@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart } from "lucide-react"
-import { useState } from "react"
 import { createClient } from "@/utils/supabase/client"
 
 interface SidebarProps {
@@ -15,17 +14,14 @@ interface SidebarProps {
     name: string
     email: string
   }
+  collapsed: boolean
+  onToggle: () => void
 }
 
-export function Sidebar({ user }: SidebarProps) {
+export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
   const supabase = createClient()
-
-  const toggleSidebar = () => {
-    setCollapsed(!collapsed)
-  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -62,7 +58,7 @@ export function Sidebar({ user }: SidebarProps) {
     <div
       data-sidebar
       className={cn(
-        "fixed left-0 top-0 z-30 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300",
+        "h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300",
         collapsed ? "w-20" : "w-64",
       )}
     >
@@ -86,7 +82,7 @@ export function Sidebar({ user }: SidebarProps) {
             variant="ghost"
             size="icon"
             className={cn("ml-auto h-8 w-8", collapsed && "rotate-180")}
-            onClick={toggleSidebar}
+            onClick={onToggle}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>

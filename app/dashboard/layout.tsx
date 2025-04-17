@@ -34,28 +34,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     fetchUser()
     setMounted(true)
-
-    // Отслеживание изменения ширины бокового меню
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          const sidebar = document.querySelector("[data-sidebar]")
-          if (sidebar) {
-            const isCollapsed = sidebar.classList.contains("w-20")
-            setSidebarCollapsed(isCollapsed)
-          }
-        }
-      })
-    })
-
-    const sidebar = document.querySelector("[data-sidebar]")
-    if (sidebar) {
-      observer.observe(sidebar, { attributes: true })
-    }
-
-    return () => {
-      observer.disconnect()
-    }
   }, [router, supabase])
 
   if (!mounted || !user) {
@@ -63,9 +41,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-      <Sidebar user={user} />
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? "pl-20" : "pl-64"}`}>
+    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+      <div className={`transition-all duration-300 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+        <Sidebar
+          user={user}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
+      </div>
+      <div className="flex-1">
         {children}
       </div>
     </div>

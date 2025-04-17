@@ -1,10 +1,3 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { Sidebar } from "@/components/sidebar"
-import { createClient } from "@/utils/supabase/client"
-import { useRouter } from "next/navigation"
-
 export default function PlanningPage() {
   return (
     <main className="w-full h-screen p-0 m-0">
