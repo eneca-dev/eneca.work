@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 
-export default function PlanningPage() {
+export default function ProgressPage() {
   const [mounted, setMounted] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [user, setUser] = useState<any>(null)
@@ -67,17 +67,15 @@ export default function PlanningPage() {
       <Sidebar user={user} />
       <div className={`transition-all duration-300 ${sidebarCollapsed ? "pl-20" : "pl-64"}`}>
         <main className="w-full h-screen p-0 m-0">
-          <div style={{ padding: 16 }}>
-            <iframe
-              src="https://v0-enecawork.vercel.app/"
-              style={{ border: "1px solid #ccc", width: "100%", height: "calc(100vh - 32px)", minHeight: 400, minWidth: 320, borderRadius: 6 }}
-              frameBorder={"0"}
-              allowFullScreen
-              title="Планирование"
-            />
-          </div>
+          <iframe
+            src="https://project-dynamic.vercel.app/"
+            style={{ border: "1px solid #ccc", width: "100%", height: "100vh", minHeight: 400, minWidth: 320, borderRadius: 6 }}
+            frameBorder={"0"}
+            allowFullScreen
+            title="Прогресс проектов"
+          />
         </main>
       </div>
     </div>
   )
-}
+} 

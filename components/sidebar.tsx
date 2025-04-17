@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart } from "lucide-react"
 import { useState } from "react"
 import { createClient } from "@/utils/supabase/client"
 
@@ -49,7 +49,14 @@ export function Sidebar({ user }: SidebarProps) {
       href: "/dashboard/tasks",
       icon: Send,
     },
+    {
+      title: "Прогресс проектов",
+      href: "/dashboard/progress",
+      icon: BarChart,
+    },
   ]
+
+  const isSettingsActive = pathname === "/dashboard/settings"
 
   return (
     <div
@@ -127,8 +134,12 @@ export function Sidebar({ user }: SidebarProps) {
               <ThemeToggle />
 
               <Link href="/dashboard/settings">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Settings className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <Button
+                  variant={isSettingsActive ? "secondary" : "ghost"}
+                  size="icon"
+                  className={`h-9 w-9 ${isSettingsActive ? "bg-primary/10 text-primary" : ""}`}
+                >
+                  <Settings className={`h-4 w-4 ${isSettingsActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                 </Button>
               </Link>
 
@@ -141,8 +152,12 @@ export function Sidebar({ user }: SidebarProps) {
               <div className="flex justify-between">
                 <ThemeToggle />
                 <Link href="/dashboard/settings">
-                  <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <Settings className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                  <Button
+                    variant={isSettingsActive ? "secondary" : "ghost"}
+                    size="icon"
+                    className={`h-9 w-9 ${isSettingsActive ? "bg-primary/10 text-primary" : ""}`}
+                  >
+                    <Settings className={`h-4 w-4 ${isSettingsActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
