@@ -1,0 +1,232 @@
+"use client"
+
+import type React from "react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { useState, useEffect } from "react"
+import { updateUser } from "../lib/data-service"
+import type { User } from "../lib/types"
+import { toast } from "@/components/ui/use-toast"
+import { DollarSign, Clock } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+interface PaymentDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  user: User | null
+  onUserUpdated?: () => void
+}
+
+export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialogProps) {
+  const [formData, setFormData] = useState<Partial<User>>({
+    employmentRate: 1,
+    salary: 0,
+    isHourly: true,
+  })
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Установка данных пользователя при открытии диалога
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        employmentRate: user.employmentRate || 1,
+        salary: user.salary || (user.isHourly ? 15 : 1500), // Разумные значения по умолчанию в BYN
+        isHourly: user.isHourly !== null ? user.isHourly : true,
+      })
+    } else {
+      setFormData({
+        employmentRate: 1,
+        salary: 1500, // Значение по умолчанию для нового пользователя в BYN
+        isHourly: true,
+      })
+    }
+  }, [user, open])
+
+  const handleChange = (field: string, value: string | boolean | number) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+
+    try {
+      // Обновление пользователя
+      if (user) {
+        await updateUser(user.id, formData)
+        toast({
+          title: "Успешно",
+          description: "Информация об оплате успешно обновлена",
+        })
+
+        // Закрываем диалог и обновляем список пользователей
+        onOpenChange(false)
+        if (onUserUpdated) {
+          onUserUpdated()
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка при сохранении информации об оплате:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось сохранить информацию об оплате",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Изменим функцию форматирования зарплаты, чтобы использовать 2 знака после запятой для почасовой оплаты
+  const formatSalary = (salary: number, isHourly: boolean) => {
+    return (
+      new Intl.NumberFormat("ru-BY", {
+        style: "currency",
+        currency: "BYN",
+        minimumFractionDigits: isHourly ? 2 : 0,
+        maximumFractionDigits: isHourly ? 2 : 0,
+      }).format(salary) + (isHourly ? "/час" : "/мес")
+    )
+  }
+
+  return (
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Редактирование оплаты</DialogTitle>
+              <DialogDescription>
+                {user && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="font-medium">{user.name}</span>
+                    <span className="text-gray-500">•</span>
+                    <span className="text-gray-500">{user.position}</span>
+                  </div>
+                )}
+                Измените информацию об оплате и нажмите Сохранить, когда закончите.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="employmentRate" className="text-right">
+                  Занятость
+                </Label>
+                <Select
+                  value={formData.employmentRate?.toString()}
+                  onValueChange={(value) => handleChange("employmentRate", Number.parseFloat(value))}
+                >
+                  <SelectTrigger id="employmentRate" className="col-span-3">
+                    <SelectValue placeholder="Выберите ставку" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.25">25% (0.25 ставки)</SelectItem>
+                    <SelectItem value="0.5">50% (0.5 ставки)</SelectItem>
+                    <SelectItem value="0.75">75% (0.75 ставки)</SelectItem>
+                    <SelectItem value="1">100% (1 ставка)</SelectItem>
+                    <SelectItem value="1.25">125% (1.25 ставки)</SelectItem>
+                    <SelectItem value="1.5">150% (1.5 ставки)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="isHourly" className="text-right">
+                  Тип оплаты
+                </Label>
+                <div className="flex items-center space-x-2 col-span-3">
+                  <Switch
+                    id="isHourly"
+                    checked={formData.isHourly}
+                    onCheckedChange={(checked) => handleChange("isHourly", checked)}
+                  />
+                  <Label htmlFor="isHourly" className="flex items-center">
+                    {formData.isHourly ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center text-blue-600 dark:text-blue-400">
+                            <Clock className="h-4 w-4 mr-1" />
+                            <span>Почасовая оплата</span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Оплата за час работы</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center text-green-600 dark:text-green-400">
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            <span>Фиксированный оклад</span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Фиксированный месячный оклад</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </Label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="salary" className="text-right">
+                  {formData.isHourly ? "Ставка в час" : "Оклад"}
+                </Label>
+                <div className="col-span-3 relative">
+                  <Input
+                    id="salary"
+                    type="number"
+                    value={formData.salary || 0}
+                    onChange={(e) => handleChange("salary", Number.parseFloat(e.target.value))}
+                    className="pl-8"
+                    min={0}
+                    step={formData.isHourly ? 0.01 : 10}
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">Br</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <div className="text-right text-sm text-gray-500">Текущая ставка:</div>
+                <div className="col-span-3 text-sm font-medium">
+                  {formatSalary(formData.salary || 0, formData.isHourly || false)}
+                </div>
+              </div>
+
+              {formData.isHourly && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <div className="text-right text-sm text-gray-500">Примерно в месяц:</div>
+                  <div className="col-span-3 text-sm">
+                    {formatSalary((formData.salary || 0) * 168 * (formData.employmentRate || 1), false)}
+                    <span className="text-xs text-gray-500 ml-1">(при 168 часах)</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+                Отмена
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Сохранение..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
+  )
+}

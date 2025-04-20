@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 
 interface SidebarProps {
@@ -53,6 +53,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
+  const isUsersActive = pathname === "/users"
 
   return (
     <div
@@ -129,13 +130,13 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 flex flex-col items-center space-y-2">
               <ThemeToggle />
 
-              <Link href="/dashboard/settings">
+              <Link href="/users">
                 <Button
-                  variant={isSettingsActive ? "secondary" : "ghost"}
+                  variant={isUsersActive ? "secondary" : "ghost"}
                   size="icon"
-                  className={`h-9 w-9 ${isSettingsActive ? "bg-primary/10 text-primary" : ""}`}
+                  className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                 >
-                  <Settings className={`h-4 w-4 ${isSettingsActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                  <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                 </Button>
               </Link>
 
@@ -147,13 +148,13 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
                 <ThemeToggle />
-                <Link href="/dashboard/settings">
+                <Link href="/users">
                   <Button
-                    variant={isSettingsActive ? "secondary" : "ghost"}
+                    variant={isUsersActive ? "secondary" : "ghost"}
                     size="icon"
-                    className={`h-9 w-9 ${isSettingsActive ? "bg-primary/10 text-primary" : ""}`}
+                    className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                   >
-                    <Settings className={`h-4 w-4 ${isSettingsActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                    <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>

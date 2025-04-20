@@ -40,16 +40,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return null
   }
 
+  const sidebarWidth = sidebarCollapsed ? "w-20" : "w-64"
+  const marginLeft = sidebarCollapsed ? "ml-20" : "ml-64"
+
   return (
-    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+      {/* Фиксированное меню */}
+      <div className={`fixed inset-y-0 left-0 z-40 h-screen ${sidebarWidth} transition-all duration-300`}>
         <Sidebar
           user={user}
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((c) => !c)}
         />
       </div>
-      <div className="flex-1">
+      {/* Контент с отступом слева */}
+      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft} overflow-auto`}>
         {children}
       </div>
     </div>

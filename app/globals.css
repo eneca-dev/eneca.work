@@ -89,3 +89,112 @@
     }
   }
 }
+
+/* Стили для бейджей расположения */
+/* Офис (синий) */
+.bg-blue-50 {
+  background-color: #eff6ff;
+}
+.text-blue-700 {
+  color: #1d4ed8;
+}
+.border-blue-200 {
+  border-color: #bfdbfe;
+}
+.dark .dark\:bg-blue-950 {
+  background-color: #172554;
+}
+.dark .dark\:text-blue-300 {
+  color: #93c5fd;
+}
+.dark .dark\:border-blue-800 {
+  border-color: #1e40af;
+}
+
+/* Удаленно (зеленый) */
+.bg-green-50 {
+  background-color: #f0fdf4;
+}
+.text-green-700 {
+  color: #15803d;
+}
+.border-green-200 {
+  border-color: #bbf7d0;
+}
+.dark .dark\:bg-green-950 {
+  background-color: #052e16;
+}
+.dark .dark\:text-green-300 {
+  color: #86efac;
+}
+.dark .dark\:border-green-800 {
+  border-color: #166534;
+}
+
+/* Гибридный (фиолетовый) */
+.bg-purple-50 {
+  background-color: #faf5ff;
+}
+.text-purple-700 {
+  color: #7e22ce;
+}
+.border-purple-200 {
+  border-color: #e9d5ff;
+}
+.dark .dark\:bg-purple-950 {
+  background-color: #3b0764;
+}
+.dark .dark\:text-purple-300 {
+  color: #d8b4fe;
+}
+.dark .dark\:border-purple-800 {
+  border-color: #6b21a8;
+}
+
+/* Стили для бейджей */
+.badge-success {
+  @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300;
+}
+
+.badge-destructive {
+  @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300;
+}
+
+/* Стили для группировки пользователей */
+.group-header {
+  @apply bg-gray-50 dark:bg-gray-800/50 font-medium py-2 px-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors;
+}
+
+.group-content {
+  @apply border-l-2 border-gray-200 dark:border-gray-700 ml-4;
+}
+
+.group-department {
+  position: relative;
+}
+
+.group-department::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: hsl(var(--primary));
+  opacity: 0.7;
+}
+
+.group-team {
+  position: relative;
+}
+
+.group-team::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: hsl(var(--primary));
+  opacity: 0.4;
+}

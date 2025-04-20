@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin", "cyrillic"] })
 export const metadata: Metadata = {
   title: "eneca.work",
   description: "Платформа для эффективной работы",
-    generator: 'v0.dev'
+    generator: 'eneca.work'
 }
 
 export default function RootLayout({
