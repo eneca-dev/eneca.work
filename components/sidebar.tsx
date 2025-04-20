@@ -130,7 +130,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 flex flex-col items-center space-y-2">
               <ThemeToggle />
 
-              <Link href="/users">
+              <Link href="/dashboard/users">
                 <Button
                   variant={isUsersActive ? "secondary" : "ghost"}
                   size="icon"
@@ -148,7 +148,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
                 <ThemeToggle />
-                <Link href="/users">
+                <Link href="/dashboard/users">
                   <Button
                     variant={isUsersActive ? "secondary" : "ghost"}
                     size="icon"
