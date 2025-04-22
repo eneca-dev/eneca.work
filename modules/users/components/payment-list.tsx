@@ -326,7 +326,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-8 w-8">
                                   <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                                  <AvatarFallback className="text-xs">
+                                  <AvatarFallback>
                                     {user.name
                                       .split(" ")
                                       .map((n) => n[0])

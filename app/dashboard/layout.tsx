@@ -4,11 +4,13 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
+import { useUserStore } from "@/stores/useUserStore"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const name = useUserStore((state) => state.name)
+  const email = useUserStore((state) => state.email)
   const router = useRouter()
   const supabase = createClient()
 
@@ -26,17 +28,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       // Get user metadata
       const { data: userData } = await supabase.from("profiles").select("*").eq("user_id", user.id).single()
 
-      setUser({
-        name: userData?.name || user.user_metadata?.name || "Пользователь",
-        email: user.email,
-      })
+      setMounted(true)
     }
 
     fetchUser()
-    setMounted(true)
   }, [router, supabase])
 
-  if (!mounted || !user) {
+  if (!mounted) {
     return null
   }
 
@@ -48,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Фиксированное меню */}
       <div className={`fixed inset-y-0 left-0 z-40 h-screen ${sidebarWidth} transition-all duration-300`}>
         <Sidebar
-          user={user}
+          user={{ name: name || "Пользователь", email: email || "" }}
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((c) => !c)}
         />

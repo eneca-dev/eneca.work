@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { updateUser, getDepartments, getTeams, getPositions, getCategories } from "../lib/data-service"
 import type { User, Department, Team, Position, Category } from "../lib/types"
 import { toast } from "@/components/ui/use-toast"
+import { useUserStore } from "@/stores/useUserStore"
+import { supabase } from "../lib/supabase-client"
 
 interface UserDialogProps {
   open: boolean
@@ -29,8 +31,9 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User>>({
-    name: "",
+  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string }>>({
+    firstName: "",
+    lastName: "",
     email: "",
     position: "",
     department: "",
@@ -47,6 +50,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [positions, setPositions] = useState<Position[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(false)
+
+  const setUser = useUserStore((state) => state.setUser)
 
   // Загрузка справочных данных
   useEffect(() => {
@@ -81,8 +86,17 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   // Изменим установку данных пользователя при открытии диалога
   useEffect(() => {
     if (user) {
+      // Разделяем имя на firstName и lastName, если они есть
+      let firstName = ""
+      let lastName = ""
+      if (user.name) {
+        const parts = user.name.split(" ")
+        firstName = parts[0] || ""
+        lastName = parts.slice(1).join(" ") || ""
+      }
       setFormData({
-        name: user.name,
+        firstName,
+        lastName,
         email: user.email,
         position: user.position,
         department: user.department,
@@ -94,7 +108,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       })
     } else {
       setFormData({
-        name: "",
+        firstName: "",
+        lastName: "",
         email: "",
         position: "",
         department: "",
@@ -134,15 +149,42 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     setIsLoading(true)
 
     try {
-      // Обновление пользователя
       if (user) {
-        await updateUser(user.id, formData)
+        await updateUser(user.id, {
+          ...formData,
+          name: undefined, // не отправляем name
+        })
+        // Получаем свежие данные пользователя из базы
+        const { data: freshProfile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .single()
+        if (freshProfile) {
+          setUser({
+            id: freshProfile.user_id,
+            email: freshProfile.email,
+            name: [freshProfile.first_name, freshProfile.last_name].filter(Boolean).join(" "),
+            profile: {
+              firstName: freshProfile.first_name,
+              lastName: freshProfile.last_name,
+              departmentId: freshProfile.department_id,
+              teamId: freshProfile.team_id,
+              positionId: freshProfile.position_id,
+              categoryId: freshProfile.category_id,
+              workFormat: freshProfile.work_format,
+              salary: freshProfile.salary,
+              isHourly: freshProfile.is_hourly,
+              employmentRate: freshProfile.employment_rate,
+              address: freshProfile.address,
+              roleId: freshProfile.role_id,
+            },
+          })
+        }
         toast({
           title: "Успешно",
           description: isSelfEdit ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
         })
-
-        // Закрываем диалог и обновляем список пользователей
         onOpenChange(false)
         if (onUserUpdated) {
           onUserUpdated()
@@ -178,13 +220,21 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           <div className="grid gap-4 py-4">
             {/* Существующие поля формы */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                ФИО
-              </Label>
+              <Label htmlFor="firstName" className="text-right">Имя</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => handleChange("name", e.target.value)}
+                id="firstName"
+                value={formData.firstName}
+                onChange={(e) => handleChange("firstName", e.target.value)}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="lastName" className="text-right">Фамилия</Label>
+              <Input
+                id="lastName"
+                value={formData.lastName}
+                onChange={(e) => handleChange("lastName", e.target.value)}
                 className="col-span-3"
                 required
               />

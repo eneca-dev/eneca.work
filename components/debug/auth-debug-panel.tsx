@@ -282,6 +282,14 @@ export function AuthDebugPanel() {
                           <p className="font-medium text-gray-500 dark:text-gray-400">Создан:</p>
                           <p>{formatDate(userData.user.created_at)}</p>
                         </div>
+                        <div>
+                          <p className="font-medium text-gray-500 dark:text-gray-400">Имя из user_metadata:</p>
+                          <p>{userData.user.user_metadata?.name || <span className="italic text-gray-400">Нет данных</span>}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-500 dark:text-gray-400">Имя из профиля:</p>
+                          <p>{userData.profile?.first_name || ""} {userData.profile?.last_name || ""}</p>
+                        </div>
                       </div>
                       
                       {userData.user.user_metadata && Object.keys(userData.user.user_metadata).length > 0 && (

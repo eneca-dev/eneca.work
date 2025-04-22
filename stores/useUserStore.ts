@@ -56,6 +56,7 @@ export const useUserStore = create<UserState>()(
           
           // Явно создаем новый объект для профиля, чтобы избежать ссылочных проблем
           let processedProfile = null;
+          let profileName = '';
           
           if (user.profile) {
             // Создаем глубокую копию профиля для безопасности
@@ -73,13 +74,14 @@ export const useUserStore = create<UserState>()(
               address: user.profile.address,
               roleId: user.profile.roleId
             };
+            profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
             console.log('Обработанный профиль перед сохранением:', processedProfile);
           }
           
           set({
             id: user.id,
             email: user.email,
-            name: user.name,
+            name: profileName || '',
             profile: processedProfile,
             isAuthenticated: true
           });

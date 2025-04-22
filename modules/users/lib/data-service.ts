@@ -141,15 +141,15 @@ export async function getCategories(): Promise<Category[]> {
 // Обновление пользователя
 export async function updateUser(
   userId: string,
-  userData: Partial<Omit<User, "id" | "avatar" | "dateJoined" | "isActive">>,
+  userData: Partial<Omit<User, "id" | "avatar" | "dateJoined" | "isActive">> & { firstName?: string; lastName?: string },
 ) {
   const updates: any = {}
 
-  // Если имя изменилось, разделим его на имя и фамилию
-  if (userData.name) {
-    const nameParts = userData.name.split(" ")
-    updates.first_name = nameParts[0] || ""
-    updates.last_name = nameParts.slice(1).join(" ") || ""
+  if (userData.firstName !== undefined) {
+    updates.first_name = userData.firstName
+  }
+  if (userData.lastName !== undefined) {
+    updates.last_name = userData.lastName
   }
 
   if (userData.email) {
