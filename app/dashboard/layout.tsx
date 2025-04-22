@@ -24,7 +24,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
 
       // Get user metadata
-      const { data: userData } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+      const { data: userData } = await supabase.from("profiles").select("*").eq("user_id", user.id).single()
 
       setUser({
         name: userData?.name || user.user_metadata?.name || "Пользователь",

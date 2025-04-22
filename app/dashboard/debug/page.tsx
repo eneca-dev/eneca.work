@@ -1,7 +1,7 @@
 "use client"
 
-import { AuthDebugPanel } from "@/components/auth-debug-panel"
-import { ReduxDebugPanel } from "@/components/redux-debug-panel"
+import { AuthDebugPanel } from "@/components/debug/auth-debug-panel"
+import { StoreDebugPanel } from "@/components/debug/store-debug-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -23,7 +23,7 @@ export default function DebugPage() {
       <Tabs defaultValue="auth" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-3 mb-8">
           <TabsTrigger value="auth">Аутентификация</TabsTrigger>
-          <TabsTrigger value="redux">Redux</TabsTrigger>
+          <TabsTrigger value="store">Состояние</TabsTrigger>
           <TabsTrigger value="system">Система</TabsTrigger>
         </TabsList>
         
@@ -39,7 +39,7 @@ export default function DebugPage() {
               <CardContent className="pt-6">
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                   На этой странице представлена информация о текущем состоянии аутентификации 
-                  пользователя в Supabase и Redux. Используйте эту информацию для отладки 
+                  пользователя в Supabase и Zustand. Используйте эту информацию для отладки 
                   проблем с аутентификацией.
                 </p>
                 
@@ -49,23 +49,22 @@ export default function DebugPage() {
           </div>
         </TabsContent>
         
-        <TabsContent value="redux" className="space-y-6">
+        <TabsContent value="store" className="space-y-6">
           <div className="grid grid-cols-1 gap-6">
             <Card>
               <CardHeader className="bg-primary/5">
-                <CardTitle className="text-xl font-bold">Отладка Redux</CardTitle>
+                <CardTitle className="text-xl font-bold">Отладка Zustand</CardTitle>
                 <CardDescription>
-                  Информация о состоянии Redux Store и его слайсах
+                  Информация о состоянии Zustand сторов
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  На этой странице представлена детальная информация о состоянии Redux store, 
-                  включая все его слайсы. Вы можете просматривать и манипулировать данными 
-                  в реальном времени для отладки.
+                  На этой странице представлена детальная информация о состоянии Zustand сторов.
+                  Вы можете просматривать и манипулировать данными в реальном времени для отладки.
                 </p>
                 
-                <ReduxDebugPanel />
+                <StoreDebugPanel />
               </CardContent>
             </Card>
           </div>
@@ -91,7 +90,7 @@ export default function DebugPage() {
                       <span className="font-medium">Режим приложения:</span> Production
                     </div>
                     <div>
-                      <span className="font-medium">Версия React:</span> 18.3.0
+                      <span className="font-medium">Версия React:</span> 19.1.0
                     </div>
                     <div>
                       <span className="font-medium">Режим React:</span> Concurrent

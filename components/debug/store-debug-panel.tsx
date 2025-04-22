@@ -1,44 +1,46 @@
 "use client"
 
-import { RootState } from "@/store"
-import { useDispatch, useSelector } from "react-redux"
-import { clearUser } from "@/store/userSlice"
-import { setLoading, setNotification, clearNotification } from "@/store/uiSlice"
-import { setTheme } from "@/store/settingsSlice"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "./ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { useState } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { Input } from "./ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 
-export function ReduxDebugPanel() {
-  const dispatch = useDispatch()
+import { useUserStore } from "@/stores/useUserStore"
+import { useUiStore } from "@/stores/useUiStore"
+import { useSettingsStore } from "@/stores/useSettingsStore"
+
+export function StoreDebugPanel() {
   const { toast } = useToast()
   
-  // Получаем состояние всех слайсов из Redux
-  const reduxState = useSelector((state: RootState) => state)
-  const userState = useSelector((state: RootState) => state.user)
-  const uiState = useSelector((state: RootState) => state.ui)
-  const settingsState = useSelector((state: RootState) => state.settings)
+  // Получаем состояние всех сторов из Zustand
+  const userState = useUserStore()
+  const uiState = useUiStore()
+  const settingsState = useSettingsStore()
   
-  // Состояние для форм модификации Redux
+  // Получаем действия из сторов
+  const { clearUser } = useUserStore()
+  const { setLoading, setNotification, clearNotification } = useUiStore()
+  const { setTheme } = useSettingsStore()
+  
+  // Состояние для форм модификации
   const [notificationText, setNotificationText] = useState("")
-  const [selectedTheme, setSelectedTheme] = useState<"light" | "dark" | "system">("system")
+  const [selectedTheme, setSelectedTheme] = useState<"light" | "dark" | "system">(settingsState.theme)
   
-  // Функции для изменения состояния Redux
+  // Функции для изменения состояния Zustand
   const handleClearUser = () => {
-    dispatch(clearUser())
+    clearUser()
     toast({
       title: "Действие выполнено",
-      description: "Пользователь был очищен из Redux store",
+      description: "Пользователь был очищен из Zustand store",
     })
   }
   
   const handleToggleLoading = () => {
-    dispatch(setLoading(!uiState.loading))
+    setLoading(!uiState.loading)
     toast({
       title: "Действие выполнено",
       description: `Состояние загрузки изменено на ${!uiState.loading ? "активное" : "неактивное"}`,
@@ -47,7 +49,7 @@ export function ReduxDebugPanel() {
   
   const handleSetNotification = () => {
     if (notificationText.trim()) {
-      dispatch(setNotification(notificationText))
+      setNotification(notificationText)
       toast({
         title: "Действие выполнено",
         description: "Уведомление было добавлено",
@@ -56,7 +58,7 @@ export function ReduxDebugPanel() {
   }
   
   const handleClearNotification = () => {
-    dispatch(clearNotification())
+    clearNotification()
     setNotificationText("")
     toast({
       title: "Действие выполнено",
@@ -67,19 +69,26 @@ export function ReduxDebugPanel() {
   const handleChangeTheme = (value: string) => {
     const theme = value as "light" | "dark" | "system"
     setSelectedTheme(theme)
-    dispatch(setTheme(theme))
+    setTheme(theme)
     toast({
       title: "Действие выполнено",
       description: `Тема изменена на ${theme}`,
     })
   }
   
+  // Объединяем все состояния в один объект для отображения полного состояния
+  const fullState = {
+    user: userState,
+    ui: uiState,
+    settings: settingsState
+  }
+  
   return (
     <Card className="w-full bg-white dark:bg-gray-800 shadow-md">
       <CardHeader className="bg-primary/5">
-        <CardTitle className="text-xl font-bold">Состояние Redux</CardTitle>
+        <CardTitle className="text-xl font-bold">Состояние Zustand</CardTitle>
         <CardDescription>
-          Информация о текущем состоянии Redux store и возможность манипуляции данными
+          Информация о текущем состоянии Zustand сторов и возможность манипуляции данными
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
@@ -95,21 +104,21 @@ export function ReduxDebugPanel() {
               {/* Полное состояние */}
               <AccordionItem value="item-full">
                 <AccordionTrigger className="text-base font-medium">
-                  Полное состояние Redux
+                  Полное состояние Zustand
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md p-4">
                     <pre className="text-xs overflow-auto max-h-[400px] whitespace-pre-wrap">
-                      {JSON.stringify(reduxState, null, 2)}
+                      {JSON.stringify(fullState, null, 2)}
                     </pre>
                   </div>
                 </AccordionContent>
               </AccordionItem>
               
-              {/* User Slice */}
+              {/* User Store */}
               <AccordionItem value="item-user">
                 <AccordionTrigger className="text-base font-medium">
-                  User Slice
+                  User Store
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-4">
@@ -144,10 +153,10 @@ export function ReduxDebugPanel() {
                 </AccordionContent>
               </AccordionItem>
               
-              {/* UI Slice */}
+              {/* UI Store */}
               <AccordionItem value="item-ui">
                 <AccordionTrigger className="text-base font-medium">
-                  UI Slice
+                  UI Store
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-4">
@@ -174,10 +183,10 @@ export function ReduxDebugPanel() {
                 </AccordionContent>
               </AccordionItem>
               
-              {/* Settings Slice */}
+              {/* Settings Store */}
               <AccordionItem value="item-settings">
                 <AccordionTrigger className="text-base font-medium">
-                  Settings Slice
+                  Settings Store
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-4">
@@ -200,13 +209,13 @@ export function ReduxDebugPanel() {
             </Accordion>
           </TabsContent>
           
-          {/* Вкладка действий с Redux */}
+          {/* Вкладка действий */}
           <TabsContent value="actions" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* User Actions */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">User Slice</CardTitle>
+                  <CardTitle className="text-base">User Store</CardTitle>
                   <CardDescription>Действия с данными пользователя</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -231,7 +240,7 @@ export function ReduxDebugPanel() {
               {/* UI Actions */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">UI Slice</CardTitle>
+                  <CardTitle className="text-base">UI Store</CardTitle>
                   <CardDescription>Управление интерфейсом</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -274,7 +283,7 @@ export function ReduxDebugPanel() {
               {/* Settings Actions */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Settings Slice</CardTitle>
+                  <CardTitle className="text-base">Settings Store</CardTitle>
                   <CardDescription>Настройки приложения</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -307,7 +316,7 @@ export function ReduxDebugPanel() {
       </CardContent>
       <CardFooter className="bg-gray-50 dark:bg-gray-900/30 p-4">
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Этот компонент предоставляет информацию о Redux store приложения и позволяет манипулировать его состоянием для отладки.
+          Этот компонент предоставляет информацию о Zustand сторах приложения и позволяет манипулировать их состоянием для отладки.
         </p>
       </CardFooter>
     </Card>
