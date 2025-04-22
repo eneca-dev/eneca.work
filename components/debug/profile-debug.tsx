@@ -8,6 +8,7 @@ import { useUserStore } from "@/stores/useUserStore"
 export function ProfileDebug() {
   const [refreshCounter, setRefreshCounter] = useState(0)
   const userState = useUserStore()
+  const { role, permissions } = userState
   
   useEffect(() => {
     console.log("ProfileDebug компонент смонтирован с состоянием:", userState)
@@ -62,6 +63,26 @@ export function ProfileDebug() {
               <Button onClick={handleRefresh} className="mt-4">
                 Обновить информацию
               </Button>
+            </div>
+          </div>
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Роль и разрешения пользователя</h3>
+            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-gray-500 dark:text-gray-400">Роль:</span> {role || "—"}
+              </div>
+              <div>
+                <span className="font-medium text-gray-500 dark:text-gray-400">Разрешения:</span>
+                {permissions && permissions.length > 0 ? (
+                  <ul className="list-disc list-inside ml-4">
+                    {permissions.map((perm) => (
+                      <li key={perm}>{perm}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="ml-2">—</span>
+                )}
+              </div>
             </div>
           </div>
         </div>

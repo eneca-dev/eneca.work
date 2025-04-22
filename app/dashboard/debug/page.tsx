@@ -1,112 +1,169 @@
 "use client"
 
-import { AuthDebugPanel } from "@/components/debug/auth-debug-panel"
-import { StoreDebugPanel } from "@/components/debug/store-debug-panel"
+import { useState, useEffect } from "react"
+import { useUserStore } from "@/stores/useUserStore"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { Card } from "@/components/ui/card"
+import { createClient } from "@/utils/supabase/client"
+import { Copy, RefreshCw } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { syncCurrentUserState } from "@/modules/users/lib/data-service"
 
 export default function DebugPage() {
+  const [refreshCounter, setRefreshCounter] = useState(0)
+  const [supabaseData, setSupabaseData] = useState<any>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const userState = useUserStore()
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      const supabase = createClient()
+      const sessionData = await supabase.auth.getSession()
+      const userData = sessionData.data.session ? await supabase.auth.getUser() : null
+      
+      setSupabaseData({
+        session: sessionData.data,
+        user: userData?.data
+      })
+    }
+    
+    fetchData()
+  }, [refreshCounter])
+  
+  const handleRefresh = () => {
+    setRefreshCounter(prev => prev + 1)
+    window.location.reload()
+  }
+  
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      const success = await syncCurrentUserState()
+      if (success) {
+        toast({
+          title: "Синхронизация выполнена",
+          description: "Данные пользователя успешно синхронизированы с Supabase",
+        })
+        setRefreshCounter(prev => prev + 1)
+      } else {
+        toast({
+          title: "Ошибка синхронизации",
+          description: "Не удалось синхронизировать данные пользователя",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Ошибка при синхронизации:", error)
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при синхронизации данных",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+  
+  const copyToClipboard = (text: string, name: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({
+          title: "Скопировано",
+          description: `${name} скопирован в буфер обмена`,
+        })
+      })
+      .catch((err) => {
+        console.error('Ошибка при копировании:', err)
+        toast({
+          title: "Ошибка",
+          description: "Не удалось скопировать в буфер обмена",
+          variant: "destructive",
+        })
+      })
+  }
+  
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center mb-6">
-        <Link href="/dashboard">
-          <Button variant="ghost" size="icon" className="mr-2">
-            <ArrowLeft className="h-5 w-5" />
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Отладка</h1>
+        <div className="flex space-x-2">
+          <Button 
+            onClick={handleSync} 
+            variant="outline" 
+            disabled={isSyncing}
+            className="flex items-center gap-1"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? "Синхронизация..." : "Синхронизировать данные"}
           </Button>
-        </Link>
-        <h1 className="text-2xl font-bold">Отладка системы</h1>
+          <Button onClick={handleRefresh} className="bg-blue-600 hover:bg-blue-700">
+            Перезагрузить страницу
+          </Button>
+        </div>
       </div>
-
-      <Tabs defaultValue="auth" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3 mb-8">
-          <TabsTrigger value="auth">Аутентификация</TabsTrigger>
-          <TabsTrigger value="store">Состояние</TabsTrigger>
-          <TabsTrigger value="system">Система</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="auth" className="space-y-6">
-          <div className="grid grid-cols-1 gap-6">
-            <Card>
-              <CardHeader className="bg-primary/5">
-                <CardTitle className="text-xl font-bold">Отладка аутентификации</CardTitle>
-                <CardDescription>
-                  Подробная информация о состоянии аутентификации в приложении
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  На этой странице представлена информация о текущем состоянии аутентификации 
-                  пользователя в Supabase и Zustand. Используйте эту информацию для отладки 
-                  проблем с аутентификацией.
-                </p>
-                
-                <AuthDebugPanel />
-              </CardContent>
-            </Card>
+      
+      <div className="space-y-6">
+        <Card className="p-6 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Zustand Store</h2>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1"
+              onClick={() => copyToClipboard(JSON.stringify(userState, null, 2), "Zustand Store")}
+            >
+              <Copy className="h-4 w-4" /> Копировать
+            </Button>
           </div>
-        </TabsContent>
+          <pre className="bg-gray-50 p-4 rounded-md overflow-auto text-xs h-[300px]">
+            {JSON.stringify(userState, null, 2)}
+          </pre>
+        </Card>
         
-        <TabsContent value="store" className="space-y-6">
-          <div className="grid grid-cols-1 gap-6">
-            <Card>
-              <CardHeader className="bg-primary/5">
-                <CardTitle className="text-xl font-bold">Отладка Zustand</CardTitle>
-                <CardDescription>
-                  Информация о состоянии Zustand сторов
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  На этой странице представлена детальная информация о состоянии Zustand сторов.
-                  Вы можете просматривать и манипулировать данными в реальном времени для отладки.
-                </p>
-                
-                <StoreDebugPanel />
-              </CardContent>
-            </Card>
+        <Card className="p-6 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Supabase Data</h2>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1"
+              onClick={() => copyToClipboard(JSON.stringify(supabaseData, null, 2), "Supabase Data")}
+            >
+              <Copy className="h-4 w-4" /> Копировать
+            </Button>
           </div>
-        </TabsContent>
+          <pre className="bg-gray-50 p-4 rounded-md overflow-auto text-xs h-[300px]">
+            {JSON.stringify(supabaseData, null, 2)}
+          </pre>
+        </Card>
         
-        <TabsContent value="system" className="space-y-6">
-          <Card>
-            <CardHeader className="bg-primary/5">
-              <CardTitle className="text-xl font-bold">Отладка системы</CardTitle>
-              <CardDescription>
-                Системная информация и инструменты отладки
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="rounded-lg border p-4 mb-4">
-                <h3 className="text-lg font-semibold mb-2">Системная информация</h3>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="font-medium">Версия Next.js:</span> 14.0.0
-                    </div>
-                    <div>
-                      <span className="font-medium">Режим приложения:</span> Production
-                    </div>
-                    <div>
-                      <span className="font-medium">Версия React:</span> 19.1.0
-                    </div>
-                    <div>
-                      <span className="font-medium">Режим React:</span> Concurrent
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                Этот раздел будет расширен в будущем для включения дополнительных 
-                инструментов отладки и системной информации.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </main>
+        <Card className="p-6 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Environment</h2>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1"
+              onClick={() => copyToClipboard(JSON.stringify({
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+                screenSize: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'unknown',
+                time: new Date().toISOString(),
+                timeLocale: new Date().toLocaleString(),
+              }, null, 2), "Environment")}
+            >
+              <Copy className="h-4 w-4" /> Копировать
+            </Button>
+          </div>
+          <pre className="bg-gray-50 p-4 rounded-md overflow-auto text-xs h-[150px]">
+            {JSON.stringify({
+              userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+              screenSize: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'unknown',
+              time: new Date().toISOString(),
+              timeLocale: new Date().toLocaleString(),
+            }, null, 2)}
+          </pre>
+        </Card>
+      </div>
+    </div>
   )
 } 

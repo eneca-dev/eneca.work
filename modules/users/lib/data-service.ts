@@ -1,5 +1,5 @@
-import { supabase } from "./supabase-client"
 import type { User, Department, Team, Position, Category, WorkFormatType } from "./types"
+import { createClient } from "@/utils/supabase/client"
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -29,6 +29,7 @@ export function mapWorkFormatToDb(format: "office" | "remote" | "hybrid"): WorkF
 
 // Получение всех пользователей с объединением данных из связанных таблиц
 export async function getUsers(): Promise<User[]> {
+  const supabase = createClient();
   const { data: profiles, error } = await supabase.from("profiles").select(`
       user_id,
       first_name,
@@ -79,6 +80,7 @@ export async function getUsers(): Promise<User[]> {
 
 // Получение всех отделов
 export async function getDepartments(): Promise<Department[]> {
+  const supabase = createClient();
   const { data, error } = await supabase.from("departments").select("department_id, department_name")
 
   if (error) {
@@ -94,6 +96,7 @@ export async function getDepartments(): Promise<Department[]> {
 
 // Получение всех команд
 export async function getTeams(): Promise<Team[]> {
+  const supabase = createClient();
   const { data, error } = await supabase.from("teams").select("team_id, team_name, department_id")
 
   if (error) {
@@ -110,6 +113,7 @@ export async function getTeams(): Promise<Team[]> {
 
 // Получение всех должностей
 export async function getPositions(): Promise<Position[]> {
+  const supabase = createClient();
   const { data, error } = await supabase.from("positions").select("position_id, position_name")
 
   if (error) {
@@ -125,6 +129,7 @@ export async function getPositions(): Promise<Position[]> {
 
 // Получение всех категорий
 export async function getCategories(): Promise<Category[]> {
+  const supabase = createClient();
   const { data, error } = await supabase.from("categories").select("category_id, category_name")
 
   if (error) {
@@ -143,6 +148,7 @@ export async function updateUser(
   userId: string,
   userData: Partial<Omit<User, "id" | "avatar" | "dateJoined" | "isActive">> & { firstName?: string; lastName?: string },
 ) {
+  const supabase = createClient();
   const updates: any = {}
 
   if (userData.firstName !== undefined) {
@@ -205,11 +211,10 @@ export async function updateUser(
     updates.work_format = mapWorkFormatToDb(userData.workLocation)
   }
 
-  if (userData.address) {
+  if (userData.address !== undefined) {
     updates.address = userData.address
   }
 
-  // Добавим обработку новых полей
   if (userData.employmentRate !== undefined) {
     updates.employment_rate = userData.employmentRate
   }
@@ -222,18 +227,19 @@ export async function updateUser(
     updates.is_hourly = userData.isHourly
   }
 
-  const { data, error } = await supabase.from("profiles").update(updates).eq("user_id", userId).select()
+  const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
 
   if (error) {
     console.error("Error updating user:", error)
     throw error
   }
 
-  return data
+  return true
 }
 
 // Удаление пользователя
 export async function deleteUser(userId: string) {
+  const supabase = createClient();
   const { error } = await supabase.from("profiles").delete().eq("user_id", userId)
 
   if (error) {
@@ -244,133 +250,349 @@ export async function deleteUser(userId: string) {
   return true
 }
 
-// Аналитические функции
+// Получение пользователей по отделам для аналитики
 export async function getUsersByDepartment() {
-  const users = await getUsers()
-  const result: Record<string, number> = {}
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("departments")
+    .select(
+      `
+      department_name,
+      profiles!inner (
+        user_id
+      )
+    `,
+    )
+    .order("department_name")
 
-  users.forEach((user) => {
-    if (user.department) {
-      if (!result[user.department]) {
-        result[user.department] = 0
-      }
-      result[user.department]++
-    }
-  })
+  if (error) {
+    console.error("Error fetching users by department:", error)
+    return []
+  }
 
-  return result
+  return data.map((dept) => ({
+    name: dept.department_name,
+    value: Array.isArray(dept.profiles) ? dept.profiles.length : 0,
+  }))
 }
 
+// Получение пользователей по командам для аналитики
 export async function getUsersByTeam() {
-  const users = await getUsers()
-  const result: Record<string, number> = {}
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .select(
+      `
+      team_name,
+      profiles!inner (
+        user_id
+      )
+    `,
+    )
+    .order("team_name")
 
-  users.forEach((user) => {
-    if (user.team) {
-      if (!result[user.team]) {
-        result[user.team] = 0
-      }
-      result[user.team]++
-    }
-  })
+  if (error) {
+    console.error("Error fetching users by team:", error)
+    return []
+  }
 
-  return result
+  return data.map((team) => ({
+    name: team.team_name,
+    value: Array.isArray(team.profiles) ? team.profiles.length : 0,
+  }))
 }
 
+// Получение пользователей по категориям для аналитики
 export async function getUsersByCategory() {
-  const users = await getUsers()
-  const result: Record<string, number> = {}
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("categories")
+    .select(
+      `
+      category_name,
+      profiles!inner (
+        user_id
+      )
+    `,
+    )
+    .order("category_name")
 
-  users.forEach((user) => {
-    if (user.category) {
-      if (!result[user.category]) {
-        result[user.category] = 0
-      }
-      result[user.category]++
-    }
-  })
+  if (error) {
+    console.error("Error fetching users by category:", error)
+    return []
+  }
 
-  return result
+  return data.map((cat) => ({
+    name: cat.category_name,
+    value: Array.isArray(cat.profiles) ? cat.profiles.length : 0,
+  }))
 }
 
+// Получение количества активных пользователей
 export async function getActiveUsersCount() {
-  const users = await getUsers()
-  return users.filter((user) => user.isActive).length
+  const supabase = createClient();
+  const { count, error } = await supabase.from("profiles").select("*", { count: "exact" })
+
+  return error ? 0 : count || 0
 }
 
+// Получение количества неактивных пользователей (пока всегда 0)
 export async function getInactiveUsersCount() {
-  const users = await getUsers()
-  return users.filter((user) => !user.isActive).length
+  return 0 // В будущем можно реализовать логику с флагом is_active
 }
 
+// Получение статистики по присоединению пользователей по месяцам
 export async function getUsersJoinedByMonth() {
-  const users = await getUsers()
-  const result: Record<string, number> = {}
-  const now = new Date()
+  const supabase = createClient();
+  const { data, error } = await supabase.from("profiles").select("created_at").order("created_at")
 
-  // Последние 12 месяцев
-  for (let i = 0; i < 12; i++) {
-    const date = new Date(now)
-    date.setMonth(now.getMonth() - i)
-    const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`
-    result[monthYear] = 0
+  if (error) {
+    console.error("Error fetching users join dates:", error)
+    return []
   }
 
-  users.forEach((user) => {
-    const joinDate = new Date(user.dateJoined)
-    const monthYear = `${joinDate.getMonth() + 1}/${joinDate.getFullYear()}`
-    if (result[monthYear] !== undefined) {
-      result[monthYear]++
+  const months: Record<string, number> = {}
+  const monthNames = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+
+  data.forEach((user) => {
+    if (!user.created_at) return
+
+    const date = new Date(user.created_at)
+    const monthYear = `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+
+    if (!months[monthYear]) {
+      months[monthYear] = 0
     }
+    months[monthYear]++
   })
 
-  return result
+  return Object.entries(months).map(([name, value]) => ({ name, value }))
 }
 
+// Получение топ-отделов по количеству пользователей
 export async function getTopDepartments() {
-  const departmentCounts = await getUsersByDepartment()
-  return Object.entries(departmentCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }))
+  return getUsersByDepartment()
 }
 
+// Получение топ-команд по количеству пользователей
 export async function getTopTeams() {
-  const teamCounts = await getUsersByTeam()
-  return Object.entries(teamCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }))
+  return getUsersByTeam()
 }
 
+// Получение распределения пользователей по местоположению работы
 export async function getUsersByLocation() {
-  const users = await getUsers()
-  const result = {
-    office: 0,
-    remote: 0,
-    hybrid: 0,
+  const supabase = createClient();
+  const { data, error } = await supabase.from("profiles").select("work_format")
+
+  if (error) {
+    console.error("Error fetching users by location:", error)
+    return []
   }
 
-  users.forEach((user) => {
-    if (user.workLocation) {
-      result[user.workLocation]++
+  const locations: Record<string, number> = {
+    "В офисе": 0,
+    Удаленно: 0,
+    Гибридный: 0,
+  }
+
+  data.forEach((user) => {
+    if (user.work_format) {
+      locations[user.work_format]++
+    } else {
+      locations["В офисе"]++
     }
   })
 
-  return result
+  return [
+    { name: "Офис", value: locations["В офисе"] },
+    { name: "Удаленно", value: locations["Удаленно"] },
+    { name: "Гибрид", value: locations["Гибридный"] },
+  ]
 }
 
-// Добавим функцию проверки доступа к разделу оплаты
+/**
+ * Проверка доступа к платежному функционалу
+ * @returns {Promise<boolean>}
+ */
 export async function checkPaymentAccess(): Promise<boolean> {
   try {
-    // В реальном приложении здесь будет проверка прав доступа пользователя
-    // Например, проверка роли пользователя в базе данных
+    const supabase = createClient();
+    const { data, error } = await supabase.from("payment_settings").select("is_enabled").single()
 
-    // Для демонстрации просто возвращаем true
-    // В реальном приложении нужно реализовать проверку прав
-    return true
+    if (error || !data) {
+      console.error("Ошибка при проверке доступа к платежам:", error)
+      return false
+    }
+
+    return data.is_enabled || false
   } catch (error) {
-    console.error("Ошибка при проверке доступа к разделу оплаты:", error)
+    console.error("Непредвиденная ошибка при проверке доступа к платежам:", error)
     return false
+  }
+}
+
+/**
+ * Получить роль и разрешения пользователя по userId
+ * @param userId string
+ * @param supabaseClient - опциональный экземпляр клиента Supabase
+ * @returns { role: string | null, permissions: string[] }
+ */
+export async function getUserRoleAndPermissions(userId: string, supabaseClient?: any) {
+  console.log("getUserRoleAndPermissions вызвана с userId (обновленная версия):", userId);
+  
+  try {
+    // Используем переданный клиент Supabase или создаем новый
+    const supabase = supabaseClient || createClient();
+    console.log("Используем экземпляр Supabase клиента:", supabaseClient ? "переданный" : "созданный внутри функции");
+    
+    // Шаг 1: Получаем запись из user_roles для пользователя
+    const { data: userRoles, error: userRolesError } = await supabase
+      .from("user_roles")
+      .select("role_id")
+      .eq("user_id", userId);
+    
+    console.log("Запрос user_roles завершен:", { userRoles, userRolesError });
+    
+    if (userRolesError) {
+      console.error("Ошибка при получении ролей пользователя:", userRolesError);
+      return { role: null, permissions: [] };
+    }
+    
+    if (!userRoles || userRoles.length === 0) {
+      console.warn("Роли для пользователя не найдены:", userId);
+      return { role: null, permissions: [] };
+    }
+    
+    const roleId = userRoles[0].role_id;
+    console.log("Найден role_id:", roleId);
+    
+    // Проверим структуру таблицы roles
+    console.log("Выполняем запрос к таблице roles с id =", roleId);
+    
+    // Шаг 2: Получаем имя роли из таблицы roles
+    const { data: roleData, error: roleError } = await supabase
+      .from("roles")
+      .select("name, description")
+      .eq("id", roleId)
+      .single();
+    
+    console.log("Запрос roles завершен:", { roleData, roleError });
+    
+    if (roleError) {
+      console.error("Ошибка при получении информации о роли:", roleError);
+      return { role: null, permissions: [] };
+    }
+    
+    // Шаг 3: Получаем разрешения для роли
+    const { data: rolePermissions, error: permissionsError } = await supabase
+      .from("role_permissions")
+      .select("permission_id")
+      .eq("role_id", roleId);
+    
+    console.log("Запрос role_permissions завершен:", { rolePermissions, permissionsError });
+    
+    if (permissionsError) {
+      console.error("Ошибка при получении разрешений для роли:", permissionsError);
+      return { role: roleData.name, permissions: [] };
+    }
+    
+    if (!rolePermissions || rolePermissions.length === 0) {
+      console.warn("Разрешения для роли не найдены:", roleId);
+      return { role: roleData.name, permissions: [] };
+    }
+    
+    // Получаем имена разрешений из таблицы permissions
+    const permissionIds = rolePermissions.map((p: { permission_id: string }) => p.permission_id);
+    const { data: permissions, error: permNameError } = await supabase
+      .from("permissions")
+      .select("name")
+      .in("id", permissionIds);
+    
+    console.log("Запрос permissions завершен:", { permissions, permNameError });
+    
+    if (permNameError) {
+      console.error("Ошибка при получении имен разрешений:", permNameError);
+      return { role: roleData.name, permissions: [] };
+    }
+    
+    const permissionNames = permissions ? permissions.map((p: { name: string }) => p.name) : [];
+    
+    console.log("Возвращаемые данные:", { role: roleData.name, permissions: permissionNames });
+    return { role: roleData.name, permissions: permissionNames };
+  } catch (error) {
+    console.error("Непредвиденная ошибка в getUserRoleAndPermissions:", error);
+    return { role: null, permissions: [] };
+  }
+}
+
+// Функция для принудительной синхронизации текущего пользователя из Supabase в Zustand
+export async function syncCurrentUserState() {
+  try {
+    const supabase = createClient();
+    
+    // Получаем текущего пользователя из Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authData.user) {
+      console.error("Ошибка при получении пользователя из Auth:", authError);
+      return false;
+    }
+    
+    const userId = authData.user.id;
+    
+    // Получаем профиль пользователя из БД
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    
+    if (profileError) {
+      console.error("Ошибка при получении профиля:", profileError);
+      return false;
+    }
+    
+    // Получаем роль и разрешения
+    const { role, permissions } = await getUserRoleAndPermissions(userId);
+    
+    // Импортируем useUserStore динамически, чтобы избежать циклических зависимостей
+    const { useUserStore } = await import("@/stores/useUserStore");
+    
+    // Обновляем состояние в Zustand
+    useUserStore.getState().setUser({
+      id: userId,
+      email: authData.user.email || "",
+      name: profileData 
+        ? [profileData.first_name || "", profileData.last_name || ""].filter(Boolean).join(" ") 
+        : authData.user.user_metadata?.name || "Пользователь",
+      profile: profileData 
+        ? {
+            firstName: profileData.first_name,
+            lastName: profileData.last_name,
+            departmentId: profileData.department_id,
+            teamId: profileData.team_id,
+            positionId: profileData.position_id,
+            categoryId: profileData.category_id,
+            workFormat: profileData.work_format,
+            salary: profileData.salary,
+            isHourly: profileData.is_hourly,
+            employmentRate: profileData.employment_rate,
+            address: profileData.address,
+            roleId: profileData.role_id,
+          } 
+        : null
+    });
+    
+    // Устанавливаем роль и разрешения
+    if (role) {
+      useUserStore.getState().setRoleAndPermissions(role, permissions);
+    }
+    
+    console.log("Состояние пользователя успешно синхронизировано из Supabase");
+    return true;
+    
+  } catch (error) {
+    console.error("Ошибка при синхронизации состояния пользователя:", error);
+    return false;
   }
 }

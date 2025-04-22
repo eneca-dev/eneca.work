@@ -32,10 +32,13 @@ interface UserState {
   name: string | null
   profile: UserProfile | null
   isAuthenticated: boolean
+  role: string | null
+  permissions: string[]
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
+  setRoleAndPermissions: (role: string | null, permissions: string[]) => void
 }
 
 export const useUserStore = create<UserState>()(
@@ -48,6 +51,8 @@ export const useUserStore = create<UserState>()(
         name: null,
         profile: null,
         isAuthenticated: false,
+        role: null,
+        permissions: [],
         
         // Действия
         setUser: (user: UserData) => {
@@ -83,7 +88,9 @@ export const useUserStore = create<UserState>()(
             email: user.email,
             name: profileName || '',
             profile: processedProfile,
-            isAuthenticated: true
+            isAuthenticated: true,
+            role: null,
+            permissions: []
           });
           
           console.log('Новое состояние:', useUserStore.getState());
@@ -95,7 +102,14 @@ export const useUserStore = create<UserState>()(
           email: null,
           name: null,
           profile: null,
-          isAuthenticated: false
+          isAuthenticated: false,
+          role: null,
+          permissions: []
+        }),
+        
+        setRoleAndPermissions: (role, permissions) => set({
+          role,
+          permissions
         })
       }),
       {
@@ -107,7 +121,9 @@ export const useUserStore = create<UserState>()(
             email: state.email,
             name: state.name,
             profile: state.profile,
-            isAuthenticated: state.isAuthenticated
+            isAuthenticated: state.isAuthenticated,
+            role: state.role,
+            permissions: state.permissions
           };
           console.log('Serialized state:', partializedState);
           return partializedState;

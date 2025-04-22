@@ -8,6 +8,10 @@ import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useUserStore, UserProfile } from "@/stores/useUserStore"
 import { ProfileDebug } from "./profile-debug"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 
 export function AuthDebugPanel() {
   const [sessionData, setSessionData] = useState<any>(null)
@@ -63,8 +67,20 @@ export function AuthDebugPanel() {
             // Проверка текущего состояния
             console.log("Текущее состояние пользователя:", userState);
             
-            // Обновляем хранилище, если пользователь еще не аутентифицирован или данные изменились
-            if (!userState.isAuthenticated || userData.user.id !== userState.id) {
+            // Проверяем, совпадает ли текущий ID пользователя с ID из Supabase
+            const currentId = userState.id;
+            const needsUpdate = refreshKey > 0 || !currentId || currentId !== userData.user.id || !userState.isAuthenticated;
+            
+            console.log("Требуется обновление Zustand:", needsUpdate, {
+              refreshKey,
+              currentId,
+              supabaseId: userData.user.id,
+              isAuthenticated: userState.isAuthenticated
+            });
+            
+            if (needsUpdate) {
+              console.log("Обновляем данные в хранилище, т.к. они не соответствуют или устарели");
+              
               // Преобразуем профиль в тип UserProfile
               const profileForStore = profileData ? {
                 firstName: profileData.first_name ?? null,
@@ -83,13 +99,6 @@ export function AuthDebugPanel() {
               
               console.log("Преобразованный профиль для хранилища:", profileForStore);
               
-              // Проверка на корректность полей профиля
-              if (profileForStore) {
-                Object.entries(profileForStore).forEach(([key, value]) => {
-                  console.log(`Поле профиля ${key}: ${value}, тип: ${typeof value}`);
-                });
-              }
-              
               const userDataToStore = {
                 id: userData.user.id,
                 email: userData.user.email || "no-email@example.com",
@@ -99,15 +108,21 @@ export function AuthDebugPanel() {
               };
               
               console.log('Итоговые данные для хранилища:', userDataToStore);
-              console.log('Итоговый профиль для хранилища:', userDataToStore.profile);
+              
+              // Сохраняем роль и разрешения, если они есть
+              const role = userState.role;
+              const permissions = userState.permissions;
+              
+              // Обновляем профиль пользователя
               setUser(userDataToStore);
               
-              // Проверка после установки
-              setTimeout(() => {
-                console.log('Состояние после установки:', useUserStore.getState());
-              }, 100);
+              // Восстанавливаем роль и разрешения, если они были
+              if (role && permissions && permissions.length > 0) {
+                console.log("Восстанавливаем роль и разрешения:", { role, permissions });
+                useUserStore.getState().setRoleAndPermissions(role, permissions);
+              }
             } else {
-              console.log("Пользователь уже аутентифицирован в хранилище, пропускаем обновление");
+              console.log("Пропускаем обновление хранилища, данные актуальны");
             }
           } catch (profileError) {
             console.log("Ошибка при получении профиля:", profileError)
@@ -162,7 +177,7 @@ export function AuthDebugPanel() {
   }
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "N/A"
+    if (!dateString) return "Н/Д"
     const date = new Date(dateString)
     return new Intl.DateTimeFormat('ru-RU', {
       day: '2-digit',
@@ -170,7 +185,6 @@ export function AuthDebugPanel() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
     }).format(date)
   }
 
@@ -179,166 +193,222 @@ export function AuthDebugPanel() {
       <ProfileDebug />
       
       <Card className="w-full bg-white dark:bg-gray-800 shadow-md">
-        <CardHeader className="bg-primary/5">
-          <CardTitle className="text-xl font-bold">Состояние аутентификации</CardTitle>
-          <CardDescription>
-            Информация о текущем состоянии аутентификации пользователя
-          </CardDescription>
+        <CardHeader className="bg-primary/5 pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl font-bold">Отладка аутентификации</CardTitle>
+              <CardDescription>
+                Просмотр состояния аутентификации и данных пользователя
+              </CardDescription>
+            </div>
+            <Badge variant={userState.isAuthenticated ? "default" : "destructive"} className="text-xs">
+              {userState.isAuthenticated ? "Аутентифицирован" : "Не аутентифицирован"}
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center items-center h-32">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
             </div>
           ) : error ? (
-            <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-md">
+            <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-md m-6">
               <p className="font-semibold">Ошибка:</p>
               <p>{error}</p>
             </div>
           ) : (
-            <>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 text-primary">Zustand состояние</h3>
-                  <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md space-y-3 text-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="font-medium text-gray-500 dark:text-gray-400">Аутентифицирован в Zustand:</p>
-                        <p className={userState.isAuthenticated ? "text-green-600 dark:text-green-400 font-medium" : "text-red-600 dark:text-red-400 font-medium"}>
-                          {userState.isAuthenticated ? "Да" : "Нет"}
-                        </p>
+            <Tabs defaultValue="zustand" className="w-full">
+              <TabsList className="w-full justify-start rounded-none border-b px-6 pt-2">
+                <TabsTrigger value="zustand">Zustand</TabsTrigger>
+                <TabsTrigger value="supabase">Supabase</TabsTrigger>
+                <TabsTrigger value="session">Сессия</TabsTrigger>
+              </TabsList>
+              
+              {/* Вкладка Zustand */}
+              <TabsContent value="zustand" className="p-6 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-muted-foreground">Информация о пользователе</h3>
+                    <div className="rounded border p-3 text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-muted-foreground">ID:</span>
+                        <span className="truncate max-w-[180px]">{userState.id || "Н/Д"}</span>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-500 dark:text-gray-400">ID пользователя:</p>
-                        <p className="truncate">{userState.id || "Нет данных"}</p>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-muted-foreground">Имя:</span>
+                        <span>{userState.name || "Н/Д"}</span>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-500 dark:text-gray-400">Имя пользователя:</p>
-                        <p>{userState.name || "Нет данных"}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-500 dark:text-gray-400">Email пользователя:</p>
-                        <p>{userState.email || "Нет данных"}</p>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-muted-foreground">Email:</span>
+                        <span>{userState.email || "Н/Д"}</span>
                       </div>
                     </div>
-                    <div className="pt-2 border-t dark:border-gray-700">
-                      <p className="font-medium text-gray-500 dark:text-gray-400 mb-2">Полное состояние Zustand:</p>
-                      <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md whitespace-pre-wrap overflow-x-auto text-xs">
-                        {JSON.stringify(userState, null, 2)}
-                      </pre>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium text-muted-foreground">Роль и разрешения</h3>
+                    <div className="rounded border p-3 text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-muted-foreground">Роль:</span>
+                        <Badge variant="outline">{userState.role || "Не назначена"}</Badge>
+                      </div>
+                      <div>
+                        <div className="font-medium text-muted-foreground mb-1">Разрешения:</div>
+                        {userState.permissions && userState.permissions.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {userState.permissions.slice(0, 6).map((perm) => (
+                              <Badge key={perm} variant="secondary" className="justify-start font-mono">{perm}</Badge>
+                            ))}
+                            {userState.permissions.length > 6 && (
+                              <Badge variant="secondary">+{userState.permissions.length - 6} ещё</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic">Нет разрешений</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                    <h3 className="text-sm font-medium text-muted-foreground">Профиль</h3>
+                    <div className="rounded border p-3 text-sm h-[calc(100%-28px)]">
+                      {userState.profile ? (
+                        <ScrollArea className="h-full max-h-[200px]">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            {Object.entries(userState.profile)
+                              .filter(([_, value]) => value !== null && value !== undefined)
+                              .map(([key, value]) => (
+                                <div key={key} className="overflow-hidden">
+                                  <span className="font-medium text-muted-foreground">{key}: </span>
+                                  <span className="truncate">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <span className="text-muted-foreground italic">Профиль не загружен</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="col-span-1 md:col-span-2 lg:col-span-3 space-y-2">
+                    <h3 className="text-sm font-medium text-muted-foreground">Полное состояние Zustand</h3>
+                    <ScrollArea className="h-[200px] rounded border">
+                      <pre className="p-3 text-xs font-mono">{JSON.stringify(userState, null, 2)}</pre>
+                    </ScrollArea>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              {/* Вкладка Supabase */}
+              <TabsContent value="supabase" className="p-6 pt-4">
+                {userData?.user ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Основная информация</h3>
+                        <div className="rounded border p-3 text-sm space-y-2">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">ID:</span>
+                            <span className="truncate max-w-[180px]">{userData.user.id}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Email:</span>
+                            <span>{userData.user.email}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Email подтвержден:</span>
+                            <Badge variant={userData.user.email_confirmed_at ? "default" : "destructive"}>
+                              {userData.user.email_confirmed_at ? "Да" : "Нет"}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Создан:</span>
+                            <span>{formatDate(userData.user.created_at)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Профиль в Supabase</h3>
+                        <div className="rounded border p-3 text-sm">
+                          {userData.profile ? (
+                            <ScrollArea className="h-[150px]">
+                              <div className="grid grid-cols-1 gap-2">
+                                {Object.entries(userData.profile)
+                                  .filter(([key, value]) => value !== null && value !== undefined && key !== 'id' && key !== 'user_id')
+                                  .map(([key, value]) => (
+                                    <div key={key} className="flex justify-between">
+                                      <span className="font-medium text-muted-foreground">{key}:</span>
+                                      <span className="truncate max-w-[180px]">{String(value)}</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </ScrollArea>
+                          ) : (
+                            <span className="text-muted-foreground italic">Профиль не загружен</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     
-                    {userState.profile && (
-                      <div className="pt-2 border-t dark:border-gray-700">
-                        <p className="font-medium text-gray-500 dark:text-gray-400 mb-2">Данные профиля в Zustand:</p>
-                        <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md whitespace-pre-wrap overflow-x-auto text-xs">
-                          {JSON.stringify(userState.profile, null, 2)}
-                        </pre>
+                    {userData.user.user_metadata && Object.keys(userData.user.user_metadata).length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">User Metadata</h3>
+                        <div className="rounded border p-3">
+                          <pre className="text-xs font-mono">{JSON.stringify(userData.user.user_metadata, null, 2)}</pre>
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 text-primary">Статус аутентификации (Supabase)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md text-sm">
-                    <div>
-                      <p className="font-medium text-gray-500 dark:text-gray-400">Пользователь аутентифицирован:</p>
-                      <p className={sessionData?.session ? "text-green-600 dark:text-green-400 font-medium" : "text-red-600 dark:text-red-400 font-medium"}>
-                        {sessionData?.session ? "Да" : "Нет"}
-                      </p>
-                    </div>
-                    {sessionData?.session && (
-                      <>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Истекает:</p>
-                          <p>{formatDate(sessionData.session.expires_at)}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {userData?.user && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2 text-primary">Данные пользователя (Supabase)</h3>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-md space-y-3 text-sm">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">ID:</p>
-                          <p className="truncate">{userData.user.id}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Email:</p>
-                          <p>{userData.user.email}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Email подтвержден:</p>
-                          <p className={userData.user.email_confirmed_at ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                            {userData.user.email_confirmed_at ? "Да" : "Нет"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Создан:</p>
-                          <p>{formatDate(userData.user.created_at)}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Имя из user_metadata:</p>
-                          <p>{userData.user.user_metadata?.name || <span className="italic text-gray-400">Нет данных</span>}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Имя из профиля:</p>
-                          <p>{userData.profile?.first_name || ""} {userData.profile?.last_name || ""}</p>
-                        </div>
-                      </div>
-                      
-                      {userData.user.user_metadata && Object.keys(userData.user.user_metadata).length > 0 && (
-                        <div className="pt-2 border-t dark:border-gray-700">
-                          <p className="font-medium text-gray-500 dark:text-gray-400 mb-2">User Metadata:</p>
-                          <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md whitespace-pre-wrap overflow-x-auto text-xs">
-                            {JSON.stringify(userData.user.user_metadata, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                      
-                      {userData.profile && (
-                        <div className="pt-2 border-t dark:border-gray-700">
-                          <p className="font-medium text-gray-500 dark:text-gray-400 mb-2">Данные профиля:</p>
-                          <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md whitespace-pre-wrap overflow-x-auto text-xs">
-                            {JSON.stringify(userData.profile, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
+                ) : (
+                  <div className="p-4 text-center text-muted-foreground">
+                    Пользователь не аутентифицирован в Supabase
                   </div>
                 )}
-                
-                {sessionData?.session && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2 text-primary">Данные сессии (Supabase)</h3>
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md p-4 text-sm">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Провайдер:</p>
-                          <p className="capitalize">{sessionData.session.provider || "email"}</p>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-500 dark:text-gray-400">Время последней активности:</p>
-                          <p>{formatDate(sessionData.session.last_sign_in_at)}</p>
+              </TabsContent>
+              
+              {/* Вкладка Сессия */}
+              <TabsContent value="session" className="p-6 pt-4">
+                {sessionData?.session ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Информация о сессии</h3>
+                        <div className="rounded border p-3 text-sm space-y-2">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Провайдер:</span>
+                            <span className="capitalize">{sessionData.session.provider || "email"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Последний вход:</span>
+                            <span>{formatDate(sessionData.session.last_sign_in_at)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-muted-foreground">Истекает:</span>
+                            <span>{formatDate(sessionData.session.expires_at)}</span>
+                          </div>
                         </div>
                       </div>
                       
-                      <div className="pt-2 mt-2 border-t dark:border-gray-700">
-                        <p className="font-medium text-gray-500 dark:text-gray-400 mb-2">Токен:</p>
-                        <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md overflow-x-auto">
-                          <p className="text-xs break-all">{sessionData.session.access_token.substring(0, 30)}...</p>
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Токен</h3>
+                        <div className="rounded border p-3">
+                          <ScrollArea className="h-[100px]">
+                            <p className="text-xs font-mono break-all">{sessionData.session.access_token}</p>
+                          </ScrollArea>
                         </div>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="p-4 text-center text-muted-foreground">
+                    Активная сессия не найдена
+                  </div>
                 )}
-              </div>
-            </>
+              </TabsContent>
+            </Tabs>
           )}
         </CardContent>
         <CardFooter className="flex justify-between bg-gray-50 dark:bg-gray-900/30 p-4">
@@ -347,13 +417,15 @@ export function AuthDebugPanel() {
               variant="outline"
               onClick={handleRefresh}
               disabled={loading}
+              size="sm"
             >
-              Обновить данные
+              Обновить
             </Button>
             <Button 
               variant="outline" 
               onClick={() => clearUser()}
               disabled={loading || !userState.isAuthenticated}
+              size="sm"
             >
               Сбросить Zustand
             </Button>
@@ -363,8 +435,9 @@ export function AuthDebugPanel() {
               variant="destructive" 
               onClick={handleLogout}
               disabled={loading}
+              size="sm"
             >
-              Выйти из системы
+              Выйти
             </Button>
           )}
         </CardFooter>

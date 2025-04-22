@@ -20,7 +20,7 @@ import { updateUser, getDepartments, getTeams, getPositions, getCategories } fro
 import type { User, Department, Team, Position, Category } from "../lib/types"
 import { toast } from "@/components/ui/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
-import { supabase } from "../lib/supabase-client"
+import { createClient } from "@/utils/supabase/client"
 
 interface UserDialogProps {
   open: boolean
@@ -154,33 +154,40 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           ...formData,
           name: undefined, // не отправляем name
         })
-        // Получаем свежие данные пользователя из базы
-        const { data: freshProfile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single()
-        if (freshProfile) {
-          setUser({
-            id: freshProfile.user_id,
-            email: freshProfile.email,
-            name: [freshProfile.first_name, freshProfile.last_name].filter(Boolean).join(" "),
-            profile: {
-              firstName: freshProfile.first_name,
-              lastName: freshProfile.last_name,
-              departmentId: freshProfile.department_id,
-              teamId: freshProfile.team_id,
-              positionId: freshProfile.position_id,
-              categoryId: freshProfile.category_id,
-              workFormat: freshProfile.work_format,
-              salary: freshProfile.salary,
-              isHourly: freshProfile.is_hourly,
-              employmentRate: freshProfile.employment_rate,
-              address: freshProfile.address,
-              roleId: freshProfile.role_id,
-            },
-          })
+        
+        // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
+        if (isSelfEdit) {
+          // Получаем свежие данные пользователя из базы
+          const freshSupabase = createClient();
+          const { data: freshProfile } = await freshSupabase
+            .from("profiles")
+            .select("*")
+            .eq("user_id", user.id)
+            .single()
+          
+          if (freshProfile) {
+            setUser({
+              id: freshProfile.user_id,
+              email: freshProfile.email,
+              name: [freshProfile.first_name, freshProfile.last_name].filter(Boolean).join(" "),
+              profile: {
+                firstName: freshProfile.first_name,
+                lastName: freshProfile.last_name,
+                departmentId: freshProfile.department_id,
+                teamId: freshProfile.team_id,
+                positionId: freshProfile.position_id,
+                categoryId: freshProfile.category_id,
+                workFormat: freshProfile.work_format,
+                salary: freshProfile.salary,
+                isHourly: freshProfile.is_hourly,
+                employmentRate: freshProfile.employment_rate,
+                address: freshProfile.address,
+                roleId: freshProfile.role_id,
+              },
+            })
+          }
         }
+        
         toast({
           title: "Успешно",
           description: isSelfEdit ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
