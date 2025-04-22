@@ -8,7 +8,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
-import { useUserStore } from "@/stores/useUserStore"
+import { syncCurrentUserState } from "@/modules/users/lib/data-service"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -35,39 +35,16 @@ export default function LoginPage() {
         return
       }
 
-      if (signInData?.user) {
-        const user = signInData.user;
-        console.log("Успешный вход, пользователь:", user.id);
+      console.log("Успешный вход, запускаем синхронизацию состояния...");
+      const syncSuccess = await syncCurrentUserState();
 
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (profileError && profileError.code !== 'PGRST116') {
-          console.error("Ошибка получения профиля:", profileError);
-          setError("Не удалось загрузить данные профиля.");
-          setLoading(false);
-          return;
-        }
-
-        console.log("Полученный профиль:", profileData);
-
-        useUserStore.getState().setUser({
-          id: user.id,
-          email: user.email ?? "",
-          name: profileData ? [profileData.first_name ?? "", profileData.last_name ?? ""].filter(Boolean).join(" ") : "Пользователь",
-          profile: profileData,
-        });
-
-        console.log("Состояние Zustand обновлено после входа.");
-
-      } else {
-        setError("Не удалось получить данные пользователя после входа.");
+      if (!syncSuccess) {
+        setError("Не удалось синхронизировать данные пользователя после входа.");
         setLoading(false);
         return;
       }
+
+      console.log("Синхронизация состояния после входа прошла успешно.");
 
       router.refresh()
       router.push("/dashboard")
