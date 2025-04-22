@@ -6,9 +6,9 @@ import UserAnalytics from "../components/user-analytics"
 import PaymentList from "../components/payment-list"
 import { UserFilters } from "../components/user-filters"
 import { CurrentUserCard } from "../components/current-user-card"
-import { getUsers } from "../lib/data-service"
+import { getUsers } from "@/services/org-data-service"
 import { useState, useEffect } from "react"
-import type { User } from "../lib/types"
+import type { User } from "@/types/db"
 import { PaymentAccessCheck } from "../components/payment-access-check"
 
 export default function UsersPage() {

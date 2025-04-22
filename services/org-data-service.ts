@@ -1,4 +1,4 @@
-import type { User, Department, Team, Position, Category, WorkFormatType } from "./types"
+import type { User, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
 import { createClient } from "@/utils/supabase/client"
 
 // Функция для преобразования формата работы из БД в формат приложения

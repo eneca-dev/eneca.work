@@ -8,7 +8,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
-import { syncCurrentUserState } from "@/modules/users/lib/data-service"
+import { syncCurrentUserState } from "@/services/org-data-service"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)

@@ -14,7 +14,7 @@ import {
   getUsersJoinedByMonth,
   getTopDepartments,
   getTopTeams,
-} from "../lib/data-service"
+} from "@/services/org-data-service"
 import { toast } from "@/components/ui/use-toast"
 
 export default function UserAnalytics() {

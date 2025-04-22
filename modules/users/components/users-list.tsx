@@ -30,8 +30,8 @@ import {
 import { UserDialog } from "./user-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { deleteUser } from "../lib/data-service"
-import type { User } from "../lib/types"
+import { deleteUser } from "@/services/org-data-service"
+import type { User } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 

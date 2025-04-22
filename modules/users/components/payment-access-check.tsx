@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { checkPaymentAccess } from "../lib/data-service"
+import { checkPaymentAccess } from "@/services/org-data-service"
 
 interface PaymentAccessCheckProps {
   children: React.ReactNode

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronUp, Filter, Building2, Home, Briefcase } from "lucide-react"
 import { useEffect, useState } from "react"
-import type { User } from "../lib/types"
+import type { User } from "@/types/db"
 
 // Обновим интерфейс UserFiltersProps, чтобы включить workLocations
 interface UserFiltersProps {

@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { getUserRoleAndPermissions } from "@/modules/users/lib/data-service"
+import { getUserRoleAndPermissions } from "@/services/org-data-service"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)

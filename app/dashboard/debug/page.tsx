@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
 import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import { syncCurrentUserState } from "@/modules/users/lib/data-service"
+import { syncCurrentUserState } from "@/services/org-data-service"
 
 export default function DebugPage() {
   const [refreshCounter, setRefreshCounter] = useState(0)
