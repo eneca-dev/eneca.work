@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 
 interface SidebarProps {
@@ -54,6 +54,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
 
   const isSettingsActive = pathname === "/dashboard/settings"
   const isUsersActive = pathname === "/users"
+  const isDebugActive = pathname === "/dashboard/debug"
 
   return (
     <div
@@ -130,6 +131,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 flex flex-col items-center space-y-2">
               <ThemeToggle />
 
+              <Link href="/dashboard/debug">
+                <Button
+                  variant={isDebugActive ? "secondary" : "ghost"}
+                  size="icon"
+                  className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
+                >
+                  <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                </Button>
+              </Link>
+
               <Link href="/dashboard/users">
                 <Button
                   variant={isUsersActive ? "secondary" : "ghost"}
@@ -148,6 +159,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
                 <ThemeToggle />
+                
+                <Link href="/dashboard/debug">
+                  <Button
+                    variant={isDebugActive ? "secondary" : "ghost"}
+                    size="icon"
+                    className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
+                  >
+                    <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                  </Button>
+                </Link>
+                
                 <Link href="/dashboard/users">
                   <Button
                     variant={isUsersActive ? "secondary" : "ghost"}
@@ -157,6 +179,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                     <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
+                
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" />
                 </Button>

@@ -1,0 +1,370 @@
+# План миграции с Redux на Zustand
+
+## 1. Подготовка проекта
+
+### 1.1. Установка зависимостей
+```bash
+npm install zustand
+# или
+yarn add zustand
+```
+
+### 1.2. Создание структуры директорий
+```
+src/
+└── stores/
+    ├── useUserStore.ts     # Вместо userSlice.ts
+    ├── useUiStore.ts       # Вместо uiSlice.ts
+    ├── useSettingsStore.ts # Вместо settingsSlice.ts
+    └── index.ts            # Общие экспорты и типы (при необходимости)
+```
+
+## 2. Пошаговая миграция слайсов
+
+### 2.1. Анализ существующей структуры Redux
+
+Перед миграцией сделайте инвентаризацию существующих слайсов Redux и их взаимодействия:
+- Какие слайсы используются в приложении
+- Какие данные хранятся в каждом слайсе
+- Какие экшены и редьюсеры есть
+- Как компоненты взаимодействуют со стором
+
+### 2.2. Миграция слайса пользователя (userSlice → useUserStore)
+
+#### 2.2.1. Создание стора пользователя
+```typescript
+// stores/useUserStore.ts
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+// Определяем интерфейс состояния (основан на типах из Redux)
+interface UserState {
+  id: string | null;
+  email: string | null;
+  name: string | null;
+  isAuthenticated: boolean;
+  
+  // Действия (преобразованные из Redux actions)
+  setUser: (user: { id: string; email: string; name: string }) => void;
+  clearUser: () => void;
+}
+
+// Создаем стор
+export const useUserStore = create<UserState>()(
+  devtools(
+    persist(
+      (set) => ({
+        // Начальное состояние (скопировано из initialState Redux)
+        id: null,
+        email: null,
+        name: null,
+        isAuthenticated: false,
+        
+        // Действия (преобразованные из Redux actions)
+        setUser: (user) => set({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          isAuthenticated: true
+        }),
+        
+        clearUser: () => set({
+          id: null,
+          email: null,
+          name: null,
+          isAuthenticated: false
+        })
+      }),
+      {
+        name: 'user-storage',
+        partialize: (state) => ({
+          id: state.id,
+          email: state.email,
+          name: state.name,
+          isAuthenticated: state.isAuthenticated
+        }),
+      }
+    )
+  )
+)
+```
+
+#### 2.2.2. Обновление компонентов, использующих userSlice
+```typescript
+// Было (Redux)
+import { useSelector, useDispatch } from 'react-redux'
+import { clearUser } from '@/store/userSlice'
+
+function UserProfile() {
+  const user = useSelector((state) => state.user)
+  const dispatch = useDispatch()
+  
+  const handleLogout = () => {
+    dispatch(clearUser())
+  }
+  
+  return (...)
+}
+
+// Стало (Zustand)
+import { useUserStore } from '@/stores/useUserStore'
+
+function UserProfile() {
+  const { id, name, email, isAuthenticated, clearUser } = useUserStore(
+    (state) => ({ 
+      id: state.id,
+      name: state.name, 
+      email: state.email,
+      isAuthenticated: state.isAuthenticated,
+      clearUser: state.clearUser
+    })
+  )
+  
+  const handleLogout = () => {
+    clearUser()
+  }
+  
+  return (...)
+}
+```
+
+### 2.3. Миграция UI-слайса (uiSlice → useUiStore)
+
+#### 2.3.1. Создание UI-стора
+```typescript
+// stores/useUiStore.ts
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
+
+interface UiState {
+  loading: boolean;
+  notification: string | null;
+  
+  setLoading: (loading: boolean) => void;
+  setNotification: (notification: string | null) => void;
+  clearNotification: () => void;
+}
+
+export const useUiStore = create<UiState>()(
+  devtools(
+    (set) => ({
+      loading: false,
+      notification: null,
+      
+      setLoading: (loading) => set({ loading }),
+      setNotification: (notification) => set({ notification }),
+      clearNotification: () => set({ notification: null })
+    })
+  )
+)
+```
+
+#### 2.3.2. Обновление компонентов, использующих uiSlice
+```typescript
+// Было (Redux)
+import { useSelector, useDispatch } from 'react-redux'
+import { setLoading, setNotification } from '@/store/uiSlice'
+
+// Стало (Zustand)
+import { useUiStore } from '@/stores/useUiStore'
+```
+
+### 2.4. Миграция слайса настроек (settingsSlice → useSettingsStore)
+
+#### 2.4.1. Создание стора настроек
+```typescript
+// stores/useSettingsStore.ts
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+interface SettingsState {
+  theme: 'light' | 'dark' | 'system';
+  
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+}
+
+export const useSettingsStore = create<SettingsState>()(
+  devtools(
+    persist(
+      (set) => ({
+        theme: 'system',
+        
+        setTheme: (theme) => set({ theme })
+      }),
+      {
+        name: 'settings-storage',
+      }
+    )
+  )
+)
+```
+
+#### 2.4.2. Обновление компонентов, использующих settingsSlice
+```typescript
+// Было (Redux)
+import { useSelector, useDispatch } from 'react-redux'
+import { setTheme } from '@/store/settingsSlice'
+
+// Стало (Zustand)
+import { useSettingsStore } from '@/stores/useSettingsStore'
+```
+
+## 3. Проверка и настройка взаимодействия между сторами
+
+### 3.1. Взаимодействие через получение состояния другого стора
+
+```typescript
+// Например, в useUserStore.ts
+import { useUiStore } from './useUiStore'
+
+// Внутри action:
+const login = async (credentials) => {
+  // Получаем доступ к другому стору через getState
+  useUiStore.getState().setLoading(true)
+  
+  try {
+    // ... логика авторизации
+    set({ /* обновление состояния пользователя */ })
+    useUiStore.getState().setLoading(false)
+  } catch (error) {
+    useUiStore.getState().setNotification(error.message)
+    useUiStore.getState().setLoading(false)
+  }
+}
+```
+
+## 4. Миграция специфических компонентов
+
+### 4.1. Обновление AuthDebugPanel
+
+```typescript
+// components/auth-debug-panel.tsx
+"use client"
+
+// Было
+// import { useDispatch, useSelector } from "react-redux"
+// import { RootState } from "@/store"
+// import { clearUser, setUser } from "@/store/userSlice"
+
+// Стало
+import { useUserStore } from "@/stores/useUserStore"
+import { useUiStore } from "@/stores/useUiStore"
+
+export function AuthDebugPanel() {
+  // Было
+  // const reduxUserState = useSelector((state: RootState) => state.user)
+  // const dispatch = useDispatch()
+  
+  // Стало
+  const userState = useUserStore()
+  
+  // И так далее с заменой всех вызовов dispatch и useSelector
+}
+```
+
+### 4.2. Обновление ReduxDebugPanel
+
+Переименовать в `StoreDebugPanel` и обновить для работы с Zustand:
+
+```typescript
+// components/store-debug-panel.tsx
+"use client"
+
+// Было
+// import { RootState } from "@/store"
+// import { useDispatch, useSelector } from "react-redux"
+// import { clearUser } from "@/store/userSlice"
+// import { setLoading, setNotification, clearNotification } from "@/store/uiSlice"
+// import { setTheme } from "@/store/settingsSlice"
+
+// Стало
+import { useUserStore } from "@/stores/useUserStore"
+import { useUiStore } from "@/stores/useUiStore"
+import { useSettingsStore } from "@/stores/useSettingsStore"
+
+export function StoreDebugPanel() {
+  // Заменить все обращения к Redux на использование Zustand
+  const userState = useUserStore()
+  const uiState = useUiStore()
+  const settingsState = useSettingsStore()
+  
+  // Заменить dispatch(action()) на прямые вызовы
+  // Было: dispatch(clearUser())
+  // Стало: userState.clearUser()
+}
+```
+
+## 5. Удаление неиспользуемых элементов Redux
+
+### 5.1. Удаление redux-зависимостей
+- Удалить `@reduxjs/toolkit` и `react-redux` из package.json, если они больше не используются
+- Удалить исходные файлы слайсов и конфигурации Redux-стора
+- Удалить обёртку `<Provider store={store}>` из корня приложения
+
+### 5.2. Убедиться, что все импорты обновлены
+```bash
+# Найти все оставшиеся ссылки на Redux
+grep -r "useSelector\|useDispatch\|createSlice\|configureStore" src/
+```
+
+## 6. Тестирование и отладка
+
+### 6.1. Тестирование сторов
+```typescript
+// Пример тестирования useUserStore
+import { useUserStore } from '@/stores/useUserStore'
+
+describe('useUserStore', () => {
+  beforeEach(() => {
+    useUserStore.setState({
+      id: null,
+      email: null,
+      name: null,
+      isAuthenticated: false
+    })
+  })
+  
+  it('should set user', () => {
+    const user = { id: '1', email: 'test@example.com', name: 'Test User' }
+    useUserStore.getState().setUser(user)
+    
+    expect(useUserStore.getState().id).toBe(user.id)
+    expect(useUserStore.getState().email).toBe(user.email)
+    expect(useUserStore.getState().name).toBe(user.name)
+    expect(useUserStore.getState().isAuthenticated).toBe(true)
+  })
+})
+```
+
+### 6.2. Проверка интеграции
+- Пройтись по основным пользовательским сценариям
+- Убедиться, что все функции работают правильно
+- Проверить интеграцию с внешними API и сервисами
+
+## 7. Оптимизация и рефакторинг
+
+### 7.1. Оптимизация селекторов
+```typescript
+// Оптимизация селекторов для предотвращения ненужных ререндеров
+import { shallow } from 'zustand/shallow'
+
+// В компоненте
+const { name, email } = useUserStore(
+  state => ({ 
+    name: state.name, 
+    email: state.email 
+  }),
+  shallow // Сравнение объектов по shallow equality
+)
+```
+
+### 7.2. Рефакторинг общих паттернов
+- Выделение общих шаблонов использования сторов
+- Создание утилит для упрощения работы со сторами
+
+## 8. Документирование новой архитектуры
+
+### 8.1. Обновление документации
+- Описать новую архитектуру управления состоянием
+- Добавить примеры использования Zustand
+- Обновить руководство для разработчиков
