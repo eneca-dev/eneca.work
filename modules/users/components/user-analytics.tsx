@@ -36,22 +36,34 @@ export default function UserAnalytics() {
         setIsLoading(true)
 
         // Загрузка данных для аналитики
-        const deptData = (await getUsersByDepartment()) || {}
-        const teamData = (await getUsersByTeam()) || {}
-        const catData = (await getUsersByCategory()) || {}
-        const monthData = (await getUsersJoinedByMonth()) || {}
+        const deptData = (await getUsersByDepartment()) || []
+        const teamData = (await getUsersByTeam()) || []
+        const catData = (await getUsersByCategory()) || []
+        const monthData = (await getUsersJoinedByMonth()) || []
         const topDepts = (await getTopDepartments()) || []
         const topTeamsData = (await getTopTeams()) || []
         const activeCount = (await getActiveUsersCount()) || 0
         const inactiveCount = (await getInactiveUsersCount()) || 0
 
         // Преобразование данных в формат для графиков
-        setDepartmentData(Object.entries(deptData).map(([name, value]) => ({ name, value })))
-        setTeamData(Object.entries(teamData).map(([name, value]) => ({ name, value })))
-        setCategoryData(Object.entries(catData).map(([name, value]) => ({ name, value })))
-        setMonthlyData(Object.entries(monthData).map(([name, value]) => ({ name, value })))
-        setTopDepartments(topDepts)
-        setTopTeams(topTeamsData)
+        // Данные уже приходят в нужном формате {name, value}, просто устанавливаем их
+        setDepartmentData(deptData)
+        setTeamData(teamData)
+        setCategoryData(catData)
+        setMonthlyData(monthData)
+        
+        // Преобразование формата данных для top departments и teams
+        // Оба API возвращают массив объектов {name, value}, нужно преобразовать value в count
+        setTopDepartments(topDepts.map(item => ({ 
+          name: item.name, 
+          count: item.value
+        })))
+        
+        setTopTeams(topTeamsData.map(item => ({ 
+          name: item.name, 
+          count: item.value
+        })))
+        
         setActiveUsers(activeCount)
         setInactiveUsers(inactiveCount)
       } catch (error) {

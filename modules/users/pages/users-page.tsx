@@ -96,7 +96,7 @@ export default function UsersPage() {
         <h1 className="text-2xl font-bold tracking-tight">Управление пользователями</h1>
       </div>
 
-      <CurrentUserCard user={defaultUser} onUserUpdated={handleUserUpdated} />
+      <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />
 
       <Tabs defaultValue="list" className="w-full">
         <TabsList>
