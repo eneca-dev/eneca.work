@@ -15,6 +15,7 @@ export interface UserProfile {
   employmentRate?: number | null
   address?: string | null
   roleId?: string | null
+  avatar?: string | null
 }
 
 // Тип данных пользователя для передачи в setUser
@@ -39,12 +40,13 @@ interface UserState {
   setUser: (user: UserData) => void
   clearUser: () => void
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
+  updateAvatar: (avatarUrl: string) => void
 }
 
 export const useUserStore = create<UserState>()(
   devtools(
     persist(
-      (set) => ({
+      (set, get) => ({
         // Начальное состояние
         id: null,
         email: null,
@@ -77,7 +79,8 @@ export const useUserStore = create<UserState>()(
               isHourly: user.profile.isHourly,
               employmentRate: user.profile.employmentRate,
               address: user.profile.address,
-              roleId: user.profile.roleId
+              roleId: user.profile.roleId,
+              avatar: user.profile.avatar
             };
             profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
             console.log('Обработанный профиль перед сохранением:', processedProfile);
@@ -110,7 +113,33 @@ export const useUserStore = create<UserState>()(
         setRoleAndPermissions: (role, permissions) => set({
           role,
           permissions
-        })
+        }),
+        
+        // Метод для обновления аватара
+        updateAvatar: (avatarUrl: string) => {
+          const currentState = get();
+          
+          // Если у пользователя еще нет профиля, создаем его
+          if (!currentState.profile) {
+            set({ 
+              profile: { 
+                avatar: avatarUrl 
+              } 
+            });
+            return;
+          }
+          
+          // Иначе обновляем существующий профиль
+          set({
+            profile: {
+              ...currentState.profile,
+              avatar: avatarUrl
+            }
+          });
+          
+          console.log('Аватар обновлен:', avatarUrl);
+          console.log('Новый профиль:', useUserStore.getState().profile);
+        }
       }),
       {
         name: 'user-storage',

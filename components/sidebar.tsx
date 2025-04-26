@@ -53,7 +53,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
-  const isUsersActive = pathname === "/users"
+  const isUsersActive = pathname === "/dashboard/users"
   const isDebugActive = pathname === "/dashboard/debug"
 
   return (

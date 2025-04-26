@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +10,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { UserDialog } from "./user-dialog"
 import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
+import { AvatarUploader } from "./avatar-uploader"
+import { toast } from "sonner"
 
 interface CurrentUserCardProps {
   onUserUpdated?: () => void
@@ -28,6 +29,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
   
   // Используем существующий клиент Supabase
   const supabase = createClient()
+  const updateAvatar = useUserStore((state) => state.updateAvatar)
 
   // Получаем имена отделов, команд и должностей из Supabase
   useEffect(() => {
@@ -112,11 +114,12 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         name: userState.profile?.firstName && userState.profile?.lastName 
           ? `${userState.profile.firstName} ${userState.profile.lastName}`
           : userState.name || "",
-        avatar: "", // Может потребоваться доработка, если аватар хранится где-то в профиле
+        avatar: userState.profile?.avatar || "", // Используем аватар из профиля, если есть
         position: positionName,
         department: departmentName,
         team: teamName,
         category: categoryName,
+        role: userState.role || "",
         isActive: true,
         dateJoined: "",
         workLocation: 
@@ -166,6 +169,29 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         }
     }
   }
+  
+  // Обработчик успешной загрузки аватара
+  const handleAvatarUploaded = (url: string) => {
+    // Обновляем аватар в Zustand
+    updateAvatar(url)
+    
+    toast.success("После обработки аватар будет автоматически применен", {
+      description: "Повторно загрузить аватар можно будет через 15 минут"
+    })
+    
+    // Обновление аватара в локальном состоянии для демонстрации
+    if (currentUser) {
+      setCurrentUser({
+        ...currentUser,
+        avatar: url
+      })
+    }
+    
+    // Вызываем callback, если он есть
+    if (onUserUpdated) {
+      onUserUpdated()
+    }
+  }
 
   // Если данных нет, показываем пустую карточку или индикатор загрузки
   if (!currentUser) {
@@ -183,19 +209,16 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
 
   return (
     <TooltipProvider>
-      <Card>
+      <Card className="w-full max-w-4xl">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={currentUser.avatar || "/placeholder.svg"} alt={currentUser.name} />
-                <AvatarFallback>
-                  {currentUser.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
+              <AvatarUploader
+                avatarUrl={currentUser.avatar}
+                name={currentUser.name}
+                className="h-16 w-16"
+                onAvatarUploaded={handleAvatarUploaded}
+              />
               <div>
                 <h3 className="text-lg font-medium">{currentUser.name}</h3>
                 <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -222,6 +245,12 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
                         <p>{currentUser.address || "Адрес не указан"}</p>
                       </TooltipContent>
                     </Tooltip>
+                  )}
+                  {currentUser.role && currentUser.workLocation && (
+                    <span>•</span>
+                  )}
+                  {currentUser.role && (
+                    <span>{currentUser.role}</span>
                   )}
                 </div>
               </div>

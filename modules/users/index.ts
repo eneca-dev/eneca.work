@@ -17,8 +17,8 @@ import {
   updateUser,
   deleteUser,
   checkPaymentAccess,
-} from "./lib/data-service"
-import type { User, Department, Team, Position, Category } from "./lib/types"
+} from "@/services/org-data-service"
+import type { User, Department, Team, Position, Category } from "@/types/db"
 
 // Экспортируем все компоненты и функции
 export {

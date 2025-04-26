@@ -9,6 +9,7 @@ export type User = {
   department: string
   team: string
   category: string
+  role?: string
   isActive: boolean
   dateJoined: string
   workLocation: "office" | "remote" | "hybrid"
@@ -128,6 +129,7 @@ export type Database = {
       profiles: {
         Row: {
           address: string | null
+          avatar: string | null
           category_id: string
           created_at: string
           department_id: string
@@ -145,6 +147,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          avatar?: string | null
           category_id: string
           created_at?: string
           department_id: string
@@ -162,6 +165,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          avatar?: string | null
           category_id?: string
           created_at?: string
           department_id?: string
