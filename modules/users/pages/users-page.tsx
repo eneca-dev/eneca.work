@@ -76,7 +76,7 @@ export default function UsersPage() {
     id: "current",
     name: "Иван Иванов",
     email: "ivan@eneca.work",
-    avatar: "/placeholder.svg?height=40&width=40&text=ИИ",
+    avatar_url: "/placeholder.svg?height=40&width=40&text=ИИ",
     position: "Разработчик",
     department: "Разработка",
     team: "Frontend",

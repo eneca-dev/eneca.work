@@ -4,7 +4,7 @@ export type User = {
   id: string
   name: string
   email: string
-  avatar: string
+  avatar_url?: string
   position: string
   department: string
   team: string
@@ -129,7 +129,7 @@ export type Database = {
       profiles: {
         Row: {
           address: string | null
-          avatar: string | null
+          avatar_url: string | null
           category_id: string
           created_at: string
           department_id: string
@@ -147,7 +147,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          avatar?: string | null
+          avatar_url?: string | null
           category_id: string
           created_at?: string
           department_id: string
@@ -165,7 +165,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
-          avatar?: string | null
+          avatar_url?: string | null
           category_id?: string
           created_at?: string
           department_id?: string

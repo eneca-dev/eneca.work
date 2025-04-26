@@ -117,46 +117,103 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
   // Симуляция отправки аватара на сервер
   const uploadAvatar = async () => {
     if (!selectedFile || !canvasRef.current || !isUploadAllowed()) return
-    
+
     setIsProcessing(true)
-    
+    setProcessingError(null)
+
     try {
-      // Подготавливаем данные для отправки
+      // Получаем access_token пользователя
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session) {
+        throw new Error("Не удалось получить access_token пользователя")
+      }
+      const access_token = sessionData.session.access_token
+
+      // Получаем user_id
+      const user_id = sessionData.session.user.id
+
+      // Готовим изображение (Blob)
       canvasRef.current.toBlob(async (blob) => {
         if (!blob) {
-          throw new Error("Не удалось подготовить изображение")
+          setIsProcessing(false)
+          setProcessingError("Не удалось подготовить изображение")
+          toast.error("Не удалось подготовить изображение")
+          return
         }
-        
-        // Здесь будет логика отправки в Supabase
-        // Пока просто имитируем задержку
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        // Имитируем ошибку как запрошено
-        throw new Error("API для загрузки аватаров еще не реализован")
-        
-        // Реальный код отправки будет примерно таким
-        // const { data, error } = await supabase.storage
-        //   .from('avatars')
-        //   .upload(`${userState.id}/avatar.png`, blob, {
-        //     contentType: 'image/png',
-        //     upsert: true
-        //   })
-        
-        // if (error) throw error
-        
+
+        // Формируем FormData
+        const formData = new FormData()
+        formData.append("avatar", blob, "avatar.png")
+
+        // Отправляем на Edge Function
+        let resp
+        try {
+          resp = await fetch("https://gvrcbvifirhxxdnvrwlz.supabase.co/functions/v1/generate-avatar-from-photo", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${access_token}`
+            },
+            body: formData
+          })
+        } catch (err) {
+          setIsProcessing(false)
+          setProcessingError("Ошибка сети при отправке изображения")
+          toast.error("Ошибка сети при отправке изображения")
+          return
+        }
+
+        // DEBUG: временно выводим ответ сервера
+        console.log("[DEBUG] Edge Function response:", resp)
+
+        let data
+        try {
+          data = await resp.json()
+        } catch {
+          setIsProcessing(false)
+          setProcessingError("Некорректный ответ от сервера")
+          toast.error("Некорректный ответ от сервера")
+          return
+        }
+
+        // DEBUG: временно выводим data
+        console.log("[DEBUG] Edge Function data:", data)
+
+        if (!resp.ok || !data?.url) {
+          setIsProcessing(false)
+          setProcessingError(data?.error || "Ошибка генерации аватара")
+          toast.error(data?.error || "Ошибка генерации аватара")
+          return
+        }
+
+        // Обновляем профиль пользователя в Supabase (таблица profiles)
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ avatar_url: data.url })
+          .eq("user_id", user_id)
+
+        if (updateError) {
+          setIsProcessing(false)
+          setProcessingError("Не удалось обновить профиль пользователя")
+          toast.error("Не удалось обновить профиль пользователя")
+          return
+        }
+
         // Обновляем время последней загрузки
-        // setLastUploadTime(Date.now())
-        
-        // Получаем URL и вызываем обработчик
-        // const avatarUrl = ...
-        // if (onAvatarUploaded) onAvatarUploaded(avatarUrl)
-      })
+        setLastUploadTime(Date.now())
+
+        // Вызываем обработчик и уведомляем пользователя
+        if (onAvatarUploaded) onAvatarUploaded(data.url)
+        toast.success("Аватар успешно обновлён!")
+        setIsProcessing(false)
+        setSelectedFile(null)
+        setPreview(null)
+        setIsAgreementChecked(false)
+        onOpenChange(false)
+      }, "image/png")
     } catch (error) {
-      console.error("Ошибка загрузки аватара:", error)
-      setProcessingError(error instanceof Error ? error.message : "Неизвестная ошибка")
-      toast.error("Не удалось загрузить аватар")
-    } finally {
       setIsProcessing(false)
+      setProcessingError(error instanceof Error ? error.message : "Неизвестная ошибка")
+      toast.error(error instanceof Error ? error.message : "Неизвестная ошибка")
     }
   }
 

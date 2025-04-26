@@ -114,7 +114,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         name: userState.profile?.firstName && userState.profile?.lastName 
           ? `${userState.profile.firstName} ${userState.profile.lastName}`
           : userState.name || "",
-        avatar: userState.profile?.avatar || "", // Используем аватар из профиля, если есть
+        avatar_url: userState.profile?.avatar_url || "", // Используем avatar_url из профиля
         position: positionName,
         department: departmentName,
         team: teamName,
@@ -183,7 +183,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
     if (currentUser) {
       setCurrentUser({
         ...currentUser,
-        avatar: url
+        avatar_url: url
       })
     }
     
@@ -214,7 +214,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <AvatarUploader
-                avatarUrl={currentUser.avatar}
+                avatarUrl={currentUser.avatar_url}
                 name={currentUser.name}
                 className="h-16 w-16"
                 onAvatarUploaded={handleAvatarUploaded}

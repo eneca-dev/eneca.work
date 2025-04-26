@@ -41,6 +41,7 @@ export async function getUsers(): Promise<User[]> {
       employment_rate,
       salary,
       is_hourly,
+      avatar_url,
       departments(department_id, department_name),
       teams(team_id, team_name),
       positions(position_id, position_name),
@@ -62,7 +63,7 @@ export async function getUsers(): Promise<User[]> {
       id: profile.user_id,
       name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
       email: profile.email || "",
-      avatar: `/placeholder.svg?height=40&width=40&text=${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`,
+      avatar_url: profile.avatar_url || `/placeholder.svg?height=40&width=40&text=${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`,
       position: position?.position_name || "",
       department: department?.department_name || "",
       team: team?.team_name || "",
@@ -146,7 +147,7 @@ export async function getCategories(): Promise<Category[]> {
 // Обновление пользователя
 export async function updateUser(
   userId: string,
-  userData: Partial<Omit<User, "id" | "avatar" | "dateJoined" | "isActive">> & { firstName?: string; lastName?: string },
+  userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined" | "isActive">> & { firstName?: string; lastName?: string },
 ) {
   const supabase = createClient();
   const updates: any = {}
@@ -579,6 +580,7 @@ export async function syncCurrentUserState() {
             employmentRate: profileData.employment_rate,
             address: profileData.address,
             roleId: profileData.role_id,
+            avatar_url: profileData.avatar_url
           } 
         : null
     });

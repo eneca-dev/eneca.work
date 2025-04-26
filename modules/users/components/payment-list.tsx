@@ -325,7 +325,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
                             <TableCell className="py-1">
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-8 w-8">
-                                  <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                                  <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
                                   <AvatarFallback>
                                     {user.name
                                       .split(" ")

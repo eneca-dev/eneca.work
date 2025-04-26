@@ -15,7 +15,7 @@ export interface UserProfile {
   employmentRate?: number | null
   address?: string | null
   roleId?: string | null
-  avatar?: string | null
+  avatar_url?: string | null
 }
 
 // Тип данных пользователя для передачи в setUser
@@ -80,7 +80,7 @@ export const useUserStore = create<UserState>()(
               employmentRate: user.profile.employmentRate,
               address: user.profile.address,
               roleId: user.profile.roleId,
-              avatar: user.profile.avatar
+              avatar_url: user.profile.avatar_url
             };
             profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
             console.log('Обработанный профиль перед сохранением:', processedProfile);
@@ -123,7 +123,7 @@ export const useUserStore = create<UserState>()(
           if (!currentState.profile) {
             set({ 
               profile: { 
-                avatar: avatarUrl 
+                avatar_url: avatarUrl 
               } 
             });
             return;
@@ -133,7 +133,7 @@ export const useUserStore = create<UserState>()(
           set({
             profile: {
               ...currentState.profile,
-              avatar: avatarUrl
+              avatar_url: avatarUrl
             }
           });
           

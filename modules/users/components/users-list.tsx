@@ -351,7 +351,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                 <TableCell className="font-medium">
                                   <div className="flex items-center gap-3">
                                     <Avatar>
-                                      <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                                      <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
                                       <AvatarFallback>
                                         {user.name
                                           .split(" ")
@@ -477,7 +477,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                         <TableCell className="font-medium pl-12">
                                           <div className="flex items-center gap-3">
                                             <Avatar>
-                                              <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                                              <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
                                               <AvatarFallback>
                                                 {user.name
                                                   .split(" ")
