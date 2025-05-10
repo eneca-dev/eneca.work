@@ -12,243 +12,494 @@
 - **Иконки**: Lucide React
 - **Уведомления**: Sonner для тостов
 
-## Структура приложения
+## Полная структура приложения
 
-1. **`app/`** - основные страницы Next.js App Router
-   - `auth/` - страницы аутентификации (логин, регистрация, сброс пароля)
-   - `dashboard/` - защищенные страницы приложения (основной функционал)
-
-2. **`components/`** - переиспользуемые React компоненты
-   - Включает компоненты UI на основе Radix
-
-3. **`hooks/`** - пользовательские React хуки
-
-4. **`lib/`** - служебные функции
-   - `utils.ts` - утилиты для работы с классами
-
-5. **`modules/`** - функциональные модули приложения
-   - `users/` - модуль управления пользователями, включающий загрузку и создание аватаров
-
-6. **`public/`** - статические файлы
-
-7. **`stores/`** - хранилища состояния Zustand
-
-8. **`styles/`** - глобальные стили
-
-9. **`utils/`** - утилиты
-   - `supabase/` - клиенты и утилиты для Supabase
-
-## Интерфейс взаимодействия с базой данных (Supabase)
-
-Приложение использует Supabase для хранения данных и аутентификации. Взаимодействие происходит через следующие клиенты:
-
-- **Серверный клиент**: `utils/supabase/server.ts` - создает клиент на стороне сервера для серверных компонентов
-- **Клиентский клиент**: `utils/supabase/client.ts` - создает клиент на стороне клиента для клиентских компонентов
-- **Middleware**: `utils/supabase/middleware.ts` - обрабатывает сессии и перенаправления
-
-Для доступа к базе данных необходимо использовать соответствующий клиент:
-
-```typescript
-// В серверном компоненте
-import { createClient } from "@/utils/supabase/server"
-const supabase = createClient()
-
-// В клиентском компоненте
-import { createClient } from "@/utils/supabase/client"
-const supabase = createClient()
+```
+/
+├── app/                      # Директория Next.js App Router
+│   ├── api/                  # API маршруты
+│   ├── auth/                 # Аутентификация
+│   │   ├── login/            # Страница входа
+│   │   ├── register/         # Страница регистрации
+│   │   ├── forgot-password/  # Восстановление пароля
+│   │   └── reset-password/   # Сброс пароля
+│   ├── dashboard/            # Защищенные страницы
+│   │   ├── projects/         # Страницы проектов
+│   │   ├── clients/          # Страницы клиентов
+│   │   ├── users/            # Управление пользователями
+│   │   ├── settings/         # Настройки приложения
+│   │   └── ...               # Другие страницы дашборда
+│   ├── globals.css           # Глобальные стили
+│   ├── layout.tsx            # Корневой макет
+│   └── page.tsx              # Главная страница
+│
+├── components/               # Переиспользуемые компоненты
+│   ├── auth/                 # Компоненты для аутентификации
+│   ├── dashboard/            # Компоненты для дашборда
+│   │   ├── header.tsx        # Шапка дашборда
+│   │   ├── sidebar.tsx       # Боковая панель
+│   │   └── ...
+│   ├── forms/                # Компоненты форм
+│   ├── modals/               # Модальные окна
+│   ├── tables/               # Компоненты таблиц
+│   ├── ui/                   # Базовые UI компоненты
+│   │   ├── button.tsx        # Кнопка
+│   │   ├── form.tsx          # Компоненты форм
+│   │   ├── input.tsx         # Поле ввода
+│   │   ├── select.tsx        # Выпадающий список
+│   │   ├── dialog.tsx        # Диалоговое окно
+│   │   ├── toast.tsx         # Уведомления
+│   │   ├── card.tsx          # Карточка
+│   │   └── ...               # Другие UI компоненты
+│   ├── layout/               # Компоненты макетов
+│   ├── theme-provider.tsx    # Провайдер темы
+│   └── theme-toggle.tsx      # Переключатель темы
+│
+├── hooks/                    # React-хуки
+│   ├── use-media-query.ts    # Хук для медиа-запросов
+│   ├── use-debounce.ts       # Хук для debounce
+│   └── ...                   # Другие хуки
+│
+├── lib/                      # Библиотеки и утилиты
+│   ├── utils.ts              # Общие утилиты
+│   ├── validation.ts         # Схемы валидации
+│   └── constants.ts          # Константы
+│
+├── modules/                  # Функциональные модули
+│   ├── users/                # Модуль пользователей
+│   │   ├── components/       # Компоненты модуля
+│   │   ├── hooks/            # Специфичные хуки
+│   │   ├── store.ts          # Store модуля (если нужен)
+│   │   ├── UserPage.tsx      # Главная страница модуля
+│   │   └── UserMenu.tsx      # Меню модуля для бокового меню
+│   ├── projects/             # Модуль проектов
+│   │   ├── components/       # Компоненты модуля
+│   │   ├── hooks/            # Специфичные хуки
+│   │   ├── types.ts          # Типы данных модуля
+│   │   ├── store.ts          # Store модуля
+│   │   ├── utils.ts          # Утилиты модуля
+│   │   ├── ProjectPage.tsx   # Главная страница модуля
+│   │   └── ProjectMenu.tsx   # Меню модуля для бокового меню
+│   └── ...                   # Другие модули
+│
+├── public/                   # Статические файлы
+│   ├── images/               # Изображения
+│   ├── fonts/                # Шрифты
+│   └── ...                   # Другие статические файлы
+│
+├── stores/                   # Хранилища Zustand
+│   ├── index.ts              # Экспорт хранилищ
+│   ├── useUserStore.ts       # Хранилище пользователя
+│   ├── useSettingsStore.ts   # Хранилище настроек
+│   ├── useUiStore.ts         # Хранилище UI-состояния
+│   └── ...                   # Другие глобальные хранилища
+│
+├── styles/                   # Стили
+│   └── globals.css           # Глобальные стили и темы
+│
+├── types/                    # TypeScript типы
+│   ├── supabase.ts           # Типы для Supabase
+│   ├── api.ts                # Типы API
+│   └── ...                   # Другие типы
+│
+├── utils/                    # Утилиты
+│   ├── api/                  # Утилиты для API
+│   ├── form/                 # Утилиты для форм
+│   ├── date/                 # Утилиты для работы с датами
+│   └── supabase/             # Клиенты Supabase
+│       ├── client.ts         # Клиент для браузера
+│       ├── server.ts         # Клиент для сервера
+│       └── middleware.ts     # Middleware для сессий
+│
+├── middleware.ts             # Next.js middleware
+├── package.json              # Зависимости проекта
+├── tsconfig.json             # Настройки TypeScript
+├── next.config.mjs           # Настройки Next.js
+└── tailwind.config.ts        # Настройки Tailwind CSS
 ```
 
-## Работа с Zustand в приложении
+## Рекомендации по размещению файлов для новых модулей
 
-Zustand используется для управления глобальным состоянием. Основные хранилища:
+При разработке нового модуля (например, "client-management"), следуйте этим рекомендациям:
 
-1. **`useUserStore`** - хранение информации о пользователе и его профиле
-2. **`useSettingsStore`** - хранение пользовательских настроек (например, тема)
-3. **`useUiStore`** - хранение состояния UI (открытие/закрытие модалок и т.д.)
+### 1. Основная структура модуля
 
-Все хранилища используют middleware:
-- **persist** - для сохранения данных в localStorage
+Создайте директорию для модуля в папке `modules/`:
 
-## Информация в хранилищах (stores)
+```
+modules/
+└── client-management/           # Название модуля
+    ├── components/              # Компоненты, специфичные для модуля
+    │   ├── ClientForm.tsx       # Форма клиента
+    │   ├── ClientList.tsx       # Список клиентов
+    │   └── ...
+    ├── hooks/                   # Хуки модуля
+    │   ├── useClients.ts        # Хук для работы с клиентами
+    │   └── ...
+    ├── types.ts                 # Типы данных модуля
+    ├── store.ts                 # Store Zustand для модуля (локальный)
+    ├── utils.ts                 # Утилиты модуля
+    ├── ClientPage.tsx           # Основная страница модуля
+    └── ClientMenu.tsx           # Компонент для бокового меню
+```
 
-### useUserStore
-Хранит информацию о текущем пользователе:
-- `id`, `email`, `name` - основная информация
-- `profile` - расширенная информация профиля
-- `isAuthenticated` - статус аутентификации
-- `role` - роль пользователя
-- `permissions` - разрешения пользователя
+### 2. Связь модуля с основным приложением
 
-Методы:
-- `setUser(userData)` - установка данных пользователя
-- `clearUser()` - очистка данных пользователя
-- `setRoleAndPermissions(role, permissions)` - установка роли и разрешений
+#### Страницы в App Router
 
-### useSettingsStore
-Хранит пользовательские настройки:
-- `theme` - текущая тема ('light', 'dark', 'system')
+Создайте соответствующие страницы в `app/dashboard/`:
 
-Методы:
-- `setTheme(theme)` - изменение темы
+```tsx
+// app/dashboard/clients/page.tsx
+import ClientPage from '@/modules/client-management/ClientPage';
 
-## Основные страницы
+export default function Page() {
+  return <ClientPage />;
+}
+```
 
-1. **Аутентификация** (`/auth/*`):
-   - Вход (`/auth/login`)
-   - Регистрация (`/auth/register`)
-   - Восстановление пароля (`/auth/forgot-password`, `/auth/reset-password`)
+#### Интеграция в меню
 
-2. **Дашборд** (`/dashboard/*`):
-   - Главная страница дашборда (`/dashboard`)
-   - Пользователи (`/dashboard/users`)
-   - Задачи (`/dashboard/tasks`)
-   - Прогресс (`/dashboard/progress`)
-   - Планирование (`/dashboard/planning`)
-   - Настройки (`/dashboard/settings`)
+Добавьте компонент меню в боковую панель:
+
+```tsx
+// components/dashboard/sidebar.tsx
+import { ClientMenu } from '@/modules/client-management/ClientMenu';
+
+export function Sidebar() {
+  return (
+    <nav>
+      {/* Другие пункты меню */}
+      <ClientMenu />
+    </nav>
+  );
+}
+```
+
+### 3. Управление состоянием
+
+#### Локальное состояние модуля
+
+Если состояние используется только внутри модуля:
+
+```tsx
+// modules/client-management/store.ts
+import { create } from 'zustand';
+
+type ClientState = {
+  // определение состояния
+};
+
+export const useClientStore = create<ClientState>((set) => ({
+  // реализация состояния
+}));
+```
+
+#### Глобальное состояние
+
+Если состояние нужно сделать глобальным:
+
+1. Создайте файл `stores/useClientStore.ts`:
+
+```tsx
+// stores/useClientStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+type ClientState = {
+  // определение состояния
+};
+
+export const useClientStore = create<ClientState>()(
+  persist(
+    (set) => ({
+      // реализация состояния
+    }),
+    {
+      name: 'client-storage',
+    }
+  )
+);
+```
+
+2. Добавьте экспорт в `stores/index.ts`:
+
+```tsx
+// stores/index.ts
+export * from './useUserStore';
+export * from './useSettingsStore';
+export * from './useUiStore';
+export * from './useClientStore'; // Добавить эту строку
+```
+
+### 4. Стили и темы
+
+Все стили компонентов должны использовать Tailwind CSS и следовать принципам дизайн-системы. Если нужны дополнительные глобальные стили:
+
+1. Для компонент-специфичных стилей используйте Tailwind в самих компонентах
+2. Для глобальных стилей модифицируйте файл `styles/globals.css`:
+
+```css
+/* styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Добавьте здесь стили для модуля */
+  .client-card {
+    /* стили */
+  }
+}
+```
+
+### 5. Доступ к данным Supabase
+
+Используйте соответствующие клиенты Supabase:
+
+```tsx
+// Для клиентских компонентов
+import { createClient } from '@/utils/supabase/client';
+
+export function ClientComponent() {
+  const fetchClients = async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.from('clients').select('*');
+    // обработка данных
+  };
+  
+  // остальной код компонента
+}
+
+// Для серверных компонентов и Server Actions
+import { createClient } from '@/utils/supabase/server';
+
+export async function ServerComponent() {
+  const supabase = createClient();
+  const { data } = await supabase.from('clients').select('*');
+  
+  return (
+    <div>
+      {/* Отображение данных */}
+    </div>
+  );
+}
+```
+
+### 6. Формы и валидация
+
+Используйте установленные библиотеки для форм и компоненты UI:
+
+```tsx
+// modules/client-management/components/ClientForm.tsx
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Button } from '@/components/ui/button';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+
+// Схема валидации
+const formSchema = z.object({
+  name: z.string().min(1, 'Имя клиента обязательно'),
+  email: z.string().email('Введите корректный email'),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+export function ClientForm() {
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+    },
+  });
+
+  const onSubmit = (values: FormValues) => {
+    // Обработка отправки формы
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Название</FormLabel>
+              <FormControl>
+                <Input placeholder="Введите название клиента" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {/* Другие поля формы */}
+        <Button type="submit">Сохранить</Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+### 7. Права доступа и permissions
+
+Учитывайте систему разрешений в UI и логике:
+
+```tsx
+import { useUserStore } from '@/stores/useUserStore';
+
+export function ClientActions() {
+  const { permissions } = useUserStore();
+  
+  const canEditClient = permissions.includes('client.edit');
+  const canDeleteClient = permissions.includes('client.delete');
+  
+  return (
+    <div className="flex gap-2">
+      {canEditClient && <Button>Редактировать</Button>}
+      {canDeleteClient && <Button variant="destructive">Удалить</Button>}
+    </div>
+  );
+}
+```
+
+### 8. Работа с модальными окнами
+
+Используйте компоненты UI для модальных окон:
+
+```tsx
+// modules/client-management/components/ClientDialog.tsx
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { ClientForm } from './ClientForm';
+
+export function ClientDialog() {
+  const [open, setOpen] = useState(false);
+  
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Добавить клиента</Button>
+      
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Новый клиент</DialogTitle>
+          </DialogHeader>
+          <ClientForm />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Отмена</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+```
+
+## Интеграция модуля в систему разрешений
+
+При разработке нового модуля определите необходимые permissions и добавьте их в документацию. Например, для модуля управления клиентами:
+
+```
+client.create      - Разрешение на создание клиентов
+client.edit        - Разрешение на редактирование клиентов
+client.delete      - Разрешение на удаление клиентов
+client.view        - Разрешение на просмотр клиентов
+```
 
 ## Работа с темой
 
-Тема управляется через `useSettingsStore` и `next-themes`. Для изменения темы:
+Все компоненты должны поддерживать темную и светлую тему. Используйте переменные CSS из файла `globals.css` и проверяйте отображение компонентов в обеих темах.
 
-```typescript
-import { useSettingsStore } from "@/stores/useSettingsStore"
+## Работа с базой данных Supabase
 
-// Получить текущую тему
-const { theme } = useSettingsStore()
+При необходимости добавления новых таблиц в базу данных, следуйте структуре, описанной в [`docs/database-schema.md`](docs/database-schema.md). Определите новые таблицы, их связи и обновите документацию.
 
-// Изменить тему
-const { setTheme } = useSettingsStore()
-setTheme('dark') // или 'light', 'system'
+## Разработка и интеграция модулей
+
+### Что такое модуль
+
+Модуль — это независимый функциональный блок (например, календарь, задачи, аналитика), который разрабатывается и тестируется отдельно, а затем интегрируется в основной проект.
+
+### Структура папки модуля
+
+```
+modules/
+└── example/
+    ├── components/          # Компоненты модуля
+    ├── hooks/               # Хуки модуля
+    ├── types.ts             # Типы данных
+    ├── store.ts             # Локальное хранилище (опционально)
+    ├── ExamplePage.tsx      # Главная страница модуля
+    └── ExampleMenu.tsx      # Компонент для бокового меню
 ```
 
-## Получение состояния аутентификации
+### Как добавить новый модуль
 
-Состояние аутентификации доступно через `useUserStore`:
+1. Создайте папку в `modules/` (например, `modules/calendar`).
+2. Реализуйте необходимые компоненты, хуки и типы.
+3. Создайте страницу модуля (например, `CalendarPage.tsx`).
+4. Создайте компонент меню (`CalendarMenu.tsx`).
+5. Интегрируйте страницу в App Router (создав файл в `app/dashboard/calendar/page.tsx`).
+6. Добавьте компонент меню в Sidebar.
+7. При необходимости создайте глобальное хранилище в папке `stores/`.
 
-```typescript
-import { useUserStore } from "@/stores/useUserStore"
+### Пример кода для модуля
 
-// Проверка аутентификации
-const { isAuthenticated, id, email, name, profile } = useUserStore()
+```tsx
+// modules/calendar/CalendarPage.tsx
+import { createClient } from '@/utils/supabase/client';
+import { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
 
-// Текущая роль и разрешения
-const { role, permissions } = useUserStore()
-```
+export default function CalendarPage() {
+  const [events, setEvents] = useState([]);
+  
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.from('events').select('*');
+      if (data) setEvents(data);
+    };
+    
+    fetchEvents();
+  }, []);
+  
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Календарь событий</h1>
+      <div className="grid gap-4">
+        {events.map(event => (
+          <Card key={event.id} className="p-4">
+            <h2>{event.title}</h2>
+            <p>{event.date}</p>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-На серверной стороне используйте middleware для проверки сессии и перенаправления неаутентифицированных пользователей.
+// modules/calendar/CalendarMenu.tsx
+import { CalendarIcon } from 'lucide-react';
+import Link from 'next/link';
 
-## Информация для разработки новых модулей
-
-При разработке любого нового функционального модуля (например, "Задачи", "Проекты", "Отчеты" и т.д.), учитывайте следующие моменты:
-
-### 1. Модель данных модуля (TypeScript Interface)
-
-Перед началом разработки определите и согласуйте основной TypeScript интерфейс для сущности вашего модуля.
-
-*Пример для модуля "Задачи":*
-```typescript
-interface Task {
-  id: string; // UUID, Primary Key
-  title: string; // Название задачи, обязательное
-  description?: string | null; // Описание задачи, необязательное
-  status: 'todo' | 'in_progress' | 'done' | 'canceled'; // Статус задачи, обязательное
-  priority: 'low' | 'medium' | 'high'; // Приоритет, обязательное
-  dueDate?: string | null; // Дата выполнения (ISO 8601), необязательное
-  assigneeId?: string | null; // UUID пользователя-исполнителя (ссылка на users.id), необязательное
-  projectId?: string | null; // UUID проекта (ссылка на projects.id), необязательное
-  createdAt: string; // Дата создания (ISO 8601), управляется БД
-  updatedAt: string; // Дата обновления (ISO 8601), управляется БД
-  creatorId: string; // UUID пользователя-создателя (ссылка на users.id), обязательное
+export function CalendarMenu() {
+  return (
+    <Link 
+      href="/dashboard/calendar" 
+      className="flex items-center p-2 hover:bg-accent rounded-md"
+    >
+      <CalendarIcon className="mr-2 h-4 w-4" />
+      <span>Календарь</span>
+    </Link>
+  );
 }
 ```
-**Убедитесь, что интерфейс предоставлен или уточнен для конкретного разрабатываемого модуля.**
-
-### 2. Схема базы данных Supabase
-
-Структура таблиц базы данных, включая колонки, типы данных, ограничения, связи и политики Row Level Security (RLS), описана в отдельном файле: [`docs/database-schema.md`](docs/database-schema.md).
-
-**Перед началом работы с базой данных обязательно изучите этот файл**, чтобы понять существующую структуру и определить, как ваш новый модуль будет интегрироваться (нужны ли новые таблицы, связи, политики RLS).
-
-### 3. Система разрешений (Permissions)
-
-В приложении используется гибкая система разрешений (permissions) для контроля доступа к данным и функционалу. все права пользователя определяются только массивом `permissions` в объекте пользователя.
-
-#### Пример структуры пользователя с permissions
-
-```json
-{
-  "id": "9fbe5adc-1a18-43ed-aa8b-66d101a6afa8",
-  "email": "khutsishvili.gamedev@gmail.com",
-  "name": "Дмитрий Хуцишвили",
-  "profile": { /* ... */ },
-  "isAuthenticated": true,
-  "permissions": [
-    "user.edit",
-    "user.edit.self",
-    "user.edit.department",
-    "user.edit.team",
-    "user.create",
-    "user.delete",
-    "user.deactivate",
-    "structure.edit",
-    "analytics.view",
-    "analytics.export",
-    "role.assign",
-    "department.edit",
-    "team.edit",
-    "position.edit",
-    "category.edit",
-    "payments.view",
-    "payments.edit"
-  ]
-}
-```
-
-#### Принципы работы с permissions
-
-- **Каждое разрешение** — это строка в формате `module.action[.scope]`, например: `user.edit`, `user.edit.self`, `analytics.view`, `payments.edit`.
-- **Права доступа** к любому действию или разделу определяются только наличием соответствующего permission у пользователя.
-- **Проверка прав** в коде осуществляется через массив `permissions`:
-
-  ```typescript
-  import { useUserStore } from "@/stores/useUserStore"
-  const { permissions } = useUserStore()
-
-  // Проверка права на редактирование пользователя
-  const canEditUser = permissions.includes("user.edit")
-  ```
-
-- **UI и бизнес-логика** должны опираться только на permissions, а не на роли.
-- **Список permissions** может быть расширен для новых модулей и действий. Для новых сущностей рекомендуется использовать единый стиль: `<module>.<action>[.<scope>]`.
-- **Примеры permissions**:
-  - `user.create`, `user.edit`, `user.delete`, `user.edit.self`, `user.edit.department`
-  - `structure.edit`, `analytics.view`, `analytics.export`
-  - `payments.view`, `payments.edit`
-  - `project.create`, `project.edit`, `project.delete`, `project.view`
-  - `task.create`, `task.edit`, `task.delete`, `task.view`
-
-#### Рекомендации по проектированию permissions
-
-- Для каждого нового модуля заранее определяйте список необходимых permissions.
-- В UI скрывайте или блокируйте действия, если у пользователя нет нужного permission.
-- Валидация на сервере и в Supabase (через RLS) также должна опираться на permissions.
-- Для сложных сценариев используйте scopes: например, `user.edit.self` (разрешено редактировать только себя), `user.edit.department` (разрешено редактировать пользователей своего департамента).
-
-**Важно:**
-- Все проверки доступа должны строиться только на permissions.
-- Роли могут быть реализованы как наборы permissions, но в приложении и UI используются только permissions.
-
-### 4. Специфичные UI/UX паттерны
-
-Для обеспечения визуальной и функциональной консистентности приложения, придерживайтесь следующих паттернов и используйте существующие компоненты:
-
-- **Списки/Таблицы:** Используйте `components/ui/table`.
-- **Формы:** Используйте `react-hook-form`, `zod`, `components/ui/form`, `input`, `select`, `textarea`, etc.
-- **Индикаторы (Статусы, Типы, Приоритеты):** Используйте `components/ui/badge` с согласованными цветами.
-- **Модальные окна/Боковые панели:** Используйте `components/ui/dialog` или `components/ui/sheet`.
-- **Уведомления/Обратная связь:** Используйте `components/ui/toaster` (`sonner`).
-
-Если для вашего модуля требуются уникальные UI-элементы, обсудите их дизайн и необходимость создания новых компонентов.
 
 ## Список ключевых файлов для разработки новых модулей
 
@@ -291,67 +542,6 @@ interface Task {
 
 ### Утилиты
 - `lib/utils.ts` - утилиты для работы с классами
-
-## Разработка и интеграция модулей
-
-### Что такое модуль
-
-Модуль — это независимый функциональный блок (например, календарь, задачи, аналитика), который разрабатывается и тестируется отдельно, а затем интегрируется в основной проект.
-
-### Структура папки модуля
-
-```
-modules/
-└── example/
-    ├── ExamplePage.tsx
-    ├── ExampleMenu.tsx
-    └── (опционально) store.ts
-```
-
-### Как добавить новый модуль
-
-1. Создайте папку в `modules/` (например, `modules/calendar`).
-2. Реализуйте страницу (например, `CalendarPage.tsx`) и меню (`CalendarMenu.tsx`).
-3. Импортируйте компонент меню модуля в Sidebar.
-4. Импортируйте страницу модуля в роутинг (например, в `app/dashboard` или `app/`).
-5. (Опционально) Если модулю нужно глобальное состояние — добавьте zustand-хранилище в `store.ts` внутри модуля.
-6. Проверьте, что модуль не нарушает архитектурные правила (см. `rules.md`).
-
-### Интеграция модуля
-
-- Меню модуля добавляется вручную в Sidebar.
-- Страница модуля добавляется вручную в роутинг (например, в `app/dashboard` или `app/`).
-- Если модулю нужно глобальное состояние — zustand-хранилище импортируется в `stores/index.ts`.
-
-### Пример кода для модуля
-
-```tsx
-// modules/calendar/CalendarMenu.tsx
-export function CalendarMenu() {
-  return <MenuItem to="/dashboard/calendar">Календарь</MenuItem>
-}
-
-// modules/calendar/CalendarPage.tsx
-export default function CalendarPage() {
-  return <div>Здесь будет календарь компании</div>
-}
-```
-
-### Рекомендации
-
-- Соблюдайте структуру и стандарты именования.
-- Документируйте особенности модуля, если они есть.
-- Не дублируйте код — выносите общие части в core.
-
-## Руководство по безопасным модификациям
-
-1. При добавлении нового функционала следуйте структуре проекта:
-   - UI компоненты размещайте в `components/`
-   - Новые страницы в `app/` соответствующего раздела
-   - Бизнес-логику в `modules/`
-
-2. При работе с состоянием:
-   - Используйте существующие хранилища или создавайте новые в `stores/`
 
 ## Ключевые функциональные возможности приложения
 
