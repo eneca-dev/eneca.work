@@ -10,6 +10,7 @@ import { getUsers } from "@/services/org-data-service"
 import { useState, useEffect } from "react"
 import type { User } from "@/types/db"
 import { PaymentAccessCheck } from "../components/payment-access-check"
+import AdminPanel from "@/app/dashboard/admin/AdminPanel"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -22,6 +23,7 @@ export default function UsersPage() {
     positions: [] as string[],
     workLocations: [] as string[],
   })
+  const [adminTab, setAdminTab] = useState("list")
 
   const loadUsers = async () => {
     try {
@@ -98,11 +100,12 @@ export default function UsersPage() {
 
       <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />
 
-      <Tabs defaultValue="list" className="w-full">
+      <Tabs value={adminTab} onValueChange={setAdminTab} className="w-full">
         <TabsList>
           <TabsTrigger value="list">Список пользователей</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
           <TabsTrigger value="analytics">Аналитика</TabsTrigger>
+          <TabsTrigger value="admin">Администратор</TabsTrigger>
         </TabsList>
         <TabsContent value="list" className="space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -128,6 +131,9 @@ export default function UsersPage() {
         </TabsContent>
         <TabsContent value="analytics">
           <UserAnalytics />
+        </TabsContent>
+        <TabsContent value="admin">
+          <AdminPanel />
         </TabsContent>
       </Tabs>
     </div>
