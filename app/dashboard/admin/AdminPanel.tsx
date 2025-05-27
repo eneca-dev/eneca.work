@@ -4,6 +4,7 @@ import DepartmentsTab from "./DepartmentsTab"
 import TeamsTab from "./TeamsTab"
 import PositionsTab from "./PositionsTab"
 import CategoriesTab from "./CategoriesTab"
+import RolesTab from "./RolesTab"
 import { Toaster } from "sonner"
 import { NotificationProvider } from "@/lib/notification-context"
 
@@ -24,11 +25,13 @@ export default function AdminPanel() {
           <TabsTrigger value="teams">Команды</TabsTrigger>
           <TabsTrigger value="positions">Должности</TabsTrigger>
           <TabsTrigger value="categories">Категории</TabsTrigger>
+          <TabsTrigger value="roles">Управление ролями</TabsTrigger>
         </TabsList>
         <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="teams"><TeamsTab /></TabsContent>
         <TabsContent value="positions"><PositionsTab /></TabsContent>
         <TabsContent value="categories"><CategoriesTab /></TabsContent>
+        <TabsContent value="roles"><RolesTab /></TabsContent>
       </Tabs>
     </NotificationProvider>
   )

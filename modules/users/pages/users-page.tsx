@@ -11,6 +11,9 @@ import { useState, useEffect } from "react"
 import type { User } from "@/types/db"
 import { PaymentAccessCheck } from "../components/payment-access-check"
 import AdminPanel from "@/app/dashboard/admin/AdminPanel"
+import { useUserStore } from "@/stores/useUserStore"
+import { AdminAccessCheck } from "../components/admin-access-check"
+import { useSearchParams, useRouter } from "next/navigation"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -23,7 +26,37 @@ export default function UsersPage() {
     positions: [] as string[],
     workLocations: [] as string[],
   })
-  const [adminTab, setAdminTab] = useState("list")
+  
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const tabFromUrl = searchParams.get('tab')
+  const permissions = useUserStore((state) => state.permissions)
+  const canViewAdminPanel = permissions.includes("can_view_user_admin_panel")
+  
+  // Set initial tab value based on URL
+  const [adminTab, setAdminTab] = useState(
+    tabFromUrl && ["list", "payment", "analytics", "admin"].includes(tabFromUrl)
+      ? tabFromUrl
+      : "list"
+  )
+
+  // If user switched to admin tab but doesn't have permission, reset to list
+  useEffect(() => {
+    if (adminTab === "admin" && !canViewAdminPanel) {
+      setAdminTab("list")
+      
+      // Update URL, removing tab=admin parameter
+      if (tabFromUrl === "admin") {
+        router.replace("/dashboard/users?tab=list")
+      }
+    }
+  }, [adminTab, canViewAdminPanel, tabFromUrl, router])
+  
+  // Update URL when tab changes
+  const handleTabChange = (value: string) => {
+    setAdminTab(value)
+    router.replace(`/dashboard/users?tab=${value}`)
+  }
 
   const loadUsers = async () => {
     try {
@@ -31,12 +64,12 @@ export default function UsersPage() {
       const loadedUsers = await getUsers()
       setUsers(loadedUsers)
 
-      // Получаем текущего пользователя (первого в списке для демонстрации)
+      // Get current user (first in list for demonstration)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
       }
     } catch (error) {
-      console.error("Ошибка загрузки пользователей:", error)
+      console.error("Error loading users:", error)
     } finally {
       setIsLoading(false)
     }
@@ -57,23 +90,23 @@ export default function UsersPage() {
   }
 
   const handleUserUpdated = () => {
-    // Перезагружаем список пользователей после обновления
+    // Reload user list after update
     loadUsers()
   }
 
-  // Если данные загружаются, показываем индикатор загрузки
+  // If data is loading, show loading indicator
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
-          <p className="mt-4 text-gray-500">Загрузка данных...</p>
+          <p className="mt-4 text-gray-500">Loading data...</p>
         </div>
       </div>
     )
   }
 
-  // Если нет текущего пользователя, создаем заглушку
+  // If no current user, create fallback
   const defaultUser = currentUser || {
     id: "current",
     name: "Иван Иванов",
@@ -100,12 +133,12 @@ export default function UsersPage() {
 
       <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />
 
-      <Tabs value={adminTab} onValueChange={setAdminTab} className="w-full">
+      <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="list">Список пользователей</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
           <TabsTrigger value="analytics">Аналитика</TabsTrigger>
-          <TabsTrigger value="admin">Администратор</TabsTrigger>
+          {canViewAdminPanel && <TabsTrigger value="admin">Администратор</TabsTrigger>}
         </TabsList>
         <TabsContent value="list" className="space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -133,7 +166,9 @@ export default function UsersPage() {
           <UserAnalytics />
         </TabsContent>
         <TabsContent value="admin">
-          <AdminPanel />
+          <AdminAccessCheck>
+            <AdminPanel />
+          </AdminAccessCheck>
         </TabsContent>
       </Tabs>
     </div>
