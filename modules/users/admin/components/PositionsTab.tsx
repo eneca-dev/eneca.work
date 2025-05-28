@@ -5,87 +5,88 @@ import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import EntityModal from "./components/EntityModal"
-import DeleteConfirmModal from "./components/DeleteConfirmModal"
+import EntityModal from "./EntityModal"
+import DeleteConfirmModal from "./DeleteConfirmModal"
+import EmptyState from "./EmptyState"
 
 // Типы для сущностей
-interface Category {
+interface Position {
   id: string;
   name: string;
 }
 
-export default function CategoriesTab() {
-  const [categories, setCategories] = useState<Category[]>([])
+export default function PositionsTab() {
+  const [positions, setPositions] = useState<Position[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null)
 
-  // Мемоизируем функцию загрузки категорий
-  const fetchCategories = useCallback(async () => {
+  // Мемоизируем функцию загрузки должностей
+  const fetchPositions = useCallback(async () => {
     try {
       const supabase = createClient()
       
       const { data, error } = await supabase
-        .from("categories")
-        .select("category_id, category_name")
+        .from("positions")
+        .select("position_id, position_name")
       
       if (error) {
-        console.error('Ошибка при загрузке категорий:', error)
+        console.error('Ошибка при загрузке должностей:', error)
         return
       }
       
-      setCategories(
+      setPositions(
         data ? 
-        data.map(cat => ({ 
-          id: cat.category_id, 
-          name: cat.category_name 
+        data.map(pos => ({ 
+          id: pos.position_id, 
+          name: pos.position_name 
         })) : 
         []
       )
     } catch (error) {
-      console.error('Ошибка при загрузке категорий:', error)
+      console.error('Ошибка при загрузке должностей:', error)
     }
   }, [])
 
-  // Загружаем категории при монтировании компонента
+  // Загружаем должности при монтировании компонента
   useEffect(() => {
-    fetchCategories()
-  }, [fetchCategories])
+    fetchPositions()
+  }, [fetchPositions])
 
-  // Мемоизируем фильтрованные категории
+  // Мемоизируем фильтрованные должности
   const filtered = useMemo(() => {
-    return categories.filter(cat =>
-      typeof cat.name === "string" && cat.name.toLowerCase().includes(search.toLowerCase())
+    return positions.filter(pos =>
+      typeof pos.name === "string" && pos.name.toLowerCase().includes(search.toLowerCase())
     )
-  }, [categories, search])
+  }, [positions, search])
 
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
-    if (!selectedCategory) return undefined
+    if (!selectedPosition) return undefined
     
     return {
-      category_id: selectedCategory.id,
-      category_name: selectedCategory.name
+      position_id: selectedPosition.id,
+      position_name: selectedPosition.name
     }
-  }, [selectedCategory])
+  }, [selectedPosition])
 
   // Обработчики событий
-  const handleCreateCategory = useCallback(() => {
+  const handleCreatePosition = useCallback(() => {
     setModalMode("create")
-    setSelectedCategory(null)
+    setSelectedPosition(null)
     setModalOpen(true)
   }, [])
 
-  const handleEditCategory = useCallback((category: Category) => {
+  const handleEditPosition = useCallback((position: Position) => {
     setModalMode("edit")
-    setSelectedCategory(category)
+    setSelectedPosition(position)
     setModalOpen(true)
   }, [])
 
-  const handleDeleteCategoryClick = useCallback((category: Category) => {
-    setSelectedCategory(category)
+  const handleDeletePositionClick = useCallback((position: Position) => {
+    setSelectedPosition(position)
     setDeleteModalOpen(true)
   }, [])
 
@@ -102,15 +103,15 @@ export default function CategoriesTab() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <CardTitle className="text-xl font-semibold">Управление категориями</CardTitle>
+            <CardTitle className="text-xl font-semibold">Управление должностями</CardTitle>
             <div className="flex justify-end gap-2">
               <Input
-                placeholder="Поиск категорий..."
+                placeholder="Поиск должностей..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="max-w-xs"
               />
-              <Button size="default" onClick={handleCreateCategory}>Создать категорию</Button>
+              <Button size="default" onClick={handleCreatePosition}>Создать должность</Button>
             </div>
           </div>
         </CardContent>
@@ -121,21 +122,21 @@ export default function CategoriesTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-base">Название категории</TableHead>
+                <TableHead className="text-base">Название должности</TableHead>
                 <TableHead className="w-48 text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length > 0 ? (
-                filtered.map(cat => (
-                  <TableRow key={cat.id}>
-                    <TableCell className="text-base font-medium">{cat.name}</TableCell>
+                filtered.map(pos => (
+                  <TableRow key={pos.id}>
+                    <TableCell className="text-base font-medium">{pos.name}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => handleEditCategory(cat)}>
+                        <Button variant="outline" onClick={() => handleEditPosition(pos)}>
                           Изменить
                         </Button>
-                        <Button variant="destructive" onClick={() => handleDeleteCategoryClick(cat)}>
+                        <Button variant="destructive" onClick={() => handleDeletePositionClick(pos)}>
                           Удалить
                         </Button>
                       </div>
@@ -145,7 +146,7 @@ export default function CategoriesTab() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={2} className="text-center py-6 text-muted-foreground">
-                    Категории не найдены
+                    Должности не найдены
                   </TableCell>
                 </TableRow>
               )}
@@ -157,25 +158,25 @@ export default function CategoriesTab() {
       <EntityModal
         open={modalOpen}
         onOpenChange={handleModalOpenChange}
-        title={modalMode === "create" ? "Создать категорию" : "Редактировать категорию"}
+        title={modalMode === "create" ? "Создать должность" : "Редактировать должность"}
         mode={modalMode}
-        table="categories"
-        idField="category_id"
-        nameField="category_name"
+        table="positions"
+        idField="position_id"
+        nameField="position_name"
         entity={entityData}
-        onSuccess={fetchCategories}
+        onSuccess={fetchPositions}
       />
 
-      {selectedCategory && (
+      {selectedPosition && (
         <DeleteConfirmModal
           open={deleteModalOpen}
           onOpenChange={handleDeleteModalOpenChange}
-          title="Удаление категории"
-          entityName={selectedCategory.name}
-          table="categories"
-          idField="category_id"
-          entityId={selectedCategory.id}
-          onSuccess={fetchCategories}
+          title="Удаление должности"
+          entityName={selectedPosition.name}
+          table="positions"
+          idField="position_id"
+          entityId={selectedPosition.id}
+          onSuccess={fetchPositions}
         />
       )}
     </div>

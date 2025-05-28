@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import EntityModal from "./components/EntityModal"
-import DeleteConfirmModal from "./components/DeleteConfirmModal"
-import LoadingState from "./components/LoadingState"
-import EmptyState from "./components/EmptyState"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import EntityModal from "./EntityModal"
+import DeleteConfirmModal from "./DeleteConfirmModal"
+import LoadingState from "./LoadingState"
+import EmptyState from "./EmptyState"
 
 // Типы для сущностей
 interface Department {
@@ -111,7 +112,7 @@ export default function TeamsTab() {
         name: "department_id",
         label: "Отдел",
         type: "select" as const,
-        options: departments.map(dep => ({ id: dep.id, name: dep.name }))
+        options: departments.map(dep => ({ value: dep.id, label: dep.name }))
       }
     ]
   }, [departments])
@@ -155,7 +156,51 @@ export default function TeamsTab() {
 
   // Если данные загружаются, показываем индикатор загрузки
   if (isLoading) {
-    return <LoadingState columnCount={3} />
+    return (
+      <div className="mb-6 space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardTitle className="text-xl font-semibold">Управление командами</CardTitle>
+              <div className="flex justify-end gap-2">
+                <Input
+                  placeholder="Поиск команд..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+                <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+              </div>
+            </div>
+            
+            <div className="mt-4">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs rounded font-normal">
+                  Все отделы
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-base">Название команды</TableHead>
+                  <TableHead className="text-base">Отдел</TableHead>
+                  <TableHead className="w-48 text-right">Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <LoadingState columnCount={3} />
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

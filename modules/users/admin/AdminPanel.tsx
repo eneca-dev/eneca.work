@@ -1,10 +1,12 @@
+"use client"
+
 import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import DepartmentsTab from "./DepartmentsTab"
-import TeamsTab from "./TeamsTab"
-import PositionsTab from "./PositionsTab"
-import CategoriesTab from "./CategoriesTab"
-import RolesTab from "./RolesTab"
+import DepartmentsTab from "./components/DepartmentsTab"
+import TeamsTab from "./components/TeamsTab"
+import PositionsTab from "./components/PositionsTab"
+import CategoriesTab from "./components/CategoriesTab"
+import RolesTab from "./components/RolesTab"
 import { Toaster } from "sonner"
 import { NotificationProvider } from "@/lib/notification-context"
 

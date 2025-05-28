@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import EntityModal from "./components/EntityModal"
-import DeleteConfirmModal from "./components/DeleteConfirmModal"
-import LoadingState from "./components/LoadingState"
-import EmptyState from "./components/EmptyState"
+import EntityModal from "./EntityModal"
+import DeleteConfirmModal from "./DeleteConfirmModal"
+import LoadingState from "./LoadingState"
+import EmptyState from "./EmptyState"
 
 // Типы для сущностей
 interface Department {
@@ -105,7 +105,42 @@ export default function DepartmentsTab() {
 
   // Если данные загружаются, показываем индикатор загрузки
   if (isLoading) {
-    return <LoadingState columnCount={2} />
+    return (
+      <div className="mb-6 space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <CardTitle className="text-xl font-semibold">Управление отделами</CardTitle>
+              <div className="flex justify-end gap-2">
+                <Input
+                  placeholder="Поиск отделов..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+                <Button size="default" onClick={handleCreateDepartment}>Создать отдел</Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-base">Название отдела</TableHead>
+                  <TableHead className="w-48 text-right">Действия</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <LoadingState columnCount={2} />
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
