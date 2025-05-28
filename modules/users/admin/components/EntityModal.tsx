@@ -17,7 +17,7 @@ interface EntityModalProps {
   table: string
   idField: string
   nameField: string
-  entity?: any
+  entity?: Record<string, string | number | null>
   extraFields?: Array<{
     name: string
     label: string
@@ -40,7 +40,7 @@ export default function EntityModal({
   extraFields = [],
   onSuccess
 }: EntityModalProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({})
+  const [formData, setFormData] = useState<Record<string, string | number | null>>({})
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -53,6 +53,21 @@ export default function EntityModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Basic validation
+    if (!formData[nameField]?.toString().trim()) {
+      toast.error("Название обязательно для заполнения")
+      return
+    }
+    
+    // Validate required extra fields
+    for (const field of extraFields) {
+      if (field.required && !formData[field.name]) {
+        toast.error(`Поле "${field.label}" обязательно для заполнения`)
+        return
+      }
+    }
+    
     setLoading(true)
 
     try {
@@ -69,7 +84,7 @@ export default function EntityModal({
         const { error } = await supabase
           .from(table)
           .update(formData)
-          .eq(idField, entity[idField])
+          .eq(idField, entity![idField])
 
         if (error) throw error
         toast.success("Запись успешно обновлена")
@@ -100,7 +115,7 @@ export default function EntityModal({
             <Label htmlFor={nameField}>Название</Label>
             <Input
               id={nameField}
-              value={formData[nameField] || ""}
+              value={formData[nameField]?.toString() || ""}
               onChange={(e) => handleInputChange(nameField, e.target.value)}
               required
             />
@@ -110,25 +125,31 @@ export default function EntityModal({
             <div key={field.name}>
               <Label htmlFor={field.name}>{field.label}</Label>
               {field.type === "select" ? (
-                <Select
-                  value={formData[field.name] || ""}
-                  onValueChange={(value) => handleInputChange(field.name, value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={`Выберите ${field.label.toLowerCase()}`} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {field.options?.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                field.options && field.options.length > 0 ? (
+                  <Select
+                    value={formData[field.name]?.toString() || ""}
+                    onValueChange={(value) => handleInputChange(field.name, value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={`Выберите ${field.label.toLowerCase()}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Нет доступных вариантов для выбора
+                  </div>
+                )
               ) : (
                 <Input
                   id={field.name}
-                  value={formData[field.name] || ""}
+                  value={formData[field.name]?.toString() || ""}
                   onChange={(e) => handleInputChange(field.name, e.target.value)}
                   required={field.required}
                 />

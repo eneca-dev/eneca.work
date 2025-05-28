@@ -373,44 +373,91 @@ export default function RolesTab() {
         }
       }
       
-      // Execute operations
-      if (toInsert.length > 0) {
-        const { error: insertError } = await supabase.from("role_permissions").insert(toInsert)
-        if (insertError) {
-          notification.error("Error adding permissions", insertError.message)
-          return
-        }
-      }
+      // Track successful operations for potential rollback
+      const successfulInserts = []
+      const successfulDeletes = []
       
-      // Use optimized bulk delete for better performance
-      if (toDeleteIds.length > 0) {
-        const deletePromises = toDeleteIds.map(item => 
-          supabase
+      try {
+        // Execute insert operations
+        if (toInsert.length > 0) {
+          const { data: insertedData, error: insertError } = await supabase
             .from("role_permissions")
-            .delete()
-            .eq("role_id", item.role_id)
-            .eq("permission_id", item.permission_id)
-        );
-        
-        const results = await Promise.all(deletePromises);
-        const errors = results.filter(r => r.error);
-        
-        if (errors.length > 0) {
-          notification.error("Error removing permissions", 
-            `Failed to remove ${errors.length} permissions`);
-          return;
+            .insert(toInsert)
+            .select()
+          
+          if (insertError) {
+            throw new Error(`Ошибка добавления разрешений: ${insertError.message}`)
+          }
+          
+          successfulInserts.push(...(insertedData || []))
         }
+        
+        // Execute delete operations with better error handling
+        if (toDeleteIds.length > 0) {
+          for (const item of toDeleteIds) {
+            const { error: deleteError } = await supabase
+              .from("role_permissions")
+              .delete()
+              .eq("role_id", item.role_id)
+              .eq("permission_id", item.permission_id)
+            
+            if (deleteError) {
+              throw new Error(`Ошибка удаления разрешения: ${deleteError.message}`)
+            }
+            
+            successfulDeletes.push(item)
+          }
+        }
+        
+        // Update data and clear changes only if all operations succeeded
+        await fetchData()
+        setPendingChanges([])
+        setSaveChangesModalOpen(false)
+        
+        notification.success("Изменения сохранены", "Разрешения ролей успешно обновлены")
+        
+      } catch (operationError) {
+        // Attempt to rollback successful operations
+        console.error('Ошибка при выполнении операций:', operationError)
+        
+        try {
+          // Rollback successful inserts
+          if (successfulInserts.length > 0) {
+            const rollbackIds = successfulInserts.map(item => item.id)
+            await supabase
+              .from("role_permissions")
+              .delete()
+              .in("id", rollbackIds)
+          }
+          
+          // Rollback successful deletes by re-inserting
+          if (successfulDeletes.length > 0) {
+            const rollbackInserts = successfulDeletes.map(item => ({
+              id: generateUUID(),
+              role_id: item.role_id,
+              permission_id: item.permission_id
+            }))
+            await supabase
+              .from("role_permissions")
+              .insert(rollbackInserts)
+          }
+          
+          notification.error("Ошибка сохранения", 
+            "Операция отменена, изменения откатаны. Попробуйте еще раз.")
+        } catch (rollbackError) {
+          console.error('Ошибка отката:', rollbackError)
+          notification.error("Критическая ошибка", 
+            "Не удалось откатить изменения. Обновите страницу и попробуйте снова.")
+        }
+        
+        // Refresh data to ensure consistency
+        await fetchData()
       }
       
-      // Update data and clear changes
-      await fetchData()
-      setPendingChanges([])
-      setSaveChangesModalOpen(false)
-      
-      notification.success("Changes Saved", "Role permissions have been successfully updated")
     } catch (error) {
-      console.error('Error saving changes:', error)
-      notification.error("Save Error", "Unknown error occurred")
+      console.error('Критическая ошибка при сохранении изменений:', error)
+      notification.error("Ошибка сохранения", 
+        "Произошла неизвестная ошибка. Попробуйте обновить страницу.")
     } finally {
       setLoading(false)
     }

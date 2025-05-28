@@ -10,6 +10,14 @@ import RolesTab from "./components/RolesTab"
 import { Toaster } from "sonner"
 import { NotificationProvider } from "@/lib/notification-context"
 
+const TAB_LABELS = {
+  departments: "Отделы",
+  teams: "Команды", 
+  positions: "Должности",
+  categories: "Категории",
+  roles: "Управление ролями"
+} as const;
+
 export default function AdminPanel() {
   const [tab, setTab] = useState("departments")
   
@@ -23,11 +31,11 @@ export default function AdminPanel() {
       />
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="mb-6">
-          <TabsTrigger value="departments">Отделы</TabsTrigger>
-          <TabsTrigger value="teams">Команды</TabsTrigger>
-          <TabsTrigger value="positions">Должности</TabsTrigger>
-          <TabsTrigger value="categories">Категории</TabsTrigger>
-          <TabsTrigger value="roles">Управление ролями</TabsTrigger>
+          <TabsTrigger value="departments">{TAB_LABELS.departments}</TabsTrigger>
+          <TabsTrigger value="teams">{TAB_LABELS.teams}</TabsTrigger>
+          <TabsTrigger value="positions">{TAB_LABELS.positions}</TabsTrigger>
+          <TabsTrigger value="categories">{TAB_LABELS.categories}</TabsTrigger>
+          <TabsTrigger value="roles">{TAB_LABELS.roles}</TabsTrigger>
         </TabsList>
         <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="teams"><TeamsTab /></TabsContent>

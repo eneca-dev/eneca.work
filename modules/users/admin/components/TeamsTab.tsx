@@ -10,6 +10,7 @@ import EntityModal from "./EntityModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
+import { toast } from "sonner"
 
 // Типы для сущностей
 interface Department {
@@ -46,6 +47,7 @@ export default function TeamsTab() {
       
       if (teamsError) {
         console.error('Ошибка при загрузке команд:', teamsError)
+        toast.error('Не удалось загрузить команды')
         return
       }
       
@@ -56,6 +58,7 @@ export default function TeamsTab() {
       
       if (deptsError) {
         console.error('Ошибка при загрузке отделов:', deptsError)
+        toast.error('Не удалось загрузить отделы')
         return
       }
       
@@ -81,6 +84,7 @@ export default function TeamsTab() {
       )
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error)
+      toast.error('Произошла ошибка при загрузке данных')
     } finally {
       setIsLoading(false)
     }

@@ -45,12 +45,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ): Promise<T> => {
     let lastError: Error | null = null
     
-    for (let i = 0; i < retries; i++) {
+    for (let i = 0; i < retries && isMounted.current; i++) {
       try {
         return await operation()
       } catch (error) {
         lastError = error as Error
         if (i === retries - 1) break
+        
+        // Проверяем, что компонент еще смонтирован перед задержкой
+        if (!isMounted.current) break
         
         // Exponential backoff с максимальной задержкой
         const delay = Math.min(
