@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Network } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 
@@ -35,7 +35,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.refresh()
     router.push("/auth/login")
   }
 
@@ -59,6 +58,11 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       title: "Прогресс проектов",
       href: "/dashboard/progress",
       icon: BarChart,
+    },
+    {
+      title: "Настройки",
+      href: "/dashboard/settings",
+      icon: Settings,
     },
   ]
 
