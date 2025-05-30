@@ -1,11 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 import { getUserRoleAndPermissions } from "@/services/org-data-service"
+import { toast } from "@/components/ui/use-toast"
+
+// Константы для retry логики
+const MAX_RETRIES = 3
+const INITIAL_RETRY_DELAY = 1000
+const MAX_RETRY_DELAY = 5000
+
+// Типы для улучшения типизации
+interface FetchPermissionsResult {
+  role: string;
+  permissions: string[];
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
@@ -15,88 +27,170 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
   const router = useRouter()
   const supabase = createClient()
-
+  
+  // Реф для отслеживания актуальности компонента
+  const isMounted = useRef(true)
+  
+  // Очистка при размонтировании
   useEffect(() => {
-    const fetchUser = async () => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  // Функция для повторных попыток с exponential backoff
+  const fetchWithRetry = useCallback(async <T,>(
+    operation: () => Promise<T>,
+    retries = MAX_RETRIES
+  ): Promise<T> => {
+    let lastError: Error | null = null
+    
+    for (let i = 0; i < retries && isMounted.current; i++) {
       try {
-        console.log("Запускаем fetchUser в DashboardLayout");
-        console.log("Текущее состояние аутентификации:", isAuthenticated);
+        return await operation()
+      } catch (error) {
+        lastError = error as Error
+        if (i === retries - 1) break
         
-        // Проверка сессии Supabase для подтверждения аутентификации
-        const { data: sessionData } = await supabase.auth.getSession();
+        // Проверяем, что компонент еще смонтирован перед задержкой
+        if (!isMounted.current) break
         
-        if (!sessionData.session) {
-          console.log("Сессия Supabase отсутствует, перенаправляем на страницу входа");
-          useUserStore.getState().clearUser(); // Очищаем хранилище, если сессия истекла
-          router.push("/auth/login");
-          return;
+        // Exponential backoff с максимальной задержкой
+        const delay = Math.min(
+          INITIAL_RETRY_DELAY * Math.pow(2, i),
+          MAX_RETRY_DELAY
+        )
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+    
+    throw lastError
+  }, [])
+
+  // Обработчик ошибок авторизации
+  const handleAuthError = useCallback((error: Error) => {
+    if (!isMounted.current) return
+    
+    console.error("Ошибка авторизации:", error)
+    toast({
+      title: "Ошибка авторизации",
+      description: "Пожалуйста, войдите в систему заново",
+      variant: "destructive"
+    })
+    useUserStore.getState().clearState()
+    router.push('/auth/login')
+  }, [router])
+
+  // Функция получения разрешений с правильной обработкой race condition
+  const fetchPermissions = useCallback(async (userId: string): Promise<FetchPermissionsResult | null> => {
+    try {
+      const { role, permissions } = await getUserRoleAndPermissions(userId, supabase)
+      
+      if (!isMounted.current) return null
+      
+      if (role) {
+        useUserStore.getState().setRoleAndPermissions(role, permissions)
+        console.log("Роль и разрешения обновлены:", { role, permissions })
+      }
+      
+      return { role, permissions }
+    } catch (error) {
+      console.error("Ошибка при получении разрешений:", error)
+      throw error
+    }
+  }, [supabase])
+
+  // Мемоизируем функцию получения пользователя
+  const fetchUser = useCallback(async () => {
+    if (!isMounted.current) return
+    
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      if (error) {
+        console.error("Ошибка при получении пользователя:", error)
+        router.push('/auth/login')
+        return
+      }
+      
+      if (!user) {
+        console.log("Пользователь не авторизован")
+        router.push('/auth/login')
+        return
+      }
+      
+      // Получаем разрешения с retry логикой
+      try {
+        await fetchWithRetry(() => fetchPermissions(user.id))
+      } catch (error) {
+        if (!isMounted.current) return
+        
+        console.error("Не удалось получить разрешения после всех попыток:", error)
+        toast({
+          title: "Ошибка получения разрешений",
+          description: "Попробуйте обновить страницу",
+          variant: "destructive"
+        })
+      }
+      
+      // Проверяем, нужно ли обновлять остальные данные пользователя
+      if (!isMounted.current) return
+      
+      const userState = useUserStore.getState()
+      const needsRefresh = !userState.id || userState.id !== user.id || !userState.profile
+      
+      if (needsRefresh) {
+        console.log("Обновляем данные пользователя в хранилище")
+        
+        const { data: userData, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .single()
+        
+        if (profileError) {
+          if (!isMounted.current) return
+          
+          console.error("Ошибка при получении профиля:", profileError)
+          toast({
+            title: "Ошибка получения профиля",
+            description: "Некоторые данные могут отображаться некорректно",
+            variant: "destructive"
+          })
         }
         
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          console.log("Пользователь не найден, перенаправляем на страницу входа");
-          useUserStore.getState().clearUser();
-          router.push("/auth/login");
-          return;
-        }
-
-        console.log("Аутентифицированный пользователь:", user.id);
+        if (!isMounted.current) return
         
-        // Проверяем, есть ли уже пользовательские данные в хранилище
-        const currentUserId = useUserStore.getState().id;
-        console.log("ID текущего пользователя в хранилище:", currentUserId);
-        
-        // Проверяем соответствие ID в хранилище и в Supabase
-        const needsRefresh = !currentUserId || currentUserId !== user.id;
-        
-        if (needsRefresh) {
-          console.log("Требуется обновление данных пользователя в хранилище");
-          
-          // Get user metadata
-          const { data: userData } = await supabase.from("profiles").select("*").eq("user_id", user.id).single();
-          
-          console.log("Получены данные профиля из Supabase:", userData);
-          
-          // Сохраняем профиль в Zustand только если нужно обновить данные
+        try {
           useUserStore.getState().setUser({
             id: user.id,
             email: user.email ?? "",
             name: userData ? [userData.first_name ?? "", userData.last_name ?? ""].filter(Boolean).join(" ") : "Пользователь",
             profile: userData
-          });
-          
-          // Теперь получаем роль и разрешения
-          console.log("Получаем роли и разрешения для пользователя с ID:", user.id);
-          
-          try {
-            const { role, permissions } = await getUserRoleAndPermissions(user.id, supabase);
-            console.log("Полученные роли и разрешения:", { role, permissions });
-            if (role) {
-              useUserStore.getState().setRoleAndPermissions(role, permissions);
-              console.log("Роль и разрешения сохранены в хранилище:", role, permissions);
-            } else {
-              console.warn("Роль не найдена для пользователя:", user.id);
-            }
-          } catch (error) {
-            console.error("Ошибка при получении ролей и разрешений:", error);
-          }
-        } else {
-          console.log("Пользовательские данные уже актуальны, пропускаем обновление");
+          })
+        } catch (setUserError) {
+          console.error("Ошибка при установке данных пользователя:", setUserError)
+          toast({
+            title: "Ошибка обновления данных",
+            description: "Не удалось обновить данные пользователя",
+            variant: "destructive"
+          })
         }
-
-        setMounted(true);
-        console.log("Компонент установлен");
-      } catch (error) {
-        console.error("Ошибка при загрузке пользователя:", error);
-        router.push("/auth/login");
       }
-    };
+    } catch (error) {
+      if (!isMounted.current) return
+      
+      console.error("Критическая ошибка при получении данных:", error)
+      handleAuthError(error as Error)
+    }
+  }, [supabase, fetchWithRetry, fetchPermissions, router, handleAuthError])
 
-    fetchUser();
-  }, [router, supabase, isAuthenticated]);
+  useEffect(() => {
+    if (!mounted) {
+      fetchUser()
+      setMounted(true)
+    }
+  }, [mounted, fetchUser])
 
   if (!mounted) {
     return null

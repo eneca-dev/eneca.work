@@ -39,6 +39,7 @@ interface UserState {
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
+  clearState: () => void
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
 }
@@ -58,15 +59,19 @@ export const useUserStore = create<UserState>()(
         
         // Действия
         setUser: (user: UserData) => {
-          console.log('setUser вызван с данными:', user);
-          console.log('Профиль пользователя в данных:', user.profile);
+          if (!user?.id || !user?.email) {
+            throw new Error('Invalid user data: id and email are required');
+          }
           
-          // Явно создаем новый объект для профиля, чтобы избежать ссылочных проблем
+          const currentState = get();
+          const shouldPreserveRoleData = currentState.id === user.id;
+          
+          // Explicitly create new object for profile to avoid reference issues
           let processedProfile = null;
           let profileName = '';
           
           if (user.profile) {
-            // Создаем глубокую копию профиля для безопасности
+            // Create deep copy of profile for safety
             processedProfile = {
               firstName: user.profile.firstName,
               lastName: user.profile.lastName,
@@ -83,7 +88,6 @@ export const useUserStore = create<UserState>()(
               avatar_url: user.profile.avatar_url
             };
             profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
-            console.log('Обработанный профиль перед сохранением:', processedProfile);
           }
           
           set({
@@ -92,12 +96,9 @@ export const useUserStore = create<UserState>()(
             name: profileName || '',
             profile: processedProfile,
             isAuthenticated: true,
-            role: null,
-            permissions: []
+            role: shouldPreserveRoleData ? currentState.role : null,
+            permissions: shouldPreserveRoleData ? currentState.permissions : []
           });
-          
-          console.log('Новое состояние:', useUserStore.getState());
-          console.log('Профиль в новом состоянии:', useUserStore.getState().profile);
         },
         
         clearUser: () => set({
@@ -110,16 +111,19 @@ export const useUserStore = create<UserState>()(
           permissions: []
         }),
         
+        // Alias for clearUser for backward compatibility
+        clearState: () => get().clearUser(),
+        
         setRoleAndPermissions: (role, permissions) => set({
           role,
           permissions
         }),
         
-        // Метод для обновления аватара
+        // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
           const currentState = get();
           
-          // Если у пользователя еще нет профиля, создаем его
+          // If user doesn't have profile yet, create one
           if (!currentState.profile) {
             set({ 
               profile: { 
@@ -129,32 +133,28 @@ export const useUserStore = create<UserState>()(
             return;
           }
           
-          // Иначе обновляем существующий профиль
+          // Otherwise update existing profile
           set({
             profile: {
               ...currentState.profile,
               avatar_url: avatarUrl
             }
           });
-          
-          console.log('Аватар обновлен:', avatarUrl);
-          console.log('Новый профиль:', useUserStore.getState().profile);
         }
       }),
       {
         name: 'user-storage',
         partialize: (state) => {
-          console.log('Partialize state:', state);
           const partializedState = {
             id: state.id,
             email: state.email,
             name: state.name,
             profile: state.profile,
             isAuthenticated: state.isAuthenticated,
-            role: state.role,
-            permissions: state.permissions
+            // Don't save role and permissions in localStorage
+            role: null,
+            permissions: []
           };
-          console.log('Serialized state:', partializedState);
           return partializedState;
         },
       }
