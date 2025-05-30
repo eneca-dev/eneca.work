@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Network } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 
 interface SidebarProps {
@@ -49,6 +49,11 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       title: "Прогресс проектов",
       href: "/dashboard/progress",
       icon: BarChart,
+    },
+    {
+      title: "Декомпозиция",
+      href: "/dashboard/decomposition", 
+      icon: Network,
     },
   ]
 
