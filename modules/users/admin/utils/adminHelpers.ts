@@ -1,7 +1,7 @@
 // Вспомогательные функции для админ-панели
 
-export function checkAdminAccess(permissions: string[]): boolean {
-  return permissions?.includes("can_view_user_admin_panel") ?? false
+export function hasAdminAccess(permissions: string[]): boolean {
+  return permissions?.includes("user_admin_panel_can_view") ?? false
 }
 
 export function formatAdminError(error: unknown): string {

@@ -31,7 +31,7 @@ export default function UsersPage() {
   const router = useRouter()
   const tabFromUrl = searchParams.get('tab')
   const permissions = useUserStore((state) => state.permissions)
-  const canViewAdminPanel = permissions.includes("can_view_user_admin_panel")
+  const canViewAdminPanel = permissions.includes("user_admin_panel_can_view")
   
   // Set initial tab value based on URL
   const [adminTab, setAdminTab] = useState(

@@ -5,7 +5,7 @@ export function useAdminPermissions(): AdminPermissions {
   const permissions = useUserStore((state) => state.permissions)
 
   return {
-    canViewAdminPanel: permissions?.includes("can_view_user_admin_panel") ?? false,
+    canViewAdminPanel: permissions?.includes("user_admin_panel_can_view") ?? false,
     canManageRoles: permissions?.includes("role.manage") ?? false,
     canManageDepartments: permissions?.includes("department.manage") ?? false,
     canManageTeams: permissions?.includes("team.manage") ?? false,
