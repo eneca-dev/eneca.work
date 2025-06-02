@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
+import { WeeklyCalendar } from "@/components/weekly-calendar"
 
 interface SidebarProps {
   user: {
@@ -49,6 +50,11 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       title: "Прогресс проектов",
       href: "/dashboard/progress",
       icon: BarChart,
+    },
+    {
+      title: "Календарь",
+      href: "/dashboard/calendar",
+      icon: Calendar,
     },
   ]
 
@@ -112,6 +118,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             ))}
           </ul>
         </nav>
+
+        {/* Weekly Calendar */}
+        <WeeklyCalendar collapsed={collapsed} />
 
         {/* User and Theme */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-4">

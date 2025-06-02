@@ -1,5 +1,9 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { createClient } from "@/utils/supabase/client"
+import { getUserRoleAndPermissions, getUserRoleAndPermissionsByRoleId } from "@/services/org-data-service"
+
+export type UserRole = "admin" | "user"
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
@@ -26,7 +30,7 @@ export type UserData = {
   profile?: UserProfile | null
 }
 
-// Основной интерфейс состояния
+// Расширенный интерфейс состояния
 interface UserState {
   id: string | null
   email: string | null
@@ -35,12 +39,15 @@ interface UserState {
   isAuthenticated: boolean
   role: string | null
   permissions: string[]
+  isLoadingPermissions: boolean
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
+  hasPermission: (permission: string) => boolean
+  loadUserPermissions: (userId: string) => Promise<void>
 }
 
 export const useUserStore = create<UserState>()(
@@ -55,6 +62,7 @@ export const useUserStore = create<UserState>()(
         isAuthenticated: false,
         role: null,
         permissions: [],
+        isLoadingPermissions: false,
         
         // Действия
         setUser: (user: UserData) => {
@@ -98,6 +106,15 @@ export const useUserStore = create<UserState>()(
           
           console.log('Новое состояние:', useUserStore.getState());
           console.log('Профиль в новом состоянии:', useUserStore.getState().profile);
+          
+          // Автоматически загружаем разрешения после установки пользователя
+          const state = get();
+          console.log(
+            state.profile?.roleId 
+              ? `Автоматически загружаем разрешения из profile.roleId: ${state.profile.roleId}`
+              : 'profile.roleId отсутствует, загружаем разрешения через user_roles'
+          );
+          state.loadUserPermissions(user.id);
         },
         
         clearUser: () => set({
@@ -107,7 +124,8 @@ export const useUserStore = create<UserState>()(
           profile: null,
           isAuthenticated: false,
           role: null,
-          permissions: []
+          permissions: [],
+          isLoadingPermissions: false,
         }),
         
         setRoleAndPermissions: (role, permissions) => set({
@@ -139,7 +157,62 @@ export const useUserStore = create<UserState>()(
           
           console.log('Аватар обновлен:', avatarUrl);
           console.log('Новый профиль:', useUserStore.getState().profile);
-        }
+        },
+
+        hasPermission: (permission: string) => {
+          const state = get()
+          return state.permissions.includes(permission)
+        },
+
+        loadUserPermissions: async (userId: string) => {
+          const currentState = get();
+          
+          // Проверяем, не идет ли уже загрузка разрешений
+          if (currentState.isLoadingPermissions) {
+            console.log('Загрузка разрешений уже выполняется, пропускаем запрос');
+            return;
+          }
+
+          // Устанавливаем флаг загрузки
+          set({ isLoadingPermissions: true });
+
+          try {
+            console.log('loadUserPermissions вызван для userId:', userId);
+            console.log('Текущий профиль пользователя:', currentState.profile);
+            
+            let rolePermissions;
+            
+            // Если у пользователя есть roleId в профиле, используем его напрямую
+            if (currentState.profile?.roleId) {
+              console.log('Используем roleId из профиля:', currentState.profile.roleId);
+              rolePermissions = await getUserRoleAndPermissionsByRoleId(currentState.profile.roleId);
+            } else {
+              console.log('Используем стандартный способ через user_roles');
+              rolePermissions = await getUserRoleAndPermissions(userId);
+            }
+            
+            console.log('Полученные разрешения:', rolePermissions);
+            
+            set({
+              role: rolePermissions.role,
+              permissions: rolePermissions.permissions,
+              isLoadingPermissions: false
+            });
+            
+            console.log('Разрешения успешно загружены и установлены:', {
+              role: rolePermissions.role,
+              permissions: rolePermissions.permissions
+            });
+          } catch (error) {
+            console.error('Ошибка при загрузке разрешений пользователя:', error);
+            
+            // Сбрасываем флаг загрузки при ошибке
+            set({ isLoadingPermissions: false });
+            
+            // Перебрасываем ошибку для propagation к вызывающему коду
+            throw error;
+          }
+        },
       }),
       {
         name: 'user-storage',
@@ -160,4 +233,4 @@ export const useUserStore = create<UserState>()(
       }
     )
   )
-) 
+)
