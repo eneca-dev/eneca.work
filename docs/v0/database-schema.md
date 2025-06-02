@@ -196,6 +196,13 @@
 - loading_created (timestamptz, default: now()) - Дата и время создания записи
 - loading_updated (timestamptz, default: now()) - Дата и время последнего обновления записи
 - loading_task (uuid, FK → tasks.task_id) - Ссылка на задачу, к которой относится нагрузка
+- loading_status (loading_status_type, NOT NULL, default: 'active') - Статус загрузки: active - активная, archived - архивная
+
+## Тип loading_status_type
+Перечисление статусов загрузок для разделения активных и архивных записей.
+
+- 'active' - Активная загрузка
+- 'archived' - Архивная загрузка
 
 ## Таблица plan_loadings
 Плановые загрузки, создаваемые менеджерами. Используется для планирования необходимых ресурсов на проект.
@@ -439,50 +446,100 @@ GROUP BY
 Представление для анализа загрузки сотрудников по проектам и разделам. Ориентировано на мониторинг занятости персонала и планирование ресурсов с акцентом на сотрудника, а не на структуру проекта.
 
 #### Описание:
-Это представление предоставляет полную информацию о загрузке каждого сотрудника:
+Это представление предоставляет полную информацию о загрузке каждого сотрудника с улучшенной обработкой организационной структуры:
 - Персональные данные сотрудника, включая должность и контактную информацию
-- Организационная структура: департамент и команда
+- **Умная обработка имен**: автоматическое формирование полного имени из email, если имя/фамилия пустые
+- **Двойная структура департаментов/команд**: оригинальные данные (могут быть NULL) и финальные (всегда заполнены)
+- **Виртуальные департаменты/команды**: создание "Без отдела"/"Без команды" для неназначенных сотрудников
 - Детализированные данные о загрузках на разделы проектов
 - Статистика общей загрузки сотрудника
 
 #### Ключевые поля:
-- **Данные сотрудника**: user_id, first_name, last_name, email, position_name, avatar_url
-- **Организационная структура**: team_id, team_name, department_id, department_name
-- **Параметры загрузки**: loading_id, loading_section, loading_start, loading_finish, loading_rate
-- **Данные проекта/раздела**: section_name, project_name, project_status
-- **Статистика занятости**: has_loadings, loadings_count, employment_rate
+**Персональные данные:**
+- **user_id**: Уникальный идентификатор пользователя (uuid)
+- **first_name**: Имя сотрудника (text)
+- **last_name**: Фамилия сотрудника (text)
+- **full_name**: Полное имя с умной обработкой пустых значений (text)
+- **email**: Email сотрудника (text)
+- **avatar_url**: URL аватара (text)
+- **work_format**: Формат работы (work_format_type)
+- **employment_rate**: Ставка занятости (numeric)
+
+**Должность и роли:**
+- **position_id**: ID должности (uuid)
+- **position_name**: Название должности (text)
+- **category_id**: ID категории (uuid)
+- **category_name**: Название категории (text)
+- **role_id**: ID роли (uuid)
+- **role_name**: Название роли (text)
+
+**Организационная структура (оригинальные данные):**
+- **original_team_id**: Оригинальный ID команды (uuid, может быть NULL)
+- **original_team_name**: Оригинальное название команды (text, может быть NULL)
+- **original_department_id**: Оригинальный ID департамента (uuid, может быть NULL)
+- **original_department_name**: Оригинальное название департамента (text, может быть NULL)
+
+**Организационная структура (финальные данные):**
+- **final_team_id**: Финальный ID команды (uuid, всегда заполнен)
+- **final_team_name**: Финальное название команды (text, всегда заполнено)
+- **final_department_id**: Финальный ID департамента (uuid, всегда заполнен)
+- **final_department_name**: Финальное название департамента (text, всегда заполнено)
+
+**Данные загрузок:**
+- **loading_id**: ID загрузки (uuid)
+- **loading_section**: ID раздела загрузки (uuid)
+- **loading_start**: Дата начала загрузки (date)
+- **loading_finish**: Дата окончания загрузки (date)
+- **loading_rate**: Коэффициент загрузки (numeric)
+- **loading_status**: Статус загрузки (loading_status_type)
+
+**Данные проектов:**
+- **section_name**: Название раздела (text)
+- **project_name**: Название проекта (text)
+- **project_status**: Статус проекта (project_status_enum)
+
+**Статистика:**
+- **has_loadings**: Флаг наличия загрузок (boolean)
+- **loadings_count**: Количество загрузок сотрудника (bigint)
+
+#### Особенности:
+- **Умная обработка имен**: если `first_name` и `last_name` пустые, в `full_name` используется часть email до символа `@`
+- **Виртуальная структура**: сотрудники без департамента/команды автоматически попадают в "Без отдела"/"Без команды"
+- **Двойные данные**: оригинальные поля показывают реальное состояние БД, финальные - всегда заполнены для удобства отображения
+- **Полная детализация**: включает все данные о сотруднике, его загрузках и связанных проектах
 
 #### Применение:
 - Планирование и распределение ресурсов на уровне департаментов и команд
 - Мониторинг загруженности специалистов различных должностей
 - Составление отчетов о занятости сотрудников по проектам
 - Выявление незагруженных или перегруженных специалистов
+- Анализ организационной структуры с учетом неназначенных сотрудников
 
 #### Пример использования:
 ```sql
 -- Анализ загруженности сотрудников по департаментам
 SELECT 
-    department_name,
+    final_department_name,
     COUNT(DISTINCT user_id) AS employees_count,
     SUM(CASE WHEN has_loadings THEN 1 ELSE 0 END) AS employees_with_loadings,
     AVG(loadings_count) AS avg_loadings_per_employee
 FROM 
     view_employee_workloads
 GROUP BY 
-    department_name;
+    final_department_name;
 
--- Найти незагруженных сотрудников
-SELECT 
-    first_name || ' ' || last_name AS employee_name,
+-- Найти незагруженных сотрудников с реальными должностями
+SELECT DISTINCT
+    full_name,
     position_name,
-    department_name,
-    team_name
+    final_department_name,
+    final_team_name
 FROM 
     view_employee_workloads
 WHERE 
     has_loadings = false
-GROUP BY 
-    user_id, first_name, last_name, position_name, department_name, team_name;
+    AND position_name != 'Без должности'
+ORDER BY final_department_name, full_name;
 
 -- Анализ загрузки по проектам и должностям
 SELECT 
@@ -498,6 +555,19 @@ GROUP BY
     project_name, position_name
 ORDER BY 
     project_name, total_loading DESC;
+
+-- Сравнение оригинальной и финальной структуры
+SELECT 
+    full_name,
+    original_department_name,
+    final_department_name,
+    original_team_name,
+    final_team_name
+FROM 
+    view_employee_workloads
+WHERE 
+    original_department_name IS NULL 
+    OR original_team_name IS NULL;
 ```
 
 ### view_project_managers
@@ -552,36 +622,588 @@ ORDER BY
 - Отчеты о проектной деятельности
 - Интерфейсы управления проектами
 
-**Связи:**
-- profiles.department_id → departments.department_id
-- profiles.team_id → teams.team_id
-- profiles.position_id → positions.position_id
-- profiles.category_id → categories.category_id
-- profiles.role_id → roles.id
-- profiles.user_id → auth.users.id
-- user_roles.user_id → profiles.user_id
-- user_roles.role_id → roles.id
-- role_permissions.role_id → roles.id
-- role_permissions.permission_id → permissions.id
-- projects.project_manager → profiles.user_id
-- projects.project_lead_engineer → profiles.user_id
-- projects.client_id → clients.client_id
-- contracts.contract_client_id → clients.client_id
-- contracts.contract_project_id → projects.project_id
-- objects.object_stage_id → stages.stage_id
-- objects.object_responsible → profiles.user_id
-- sections.section_responsible → profiles.user_id
-- sections.section_project_id → projects.project_id
-- sections.section_object_id → objects.object_id
-- tasks.task_responsible → profiles.user_id
-- tasks.task_parent_section → sections.section_id
-- loadings.loading_responsible → profiles.user_id
-- loadings.loading_section → sections.section_id
-- loadings.loading_task → tasks.task_id
-- plan_loadings.plan_loading_section → sections.section_id
-- plan_loadings.plan_loading_created_by → auth.users.id
-- assignments.project_id → projects.project_id
-- assignments.from_section_id → sections.section_id
-- assignments.to_section_id → sections.section_id
-- ws_tasks.ws_project_id → ws_projects.ws_id
-- calendar_events.calendar_event_created_by → profiles.user_id
+### view_employees
+Представление для работы с сотрудниками с полной детализированной информацией. Предоставляет комплексный доступ к данным о персонале с информацией из всех связанных справочников.
+
+#### Описание:
+Это представление объединяет данные из таблицы profiles с информацией из всех связанных справочников:
+- Персональные данные сотрудника с умной обработкой пустых имен
+- Информация о должности, департаменте, команде и категории
+- Данные о системной роли и правах доступа
+- Визуальные элементы: аватар сотрудника
+
+#### Ключевые поля:
+- **user_id**: Уникальный идентификатор пользователя (uuid)
+- **first_name**: Имя сотрудника (text)
+- **last_name**: Фамилия сотрудника (text)
+- **full_name**: Полное имя с умной обработкой пустых значений (text)
+- **email**: Email сотрудника (text)
+- **avatar_url**: URL аватара (text)
+- **work_format**: Формат работы (work_format_type)
+- **employment_rate**: Ставка занятости (numeric)
+- **position_id**: ID должности (uuid)
+- **position_name**: Название должности (text)
+- **department_id**: ID департамента (uuid)
+- **department_name**: Название департамента (text)
+- **team_id**: ID команды (uuid)
+- **team_name**: Название команды (text)
+- **category_id**: ID категории (uuid)
+- **category_name**: Название категории (text)
+- **role_id**: ID роли (uuid)
+- **role_name**: Название роли (text)
+- **role_description**: Описание роли (text)
+
+#### Особенности:
+- **Умная обработка имен**: если `first_name` и `last_name` пустые, в `full_name` используется часть email до символа `@`
+- **Полная информация**: включает все данные из связанных справочников
+- **Сортировка**: по департаменту, команде, фамилии и имени
+
+#### Применение:
+- Отображение списков сотрудников в интерфейсах
+- Назначение ответственных на проекты и задачи
+- Аналитические отчеты по персоналу
+- Управление правами доступа
+
+#### Пример использования:
+```sql
+-- Получить всех сотрудников с должностями
+SELECT full_name, position_name, department_name, team_name 
+FROM view_employees 
+WHERE position_name != 'Без должности';
+
+-- Найти сотрудников конкретного департамента
+SELECT full_name, position_name, email 
+FROM view_employees 
+WHERE department_name = 'ВК';
+
+-- Получить руководителей проектов
+SELECT full_name, email, avatar_url 
+FROM view_employees 
+WHERE position_name LIKE '%руководитель%';
+```
+
+### view_profiles_extended
+Расширенное представление таблицы profiles с присоединенными данными из справочников. Предоставляет все поля исходной таблицы плюс расшифровки внешних ключей.
+
+#### Описание:
+Это представление расширяет таблицу profiles, добавляя читаемые названия из связанных справочников:
+- Все исходные поля таблицы profiles
+- Названия должности, департамента, команды, категории и роли
+- Вычисляемое поле full_name с умной обработкой пустых значений
+
+#### Ключевые поля:
+- Все поля таблицы **profiles** (user_id, first_name, last_name, email, и т.д.)
+- **position_name**: Название должности (text)
+- **department_name**: Название департамента (text)
+- **team_name**: Название команды (text)
+- **category_name**: Название категории (text)
+- **role_name**: Название роли (text)
+- **full_name**: Полное имя с умной обработкой (text)
+
+#### Применение:
+- Замена прямых запросов к таблице profiles в случаях, когда нужны названия справочников
+- API endpoints для получения данных сотрудников
+- Компоненты выбора ответственных лиц
+- Отчеты и экспорт данных
+
+#### Пример использования:
+```sql
+-- Использовать вместо profiles для получения полной информации
+SELECT user_id, full_name, email, position_name, department_name 
+FROM view_profiles_extended 
+WHERE email LIKE '%@enecagroup.com';
+
+-- Группировка по департаментам
+SELECT department_name, COUNT(*) as employees_count 
+FROM view_profiles_extended 
+GROUP BY department_name;
+```
+
+### active_loadings
+Представление для работы с активными загрузками. Отображает только загрузки со статусом 'active' с дополнительной информацией о временном статусе.
+
+#### Описание:
+Это представление фильтрует загрузки по статусу 'active' и добавляет временную классификацию:
+- Все поля из таблицы loadings для активных записей
+- Дополнительное поле time_status для классификации по времени
+
+#### Ключевые поля:
+- Все поля таблицы loadings
+- **time_status**: Временной статус ('Завершена', 'Текущая', 'Будущая')
+
+#### Применение:
+- Отображение только активных загрузок в интерфейсе
+- Планирование текущих и будущих работ
+- Исключение архивных данных из основных отчетов
+
+### archived_loadings
+Представление для работы с архивными загрузками. Отображает только загрузки со статусом 'archived'.
+
+#### Описание:
+Это представление фильтрует загрузки по статусу 'archived' и добавляет метку архивного статуса:
+- Все поля из таблицы loadings для архивных записей
+- Фиксированное поле time_status со значением 'Архивная'
+
+#### Ключевые поля:
+- Все поля таблицы loadings
+- **time_status**: Всегда 'Архивная'
+
+#### Применение:
+- Просмотр архивных данных
+- Аналитика по завершенным проектам
+- Восстановление данных из архива
+
+### loading_statistics
+Представление для получения статистики по загрузкам с группировкой по статусам.
+
+#### Описание:
+Это представление предоставляет агрегированную статистику по загрузкам:
+- Группировка по статусу загрузки (active/archived)
+- Подсчет количества записей по временным категориям
+- Расчет временных диапазонов и средних значений
+
+#### Ключевые поля:
+- **loading_status**: Статус загрузки ('active' или 'archived')
+- **total_count**: Общее количество загрузок в статусе
+- **completed_count**: Количество завершенных загрузок
+- **current_count**: Количество текущих загрузок
+- **future_count**: Количество будущих загрузок
+- **earliest_start**: Самая ранняя дата начала
+- **latest_finish**: Самая поздняя дата окончания
+- **avg_rate**: Средний коэффициент нагрузки
+
+#### Применение:
+- Аналитические панели и дашборды
+- Отчеты о распределении загрузок
+- Мониторинг активности по проектам
+- Планирование архивирования данных
+
+## Функции управления загрузками
+
+### archive_old_loadings(days_threshold INTEGER DEFAULT 30)
+Функция для автоматического архивирования старых загрузок.
+
+#### Параметры:
+- **days_threshold**: Количество дней с момента окончания загрузки для архивирования (по умолчанию 30)
+
+#### Возвращает:
+- **archived_count**: Количество заархивированных записей
+- **message**: Сообщение о результате операции
+
+#### Применение:
+```sql
+-- Архивировать загрузки старше 30 дней
+SELECT * FROM archive_old_loadings();
+
+-- Архивировать загрузки старше 60 дней
+SELECT * FROM archive_old_loadings(60);
+```
+
+### restore_loading_from_archive(loading_uuid UUID)
+Функция для восстановления загрузки из архива.
+
+#### Параметры:
+- **loading_uuid**: UUID загрузки для восстановления
+
+#### Возвращает:
+- **success**: Флаг успешности операции
+- **message**: Сообщение о результате операции
+
+#### Применение:
+```sql
+-- Восстановить конкретную загрузку из архива
+SELECT * FROM restore_loading_from_archive('550e8400-e29b-41d4-a716-446655440000');
+```
+
+## Индексы для оптимизации
+
+### Индексы таблицы loadings
+Для оптимизации запросов по статусам загрузок созданы следующие индексы:
+
+- **idx_loadings_status**: Индекс по полю loading_status для быстрой фильтрации активных/архивных загрузок
+- **idx_loadings_status_finish_date**: Составной индекс по loading_status и loading_finish для оптимизации запросов с фильтрацией по статусу и дате окончания
+- **idx_loadings_active_date_range**: Индекс по диапазону дат для активных загрузок (loading_start, loading_finish) с условием loading_status = 'active'
+
+#### Применение индексов:
+```sql
+-- Быстрый поиск активных загрузок
+SELECT * FROM loadings WHERE loading_status = 'active';
+
+-- Оптимизированный поиск архивных загрузок по дате
+SELECT * FROM loadings 
+WHERE loading_status = 'archived' 
+AND loading_finish < '2025-01-01';
+
+-- Эффективный поиск пересечений дат для активных загрузок
+SELECT * FROM loadings 
+WHERE loading_status = 'active' 
+AND loading_start <= '2025-06-01' 
+AND loading_finish >= '2025-05-01';
+```
+
+### view_department_statistics
+Представление для получения агрегированной статистики по департаментам и командам. Предоставляет комплексный анализ организационной структуры и загруженности персонала.
+
+#### Описание:
+Это представление создает сводную статистику по каждому департаменту:
+- Количественные показатели по сотрудникам и загрузкам
+- Процентные метрики загруженности
+- Детализированная информация по командам в формате JSON
+- Анализ распределения должностей
+
+#### Ключевые поля:
+- **final_department_id**: ID департамента (uuid)
+- **final_department_name**: Название департамента (text)
+- **total_employees**: Общее количество сотрудников (bigint)
+- **employees_with_loadings**: Количество сотрудников с загрузками (bigint)
+- **teams_count**: Количество команд в департаменте (bigint)
+- **total_loadings**: Общее количество загрузок в департаменте (numeric)
+- **avg_employment_rate**: Средняя ставка занятости (numeric)
+- **employees_with_positions**: Сотрудники с назначенными должностями (bigint)
+- **loading_percentage**: Процент загруженных сотрудников (numeric)
+- **teams_info**: Детальная информация по командам (json)
+
+#### Структура teams_info:
+```json
+[
+  {
+    "team_id": "uuid",
+    "team_name": "string",
+    "employees": number,
+    "employees_with_loadings": number,
+    "total_loadings": number
+  }
+]
+```
+
+#### Применение:
+- Аналитические дашборды для руководства
+- Планирование реорганизации департаментов
+- Мониторинг эффективности использования ресурсов
+- Отчеты о структуре организации
+
+#### Пример использования:
+```sql
+-- Топ департаментов по загруженности
+SELECT 
+    final_department_name,
+    total_employees,
+    loading_percentage,
+    total_loadings
+FROM 
+    view_department_statistics
+ORDER BY 
+    loading_percentage DESC;
+
+-- Департаменты с низкой загруженностью
+SELECT 
+    final_department_name,
+    total_employees,
+    employees_with_loadings,
+    loading_percentage
+FROM 
+    view_department_statistics
+WHERE 
+    loading_percentage < 50
+    AND final_department_name != 'Без отдела';
+
+-- Анализ команд в департаменте
+SELECT 
+    final_department_name,
+    json_array_elements(teams_info) as team_info
+FROM 
+    view_department_statistics
+WHERE 
+    final_department_name = 'ВК';
+```
+
+## Таблица decomposition_templates
+Хранит шаблоны декомпозиции работ для различных департаментов. Позволяет создавать стандартизированные структуры задач для типовых проектов.
+
+- decomposition_template_id (uuid, PK, default: gen_random_uuid()) - Уникальный идентификатор шаблона
+- decomposition_template_name (text, NOT NULL) - Название шаблона декомпозиции
+- decomposition_department_id (uuid, NOT NULL, FK → departments.department_id) - Ссылка на департамент
+- decomposition_template_creator_id (uuid, NOT NULL, FK → profiles.user_id) - Создатель шаблона
+- decomposition_template_created_at (timestamptz, NOT NULL, default: now()) - Дата создания шаблона
+- decomposition_template_content (jsonb, NOT NULL) - Содержимое шаблона в формате JSON
+
+## Таблица decompositions
+Хранит фактические декомпозиции работ для конкретных разделов проектов. Представляет структурированное разбиение работ на подзадачи.
+
+- decomposition_id (uuid, PK, default: gen_random_uuid()) - Уникальный идентификатор декомпозиции
+- decomposition_creator_id (uuid, NOT NULL, FK → profiles.user_id) - Создатель декомпозиции
+- decomposition_section_id (uuid, NOT NULL, FK → sections.section_id) - Ссылка на раздел проекта
+- decomposition_content (jsonb, NOT NULL) - Содержимое декомпозиции в формате JSON
+
+## Индексы для оптимизации производительности
+
+### Индексы таблицы user_reports
+Для оптимизации запросов к отчетам пользователей созданы следующие индексы:
+
+- **idx_user_reports_created_by**: Индекс по полю user_report_created_by для быстрого поиска отчетов по автору
+- **idx_user_reports_created_at**: Индекс по полю user_report_created_at с DESC сортировкой для оптимизации запросов с сортировкой по дате
+
+#### Применение индексов:
+```sql
+-- Быстрый поиск отчетов конкретного пользователя
+SELECT * FROM user_reports WHERE user_report_created_by = 'user_uuid';
+
+-- Оптимизированная сортировка по дате создания
+SELECT * FROM user_reports ORDER BY user_report_created_at DESC LIMIT 10;
+
+-- Эффективный поиск отчетов за период
+SELECT * FROM user_reports 
+WHERE user_report_created_at >= '2025-01-01' 
+AND user_report_created_at < '2025-02-01'
+ORDER BY user_report_created_at DESC;
+```
+
+## Функции и процедуры
+
+### Функции управления загрузками
+
+#### archive_old_loadings(days_threshold INTEGER DEFAULT 30)
+Функция для автоматического архивирования старых загрузок.
+
+**Параметры:**
+- **days_threshold**: Количество дней с момента окончания загрузки для архивирования (по умолчанию 30)
+
+**Возвращает:**
+- **archived_count**: Количество заархивированных записей
+- **message**: Сообщение о результате операции
+
+**Применение:**
+```sql
+-- Архивировать загрузки старше 30 дней
+SELECT * FROM archive_old_loadings();
+
+-- Архивировать загрузки старше 60 дней
+SELECT * FROM archive_old_loadings(60);
+```
+
+#### restore_loading_from_archive(loading_uuid UUID)
+Функция для восстановления загрузки из архива.
+
+**Параметры:**
+- **loading_uuid**: UUID загрузки для восстановления
+
+**Возвращает:**
+- **success**: Флаг успешности операции
+- **message**: Сообщение о результате операции
+
+**Применение:**
+```sql
+-- Восстановить конкретную загрузку из архива
+SELECT * FROM restore_loading_from_archive('550e8400-e29b-41d4-a716-446655440000');
+```
+
+## Типы данных и перечисления
+
+### loading_status_type
+Перечисление статусов загрузок для разделения активных и архивных записей.
+
+- **'active'** - Активная загрузка, участвует в текущем планировании
+- **'archived'** - Архивная загрузка, исключена из активного планирования
+
+### calendar_event_type_enum
+Перечисление типов событий календаря для отметки особых дней.
+
+- **'Отгул'** - День отгула сотрудника
+- **'Больничный'** - Больничный лист
+- **'Перенос'** - Перенесенный рабочий день
+- **'Отпуск'** - Отпуск сотрудника
+- **'Праздник'** - Праздничный день
+- **'Событие'** - Корпоративное или иное событие
+
+### assignment_status
+Перечисление возможных статусов заданий между разделами.
+
+- **'Создано'** - Задание создано, но еще не передано
+- **'Передано'** - Задание передано исполнителю
+- **'Принято'** - Задание принято к исполнению
+- **'Выполнено'** - Задание выполнено
+- **'Согласовано'** - Задание согласовано и закрыто
+
+## Рекомендации по использованию
+
+### Работа с загрузками
+1. **Используйте представления** вместо прямых запросов к таблицам для получения агрегированных данных
+2. **Архивируйте старые загрузки** регулярно для поддержания производительности
+3. **Используйте индексы** при фильтрации по датам и статусам
+
+### Планирование ресурсов
+1. **view_employee_workloads** - для анализа загруженности сотрудников
+2. **view_department_statistics** - для анализа эффективности департаментов
+3. **loading_statistics** - для общей статистики по проекту
+
+### Отчетность
+1. **view_section_hierarchy** - для комплексного анализа проектной структуры
+2. **view_user_reports_with_authors** - для системы обратной связи
+3. **view_manager_projects** - для отчетов руководства
+
+## Таблица user_reports
+Хранит отчеты пользователей о проблемах, ошибках и предложениях по улучшению системы. Позволяет пользователям сообщать о найденных проблемах и отслеживать их решение.
+
+- user_report_id (uuid, PK, default: gen_random_uuid()) - Уникальный идентификатор отчета
+- user_report_short_description (text, NOT NULL) - Краткое описание проблемы или предложения
+- user_report_detailed_description (text) - Подробное описание проблемы или предложения
+- user_report_created_by (uuid, NOT NULL, FK → profiles.user_id) - Ссылка на пользователя, создавшего отчет
+- user_report_created_at (timestamptz, NOT NULL, default: timezone('utc', now())) - Дата и время создания отчета
+
+### view_user_reports_with_authors
+Представление для работы с отчетами пользователей, включающее полную информацию об авторах отчетов.
+
+#### Описание:
+Это представление объединяет данные из таблицы user_reports с информацией о пользователях, создавших отчеты:
+- Основные данные отчета
+- Персональные данные автора отчета с умной обработкой имен
+- Информация о должности, департаменте и команде автора
+- Визуальные элементы: аватар автора
+
+#### Ключевые поля:
+- **user_report_id**: Уникальный идентификатор отчета (uuid)
+- **user_report_short_description**: Краткое описание (text)
+- **user_report_detailed_description**: Подробное описание (text)
+- **user_report_created_by**: ID автора отчета (uuid)
+- **user_report_created_at**: Дата и время создания (timestamptz)
+- **author_first_name**: Имя автора (text)
+- **author_last_name**: Фамилия автора (text)
+- **author_full_name**: Полное имя автора с умной обработкой (text)
+- **author_email**: Email автора (text)
+- **author_avatar_url**: URL аватара автора (text)
+- **author_position_name**: Должность автора (text)
+- **author_department_name**: Департамент автора (text)
+- **author_team_name**: Команда автора (text)
+
+#### Применение:
+- Отображение списка отчетов с информацией об авторах
+- Система обратной связи и багтрекинга
+- Аналитика по типам проблем и активности пользователей
+- Интерфейсы администрирования и поддержки
+
+#### Пример использования:
+```sql
+-- Получить все отчеты с информацией об авторах
+SELECT 
+    user_report_short_description,
+    author_full_name,
+    author_position_name,
+    user_report_created_at
+FROM 
+    view_user_reports_with_authors
+ORDER BY 
+    user_report_created_at DESC;
+
+-- Найти отчеты от конкретного департамента
+SELECT 
+    user_report_short_description,
+    author_full_name,
+    user_report_created_at
+FROM 
+    view_user_reports_with_authors
+WHERE 
+    author_department_name = 'ВК';
+
+-- Статистика отчетов по департаментам
+SELECT 
+    author_department_name,
+    COUNT(*) as reports_count
+FROM 
+    view_user_reports_with_authors
+GROUP BY 
+    author_department_name
+ORDER BY 
+    reports_count DESC;
+```
+
+## Безопасность и контроль доступа
+
+### Row Level Security (RLS)
+В системе включена политика безопасности на уровне строк для следующих таблиц:
+
+#### Основные таблицы с RLS:
+- **projects** - Доступ к проектам ограничен в зависимости от роли пользователя
+- **tasks** - Доступ к задачам контролируется на основе принадлежности к проекту
+- **clients** - Доступ к данным клиентов ограничен
+- **contracts** - Доступ к договорам контролируется
+- **stages** - Доступ к стадиям проектов ограничен
+- **objects** - Доступ к объектам проектирования контролируется
+
+#### Таблицы интеграции с Worksection:
+- **ws_projects** - Данные проектов из Worksection
+- **ws_tasks** - Данные задач из Worksection  
+- **ws_subtasks** - Данные подзадач из Worksection
+
+### Рекомендации по безопасности:
+1. **Используйте представления** для доступа к данным вместо прямых запросов к таблицам
+2. **Проверяйте права доступа** перед выполнением операций изменения данных
+3. **Логируйте критические операции** через систему аудита
+4. **Используйте параметризованные запросы** для предотвращения SQL-инъекций
+
+## Миграции и версионирование
+
+### Таблица migrations
+Система отслеживает все примененные миграции через специальную таблицу:
+
+- **id** (integer, PK) - Уникальный идентификатор миграции
+- **name** (text, NOT NULL, уникальное) - Название миграции
+- **applied_at** (timestamptz, NOT NULL, default: now()) - Дата применения миграции
+
+### Процесс миграций:
+1. Каждая миграция имеет уникальное имя в формате `YYYY_MM_DD_description`
+2. Миграции применяются последовательно и не могут быть отменены
+3. Система автоматически отслеживает примененные миграции
+4. Повторное применение миграции невозможно
+
+## Мониторинг и производительность
+
+### Ключевые метрики для мониторинга:
+1. **Количество активных загрузок** - отслеживание через `loading_statistics`
+2. **Производительность запросов** - мониторинг медленных запросов к представлениям
+3. **Размер таблиц** - контроль роста данных, особенно `loadings` и `user_reports`
+4. **Использование индексов** - анализ эффективности созданных индексов
+
+### Рекомендации по оптимизации:
+1. **Регулярное архивирование** старых загрузок через `archive_old_loadings()`
+2. **Анализ планов выполнения** для сложных запросов к представлениям
+3. **Мониторинг блокировок** при массовых операциях с данными
+4. **Регулярное обновление статистики** для оптимизатора запросов
+
+## Интеграция с внешними системами
+
+### Worksection Integration
+Система интегрирована с платформой управления проектами Worksection через:
+
+#### Таблицы синхронизации:
+- **ws_projects** - Проекты из Worksection
+- **ws_tasks** - Задачи из Worksection
+- **ws_subtasks** - Подзадачи из Worksection
+
+#### Таблицы маппинга:
+- **ws_project_mappings** - Связь между внутренними проектами и Worksection
+- **ws_task_mappings** - Связь между внутренними задачами и Worksection
+- **ws_subtask_mappings** - Связь между внутренними подзадачами и Worksection
+
+#### Система вебхуков:
+- **webhook_events** - Обработка событий от Worksection
+- Автоматическая синхронизация изменений
+- Обработка ошибок интеграции
+
+### API и представления интеграции:
+- **view_projects_with_ws_data** - Проекты с данными Worksection
+- **view_sections_with_ws_data** - Разделы с данными Worksection  
+- **view_tasks_with_ws_data** - Задачи с данными Worksection
+
+## Заключение
+
+Данная схема базы данных обеспечивает:
+
+✅ **Полное управление проектами** - от клиентов до конкретных задач  
+✅ **Гибкое планирование ресурсов** - с поддержкой активных и архивных загрузок  
+✅ **Организационную структуру** - департаменты, команды, должности  
+✅ **Систему отчетности** - через мощные представления и аналитику  
+✅ **Интеграцию с внешними системами** - Worksection и другие  
+✅ **Безопасность данных** - RLS и контроль доступа  
+✅ **Масштабируемость** - оптимизированные индексы и архивирование  
+
+Система готова для использования в производственной среде и поддерживает все основные бизнес-процессы управления проектами и ресурсами.
