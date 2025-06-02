@@ -36,25 +36,15 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права на создание глобальных событий (для праздников и переносов) - ОПТИМИЗИРОВАННО
-  const canCreateGlobalEvents = useMemo(() => {
-    // Кэшируем результат, чтобы не делать повторные проверки
-    const hasCalendarAdmin = userStore.permissions.includes("calendar.admin")
-    const hasGlobalEventsPermission = userStore.permissions.includes("calendar_can_create_and_edit_global_events")
-    const result = hasCalendarAdmin || hasGlobalEventsPermission
-
-    console.log('🔐 ПРОВЕРКА РАЗРЕШЕНИЙ В ФОРМЕ РАБОЧЕГО ГРАФИКА (useMemo CACHED):', {
-      userId: userStore.id,
-      userRole: userStore.role,
-      userPermissions: userStore.permissions,
-      hasCalendarAdmin,
-      hasGlobalEventsPermission,
-      canCreateGlobalEvents: result,
-      profile: userStore.profile
-    })
+  // Проверяем права - ОПТИМИЗИРОВАННО  
+  const permissions = useMemo(() => {
+    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
+                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
+                           userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
     
-    return result
-  }, [userStore.id, userStore.role, userStore.permissions])
+    return { hasGlobalEvents, hasWorkSchedule }
+  }, [userStore])
 
   const [activeTab, setActiveTab] = useState("dayoff")
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
@@ -82,7 +72,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
     e.preventDefault()
 
     // Для глобальных изменений (переносы и праздники) требуется подтверждение
-    if ((activeTab === "transfer" || activeTab === "holiday") && canCreateGlobalEvents) {
+    if ((activeTab === "transfer" || activeTab === "holiday") && permissions.hasGlobalEvents) {
       setShowConfirmation(true)
     } else {
       await submitEvent()
@@ -173,9 +163,9 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
 
     try {
       // Определяем тип события и вызываем соответствующую функцию
-      if (activeTab === "transfer" && canCreateGlobalEvents) {
+      if (activeTab === "transfer" && permissions.hasGlobalEvents) {
         await submitTransferEvent()
-      } else if (activeTab === "holiday" && canCreateGlobalEvents) {
+      } else if (activeTab === "holiday" && permissions.hasGlobalEvents) {
         await submitHolidayEvent()
       } else {
         await submitPersonalEvent()
@@ -183,7 +173,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
 
       onClose()
     } catch (error) {
-      console.error("Error adding event:", error)
+      // Ошибка уже обрабатывается в createEvent
     } finally {
       setIsSubmitting(false)
       setShowConfirmation(false)
@@ -220,8 +210,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             <TabsTrigger value="dayoff">Отгул</TabsTrigger>
             <TabsTrigger value="vacation">Отпуск</TabsTrigger>
             <TabsTrigger value="sick">Больничный</TabsTrigger>
-            {canCreateGlobalEvents && <TabsTrigger value="transfer">Перенос</TabsTrigger>}
-            {canCreateGlobalEvents && <TabsTrigger value="holiday">Праздник</TabsTrigger>}
+            {permissions.hasGlobalEvents && <TabsTrigger value="transfer">Перенос</TabsTrigger>}
+            {permissions.hasGlobalEvents && <TabsTrigger value="holiday">Праздник</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="dayoff" className="space-y-4 pt-4">
@@ -299,7 +289,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             </div>
           </TabsContent>
 
-          {canCreateGlobalEvents && (
+          {permissions.hasGlobalEvents && (
             <>
               <TabsContent value="transfer" className="space-y-4 pt-4">
                 <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">

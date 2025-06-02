@@ -51,25 +51,15 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права на создание и удаление глобальных событий - ОПТИМИЗИРОВАННО
-  const canManageGlobalEvents = useMemo(() => {
-    // Кэшируем результат, чтобы не делать повторные проверки
-    const hasCalendarAdmin = userStore.permissions.includes("calendar.admin")
-    const hasGlobalEventsPermission = userStore.permissions.includes("calendar_can_create_and_edit_global_events")
-    const result = hasCalendarAdmin || hasGlobalEventsPermission
-
-    console.log('🔐 ПРОВЕРКА РАЗРЕШЕНИЙ В СПИСКЕ СОБЫТИЙ (useMemo CACHED):', {
-      userId: userStore.id,
-      userRole: userStore.role,
-      userPermissions: userStore.permissions,
-      hasCalendarAdmin,
-      hasGlobalEventsPermission,
-      canManageGlobalEvents: result,
-      profile: userStore.profile
-    })
+  // Проверяем права - ОПТИМИЗИРОВАННО  
+  const permissions = useMemo(() => {
+    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
+                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
+                           userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
     
-    return result
-  }, [userStore.id, userStore.role, userStore.permissions])
+    return { hasGlobalEvents, hasWorkSchedule }
+  }, [userStore])
 
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -125,7 +115,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
       await removeEvent(eventToDelete, currentUserId)
       setEventToDelete(null)
     } catch (error) {
-      console.error("Error deleting event:", error)
+      // Ошибка уже обрабатывается в removeEvent
     }
   }
 
@@ -137,7 +127,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   // Check if user can delete an event
   const canDeleteEvent = (event: CalendarEvent) => {
     // User with global events permission can delete any event
-    if (canManageGlobalEvents) return true
+    if (permissions.hasGlobalEvents) return true
 
     // Regular user can only delete their own events
     return event.calendar_event_created_by === currentUserId

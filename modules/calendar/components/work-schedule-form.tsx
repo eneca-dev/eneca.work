@@ -72,7 +72,7 @@ export function WorkScheduleForm(props: WorkScheduleFormProps) {
 
       onClose()
     } catch (error) {
-      console.error("Error adding event:", error)
+      // Ошибка уже обрабатывается в createEvent
     } finally {
       setIsSubmitting(false)
     }

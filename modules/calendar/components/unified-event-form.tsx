@@ -34,26 +34,13 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права на создание глобальных событий - ОПТИМИЗИРОВАННО
-  const canCreateGlobalEvents = useMemo(() => {
-    // Кэшируем результат, чтобы не делать повторные проверки
-    const permissions = userStore.permissions || []
-    const hasCalendarAdmin = permissions.includes("calendar.admin")
-    const hasGlobalEventsPermission = permissions.includes("calendar_can_create_and_edit_global_events")
-    const result = hasCalendarAdmin || hasGlobalEventsPermission
-
-    console.log('🔐 ПРОВЕРКА РАЗРЕШЕНИЙ В ФОРМЕ СОБЫТИЙ (useMemo CACHED):', {
-      userId: userStore.id,
-      userRole: userStore.role,
-      userPermissions: userStore.permissions,
-      hasCalendarAdmin,
-      hasGlobalEventsPermission,
-      canCreateGlobalEvents: result,
-      profile: userStore.profile
-    })
+  // Проверяем права - ОПТИМИЗИРОВАННО  
+  const permissions = useMemo(() => {
+    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
+                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
     
-    return result
-  }, [userStore.id, userStore.role, userStore.permissions])
+    return { hasGlobalEvents }
+  }, [userStore])
 
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
@@ -67,7 +54,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (isGlobal && canCreateGlobalEvents) {
+    if (isGlobal && permissions.hasGlobalEvents) {
       setShowConfirmation(true)
     } else {
       await submitEvent()
@@ -83,7 +70,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
       await createEvent({
         calendar_event_type: "Событие",
         calendar_event_comment: comment,
-        calendar_event_is_global: canCreateGlobalEvents ? isGlobal : false,
+        calendar_event_is_global: permissions.hasGlobalEvents ? isGlobal : false,
         calendar_event_is_weekday: null,
         calendar_event_created_by: currentUserId,
         calendar_event_date_start: formatDateToString(dateRange.from),
@@ -92,7 +79,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
 
       onClose()
     } catch (error) {
-      console.error("Error adding event:", error)
+      // Ошибка уже обрабатывается в createEvent
     } finally {
       setIsSubmitting(false)
       setShowConfirmation(false)
@@ -137,7 +124,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
           />
         </div>
 
-        {canCreateGlobalEvents && (
+        {permissions.hasGlobalEvents && (
           <div className="flex items-center space-x-2">
             <Checkbox 
               id="is-global" 

@@ -63,7 +63,7 @@ export function GlobalEventForm(props: GlobalEventFormProps) {
 
       onClose()
     } catch (error) {
-      console.error("Error adding event:", error)
+      // Ошибка уже обрабатывается в createEvent
     } finally {
       setIsSubmitting(false)
       setShowConfirmation(false)

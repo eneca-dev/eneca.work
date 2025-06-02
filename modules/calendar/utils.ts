@@ -32,7 +32,6 @@ export function parseDateFromString(dateString: string): Date {
   
   // Проверяем, что дата валидна
   if (isNaN(date.getTime())) {
-    console.error(`Некорректная дата: ${dateString}`);
     throw new Error(`Invalid date string: ${dateString}`);
   }
   
@@ -183,14 +182,12 @@ export function doTimeIntervalsOverlap(
     // Проверяем валидность времени
     if (isNaN(startTime1.getTime()) || isNaN(endTime1.getTime()) || 
         isNaN(startTime2.getTime()) || isNaN(endTime2.getTime())) {
-      console.warn('Некорректное время при проверке пересечения интервалов');
       return true; // Консервативный подход - считаем что есть пересечение
     }
     
     // Интервалы пересекаются если: start1 < end2 && start2 < end1
     return startTime1 < endTime2 && startTime2 < endTime1;
   } catch (error) {
-    console.warn('Ошибка при проверке пересечения временных интервалов:', error);
     return true; // Консервативный подход
   }
 }

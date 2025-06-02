@@ -104,7 +104,7 @@ export function EventsList(props: EventsListProps) {
       await removeEvent(eventToDelete, currentUserId)
       setEventToDelete(null)
     } catch (error) {
-      console.error("Error deleting event:", error)
+      // Ошибка уже обрабатывается в removeEvent
     }
   }
 

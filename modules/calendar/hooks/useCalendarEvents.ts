@@ -33,13 +33,11 @@ export function useCalendarEvents() {
 
       if (error) throw error;
 
-      console.log('Загружено событий из БД:', data?.length || 0);
       setEvents(data || []);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Ошибка загрузки событий';
       setError(message);
       toast.error(message);
-      console.error('Ошибка загрузки событий:', error);
     } finally {
       setLoading(false);
     }

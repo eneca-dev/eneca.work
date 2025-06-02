@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { CalendarHeader } from "@/modules/calendar/components/calendar-header"
 import { CalendarGrid } from "@/modules/calendar/components/calendar-grid"
-import { DebugWindow } from "@/modules/calendar/components/debug-window"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Switch } from "@/modules/calendar/components/ui/switch"
 import { Label } from "@/modules/calendar/components/ui/label"
@@ -29,7 +28,6 @@ export default function CalendarPage() {
   useEffect(() => {
     const currentUserId = userStore.id
     if (currentUserId && userStore.isAuthenticated) {
-      console.log('Загружаем события для авторизованного пользователя:', currentUserId)
       fetchEvents(currentUserId)
       fetchWorkSchedules(currentUserId)
     }
@@ -39,14 +37,6 @@ export default function CalendarPage() {
   const canCreateGlobalEvents = useMemo(() => {
     const result = userStore.hasPermission("calendar.admin") || 
                    userStore.hasPermission("calendar_can_create_and_edit_global_events")
-    
-    console.log('🔐 ПРОВЕРКА РАЗРЕШЕНИЙ КАЛЕНДАРЯ (useMemo):', {
-      userId: userStore.id,
-      userRole: userStore.role,
-      userPermissions: userStore.permissions,
-      canCreateGlobalEvents: result,
-      profile: userStore.profile
-    })
     
     return result
   }, [userStore.id, userStore.role, userStore.permissions])
@@ -134,12 +124,6 @@ export default function CalendarPage() {
 
       {/* Unified Events List */}
       <UnifiedEventsList isOpen={showEventsList} onClose={() => setShowEventsList(false)} />
-
-      {/* Постоянный дебаг-модуль */}
-      <div className="mt-6 bg-gray-50 dark:bg-gray-950 rounded-lg shadow p-4">
-        <h3 className="text-lg font-semibold mb-4">🐛 Дебаг информация</h3>
-        <DebugWindow isOpen={true} onClose={() => {}} />
-      </div>
     </div>
   )
 } 

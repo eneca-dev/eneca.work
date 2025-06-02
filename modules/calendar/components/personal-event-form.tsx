@@ -51,8 +51,7 @@ export function PersonalEventForm(props: PersonalEventFormProps) {
 
       onClose()
     } catch (error) {
-      console.error("Error adding event:", error)
-      setErrorMessage("Произошла ошибка при создании события. Пожалуйста, попробуйте еще раз.")
+      // Ошибка уже обрабатывается в createEvent
     } finally {
       setIsSubmitting(false)
     }

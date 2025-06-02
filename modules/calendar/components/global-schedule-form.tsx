@@ -181,15 +181,8 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
       
       onClose()
     } catch (error) {
-      console.error("Error adding events:", error)
-      toast({
-        title: "Ошибка",
-        description: "Произошла ошибка при добавлении событий. Попробуйте еще раз.",
-        variant: "destructive",
-      })
-    } finally {
+      // Ошибка уже обрабатывается в createEvent
       setIsSubmitting(false)
-      setShowConfirmation(false)
     }
   }
 
@@ -197,7 +190,6 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
     try {
       return format(date, "dd.MM.yyyy", { locale: ru })
     } catch (error) {
-      console.error("Error formatting date:", error, date)
       return "Invalid date"
     }
   }
