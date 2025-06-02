@@ -42,19 +42,19 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
   const [activeTab, setActiveTab] = useState("transfer")
 
   // Состояние для выбранных дат в режиме "Перенос"
-  const [workdayRange, setWorkdayRange] = useState<{ start: Date | null; end: Date | null }>({
-    start: null,
-    end: null,
+  const [workdayRange, setWorkdayRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
   })
-  const [weekendRange, setWeekendRange] = useState<{ start: Date | null; end: Date | null }>({
-    start: null,
-    end: null,
+  const [weekendRange, setWeekendRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
   })
 
   // Состояние для выбранных дат в режиме "Добавить праздники"
-  const [holidayRange, setHolidayRange] = useState<{ start: Date | null; end: Date | null }>({
-    start: null,
-    end: null,
+  const [holidayRange, setHolidayRange] = useState<{ from: Date | null; to: Date | null }>({
+    from: null,
+    to: null,
   })
 
   const [comment, setComment] = useState("")
@@ -62,9 +62,9 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
   const [showConfirmation, setShowConfirmation] = useState(false)
 
   // Получаем массивы выбранных дат
-  const workdayDates = workdayRange.start ? [workdayRange.start] : []
-  const weekendDates = weekendRange.start ? [weekendRange.start] : []
-  const holidayDates = holidayRange.start ? [holidayRange.start] : []
+  const workdayDates = workdayRange.from ? [workdayRange.from] : []
+  const weekendDates = weekendRange.from ? [weekendRange.from] : []
+  const holidayDates = holidayRange.from ? [holidayRange.from] : []
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,7 +91,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
         }
 
         // Проверяем, что выбранный рабочий день действительно рабочий
-        if (workdayRange.start && isWeekend(workdayRange.start)) {
+        if (workdayRange.from && isWeekend(workdayRange.from)) {
           toast({
             title: "Ошибка валидации",
             description: "Для переноса необходимо выбрать рабочий день (пн-пт)",
@@ -103,7 +103,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
         }
 
         // Проверяем, что выбранный выходной день действительно выходной
-        if (weekendRange.start && !isWeekend(weekendRange.start)) {
+        if (weekendRange.from && !isWeekend(weekendRange.from)) {
           toast({
             title: "Ошибка валидации",
             description: "Для переноса необходимо выбрать выходной день (сб-вс)",
@@ -222,7 +222,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
                   placeholder="Выберите рабочий день"
                   calendarWidth="500px"
                 />
-                {workdayRange.start && isWeekend(workdayRange.start) && (
+                {workdayRange.from && isWeekend(workdayRange.from) && (
                   <p className="text-sm text-red-500">
                     Выбран выходной день. Пожалуйста, выберите рабочий день (пн-пт).
                   </p>
@@ -238,7 +238,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
                   placeholder="Выберите выходной день"
                   calendarWidth="500px"
                 />
-                {weekendRange.start && !isWeekend(weekendRange.start) && (
+                {weekendRange.from && !isWeekend(weekendRange.from) && (
                   <p className="text-sm text-red-500">
                     Выбран рабочий день. Пожалуйста, выберите выходной день (сб-вс).
                   </p>
@@ -291,8 +291,8 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
             type="submit"
             disabled={
               isSubmitting ||
-              (activeTab === "transfer" && (!workdayRange.start || !weekendRange.start)) ||
-              (activeTab === "holiday" && (!holidayRange.start || !comment))
+              (activeTab === "transfer" && (!workdayRange.from || !weekendRange.from)) ||
+              (activeTab === "holiday" && (!holidayRange.from || !comment))
             }
           >
             Добавить

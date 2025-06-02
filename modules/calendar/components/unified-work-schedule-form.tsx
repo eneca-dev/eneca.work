@@ -196,12 +196,12 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
 
   const isFormValid = () => {
     if (activeTab === "transfer") {
-      return workdayDate.from || weekendDate.from
+      return Boolean(workdayDate.from || weekendDate.from)
     }
     if (activeTab === "holiday") {
-      return holidayDate.from && holidayName
+      return Boolean(holidayDate.from && holidayName)
     }
-    return dateRange.from
+    return Boolean(dateRange.from)
   }
 
   if (!isAuthenticated || !currentUserId) {
@@ -302,8 +302,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
           {canCreateGlobalEvents && (
             <>
               <TabsContent value="transfer" className="space-y-4 pt-4">
-                <div className="bg-blue-50 p-3 rounded-md mb-4">
-                  <p className="text-sm text-blue-800 font-medium">Общее изменение рабочего графика</p>
+                <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
+                  <p className="text-sm font-medium">Общее изменение рабочего графика</p>
                 </div>
 
                 <div className="space-y-2">
@@ -343,8 +343,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
               </TabsContent>
 
               <TabsContent value="holiday" className="space-y-4 pt-4">
-                <div className="bg-blue-50 p-3 rounded-md mb-4">
-                  <p className="text-sm text-blue-800 font-medium">Общее изменение рабочего графика</p>
+                <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
+                  <p className="text-sm font-medium">Общее изменение рабочего графика</p>
                 </div>
 
                 <div className="space-y-2">

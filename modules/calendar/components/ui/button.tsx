@@ -5,21 +5,21 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-700",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-background",
   {
     variants: {
       variant: {
         default:
-          "bg-green-700 text-white border border-green-800 hover:bg-green-800 active:bg-green-900 shadow-sm",
+          "bg-primary text-primary-foreground border border-primary hover:bg-primary/90 active:bg-primary/80 shadow-sm",
         destructive:
-          "bg-red-600 text-white border border-red-700 hover:bg-red-700 active:bg-red-800 shadow-sm",
+          "bg-destructive text-destructive-foreground border border-destructive hover:bg-destructive/90 active:bg-destructive/80 shadow-sm",
         outline:
-          "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 shadow-sm",
+          "border border-input bg-card dark:bg-gray-800 text-card-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/80 shadow-sm",
         secondary:
-          "bg-gray-200 text-gray-900 border border-gray-300 hover:bg-gray-300 active:bg-gray-400 shadow-sm",
+          "bg-card dark:bg-gray-800 text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground active:bg-accent/80 shadow-sm",
         ghost:
-          "text-gray-700 hover:bg-gray-100 active:bg-gray-200",
-        link: "text-green-700 underline-offset-4 hover:underline",
+          "text-card-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/80",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

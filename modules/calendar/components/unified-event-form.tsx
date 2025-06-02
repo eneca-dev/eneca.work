@@ -139,7 +139,12 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
 
         {canCreateGlobalEvents && (
           <div className="flex items-center space-x-2">
-            <Checkbox id="is-global" checked={isGlobal} onCheckedChange={(checked) => setIsGlobal(!!checked)} />
+            <Checkbox 
+              id="is-global" 
+              checked={isGlobal} 
+              onCheckedChange={(checked) => setIsGlobal(!!checked)} 
+              className="border-gray-400 bg-gray-100 dark:border-gray-600 dark:bg-gray-700 data-[state=checked]:!bg-[hsl(162_58%_28%)] data-[state=checked]:!border-[hsl(162_58%_28%)] data-[state=checked]:!text-white"
+            />
             <Label htmlFor="is-global">Сделать событие общим</Label>
           </div>
         )}

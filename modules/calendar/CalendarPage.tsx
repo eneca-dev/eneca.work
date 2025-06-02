@@ -77,12 +77,7 @@ export default function CalendarPage() {
         <div className="flex items-center justify-between">
           {/* Toggles on the left */}
           <div className="flex items-center gap-6">
-            <div className="flex items-center space-x-2">
-              <Switch id="show-birthdays" checked={uiStore.showBirthdays} onCheckedChange={uiStore.toggleBirthdays} />
-              <Label htmlFor="show-birthdays" className="text-lg">
-                🎂
-              </Label>
-            </div>
+
 
             <div className="flex items-center space-x-2">
               <Switch
@@ -113,7 +108,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-4">
         <CalendarHeader />
         <CalendarGrid />
       </div>
@@ -141,7 +136,7 @@ export default function CalendarPage() {
       <UnifiedEventsList isOpen={showEventsList} onClose={() => setShowEventsList(false)} />
 
       {/* Постоянный дебаг-модуль */}
-      <div className="mt-6 bg-gray-50 dark:bg-gray-900 rounded-lg shadow p-4">
+      <div className="mt-6 bg-gray-50 dark:bg-gray-950 rounded-lg shadow p-4">
         <h3 className="text-lg font-semibold mb-4">🐛 Дебаг информация</h3>
         <DebugWindow isOpen={true} onClose={() => {}} />
       </div>

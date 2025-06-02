@@ -95,17 +95,22 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
   const weekStart = startOfWeek(calendarDate, { weekStartsOn: 1 })
   const weekDays = [...Array(7)].map((_, i) => addDays(weekStart, i))
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = direction === 'prev' 
-      ? subWeeks(calendarDate, 1) 
-      : addWeeks(calendarDate, 1)
+  const navigateWeek = (direction: 'prev' | 'next', e?: React.MouseEvent<HTMLButtonElement>) => {
+    const newDate = new Date(calendarDate)
+    if (direction === 'prev') {
+      newDate.setDate(newDate.getDate() - 7)
+    } else {
+      newDate.setDate(newDate.getDate() + 7)
+    }
     setCalendarDate(newDate)
+    if (e) e.currentTarget.blur()
   }
 
-  const goToCurrentWeek = () => {
+  const goToCurrentWeek = (e?: React.MouseEvent<HTMLButtonElement>) => {
     const today = new Date()
     setCalendarDate(today)
     setSelectedDate(today)
+    if (e) e.currentTarget.blur()
   }
 
   const handleCalendarClick = () => {
@@ -228,10 +233,10 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
       {/* Заголовок с навигацией */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div className="text-xs font-medium text-gray-400 dark:text-gray-500">
+          <div className="text-xs font-medium text-muted-foreground">
             
           </div>
-          <div className="text-xs font-medium text-gray-400 dark:text-gray-400">
+          <div className="text-xs font-medium text-muted-foreground">
             {getMonthName()}
           </div>
         </div>
@@ -239,8 +244,8 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 text-gray-400 hover:text-gray-600"
-            onClick={() => navigateWeek('prev')}
+            className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-foreground transition-colors"
+            onClick={(e) => navigateWeek('prev', e)}
             title="Предыдущая неделя"
           >
             <ChevronLeft className="h-3 w-3" />
@@ -248,7 +253,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 text-gray-400 hover:text-gray-600"
+            className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-foreground transition-colors"
             onClick={goToCurrentWeek}
             title="Текущая неделя"
           >
@@ -257,8 +262,8 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 text-gray-400 hover:text-gray-600"
-            onClick={() => navigateWeek('next')}
+            className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-foreground transition-colors"
+            onClick={(e) => navigateWeek('next', e)}
             title="Следующая неделя"
           >
             <ChevronRight className="h-3 w-3" />

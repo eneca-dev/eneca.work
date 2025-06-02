@@ -142,7 +142,7 @@ export function CalendarGrid() {
     <div className="grid grid-cols-7 gap-1">
       {/* Weekday headers */}
       {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((day, index) => (
-        <div key={day} className={cn("text-center font-medium py-2", index >= 5 ? "text-red-500" : "text-foreground")}>
+        <div key={day} className={cn("text-center font-medium py-2", index >= 5 ? "text-red-500 dark:text-red-400" : "text-card-foreground")}>
           {day}
         </div>
       ))}
@@ -159,20 +159,28 @@ export function CalendarGrid() {
           <div
             key={`${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`}
             className={cn(
-              "min-h-24 p-1 border border-gray-300 rounded-md",
-              isCurrentMonth ? "bg-background" : "bg-muted/30",
-              !isWorkDay && "bg-red-50",
-              isSelected && "ring-2 ring-green-700",
-              isToday && "ring-2 ring-green-700",
+              "min-h-24 p-1 border rounded-md cursor-pointer transition-colors hover:bg-accent/50",
+              // Базовые цвета фона и более яркие границы - делаем ячейки светлее и обводку ярче в светлой теме
+              isCurrentMonth 
+                ? "bg-card dark:bg-gray-800 border-gray-300 dark:border-border/60 text-card-foreground" 
+                : "bg-card/50 dark:bg-gray-800/50 border-gray-200 dark:border-muted/60 text-muted-foreground",
+              // Нерабочие дни
+              !isWorkDay && isCurrentMonth && "bg-red-50 dark:bg-red-900/40 border-red-400 dark:border-red-700/70",
+              !isWorkDay && !isCurrentMonth && "bg-red-50/50 dark:bg-red-900/20 border-red-300 dark:border-red-700/50",
+              // Выделение выбранного дня - более яркое
+              isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/70",
+              // Выделение сегодняшнего дня - более яркое
+              isToday && !isSelected && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background border-primary/50",
             )}
             onClick={() => setSelectedDate(day)}
           >
             <div className="flex justify-between items-start">
               <span
                 className={cn(
-                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm",
-                  isToday && "bg-green-700 text-white",
-                  !isToday && !isCurrentMonth && "text-muted-foreground",
+                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                  isToday && "bg-primary text-primary-foreground shadow-sm",
+                  !isToday && isCurrentMonth && "text-card-foreground",
+                  !isToday && !isCurrentMonth && "text-muted-foreground/70",
                 )}
               >
                 {day.getDate()}

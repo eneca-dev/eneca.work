@@ -2,87 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-
-// Стили ч/б минимализм (вынесены за пределы компонента)
-const styles: { [key: string]: React.CSSProperties } = {
-  container: {
-    fontFamily: "sans-serif",
-    background: "#fff",
-    border: "1px solid #374151",
-    borderRadius: "8px",
-    padding: "8px",
-  },
-  controls: { display: "flex", justifyContent: "space-between", marginBottom: "12px" },
-  arrowButton: {
-    cursor: "pointer",
-    border: "none",
-    background: "none",
-    fontSize: "18px",
-    color: "#374151",
-    borderRadius: "4px",
-    padding: "4px",
-  },
-  months: { display: "flex", gap: "24px" },
-  month: { flex: 1 },
-  monthHeader: { textAlign: "center", fontWeight: "bold", marginBottom: "6px", color: "#374151" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center" },
-  dayCell: {
-    width: "32px",
-    height: "32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    borderRadius: "50%",
-    userSelect: "none",
-    border: "1px solid transparent",
-    color: "#374151",
-    fontSize: "14px",
-    margin: "2px",
-  },
-  selected: {
-    backgroundColor: "#15803d",
-    color: "#fff",
-    border: "1px solid #15803d",
-  },
-  inRange: {
-    backgroundColor: "#dcfce7",
-    color: "#15803d",
-    borderRadius: "50%",
-  },
-  empty: { cursor: "default", background: "transparent" },
-  // Pre-created style combinations to avoid Object.assign in render loop
-  dayCellInRange: {
-    width: "32px",
-    height: "32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    borderRadius: "50%",
-    userSelect: "none",
-    border: "1px solid transparent",
-    fontSize: "14px",
-    margin: "2px",
-    backgroundColor: "#dcfce7",
-    color: "#15803d",
-  },
-  dayCellSelected: {
-    width: "32px",
-    height: "32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    borderRadius: "50%",
-    userSelect: "none",
-    fontSize: "14px",
-    margin: "2px",
-    backgroundColor: "#15803d",
-    color: "#fff",
-    border: "1px solid #15803d",
-  },
-}
+import { cn } from "@/lib/utils"
 
 interface MiniCalendarProps {
   /** Диапазон выбранных дат */
@@ -96,7 +16,6 @@ interface MiniCalendarProps {
 }
 
 export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
-  // Explicitly destructure props to avoid complex patterns
   const selectedRange = props.selectedRange
   const onSelectDate = props.onSelectDate
   const mode = props.mode || "range"
@@ -105,8 +24,15 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
   const today = new Date()
   const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
 
-  const handlePrev = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
-  const handleNext = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+  const handlePrev = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+    e.currentTarget.blur()
+  }
+  
+  const handleNext = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+    e.currentTarget.blur()
+  }
 
   const renderMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -128,38 +54,49 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
       weeks.push(week)
     }
 
-    // Explicitly access from and to from selectedRange
     const from = selectedRange.from
     const to = selectedRange.to
 
     return (
-      <div style={styles.month} key={`${year}-${month}`}>
-        <div style={styles.monthHeader}>{date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
-        <div style={styles.grid}>
+      <div className="flex-1" key={`${year}-${month}`}>
+        <div className="text-center font-bold mb-1.5 text-foreground">
+          {date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}
+        </div>
+        <div className="grid grid-cols-7 text-center">
           {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-            <div style={{ ...styles.dayCell, borderRadius: "4px", fontWeight: "bold" }} key={d}>
+            <div 
+              key={d}
+              className="w-8 h-8 flex items-center justify-center rounded font-bold text-sm text-muted-foreground m-0.5"
+            >
               {d}
             </div>
           ))}
           {weeks.flat().map((d, idx) => {
-            if (!d) return <div key={idx} style={{ ...styles.dayCell, ...styles.empty }} />
+            if (!d) {
+              return (
+                <div 
+                  key={idx} 
+                  className="w-8 h-8 flex items-center justify-center rounded cursor-default m-0.5"
+                />
+              )
+            }
+            
             const time = d.getTime()
             const isFrom = from && time === from.getTime()
             const isTo = to && time === to.getTime()
             const isBetween = from && to && time > from.getTime() && time < to.getTime()
 
-            // Use pre-created style references instead of creating new objects
-            let cellStyle: React.CSSProperties
-            if (isFrom || isTo) {
-              cellStyle = styles.dayCellSelected
-            } else if (isBetween) {
-              cellStyle = styles.dayCellInRange
-            } else {
-              cellStyle = styles.dayCell
-            }
-
             return (
-              <div key={idx} style={cellStyle} onClick={() => onSelectDate(d)}>
+              <div 
+                key={idx} 
+                className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-sm m-0.5 transition-colors hover:bg-accent/50",
+                  "text-foreground",
+                  (isFrom || isTo) && "bg-primary text-primary-foreground border-primary shadow-sm",
+                  isBetween && "bg-primary/10 text-primary border-primary/20",
+                )}
+                onClick={() => onSelectDate(d)}
+              >
                 {d.getDate()}
               </div>
             )
@@ -170,16 +107,25 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
   }
 
   return (
-    <div style={{ ...styles.container, width }}>
-      <div style={styles.controls}>
-        <button style={styles.arrowButton} onClick={handlePrev}>
+    <div 
+      className="font-sans bg-background border border-border rounded-lg p-2"
+      style={{ width }}
+    >
+      <div className="flex justify-between mb-3">
+        <button 
+          className="cursor-pointer border-none bg-transparent text-lg text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          onClick={handlePrev}
+        >
           &lt;
         </button>
-        <button style={styles.arrowButton} onClick={handleNext}>
+        <button 
+          className="cursor-pointer border-none bg-transparent text-lg text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          onClick={handleNext}
+        >
           &gt;
         </button>
       </div>
-      <div style={styles.months}>
+      <div className="flex gap-6">
         {renderMonth(currentMonth)}
         {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
       </div>
@@ -204,7 +150,6 @@ interface DatePickerProps {
 }
 
 export const DatePicker: React.FC<DatePickerProps> = (props) => {
-  // Explicitly destructure props to avoid complex patterns
   const value = props.value
   const onChange = props.onChange
   const mode = props.mode || "range"
@@ -227,11 +172,9 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
 
   const handleDateSelect = (d: Date) => {
     if (mode === "single") {
-      // В режиме single всегда выбираем только одну дату
       onChange({ from: d, to: null })
       setOpen(false)
     } else {
-      // В режиме range выбираем диапазон
       const from = value.from
       const to = value.to
 
@@ -257,26 +200,22 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
   }
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }} ref={wrapperRef}>
+    <div className="relative" ref={wrapperRef} style={{ width: inputWidth }}>
       <input
-        type="text"
-        value={inputValue}
         readOnly
-        onClick={() => setOpen(!open)}
+        value={inputValue}
         placeholder={placeholder}
-        style={{
-          width: inputWidth,
-          padding: "6px 8px",
-          borderRadius: "4px",
-          border: "1px solid #374151",
-          cursor: "pointer",
-          fontSize: "14px",
-          fontFamily: "sans-serif",
-        }}
+        onClick={() => setOpen(!open)}
+        className="w-full p-2 border border-border rounded bg-gray-50 dark:bg-gray-700 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm"
       />
       {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 1000, marginTop: "4px" }}>
-          <MiniCalendar selectedRange={value} onSelectDate={handleDateSelect} mode={mode} width={calendarWidth} />
+        <div className="absolute top-full left-0 z-50 mt-1 shadow-lg rounded-lg bg-background border border-border">
+          <MiniCalendar
+            selectedRange={value}
+            onSelectDate={handleDateSelect}
+            mode={mode}
+            width={calendarWidth}
+          />
         </div>
       )}
     </div>

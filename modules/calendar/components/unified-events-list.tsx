@@ -99,7 +99,6 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
       filtered = filtered.filter(
         (event) =>
           event.calendar_event_comment?.toLowerCase().includes(term) ||
-          false ||
           event.calendar_event_type.toLowerCase().includes(term) ||
           formatDate(parseDateFromString(event.calendar_event_date_start)).includes(term),
       )

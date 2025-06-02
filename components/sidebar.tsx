@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug } from "lucide-react"
+import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Workflow } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
 
@@ -52,9 +52,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       icon: BarChart,
     },
     {
-      title: "Календарь",
-      href: "/dashboard/calendar",
-      icon: Calendar,
+      title: "Декомпозиция",
+      href: "/dashboard/decomposition",
+      icon: Workflow,
     },
   ]
 
