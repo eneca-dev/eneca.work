@@ -64,6 +64,11 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       href: "/dashboard/settings",
       icon: Settings,
     },
+    {
+      title: "Декомпозиция",
+      href: "/dashboard/decomposition", 
+      icon: Network,
+    },
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
