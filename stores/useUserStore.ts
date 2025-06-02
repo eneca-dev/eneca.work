@@ -3,7 +3,6 @@ import { devtools, persist } from 'zustand/middleware'
 import { createClient } from "@/utils/supabase/client"
 import { getUserRoleAndPermissions, getUserRoleAndPermissionsByRoleId } from "@/services/org-data-service"
 
-export type UserRole = "admin" | "user"
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
