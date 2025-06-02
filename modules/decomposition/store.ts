@@ -264,7 +264,7 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
   },
 
   saveAsTemplate: async (templateName, userId, departmentId) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true })
     try {
       const items = get().decompositionItems
 
@@ -275,11 +275,26 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
         throw new Error("Невозможно сохранить пустой шаблон")
       }
 
+      // Проверяем уникальность имени шаблона
+      const { data: existingTemplate, error: checkError } = await supabase
+        .from("decomposition_templates")
+        .select("decomposition_template_id")
+        .eq("decomposition_template_name", templateName.trim())
+        .maybeSingle()
+
+      if (checkError) {
+        throw checkError
+      }
+
+      if (existingTemplate) {
+        throw new Error("Шаблон с таким названием уже существует. Выберите другое название.")
+      }
+
       // Сохраняем шаблон
       const { error } = await supabase
         .from("decomposition_templates")
         .insert({
-          decomposition_template_name: templateName,
+          decomposition_template_name: templateName.trim(),
           decomposition_department_id: departmentId,
           decomposition_template_creator_id: userId,
           decomposition_template_content: items,
@@ -287,11 +302,10 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
 
       if (error) throw error
 
-      // Обновляем список шаблонов
-      await get().fetchTemplates(departmentId)
+      // Обновляем список шаблонов - теперь загружаем все шаблоны
+      await get().fetchTemplates(null)
     } catch (error) {
       console.error("Error saving template:", error)
-      set({ error: (error as Error).message })
       throw error
     } finally {
       set({ isLoading: false })
@@ -299,7 +313,7 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
   },
 
   loadFromTemplate: async (templateId, userId, sectionId) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true })
     try {
       // Проверяем, что у нас есть необходимые параметры
       if (!userId) {
@@ -329,7 +343,6 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
       }
     } catch (error) {
       console.error("Error loading template:", error)
-      set({ error: (error as Error).message })
       throw error
     } finally {
       set({ isLoading: false })
@@ -338,17 +351,8 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
 
   // Новый метод для удаления шаблона
   deleteTemplate: async (templateId) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true })
     try {
-      // Получаем информацию о шаблоне для определения departmentId
-      const { data: templateData, error: fetchError } = await supabase
-        .from("decomposition_templates")
-        .select("decomposition_department_id")
-        .eq("decomposition_template_id", templateId)
-        .single()
-
-      if (fetchError) throw fetchError
-
       // Удаляем шаблон
       const { error } = await supabase
         .from("decomposition_templates")
@@ -357,13 +361,10 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
 
       if (error) throw error
 
-      // Обновляем список шаблонов
-      if (templateData && templateData.decomposition_department_id) {
-        await get().fetchTemplates(templateData.decomposition_department_id)
-      }
+      // Обновляем список всех шаблонов
+      await get().fetchTemplates(null)
     } catch (error) {
       console.error("Error deleting template:", error)
-      set({ error: (error as Error).message })
       throw error
     } finally {
       set({ isLoading: false })
