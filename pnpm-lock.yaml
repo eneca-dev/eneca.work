@@ -96,7 +96,7 @@ importers:
         specifier: latest
         version: 0.6.1(@supabase/supabase-js@2.49.4)
       '@supabase/supabase-js':
-        specifier: latest
+        specifier: ^2.49.4
         version: 2.49.4
       autoprefixer:
         specifier: ^10.4.20
@@ -129,7 +129,7 @@ importers:
         specifier: 15.2.4
         version: 15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       next-themes:
-        specifier: latest
+        specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: ^19
