@@ -62,23 +62,42 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
   // Загрузка списка проектов
   const fetchProjects = async () => {
     setIsLoadingProjects(true)
+    
+    // Создаем AbortController для отмены запроса
+    const abortController = new AbortController()
+    
     try {
       const { data, error } = await supabase
         .from("projects")
         .select("project_id, project_name")
         .eq("project_status", "active")
         .order("project_name")
+        .abortSignal(abortController.signal)
 
       if (error) {
         console.error("Ошибка при загрузке проектов:", error)
         return
       }
 
-      setProjects(data || [])
+      // Проверяем, не был ли запрос отменен
+      if (!abortController.signal.aborted) {
+        setProjects(data || [])
+      }
     } catch (error) {
-      console.error("Ошибка при загрузке проектов:", error)
+      // Игнорируем ошибки отмены запроса
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error("Ошибка при загрузке проектов:", error)
+      }
     } finally {
-      setIsLoadingProjects(false)
+      // Проверяем, не был ли запрос отменен перед обновлением состояния
+      if (!abortController.signal.aborted) {
+        setIsLoadingProjects(false)
+      }
+    }
+    
+    // Возвращаем функцию очистки для отмены запроса
+    return () => {
+      abortController.abort()
     }
   }
 
@@ -112,11 +131,16 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
   // Загрузка проектов при открытии модального окна
   useEffect(() => {
-    fetchProjects()
+    const cleanup = fetchProjects()
 
     // Если у загрузки есть projectId, загружаем разделы для этого проекта
     if (loading.projectId) {
       fetchSections(loading.projectId)
+    }
+
+    // Возвращаем функцию очистки
+    return () => {
+      cleanup?.then(cleanupFn => cleanupFn?.())
     }
   }, [loading.projectId])
 
@@ -183,8 +207,10 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       newErrors.endDate = "Дата окончания должна быть позже даты начала"
     }
 
-    // Проверка ставки
-    if (formData.rate <= 0) {
+    // Проверка ставки с явной проверкой на конечное число
+    if (!Number.isFinite(formData.rate)) {
+      newErrors.rate = "Ставка должна быть числом"
+    } else if (formData.rate <= 0) {
       newErrors.rate = "Ставка должна быть больше 0"
     } else if (formData.rate > 2) {
       newErrors.rate = "Ставка не может быть больше 2"
@@ -318,7 +344,11 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
   }
 
   const handleProjectSelect = (project: Project) => {
-    setFormData((prev) => ({ ...prev, projectId: project.project_id }))
+    setFormData((prev) => ({ 
+      ...prev, 
+      projectId: project.project_id,
+      sectionId: "" // Сбрасываем sectionId при выборе нового проекта
+    }))
     setProjectSearchTerm(project.project_name)
     fetchSections(project.project_id)
   }

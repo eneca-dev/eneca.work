@@ -33,8 +33,17 @@ export function WorkloadView() {
   const { startDate, daysToShow } = usePlanningViewStore()
 
   // Используем тему из useSettingsStore
-  const { getEffectiveTheme } = useSettingsStore()
+  const { theme: settingsTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
+  
+  // Определяем эффективную тему
+  const getEffectiveTheme = (resolvedTheme: string | null) => {
+    if (settingsTheme === 'system') {
+      return resolvedTheme === 'dark' ? 'dark' : 'light'
+    }
+    return settingsTheme
+  }
+  
   const theme = getEffectiveTheme(resolvedTheme || null)
 
   // Состояние для отслеживания раскрытых отделов и команд

@@ -16,13 +16,7 @@ import { Pagination } from "./pagination"
 import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 
-// Функция для получения текущей даты с началом в понедельник текущей недели
-const getCurrentWeekStart = () => {
-  const today = new Date()
-  // Отступаем на 30 дней назад от текущей даты
-  today.setDate(today.getDate() - 30)
-  return today
-}
+
 
 export function TimelineView() {
   // Используем сторы
@@ -70,17 +64,17 @@ export function TimelineView() {
   } = usePlanningViewStore()
 
   // Устанавливаем фиксированное значение в 180 дней при инициализации
-  useEffect(() => {
-    // Устанавливаем фиксированное значение в 180 дней при инициализации
-    if (daysToShow !== 180) {
-      setDaysToShow(180)
-    }
-
-    // Проверяем, что startDate является валидным объектом Date
-    if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
-      setStartDate(getCurrentWeekStart())
-    }
-  }, [daysToShow, setDaysToShow, startDate, setStartDate])
+useEffect(() => {
+   // Устанавливаем фиксированное значение в 180 дней при инициализации
+   if (daysToShow !== 180) {
+     setDaysToShow(180)
+   }
+ 
+   // Проверяем, что startDate является валидным объектом Date
+   if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
+    setStartDate(new Date())
+   }
+}, []) // Run only on mount
 
   const { permissions } = useUserStore()
 
@@ -116,8 +110,7 @@ export function TimelineView() {
     fetchFilterOptions()
   }, [fetchFilterOptions])
 
-  // Check if user has permission to manage projects
-  const canManageProjects = permissions.includes("project.manage")
+
 
   // Загружаем разделы при монтировании компонента
   useEffect(() => {
@@ -144,12 +137,7 @@ export function TimelineView() {
     return () => clearTimeout(timer)
   }, [selectedProjectId, selectedDepartmentId, selectedManagerId, setFilters, setLoading])
 
-  // Simulate loading when component mounts
-  useEffect(() => {
-    setLoading(true)
-    const timer = setTimeout(() => setLoading(false), 500)
-    return () => clearTimeout(timer)
-  }, [setLoading])
+
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -181,36 +169,29 @@ export function TimelineView() {
     setSelectedDepartment(departmentId)
   }
 
-  // Добавляем обработчик для менеджера
-  const handleManagerChange = async (managerId: string | null) => {
-    console.log("Изменение менеджера:", managerId)
-    await setSelectedManager(managerId) // Делаем вызов асинхронным
-  }
+// Добавляем обработчик для менеджера
+ const handleManagerChange = async (managerId: string | null) => {
+   console.log("Изменение менеджера:", managerId)
+   try {
+     await setSelectedManager(managerId)
+   } catch (error) {
+     console.error("Error setting selected manager:", error)
+     // Optionally show user-friendly error message
+   }
+ }
 
   const handleResetFilters = () => {
     console.log("Сброс фильтров")
     resetFilters()
   }
 
-  // Обработчики для навигации по таймлайну
-  const handlePrevPeriod = () => {
-    const newStartDate = new Date(startDate)
-    newStartDate.setDate(newStartDate.getDate() - daysToShow)
-    setStartDate(newStartDate)
-  }
 
-  const handleNextPeriod = () => {
-    const newStartDate = new Date(startDate)
-    newStartDate.setDate(newStartDate.getDate() + daysToShow)
-    setStartDate(newStartDate)
-  }
-
-  const handleTodayPeriod = () => {
-    const today = new Date()
-    // Отступаем на 30 дней назад от текущей даты
-    today.setDate(today.getDate() - 30)
-    setStartDate(today)
-  }
+ const handleTodayPeriod = () => {
+   const today = new Date()
+   // Отступаем на 30 дней назад от текущей даты
+   today.setDate(today.getDate() - 30)
+   setStartDate(today)
+ }
 
   // Вычисляем общее количество страниц
   const totalPages = Math.ceil(allSections.length / sectionsPerPage)

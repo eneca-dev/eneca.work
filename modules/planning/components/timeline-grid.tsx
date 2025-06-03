@@ -46,12 +46,21 @@ export function TimelineGrid({
   hasActiveFilters = false, // Добавляем с значением по умолчанию
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
-  const { getEffectiveTheme } = useSettingsStore()
+  const { theme: settingsTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
+  
+  // Определяем эффективную тему
+  const getEffectiveTheme = (resolvedTheme: string | null) => {
+    if (settingsTheme === 'system') {
+      return resolvedTheme === 'dark' ? 'dark' : 'light'
+    }
+    return settingsTheme
+  }
+  
   const theme = propTheme || getEffectiveTheme(resolvedTheme || null)
 
   // Получаем видимость столбцов из стора
-  const { columnVisibility, columnWidths } = usePlanningColumnsStore()
+  const { columnVisibility } = usePlanningColumnsStore()
 
   // Получаем состояние раскрытия разделов и отделов
   const expandedSections = usePlanningStore((state) => state.expandedSections)
@@ -60,10 +69,17 @@ export function TimelineGrid({
   // Константы для размеров и отступов
   const ROW_HEIGHT = 60 // Увеличиваем высоту строки для размещения дополнительной информации
   const HEADER_HEIGHT = 40 // Высота заголовка
-  const COLUMN_WIDTH = 160 // Ширина столбца для "Раздел" и "Проект"
   const PADDING = 12 // Единый отступ для всех элементов
   const LEFT_OFFSET = 0 // Смещение влево на 105px
   const DIVIDER_HEIGHT = 32 // Уменьшенная высота разделителя между разделами и отделами (было 48)
+
+  // Канонические ширины колонок - единый источник истины
+  const COLUMN_WIDTHS = {
+    section: 320,  // Фиксированная ширина для раздела
+    project: 160,  // Фиксированная ширина для проекта
+    object: 120,   // Фиксированная ширина для объекта
+    stage: 80,     // Фиксированная ширина для стадии
+  } as const
 
   // Ссылка на контейнер таймлайна
   const timelineContainerRef = useRef<HTMLDivElement>(null)
@@ -92,16 +108,12 @@ export function TimelineGrid({
     }
   }, [windowWidth, columnVisibility]) // Добавляем columnVisibility в зависимости для перерисовки при изменении видимости столбцов
 
-  // Рассчитываем ширину для каждого столбца
-  const sectionWidth = 320 // Фиксированная ширина для раздела
-  const projectWidth = 160 // Фиксированная ширина для проекта
-  const objectWidth = 120 // Фиксированная ширина для объекта
-  const stageWidth = 80 // Фиксированная ширина для стадии
-
   // Рассчитываем общую ширину фиксированных столбцов
   const totalFixedWidth = useMemo(() => {
     return (
-      sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
+      COLUMN_WIDTHS.section + 
+      (columnVisibility.project ? COLUMN_WIDTHS.project : 0) + 
+      (columnVisibility.object ? COLUMN_WIDTHS.object : 0)
       // Убираем отсюда stage, startDate, endDate и sectionResponsible, так как они теперь в ячейке раздела
     )
   }, [columnVisibility.project, columnVisibility.object])
@@ -245,7 +257,7 @@ export function TimelineGrid({
             timeUnits={timeUnits}
             theme={theme}
             headerHeight={HEADER_HEIGHT}
-            columnWidth={COLUMN_WIDTH}
+            columnWidth={COLUMN_WIDTHS.section}
             padding={PADDING}
             leftOffset={LEFT_OFFSET}
             cellWidth={cellWidth}
@@ -262,7 +274,7 @@ export function TimelineGrid({
               theme={theme}
               rowHeight={ROW_HEIGHT}
               headerHeight={HEADER_HEIGHT}
-              columnWidth={COLUMN_WIDTH}
+              columnWidth={COLUMN_WIDTHS.section}
               padding={PADDING}
               leftOffset={LEFT_OFFSET}
               cellWidth={cellWidth}
@@ -334,7 +346,7 @@ export function TimelineGrid({
                 theme={theme}
                 rowHeight={ROW_HEIGHT}
                 headerHeight={HEADER_HEIGHT}
-                columnWidth={COLUMN_WIDTH}
+                columnWidth={COLUMN_WIDTHS.section}
                 padding={PADDING}
                 leftOffset={LEFT_OFFSET}
                 cellWidth={cellWidth}

@@ -71,17 +71,41 @@ export function FiltersPanel({
       // Сбрасываем выбранный объект при смене проекта
       setSelectedObjectId(null)
 
+      // Создаем AbortController для отмены запроса
+      const abortController = new AbortController()
+
       // Загружаем объекты из Supabase
-      fetchProjectObjects(selectedProjectId)
+      fetchProjectObjects(selectedProjectId, abortController.signal)
         .then((objects) => {
-          setAvailableObjects(objects)
+          // Проверяем, не была ли операция отменена
+          if (abortController.signal.aborted) {
+            return
+          }
+          
+          // Проверяем, что результат не является ошибкой
+          if (Array.isArray(objects)) {
+            setAvailableObjects(objects)
+          } else {
+            console.error("Ошибка при загрузке объектов:", objects.error)
+            setAvailableObjects([])
+          }
           setIsLoadingObjects(false)
         })
         .catch((error) => {
+          // Проверяем, не была ли операция отменена
+          if (abortController.signal.aborted) {
+            return
+          }
+          
           console.error("Ошибка при загрузке объектов:", error)
           setAvailableObjects([])
           setIsLoadingObjects(false)
         })
+
+      // Функция очистки для отмены запроса
+      return () => {
+        abortController.abort()
+      }
     } else {
       // Очищаем объекты, если проект не выбран
       setAvailableObjects([])

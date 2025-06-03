@@ -3,7 +3,6 @@ import { devtools, persist } from "zustand/middleware"
 
 export type TimelineScale = "day" | "week" | "month"
 
-// Упрощаем интерфейс, убирая методы для изменения масштаба
 interface PlanningViewState {
   // Настройки отображения
   activeTab: "timeline" | "board" | "calendar"
@@ -16,7 +15,7 @@ interface PlanningViewState {
   startDate: Date
   daysToShow: number
   scale: TimelineScale
-  cellWidth: number // Теперь это фиксированное значение
+  cellWidth: number // Фиксированное значение 22px
 
   // Действия
   setActiveTab: (tab: "timeline" | "board" | "calendar") => void
@@ -31,11 +30,11 @@ interface PlanningViewState {
   // Методы для прокрутки
   scrollForward: () => void
   scrollBackward: () => void
-  setCurrentMonthDate: () => void
+  setCurrentMonthDate: (date: Date) => void
 }
 
-// Изменим функцию getCurrentWeekStart, чтобы она возвращала дату на 30 дней назад от текущей
-const getCurrentWeekStart = () => {
+// Функция возвращает дату на 30 дней назад от текущей
+const getDate30DaysAgo = () => {
   const today = new Date()
   // Отступаем на 30 дней назад от текущей даты
   today.setDate(today.getDate() - 30)
@@ -46,7 +45,6 @@ export const usePlanningViewStore = create<PlanningViewState>()(
   devtools(
     persist(
       (set, get) => ({
-        // В начальном состоянии устанавливаем фиксированную ширину 10px
         // Начальное состояние
         activeTab: "timeline",
         currentMonth: "Март 2025",
@@ -55,7 +53,7 @@ export const usePlanningViewStore = create<PlanningViewState>()(
         zoomLevel: 1,
 
         // Настройки таймлайна
-        startDate: getCurrentWeekStart(),
+        startDate: getDate30DaysAgo(),
         daysToShow: 180,
         scale: "day" as TimelineScale,
         cellWidth: 22, // Фиксированная ширина ячейки в 22px
@@ -104,6 +102,12 @@ export const usePlanningViewStore = create<PlanningViewState>()(
             return { startDate: newStartDate }
           }),
         setCurrentMonthDate: (date) => {
+          // Валидация: проверяем, что date является валидным объектом Date
+          if (!(date instanceof Date) || isNaN(date.getTime())) {
+            console.error("Invalid date provided to setCurrentMonthDate:", date)
+            return
+          }
+
           // Устанавливаем startDate на первый день выбранного месяца
           const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1)
           set({ startDate: firstDayOfMonth })

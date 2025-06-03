@@ -17,18 +17,12 @@ interface AvatarProps {
 export function Avatar({ name, avatarUrl, size = "sm", theme = "light", className }: AvatarProps) {
   const [imageError, setImageError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const childRef = useRef<HTMLDivElement>(null)
 
   // Сбрасываем состояние ошибки при изменении URL
   useEffect(() => {
     setImageError(false)
     setIsLoading(true)
   }, [avatarUrl])
-
-  // Добавляем отладочный вывод
-  useEffect(() => {
-    console.log(`Avatar component: name=${name}, avatarUrl=${avatarUrl}, error=${imageError}`)
-  }, [name, avatarUrl, imageError])
 
   // Получаем инициалы из имени
   const getInitials = (name?: string) => {

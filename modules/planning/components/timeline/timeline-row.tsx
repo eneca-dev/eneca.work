@@ -50,7 +50,7 @@ export function TimelineRow({
   const [showAssignResponsibleModal, setShowAssignResponsibleModal] = useState(false)
 
   // Получаем видимость и ширину столбцов из стора
-  const { columnVisibility, columnWidths } = usePlanningColumnsStore()
+  const { columnVisibility } = usePlanningColumnsStore()
 
   // Получаем функцию для переключения состояния раскрытия
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
@@ -82,9 +82,9 @@ export function TimelineRow({
   // Также упрощаем расчет общей ширины фиксированных столбцов
   const totalFixedWidth =
     sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
-  const startDateWidth = columnWidth * columnWidths.startDate
-  const endDateWidth = columnWidth * columnWidths.endDate
-  const sectionResponsibleWidth = columnWidth * columnWidths.sectionResponsible
+  const startDateWidth = 100 // Фиксированная ширина для даты начала
+  const endDateWidth = 100 // Фиксированная ширина для даты окончания
+  const sectionResponsibleWidth = 120 // Фиксированная ширина для ответственного
 
   // Функция для форматирования даты в российском формате
   const formatDate = (date: Date | null | undefined): string => {

@@ -1,63 +1,51 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import { supabase } from "@/lib/supabase-client"
+import type { Department, Team } from "../types"
 
-// Типы для фильтров
+// Интерфейсы для фильтров
 export interface Project {
   id: string
   name: string
 }
 
-export interface Department {
-  id: string
-  name: string
-}
-
-export interface Team {
-  id: string
-  name: string
-  departmentId: string
-}
-
-// Добавляем новый интерфейс для менеджеров после интерфейса Team
 export interface Manager {
   id: string
   name: string
   avatarUrl?: string | null
-  projectsCount?: number // Добавляем количество проектов
+  projectsCount?: number
 }
 
-// В интерфейсе PlanningFiltersState добавляем новые поля:
 interface PlanningFiltersState {
   // Доступные проекты, отделы, команды и менеджеры
   availableProjects: Project[]
   availableDepartments: Department[]
   availableTeams: Team[]
-  availableManagers: Manager[] // Добавляем менеджеров
+  availableManagers: Manager[]
+  managerProjects: Project[]
   isLoading: boolean
+  isLoadingManagerProjects: boolean
   isFilterPanelOpen: boolean
 
   // Выбранные фильтры
   selectedProjectId: string | null
   selectedDepartmentId: string | null
   selectedTeamId: string | null
-  selectedManagerId: string | null // Добавляем выбранного менеджера
+  selectedManagerId: string | null
 
-  managerProjects: Project[] // Добавляем проекты выбранного менеджера
-  isLoadingManagerProjects: boolean // Флаг загрузки проектов менеджера
+  // Контроллер для отмены запросов
+  abortController: AbortController | null
 
   // Действия
   fetchFilterOptions: () => Promise<void>
   setSelectedProject: (projectId: string | null) => void
   setSelectedDepartment: (departmentId: string | null) => void
   setSelectedTeam: (teamId: string | null) => void
-  setSelectedManager: (managerId: string | null) => void // Добавляем метод для выбора менеджера
+  setSelectedManager: (managerId: string | null) => void
   resetFilters: () => void
   toggleFilterPanel: () => void
-
-  // Добавляем метод для получения отфильтрованных проектов
   getFilteredProjects: () => Project[]
-  fetchManagerProjects: (managerId: string) => Promise<void> // Новый метод
+  fetchManagerProjects: (managerId: string) => Promise<void>
 }
 
 export const usePlanningFiltersStore = create<PlanningFiltersState>()(
@@ -69,88 +57,93 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
         availableDepartments: [],
         availableTeams: [],
         availableManagers: [],
-        managerProjects: [], // Добавляем пустой массив проектов менеджера
+        managerProjects: [],
         isLoading: false,
-        isLoadingManagerProjects: false, // Добавляем флаг загрузки
+        isLoadingManagerProjects: false,
         isFilterPanelOpen: false,
         selectedProjectId: null,
         selectedDepartmentId: null,
         selectedTeamId: null,
         selectedManagerId: null,
+        abortController: null,
 
-        // Загрузка опций фильтров из базы данных
+        // Загрузка опций фильтров из базы данных (параллельно)
         fetchFilterOptions: async () => {
           set({ isLoading: true })
           try {
-            // Загружаем проекты (оставляем как есть)
-            const { data: projectsData, error: projectsError } = await supabase
-              .from("projects")
-              .select("project_id, project_name")
-              .eq("project_status", "active")
-              .order("project_name")
+            // Выполняем все запросы параллельно
+            const [projectsResult, managersResult, departmentsResult, teamsResult] = await Promise.allSettled([
+              supabase
+                .from("projects")
+                .select("project_id, project_name")
+                .eq("project_status", "active")
+                .order("project_name"),
+              
+              supabase
+                .from("view_project_managers")
+                .select("manager_id, first_name, last_name, manager_name, avatar_url, projects_count")
+                .order("manager_name"),
+              
+              supabase
+                .from("departments")
+                .select("department_id, department_name")
+                .order("department_name"),
+              
+              supabase
+                .from("teams")
+                .select("team_id, team_name, department_id")
+                .order("team_name")
+            ])
 
-            if (projectsError) {
-              console.error("Ошибка при загрузке проектов:", projectsError)
-              throw projectsError
+            // Обрабатываем результаты проектов
+            let projects: Project[] = []
+            if (projectsResult.status === 'fulfilled' && !projectsResult.value.error) {
+              projects = projectsResult.value.data?.map((project) => ({
+                id: project.project_id,
+                name: project.project_name,
+              })) || []
+            } else if (projectsResult.status === 'rejected' || projectsResult.value.error) {
+              console.error("Ошибка при загрузке проектов:", projectsResult.status === 'rejected' ? projectsResult.reason : projectsResult.value.error)
             }
 
-            const projects = projectsData.map((project) => ({
-              id: project.project_id,
-              name: project.project_name,
-            }))
-
-            // Загружаем менеджеров из представления
-            const { data: managersData, error: managersError } = await supabase
-              .from("view_project_managers")
-              .select("manager_id, first_name, last_name, manager_name, avatar_url, projects_count")
-              .order("manager_name")
-
-            if (managersError) {
-              console.error("Ошибка при загрузке менеджеров:", managersError)
-              throw managersError
+            // Обрабатываем результаты менеджеров
+            let managers: Manager[] = []
+            if (managersResult.status === 'fulfilled' && !managersResult.value.error) {
+              managers = managersResult.value.data?.map((manager) => ({
+                id: manager.manager_id,
+                name: manager.manager_name,
+                avatarUrl: manager.avatar_url,
+                projectsCount: manager.projects_count,
+              })) || []
+            } else if (managersResult.status === 'rejected' || managersResult.value.error) {
+              console.error("Ошибка при загрузке менеджеров:", managersResult.status === 'rejected' ? managersResult.reason : managersResult.value.error)
             }
 
-            const managers = managersData.map((manager) => ({
-              id: manager.manager_id,
-              name: manager.manager_name,
-              avatarUrl: manager.avatar_url,
-              projectsCount: manager.projects_count,
-            }))
-
-            console.log("Загружены менеджеры:", managers) // Добавляем отладочную информацию
-
-            // Загружаем отделы (оставляем как есть)
-            const { data: departmentsData, error: departmentsError } = await supabase
-              .from("departments")
-              .select("department_id, department_name")
-              .order("department_name")
-
-            if (departmentsError) {
-              console.error("Ошибка при загрузке отделов:", departmentsError)
-              throw departmentsError
+            // Обрабатываем результаты отделов
+            let departments: Department[] = []
+            if (departmentsResult.status === 'fulfilled' && !departmentsResult.value.error) {
+              departments = departmentsResult.value.data?.map((department) => ({
+                id: department.department_id,
+                name: department.department_name,
+                totalEmployees: 0,
+                teams: []
+              })) || []
+            } else if (departmentsResult.status === 'rejected' || departmentsResult.value.error) {
+              console.error("Ошибка при загрузке отделов:", departmentsResult.status === 'rejected' ? departmentsResult.reason : departmentsResult.value.error)
             }
 
-            const departments = departmentsData.map((department) => ({
-              id: department.department_id,
-              name: department.department_name,
-            }))
-
-            // Загружаем команды (оставляем как есть)
-            const { data: teamsData, error: teamsError } = await supabase
-              .from("teams")
-              .select("team_id, team_name, department_id")
-              .order("team_name")
-
-            if (teamsError) {
-              console.error("Ошибка при загрузке команд:", teamsError)
-              throw teamsError
+            // Обрабатываем результаты команд
+            let teams: Team[] = []
+            if (teamsResult.status === 'fulfilled' && !teamsResult.value.error) {
+              teams = teamsResult.value.data?.map((team) => ({
+                id: team.team_id,
+                name: team.team_name,
+                departmentId: team.department_id,
+                employees: []
+              })) || []
+            } else if (teamsResult.status === 'rejected' || teamsResult.value.error) {
+              console.error("Ошибка при загрузке команд:", teamsResult.status === 'rejected' ? teamsResult.reason : teamsResult.value.error)
             }
-
-            const teams = teamsData.map((team) => ({
-              id: team.team_id,
-              name: team.team_name,
-              departmentId: team.department_id,
-            }))
 
             set({
               availableProjects: projects,
@@ -174,7 +167,6 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
         setSelectedDepartment: (departmentId) => {
           set({
             selectedDepartmentId: departmentId,
-            // Сбрасываем выбранную команду, если меняется отдел
             selectedTeamId: null,
           })
         },
@@ -184,77 +176,117 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           set({ selectedTeamId: teamId })
         },
 
-        // Обновляем метод для установки выбранного менеджера:
+        // Установка выбранного менеджера с механизмом отмены
         setSelectedManager: async (managerId) => {
+          // Отменяем предыдущий запрос, если он есть
+          const currentController = get().abortController
+          if (currentController) {
+            currentController.abort()
+          }
+
+          // Создаем новый контроллер для отмены
+          const newController = new AbortController()
+          
           set({
             selectedManagerId: managerId,
-            // Сбрасываем выбранный проект при смене менеджера
             selectedProjectId: null,
-            managerProjects: [], // Сбрасываем проекты менеджера
+            managerProjects: [],
+            abortController: newController,
           })
 
           // Если выбран менеджер, загружаем его проекты
           if (managerId) {
-            await get().fetchManagerProjects(managerId)
+            try {
+              await get().fetchManagerProjects(managerId)
+            } catch (error) {
+              // Игнорируем ошибки отмены
+              if (error instanceof Error && error.name !== 'AbortError') {
+                console.error("Ошибка при загрузке проектов менеджера:", error)
+              }
+            }
           }
         },
 
-        // Обновляем метод для получения отфильтрованных проектов:
+        // Получение отфильтрованных проектов
         getFilteredProjects: () => {
-          const { availableProjects, selectedManagerId } = get()
+          const { availableProjects, selectedManagerId, managerProjects } = get()
 
           if (!selectedManagerId) {
             return availableProjects
           }
 
-          // Если выбран менеджер, загружаем его проекты
-          // Это будет синхронный вызов, поэтому нужно будет загружать проекты менеджера отдельно
-          return get().managerProjects || []
+          return managerProjects
         },
 
-        // Исправляем метод для загрузки проектов менеджера - используем правильное название поля:
+        // Загрузка проектов менеджера
         fetchManagerProjects: async (managerId: string) => {
+          const controller = get().abortController
+          
           set({ isLoadingManagerProjects: true })
           try {
-            const { data: projectsData, error: projectsError } = await supabase
+            const queryBuilder = supabase
               .from("projects")
               .select("project_id, project_name")
               .eq("project_manager", managerId)
               .eq("project_status", "active")
               .order("project_name")
 
+            // Добавляем AbortSignal только если контроллер существует
+            const query = controller ? queryBuilder.abortSignal(controller.signal) : queryBuilder
+            const { data: projectsData, error: projectsError } = await query
+
+            // Проверяем, не был ли запрос отменен
+            if (controller?.signal.aborted) {
+              return
+            }
+
             if (projectsError) {
               console.error("Ошибка при загрузке проектов менеджера:", projectsError)
               throw projectsError
             }
 
-            const managerProjects = projectsData.map((project) => ({
+            const managerProjects = projectsData?.map((project) => ({
               id: project.project_id,
               name: project.project_name,
-            }))
+            })) || []
 
-            set({
-              managerProjects,
-              isLoadingManagerProjects: false,
-            })
+            // Проверяем еще раз, не был ли запрос отменен
+            if (!controller?.signal.aborted) {
+              set({
+                managerProjects,
+                isLoadingManagerProjects: false,
+              })
+            }
           } catch (error) {
-            console.error("Ошибка при загрузке проектов менеджера:", error)
-            set({
-              managerProjects: [],
-              isLoadingManagerProjects: false,
-            })
+            if (!controller?.signal.aborted) {
+              console.error("Ошибка при загрузке проектов менеджера:", error)
+              set({
+                managerProjects: [],
+                isLoadingManagerProjects: false,
+              })
+            }
           }
         },
 
         // Сброс всех фильтров
         resetFilters: () => {
+          // Отменяем текущий запрос, если он есть
+          const currentController = get().abortController
+          if (currentController) {
+            currentController.abort()
+          }
+
           set({
             selectedProjectId: null,
             selectedDepartmentId: null,
             selectedTeamId: null,
-            selectedManagerId: null, // Добавляем сброс менеджера
+            selectedManagerId: null,
+            managerProjects: [],
+            isLoadingManagerProjects: false,
+            abortController: null,
           })
         },
+
         // Переключение видимости панели фильтров
         toggleFilterPanel: () => {
           set((state) => ({ isFilterPanelOpen: !state.isFilterPanelOpen }))
@@ -266,7 +298,7 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           selectedProjectId: state.selectedProjectId,
           selectedDepartmentId: state.selectedDepartmentId,
           selectedTeamId: state.selectedTeamId,
-          selectedManagerId: state.selectedManagerId, // Добавляем сохранение менеджера
+          selectedManagerId: state.selectedManagerId,
           isFilterPanelOpen: state.isFilterPanelOpen,
         }),
       },

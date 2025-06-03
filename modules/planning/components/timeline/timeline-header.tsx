@@ -63,8 +63,8 @@ export function TimelineHeader({
     }
   }, [filterSectionsByName, filterSectionsByProject])
 
-  // Получаем видимость и ширину столбцов из стора
-  const { columnVisibility, columnWidths } = usePlanningColumnsStore()
+  // Получаем видимость столбцов из стора
+  const { columnVisibility } = usePlanningColumnsStore()
 
   // Заменяем сложные расчеты ширины на фиксированные значения
   // Заменяем эти строки:

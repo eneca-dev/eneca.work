@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
-import type { Section, Loading } from "./modules/planning/types"
+import type { Section, Loading } from "@/modules/planning/types"
 
 // Обновляем интерфейс SectionHierarchy, добавляя поля аватаров
 export interface SectionHierarchy {
@@ -47,53 +47,35 @@ export interface LoadingData {
 
 // Обновляем интерфейс SectionWithLoadings, добавляя поле для ID команды
 export interface SectionWithLoadings {
-  // Данные раздела
   section_id: string
   section_name: string
-  object_id: string
-  object_name: string
-  stage_id: string
-  stage_name: string
   project_id: string
   project_name: string
-  client_id: string
-  client_name: string
-  project_lead_engineer_name: string | null
-  project_manager_name: string | null
-  section_responsible_name: string | null
-  // Поля аватаров
-  project_lead_engineer_avatar: string | null
-  project_manager_avatar: string | null
-  section_responsible_avatar: string | null
+  object_id: string | null
+  object_name: string | null
+  stage_id: string | null
+  stage_name: string | null
+  client_id: string | null
   responsible_department_id: string | null
   responsible_department_name: string | null
-  responsible_team_id: string | null // Добавляем ID команды
-  responsible_team_name: string | null
-  total_loading_rate: number | null
-  tasks_count: number | null
+  section_responsible_name: string | null
+  section_responsible_avatar: string | null
+  section_start_date: string | null
+  section_end_date: string | null
   latest_plan_loading_status: string | null
-  section_start_date?: string | null
-  section_end_date?: string | null
-
-  // Данные загрузки
+  has_loadings: boolean
   loading_id: string | null
   loading_responsible: string | null
   loading_start: string | null
   loading_finish: string | null
   loading_rate: number | null
-  loading_status: "active" | "archived" | null
+  loading_status: string | null
   loading_created: string | null
   loading_updated: string | null
-
-  // Данные профиля ответственного
   responsible_first_name: string | null
   responsible_last_name: string | null
   responsible_avatar: string | null
   responsible_team_name: string | null
-
-  // Флаг наличия загрузок и счетчик
-  has_loadings: boolean
-  loadings_count: number
 }
 
 // Добавляем новый интерфейс для данных о загрузке сотрудников
@@ -124,31 +106,73 @@ export interface EmployeeWorkloadData {
   employment_rate: number | null
 }
 
-// Создаем клиент Supabase с использованием переменных окружения
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+// Интерфейс для данных обновления загрузки
+interface LoadingUpdateData {
+  loading_updated: string
+  loading_start?: string
+  loading_finish?: string
+  loading_rate?: number
+  loading_section?: string
+}
 
+// Валидация переменных окружения
+function validateEnvironmentVariables() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL не установлена. Пожалуйста, добавьте переменную окружения в файл .env.local"
+    )
+  }
+
+  if (!supabaseAnonKey) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY не установлена. Пожалуйста, добавьте переменную окружения в файл .env.local"
+    )
+  }
+
+  return { supabaseUrl, supabaseAnonKey }
+}
+
+// Создаем клиент Supabase с валидацией переменных окружения
+const { supabaseUrl, supabaseAnonKey } = validateEnvironmentVariables()
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Интерфейс для структурированной ошибки
+interface StructuredError {
+  success: false
+  error: string
+  details?: any
+}
+
 // Функция для получения разделов из представления view_section_hierarchy
-export async function fetchSectionHierarchy(): Promise<SectionHierarchy[]> {
+export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
     const { data, error } = await supabase.from("view_section_hierarchy").select("*")
 
     if (error) {
       console.error("Ошибка при загрузке разделов:", error)
-      throw error
+      return {
+        success: false,
+        error: "Не удалось загрузить разделы",
+        details: error
+      }
     }
 
     return data || []
   } catch (error) {
     console.error("Ошибка при загрузке разделов:", error)
-    return []
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке разделов",
+      details: error
+    }
   }
 }
 
 // Обновляем функцию fetchLoadings для использования представления active_loadings
-export async function fetchLoadings(sectionId: string, checkOnly = false): Promise<LoadingData[]> {
+export async function fetchLoadings(sectionId: string, checkOnly = false): Promise<LoadingData[] | StructuredError> {
   try {
     let query = supabase
       .from("active_loadings")
@@ -179,12 +203,19 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
 
     if (error) {
       console.error("Ошибка при загрузке активных загрузок:", error)
-      throw error
+      return {
+        success: false,
+        error: "Не удалось загрузить активные загрузки",
+        details: error
+      }
     }
 
     // Преобразуем данные для добавления имени и аватара ответственного
     return (data || []).map((item) => {
-      const profile = item.profiles as { first_name: string; last_name: string; avatar_url: string | null } | null
+      // Исправляем типизацию профиля - это может быть объект или null
+      const profile = Array.isArray(item.profiles) 
+        ? item.profiles[0] as { first_name: string; last_name: string; avatar_url: string | null } | undefined
+        : item.profiles as { first_name: string; last_name: string; avatar_url: string | null } | null
       return {
         ...item,
         responsible_name: profile ? `${profile.first_name} ${profile.last_name}` : null,
@@ -194,7 +225,11 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
     })
   } catch (error) {
     console.error("Ошибка при загрузке активных загрузок:", error)
-    return []
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке активных загрузок",
+      details: error
+    }
   }
 }
 
@@ -204,7 +239,7 @@ export async function fetchSectionsWithLoadings(
   departmentId: string | null = null,
   teamId: string | null = null,
   managerId: string | null = null,
-): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> }> {
+): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> } | StructuredError> {
   try {
     // Строим запрос к представлению, но добавляем фильтр по активным загрузкам
     let query = supabase.from("view_sections_with_loadings").select("*")
@@ -226,7 +261,11 @@ export async function fetchSectionsWithLoadings(
 
       if (managerProjectsError) {
         console.error("Ошибка при загрузке проектов менеджера:", managerProjectsError)
-        throw managerProjectsError
+        return {
+          success: false,
+          error: "Не удалось загрузить проекты менеджера",
+          details: managerProjectsError
+        }
       }
 
       const projectIds = managerProjects.map((p) => p.project_id)
@@ -256,7 +295,11 @@ export async function fetchSectionsWithLoadings(
 
     if (error) {
       console.error("Ошибка при загрузке данных из view_sections_with_loadings:", error)
-      throw error
+      return {
+        success: false,
+        error: "Не удалось загрузить данные разделов с загрузками",
+        details: error
+      }
     }
 
     // Группируем данные по разделам и загрузкам
@@ -271,23 +314,21 @@ export async function fetchSectionsWithLoadings(
         sectionsMap.set(sectionItem.section_id, {
           id: sectionItem.section_id,
           name: sectionItem.section_name,
+          departmentId: sectionItem.responsible_department_id || "",
           projectId: sectionItem.project_id,
           projectName: sectionItem.project_name,
-          objectId: sectionItem.object_id,
-          objectName: sectionItem.object_name,
-          stageId: sectionItem.stage_id,
-          stageName: sectionItem.stage_name,
-          clientId: sectionItem.client_id,
-          clientName: sectionItem.client_name,
+          objectId: sectionItem.object_id || undefined,
+          objectName: sectionItem.object_name || undefined,
+          stageId: sectionItem.stage_id || undefined,
+          stageName: sectionItem.stage_name || undefined,
+          clientId: sectionItem.client_id || undefined,
           responsibleName: sectionItem.section_responsible_name || undefined,
           responsibleAvatarUrl: sectionItem.section_responsible_avatar || undefined,
           departmentName: sectionItem.responsible_department_name || undefined,
-          teamName: sectionItem.responsible_team_name || undefined,
-          startDate: sectionItem.section_start_date ? new Date(sectionItem.section_start_date) : null,
-          endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : null,
+          startDate: sectionItem.section_start_date ? new Date(sectionItem.section_start_date) : undefined,
+          endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : undefined,
           status: sectionItem.latest_plan_loading_status || undefined,
           hasLoadings: sectionItem.has_loadings,
-          isExpanded: false,
         })
 
         // Инициализируем массив загрузок для этого раздела
@@ -321,7 +362,11 @@ export async function fetchSectionsWithLoadings(
     }
   } catch (error) {
     console.error("Ошибка при загрузке данных из view_sections_with_loadings:", error)
-    return { sections: [], loadingsMap: {} }
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке данных разделов с загрузками",
+      details: error
+    }
   }
 }
 
@@ -329,7 +374,7 @@ export async function fetchSectionsWithLoadings(
 export async function fetchEmployeeWorkloads(
   departmentId: string | null = null,
   teamId: string | null = null,
-): Promise<EmployeeWorkloadData[]> {
+): Promise<EmployeeWorkloadData[] | StructuredError> {
   try {
     let query = supabase.from("view_employee_workloads").select("*")
 
@@ -341,20 +386,25 @@ export async function fetchEmployeeWorkloads(
       query = query.eq("team_id", teamId)
     }
 
-    // Фильтруем только активные загрузки или записи без загрузок
-    query = query.or("loading_status.eq.active,loading_status.is.null")
-
     const { data, error } = await query
 
     if (error) {
-      console.error("Ошибка при загрузке данных о загрузке сотрудников:", error)
-      throw error
+      console.error("Ошибка при загрузке данных о загруженности сотрудников:", error)
+      return {
+        success: false,
+        error: "Не удалось загрузить данные о загруженности сотрудников",
+        details: error
+      }
     }
 
     return data || []
   } catch (error) {
-    console.error("Ошибка при загрузке данных о загрузке сотрудников:", error)
-    return []
+    console.error("Ошибка при загрузке данных о загруженности сотрудников:", error)
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке данных о загруженности сотрудников",
+      details: error
+    }
   }
 }
 
@@ -370,8 +420,8 @@ export async function updateLoading(
   },
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Подготавливаем объект для обновления
-    const updateData: any = {
+    // Подготавливаем объект для обновления с правильной типизацией
+    const updateData: LoadingUpdateData = {
       loading_updated: new Date().toISOString(),
     }
 
@@ -522,7 +572,7 @@ export async function fetchArchivedLoadings(
   sectionId?: string,
   employeeId?: string,
   limit = 50,
-): Promise<LoadingData[]> {
+): Promise<LoadingData[] | StructuredError> {
   try {
     let query = supabase
       .from("archived_loadings")
@@ -557,12 +607,19 @@ export async function fetchArchivedLoadings(
 
     if (error) {
       console.error("Ошибка при загрузке архивных загрузок:", error)
-      throw error
+      return {
+        success: false,
+        error: "Не удалось загрузить архивные загрузки",
+        details: error
+      }
     }
 
     // Преобразуем данные для добавления имени и аватара ответственного
     return (data || []).map((item) => {
-      const profile = item.profiles as { first_name: string; last_name: string; avatar_url: string | null } | null
+      // Исправляем типизацию профиля - это может быть объект или null
+      const profile = Array.isArray(item.profiles) 
+        ? item.profiles[0] as { first_name: string; last_name: string; avatar_url: string | null } | undefined
+        : item.profiles as { first_name: string; last_name: string; avatar_url: string | null } | null
       return {
         ...item,
         responsible_name: profile ? `${profile.first_name} ${profile.last_name}` : null,
@@ -572,7 +629,11 @@ export async function fetchArchivedLoadings(
     })
   } catch (error) {
     console.error("Ошибка при загрузке архивных загрузок:", error)
-    return []
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке архивных загрузок",
+      details: error
+    }
   }
 }
 
@@ -624,21 +685,31 @@ export async function updateSectionResponsible(
 // Функция для получения объектов проекта
 export async function fetchProjectObjects(
   projectId: string,
-): Promise<{ id: string; name: string; projectId: string }[]> {
+  signal?: AbortSignal,
+): Promise<{ id: string; name: string; projectId: string }[] | StructuredError> {
   try {
     if (!projectId) return []
 
     // Получаем уникальные объекты для проекта через представление view_section_hierarchy
-    const { data, error } = await supabase
+    const query = supabase
       .from("view_section_hierarchy")
       .select("object_id, object_name")
       .eq("project_id", projectId)
       .not("object_id", "is", null)
       .not("object_name", "is", null)
 
+    // Добавляем AbortSignal только если он предоставлен
+    const { data, error } = signal 
+      ? await query.abortSignal(signal)
+      : await query
+
     if (error) {
       console.error("Ошибка при загрузке объектов проекта:", error)
-      throw error
+      return {
+        success: false,
+        error: "Не удалось загрузить объекты проекта",
+        details: error
+      }
     }
 
     // Убираем дубликаты и преобразуем в нужный формат
@@ -656,7 +727,16 @@ export async function fetchProjectObjects(
 
     return Array.from(uniqueObjects.values()).sort((a, b) => a.name.localeCompare(b.name))
   } catch (error) {
+    // Если операция была отменена, не логируем это как ошибку
+    if (error instanceof Error && error.message === 'Operation was aborted') {
+      throw error
+    }
+    
     console.error("Ошибка при загрузке объектов проекта:", error)
-    return []
+    return {
+      success: false,
+      error: "Произошла неожиданная ошибка при загрузке объектов проекта",
+      details: error
+    }
   }
 }

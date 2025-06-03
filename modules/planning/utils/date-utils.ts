@@ -66,7 +66,11 @@ export const getCurrentWeekStart = () => {
   const today = new Date()
   const day = today.getDay()
   const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Если сегодня воскресенье, то -6, иначе +1
-  return new Date(today.setDate(diff))
+  
+  // Создаем новый объект Date, чтобы не мутировать исходный
+  const weekStart = new Date(today)
+  weekStart.setDate(diff)
+  return weekStart
 }
 
 // Функция для определения, является ли дата первым днем месяца

@@ -80,7 +80,12 @@ export function WorkloadFilters({
           <select
             id="department-filter"
             value={selectedDepartmentId || ""}
-            onChange={(e) => onDepartmentChange(e.target.value || null)}
+            onChange={(e) => {
+              const newDepartmentId = e.target.value || null
+              onDepartmentChange(newDepartmentId)
+              // Сбрасываем выбранную команду при изменении отдела
+              onTeamChange(null)
+            }}
             className={cn(
               "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
               theme === "dark"

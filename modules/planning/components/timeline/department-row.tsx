@@ -6,6 +6,7 @@ import type { Department, Employee, Loading } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
+import { useUiStore } from "@/stores/useUiStore"
 import { useState } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { EditLoadingModal } from "./edit-loading-modal"
@@ -46,8 +47,8 @@ export function DepartmentRow({
   sectionsHeight = 0, // Значение по умолчанию
   dividerHeight = 0, // Значение по умолчанию
 }: DepartmentRowProps) {
-  // Получаем видимость и ширину столбцов из стора
-  const { columnVisibility, columnWidths } = usePlanningColumnsStore()
+  // Получаем видимость столбцов из стора
+  const { columnVisibility } = usePlanningColumnsStore()
 
   // Получаем функцию для переключения состояния раскрытия
   const toggleDepartmentExpanded = usePlanningStore((state) => state.toggleDepartmentExpanded)
@@ -61,33 +62,22 @@ export function DepartmentRow({
 
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
 
-  // Заменяем сложные расчеты ширины на фиксированные значения
-  // Заменяем эти строки:
-  // const sectionWidth = columnWidth + 80
-  // const projectWidth = columnWidth * columnWidths.project
-  // const objectWidth = columnWidth * columnWidths.object
-  // const stageWidth = columnWidth * columnWidths.stage
-
-  // На фиксированные значения:
-  const sectionWidth = 320 // Фиксированная ширина для раздела
-  const projectWidth = 160 // Фиксированная ширина для проекта
-  const objectWidth = 120 // Фиксированная ширина для объекта
-  const stageWidth = 80 // Фиксированная ширина для стадии
+  // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
+  const COLUMN_WIDTHS = {
+    section: 320,  // Фиксированная ширина для раздела
+    project: 160,  // Фиксированная ширина для проекта
+    object: 120,   // Фиксированная ширина для объекта
+    stage: 80,     // Фиксированная ширина для стадии
+  } as const
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
   const totalFixedWidth =
-    sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
+    COLUMN_WIDTHS.section + 
+    (columnVisibility.project ? COLUMN_WIDTHS.project : 0) + 
+    (columnVisibility.object ? COLUMN_WIDTHS.object : 0)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
-
-  // Вычисляем позицию строки отдела с учетом сотрудников предыдущих отделов, высоты разделов и разделителя
-  // const departmentPosition =
-  //   headerHeight * 2 + // Высота заголовка
-  //   sectionsHeight + // Общая высота разделов и их загрузок
-  //   dividerHeight + // Высота разделителя
-  //   departmentIndex * rowHeight + // Высота текущего отдела
-  //   totalEmployeesBeforeDepartment * reducedRowHeight // Высота сотрудников предыдущих отделов
 
   // Обработчик клика по отделу для раскрытия/скрытия
   const handleToggleExpand = () => {
@@ -141,8 +131,8 @@ export function DepartmentRow({
                   : "border-slate-200 bg-white group-hover/row:bg-slate-200",
               )}
               style={{
-                width: `${sectionWidth}px`,
-                minWidth: `${sectionWidth}px`,
+                width: `${COLUMN_WIDTHS.section}px`,
+                minWidth: `${COLUMN_WIDTHS.section}px`,
                 padding: `${padding}px`,
                 // Удаляем borderRight отсюда
               }}
@@ -177,8 +167,8 @@ export function DepartmentRow({
                     : "border-slate-200 bg-white group-hover/row:bg-slate-200",
                 )}
                 style={{
-                  width: `${projectWidth}px`,
-                  minWidth: `${projectWidth}px`,
+                  width: `${COLUMN_WIDTHS.project}px`,
+                  minWidth: `${COLUMN_WIDTHS.project}px`,
                   height: `${rowHeight}px`,
                   padding: `${padding}px`,
                 }}
@@ -205,8 +195,8 @@ export function DepartmentRow({
                     : "border-slate-200 bg-white group-hover/row:bg-slate-200",
                 )}
                 style={{
-                  width: `${objectWidth}px`,
-                  minWidth: `${objectWidth}px`,
+                  width: `${COLUMN_WIDTHS.object}px`,
+                  minWidth: `${COLUMN_WIDTHS.object}px`,
                   height: `${rowHeight}px`,
                   padding: `${padding}px`,
                 }}
@@ -371,8 +361,8 @@ function EmployeeRow({
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
 
-  // Получаем видимость и ширину столбцов из стора
-  const { columnVisibility, columnWidths } = usePlanningColumnsStore()
+  // Получаем видимость столбцов из стора
+  const { columnVisibility } = usePlanningColumnsStore()
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
@@ -894,15 +884,15 @@ function EmployeeRow({
                     <p className="mb-2">Архивированные загрузки можно восстановить при необходимости.</p>
                     <p>
                       <strong>Проект:</strong>{" "}
-                      {employee.loadings ? employee.loadings[0].projectName || "Без названия" : "Без названия"}
+                      {employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].projectName || "Без названия" : "Без названия"}
                     </p>
                     <p>
                       <strong>Раздел:</strong>{" "}
-                      {employee.loadings ? employee.loadings[0].sectionName || "Без названия" : "Без названия"}
+                      {employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].sectionName || "Без названия" : "Без названия"}
                     </p>
                     <p>
                       <strong>Период:</strong>{" "}
-                      {employee.loadings
+                      {employee.loadings && employee.loadings.length > 0
                         ? formatShortDate(new Date(employee.loadings[0].startDate)) +
                           " — " +
                           formatShortDate(new Date(employee.loadings[0].endDate))
@@ -931,24 +921,25 @@ function EmployeeRow({
                     // Получаем функцию архивирования из стора
                     const archiveLoadingFromStore = usePlanningStore.getState().archiveLoading
 
+                    // Проверяем наличие загрузок перед доступом к первому элементу
+                    if (!employee.loadings || employee.loadings.length === 0) {
+                      throw new Error("У сотрудника нет активных загрузок для архивирования")
+                    }
+
                     // Вызываем архивирование
-                    const result = await archiveLoadingFromStore(employee.loadings ? employee.loadings[0].id : "")
+                    const result = await archiveLoadingFromStore(employee.loadings[0].id)
 
                     if (result.success) {
                       // Показываем уведомление об успехе
-                      const uiStore = window.require ? window.require("@/stores/useUiStore").useUiStore : null
-                      if (uiStore) {
-                        uiStore
-                          .getState()
-                          .setNotification(
-                            `Загрузка для проекта "${employee.loadings ? employee.loadings[0].projectName || "Без названия" : "Без названия"}" успешно архивирована`,
-                          )
+                      const uiStore = useUiStore.getState()
+                      uiStore.setNotification(
+                        `Загрузка для проекта "${employee.loadings[0].projectName || "Без названия"}" успешно архивирована`,
+                      )
 
-                        // Автоматически скрываем уведомление через 3 секунды
-                        setTimeout(() => {
-                          uiStore.getState().clearNotification()
-                        }, 3000)
-                      }
+                      // Автоматически скрываем уведомление через 3 секунды
+                      setTimeout(() => {
+                        uiStore.clearNotification()
+                      }, 3000)
                     } else {
                       throw new Error(result.error || "Ошибка при архивировании")
                     }
@@ -956,27 +947,23 @@ function EmployeeRow({
                     console.error("Ошибка при архивировании загрузки:", error)
 
                     // Показываем уведомление об ошибке
-                    const uiStore = window.require ? window.require("@/stores/useUiStore").useUiStore : null
-                    if (uiStore) {
-                      uiStore
-                        .getState()
-                        .setNotification(
-                          `Ошибка при архивировании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
-                        )
+                    const uiStore = useUiStore.getState()
+                    uiStore.setNotification(
+                      `Ошибка при архивировании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
+                    )
 
-                      // Автоматически скрываем уведомление через 5 секунд
-                      setTimeout(() => {
-                        uiStore.getState().clearNotification()
-                      }, 5000)
-                    }
+                    // Автоматически скрываем уведомление через 5 секунд
+                    setTimeout(() => {
+                      uiStore.clearNotification()
+                    }, 5000)
                   } finally {
                     setShowArchiveConfirm(false)
                   }
 
                   console.log(
                     "Архивирование загрузки:",
-                    employee.loadings ? employee.loadings[0].id : "",
-                    employee.loadings ? employee.loadings[0].projectName : "Без названия",
+                    employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].id : "Нет загрузок",
+                    employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].projectName : "Без названия",
                   )
                 }}
                 className={cn(

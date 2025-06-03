@@ -8,6 +8,54 @@ import { cn } from "@/lib/utils"
 import { Filter, X } from "lucide-react"
 import { useTheme } from "next-themes"
 
+// Переиспользуемый компонент для select элементов
+interface FilterSelectProps {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  disabled: boolean
+  options: Array<{ id: string; name: string }>
+  placeholder: string
+  theme: 'light' | 'dark'
+}
+
+function FilterSelect({ id, label, value, onChange, disabled, options, placeholder, theme }: FilterSelectProps) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
+      >
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value || "")}
+        disabled={disabled}
+        className={cn(
+          "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
+          theme === "dark"
+            ? "bg-slate-700 border-slate-600 text-slate-200"
+            : "bg-white border-slate-300 text-slate-800",
+          "focus:outline-none focus:ring-1",
+          theme === "dark"
+            ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
+            : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
+        )}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export function PlanningFilters() {
   const {
     availableProjects: allProjects,
@@ -30,9 +78,18 @@ export function PlanningFilters() {
 
   const { setFilters } = usePlanningStore()
 
-  // Используем тему из useSettingsStore
-  const { getEffectiveTheme } = useSettingsStore()
+  // Используем тему из useSettingsStore, если не передана через props
+  const { theme: settingsTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
+  
+  // Определяем эффективную тему
+  const getEffectiveTheme = (resolvedTheme: string | null) => {
+    if (settingsTheme === 'system') {
+      return resolvedTheme === 'dark' ? 'dark' : 'light'
+    }
+    return settingsTheme
+  }
+  
   const theme = getEffectiveTheme(resolvedTheme || null)
 
   // Загружаем проекты, отделы и команды при монтировании компонента
@@ -46,7 +103,7 @@ export function PlanningFilters() {
   // Перезагружаем разделы при изменении фильтров
   useEffect(() => {
     setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId)
-  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, setFilters])
+  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, setFilters])
 
   // Фильтруем команды в зависимости от выбранного отдела
   const filteredTeams = selectedDepartmentId
@@ -84,138 +141,52 @@ export function PlanningFilters() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {/* Фильтр по менеджерам */}
-        <div>
-          <label
-            htmlFor="manager-filter"
-            className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-          >
-            Менеджер
-          </label>
-          <select
-            id="manager-filter"
-            value={selectedManagerId || ""}
-            onChange={(e) => setSelectedManager(e.target.value || null)}
-            disabled={isLoading || availableManagers.length === 0}
-            className={cn(
-              "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
-              theme === "dark"
-                ? "bg-slate-700 border-slate-600 text-slate-200"
-                : "bg-white border-slate-300 text-slate-800",
-              "focus:outline-none focus:ring-1",
-              theme === "dark"
-                ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
-                : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
-            )}
-          >
-            <option value="">Все менеджеры</option>
-            {availableManagers.map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {manager.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterSelect
+          id="manager-filter"
+          label="Менеджер"
+          value={selectedManagerId || ""}
+          onChange={(value) => setSelectedManager(value || null)}
+          disabled={isLoading || availableManagers.length === 0}
+          options={availableManagers}
+          placeholder="Все менеджеры"
+          theme={theme}
+        />
 
         {/* Фильтр по проектам */}
-        <div>
-          <label
-            htmlFor="project-filter"
-            className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-          >
-            Проект
-          </label>
-          <select
-            id="project-filter"
-            value={selectedProjectId || ""}
-            onChange={(e) => setSelectedProject(e.target.value || null)}
-            disabled={isLoading || availableProjects.length === 0}
-            className={cn(
-              "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
-              theme === "dark"
-                ? "bg-slate-700 border-slate-600 text-slate-200"
-                : "bg-white border-slate-300 text-slate-800",
-              "focus:outline-none focus:ring-1",
-              theme === "dark"
-                ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
-                : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
-            )}
-          >
-            <option value="">{selectedManagerId ? "Все проекты менеджера" : "Все проекты"}</option>
-            {availableProjects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterSelect
+          id="project-filter"
+          label="Проект"
+          value={selectedProjectId || ""}
+          onChange={(value) => setSelectedProject(value || null)}
+          disabled={isLoading || availableProjects.length === 0}
+          options={availableProjects}
+          placeholder={selectedManagerId ? "Все проекты менеджера" : "Все проекты"}
+          theme={theme}
+        />
 
-        {/* Остальные фильтры остаются без изменений */}
         {/* Фильтр по отделам */}
-        <div>
-          <label
-            htmlFor="department-filter"
-            className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-          >
-            Отдел
-          </label>
-          <select
-            id="department-filter"
-            value={selectedDepartmentId || ""}
-            onChange={(e) => setSelectedDepartment(e.target.value || null)}
-            disabled={isLoading || departments.length === 0}
-            className={cn(
-              "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
-              theme === "dark"
-                ? "bg-slate-700 border-slate-600 text-slate-200"
-                : "bg-white border-slate-300 text-slate-800",
-              "focus:outline-none focus:ring-1",
-              theme === "dark"
-                ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
-                : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
-            )}
-          >
-            <option value="">Все отделы</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterSelect
+          id="department-filter"
+          label="Отдел"
+          value={selectedDepartmentId || ""}
+          onChange={(value) => setSelectedDepartment(value || null)}
+          disabled={isLoading || departments.length === 0}
+          options={departments}
+          placeholder="Все отделы"
+          theme={theme}
+        />
 
         {/* Фильтр по командам */}
-        <div>
-          <label
-            htmlFor="team-filter"
-            className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-          >
-            Команда
-          </label>
-          <select
-            id="team-filter"
-            value={selectedTeamId || ""}
-            onChange={(e) => setSelectedTeam(e.target.value || null)}
-            disabled={isLoading || filteredTeams.length === 0}
-            className={cn(
-              "w-full text-sm rounded-md border px-3 py-2 transition-colors duration-150 ease-in-out",
-              theme === "dark"
-                ? "bg-slate-700 border-slate-600 text-slate-200"
-                : "bg-white border-slate-300 text-slate-800",
-              "focus:outline-none focus:ring-1",
-              theme === "dark"
-                ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
-                : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
-            )}
-          >
-            <option value="">Все команды</option>
-            {filteredTeams.map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.code ? `${team.code} - ` : ""}
-                {team.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterSelect
+          id="team-filter"
+          label="Команда"
+          value={selectedTeamId || ""}
+          onChange={(value) => setSelectedTeam(value || null)}
+          disabled={isLoading || filteredTeams.length === 0}
+          options={filteredTeams}
+          placeholder="Все команды"
+          theme={theme}
+        />
       </div>
     </div>
   )
