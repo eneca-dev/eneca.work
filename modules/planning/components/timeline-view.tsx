@@ -194,7 +194,7 @@ useEffect(() => {
  }
 
   // Вычисляем общее количество страниц
-  const totalPages = Math.ceil(allSections.length / sectionsPerPage)
+  const totalPages = Math.ceil(allSections.length / Math.max(sectionsPerPage, 1))
 
   // Обработчик изменения страницы
   const handlePageChange = (page: number) => {
@@ -281,7 +281,9 @@ useEffect(() => {
         <div></div>
 
         {/* Пагинация теперь здесь, в центре */}
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} theme={theme} />
+        {totalPages > 1 && (
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} theme={theme} />
+        )}
 
         {/* Блок с датами справа */}
         <NavigationControls

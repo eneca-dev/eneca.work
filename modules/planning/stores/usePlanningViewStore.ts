@@ -146,6 +146,14 @@ export const usePlanningViewStore = create<PlanningViewState>()(
             cellWidth: state.cellWidth,
           }
         },
+        merge: (persistedState, currentState) => {
+          // Десериализация: преобразуем строку startDate обратно в объект Date
+          const parsed = persistedState as any
+          if (parsed && typeof parsed.startDate === 'string') {
+            parsed.startDate = new Date(parsed.startDate)
+          }
+          return { ...currentState, ...parsed }
+        },
       },
     ),
   ),

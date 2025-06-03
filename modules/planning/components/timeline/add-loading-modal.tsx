@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { cn } from "@/lib/utils"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { Employee } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
@@ -31,6 +31,11 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   // Состояние для отслеживания ошибок валидации
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  // Рефы для хранения ID таймеров
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const dropdownTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // Получаем функции из сторов
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
@@ -55,6 +60,21 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
+  // Очистка таймеров при размонтировании компонента
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current)
+      }
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current)
+      }
+      if (dropdownTimeoutRef.current) {
+        clearTimeout(dropdownTimeoutRef.current)
+      }
+    }
+  }, [])
+
   // Загрузка списка проектов
   const fetchProjects = async () => {
     setIsLoadingProjects(true)
@@ -67,12 +87,20 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
 
       if (error) {
         console.error("Ошибка при загрузке проектов:", error)
+        setNotification("Ошибка при загрузке списка проектов. Попробуйте обновить страницу.")
+        errorTimeoutRef.current = setTimeout(() => {
+          clearNotification()
+        }, 5000)
         return
       }
 
       setProjects(data || [])
     } catch (error) {
       console.error("Ошибка при загрузке проектов:", error)
+      setNotification("Ошибка при загрузке списка проектов. Проверьте подключение к интернету.")
+      errorTimeoutRef.current = setTimeout(() => {
+        clearNotification()
+      }, 5000)
     } finally {
       setIsLoadingProjects(false)
     }
@@ -95,12 +123,20 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
 
       if (error) {
         console.error("Ошибка при загрузке разделов:", error)
+        setNotification("Ошибка при загрузке разделов проекта. Попробуйте выбрать проект заново.")
+        errorTimeoutRef.current = setTimeout(() => {
+          clearNotification()
+        }, 5000)
         return
       }
 
       setSections(data || [])
     } catch (error) {
       console.error("Ошибка при загрузке разделов:", error)
+      setNotification("Ошибка при загрузке разделов проекта. Проверьте подключение к интернету.")
+      errorTimeoutRef.current = setTimeout(() => {
+        clearNotification()
+      }, 5000)
     } finally {
       setIsLoadingSections(false)
     }
@@ -200,8 +236,12 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       const selectedProject = projects.find((p) => p.project_id === formData.projectId)
       const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
 
-      // Подготавливаем данные для создания загрузки
-      const loadingData = {
+      if (!selectedProject || !selectedSection) {
+        throw new Error("Не удалось найти выбранный проект или раздел")
+      }
+
+      // Создаем загрузку через стор
+      const result = await createLoadingInStore({
         responsibleId: employee.id,
         sectionId: formData.sectionId,
         startDate: new Date(formData.startDate),
@@ -209,13 +249,10 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         rate: formData.rate,
         projectName: selectedProject?.project_name,
         sectionName: selectedSection?.section_name,
-      }
-
-      // Вызываем функцию создания из стора
-      const result = await createLoadingInStore(loadingData)
+      })
 
       if (!result.success) {
-        throw new Error(result.error || "Ошибка при создании загрузки")
+        throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
       }
 
       // Показываем уведомление об успехе
@@ -223,7 +260,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       setNotification(`Загрузка для сотрудника ${employee.fullName} на проект "${projectName}" успешно создана`)
 
       // Автоматически скрываем уведомление через 3 секунды
-      setTimeout(() => {
+      successTimeoutRef.current = setTimeout(() => {
         clearNotification()
       }, 3000)
 
@@ -245,7 +282,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       setNotification(`Ошибка при создании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
 
       // Автоматически скрываем уведомление через 5 секунд
-      setTimeout(() => {
+      errorTimeoutRef.current = setTimeout(() => {
         clearNotification()
       }, 5000)
     } finally {
@@ -319,7 +356,9 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
                   setShowProjectDropdown(true)
                 }}
                 onFocus={() => setShowProjectDropdown(true)}
-                onBlur={() => setTimeout(() => setShowProjectDropdown(false), 200)}
+                onBlur={() => {
+                  dropdownTimeoutRef.current = setTimeout(() => setShowProjectDropdown(false), 200)
+                }}
                 placeholder="Поиск проекта..."
                 disabled={isSaving || isLoadingProjects}
                 className={cn(

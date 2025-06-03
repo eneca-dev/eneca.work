@@ -237,6 +237,7 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
 
             // Проверяем, не был ли запрос отменен
             if (controller?.signal.aborted) {
+              set({ isLoadingManagerProjects: false })
               return
             }
 
@@ -255,6 +256,7 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
               set({
                 managerProjects,
                 isLoadingManagerProjects: false,
+                abortController: null, // Очищаем контроллер после успешного завершения
               })
             }
           } catch (error) {
@@ -263,7 +265,11 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
               set({
                 managerProjects: [],
                 isLoadingManagerProjects: false,
+                abortController: null, // Очищаем контроллер после ошибки
               })
+            } else {
+              // Если запрос был отменен, также сбрасываем флаг загрузки
+              set({ isLoadingManagerProjects: false })
             }
           }
         },

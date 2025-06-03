@@ -67,6 +67,7 @@ export function FiltersPanel({
   // Загружаем объекты при изменении выбранного проекта
   useEffect(() => {
     if (selectedProjectId) {
+      console.log("FiltersPanel: начинаем загрузку объектов для проекта", selectedProjectId)
       setIsLoadingObjects(true)
       // Сбрасываем выбранный объект при смене проекта
       setSelectedObjectId(null)
@@ -79,14 +80,27 @@ export function FiltersPanel({
         .then((objects) => {
           // Проверяем, не была ли операция отменена
           if (abortController.signal.aborted) {
+            console.log("FiltersPanel: загрузка объектов отменена для проекта", selectedProjectId)
             return
           }
+          
+          console.log("FiltersPanel: получен результат загрузки объектов:", {
+            projectId: selectedProjectId,
+            isArray: Array.isArray(objects),
+            objectsCount: Array.isArray(objects) ? objects.length : 0,
+            result: objects
+          })
           
           // Проверяем, что результат не является ошибкой
           if (Array.isArray(objects)) {
             setAvailableObjects(objects)
+            console.log("FiltersPanel: объекты успешно загружены:", objects.map(obj => obj.name))
           } else {
-            console.error("Ошибка при загрузке объектов:", objects.error)
+            console.error("FiltersPanel: ошибка при загрузке объектов:", {
+              projectId: selectedProjectId,
+              error: objects.error,
+              details: objects.details
+            })
             setAvailableObjects([])
           }
           setIsLoadingObjects(false)
@@ -94,20 +108,29 @@ export function FiltersPanel({
         .catch((error) => {
           // Проверяем, не была ли операция отменена
           if (abortController.signal.aborted) {
+            console.log("FiltersPanel: загрузка объектов отменена (catch) для проекта", selectedProjectId)
             return
           }
           
-          console.error("Ошибка при загрузке объектов:", error)
+          console.error("FiltersPanel: исключение при загрузке объектов:", {
+            projectId: selectedProjectId,
+            error,
+            errorName: error instanceof Error ? error.name : 'Unknown',
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined
+          })
           setAvailableObjects([])
           setIsLoadingObjects(false)
         })
 
       // Функция очистки для отмены запроса
       return () => {
+        console.log("FiltersPanel: отменяем загрузку объектов для проекта", selectedProjectId)
         abortController.abort()
       }
     } else {
       // Очищаем объекты, если проект не выбран
+      console.log("FiltersPanel: очищаем объекты, проект не выбран")
       setAvailableObjects([])
       setSelectedObjectId(null)
     }

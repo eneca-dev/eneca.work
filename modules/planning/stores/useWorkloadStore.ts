@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import { supabase } from "@/lib/supabase-client"
 import type { Department, Employee, Team } from "../types"
+import { formatDateToLocalString } from "../utils/section-utils"
 
 interface WorkloadState {
   // Данные
@@ -220,7 +221,7 @@ export const useWorkloadStore = create<WorkloadState>()(
             const dailyWorkloads: Record<string, number> = {}
 
             dates.forEach((date) => {
-              const dateKey = date.toISOString().split("T")[0]
+              const dateKey = formatDateToLocalString(date)
               let totalRate = 0
 
               // Суммируем ставки всех загрузок сотрудника на эту дату
@@ -252,7 +253,7 @@ export const useWorkloadStore = create<WorkloadState>()(
               const dailyWorkloads: Record<string, number> = {}
 
               dates.forEach((date) => {
-                const dateKey = date.toISOString().split("T")[0]
+                const dateKey = formatDateToLocalString(date)
                 let totalRate = 0
 
                 team.employees.forEach((employee) => {
@@ -269,7 +270,7 @@ export const useWorkloadStore = create<WorkloadState>()(
             const departmentDailyWorkloads: Record<string, number> = {}
 
             dates.forEach((date) => {
-              const dateKey = date.toISOString().split("T")[0]
+              const dateKey = formatDateToLocalString(date)
               let totalRate = 0
 
               department.teams.forEach((team) => {

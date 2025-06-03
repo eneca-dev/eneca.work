@@ -273,7 +273,7 @@ function DepartmentRows({
           className={cn(
             "px-4 py-3 font-medium border-b cursor-pointer",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 hover:bg-slate-750"
+              ? "bg-slate-800 border-slate-700 hover:bg-slate-700"
               : "bg-slate-50 border-slate-200 hover:bg-slate-100",
           )}
           onClick={onToggleDepartment}

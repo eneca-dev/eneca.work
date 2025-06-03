@@ -55,11 +55,9 @@ export function DepartmentRow({
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
 
   // Проверяем, раскрыт ли отдел
-  const isExpanded = expandedDepartments[department.id] || false
+  const isDepartmentExpanded = expandedDepartments[department.id] || false
 
-  // Добавим состояние для отслеживания раскрытых сотрудников в компонент DepartmentRow
-  // Добавьте следующий код после объявления isExpanded:
-
+  // Состояния для модальных окон и раскрытых сотрудников
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
@@ -140,7 +138,7 @@ export function DepartmentRow({
               {/* Левая часть с названием отдела */}
               <div className="flex items-center">
                 <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                  {isExpanded ? (
+                  {isDepartmentExpanded ? (
                     <ChevronDown className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
                   ) : (
                     <ChevronRight className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
@@ -298,28 +296,31 @@ export function DepartmentRow({
         </div>
       </div>
 
-      {/* Передадим функцию и состояние в компонент EmployeeRow
-      // Измените вызов компонента EmployeeRow в конце компонента DepartmentRow: */}
-
-      {isExpanded &&
-        allEmployees.map((employee, employeeIndex) => (
-          <EmployeeRow
-            key={employee.id}
-            employee={employee}
-            departmentPosition={0}
-            employeeIndex={employeeIndex}
-            timeUnits={timeUnits}
-            theme={theme}
-            rowHeight={rowHeight}
-            padding={padding}
-            leftOffset={leftOffset}
-            cellWidth={cellWidth}
-            stickyColumnShadow={stickyColumnShadow}
-            totalFixedWidth={totalFixedWidth}
-            isExpanded={expandedEmployees[employee.id] || false}
-            onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
-          />
-        ))}
+      {/* Отображаем сотрудников, если отдел раскрыт */}
+      {isDepartmentExpanded && (
+        <>
+          {department.teams.map((team) =>
+            team.employees.map((employee, employeeIndex) => (
+              <EmployeeRow
+                key={employee.id}
+                employee={employee}
+                departmentPosition={departmentIndex}
+                employeeIndex={employeeIndex}
+                timeUnits={timeUnits}
+                theme={theme}
+                rowHeight={rowHeight}
+                padding={padding}
+                leftOffset={leftOffset}
+                cellWidth={cellWidth}
+                stickyColumnShadow={stickyColumnShadow}
+                totalFixedWidth={totalFixedWidth}
+                isExpanded={expandedEmployees[employee.id] || false}
+                onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
+              />
+            )),
+          )}
+        </>
+      )}
     </>
   )
 }
@@ -358,6 +359,11 @@ function EmployeeRow({
   isExpanded,
   onToggleExpand,
 }: EmployeeRowProps) {
+  // Состояния для модальных окон
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [loadingToArchive, setLoadingToArchive] = useState<Loading | null>(null)
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
+
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
 
@@ -420,11 +426,7 @@ function EmployeeRow({
     return 0
   }
 
-  // Добавь новое состояние для модального окна редактирования в начале функции EmployeeRow
-  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
-
   // Добавить после строки с editingLoading
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
 
   return (
@@ -688,6 +690,7 @@ function EmployeeRow({
                           title="Архивировать"
                           onClick={(e) => {
                             e.stopPropagation()
+                            setLoadingToArchive(loading) // Устанавливаем конкретную загрузку
                             setShowArchiveConfirm(true)
                           }}
                         >
@@ -774,18 +777,19 @@ function EmployeeRow({
 
               {/* Ячейки для каждого периода - сдвигаем влево */}
               <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
-                {timeUnits.map((unit, i) => {
+                {timeUnits.map((unit) => {
                   const isWeekendDay = unit.isWeekend
                   const isTodayDate = isToday(unit.date)
 
                   // Получаем загрузку для конкретной даты и конкретной загрузки
                   const loadingRate = getLoadingRateForDate(loading, unit.date)
 
-                  const isMonthBoundary = i === 0 || i === timeUnits.length - 1
+                  // Создаем стабильный ключ на основе даты и ID загрузки
+                  const stableKey = `${loading.id}-${unit.date.toISOString().split('T')[0]}`
 
                   return (
                     <div
-                      key={i}
+                      key={stableKey}
                       className={cn(
                         "border-r relative border-b", // Добавлена border-b
                         theme === "dark" ? "border-slate-700" : "border-slate-200",
@@ -796,7 +800,6 @@ function EmployeeRow({
                             ? "border-l border-l-slate-600"
                             : "border-l border-l-slate-300"
                           : "",
-                        isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                       )}
                       style={{
                         height: `${reducedRowHeight}px`,
@@ -847,7 +850,7 @@ function EmployeeRow({
         </>
       )}
       {/* Модальное окно подтверждения архивирования */}
-      {showArchiveConfirm && (
+      {showArchiveConfirm && loadingToArchive && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className={cn("rounded-lg p-6 w-96 max-w-[90vw]", theme === "dark" ? "bg-slate-800" : "bg-white")}>
             <h3 className={cn("text-lg font-semibold mb-4", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
@@ -883,20 +886,14 @@ function EmployeeRow({
                     </p>
                     <p className="mb-2">Архивированные загрузки можно восстановить при необходимости.</p>
                     <p>
-                      <strong>Проект:</strong>{" "}
-                      {employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].projectName || "Без названия" : "Без названия"}
+                      <strong>Проект:</strong> {loadingToArchive.projectName || "Без названия"}
                     </p>
                     <p>
-                      <strong>Раздел:</strong>{" "}
-                      {employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].sectionName || "Без названия" : "Без названия"}
+                      <strong>Раздел:</strong> {loadingToArchive.sectionName || "Без названия"}
                     </p>
                     <p>
                       <strong>Период:</strong>{" "}
-                      {employee.loadings && employee.loadings.length > 0
-                        ? formatShortDate(new Date(employee.loadings[0].startDate)) +
-                          " — " +
-                          formatShortDate(new Date(employee.loadings[0].endDate))
-                        : "Не указан"}
+                      {formatShortDate(new Date(loadingToArchive.startDate))} — {formatShortDate(new Date(loadingToArchive.endDate))}
                     </p>
                   </div>
                 </div>
@@ -905,7 +902,10 @@ function EmployeeRow({
 
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowArchiveConfirm(false)}
+                onClick={() => {
+                  setShowArchiveConfirm(false)
+                  setLoadingToArchive(null)
+                }}
                 className={cn(
                   "px-4 py-2 text-sm rounded border",
                   theme === "dark"
@@ -921,19 +921,14 @@ function EmployeeRow({
                     // Получаем функцию архивирования из стора
                     const archiveLoadingFromStore = usePlanningStore.getState().archiveLoading
 
-                    // Проверяем наличие загрузок перед доступом к первому элементу
-                    if (!employee.loadings || employee.loadings.length === 0) {
-                      throw new Error("У сотрудника нет активных загрузок для архивирования")
-                    }
-
-                    // Вызываем архивирование
-                    const result = await archiveLoadingFromStore(employee.loadings[0].id)
+                    // Вызываем архивирование для конкретной загрузки
+                    const result = await archiveLoadingFromStore(loadingToArchive.id)
 
                     if (result.success) {
                       // Показываем уведомление об успехе
                       const uiStore = useUiStore.getState()
                       uiStore.setNotification(
-                        `Загрузка для проекта "${employee.loadings[0].projectName || "Без названия"}" успешно архивирована`,
+                        `Загрузка для проекта "${loadingToArchive.projectName || "Без названия"}" успешно архивирована`,
                       )
 
                       // Автоматически скрываем уведомление через 3 секунды
@@ -958,13 +953,10 @@ function EmployeeRow({
                     }, 5000)
                   } finally {
                     setShowArchiveConfirm(false)
+                    setLoadingToArchive(null)
                   }
 
-                  console.log(
-                    "Архивирование загрузки:",
-                    employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].id : "Нет загрузок",
-                    employee.loadings && employee.loadings.length > 0 ? employee.loadings[0].projectName : "Без названия",
-                  )
+                  console.log("Архивирование загрузки:", loadingToArchive.id, loadingToArchive.projectName)
                 }}
                 className={cn(
                   "px-4 py-2 text-sm rounded",

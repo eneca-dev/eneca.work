@@ -3,19 +3,19 @@ export interface Loading {
   projectId?: string
   projectName?: string
   projectStatus?: string
-  sectionId: string
+  sectionId: string | null
   sectionName?: string
   employeeId?: string
   responsibleId?: string
   responsibleName?: string
   responsibleAvatarUrl?: string
   responsibleTeamName?: string
-  startDate: Date
-  endDate: Date
+  startDate: Date // Приходит как ISO строка, преобразуется в Date
+  endDate: Date   // Приходит как ISO строка, преобразуется в Date
   rate: number
   status?: string
-  createdAt?: Date | null
-  updatedAt?: Date | null
+  createdAt: Date // Приходит как ISO строка, преобразуется в Date
+  updatedAt: Date // Приходит как ISO строка, преобразуется в Date
 }
 
 export interface Team {
@@ -27,6 +27,8 @@ export interface Team {
   totalEmployees?: number
   dailyWorkloads?: Record<string, number>
   employees: Employee[]
+  createdAt?: Date // Приходит как ISO строка, преобразуется в Date
+  updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
 
 export interface Employee {
@@ -47,6 +49,8 @@ export interface Employee {
   employmentRate?: number
   dailyWorkloads?: Record<string, number>
   loadings?: Loading[]
+  createdAt?: Date // Приходит как ISO строка, преобразуется в Date
+  updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
 
 export interface Section {
@@ -61,13 +65,15 @@ export interface Section {
   stageId?: string
   stageName?: string
   clientId?: string
-  startDate?: Date
-  endDate?: Date
+  startDate: Date // Приходит как ISO строка, преобразуется в Date
+  endDate: Date   // Приходит как ISO строка, преобразуется в Date
   status?: string
   responsibleName?: string
   responsibleAvatarUrl?: string
   hasLoadings?: boolean
   loadings?: Loading[]
+  createdAt?: Date // Приходит как ISO строка, преобразуется в Date
+  updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
 
 export interface Department {
@@ -79,4 +85,6 @@ export interface Department {
   teams: Team[]
   sections?: Section[]
   managerName?: string
+  createdAt?: Date // Приходит как ISO строка, преобразуется в Date
+  updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }

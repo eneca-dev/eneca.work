@@ -1,7 +1,12 @@
 import type { Section } from "../types"
 
+// Утилитная функция для локального форматирования даты в формат YYYY-MM-DD
+export const formatDateToLocalString = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 // Функция для определения, попадает ли раздел в указанный период
-export const isSectionActiveInPeriod = (section: Section, periodStart: Date) => {
+export const isSectionActiveInPeriod = (section: Section, periodStart: Date, periodEnd?: Date) => {
   if (!section.startDate || !section.endDate) return false
 
   try {
@@ -24,7 +29,8 @@ export const isSectionActiveInPeriod = (section: Section, periodStart: Date) => 
     const periodStartCopy = new Date(periodStart)
     periodStartCopy.setHours(0, 0, 0, 0)
 
-    const periodEndCopy = new Date(periodStart)
+    // Если periodEnd не передан, используем periodStart как единственный день
+    const periodEndCopy = new Date(periodEnd || periodStart)
     periodEndCopy.setHours(23, 59, 59, 999)
 
     // Проверяем, пересекаются ли периоды

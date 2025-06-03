@@ -325,8 +325,8 @@ export async function fetchSectionsWithLoadings(
           responsibleName: sectionItem.section_responsible_name || undefined,
           responsibleAvatarUrl: sectionItem.section_responsible_avatar || undefined,
           departmentName: sectionItem.responsible_department_name || undefined,
-          startDate: sectionItem.section_start_date ? new Date(sectionItem.section_start_date) : undefined,
-          endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : undefined,
+          startDate: sectionItem.section_start_date ? new Date(sectionItem.section_start_date) : new Date(),
+          endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : new Date(),
           status: sectionItem.latest_plan_loading_status || undefined,
           hasLoadings: sectionItem.has_loadings,
         })
@@ -350,8 +350,8 @@ export async function fetchSectionsWithLoadings(
           startDate: sectionItem.loading_start ? new Date(sectionItem.loading_start) : new Date(),
           endDate: sectionItem.loading_finish ? new Date(sectionItem.loading_finish) : new Date(),
           rate: sectionItem.loading_rate || 1,
-          createdAt: sectionItem.loading_created ? new Date(sectionItem.loading_created) : undefined,
-          updatedAt: sectionItem.loading_updated ? new Date(sectionItem.loading_updated) : undefined,
+          createdAt: sectionItem.loading_created ? new Date(sectionItem.loading_created) : new Date(),
+          updatedAt: sectionItem.loading_updated ? new Date(sectionItem.loading_updated) : new Date(),
         })
       }
     })
@@ -688,7 +688,49 @@ export async function fetchProjectObjects(
   signal?: AbortSignal,
 ): Promise<{ id: string; name: string; projectId: string }[] | StructuredError> {
   try {
-    if (!projectId) return []
+    if (!projectId) {
+      console.warn("fetchProjectObjects: projectId не предоставлен")
+      return []
+    }
+
+    console.log("fetchProjectObjects: начало загрузки объектов для проекта", projectId)
+
+    // Проверяем подключение к Supabase
+    if (!supabase) {
+      console.error("fetchProjectObjects: клиент Supabase не инициализирован")
+      return {
+        success: false,
+        error: "Клиент Supabase не инициализирован",
+        details: { projectId }
+      }
+    }
+
+    // Сначала проверим, существует ли представление
+    console.log("fetchProjectObjects: проверяем доступность представления view_section_hierarchy")
+    const { data: viewExists, error: viewError } = await supabase
+      .from("view_section_hierarchy")
+      .select("object_id")
+      .limit(1)
+
+    if (viewError) {
+      // Безопасное логирование ошибки
+      const errorInfo = {
+        message: viewError.message || 'Неизвестная ошибка',
+        code: viewError.code || 'NO_CODE',
+        details: viewError.details || 'Нет деталей',
+        hint: viewError.hint || 'Нет подсказки',
+        originalError: JSON.stringify(viewError, null, 2)
+      }
+      
+      console.error("fetchProjectObjects: представление view_section_hierarchy недоступно:", errorInfo)
+      return {
+        success: false,
+        error: `Представление view_section_hierarchy недоступно: ${errorInfo.message}`,
+        details: errorInfo
+      }
+    }
+
+    console.log("fetchProjectObjects: представление доступно, найдено записей для проверки:", viewExists?.length || 0)
 
     // Получаем уникальные объекты для проекта через представление view_section_hierarchy
     const query = supabase
@@ -698,19 +740,39 @@ export async function fetchProjectObjects(
       .not("object_id", "is", null)
       .not("object_name", "is", null)
 
+    console.log("fetchProjectObjects: выполняем запрос к БД для проекта", projectId)
+
     // Добавляем AbortSignal только если он предоставлен
     const { data, error } = signal 
       ? await query.abortSignal(signal)
       : await query
 
     if (error) {
-      console.error("Ошибка при загрузке объектов проекта:", error)
+      // Безопасное логирование ошибки с детальной информацией
+      const errorInfo = {
+        projectId,
+        message: error.message || 'Неизвестная ошибка',
+        code: error.code || 'NO_CODE',
+        details: error.details || 'Нет деталей',
+        hint: error.hint || 'Нет подсказки',
+        originalError: JSON.stringify(error, null, 2),
+        errorType: typeof error,
+        errorConstructor: error.constructor?.name || 'Unknown'
+      }
+      
+      console.error("fetchProjectObjects: ошибка запроса к БД:", errorInfo)
       return {
         success: false,
-        error: "Не удалось загрузить объекты проекта",
-        details: error
+        error: `Не удалось загрузить объекты проекта: ${errorInfo.message}`,
+        details: errorInfo
       }
     }
+
+    console.log("fetchProjectObjects: получены данные:", {
+      projectId,
+      dataLength: data?.length || 0,
+      sampleData: data?.slice(0, 3) // Показываем первые 3 записи для отладки
+    })
 
     // Убираем дубликаты и преобразуем в нужный формат
     const uniqueObjects = new Map<string, { id: string; name: string; projectId: string }>()
@@ -725,18 +787,39 @@ export async function fetchProjectObjects(
       }
     })
 
-    return Array.from(uniqueObjects.values()).sort((a, b) => a.name.localeCompare(b.name))
+    const result = Array.from(uniqueObjects.values()).sort((a, b) => a.name.localeCompare(b.name))
+    
+    console.log("fetchProjectObjects: успешно обработано объектов:", {
+      projectId,
+      totalObjects: result.length,
+      objectNames: result.map(obj => obj.name)
+    })
+
+    return result
   } catch (error) {
     // Если операция была отменена, не логируем это как ошибку
-    if (error instanceof Error && error.message === 'Operation was aborted') {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log("fetchProjectObjects: операция отменена для проекта", projectId)
       throw error
     }
     
-    console.error("Ошибка при загрузке объектов проекта:", error)
+    // Безопасное логирование неожиданной ошибки
+    const errorInfo = {
+      projectId,
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : 'Нет стека',
+      originalError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+      errorType: typeof error,
+      errorConstructor: error?.constructor?.name || 'Unknown'
+    }
+    
+    console.error("fetchProjectObjects: неожиданная ошибка:", errorInfo)
+    
     return {
       success: false,
-      error: "Произошла неожиданная ошибка при загрузке объектов проекта",
-      details: error
+      error: `Произошла неожиданная ошибка при загрузке объектов проекта: ${errorInfo.errorMessage}`,
+      details: errorInfo
     }
   }
 }

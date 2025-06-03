@@ -85,8 +85,14 @@ const parseTimestampTz = (timestamptz: string | null): Date | null => {
   if (!timestamptz) return null
 
   try {
+    // Если строка не содержит информацию о timezone, добавляем 'Z' для UTC
+    let dateString = timestamptz
+    if (!timestamptz.includes('Z') && !timestamptz.includes('+') && !timestamptz.includes('-', 10)) {
+      dateString = timestamptz + 'Z'
+    }
+    
     // Преобразуем строку в объект Date
-    return new Date(timestamptz)
+    return new Date(dateString)
   } catch (error) {
     console.error("Ошибка при преобразовании даты:", error, timestamptz)
     return null
@@ -171,58 +177,28 @@ export const usePlanningStore = create<PlanningState>()(
               currentPage,
             } = get()
 
-            // Если выбран менеджер, но не выбран конкретный проект,
-            // нужно получить все проекты этого менеджера
-            let projectIdsToFilter: string[] | null = null
-
-            if (selectedManagerId && !selectedProjectId) {
-              // Загружаем все проекты выбранного менеджера
-              const { data: managerProjects, error: managerProjectsError } = await supabase
-                .from("projects")
-                .select("project_id")
-                .eq("project_manager", selectedManagerId)
-                .eq("project_status", "active")
-
-              if (managerProjectsError) {
-                console.error("Ошибка при загрузке проектов менеджера:", managerProjectsError)
-                throw managerProjectsError
-              }
-
-              projectIdsToFilter = managerProjects.map((p) => p.project_id)
-
-              // Если у менеджера нет проектов, возвращаем пустой результат
-              if (projectIdsToFilter.length === 0) {
-                set({
-                  allSections: [],
-                  sections: [],
-                  loadingsMap: {},
-                  isLoadingSections: false,
-                  expandedSections: {},
-                })
-                return
-              }
-            }
-
             // Загружаем данные из нового представления (только активные загрузки)
-            const { sections: allSections, loadingsMap } = await fetchSectionsWithLoadings(
-              selectedProjectId || (projectIdsToFilter ? projectIdsToFilter[0] : null),
+            const result = await fetchSectionsWithLoadings(
+              selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
+              selectedManagerId,
             )
 
-            // Если фильтруем по менеджеру и у нас есть список его проектов,
-            // дополнительно фильтруем разделы
-            let filteredSections = allSections
-            if (selectedManagerId && projectIdsToFilter && !selectedProjectId) {
-              filteredSections = allSections.filter((section) => projectIdsToFilter!.includes(section.projectId || ""))
+            // Проверяем, что результат не является ошибкой
+            if ('success' in result && !result.success) {
+              console.error("Ошибка при загрузке разделов:", result.error)
+              throw new Error(result.error)
             }
 
-            console.log(`Загружено ${filteredSections.length} разделов и активные загрузки для них`)
+            const { sections: allSections, loadingsMap } = result as { sections: Section[]; loadingsMap: Record<string, Loading[]> }
+
+            console.log(`Загружено ${allSections.length} разделов и активные загрузки для них`)
 
             // Применяем пагинацию
             const startIndex = (currentPage - 1) * sectionsPerPage
             const endIndex = startIndex + sectionsPerPage
-            const visibleSections = filteredSections.slice(startIndex, endIndex)
+            const visibleSections = allSections.slice(startIndex, endIndex)
 
             // Добавляем загрузки к видимым разделам
             const sectionsWithLoadings = visibleSections.map((section) => ({
@@ -231,7 +207,7 @@ export const usePlanningStore = create<PlanningState>()(
             }))
 
             set({
-              allSections: filteredSections,
+              allSections: allSections,
               sections: sectionsWithLoadings,
               loadingsMap,
               isLoadingSections: false,
@@ -335,7 +311,7 @@ export const usePlanningStore = create<PlanningState>()(
             employeesMap.forEach((employee) => {
               employee.dailyWorkloads = {}
               if (employee.loadings && employee.loadings.length > 0) {
-                employee.loadings.forEach((loading) => {
+                employee.loadings.forEach((loading: Loading) => {
                   const startDate = new Date(loading.startDate)
                   const endDate = new Date(loading.endDate)
                   const currentDate = new Date(startDate)
@@ -395,16 +371,21 @@ export const usePlanningStore = create<PlanningState>()(
               }
 
               const department = departmentsMap.get(team.departmentId)
-              department.teams.push(team)
-              department.totalEmployees += team.totalEmployees
+              if (department) {
+                department.teams.push(team)
+                department.totalEmployees += team.totalEmployees
 
-              // Суммируем dailyWorkloads отдела
-              Object.keys(team.dailyWorkloads || {}).forEach((dateKey) => {
-                if (!department.dailyWorkloads[dateKey]) {
-                  department.dailyWorkloads[dateKey] = 0
-                }
-                department.dailyWorkloads[dateKey] += team.dailyWorkloads[dateKey]
-              })
+                // Суммируем dailyWorkloads отдела
+                Object.keys(team.dailyWorkloads || {}).forEach((dateKey) => {
+                  if (!department.dailyWorkloads) {
+                    department.dailyWorkloads = {}
+                  }
+                  if (!department.dailyWorkloads[dateKey]) {
+                    department.dailyWorkloads[dateKey] = 0
+                  }
+                  department.dailyWorkloads[dateKey] += team.dailyWorkloads[dateKey]
+                })
+              }
             })
 
             const departments = Array.from(departmentsMap.values())
@@ -440,7 +421,7 @@ export const usePlanningStore = create<PlanningState>()(
         checkSectionHasLoadings: async (sectionId: string): Promise<boolean> => {
           try {
             const loadings = await fetchLoadings(sectionId, true)
-            return loadings.length > 0
+            return Array.isArray(loadings) && loadings.length > 0
           } catch (error) {
             console.error("Ошибка при проверке загрузок раздела:", error)
             return false
@@ -453,7 +434,7 @@ export const usePlanningStore = create<PlanningState>()(
             const loadingsData = await fetchLoadings(sectionId)
 
             // Преобразуем данные в формат Loading
-            const loadings: Loading[] = loadingsData.map((item) => ({
+            const loadings: Loading[] = Array.isArray(loadingsData) ? loadingsData.map((item: any) => ({
               id: item.loading_id,
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
@@ -464,7 +445,7 @@ export const usePlanningStore = create<PlanningState>()(
               rate: item.loading_rate || 1,
               createdAt: parseTimestampTz(item.loading_created),
               updatedAt: parseTimestampTz(item.loading_updated),
-            }))
+            })) : []
 
             // Обновляем раздел с загрузками в обоих массивах: sections и allSections
             const { sections, allSections } = get()
@@ -642,7 +623,7 @@ export const usePlanningStore = create<PlanningState>()(
             // Обновляем в карте загрузок
             const updatedLoadingsMap = { ...loadingsMap }
             Object.keys(updatedLoadingsMap).forEach((sectionId) => {
-              updatedLoadingsMap[sectionId] = updatedLoadingsMap[sectionId].map((loading) =>
+              updatedLoadingsMap[sectionId] = (updatedLoadingsMap[sectionId] ?? []).map((loading) =>
                 loading.id === loadingId ? { ...loading, ...updates } : loading,
               )
             })
@@ -847,7 +828,7 @@ export const usePlanningStore = create<PlanningState>()(
             const loadingsData = await fetchArchivedLoadings(sectionId, employeeId)
 
             // Преобразуем данные в формат Loading
-            const loadings: Loading[] = loadingsData.map((item) => ({
+            const loadings: Loading[] = Array.isArray(loadingsData) ? loadingsData.map((item: any) => ({
               id: item.loading_id,
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
@@ -858,7 +839,7 @@ export const usePlanningStore = create<PlanningState>()(
               rate: item.loading_rate || 1,
               createdAt: parseTimestampTz(item.loading_created),
               updatedAt: parseTimestampTz(item.loading_updated),
-            }))
+            })) : []
 
             return loadings
           } catch (error) {

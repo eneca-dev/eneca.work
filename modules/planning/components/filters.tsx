@@ -102,7 +102,7 @@ export function PlanningFilters() {
 
   // Перезагружаем разделы при изменении фильтров
   useEffect(() => {
-    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId)
+    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId)
   }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, setFilters])
 
   // Фильтруем команды в зависимости от выбранного отдела

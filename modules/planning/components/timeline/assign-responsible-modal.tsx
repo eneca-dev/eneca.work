@@ -47,41 +47,51 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
 
   // Загрузка списка сотрудников
-  const fetchEmployees = async () => {
-    setIsLoadingEmployees(true)
-    try {
-      const { data, error } = await supabase
-        .from("view_employees")
-        .select(`
-        user_id,
-        first_name,
-        last_name,
-        full_name,
-        email,
-        position_name,
-        avatar_url,
-        team_name,
-        department_name,
-        employment_rate
-      `)
-        .order("full_name")
-
-      if (error) {
-        console.error("Ошибка при загрузке сотрудников:", error)
-        return
-      }
-
-      setEmployees(data || [])
-    } catch (error) {
-      console.error("Ошибка при загрузке сотрудников:", error)
-    } finally {
-      setIsLoadingEmployees(false)
-    }
-  }
-
-  // Загрузка сотрудников при открытии модального окна
   useEffect(() => {
+    const abortController = new AbortController()
+    
+    const fetchEmployees = async () => {
+      setIsLoadingEmployees(true)
+      try {
+        const { data, error } = await supabase
+          .from("view_employees")
+          .select(`
+          user_id,
+          first_name,
+          last_name,
+          full_name,
+          email,
+          position_name,
+          avatar_url,
+          team_name,
+          department_name,
+          employment_rate
+        `)
+          .order("full_name")
+          .abortSignal(abortController.signal)
+
+        if (error) {
+          console.error("Ошибка при загрузке сотрудников:", error)
+          return
+        }
+
+        setEmployees(data || [])
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error("Ошибка при загрузке сотрудников:", error)
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsLoadingEmployees(false)
+        }
+      }
+    }
+
     fetchEmployees()
+
+    return () => {
+      abortController.abort()
+    }
   }, [])
 
   // Простая фильтрация сотрудников прямо в рендере
