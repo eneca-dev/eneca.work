@@ -6,9 +6,11 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Workflow } from "lucide-react"
+import { UserAvatar } from "@/components/ui/user-avatar"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
+import { useUserStore } from "@/stores/useUserStore"
 
 interface SidebarProps {
   user: {
@@ -23,10 +25,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  
+  // Получаем данные из store
+  const { name: storeName, email: storeEmail, profile } = useUserStore()
+  
+  // Используем данные из store, если они есть, иначе из props
+  const displayName = storeName || user.name || "Пользователь"
+  const displayEmail = storeEmail || user.email || ""
+  const avatarUrl = profile?.avatar_url || null
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.refresh()
     router.push("/auth/login")
   }
 
@@ -53,8 +62,8 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     },
     {
       title: "Декомпозиция",
-      href: "/dashboard/decomposition",
-      icon: Workflow,
+      href: "/dashboard/decomposition", 
+      icon: Network,
     },
   ]
 
@@ -125,13 +134,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         {/* User and Theme */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-4">
           <div className={cn("flex items-center", collapsed ? "flex-col space-y-2" : "space-x-3")}>
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <User className="h-4 w-4 text-primary" />
-            </div>
+            <UserAvatar
+              avatarUrl={avatarUrl}
+              name={displayName}
+              email={displayEmail}
+              size="md"
+              className="flex-shrink-0"
+            />
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate dark:text-gray-200">{user.name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                <p className="text-sm font-medium truncate dark:text-gray-200">{displayName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayEmail}</p>
               </div>
             )}
           </div>
@@ -199,4 +212,4 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       </div>
     </div>
   )
-}
+} 

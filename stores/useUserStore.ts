@@ -38,15 +38,14 @@ interface UserState {
   isAuthenticated: boolean
   role: string | null
   permissions: string[]
-  isLoadingPermissions: boolean
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
+  clearState: () => void
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
   hasPermission: (permission: string) => boolean
-  loadUserPermissions: (userId: string) => Promise<void>
 }
 
 export const useUserStore = create<UserState>()(
@@ -61,19 +60,22 @@ export const useUserStore = create<UserState>()(
         isAuthenticated: false,
         role: null,
         permissions: [],
-        isLoadingPermissions: false,
         
         // Действия
         setUser: (user: UserData) => {
-          console.log('setUser вызван с данными:', user);
-          console.log('Профиль пользователя в данных:', user.profile);
+          if (!user?.id || !user?.email) {
+            throw new Error('Invalid user data: id and email are required');
+          }
           
-          // Явно создаем новый объект для профиля, чтобы избежать ссылочных проблем
+          const currentState = get();
+          const shouldPreserveRoleData = currentState.id === user.id;
+          
+          // Explicitly create new object for profile to avoid reference issues
           let processedProfile = null;
           let profileName = '';
           
           if (user.profile) {
-            // Создаем глубокую копию профиля для безопасности
+            // Create deep copy of profile for safety
             processedProfile = {
               firstName: user.profile.firstName,
               lastName: user.profile.lastName,
@@ -90,7 +92,6 @@ export const useUserStore = create<UserState>()(
               avatar_url: user.profile.avatar_url
             };
             profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
-            console.log('Обработанный профиль перед сохранением:', processedProfile);
           }
           
           set({
@@ -99,21 +100,10 @@ export const useUserStore = create<UserState>()(
             name: profileName || '',
             profile: processedProfile,
             isAuthenticated: true,
-            role: null,
-            permissions: []
+            role: shouldPreserveRoleData ? currentState.role : null,
+            permissions: shouldPreserveRoleData ? currentState.permissions : []
           });
-          
-          console.log('Новое состояние:', useUserStore.getState());
-          console.log('Профиль в новом состоянии:', useUserStore.getState().profile);
-          
-          // Автоматически загружаем разрешения после установки пользователя
-          const state = get();
-          console.log(
-            state.profile?.roleId 
-              ? `Автоматически загружаем разрешения из profile.roleId: ${state.profile.roleId}`
-              : 'profile.roleId отсутствует, загружаем разрешения через user_roles'
-          );
-          state.loadUserPermissions(user.id);
+        
         },
         
         clearUser: () => set({
@@ -124,19 +114,21 @@ export const useUserStore = create<UserState>()(
           isAuthenticated: false,
           role: null,
           permissions: [],
-          isLoadingPermissions: false,
         }),
+        
+        // Alias for clearUser for backward compatibility
+        clearState: () => get().clearUser(),
         
         setRoleAndPermissions: (role, permissions) => set({
           role,
           permissions
         }),
         
-        // Метод для обновления аватара
+        // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
           const currentState = get();
           
-          // Если у пользователя еще нет профиля, создаем его
+          // If user doesn't have profile yet, create one
           if (!currentState.profile) {
             set({ 
               profile: { 
@@ -146,7 +138,7 @@ export const useUserStore = create<UserState>()(
             return;
           }
           
-          // Иначе обновляем существующий профиль
+          // Otherwise update existing profile
           set({
             profile: {
               ...currentState.profile,
@@ -157,76 +149,26 @@ export const useUserStore = create<UserState>()(
           console.log('Аватар обновлен:', avatarUrl);
           console.log('Новый профиль:', useUserStore.getState().profile);
         },
-
+        
+        // Method for checking permissions
         hasPermission: (permission: string) => {
-          const state = get()
-          return state.permissions.includes(permission)
-        },
-
-        loadUserPermissions: async (userId: string) => {
           const currentState = get();
-          
-          // Проверяем, не идет ли уже загрузка разрешений
-          if (currentState.isLoadingPermissions) {
-            console.log('Загрузка разрешений уже выполняется, пропускаем запрос');
-            return;
-          }
-
-          // Устанавливаем флаг загрузки
-          set({ isLoadingPermissions: true });
-
-          try {
-            console.log('loadUserPermissions вызван для userId:', userId);
-            console.log('Текущий профиль пользователя:', currentState.profile);
-            
-            let rolePermissions;
-            
-            // Если у пользователя есть roleId в профиле, используем его напрямую
-            if (currentState.profile?.roleId) {
-              console.log('Используем roleId из профиля:', currentState.profile.roleId);
-              rolePermissions = await getUserRoleAndPermissionsByRoleId(currentState.profile.roleId);
-            } else {
-              console.log('Используем стандартный способ через user_roles');
-              rolePermissions = await getUserRoleAndPermissions(userId);
-            }
-            
-            console.log('Полученные разрешения:', rolePermissions);
-            
-            set({
-              role: rolePermissions.role,
-              permissions: rolePermissions.permissions,
-              isLoadingPermissions: false
-            });
-            
-            console.log('Разрешения успешно загружены и установлены:', {
-              role: rolePermissions.role,
-              permissions: rolePermissions.permissions
-            });
-          } catch (error) {
-            console.error('Ошибка при загрузке разрешений пользователя:', error);
-            
-            // Сбрасываем флаг загрузки при ошибке
-            set({ isLoadingPermissions: false });
-            
-            // Перебрасываем ошибку для propagation к вызывающему коду
-            throw error;
-          }
-        },
+          return currentState.permissions.includes(permission);
+        }
       }),
       {
         name: 'user-storage',
         partialize: (state) => {
-          console.log('Partialize state:', state);
           const partializedState = {
             id: state.id,
             email: state.email,
             name: state.name,
             profile: state.profile,
             isAuthenticated: state.isAuthenticated,
-            role: state.role,
-            permissions: state.permissions
+            // Don't save role and permissions in localStorage
+            role: null,
+            permissions: []
           };
-          console.log('Serialized state:', partializedState);
           return partializedState;
         },
       }
