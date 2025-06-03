@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Network } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
+import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { useUserStore } from "@/stores/useUserStore"
 
 interface SidebarProps {
@@ -60,9 +61,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       icon: BarChart,
     },
     {
-      title: "Настройки",
-      href: "/dashboard/settings",
-      icon: Settings,
+      title: "Декомпозиция",
+      href: "/dashboard/decomposition", 
+      icon: Network,
     },
   ]
 
@@ -126,6 +127,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             ))}
           </ul>
         </nav>
+
+        {/* Weekly Calendar */}
+        <WeeklyCalendar collapsed={collapsed} />
 
         {/* User and Theme */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-4">

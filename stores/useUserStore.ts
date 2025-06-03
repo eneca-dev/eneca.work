@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { createClient } from "@/utils/supabase/client"
+import { getUserRoleAndPermissions, getUserRoleAndPermissionsByRoleId } from "@/services/org-data-service"
+
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
@@ -26,7 +29,7 @@ export type UserData = {
   profile?: UserProfile | null
 }
 
-// Основной интерфейс состояния
+// Расширенный интерфейс состояния
 interface UserState {
   id: string | null
   email: string | null
@@ -42,6 +45,7 @@ interface UserState {
   clearState: () => void
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
+  hasPermission: (permission: string) => boolean
 }
 
 export const useUserStore = create<UserState>()(
@@ -99,6 +103,7 @@ export const useUserStore = create<UserState>()(
             role: shouldPreserveRoleData ? currentState.role : null,
             permissions: shouldPreserveRoleData ? currentState.permissions : []
           });
+        
         },
         
         clearUser: () => set({
@@ -108,7 +113,7 @@ export const useUserStore = create<UserState>()(
           profile: null,
           isAuthenticated: false,
           role: null,
-          permissions: []
+          permissions: [],
         }),
         
         // Alias for clearUser for backward compatibility
@@ -140,6 +145,15 @@ export const useUserStore = create<UserState>()(
               avatar_url: avatarUrl
             }
           });
+          
+          console.log('Аватар обновлен:', avatarUrl);
+          console.log('Новый профиль:', useUserStore.getState().profile);
+        },
+        
+        // Method for checking permissions
+        hasPermission: (permission: string) => {
+          const currentState = get();
+          return currentState.permissions.includes(permission);
         }
       }),
       {
@@ -160,4 +174,4 @@ export const useUserStore = create<UserState>()(
       }
     )
   )
-) 
+)

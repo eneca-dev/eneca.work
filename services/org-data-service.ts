@@ -446,6 +446,24 @@ export async function getUserRoleAndPermissions(userId: string, supabaseClient?:
     const supabase = supabaseClient || createClient();
     console.log("Используем экземпляр Supabase клиента:", supabaseClient ? "переданный" : "созданный внутри функции");
     
+    // Сначала пытаемся получить roleId из профиля пользователя
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("role_id")
+      .eq("user_id", userId)
+      .single();
+    
+    console.log("Запрос profiles завершен:", { profileData, profileError });
+    
+    // Если в профиле есть role_id, используем его
+    if (profileData?.role_id && !profileError) {
+      console.log("Найден role_id в профиле:", profileData.role_id);
+      return await getUserRoleAndPermissionsByRoleId(profileData.role_id, supabaseClient);
+    }
+    
+    // Если в профиле нет role_id, пытаемся найти в user_roles (старый способ)
+    console.log("role_id не найден в профиле, ищем в user_roles");
+    
     // Шаг 1: Получаем запись из user_roles для пользователя
     const { data: userRoles, error: userRolesError } = await supabase
       .from("user_roles")
@@ -465,26 +483,43 @@ export async function getUserRoleAndPermissions(userId: string, supabaseClient?:
     }
     
     const roleId = userRoles[0].role_id;
-    console.log("Найден role_id:", roleId);
+    console.log("Найден role_id в user_roles:", roleId);
     
-    // Проверим структуру таблицы roles
-    console.log("Выполняем запрос к таблице roles с id =", roleId);
+    return await getUserRoleAndPermissionsByRoleId(roleId, supabaseClient);
+  } catch (error) {
+    console.error("Непредвиденная ошибка в getUserRoleAndPermissions:", error);
+    return { role: null, permissions: [] };
+  }
+}
+
+/**
+ * Получить роль и разрешения по roleId
+ * @param roleId string
+ * @param supabaseClient - опциональный экземпляр клиента Supabase
+ * @returns { role: string | null, permissions: string[] }
+ */
+export async function getUserRoleAndPermissionsByRoleId(roleId: string, supabaseClient?: any) {
+  console.log("getUserRoleAndPermissionsByRoleId вызвана с roleId:", roleId);
+  
+  try {
+    // Используем переданный клиент Supabase или создаем новый
+    const supabase = supabaseClient || createClient();
     
-    // Шаг 2: Получаем имя роли из таблицы roles
+    // Шаг 1: Получаем имя роли из таблицы roles
     const { data: roleData, error: roleError } = await supabase
       .from("roles")
       .select("name, description")
       .eq("id", roleId)
       .single();
     
-    console.log("Запрос roles завершен:", { roleData, roleError });
+    console.log("Запрос roles завершен для roleId:", { roleId, roleData, roleError });
     
     if (roleError) {
       console.error("Ошибка при получении информации о роли:", roleError);
       return { role: null, permissions: [] };
     }
     
-    // Шаг 3: Получаем разрешения для роли
+    // Шаг 2: Получаем разрешения для роли
     const { data: rolePermissions, error: permissionsError } = await supabase
       .from("role_permissions")
       .select("permission_id")
@@ -518,10 +553,10 @@ export async function getUserRoleAndPermissions(userId: string, supabaseClient?:
     
     const permissionNames = permissions ? permissions.map((p: { name: string }) => p.name) : [];
     
-    console.log("Возвращаемые данные:", { role: roleData.name, permissions: permissionNames });
+    console.log("Возвращаемые данные по roleId:", { role: roleData.name, permissions: permissionNames });
     return { role: roleData.name, permissions: permissionNames };
   } catch (error) {
-    console.error("Непредвиденная ошибка в getUserRoleAndPermissions:", error);
+    console.error("Непредвиденная ошибка в getUserRoleAndPermissionsByRoleId:", error);
     return { role: null, permissions: [] };
   }
 }
@@ -553,8 +588,15 @@ export async function syncCurrentUserState() {
       return false;
     }
     
-    // Получаем роль и разрешения
-    const { role, permissions } = await getUserRoleAndPermissions(userId);
+    // Получаем роль и разрешения - используем roleId из профиля, если он есть
+    let rolePermissions;
+    if (profileData?.role_id) {
+      console.log("Синхронизация: используем role_id из профиля:", profileData.role_id);
+      rolePermissions = await getUserRoleAndPermissionsByRoleId(profileData.role_id);
+    } else {
+      console.log("Синхронизация: используем стандартный способ через user_roles");
+      rolePermissions = await getUserRoleAndPermissions(userId);
+    }
     
     // Импортируем useUserStore динамически, чтобы избежать циклических зависимостей
     const { useUserStore } = await import("@/stores/useUserStore");
@@ -586,8 +628,9 @@ export async function syncCurrentUserState() {
     });
     
     // Устанавливаем роль и разрешения
-    if (role) {
-      useUserStore.getState().setRoleAndPermissions(role, permissions);
+    if (rolePermissions.role || rolePermissions.permissions.length > 0) {
+      useUserStore.getState().setRoleAndPermissions(rolePermissions.role, rolePermissions.permissions);
+      console.log("Синхронизация: установлены разрешения:", rolePermissions);
     }
     
     console.log("Состояние пользователя успешно синхронизировано из Supabase");
