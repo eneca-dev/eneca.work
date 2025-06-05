@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, User, Home, Calendar, Send, ChevronLeft, Settings, BarChart, Users, Bug, Network } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
+import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { useUserStore } from "@/stores/useUserStore"
 
 interface SidebarProps {
@@ -60,20 +61,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       icon: BarChart,
     },
     {
-      title: "Настройки",
-      href: "/dashboard/settings",
-      icon: Settings,
-    },
-    {
       title: "Декомпозиция",
       href: "/dashboard/decomposition", 
       icon: Network,
     },
+
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
   const isUsersActive = pathname === "/dashboard/users"
   const isDebugActive = pathname === "/dashboard/debug"
+  const isReportActive = pathname === "/dashboard/report"
 
   return (
     <div
@@ -132,6 +130,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
           </ul>
         </nav>
 
+        {/* Weekly Calendar */}
+        <WeeklyCalendar collapsed={collapsed} />
+
         {/* User and Theme */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-4">
           <div className={cn("flex items-center", collapsed ? "flex-col space-y-2" : "space-x-3")}>
@@ -174,6 +175,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                 </Button>
               </Link>
 
+              <Link href="/dashboard/report">
+                <Button
+                  variant={isReportActive ? "secondary" : "ghost"}
+                  size="icon"
+                  className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
+                >
+                  <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                </Button>
+              </Link>
+
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -200,6 +211,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                     className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                   >
                     <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                  </Button>
+                </Link>
+                
+                <Link href="/dashboard/report">
+                  <Button
+                    variant={isReportActive ? "secondary" : "ghost"}
+                    size="icon"
+                    className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
+                  >
+                    <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
                 
