@@ -72,7 +72,7 @@ export function AnnouncementsWidget() {
     return (
       <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center space-x-2 mb-4">
-          <span className="h-5 w-5 text-primary">📢</span>
+          <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
           <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
         </div>
         <p className="text-gray-500 dark:text-gray-400">
@@ -86,7 +86,7 @@ export function AnnouncementsWidget() {
     return (
       <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center space-x-2 mb-4">
-          <span className="h-5 w-5 text-primary">📢</span>
+          <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
           <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
         </div>
         <div className="flex items-center justify-center py-8">
@@ -102,7 +102,7 @@ export function AnnouncementsWidget() {
       <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <span className="h-5 w-5 text-primary">📢</span>
+            <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
             <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
           </div>
           {canCreateAndEdit && (
