@@ -53,7 +53,8 @@ function ResetPasswordForm() {
     }
 
     handlePasswordReset()
-  }, [searchParams, supabase.auth])
+  // Run once per query-param change
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
