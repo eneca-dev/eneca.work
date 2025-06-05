@@ -532,4 +532,19 @@ ORDER BY
 - assignments.from_section_id → sections.section_id
 - assignments.to_section_id → sections.section_id
 - ws_tasks.ws_project_id → ws_projects.ws_id
-- calendar_event_created_by → public.profiles.user_id
+- calendar.calendar_event_created_by → public.profiles.user_id
+- announcement.created_by → public.profiles.user_id
+
+
+### Таблица announcements
+Хранит объявления, создаваемые пользователями. Используется для публикации информации внутри системы.
+
+- id (uuid, PK, default: gen_random_uuid()) – Уникальный идентификатор объявления
+
+- header (text, NOT NULL) – Заголовок объявления
+
+- text (text, NULLABLE) – Основной текст объявления (может отсутствовать)
+
+- created_by (uuid, NOT NULL, FK → public.profiles.user_id) – Автор объявления
+
+- created_at (timestamptz, NOT NULL, default: now()) – Дата и время создания объявления
