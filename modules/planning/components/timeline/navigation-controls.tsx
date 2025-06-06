@@ -62,10 +62,10 @@ export function NavigationControls({
       <div className="flex items-center gap-2">
         <div
           className={cn(
-            "p-2 rounded-lg shadow-sm border flex items-center",
+            "p-2 rounded-lg border flex items-center",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-300"
-              : "bg-white border-slate-200 text-slate-600",
+              ? "bg-slate-800 border-slate-700 text-slate-200"
+              : "bg-white border-slate-200 text-slate-800",
           )}
         >
           <span className="text-xs font-medium">
@@ -76,10 +76,10 @@ export function NavigationControls({
         {/* Кнопка "Сегодня" */}
         <button
           className={cn(
-            "p-2 rounded-lg shadow-sm border",
+            "p-2 rounded-lg border",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
           )}
           onClick={onTodayClick}
           title="Перейти к сегодняшнему дню"
@@ -92,10 +92,10 @@ export function NavigationControls({
       <div className="flex">
         <button
           className={cn(
-            "p-2 rounded-l-lg shadow-sm border",
+            "p-2 rounded-l-lg border",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
           )}
           onClick={onScrollBackward}
           title="Прокрутить назад"
@@ -115,10 +115,10 @@ export function NavigationControls({
         </button>
         <button
           className={cn(
-            "p-2 rounded-r-lg shadow-sm border-t border-r border-b",
+            "p-2 rounded-r-lg border-t border-r border-b",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
+              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
           )}
           onClick={onScrollForward}
           title="Прокрутить вперед"

@@ -90,8 +90,7 @@ export function TimelineGrid({
   }, [startDate, daysToShow])
 
   // Обновляем стиль для тени при прокрутке (делаем его более заметным)
-  const stickyColumnShadow =
-    theme === "dark" ? "shadow-[5px_0_10px_-2px_rgba(0,0,0,0.3)]" : "shadow-[5px_0_10px_-2px_rgba(0,0,0,0.1)]"
+  const stickyColumnShadow = ""
 
   // Добавляем эффект для принудительной перерисовки при изменении размера окна
   useEffect(() => {
@@ -312,7 +311,6 @@ export function TimelineGrid({
                 className={cn(
                   "sticky left-0 top-0 bottom-0 py-1 px-2 font-medium z-30 flex items-center",
                   theme === "dark" ? "bg-slate-800 border-b border-slate-700" : "bg-white border-b border-slate-200",
-                  // Removed stickyColumnShadow
                 )}
                 style={{
                   width: `${totalFixedWidth}px`,

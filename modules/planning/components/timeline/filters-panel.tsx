@@ -12,6 +12,7 @@ interface FiltersPanelProps {
   theme: string
   onProjectChange: (projectId: string | null) => void
   onDepartmentChange: (departmentId: string | null) => void
+  onTeamChange: (teamId: string | null) => void
   onManagerChange: (managerId: string | null) => void
   onObjectChange?: (objectId: string | null) => void // Make optional
   onResetFilters: () => void
@@ -32,6 +33,7 @@ export function FiltersPanel({
   theme,
   onProjectChange,
   onDepartmentChange,
+  onTeamChange,
   onManagerChange,
   onObjectChange,
   onResetFilters,
@@ -50,8 +52,10 @@ export function FiltersPanel({
     availableProjects,
     availableManagers,
     availableDepartments,
+    availableTeams,
     selectedProjectId,
     selectedDepartmentId,
+    selectedTeamId,
     selectedManagerId,
     isLoading,
     isLoadingManagerProjects,
@@ -148,14 +152,14 @@ export function FiltersPanel({
   const filteredProjects = getFilteredProjects()
 
   // Количество активных фильтров
-  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedManagerId, selectedObjectId].filter(
+  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedObjectId].filter(
     Boolean,
   ).length
 
   return (
     <div
       className={cn(
-        "p-4 rounded-xl shadow-md border mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
+        "p-4 rounded-xl border mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
         theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
       )}
     >
@@ -312,6 +316,46 @@ export function FiltersPanel({
             ))}
           </select>
         </div>
+
+        {/* Фильтр по командам - показывается только при выбранном отделе */}
+        {selectedDepartmentId && (
+          <div className="flex-shrink-0 min-w-[200px]">
+            <label
+              htmlFor="team-filter"
+              className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
+            >
+              Команда
+            </label>
+            <select
+              id="team-filter"
+              value={selectedTeamId || ""}
+              onChange={(e) => onTeamChange(e.target.value || null)}
+              disabled={isLoading || availableTeams.filter(team => team.departmentId === selectedDepartmentId).length === 0}
+              className={cn(
+                "w-full text-sm rounded-md border px-3 py-2 pr-8",
+                "appearance-none bg-no-repeat bg-right",
+                "bg-[length:16px_16px] bg-[position:right_8px_center]",
+                theme === "dark"
+                  ? "bg-slate-700 border-slate-600 text-slate-200 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQgNkw4IDEwTDEyIDYiIHN0cm9rZT0iIzk0YTNiOCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
+                  : "bg-white border-slate-300 text-slate-800 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQgNkw4IDEwTDEyIDYiIHN0cm9rZT0iIzY0NzQ4YiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]",
+                "focus:outline-none focus:ring-1",
+                theme === "dark"
+                  ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
+                  : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
+                "transition-colors duration-150 ease-in-out",
+              )}
+            >
+              <option value="">Все команды</option>
+              {availableTeams
+                .filter(team => team.departmentId === selectedDepartmentId)
+                .map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}{team.teamLeadName ? ` (${team.teamLeadName})` : ''}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Group for Other Controls */}
