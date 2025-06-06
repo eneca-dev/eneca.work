@@ -8,7 +8,11 @@ export default function ClientProviders({ children }: { children: React.ReactNod
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <ThemeSync />
       {children}
-      <Toaster />
+      <Toaster 
+        richColors 
+        position="top-right" 
+        className="toaster-with-shadow"
+      />
     </ThemeProvider>
   );
 } 
