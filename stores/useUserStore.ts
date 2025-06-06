@@ -46,6 +46,8 @@ interface UserState {
   setRoleAndPermissions: (role: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
   hasPermission: (permission: string) => boolean
+  getActivePermission: () => string | null
+  getPermissionLabel: (permission: string) => string
 }
 
 export const useUserStore = create<UserState>()(
@@ -154,6 +156,41 @@ export const useUserStore = create<UserState>()(
         hasPermission: (permission: string) => {
           const currentState = get();
           return currentState.permissions.includes(permission);
+        },
+
+        // Method for getting the highest priority permission
+        getActivePermission: () => {
+          const currentState = get();
+          const permissions = currentState.permissions;
+          
+          // Иерархия разрешений (от высшего к низшему)
+          const permissionHierarchy = [
+            'is_top_manager',
+            'is_project_manager', 
+            'is_head_of_department',
+            'is_teamlead'
+          ];
+          
+          // Возвращаем первое найденное разрешение согласно иерархии
+          for (const permission of permissionHierarchy) {
+            if (permissions.includes(permission)) {
+              return permission;
+            }
+          }
+          
+          return null;
+        },
+
+        // Method for getting permission label
+        getPermissionLabel: (permission: string) => {
+          const labels: Record<string, string> = {
+            'is_top_manager': 'Топ-менеджер',
+            'is_project_manager': 'Менеджер проектов',
+            'is_head_of_department': 'Руководитель отдела',
+            'is_teamlead': 'Руководитель команды'
+          };
+          
+          return labels[permission] || permission;
         }
       }),
       {

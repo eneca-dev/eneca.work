@@ -125,8 +125,8 @@ export function DepartmentRow({
               className={cn(
                 "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]", // Добавлена border-b
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-600"
-                  : "border-slate-200 bg-white group-hover/row:bg-slate-200",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
               )}
               style={{
                 width: `${COLUMN_WIDTHS.section}px`,
@@ -144,14 +144,26 @@ export function DepartmentRow({
                     <ChevronRight className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
                   )}
                 </div>
-                <span
-                  className={cn(
-                    "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[160px]",
-                    theme === "dark" ? "text-slate-200" : "text-slate-800",
+                <div className="flex flex-col min-w-0">
+                  <span
+                    className={cn(
+                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                      theme === "dark" ? "text-slate-200" : "text-slate-800",
+                    )}
+                  >
+                    {department.name}
+                  </span>
+                  {department.departmentHeadName && (
+                    <span
+                      className={cn(
+                        "text-xs truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                        theme === "dark" ? "text-slate-400" : "text-slate-500",
+                      )}
+                    >
+                      Руководитель: {department.departmentHeadName}
+                    </span>
                   )}
-                >
-                  {department.name}
-                </span>
+                </div>
               </div>
             </div>
 
@@ -161,8 +173,8 @@ export function DepartmentRow({
                 className={cn(
                   "p-3 transition-colors h-full border-b flex items-center justify-center border-r-[0.5px]", // Добавлены flex items-center justify-center
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-600"
-                    : "border-slate-200 bg-white group-hover/row:bg-slate-200",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
                 )}
                 style={{
                   width: `${COLUMN_WIDTHS.project}px`,
@@ -189,8 +201,8 @@ export function DepartmentRow({
                 className={cn(
                   "p-3 transition-colors h-full flex items-center justify-center border-b border-r-[0.5px]", // Добавлена border-b
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-600"
-                    : "border-slate-200 bg-white group-hover/row:bg-slate-200",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
                 )}
                 style={{
                   width: `${COLUMN_WIDTHS.object}px`,
@@ -236,7 +248,7 @@ export function DepartmentRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-50/70",
+                    theme === "dark" ? "group-hover/row:bg-emerald-900" : "group-hover/row:bg-emerald-50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-60"
@@ -247,19 +259,19 @@ export function DepartmentRow({
                     departmentLoadPercentage > 100
                       ? theme === "dark"
                         ? "bg-red-500/30"
-                        : "bg-red-500/20"
+                        : "bg-red-200"
                       : departmentLoadPercentage > 80
                         ? theme === "dark"
                           ? "bg-green-500/30"
-                          : "bg-green-500/20"
+                          : "bg-green-200"
                         : departmentLoadPercentage > 50
                           ? theme === "dark"
                             ? "bg-yellow-500/30"
-                            : "bg-yellow-500/20"
+                            : "bg-yellow-200"
                           : departmentLoadPercentage >= 1
                             ? theme === "dark"
                               ? "bg-blue-500/30"
-                              : "bg-blue-500/20"
+                              : "bg-blue-200"
                             : "",
                   )}
                   style={{
@@ -282,7 +294,15 @@ export function DepartmentRow({
                       <span
                         className={cn(
                           "text-[10px] font-medium transform -rotate-90",
-                          "text-white", // Всегда белый текст для лучшей читаемости
+                          theme === "dark" 
+                            ? "text-white" 
+                            : departmentLoadPercentage > 100
+                              ? "text-red-800"
+                              : departmentLoadPercentage > 80
+                                ? "text-green-800"
+                                : departmentLoadPercentage > 50
+                                  ? "text-yellow-800"
+                                  : "text-blue-800"
                         )}
                       >
                         {departmentLoadPercentage}%

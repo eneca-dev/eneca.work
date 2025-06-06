@@ -42,7 +42,7 @@ export async function getUsers(): Promise<User[]> {
       salary,
       is_hourly,
       avatar_url,
-      departments(department_id, department_name),
+      departments!profiles_department_membership_fkey(department_id, department_name),
       teams(team_id, team_name),
       positions(position_id, position_name),
       categories(category_id, category_name)
@@ -259,7 +259,7 @@ export async function getUsersByDepartment() {
     .select(
       `
       department_name,
-      profiles!inner (
+      profiles!profiles_department_membership_fkey!inner (
         user_id
       )
     `,

@@ -14,6 +14,7 @@
 - **[view_employees](#view_employees)** - расширенная информация о сотрудниках
 - **[view_employee_workloads](#view_employee_workloads)** - рабочие нагрузки сотрудников
 - **[view_profiles_extended](#view_profiles_extended)** - расширенные профили пользователей
+- **[view_organizational_structure](#view_organizational_structure)** - полная организационная структура с руководителями
 
 ### Статистика отделов
 - **[view_department_statistics](#view_department_statistics)** - статистика по отделам
@@ -192,6 +193,58 @@ LEFT JOIN roles r ON p.role_id = r.id;
 ```
 
 **Назначение:** Предоставляет полную информацию о профилях пользователей с расшифровкой всех связанных данных.
+
+### view_organizational_structure
+Полная организационная структура компании с отделами, командами и их руководителями.
+
+```sql
+SELECT 
+    -- Информация об отделе
+    d.department_id,
+    d.department_name,
+    d.ws_department_id,
+    
+    -- Информация о руководителе отдела
+    dh.user_id as department_head_id,
+    dh.first_name as department_head_first_name,
+    dh.last_name as department_head_last_name,
+    CONCAT(dh.first_name, ' ', dh.last_name) as department_head_full_name,
+    dh.email as department_head_email,
+    dh.avatar_url as department_head_avatar_url,
+    
+    -- Информация о команде
+    t.team_id,
+    t.team_name,
+    t.ws_team_id,
+    
+    -- Информация о руководителе команды
+    tl.user_id as team_lead_id,
+    tl.first_name as team_lead_first_name,
+    tl.last_name as team_lead_last_name,
+    CONCAT(tl.first_name, ' ', tl.last_name) as team_lead_full_name,
+    tl.email as team_lead_email,
+    tl.avatar_url as team_lead_avatar_url,
+    
+    -- Статистика по отделу
+    (SELECT COUNT(*) FROM profiles p WHERE p.department_id = d.department_id) as department_employee_count,
+    
+    -- Статистика по команде
+    (SELECT COUNT(*) FROM profiles p WHERE p.team_id = t.team_id) as team_employee_count
+    
+FROM departments d
+LEFT JOIN profiles dh ON d.department_head = dh.user_id
+LEFT JOIN teams t ON t.department_id = d.department_id
+LEFT JOIN profiles tl ON t.team_lead = tl.user_id
+ORDER BY d.department_name, t.team_name;
+```
+
+**Назначение:** Предоставляет полную организационную структуру компании, включая отделы с их руководителями, команды с их руководителями и статистику по количеству сотрудников. Используется для отображения иерархии управления и административных функций.
+
+**Примеры использования:**
+- Получение всей организационной структуры
+- Поиск руководителей отделов и команд
+- Анализ распределения сотрудников по подразделениям
+- Построение организационных диаграмм
 
 ## Статистика отделов
 

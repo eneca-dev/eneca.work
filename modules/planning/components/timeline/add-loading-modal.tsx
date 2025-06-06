@@ -374,8 +374,10 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
               {showProjectDropdown && filteredProjects.length > 0 && (
                 <div
                   className={cn(
-                    "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border shadow-lg",
-                    theme === "dark" ? "bg-slate-700 border-slate-600" : "bg-white border-slate-300",
+                    "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border",
+                    theme === "dark"
+                      ? "bg-slate-800 border-slate-600"
+                      : "bg-white border-slate-300",
                   )}
                 >
                   {filteredProjects.map((project) => (

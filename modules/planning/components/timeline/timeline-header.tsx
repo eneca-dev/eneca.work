@@ -112,7 +112,6 @@ export function TimelineHeader({
             className={cn(
               fixedColumnStyle,
               theme === "dark" ? "bg-slate-800" : "bg-white",
-              "shadow-[5px_0_10px_-2px_rgba(0,0,0,0.1)]",
             )}
             style={{
               width: `${sectionWidth}px`,
@@ -134,7 +133,6 @@ export function TimelineHeader({
               className={cn(
                 fixedColumnStyle,
                 theme === "dark" ? "bg-slate-800" : "bg-white",
-                "shadow-[5px_0_10px_-2px_rgba(0,0,0,0.1)]",
               )}
               style={{
                 width: `${projectWidth}px`,
@@ -157,7 +155,6 @@ export function TimelineHeader({
               className={cn(
                 fixedColumnStyle,
                 theme === "dark" ? "bg-slate-800" : "bg-white",
-                // Удалена тень "shadow-[5px_0_10px_-2px_rgba(0,0,0,0.1)]"
               )}
               style={{
                 width: `${objectWidth}px`,
