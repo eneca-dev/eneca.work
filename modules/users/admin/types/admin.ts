@@ -7,6 +7,8 @@ export interface AdminPermissions {
   canManageTeams: boolean
   canManagePositions: boolean
   canManageCategories: boolean
+  canChangeRoles: boolean
+  canAddAdminRole: boolean
 }
 
 export interface AdminTabProps {

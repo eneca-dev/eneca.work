@@ -16,10 +16,18 @@ const TAB_LABELS = {
   positions: "Должности",
   categories: "Категории",
   roles: "Управление ролями"
-} as const;
+} as const
+
+const TAB_COMPONENTS = {
+  departments: DepartmentsTab,
+  teams: TeamsTab,
+  positions: PositionsTab,
+  categories: CategoriesTab,
+  roles: RolesTab
+} as const
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState("departments")
+  const [activeTab, setActiveTab] = useState<keyof typeof TAB_LABELS>("departments")
   
   return (
     <NotificationProvider>
@@ -29,19 +37,20 @@ export default function AdminPanel() {
         theme="system"
         className="toaster-with-shadow"
       />
-      <Tabs value={tab} onValueChange={setTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as keyof typeof TAB_LABELS)} className="w-full">
         <TabsList className="mb-6">
-          <TabsTrigger value="departments">{TAB_LABELS.departments}</TabsTrigger>
-          <TabsTrigger value="teams">{TAB_LABELS.teams}</TabsTrigger>
-          <TabsTrigger value="positions">{TAB_LABELS.positions}</TabsTrigger>
-          <TabsTrigger value="categories">{TAB_LABELS.categories}</TabsTrigger>
-          <TabsTrigger value="roles">{TAB_LABELS.roles}</TabsTrigger>
+          {Object.entries(TAB_LABELS).map(([key, label]) => (
+            <TabsTrigger key={key} value={key}>
+              {label}
+            </TabsTrigger>
+          ))}
         </TabsList>
-        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
-        <TabsContent value="teams"><TeamsTab /></TabsContent>
-        <TabsContent value="positions"><PositionsTab /></TabsContent>
-        <TabsContent value="categories"><CategoriesTab /></TabsContent>
-        <TabsContent value="roles"><RolesTab /></TabsContent>
+        
+        {Object.entries(TAB_COMPONENTS).map(([key, Component]) => (
+          <TabsContent key={key} value={key}>
+            <Component />
+          </TabsContent>
+        ))}
       </Tabs>
     </NotificationProvider>
   )

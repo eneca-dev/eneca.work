@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -109,10 +109,23 @@ export default function EntityModal({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {mode === "create" 
+              ? table === "departments"
+                ? "Введите название нового отдела и нажмите кнопку «Сохранить»"
+                : table === "teams"
+                  ? "Введите название новой команды и нажмите кнопку «Сохранить»"
+                  : table === "positions"
+                    ? "Введите название новой должности и нажмите кнопку «Сохранить»"
+                    : table === "categories"
+                      ? "Введите название новой категории и нажмите кнопку «Сохранить»"
+                      : "Заполните необходимые поля для создания новой записи. После заполнения нажмите кнопку «Сохранить»."
+              : "Отредактируйте необходимые поля. Изменения вступят в силу после нажатия кнопки «Сохранить»."
+            }
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor={nameField}>Название</Label>
             <Input
               id={nameField}
               value={formData[nameField]?.toString() || ""}

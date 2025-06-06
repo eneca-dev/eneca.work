@@ -109,17 +109,17 @@ export function AuthDebugPanel() {
               
               console.log('Итоговые данные для хранилища:', userDataToStore);
               
-              // Сохраняем роль и разрешения, если они есть
-              const role = userState.role;
+              // Сохраняем roleId и разрешения, если они есть
+              const roleId = userState.profile?.roleId;
               const permissions = userState.permissions;
               
               // Обновляем профиль пользователя
               setUser(userDataToStore);
               
-              // Восстанавливаем роль и разрешения, если они были
-              if (role && permissions && permissions.length > 0) {
-                console.log("Восстанавливаем роль и разрешения:", { role, permissions });
-                useUserStore.getState().setRoleAndPermissions(role, permissions);
+              // Восстанавливаем roleId и разрешения, если они были
+              if (roleId && permissions && permissions.length > 0) {
+                console.log("Восстанавливаем roleId и разрешения:", { roleId, permissions });
+                useUserStore.getState().setRoleAndPermissions(roleId, permissions);
               }
             } else {
               console.log("Пропускаем обновление хранилища, данные актуальны");
@@ -249,8 +249,8 @@ export function AuthDebugPanel() {
                     <h3 className="text-sm font-medium text-muted-foreground">Роль и разрешения</h3>
                     <div className="rounded border p-3 text-sm space-y-2">
                       <div className="flex justify-between">
-                        <span className="font-medium text-muted-foreground">Роль:</span>
-                        <Badge variant="outline">{userState.role || "Не назначена"}</Badge>
+                        <span className="font-medium text-muted-foreground">RoleId:</span>
+                        <Badge variant="outline">{userState.profile?.roleId || "Не назначена"}</Badge>
                       </div>
                       <div>
                         <div className="font-medium text-muted-foreground mb-1">Разрешения:</div>
