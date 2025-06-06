@@ -60,18 +60,22 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
+      console.log("=== UsersPage: loadUsers ===");
       setIsLoading(true)
       const loadedUsers = await getUsers()
+      console.log("Загружено пользователей:", loadedUsers.length);
       setUsers(loadedUsers)
 
       // Get current user (first in list for demonstration)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
+        console.log("Установлен текущий пользователь:", loadedUsers[0].name);
       }
     } catch (error) {
       console.error("Error loading users:", error)
     } finally {
       setIsLoading(false)
+      console.log("loadUsers завершен");
     }
   }
 
@@ -90,6 +94,7 @@ export default function UsersPage() {
   }
 
   const handleUserUpdated = () => {
+    console.log("=== UsersPage: handleUserUpdated ===");
     // Reload user list after update
     loadUsers()
   }
@@ -146,7 +151,7 @@ export default function UsersPage() {
               <UserFilters onFilterChange={handleFilterChange} users={users} />
             </div>
             <div className="flex-1">
-              <UsersList users={users} filters={filters} />
+              <UsersList users={users} filters={filters} onUserUpdated={handleUserUpdated} />
             </div>
           </div>
         </TabsContent>
