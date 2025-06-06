@@ -14,6 +14,10 @@ import { AdminPanel } from "@/modules/users/admin"
 import { useUserStore } from "@/stores/useUserStore"
 import { AdminAccessCheck } from "../components/admin-access-check"
 import { useSearchParams, useRouter } from "next/navigation"
+import { AdminPanel } from "@/modules/users/admin"
+import { useUserStore } from "@/stores/useUserStore"
+import { AdminAccessCheck } from "../components/admin-access-check"
+import { useSearchParams, useRouter } from "next/navigation"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -57,6 +61,37 @@ export default function UsersPage() {
     setAdminTab(value)
     router.replace(`/dashboard/users?tab=${value}`)
   }
+  
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const tabFromUrl = searchParams.get('tab')
+  const permissions = useUserStore((state) => state.permissions)
+  const canViewAdminPanel = permissions.includes("user_admin_panel_can_view")
+  
+  // Set initial tab value based on URL
+  const [adminTab, setAdminTab] = useState(
+    tabFromUrl && ["list", "payment", "analytics", "admin"].includes(tabFromUrl)
+      ? tabFromUrl
+      : "list"
+  )
+
+  // If user switched to admin tab but doesn't have permission, reset to list
+  useEffect(() => {
+    if (adminTab === "admin" && !canViewAdminPanel) {
+      setAdminTab("list")
+      
+      // Update URL, removing tab=admin parameter
+      if (tabFromUrl === "admin") {
+        router.replace("/dashboard/users?tab=list")
+      }
+    }
+  }, [adminTab, canViewAdminPanel, tabFromUrl, router])
+  
+  // Update URL when tab changes
+  const handleTabChange = (value: string) => {
+    setAdminTab(value)
+    router.replace(`/dashboard/users?tab=${value}`)
+  }
 
   const loadUsers = async () => {
     try {
@@ -67,11 +102,13 @@ export default function UsersPage() {
       setUsers(loadedUsers)
 
       // Get current user (first in list for demonstration)
+      // Get current user (first in list for demonstration)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
         console.log("Установлен текущий пользователь:", loadedUsers[0].name);
       }
     } catch (error) {
+      console.error("Error loading users:", error)
       console.error("Error loading users:", error)
     } finally {
       setIsLoading(false)
@@ -100,17 +137,20 @@ export default function UsersPage() {
   }
 
   // If data is loading, show loading indicator
+  // If data is loading, show loading indicator
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
           <p className="mt-4 text-gray-500">Loading data...</p>
+          <p className="mt-4 text-gray-500">Loading data...</p>
         </div>
       </div>
     )
   }
 
+  // If no current user, create fallback
   // If no current user, create fallback
   const defaultUser = currentUser || {
     id: "current",
@@ -139,10 +179,12 @@ export default function UsersPage() {
       <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />
 
       <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
+      <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="list">Список пользователей</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
           <TabsTrigger value="analytics">Аналитика</TabsTrigger>
+          {canViewAdminPanel && <TabsTrigger value="admin">Администратор</TabsTrigger>}
           {canViewAdminPanel && <TabsTrigger value="admin">Администратор</TabsTrigger>}
         </TabsList>
         <TabsContent value="list" className="space-y-4">
@@ -171,6 +213,9 @@ export default function UsersPage() {
           <UserAnalytics />
         </TabsContent>
         <TabsContent value="admin">
+          <AdminAccessCheck>
+            <AdminPanel />
+          </AdminAccessCheck>
           <AdminAccessCheck>
             <AdminPanel />
           </AdminAccessCheck>

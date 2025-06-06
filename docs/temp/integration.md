@@ -1,0 +1,16 @@
+Skipped 15 files: (files might be identical, use --overwrite to overwrite)
+  - lib/utils.ts
+  - stores/useUserStore.ts
+  - stores/useUiStore.ts
+  - stores/index.ts
+  - app/dashboard/planning/page.tsx
+  - tailwind.config.ts
+  - app/page.tsx
+  - app/globals.css
+  - package.json
+  - app/dashboard/page.tsx
+  - app/dashboard/layout.tsx
+  - components/theme-provider.tsx
+  - app/layout.tsx
+  - stores/useSettingsStore.ts
+  - components/theme-toggle.tsx

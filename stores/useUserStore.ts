@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
+import { createClient } from "@/utils/supabase/client"
+import { getUserRoleAndPermissions, getUserRoleAndPermissionsByRoleId } from "@/services/org-data-service"
+
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
@@ -26,7 +29,7 @@ export type UserData = {
   profile?: UserProfile | null
 }
 
-// Основной интерфейс состояния
+// Расширенный интерфейс состояния
 interface UserState {
   id: string | null
   email: string | null
@@ -41,6 +44,7 @@ interface UserState {
   clearState: () => void
   setRoleAndPermissions: (roleId: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
+  hasPermission: (permission: string) => boolean
 }
 
 export const useUserStore = create<UserState>()(
@@ -63,12 +67,20 @@ export const useUserStore = create<UserState>()(
           
           const currentState = get();
           const shouldPreserveRoleData = currentState.id === user.id;
+          if (!user?.id || !user?.email) {
+            throw new Error('Invalid user data: id and email are required');
+          }
           
+          const currentState = get();
+          const shouldPreserveRoleData = currentState.id === user.id;
+          
+          // Explicitly create new object for profile to avoid reference issues
           // Explicitly create new object for profile to avoid reference issues
           let processedProfile = null;
           let profileName = '';
           
           if (user.profile) {
+            // Create deep copy of profile for safety
             // Create deep copy of profile for safety
             processedProfile = {
               firstName: user.profile.firstName,
@@ -122,9 +134,11 @@ export const useUserStore = create<UserState>()(
         },
         
         // Method for updating avatar
+        // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
           const currentState = get();
           
+          // If user doesn't have profile yet, create one
           // If user doesn't have profile yet, create one
           if (!currentState.profile) {
             set({ 
@@ -135,6 +149,7 @@ export const useUserStore = create<UserState>()(
             return;
           }
           
+          // Otherwise update existing profile
           // Otherwise update existing profile
           set({
             profile: {
@@ -161,4 +176,4 @@ export const useUserStore = create<UserState>()(
       }
     )
   )
-) 
+)

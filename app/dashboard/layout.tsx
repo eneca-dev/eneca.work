@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useCallback, useRef } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
@@ -27,6 +27,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
   const router = useRouter()
   const supabase = createClient()
+  
+  // Реф для отслеживания актуальности компонента
+  const isMounted = useRef(true)
+  
+  // Очистка при размонтировании
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)

@@ -116,13 +116,13 @@ export const useDecomposition = () => {
     }
   }, [profile?.departmentId, storeLoaded])
 
-  // Загружаем шаблоны для отдела пользователя
+  // Загружаем шаблоны для всех пользователей
   useEffect(() => {
-    if (storeLoaded && profile?.departmentId) {
-      // Передаем departmentId пользователя для загрузки только шаблонов его отдела
-      fetchTemplates(profile.departmentId)
+    if (storeLoaded) {
+      // Передаем null для загрузки всех шаблонов независимо от отдела
+      fetchTemplates(null)
     }
-  }, [fetchTemplates, storeLoaded, profile?.departmentId])
+  }, [fetchTemplates, storeLoaded])
 
   // Добавьте этот эффект для обработки данных разделов
   useEffect(() => {
