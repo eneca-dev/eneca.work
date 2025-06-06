@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,13 +14,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useState, useEffect } from "react"
 import { Textarea } from "@/components/ui/textarea"
-import { updateUser, getDepartments, getTeams, getPositions, getCategories } from "@/services/org-data-service"
+import { updateUser, getDepartments, getTeams, getPositions, getCategories, getAvailableRoles, getUserRoleAndPermissions } from "@/services/org-data-service"
 import type { User, Department, Team, Position, Category } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
+import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
+import { useUserPermissions } from "../hooks/useUserPermissions"
 
 interface UserDialogProps {
   open: boolean
@@ -31,7 +32,7 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string }>>({
+  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string }>>({
     firstName: "",
     lastName: "",
     email: "",
@@ -39,6 +40,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     department: "",
     team: "",
     category: "",
+    role: "",
+    roleId: "",
     isActive: true,
     workLocation: "office",
     address: "",
@@ -49,9 +52,28 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   const setUser = useUserStore((state) => state.setUser)
+  const currentUserId = useUserStore((state) => state.id)
+  const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
+  const { canEditAllUsers, canEditStructures } = useUserPermissions()
+
+  // Определяем, может ли пользователь редактировать роли
+  const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole)
+
+  // Определяем, может ли пользователь редактировать организационные поля
+  // При самостоятельном редактировании все пользователи могут редактировать все поля своего профиля
+  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей
+  const canEditOrganizationalFields = isSelfEdit ? true : canEditAllUsers
+
+  // Определяем, может ли пользователь редактировать структуры (команды, отделы, должности, категории)
+  // Это разрешение позволяет создавать новые структуры в процессе редактирования
+  const canEditStructureData = canEditStructures
+
+  // Определяем, редактирует ли пользователь свой собственный профиль
+  const isEditingOwnProfile = user?.id === currentUserId
 
   // Загрузка справочных данных
   useEffect(() => {
@@ -68,6 +90,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         setTeams(allTeams)
         setPositions(pos)
         setCategories(cats)
+
+        // Загружаем роли только если пользователь может их редактировать
+        if (canEditRoles) {
+          const availableRoles = await getAvailableRoles(canAddAdminRole)
+          setRoles(availableRoles)
+        }
       } catch (error) {
         console.error("Ошибка загрузки справочных данных:", error)
         toast({
@@ -81,7 +109,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     if (open) {
       loadReferenceData()
     }
-  }, [open])
+  }, [open, canEditRoles, canAddAdminRole])
 
   // Изменим установку данных пользователя при открытии диалога
   useEffect(() => {
@@ -94,6 +122,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         firstName = parts[0] || ""
         lastName = parts.slice(1).join(" ") || ""
       }
+
+      // Получаем ID роли по её имени
+      const roleId = roles.find(r => r.name === user.role)?.id || ""
+      
+      // Устанавливаем значение роли для Select (роль как есть, без fallback на "none")
+      const roleValue = user.role || ""
+
       setFormData({
         firstName,
         lastName,
@@ -102,6 +137,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         department: user.department,
         team: user.team,
         category: user.category,
+        role: roleValue,
+        roleId,
         isActive: user.isActive,
         workLocation: user.workLocation,
         address: user.address,
@@ -115,12 +152,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         department: "",
         team: "",
         category: "",
+        role: "",
+        roleId: "",
         isActive: true,
         workLocation: "office",
         address: "",
       })
     }
-  }, [user, open])
+  }, [user, open, roles])
 
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
@@ -142,6 +181,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
 
   const handleChange = (field: string, value: string | boolean | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    
+    // Если изменяется роль, обновляем roleId
+    if (field === "role") {
+      const selectedRole = roles.find(r => r.name === value)
+      setFormData((prev) => ({ ...prev, roleId: selectedRole?.id || "" }))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,22 +195,57 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
 
     try {
       if (user) {
-        await updateUser(user.id, {
-          ...formData,
-          name: undefined, // не отправляем name
-        })
+        console.log("=== UserDialog: handleSubmit ===");
+        console.log("isSelfEdit:", isSelfEdit);
+        console.log("canEditAllUsers:", canEditAllUsers);
+        console.log("canEditOrganizationalFields:", canEditOrganizationalFields);
+        console.log("isEditingOwnProfile:", isEditingOwnProfile);
+        console.log("Отправляемые данные формы:", formData);
+        
+        // Подготавливаем данные для отправки, исключая проблемные поля
+        const updateData: any = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          address: formData.address,
+          workLocation: formData.workLocation,
+        }
+        
+        // Добавляем организационные поля только если пользователь может их редактировать
+        if (canEditOrganizationalFields) {
+          if (formData.department) updateData.department = formData.department
+          if (formData.team) updateData.team = formData.team
+          if (formData.position) updateData.position = formData.position
+          if (formData.category) updateData.category = formData.category
+          // Добавляем roleId если пользователь может редактировать роли И роль выбрана
+          if (canEditRoles && formData.roleId) updateData.roleId = formData.roleId
+          // ВРЕМЕННО ОТКЛЮЧЕНО: колонка is_active отсутствует в таблице profiles
+          // TODO: Раскомментировать после добавления колонки is_active
+          // if (formData.isActive !== undefined) updateData.isActive = formData.isActive
+        }
+        
+        console.log("Итоговые данные для updateUser:", updateData);
+        
+        await updateUser(user.id, updateData)
+        console.log("updateUser завершен успешно");
         
         // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
-        if (isSelfEdit) {
+        if (isEditingOwnProfile) {
+          console.log("Обновляем Zustand для собственного профиля");
           // Получаем свежие данные пользователя из базы
           const freshSupabase = createClient();
-          const { data: freshProfile } = await freshSupabase
+          const { data: freshProfile, error: profileError } = await freshSupabase
             .from("profiles")
             .select("*")
             .eq("user_id", user.id)
             .single()
           
-          if (freshProfile) {
+          if (profileError) {
+            console.error("Ошибка получения обновленного профиля:", profileError);
+          } else if (freshProfile) {
+            console.log("Полученный обновленный профиль:", freshProfile);
+            
+            // Обновляем профиль в Zustand
             setUser({
               id: freshProfile.user_id,
               email: freshProfile.email,
@@ -183,34 +263,45 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 employmentRate: freshProfile.employment_rate,
                 address: freshProfile.address,
                 roleId: freshProfile.role_id,
+                avatar_url: freshProfile.avatar_url,
               },
             })
+            
+            // Всегда обновляем разрешения при редактировании собственного профиля
+            // (не только при изменении роли, т.к. разрешения могли измениться в БД)
+            const { roleId, permissions } = await getUserRoleAndPermissions(user.id, freshSupabase)
+            if (roleId) {
+              useUserStore.getState().setRoleAndPermissions(roleId, permissions)
+              console.log("Разрешения обновлены для пользователя:", { roleId, permissions })
+            }
           }
+        } else {
+          console.log("Не обновляем Zustand, так как редактируем другого пользователя");
         }
         
         toast({
           title: "Успешно",
-          description: isSelfEdit ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
+          description: isEditingOwnProfile ? "Ваш профиль успешно обновлен" : "Пользователь успешно обновлен",
         })
         onOpenChange(false)
         if (onUserUpdated) {
+          console.log("Вызываем onUserUpdated callback");
           onUserUpdated()
+        } else {
+          console.log("onUserUpdated callback отсутствует");
         }
       }
     } catch (error) {
       console.error("Ошибка при сохранении пользователя:", error)
       toast({
         title: "Ошибка",
-        description: "Не удалось сохранить пользователя",
+        description: `Не удалось сохранить пользователя: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
         variant: "destructive",
       })
     } finally {
       setIsLoading(false)
     }
   }
-
-  // Определяем, какие поля доступны для редактирования в режиме самостоятельного редактирования
-  const canEditOrganizationalFields = !isSelfEdit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -343,6 +434,30 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 </SelectContent>
               </Select>
             </div>
+            
+            {canEditRoles && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="role" className="text-right">
+                  Роль
+                </Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value) => handleChange("role", value)}
+                >
+                  <SelectTrigger id="role" className="col-span-3">
+                    <SelectValue placeholder="Выберите роль" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.name}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="workLocation" className="text-right">
                 Расположение

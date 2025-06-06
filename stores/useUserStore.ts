@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { createClient } from "@/utils/supabase/client"
-import { getUserRoleAndPermissions, getUserRoleAndPermissionsByRoleId } from "@/services/org-data-service"
+import { getUserRoleAndPermissions } from "@/services/org-data-service"
 
 
 // Интерфейс данных профиля пользователя
@@ -36,14 +36,13 @@ interface UserState {
   name: string | null
   profile: UserProfile | null
   isAuthenticated: boolean
-  role: string | null
   permissions: string[]
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
   clearState: () => void
-  setRoleAndPermissions: (role: string | null, permissions: string[]) => void
+  setRoleAndPermissions: (roleId: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
   hasPermission: (permission: string) => boolean
   getActivePermission: () => string | null
@@ -60,7 +59,6 @@ export const useUserStore = create<UserState>()(
         name: null,
         profile: null,
         isAuthenticated: false,
-        role: null,
         permissions: [],
         
         // Действия
@@ -102,10 +100,8 @@ export const useUserStore = create<UserState>()(
             name: profileName || '',
             profile: processedProfile,
             isAuthenticated: true,
-            role: shouldPreserveRoleData ? currentState.role : null,
             permissions: shouldPreserveRoleData ? currentState.permissions : []
           });
-        
         },
         
         clearUser: () => set({
@@ -114,17 +110,22 @@ export const useUserStore = create<UserState>()(
           name: null,
           profile: null,
           isAuthenticated: false,
-          role: null,
-          permissions: [],
+          permissions: []
         }),
         
         // Alias for clearUser for backward compatibility
         clearState: () => get().clearUser(),
         
-        setRoleAndPermissions: (role, permissions) => set({
-          role,
-          permissions
-        }),
+        setRoleAndPermissions: (roleId, permissions) => {
+          const currentState = get();
+          set({
+            profile: currentState.profile ? {
+              ...currentState.profile,
+              roleId
+            } : { roleId },
+            permissions
+          });
+        },
         
         // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
@@ -147,12 +148,8 @@ export const useUserStore = create<UserState>()(
               avatar_url: avatarUrl
             }
           });
-          
-          console.log('Аватар обновлен:', avatarUrl);
-          console.log('Новый профиль:', useUserStore.getState().profile);
         },
         
-        // Method for checking permissions
         hasPermission: (permission: string) => {
           const currentState = get();
           return currentState.permissions.includes(permission);
@@ -202,8 +199,7 @@ export const useUserStore = create<UserState>()(
             name: state.name,
             profile: state.profile,
             isAuthenticated: state.isAuthenticated,
-            // Don't save role and permissions in localStorage
-            role: null,
+            // Don't save permissions in localStorage
             permissions: []
           };
           return partializedState;
