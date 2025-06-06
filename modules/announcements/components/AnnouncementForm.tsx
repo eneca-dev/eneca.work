@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Input } from "@/modules/calendar/components/ui/input"
 import { Label } from "@/modules/calendar/components/ui/label"
-import { Textarea } from "@/modules/calendar/components/ui/textarea"
+import { RichTextEditor } from "./RichTextEditor"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,13 +111,11 @@ export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: Ann
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="text">Текст</Label>
-          <Textarea
-            id="text"
+          <RichTextEditor
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={setText}
             placeholder="Введите текст объявления (необязательно)"
-            rows={4}
+            label="Текст"
           />
         </div>
 

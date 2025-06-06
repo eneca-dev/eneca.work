@@ -17,7 +17,7 @@ import { AnnouncementForm } from "./AnnouncementForm"
 import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements"
 import { useUserStore } from "@/stores/useUserStore"
 import { Announcement } from "@/modules/announcements/types"
-import { PlusIcon, PencilIcon, Loader2, UserIcon } from "lucide-react"
+import { PlusIcon, PencilIcon, Loader2, UserIcon, SearchIcon } from "lucide-react"
 
 export function AnnouncementsWidget() {
   const { announcements, fetchAnnouncements, removeAnnouncement } = useAnnouncements()
@@ -28,11 +28,32 @@ export function AnnouncementsWidget() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [isPermissionsLoading, setIsPermissionsLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
 
   // Проверяем разрешение на создание и редактирование объявлений
   const canCreateAndEdit = useMemo(() => {
     return userStore.hasPermission("announcements_can_create_and_edit")
   }, [userStore.id, userStore.permissions])
+
+  // Фильтруем и сортируем объявления
+  const filteredAndSortedAnnouncements = useMemo(() => {
+    let filtered = announcements
+
+    // Фильтрация по поисковому запросу
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = announcements.filter((announcement) => {
+        const headerMatch = announcement.header.toLowerCase().includes(query)
+        const textMatch = announcement.text?.toLowerCase().includes(query) || false
+        return headerMatch || textMatch
+      })
+    }
+
+    // Сортировка по дате создания (самые новые сверху)
+    return filtered.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+  }, [announcements, searchQuery])
 
   // Ждем загрузки разрешений
   useEffect(() => {
@@ -66,6 +87,13 @@ export function AnnouncementsWidget() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  const formatText = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
   }
 
   if (!isAuthenticated) {
@@ -113,13 +141,25 @@ export function AnnouncementsWidget() {
           )}
         </div>
 
+        {/* Поле поиска */}
+        <div className="relative mb-4">
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Поиск по объявлениям..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          />
+        </div>
+
         <div className="space-y-4 max-h-96 overflow-y-auto">
-          {announcements.length === 0 ? (
+          {filteredAndSortedAnnouncements.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-              Пока нет объявлений
+              {searchQuery.trim() ? "Ничего не найдено" : "Пока нет объявлений"}
             </p>
           ) : (
-            announcements.map((announcement) => (
+            filteredAndSortedAnnouncements.map((announcement) => (
               <div
                 key={announcement.id}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -130,9 +170,10 @@ export function AnnouncementsWidget() {
                       {announcement.header}
                     </h3>
                     {announcement.text && (
-                      <p className="text-gray-600 dark:text-gray-300 text-sm mb-2">
-                        {announcement.text}
-                      </p>
+                      <div 
+                        className="text-gray-600 dark:text-gray-300 text-sm mb-2 whitespace-pre-wrap"
+                        dangerouslySetInnerHTML={{ __html: formatText(announcement.text) }}
+                      />
                     )}
                     <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                       <span>{formatDate(announcement.created_at)}</span>
