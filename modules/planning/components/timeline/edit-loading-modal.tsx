@@ -216,14 +216,9 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       newErrors.rate = "Ставка не может быть больше 2"
     }
 
-    // Проверка проекта
-    if (!formData.projectId) {
-      newErrors.projectId = "Необходимо выбрать проект"
-    }
-
-    // Проверка раздела
-    if (!formData.sectionId) {
-      newErrors.sectionId = "Необходимо выбрать раздел"
+    // Проверка: если выбран проект, то должен быть выбран и раздел
+    if (formData.projectId && !formData.sectionId) {
+      newErrors.sectionId = "При выборе проекта необходимо выбрать раздел"
     }
 
     setErrors(newErrors)
@@ -241,19 +236,24 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     setIsSaving(true)
 
     try {
-      // Получаем названия проекта и раздела
-      const selectedProject = projects.find((p) => p.project_id === formData.projectId)
-      const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
-
-      // Подготавливаем данные для обновления с названиями
+      // Подготавливаем данные для обновления - только измененные поля
       const updatedLoading: Partial<Loading> = {
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
         rate: formData.rate,
-        projectId: formData.projectId,
-        projectName: selectedProject?.project_name,
-        sectionId: formData.sectionId,
-        sectionName: selectedSection?.section_name,
+      }
+
+      // Добавляем проект и раздел только если они были изменены
+      if (formData.projectId && formData.projectId !== loading.projectId) {
+        const selectedProject = projects.find((p) => p.project_id === formData.projectId)
+        updatedLoading.projectId = formData.projectId
+        updatedLoading.projectName = selectedProject?.project_name
+      }
+
+      if (formData.sectionId && formData.sectionId !== loading.sectionId) {
+        const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
+        updatedLoading.sectionId = formData.sectionId
+        updatedLoading.sectionName = selectedSection?.section_name
       }
 
       // Вызываем функцию обновления из стора
@@ -264,8 +264,8 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       }
 
       // Показываем уведомление об успехе
-      const projectName = selectedProject?.project_name || "Неизвестный проект"
-      setNotification(`Загрузка для проекта "${projectName}" успешно обновлена`)
+      const currentProject = updatedLoading.projectName || loading.projectName || "Неизвестный проект"
+      setNotification(`Загрузка для проекта "${currentProject}" успешно обновлена`)
 
       // Автоматически скрываем уведомление через 3 секунды
       setTimeout(() => {
@@ -275,15 +275,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       // Закрываем модальное окно
       setEditingLoading(null)
 
-      console.log("Загрузка успешно обновлена:", loading.id, {
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        rate: formData.rate,
-        projectId: formData.projectId,
-        projectName: selectedProject?.project_name,
-        sectionId: formData.sectionId,
-        sectionName: selectedSection?.section_name,
-      })
+      console.log("Загрузка успешно обновлена:", loading.id, updatedLoading)
     } catch (error) {
       console.error("Ошибка при сохранении загрузки:", error)
 
@@ -488,8 +480,10 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
                   {showProjectDropdown && filteredProjects.length > 0 && (
                     <div
                       className={cn(
-                        "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border shadow-lg",
-                        theme === "dark" ? "bg-slate-700 border-slate-600" : "bg-white border-slate-300",
+                        "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border",
+                        theme === "dark"
+                          ? "bg-slate-800 border-slate-600"
+                          : "bg-white border-slate-300",
                       )}
                     >
                       {filteredProjects.map((project) => (

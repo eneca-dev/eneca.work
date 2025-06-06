@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
-import type { Section, Loading, Department } from "../types"
+import type { Section, Loading, Department, Team } from "../types"
 // Обновляем импорты, добавляя новые функции
 import {
   fetchLoadings,
@@ -33,6 +33,29 @@ interface PlanningState {
   selectedDepartmentId: string | null
   selectedTeamId: string | null
   selectedManagerId: string | null
+  selectedEmployeeId: string | null
+
+  // Состояние синхронизации фильтров и данных
+  syncState: {
+    isApplyingFilters: boolean
+    lastAppliedFilters: {
+      projectId: string | null
+      departmentId: string | null
+      teamId: string | null
+      managerId: string | null
+      employeeId: string | null
+    } | null
+    currentFilters: {
+      projectId: string | null
+      departmentId: string | null
+      teamId: string | null
+      managerId: string | null
+      employeeId: string | null
+    }
+    filtersKey: string
+    lastDataLoadTime: number | null
+    abortController: AbortController | null
+  }
 
   // Карта загрузок
   loadingsMap: Record<string, Loading[]> // Карта загрузок по ID раздела
@@ -45,11 +68,14 @@ interface PlanningState {
   fetchSections: () => Promise<void>
   fetchDepartments: () => Promise<void>
   fetchSectionLoadings: (sectionId: string) => Promise<Loading[]>
+  fetchSectionsWithSync: (abortController: AbortController) => Promise<void>
+  fetchDepartmentsWithSync: (abortController: AbortController) => Promise<void>
   setFilters: (
     projectId: string | null,
     departmentId: string | null,
     teamId: string | null,
     managerId?: string | null,
+    employeeId?: string | null,
   ) => void
   addSection: (section: Section) => void
   updateSection: (id: string, updates: Partial<Section>) => void
@@ -78,6 +104,22 @@ interface PlanningState {
   toggleShowDepartments: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
+
+  // Функции синхронизации
+  generateFiltersKey: (filters: {
+    projectId: string | null
+    departmentId: string | null
+    teamId: string | null
+    managerId: string | null
+    employeeId: string | null
+  }) => string
+  isDataSynced: () => boolean
+  getDataSyncStatus: () => {
+    isSynced: boolean
+    isApplying: boolean
+    hasStaleData: boolean
+  }
+  cancelPendingRequests: () => void
 }
 
 // Функция для правильного преобразования timestamptz в объект Date
@@ -113,6 +155,7 @@ export const usePlanningStore = create<PlanningState>()(
         selectedDepartmentId: null,
         selectedTeamId: null,
         selectedManagerId: null,
+        selectedEmployeeId: null,
         expandedSections: {},
         expandedDepartments: {},
         showDepartments: false,
@@ -122,20 +165,89 @@ export const usePlanningStore = create<PlanningState>()(
         searchQuery: "",
         projectSearchQuery: "",
 
+        // Состояние синхронизации фильтров и данных
+        syncState: {
+          isApplyingFilters: false,
+          lastAppliedFilters: null,
+          currentFilters: {
+            projectId: null,
+            departmentId: null,
+            teamId: null,
+            managerId: null,
+            employeeId: null,
+          },
+          filtersKey: "",
+          lastDataLoadTime: null,
+          abortController: null,
+        },
+
         // Установка фильтров
-        setFilters: (projectId, departmentId, teamId, managerId = null) => {
+        setFilters: (projectId, departmentId, teamId, managerId = null, employeeId = null) => {
+          const currentState = get()
+          
+          // Создаем новые фильтры
+          const newFilters = {
+            projectId,
+            departmentId,
+            teamId,
+            managerId,
+            employeeId,
+          }
+          
+          // Генерируем ключ для новых фильтров
+          const newFiltersKey = currentState.generateFiltersKey(newFilters)
+          
+          // Проверяем, изменились ли фильтры
+          const filtersChanged = currentState.syncState.filtersKey !== newFiltersKey
+          
+          // Проверяем, нужна ли первоначальная загрузка данных
+          const needsInitialLoad = currentState.syncState.lastDataLoadTime === null
+
+          console.log("🎯 Установка фильтров в usePlanningStore:", {
+            projectId,
+            departmentId,
+            teamId,
+            managerId,
+            employeeId,
+            filtersChanged,
+            needsInitialLoad,
+            oldKey: currentState.syncState.filtersKey,
+            newKey: newFiltersKey
+          })
+          
+          // Отменяем предыдущие запросы
+          if (currentState.syncState.abortController) {
+            currentState.syncState.abortController.abort()
+          }
+          
+          // Создаем новый AbortController
+          const abortController = new AbortController()
+          
+          // Обновляем состояние фильтров и синхронизации
           set({
             selectedProjectId: projectId,
             selectedDepartmentId: departmentId,
             selectedTeamId: teamId,
             selectedManagerId: managerId,
+            selectedEmployeeId: employeeId,
             currentPage: 1,
+            syncState: {
+              ...currentState.syncState,
+              isApplyingFilters: filtersChanged || needsInitialLoad,
+              currentFilters: newFilters,
+              filtersKey: newFiltersKey,
+              abortController: (filtersChanged || needsInitialLoad) ? abortController : null,
+            }
           })
-          // После установки фильтров загружаем разделы
-          get().fetchSections()
-          // Если показаны отделы, загружаем их тоже
-          if (get().showDepartments) {
-            get().fetchDepartments()
+
+          // Загружаем данные если фильтры изменились или нужна первоначальная загрузка
+          if (filtersChanged || needsInitialLoad) {
+            // Загружаем разделы с новым AbortController
+            get().fetchSectionsWithSync(abortController)
+            // Если показаны отделы, загружаем их тоже
+            if (currentState.showDepartments) {
+              get().fetchDepartmentsWithSync(abortController)
+            }
           }
         },
 
@@ -173,9 +285,18 @@ export const usePlanningStore = create<PlanningState>()(
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
+              selectedEmployeeId,
               sectionsPerPage,
               currentPage,
             } = get()
+
+            console.log("📋 Загрузка разделов с фильтрами:", {
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId
+            })
 
             // Загружаем данные из нового представления (только активные загрузки)
             const result = await fetchSectionsWithLoadings(
@@ -183,6 +304,7 @@ export const usePlanningStore = create<PlanningState>()(
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
+              selectedEmployeeId,
             )
 
             // Проверяем, что результат не является ошибкой
@@ -219,54 +341,78 @@ export const usePlanningStore = create<PlanningState>()(
           }
         },
 
-        // Обновляем функцию загрузки отделов для использования view_employee_workloads
+        // Обновляем функцию загрузки отделов для использования view_organizational_structure
         fetchDepartments: async () => {
           set({ isLoadingDepartments: true })
           try {
             // Получаем текущие фильтры из состояния
-            const { selectedDepartmentId } = get()
+            const { selectedDepartmentId, selectedTeamId } = get()
 
-            // Загружаем данные из представления view_employee_workloads
-            let query = supabase
+            // Загружаем организационную структуру из нового представления
+            let query = supabase.from("view_organizational_structure").select("*")
+
+            // Применяем фильтр по отделу, если он выбран
+            if (selectedDepartmentId) {
+              query = query.eq("department_id", selectedDepartmentId)
+            }
+
+            // Применяем фильтр по команде, если она выбрана
+            if (selectedTeamId) {
+              query = query.eq("team_id", selectedTeamId)
+            }
+
+            const { data: orgData, error: orgError } = await query
+
+            if (orgError) {
+              console.error("Ошибка при загрузке организационной структуры:", orgError)
+              throw orgError
+            }
+
+            console.log("🏢 Данные из view_organizational_structure:", orgData?.length, "записей")
+
+            // Загружаем данные о сотрудниках с их загрузками
+            let employeeQuery = supabase
               .from("view_employee_workloads")
               .select("*")
               .or("loading_status.eq.active,loading_status.is.null")
 
-            // Применяем фильтр по отделу, если он выбран
+            // Применяем те же фильтры для сотрудников
             if (selectedDepartmentId) {
-              query = query.eq("final_department_id", selectedDepartmentId)
+              employeeQuery = employeeQuery.eq("final_department_id", selectedDepartmentId)
             }
 
-            const { data, error } = await query
-
-            if (error) {
-              console.error("Ошибка при загрузке данных о сотрудниках:", error)
-              throw error
+            if (selectedTeamId) {
+              employeeQuery = employeeQuery.eq("final_team_id", selectedTeamId)
             }
 
-            console.log("📊 Данные из view_employee_workloads:", data?.length, "записей")
+            const { data: employeeData, error: employeeError } = await employeeQuery
 
-            // Группируем данные по отделам и командам, используя финальные поля
+            if (employeeError) {
+              console.error("Ошибка при загрузке данных о сотрудниках:", employeeError)
+              throw employeeError
+            }
+
+            console.log("👥 Данные о сотрудниках:", employeeData?.length, "записей")
+
+            // Группируем данные по отделам и командам
             const departmentsMap = new Map<string, Department>()
-            const teamsMap = new Map<string, any>()
+            const teamsMap = new Map<string, Team>()
             const employeesMap = new Map<string, any>()
 
-            // Обрабатываем каждую запись
-            data?.forEach((item) => {
-              // Создаем или обновляем сотрудника
+            // Сначала обрабатываем сотрудников и их загрузки
+            employeeData?.forEach((item) => {
               if (!employeesMap.has(item.user_id)) {
                 employeesMap.set(item.user_id, {
                   id: item.user_id,
                   firstName: item.first_name,
                   lastName: item.last_name,
-                  fullName: item.full_name, // Используем умно обработанное полное имя
+                  fullName: item.full_name,
                   email: item.email,
                   position: item.position_name,
                   avatarUrl: item.avatar_url,
-                  // Используем финальные поля для группировки
                   teamId: item.final_team_id,
                   teamName: item.final_team_name,
-                  teamCode: "", // В представлении нет team_code, оставляем пустым
+                  teamCode: "",
                   departmentId: item.final_department_id,
                   departmentName: item.final_department_name,
                   loadings: [],
@@ -274,14 +420,6 @@ export const usePlanningStore = create<PlanningState>()(
                   hasLoadings: item.has_loadings,
                   loadingsCount: item.loadings_count,
                   employmentRate: item.employment_rate || 1,
-                })
-
-                console.log("👤 Сотрудник:", {
-                  fullName: item.full_name,
-                  finalDepartment: item.final_department_name,
-                  finalTeam: item.final_team_name,
-                  originalDepartment: item.original_department_name,
-                  originalTeam: item.original_team_name,
                 })
               }
 
@@ -297,7 +435,7 @@ export const usePlanningStore = create<PlanningState>()(
                   responsibleTeamName: item.final_team_name,
                   sectionId: item.loading_section,
                   sectionName: item.section_name,
-                  projectId: null, // В представлении нет project_id
+                  projectId: null,
                   projectName: item.project_name,
                   projectStatus: item.project_status,
                   startDate: new Date(item.loading_start),
@@ -328,52 +466,75 @@ export const usePlanningStore = create<PlanningState>()(
               }
             })
 
-            // Группируем сотрудников по командам, используя финальные поля
-            employeesMap.forEach((employee) => {
-              const teamKey = `${employee.departmentId}-${employee.teamId}`
-
-              if (!teamsMap.has(teamKey)) {
-                teamsMap.set(teamKey, {
-                  id: employee.teamId,
-                  name: employee.teamName,
-                  code: employee.teamCode || "",
-                  departmentId: employee.departmentId,
-                  departmentName: employee.departmentName,
-                  employees: [],
-                  totalEmployees: 0,
+            // Теперь обрабатываем организационную структуру
+            orgData?.forEach((item) => {
+              // Создаем или обновляем отдел
+              if (!departmentsMap.has(item.department_id)) {
+                departmentsMap.set(item.department_id, {
+                  id: item.department_id,
+                  name: item.department_name,
+                  wsDepartmentId: item.ws_department_id,
+                  totalEmployees: item.department_employee_count || 0,
+                  teams: [],
                   dailyWorkloads: {},
+                  // Добавляем информацию о руководителе отдела
+                  departmentHeadId: item.department_head_id,
+                  departmentHeadName: item.department_head_full_name,
+                  departmentHeadEmail: item.department_head_email,
+                  departmentHeadAvatarUrl: item.department_head_avatar_url,
+                  managerName: item.department_head_full_name, // Для обратной совместимости
                 })
               }
 
-              const team = teamsMap.get(teamKey)
-              team.employees.push(employee)
-              team.totalEmployees += 1
-
-              // Суммируем dailyWorkloads команды
-              Object.keys(employee.dailyWorkloads || {}).forEach((dateKey) => {
-                if (!team.dailyWorkloads[dateKey]) {
-                  team.dailyWorkloads[dateKey] = 0
+              // Создаем или обновляем команду, если она есть
+              if (item.team_id) {
+                const teamKey = `${item.department_id}-${item.team_id}`
+                if (!teamsMap.has(teamKey)) {
+                  teamsMap.set(teamKey, {
+                    id: item.team_id,
+                    name: item.team_name,
+                    code: "",
+                    departmentId: item.department_id,
+                    departmentName: item.department_name,
+                    totalEmployees: item.team_employee_count || 0,
+                    employees: [],
+                    dailyWorkloads: {},
+                    // Добавляем информацию о руководителе команды
+                    teamLeadId: item.team_lead_id,
+                    teamLeadName: item.team_lead_full_name,
+                    teamLeadEmail: item.team_lead_email,
+                    teamLeadAvatarUrl: item.team_lead_avatar_url,
+                  })
                 }
-                team.dailyWorkloads[dateKey] += employee.dailyWorkloads[dateKey]
-              })
+              }
             })
 
-            // Группируем команды по отделам, используя финальные поля
-            teamsMap.forEach((team) => {
-              if (!departmentsMap.has(team.departmentId)) {
-                departmentsMap.set(team.departmentId, {
-                  id: team.departmentId,
-                  name: team.departmentName,
-                  teams: [],
-                  totalEmployees: 0,
-                  dailyWorkloads: {},
+            // Распределяем сотрудников по командам
+            employeesMap.forEach((employee) => {
+              const teamKey = `${employee.departmentId}-${employee.teamId}`
+              const team = teamsMap.get(teamKey)
+              
+              if (team) {
+                team.employees.push(employee)
+                
+                // Суммируем dailyWorkloads команды
+                Object.keys(employee.dailyWorkloads || {}).forEach((dateKey) => {
+                  if (!team.dailyWorkloads) {
+                    team.dailyWorkloads = {}
+                  }
+                  if (!team.dailyWorkloads[dateKey]) {
+                    team.dailyWorkloads[dateKey] = 0
+                  }
+                  team.dailyWorkloads[dateKey] += employee.dailyWorkloads[dateKey]
                 })
               }
+            })
 
+            // Распределяем команды по отделам
+            teamsMap.forEach((team) => {
               const department = departmentsMap.get(team.departmentId)
               if (department) {
                 department.teams.push(team)
-                department.totalEmployees += team.totalEmployees
 
                 // Суммируем dailyWorkloads отдела
                 Object.keys(team.dailyWorkloads || {}).forEach((dateKey) => {
@@ -383,24 +544,25 @@ export const usePlanningStore = create<PlanningState>()(
                   if (!department.dailyWorkloads[dateKey]) {
                     department.dailyWorkloads[dateKey] = 0
                   }
-                  department.dailyWorkloads[dateKey] += team.dailyWorkloads[dateKey]
+                  department.dailyWorkloads[dateKey] += (team.dailyWorkloads || {})[dateKey] || 0
                 })
               }
             })
 
             const departments = Array.from(departmentsMap.values())
 
-            console.log("🏢 Структура отделов:", {
+            console.log("🏢 Организационная структура:", {
               totalDepartments: departments.length,
               departments: departments.map((dept) => ({
                 id: dept.id,
                 name: dept.name,
+                headName: dept.departmentHeadName,
                 totalEmployees: dept.totalEmployees,
                 teams: dept.teams.map((team) => ({
                   id: team.id,
                   name: team.name,
+                  leadName: team.teamLeadName,
                   employeeCount: team.employees.length,
-                  employees: team.employees.map((emp) => emp.fullName),
                 })),
               })),
             })
@@ -410,9 +572,9 @@ export const usePlanningStore = create<PlanningState>()(
               isLoadingDepartments: false,
             })
 
-            console.log(`✅ Загружено ${departments.length} отделов`)
+            console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
           } catch (error) {
-            console.error("❌ Ошибка при загрузке отделов:", error)
+            console.error("❌ Ошибка при загрузке организационной структуры:", error)
             set({ isLoadingDepartments: false })
           }
         },
@@ -443,8 +605,8 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
-              createdAt: parseTimestampTz(item.loading_created),
-              updatedAt: parseTimestampTz(item.loading_updated),
+              createdAt: parseTimestampTz(item.loading_created) || new Date(),
+              updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
             })) : []
 
             // Обновляем раздел с загрузками в обоих массивах: sections и allSections
@@ -558,12 +720,6 @@ export const usePlanningStore = create<PlanningState>()(
               loadingsMap: updatedLoadingsMap,
             })
 
-            // Перезагружаем данные для получения актуальной информации
-            await get().fetchSections()
-            if (get().showDepartments) {
-              await get().fetchDepartments()
-            }
-
             return { success: true, loadingId: result.loadingId }
           } catch (error) {
             console.error("Ошибка при создании загрузки:", error)
@@ -602,6 +758,22 @@ export const usePlanningStore = create<PlanningState>()(
               return result
             }
 
+            // Если API вернул обновленные данные, используем их
+            let finalUpdates = updates
+            if (result.updatedLoading) {
+              console.log("🔄 Используем актуальные данные из API:", result.updatedLoading)
+              finalUpdates = {
+                ...updates,
+                sectionId: result.updatedLoading.sectionId,
+                sectionName: result.updatedLoading.sectionName,
+                projectId: result.updatedLoading.projectId,
+                projectName: result.updatedLoading.projectName,
+                startDate: result.updatedLoading.startDate,
+                endDate: result.updatedLoading.endDate,
+                rate: result.updatedLoading.rate,
+              }
+            }
+
             // Обновляем локальное состояние
             const { sections, allSections, loadingsMap, departments } = get()
 
@@ -609,14 +781,14 @@ export const usePlanningStore = create<PlanningState>()(
             const updatedSections = sections.map((section) => ({
               ...section,
               loadings: section.loadings?.map((loading) =>
-                loading.id === loadingId ? { ...loading, ...updates } : loading,
+                loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
               ),
             }))
 
             const updatedAllSections = allSections.map((section) => ({
               ...section,
               loadings: section.loadings?.map((loading) =>
-                loading.id === loadingId ? { ...loading, ...updates } : loading,
+                loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
               ),
             }))
 
@@ -624,31 +796,43 @@ export const usePlanningStore = create<PlanningState>()(
             const updatedLoadingsMap = { ...loadingsMap }
             Object.keys(updatedLoadingsMap).forEach((sectionId) => {
               updatedLoadingsMap[sectionId] = (updatedLoadingsMap[sectionId] ?? []).map((loading) =>
-                loading.id === loadingId ? { ...loading, ...updates } : loading,
+                loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
               )
             })
 
             // Если изменился раздел, нужно переместить загрузку из одного раздела в другой
-            if (updates.sectionId) {
-              // Находим загрузку
-              let loadingToMove: Loading | undefined
-
-              // Ищем загрузку в текущем разделе
-              Object.keys(updatedLoadingsMap).forEach((sectionId) => {
-                const loadingIndex = updatedLoadingsMap[sectionId].findIndex((l) => l.id === loadingId)
-                if (loadingIndex !== -1) {
-                  loadingToMove = { ...updatedLoadingsMap[sectionId][loadingIndex], ...updates }
-                  // Удаляем загрузку из текущего раздела
-                  updatedLoadingsMap[sectionId] = updatedLoadingsMap[sectionId].filter((l) => l.id !== loadingId)
+            if (finalUpdates.sectionId) {
+              // Находим текущую загрузку для сравнения
+              let currentLoading: Loading | undefined
+              Object.keys(loadingsMap).forEach((sectionId) => {
+                const found = loadingsMap[sectionId]?.find((l) => l.id === loadingId)
+                if (found) {
+                  currentLoading = found
                 }
               })
 
-              // Добавляем загрузку в новый раздел
-              if (loadingToMove) {
-                if (!updatedLoadingsMap[updates.sectionId]) {
-                  updatedLoadingsMap[updates.sectionId] = []
+              // Проверяем, изменился ли раздел
+              if (currentLoading && finalUpdates.sectionId !== currentLoading.sectionId) {
+                // Находим загрузку
+                let loadingToMove: Loading | undefined
+
+                // Ищем загрузку в текущем разделе
+                Object.keys(updatedLoadingsMap).forEach((sectionId) => {
+                  const loadingIndex = updatedLoadingsMap[sectionId].findIndex((l) => l.id === loadingId)
+                  if (loadingIndex !== -1) {
+                    loadingToMove = { ...updatedLoadingsMap[sectionId][loadingIndex], ...finalUpdates }
+                    // Удаляем загрузку из текущего раздела
+                    updatedLoadingsMap[sectionId] = updatedLoadingsMap[sectionId].filter((l) => l.id !== loadingId)
+                  }
+                })
+
+                // Добавляем загрузку в новый раздел
+                if (loadingToMove && finalUpdates.sectionId) {
+                  if (!updatedLoadingsMap[finalUpdates.sectionId]) {
+                    updatedLoadingsMap[finalUpdates.sectionId] = []
+                  }
+                  updatedLoadingsMap[finalUpdates.sectionId].push(loadingToMove)
                 }
-                updatedLoadingsMap[updates.sectionId].push(loadingToMove)
               }
             }
 
@@ -660,7 +844,7 @@ export const usePlanningStore = create<PlanningState>()(
                 employees: team.employees.map((employee) => ({
                   ...employee,
                   loadings: employee.loadings?.map((loading) =>
-                    loading.id === loadingId ? { ...loading, ...updates } : loading,
+                    loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
                   ),
                 })),
               })),
@@ -671,6 +855,11 @@ export const usePlanningStore = create<PlanningState>()(
               allSections: updatedAllSections,
               loadingsMap: updatedLoadingsMap,
               departments: updatedDepartments,
+            })
+
+            console.log("✅ Загрузка успешно обновлена в сторе с актуальными данными:", {
+              loadingId,
+              finalUpdates
             })
 
             return { success: true }
@@ -837,8 +1026,8 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
-              createdAt: parseTimestampTz(item.loading_created),
-              updatedAt: parseTimestampTz(item.loading_updated),
+              createdAt: parseTimestampTz(item.loading_created) || new Date(),
+              updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
             })) : []
 
             return loadings
@@ -1124,6 +1313,397 @@ export const usePlanningStore = create<PlanningState>()(
           // Обновляем состояние с отфильтрованными разделами
           set({ sections: sectionsWithLoadings })
         },
+
+        // Функции синхронизации с поддержкой AbortController
+        fetchSectionsWithSync: async (abortController: AbortController) => {
+          set({ isLoadingSections: true })
+          try {
+            // Получаем текущие фильтры из состояния
+            const {
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+              sectionsPerPage,
+              currentPage,
+            } = get()
+
+            console.log("📋 Синхронная загрузка разделов с фильтрами:", {
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId
+            })
+
+            // Проверяем, не был ли запрос отменен
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки разделов был отменен")
+              return
+            }
+
+            // Загружаем данные из нового представления (только активные загрузки)
+            const result = await fetchSectionsWithLoadings(
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+            )
+
+            // Проверяем, не был ли запрос отменен после загрузки
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки разделов был отменен после получения данных")
+              return
+            }
+
+            // Проверяем, что результат не является ошибкой
+            if ('success' in result && !result.success) {
+              console.error("Ошибка при загрузке разделов:", result.error)
+              throw new Error(result.error)
+            }
+
+            const { sections: allSections, loadingsMap } = result as { sections: Section[]; loadingsMap: Record<string, Loading[]> }
+
+            console.log(`Загружено ${allSections.length} разделов и активные загрузки для них`)
+
+            // Применяем пагинацию
+            const startIndex = (currentPage - 1) * sectionsPerPage
+            const endIndex = startIndex + sectionsPerPage
+            const visibleSections = allSections.slice(startIndex, endIndex)
+
+            // Добавляем загрузки к видимым разделам
+            const sectionsWithLoadings = visibleSections.map((section) => ({
+              ...section,
+              loadings: loadingsMap[section.id] || [],
+            }))
+
+            set({
+              allSections: allSections,
+              sections: sectionsWithLoadings,
+              loadingsMap,
+              isLoadingSections: false,
+              expandedSections: {},
+              syncState: {
+                ...get().syncState,
+                lastDataLoadTime: Date.now(),
+              }
+            })
+          } catch (error) {
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки разделов был отменен из-за ошибки")
+              return
+            }
+            console.error("Ошибка при синхронной загрузке разделов:", error)
+            set({ isLoadingSections: false })
+          }
+        },
+
+        fetchDepartmentsWithSync: async (abortController: AbortController) => {
+          set({ isLoadingDepartments: true })
+          try {
+            // Получаем текущие фильтры из состояния
+            const { selectedDepartmentId, selectedTeamId } = get()
+
+            console.log("🏢 Синхронная загрузка отделов с фильтрами:", {
+              selectedDepartmentId,
+              selectedTeamId
+            })
+
+            // Проверяем, не был ли запрос отменен
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки отделов был отменен")
+              return
+            }
+
+            // Загружаем организационную структуру из нового представления
+            let query = supabase.from("view_organizational_structure").select("*")
+
+            // Применяем фильтр по отделу, если он выбран
+            if (selectedDepartmentId) {
+              query = query.eq("department_id", selectedDepartmentId)
+            }
+
+            // Применяем фильтр по команде, если она выбрана
+            if (selectedTeamId) {
+              query = query.eq("team_id", selectedTeamId)
+            }
+
+            const { data: orgData, error: orgError } = await query
+
+            // Проверяем, не был ли запрос отменен после загрузки
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки отделов был отменен после получения данных")
+              return
+            }
+
+            if (orgError) {
+              console.error("Ошибка при загрузке организационной структуры:", orgError)
+              throw orgError
+            }
+
+            console.log("🏢 Данные из view_organizational_structure:", orgData?.length, "записей")
+
+            // Загружаем данные о сотрудниках с их загрузками
+            let employeeQuery = supabase
+              .from("view_employee_workloads")
+              .select("*")
+              .or("loading_status.eq.active,loading_status.is.null")
+
+            // Применяем те же фильтры для сотрудников
+            if (selectedDepartmentId) {
+              employeeQuery = employeeQuery.eq("final_department_id", selectedDepartmentId)
+            }
+
+            if (selectedTeamId) {
+              employeeQuery = employeeQuery.eq("final_team_id", selectedTeamId)
+            }
+
+            const { data: employeeData, error: employeeError } = await employeeQuery
+
+            // Проверяем, не был ли запрос отменен после второй загрузки
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки отделов был отменен после получения данных о сотрудниках")
+              return
+            }
+
+            if (employeeError) {
+              console.error("Ошибка при загрузке данных о сотрудниках:", employeeError)
+              throw employeeError
+            }
+
+            console.log("👥 Данные о сотрудниках:", employeeData?.length, "записей")
+
+            // Группируем данные по отделам и командам (тот же код что и в fetchDepartments)
+            const departmentsMap = new Map<string, Department>()
+            const teamsMap = new Map<string, Team>()
+            const employeesMap = new Map<string, any>()
+
+            // Сначала обрабатываем сотрудников и их загрузки
+            employeeData?.forEach((item) => {
+              if (!employeesMap.has(item.user_id)) {
+                employeesMap.set(item.user_id, {
+                  id: item.user_id,
+                  firstName: item.first_name,
+                  lastName: item.last_name,
+                  fullName: item.full_name,
+                  email: item.email,
+                  position: item.position_name,
+                  avatarUrl: item.avatar_url,
+                  teamId: item.final_team_id,
+                  teamName: item.final_team_name,
+                  teamCode: "",
+                  departmentId: item.final_department_id,
+                  departmentName: item.final_department_name,
+                  loadings: [],
+                  dailyWorkloads: {},
+                  hasLoadings: item.has_loadings,
+                  loadingsCount: item.loadings_count,
+                  employmentRate: item.employment_rate || 1,
+                })
+              }
+
+              const employee = employeesMap.get(item.user_id)
+
+              // Добавляем загрузку, если она есть
+              if (item.loading_id) {
+                employee.loadings.push({
+                  id: item.loading_id,
+                  responsibleId: item.user_id,
+                  responsibleName: item.full_name,
+                  responsibleAvatarUrl: item.avatar_url,
+                  responsibleTeamName: item.final_team_name,
+                  sectionId: item.loading_section,
+                  sectionName: item.section_name,
+                  projectId: null,
+                  projectName: item.project_name,
+                  projectStatus: item.project_status,
+                  startDate: new Date(item.loading_start),
+                  endDate: new Date(item.loading_finish),
+                  rate: item.loading_rate || 1,
+                })
+              }
+            })
+
+            // Вычисляем dailyWorkloads для каждого сотрудника
+            employeesMap.forEach((employee) => {
+              employee.dailyWorkloads = {}
+              if (employee.loadings && employee.loadings.length > 0) {
+                employee.loadings.forEach((loading: Loading) => {
+                  const startDate = new Date(loading.startDate)
+                  const endDate = new Date(loading.endDate)
+                  const currentDate = new Date(startDate)
+
+                  while (currentDate <= endDate) {
+                    const dateKey = currentDate.toISOString().split("T")[0]
+                    if (!employee.dailyWorkloads[dateKey]) {
+                      employee.dailyWorkloads[dateKey] = 0
+                    }
+                    employee.dailyWorkloads[dateKey] += loading.rate || 1
+                    currentDate.setDate(currentDate.getDate() + 1)
+                  }
+                })
+              }
+            })
+
+            // Теперь обрабатываем организационную структуру
+            orgData?.forEach((item) => {
+              // Создаем или обновляем отдел
+              if (!departmentsMap.has(item.department_id)) {
+                departmentsMap.set(item.department_id, {
+                  id: item.department_id,
+                  name: item.department_name,
+                  wsDepartmentId: item.ws_department_id,
+                  totalEmployees: item.department_employee_count || 0,
+                  teams: [],
+                  dailyWorkloads: {},
+                  // Добавляем информацию о руководителе отдела
+                  departmentHeadId: item.department_head_id,
+                  departmentHeadName: item.department_head_full_name,
+                  departmentHeadEmail: item.department_head_email,
+                  departmentHeadAvatarUrl: item.department_head_avatar_url,
+                  managerName: item.department_head_full_name, // Для обратной совместимости
+                })
+              }
+
+              // Создаем или обновляем команду, если она есть
+              if (item.team_id) {
+                const teamKey = `${item.department_id}-${item.team_id}`
+                if (!teamsMap.has(teamKey)) {
+                  teamsMap.set(teamKey, {
+                    id: item.team_id,
+                    name: item.team_name,
+                    code: "",
+                    departmentId: item.department_id,
+                    departmentName: item.department_name,
+                    totalEmployees: item.team_employee_count || 0,
+                    employees: [],
+                    dailyWorkloads: {},
+                    // Добавляем информацию о руководителе команды
+                    teamLeadId: item.team_lead_id,
+                    teamLeadName: item.team_lead_full_name,
+                    teamLeadEmail: item.team_lead_email,
+                    teamLeadAvatarUrl: item.team_lead_avatar_url,
+                  })
+                }
+              }
+            })
+
+            // Распределяем сотрудников по командам
+            employeesMap.forEach((employee) => {
+              const teamKey = `${employee.departmentId}-${employee.teamId}`
+              const team = teamsMap.get(teamKey)
+              
+              if (team) {
+                team.employees.push(employee)
+                
+                // Суммируем dailyWorkloads команды
+                Object.keys(employee.dailyWorkloads || {}).forEach((dateKey) => {
+                  if (!team.dailyWorkloads) {
+                    team.dailyWorkloads = {}
+                  }
+                  if (!team.dailyWorkloads[dateKey]) {
+                    team.dailyWorkloads[dateKey] = 0
+                  }
+                  team.dailyWorkloads[dateKey] += employee.dailyWorkloads[dateKey]
+                })
+              }
+            })
+
+            // Распределяем команды по отделам
+            teamsMap.forEach((team) => {
+              const department = departmentsMap.get(team.departmentId)
+              if (department) {
+                department.teams.push(team)
+
+                // Суммируем dailyWorkloads отдела
+                Object.keys(team.dailyWorkloads || {}).forEach((dateKey) => {
+                  if (!department.dailyWorkloads) {
+                    department.dailyWorkloads = {}
+                  }
+                  if (!department.dailyWorkloads[dateKey]) {
+                    department.dailyWorkloads[dateKey] = 0
+                  }
+                  department.dailyWorkloads[dateKey] += (team.dailyWorkloads || {})[dateKey] || 0
+                })
+              }
+            })
+
+            const departments = Array.from(departmentsMap.values())
+
+            console.log("🏢 Синхронная организационная структура:", {
+              totalDepartments: departments.length,
+              departments: departments.map((dept) => ({
+                id: dept.id,
+                name: dept.name,
+                headName: dept.departmentHeadName,
+                totalEmployees: dept.totalEmployees,
+                teams: dept.teams.map((team) => ({
+                  id: team.id,
+                  name: team.name,
+                  leadName: team.teamLeadName,
+                  employeeCount: team.employees.length,
+                })),
+              })),
+            })
+
+            set({
+              departments,
+              isLoadingDepartments: false,
+              syncState: {
+                ...get().syncState,
+                lastDataLoadTime: Date.now(),
+              }
+            })
+
+            console.log(`✅ Синхронно загружено ${departments.length} отделов с руководителями`)
+          } catch (error) {
+            if (abortController.signal.aborted) {
+              console.log("🚫 Запрос загрузки отделов был отменен из-за ошибки")
+              return
+            }
+            console.error("❌ Ошибка при синхронной загрузке организационной структуры:", error)
+            set({ isLoadingDepartments: false })
+          }
+        },
+
+        // Функции синхронизации
+        generateFiltersKey: (filters: {
+          projectId: string | null
+          departmentId: string | null
+          teamId: string | null
+          managerId: string | null
+          employeeId: string | null
+        }) => {
+          const { projectId, departmentId, teamId, managerId, employeeId } = filters
+          return `${projectId}-${departmentId}-${teamId}-${managerId}-${employeeId}`
+        },
+        isDataSynced: () => {
+          const { syncState } = get()
+          return syncState.isApplyingFilters === false && syncState.lastDataLoadTime !== null
+        },
+        getDataSyncStatus: () => {
+          const { syncState } = get()
+          const currentTime = Date.now()
+          const lastDataLoadTime = syncState.lastDataLoadTime || 0
+          const isApplying = syncState.isApplyingFilters
+          const hasStaleData = currentTime - lastDataLoadTime > 10000 // 10 seconds
+          return { isSynced: isApplying === false, isApplying, hasStaleData }
+        },
+        cancelPendingRequests: () => {
+          const { syncState } = get()
+          if (syncState.abortController) {
+            syncState.abortController.abort()
+          }
+          set((state) => ({
+            syncState: {
+              ...state.syncState,
+              isApplyingFilters: false,
+              abortController: null,
+            }
+          }))
+        },
       }),
       {
         name: "planning-data-storage",
@@ -1132,6 +1712,7 @@ export const usePlanningStore = create<PlanningState>()(
           selectedDepartmentId: state.selectedDepartmentId,
           selectedTeamId: state.selectedTeamId,
           selectedManagerId: state.selectedManagerId,
+          selectedEmployeeId: state.selectedEmployeeId,
           expandedSections: state.expandedSections,
           expandedDepartments: state.expandedDepartments,
           showDepartments: state.showDepartments,

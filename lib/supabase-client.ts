@@ -239,39 +239,41 @@ export async function fetchSectionsWithLoadings(
   departmentId: string | null = null,
   teamId: string | null = null,
   managerId: string | null = null,
+  employeeId: string | null = null,
 ): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> } | StructuredError> {
   try {
-    // Строим запрос к представлению, но добавляем фильтр по активным загрузкам
+    validateEnvironmentVariables()
+
+    console.log("🔍 Фильтры для fetchSectionsWithLoadings:", {
+      projectId,
+      departmentId,
+      teamId,
+      managerId,
+      employeeId
+    })
+
     let query = supabase.from("view_sections_with_loadings").select("*")
 
-    // Применяем фильтры
-    if (projectId) {
-      query = query.eq("project_id", projectId)
-    }
-
-    // Если выбран менеджер, но не выбран конкретный проект,
-    // фильтруем по менеджеру через подзапрос
-    if (managerId && !projectId) {
+    if (managerId) {
       // Получаем проекты менеджера
-      const { data: managerProjects, error: managerProjectsError } = await supabase
-        .from("projects")
+      const { data: managerProjects, error: managerError } = await supabase
+        .from("view_manager_projects")
         .select("project_id")
-        .eq("project_manager", managerId)
-        .eq("project_status", "active")
+        .eq("manager_id", managerId)
 
-      if (managerProjectsError) {
-        console.error("Ошибка при загрузке проектов менеджера:", managerProjectsError)
+      if (managerError) {
+        console.error("Ошибка при получении проектов менеджера:", managerError)
         return {
           success: false,
-          error: "Не удалось загрузить проекты менеджера",
-          details: managerProjectsError
+          error: "Не удалось получить проекты менеджера",
+          details: managerError
         }
       }
 
-      const projectIds = managerProjects.map((p) => p.project_id)
-
-      // Если у менеджера нет проектов, возвращаем пустой результат
+      const projectIds = managerProjects?.map(p => p.project_id) || []
+      
       if (projectIds.length === 0) {
+        console.log("У менеджера нет проектов")
         return { sections: [], loadingsMap: {} }
       }
 
@@ -280,12 +282,20 @@ export async function fetchSectionsWithLoadings(
     }
 
     if (departmentId) {
+      console.log("🏢 Применяю фильтр по отделу:", departmentId)
       query = query.eq("responsible_department_id", departmentId)
     }
 
     // Добавляем фильтр по команде, если он указан
     if (teamId) {
+      console.log("👥 Применяю фильтр по команде:", teamId)
       query = query.eq("responsible_team_id", teamId)
+    }
+
+    // Добавляем фильтр по сотруднику, если он указан
+    if (employeeId) {
+      console.log("👤 Применяю фильтр по сотруднику:", employeeId)
+      query = query.eq("loading_responsible", employeeId)
     }
 
     // Фильтруем только активные загрузки или записи без загрузок
@@ -301,6 +311,8 @@ export async function fetchSectionsWithLoadings(
         details: error
       }
     }
+
+    console.log("📊 Получено записей из view_sections_with_loadings:", data?.length || 0)
 
     // Группируем данные по разделам и загрузкам
     const sectionsMap = new Map<string, Section>()
@@ -418,7 +430,20 @@ export async function updateLoading(
     projectId?: string
     sectionId?: string
   },
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ 
+  success: boolean; 
+  error?: string; 
+  updatedLoading?: {
+    id: string
+    sectionId: string
+    sectionName: string
+    projectId: string
+    projectName: string
+    startDate: Date
+    endDate: Date
+    rate: number
+  }
+}> {
   try {
     // Подготавливаем объект для обновления с правильной типизацией
     const updateData: LoadingUpdateData = {
@@ -448,8 +473,41 @@ export async function updateLoading(
       return { success: false, error: error.message }
     }
 
-    console.log("Загрузка успешно обновлена:", loadingId)
-    return { success: true }
+    // После успешного обновления получаем актуальные данные о загрузке с информацией о проекте и разделе
+    const { data: loadingData, error: fetchError } = await supabase
+      .from("view_sections_with_loadings")
+      .select(`
+        loading_id,
+        loading_section,
+        section_name,
+        project_id,
+        project_name,
+        loading_start,
+        loading_finish,
+        loading_rate
+      `)
+      .eq("loading_id", loadingId)
+      .single()
+
+    if (fetchError) {
+      console.error("Ошибка при получении обновленных данных загрузки:", fetchError)
+      // Возвращаем успех, но без обновленных данных
+      return { success: true }
+    }
+
+    const updatedLoading = {
+      id: loadingData.loading_id,
+      sectionId: loadingData.loading_section,
+      sectionName: loadingData.section_name,
+      projectId: loadingData.project_id,
+      projectName: loadingData.project_name,
+      startDate: new Date(loadingData.loading_start),
+      endDate: new Date(loadingData.loading_finish),
+      rate: loadingData.loading_rate || 1,
+    }
+
+    console.log("Загрузка успешно обновлена с актуальными данными:", updatedLoading)
+    return { success: true, updatedLoading }
   } catch (error) {
     console.error("Ошибка при обновлении загрузки:", error)
     return { success: false, error: "Произошла неожиданная ошибка" }

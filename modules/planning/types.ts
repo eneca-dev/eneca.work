@@ -27,6 +27,10 @@ export interface Team {
   totalEmployees?: number
   dailyWorkloads?: Record<string, number>
   employees: Employee[]
+  teamLeadId?: string | null
+  teamLeadName?: string | null
+  teamLeadEmail?: string | null
+  teamLeadAvatarUrl?: string | null
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
@@ -47,6 +51,8 @@ export interface Employee {
   avatarUrl?: string
   workload: number
   employmentRate?: number
+  hasLoadings?: boolean
+  loadingsCount?: number
   dailyWorkloads?: Record<string, number>
   loadings?: Loading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
@@ -84,6 +90,10 @@ export interface Department {
   dailyWorkloads?: Record<string, number>
   teams: Team[]
   sections?: Section[]
+  departmentHeadId?: string | null
+  departmentHeadName?: string | null
+  departmentHeadEmail?: string | null
+  departmentHeadAvatarUrl?: string | null
   managerName?: string
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date

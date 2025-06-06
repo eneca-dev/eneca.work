@@ -172,8 +172,7 @@ export function WorkloadView() {
 
       <div
         className={cn(
-          "w-full max-w-full rounded-xl shadow-lg border overflow-hidden",
-          "h-[calc(100vh-300px)] overflow-auto",
+          "w-full max-w-full rounded-xl border overflow-hidden",
           theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
         )}
       >

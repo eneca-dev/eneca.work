@@ -62,17 +62,6 @@ export function TimelineRow({
   // Проверяем, есть ли у раздела загрузки
   const hasLoadings = section.hasLoadings || false
 
-  // Увеличиваем ширину столбца "Раздел" для размещения аватара
-  // Заменяем сложные расчеты ширины на фиксированные значения
-  // Заменяем эти строки:
-  // const sectionWidth = (columnWidth + 80) * 1.5
-  // const projectWidth = columnWidth * columnWidths.project
-  // const objectWidth = columnWidth * columnWidths.object
-  // const stageWidth = columnWidth * columnWidths.stage
-  // const startDateWidth = columnWidth * columnWidths.startDate
-  // const endDateWidth = columnWidth * columnWidths.endDate
-  // const sectionResponsibleWidth = columnWidth * columnWidths.sectionResponsible
-
   // На фиксированные значения:
   const sectionWidth = 320 // Фиксированная ширина для раздела
   const projectWidth = 160 // Фиксированная ширина для проекта
@@ -91,13 +80,11 @@ export function TimelineRow({
     if (!date) return "-"
 
     try {
-      // Получаем день и месяц в формате ДД.ММ
+      // Получаем день и месяц в формате ДД.ММ (без года)
       const day = date.getDate().toString().padStart(2, "0")
       const month = (date.getMonth() + 1).toString().padStart(2, "0")
-      // Получаем только последние две цифры года
-      const year = date.getFullYear().toString().slice(-2)
 
-      return `${day}.${month}.${year}`
+      return `${day}.${month}`
     } catch (error) {
       console.error("Ошибка форматирования даты:", error, date)
       return "-"
@@ -149,8 +136,8 @@ export function TimelineRow({
               className={cn(
                 "p-2 font-medium border-r flex flex-col justify-between transition-colors h-full", // Уменьшаем padding с p-3 до p-2
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
-                  : "border-slate-200 bg-white group-hover/row:bg-slate-50",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
               )}
               style={{
                 width: `${sectionWidth}px`,
@@ -286,8 +273,8 @@ export function TimelineRow({
                 className={cn(
                   "p-3 border-r transition-colors h-full",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
-                    : "border-slate-200 bg-white group-hover/row:bg-slate-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
                 )}
                 style={{
                   width: `${projectWidth}px`,
@@ -309,8 +296,8 @@ export function TimelineRow({
                 className={cn(
                   "p-3 border-r transition-colors h-full",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
-                    : "border-slate-200 bg-white group-hover/row:bg-slate-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
+                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
                 )}
                 style={{
                   width: `${objectWidth}px`,
@@ -343,7 +330,7 @@ export function TimelineRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-50/70",
+                    theme === "dark" ? "group-hover/row:bg-emerald-900/20" : "group-hover/row:bg-emerald-50",
                     isMonthStart
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
@@ -502,8 +489,8 @@ function LoadingRow({
             className={cn(
               "p-2 font-medium border-r flex items-center transition-colors h-full",
               theme === "dark"
-                ? "border-slate-700 bg-slate-800 group-hover/loading:bg-slate-700"
-                : "border-slate-200 bg-white group-hover/loading:bg-slate-50",
+                ? "border-slate-700 bg-slate-800 group-hover/loading:bg-emerald-900"
+                : "border-slate-200 bg-white group-hover/loading:bg-emerald-50",
             )}
             style={{
               width: `${totalFixedWidth}px`,
@@ -600,7 +587,7 @@ function LoadingRow({
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
                   isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
-                  theme === "dark" ? "group-hover/loading:bg-slate-700/50" : "group-hover/loading:bg-slate-50/70",
+                  theme === "dark" ? "group-hover/loading:bg-emerald-900/20" : "group-hover/loading:bg-emerald-50",
                   isMonthStart
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"

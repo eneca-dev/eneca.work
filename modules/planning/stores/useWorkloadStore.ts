@@ -65,17 +65,19 @@ export const useWorkloadStore = create<WorkloadState>()(
               if (!employeesMap.has(item.user_id)) {
                 employeesMap.set(item.user_id, {
                   id: item.user_id,
+                  name: `${item.first_name} ${item.last_name}`,
                   firstName: item.first_name,
                   lastName: item.last_name,
                   fullName: `${item.first_name} ${item.last_name}`,
                   email: item.email,
                   position: item.position_name,
                   avatarUrl: item.avatar_url,
-                  teamId: item.team_id,
-                  teamName: item.team_name,
-                  teamCode: item.team_code,
-                  departmentId: item.department_id,
-                  departmentName: item.department_name,
+                  teamId: item.final_team_id,
+                  teamName: item.final_team_name,
+                  teamCode: item.final_team_name,
+                  departmentId: item.final_department_id,
+                  departmentName: item.final_department_name,
+                  workload: 0,
                   loadings: [],
                   dailyWorkloads: {},
                   hasLoadings: item.has_loadings,
@@ -93,7 +95,7 @@ export const useWorkloadStore = create<WorkloadState>()(
                   responsibleId: item.user_id,
                   responsibleName: `${item.first_name} ${item.last_name}`,
                   responsibleAvatarUrl: item.avatar_url,
-                  responsibleTeamName: item.team_name,
+                  responsibleTeamName: item.final_team_name,
                   sectionId: item.loading_section,
                   sectionName: item.section_name,
                   projectId: item.project_id,
@@ -102,6 +104,8 @@ export const useWorkloadStore = create<WorkloadState>()(
                   startDate: new Date(item.loading_start),
                   endDate: new Date(item.loading_finish),
                   rate: item.loading_rate || 1,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
                 })
 
                 // Добавляем проект в список проектов
@@ -132,7 +136,7 @@ export const useWorkloadStore = create<WorkloadState>()(
 
                 const team = teamsMap.get(employee.teamId)!
                 team.employees.push(employee)
-                team.totalEmployees += 1
+                team.totalEmployees = (team.totalEmployees || 0) + 1
               }
             })
 
@@ -151,7 +155,7 @@ export const useWorkloadStore = create<WorkloadState>()(
 
                 const department = departmentsMap.get(team.departmentId)!
                 department.teams.push(team)
-                department.totalEmployees += team.totalEmployees
+                department.totalEmployees += (team.totalEmployees || 0)
               }
             })
 

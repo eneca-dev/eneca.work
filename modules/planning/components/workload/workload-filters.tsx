@@ -40,7 +40,7 @@ export function WorkloadFilters({
   return (
     <div
       className={cn(
-        "p-4 rounded-xl shadow-md border mb-6",
+        "p-4 rounded-xl border mb-6",
         theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
       )}
     >

@@ -301,8 +301,10 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
               {showEmployeeDropdown && filteredEmployees.length > 0 && !selectedEmployee && (
                 <div
                   className={cn(
-                    "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border shadow-lg",
-                    theme === "dark" ? "bg-slate-700 border-slate-600" : "bg-white border-slate-300",
+                    "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border",
+                    theme === "dark"
+                      ? "bg-slate-800 border-slate-600"
+                      : "bg-white border-slate-300",
                   )}
                   onMouseDown={(e) => e.preventDefault()} // Предотвращаем потерю фокуса при клике
                 >

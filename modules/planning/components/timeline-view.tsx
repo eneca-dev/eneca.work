@@ -1,5 +1,5 @@
 "use client"
-import { Loader2, Moon, Sun } from "lucide-react"
+import { Loader2 } from "lucide-react"
 // Импортируем сторы напрямую из их файлов
 import { usePlanningStore } from "../stores/usePlanningStore"
 import { usePlanningFiltersStore } from "../stores/usePlanningFiltersStore"
@@ -15,41 +15,49 @@ import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
 import { Pagination } from "./pagination"
 import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
+import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
+import { PermissionBadge } from "./permission-badge"
 
 
 
 export function TimelineView() {
-  // Используем сторы
+  // Получаем состояние и действия из стора фильтров
+  const {
+    selectedProjectId,
+    selectedDepartmentId,
+    selectedTeamId,
+    selectedManagerId, // Добавляем выбранного менеджера
+    setSelectedProject,
+    setSelectedDepartment,
+    setSelectedTeam,
+    setSelectedManager,
+    resetFilters,
+    fetchFilterOptions,
+  } = usePlanningFiltersStore()
+
   const {
     sections,
     allSections,
     departments,
     isLoadingSections,
     isLoadingDepartments,
-    showDepartments,
     fetchSections,
     fetchDepartments,
     setFilters,
-    currentPage,
-    sectionsPerPage,
-    setCurrentPage,
+    expandedSections,
+    expandedDepartments,
+    toggleSectionExpanded,
+    toggleDepartmentExpanded,
     expandAllSections,
     collapseAllSections,
     expandAllDepartments,
     collapseAllDepartments,
     toggleShowDepartments,
+    showDepartments,
+    currentPage,
+    sectionsPerPage,
+    setCurrentPage,
   } = usePlanningStore()
-
-  const {
-    fetchFilterOptions,
-    setSelectedProject,
-    setSelectedDepartment,
-    setSelectedManager, // Добавляем метод для выбора менеджера
-    resetFilters,
-    selectedProjectId,
-    selectedDepartmentId,
-    selectedManagerId, // Добавляем выбранного менеджера
-  } = usePlanningFiltersStore()
 
   const {
     activeTab,
@@ -79,14 +87,9 @@ useEffect(() => {
   const { permissions } = useUserStore()
 
   // Используем тему из useSettingsStore
-  const { theme: storeTheme, setTheme } = useSettingsStore()
+  const { theme: storeTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
   const theme = storeTheme === "system" ? resolvedTheme || "light" : storeTheme
-
-  // Функция для переключения темы
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark")
-  }
 
   const { setLoading } = useUiStore()
 
@@ -100,7 +103,7 @@ useEffect(() => {
   })
 
   // Количество активных фильтров
-  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedManagerId].filter(Boolean).length
+  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId].filter(Boolean).length
 
   // Проверяем, есть ли активные фильтры
   const hasActiveFilters = activeFiltersCount > 0
@@ -110,34 +113,25 @@ useEffect(() => {
     fetchFilterOptions()
   }, [fetchFilterOptions])
 
-
-
-  // Загружаем разделы при монтировании компонента
-  useEffect(() => {
-    fetchSections()
-  }, [fetchSections])
-
-  // Загружаем отделы, если они должны быть показаны
-  useEffect(() => {
-    if (showDepartments) {
-      fetchDepartments()
-    }
-  }, [showDepartments, fetchDepartments, selectedProjectId, selectedDepartmentId])
-
-  // Применяем фильтры при их изменении
+  // Применяем фильтры при их изменении или при монтировании компонента
   useEffect(() => {
     // Устанавливаем состояние загрузки перед применением фильтров
     setLoading(true)
 
-    // Применяем фильтры, включая менеджера
-    setFilters(selectedProjectId, selectedDepartmentId, null, selectedManagerId)
+    // Применяем фильтры, включая команду
+    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId)
 
     // Сбрасываем состояние загрузки после небольшой задержки
     const timer = setTimeout(() => setLoading(false), 300)
     return () => clearTimeout(timer)
-  }, [selectedProjectId, selectedDepartmentId, selectedManagerId, setFilters, setLoading])
+  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, setFilters, setLoading])
 
-
+  // Загружаем отделы при переключении showDepartments
+  useEffect(() => {
+    if (showDepartments && departments.length === 0) {
+      fetchDepartments()
+    }
+  }, [showDepartments, departments.length, fetchDepartments])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -167,6 +161,11 @@ useEffect(() => {
   const handleDepartmentChange = (departmentId: string | null) => {
     console.log("Изменение отдела:", departmentId)
     setSelectedDepartment(departmentId)
+  }
+
+  const handleTeamChange = (teamId: string | null) => {
+    console.log("Изменение команды:", teamId)
+    setSelectedTeam(teamId)
   }
 
 // Добавляем обработчик для менеджера
@@ -227,8 +226,10 @@ useEffect(() => {
         <div className="flex items-center gap-3">
           <div
             className={cn(
-              "p-2 rounded-xl shadow-sm border",
-              theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
+              "p-2 rounded-xl border",
+              theme === "dark"
+                ? "bg-slate-800 border-slate-700 text-slate-200"
+                : "bg-white border-slate-200 text-slate-800",
             )}
           >
             <div className="flex items-center gap-2">
@@ -238,20 +239,24 @@ useEffect(() => {
               </h1>
             </div>
           </div>
-
-          {/* Добавляем переключатель темы */}
-          <button
-            onClick={toggleTheme}
-            className={cn(
-              "p-2 rounded-xl shadow-sm border flex items-center justify-center",
-              theme === "dark"
-                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50",
-            )}
-            title={`Переключить на ${theme === "dark" ? "светлую" : "темную"} тему`}
-          >
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          
+          {/* Бейдж разрешений */}
+          {/* <PermissionBadge 
+            theme={theme} 
+            userRole="admin" // Здесь можно передавать реальную роль пользователя
+            debugInfo={{
+              reason: "Роль установлена статически для демонстрации",
+              permissions: [
+                "Просмотр всех проектов",
+                "Редактирование планирования",
+                "Управление пользователями",
+                "Доступ к отчетам"
+              ],
+              userId: "demo-user-123",
+              source: "Hardcoded в TimelineView"
+            }}
+            showDebug={true}
+          /> */}
         </div>
 
         <TimelineHeaderTabs
@@ -267,6 +272,7 @@ useEffect(() => {
         theme={theme}
         onProjectChange={handleProjectChange}
         onDepartmentChange={handleDepartmentChange}
+        onTeamChange={handleTeamChange}
         onManagerChange={handleManagerChange}
         onResetFilters={handleResetFilters}
         showDepartments={showDepartments}
@@ -301,7 +307,7 @@ useEffect(() => {
       {/* Передаем тему в TimelineGrid */}
       <div
         className={cn(
-          "w-full max-w-full rounded-xl shadow-sm border overflow-hidden relative",
+          "w-full max-w-full rounded-xl border overflow-hidden relative",
           "h-[calc(100vh-240px)] overflow-y-auto", // Возвращаем фиксированную высоту
           theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
         )}
