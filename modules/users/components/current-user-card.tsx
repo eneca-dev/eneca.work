@@ -26,6 +26,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
   const [teamName, setTeamName] = useState<string>("")
   const [positionName, setPositionName] = useState<string>("")
   const [categoryName, setCategoryName] = useState<string>("")
+  const [roleName, setRoleName] = useState<string>("")
   
   // Используем существующий клиент Supabase
   const supabase = createClient()
@@ -89,6 +90,19 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
           }
         }
 
+        // Получаем информацию о роли
+        if (userState.profile.roleId) {
+          const { data: roleData } = await supabase
+            .from("roles")
+            .select("name")
+            .eq("id", userState.profile.roleId)
+            .single()
+          
+          if (roleData) {
+            setRoleName(roleData.name || "")
+          }
+        }
+
       } catch (error) {
         console.error("Ошибка получения метаданных:", error)
       }
@@ -119,7 +133,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         department: departmentName,
         team: teamName,
         category: categoryName,
-        role: userState.role || "",
+        role: "", // Роль больше не отображается в карточке
         isActive: true,
         dateJoined: "",
         workLocation: 
@@ -141,7 +155,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
     } else {
       console.log("CurrentUserCard: Нет данных ни в Zustand, ни в fallbackUser")
     }
-  }, [userState, fallbackUser, departmentName, teamName, positionName, categoryName])
+  }, [userState, fallbackUser, departmentName, teamName, positionName, categoryName, roleName])
 
   // Функция для отображения значка и цвета в зависимости от расположения
   const getLocationBadge = (location: "office" | "remote" | "hybrid") => {
@@ -246,11 +260,11 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
                       </TooltipContent>
                     </Tooltip>
                   )}
-                  {currentUser.role && currentUser.workLocation && (
+                  {roleName && (currentUser.workLocation || currentUser.position || currentUser.department || currentUser.team) && (
                     <span>•</span>
                   )}
-                  {currentUser.role && (
-                    <span>{currentUser.role}</span>
+                  {roleName && (
+                    <span className="text-gray-400 dark:text-gray-500">{roleName}</span>
                   )}
                 </div>
               </div>

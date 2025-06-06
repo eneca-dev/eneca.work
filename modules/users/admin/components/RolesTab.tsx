@@ -20,52 +20,41 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check, Loader2, X, Save, Trash, AlertTriangle, Info } from "lucide-react"
+import { Check, Loader2, X, Save, Trash, AlertTriangle, Info, Key } from "lucide-react"
 import { useNotification } from "@/lib/notification-context"
 
-// Константы
-const ROLE_NAME_MAX_LENGTH = 20;
-const ROLE_DESCRIPTION_MAX_LENGTH = 50;
+const ROLE_NAME_MAX_LENGTH = 20
+const ROLE_DESCRIPTION_MAX_LENGTH = 50
+const PROTECTED_ROLES = ['user', 'admin']
 
-// Интерфейсы и типы для системы ролей и разрешений
 interface Role {
-  id: string;
-  name: string;
-  description?: string;
+  id: string
+  name: string
+  description?: string
 }
 
 interface Permission {
-  id: string;
-  name: string;
-  description?: string;
+  id: string
+  name: string
+  description?: string
 }
 
 interface RolePermission {
-  role_id: string;
-  permission_id: string;
+  role_id: string
+  permission_id: string
 }
 
-// Отслеживание изменений в матрице разрешений до сохранения
 interface PendingChange {
-  roleId: string;
-  permissionId: string;
-  action: 'add' | 'remove'; // add - добавление разрешения, remove - удаление
+  roleId: string
+  permissionId: string
+  action: 'add' | 'remove'
 }
 
-/**
- * Генерирует уникальный идентификатор для новых записей
- * @returns UUID v4 строка
- */
 function generateUUID(): string {
-  return crypto.randomUUID();
+  return crypto.randomUUID()
 }
 
-/**
- * Компонент управления ролями и разрешениями
- * Позволяет создавать/удалять роли и управлять их разрешениями через матрицу
- */
 export default function RolesTab() {
-  // Основное состояние
   const [roles, setRoles] = useState<Role[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([])
@@ -73,7 +62,6 @@ export default function RolesTab() {
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
 
-  // Модальные окна
   const [createRoleModalOpen, setCreateRoleModalOpen] = useState(false)
   const [deleteRoleModalOpen, setDeleteRoleModalOpen] = useState(false)
   const [deleteConfirmModalOpen, setDeleteConfirmModalOpen] = useState(false)
@@ -81,13 +69,11 @@ export default function RolesTab() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [selectedRoleId, setSelectedRoleId] = useState("")
 
-  // Данные для создания роли
   const [newRoleName, setNewRoleName] = useState("")
   const [newRoleDescription, setNewRoleDescription] = useState("")
 
   const notification = useNotification()
   
-  // Мемоизируем функцию загрузки данных
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -128,50 +114,30 @@ export default function RolesTab() {
     }
   }, [notification])
 
-  // Загружаем данные при монтировании компонента
   useEffect(() => {
     fetchData()
   }, [fetchData])
 
-  // Мемоизируем отфильтрованные роли
   const filteredRoles = useMemo(() => {
     return roles.filter(role =>
       role.name.toLowerCase().includes(search.toLowerCase())
     )
   }, [roles, search])
 
-  // Проверяем наличие несохраненных изменений
   const hasChanges = useMemo(() => {
     return pendingChanges.length > 0
   }, [pendingChanges])
 
-  /**
-   * Проверяет наличие разрешения у роли
-   * @param roleId - ID роли
-   * @param permissionId - ID разрешения
-   * @returns true если разрешение есть у роли
-   */
   const checkHasPermission = useCallback((roleId: string, permissionId: string) => {
     return rolePermissions.some(rp => rp.role_id === roleId && rp.permission_id === permissionId)
   }, [rolePermissions])
 
-  /**
-   * Находит ожидающее изменение для комбинации роль-разрешение
-   * Используется для отображения промежуточного состояния в матрице
-   */
   const getPendingChange = useCallback((roleId: string, permissionId: string) => {
     return pendingChanges.find(change => 
       change.roleId === roleId && change.permissionId === permissionId
     )
   }, [pendingChanges])
 
-  /**
-   * Определяет стиль ячейки матрицы на основе текущего состояния и ожидающих изменений
-   * - Зеленый: разрешение будет добавлено
-   * - Серый: разрешение будет удалено
-   * - Черный: активное разрешение
-   * - Белый: неактивное разрешение
-   */
   const getCellStyle = useCallback((hasPermission: boolean, pendingChange?: PendingChange) => {
     if (pendingChange) {
       if (pendingChange.action === 'add') {
@@ -204,26 +170,34 @@ export default function RolesTab() {
     return null
   }, [])
 
-  /**
-   * Обработчик клика по ячейке матрицы
-   * Добавляет или удаляет изменение в список ожидающих изменений
-   * Изменения применяются только после нажатия кнопки "Сохранить"
-   */
+  const isProtectedRole = useCallback((roleName: string) => {
+    return PROTECTED_ROLES.includes(roleName.toLowerCase())
+  }, [])
+
   const handleCellClick = useCallback((roleId: string, permissionId: string) => {
+    const role = roles.find(r => r.id === roleId)
+    
+    if (role && isProtectedRole(role.name)) {
+      const roleDisplayName = role.name === 'admin' ? 'администратора' : 'пользователя'
+      notification.error(
+        "Действие запрещено", 
+        `Роль ${roleDisplayName} нельзя изменить или удалить`
+      )
+      return
+    }
+
     const hasPermission = checkHasPermission(roleId, permissionId)
     const existingChangeIndex = pendingChanges.findIndex(change => 
       change.roleId === roleId && change.permissionId === permissionId
     )
     
     if (existingChangeIndex >= 0) {
-      // Убираем существующее изменение если кликнули повторно
       setPendingChanges(prev => prev.filter((_, index) => index !== existingChangeIndex))
     } else {
-      // Добавляем новое изменение
       const action = hasPermission ? 'remove' : 'add'
       setPendingChanges(prev => [...prev, { roleId, permissionId, action }])
     }
-  }, [checkHasPermission, pendingChanges])
+  }, [checkHasPermission, pendingChanges, roles, isProtectedRole, notification])
 
   const handleCreateRole = useCallback(() => {
     setNewRoleName("")
@@ -242,7 +216,6 @@ export default function RolesTab() {
     }
   }, [hasChanges])
 
-  // Обработчики модальных окон
   const handleCreateRoleSubmit = useCallback(async () => {
     if (!newRoleName.trim()) {
       notification.error("Validation Error", "Role name cannot be empty")
@@ -259,7 +232,6 @@ export default function RolesTab() {
       return
     }
 
-    // Check for duplicate role names (case-insensitive)
     const existingRole = roles.find(role => 
       role.name.toLowerCase() === newRoleName.trim().toLowerCase()
     )
@@ -313,13 +285,11 @@ export default function RolesTab() {
       setLoading(true)
       const supabase = createClient()
       
-      // Сначала удаляем все связи роли с разрешениями
       await supabase
         .from("role_permissions")
         .delete()
         .eq("role_id", selectedRole.id)
       
-      // Затем удаляем саму роль
       const { error } = await supabase
         .from("roles")
         .delete()
@@ -342,10 +312,6 @@ export default function RolesTab() {
     }
   }, [selectedRole, notification, fetchData])
 
-  /**
-   * Saves all accumulated changes to the database using optimized batch operations
-   * Uses bulk operations for better performance and atomicity
-   */
   const handleSaveChangesExecute = useCallback(async () => {
     try {
       setLoading(true)
@@ -354,7 +320,6 @@ export default function RolesTab() {
       const toInsert = []
       const toDeleteIds = []
       
-      // Separate changes into insert and delete operations
       for (const change of pendingChanges) {
         if (change.action === 'add') {
           toInsert.push({
@@ -363,7 +328,6 @@ export default function RolesTab() {
             permission_id: change.permissionId
           })
         } else {
-          // Collect IDs for bulk delete
           const existingPermission = rolePermissions.find(rp => 
             rp.role_id === change.roleId && rp.permission_id === change.permissionId
           )
@@ -373,12 +337,10 @@ export default function RolesTab() {
         }
       }
       
-      // Track successful operations for potential rollback
       const successfulInserts = []
       const successfulDeletes = []
       
       try {
-        // Execute insert operations
         if (toInsert.length > 0) {
           const { data: insertedData, error: insertError } = await supabase
             .from("role_permissions")
@@ -392,7 +354,6 @@ export default function RolesTab() {
           successfulInserts.push(...(insertedData || []))
         }
         
-        // Execute delete operations with better error handling
         if (toDeleteIds.length > 0) {
           for (const item of toDeleteIds) {
             const { error: deleteError } = await supabase
@@ -409,7 +370,6 @@ export default function RolesTab() {
           }
         }
         
-        // Update data and clear changes only if all operations succeeded
         await fetchData()
         setPendingChanges([])
         setSaveChangesModalOpen(false)
@@ -417,11 +377,9 @@ export default function RolesTab() {
         notification.success("Изменения сохранены", "Разрешения ролей успешно обновлены")
         
       } catch (operationError) {
-        // Attempt to rollback successful operations
         console.error('Ошибка при выполнении операций:', operationError)
         
         try {
-          // Rollback successful inserts
           if (successfulInserts.length > 0) {
             const rollbackIds = successfulInserts.map(item => item.id)
             await supabase
@@ -430,7 +388,6 @@ export default function RolesTab() {
               .in("id", rollbackIds)
           }
           
-          // Rollback successful deletes by re-inserting
           if (successfulDeletes.length > 0) {
             const rollbackInserts = successfulDeletes.map(item => ({
               id: generateUUID(),
@@ -450,7 +407,6 @@ export default function RolesTab() {
             "Не удалось откатить изменения. Обновите страницу и попробуйте снова.")
         }
         
-        // Refresh data to ensure consistency
         await fetchData()
       }
       
@@ -463,7 +419,6 @@ export default function RolesTab() {
     }
   }, [pendingChanges, notification, fetchData, rolePermissions])
 
-  // Рендер матрицы разрешений
   const renderPermissionMatrix = () => {
     if (loading) {
       return (
@@ -492,9 +447,26 @@ export default function RolesTab() {
               </TableHead>
               {filteredRoles.map(role => (
                 <TableHead key={role.id} className="w-32 text-center">
-                  <span className="truncate" title={role.name}>
-                    {role.name}
-                  </span>
+                  <div className="flex items-center justify-center gap-1" title={role.name}>
+                    <span className="truncate">
+                      {role.name}
+                    </span>
+                    {isProtectedRole(role.name) && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Key className="h-3 w-3 stroke-[1.5] fill-transparent dark:stroke-white stroke-black" />
+                          </TooltipTrigger>
+                          <TooltipContent 
+                            className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/50 dark:border-green-700 dark:text-green-200"
+                            side="top"
+                          >
+                            <p className="text-sm">Защищенная роль</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -541,7 +513,6 @@ export default function RolesTab() {
     const cellStyle = getCellStyle(hasPermission, pendingChange)
     const icon = getCellIcon(hasPermission, pendingChange)
     
-    // Находим объекты роли и разрешения
     const permission = permissions.find(p => p.id === permissionId)
     const role = roles.find(r => r.id === roleId)
     
@@ -559,14 +530,13 @@ export default function RolesTab() {
     )
   }
 
-  // Рендер модальных окон
   const renderCreateRoleModal = () => (
     <Dialog open={createRoleModalOpen} onOpenChange={setCreateRoleModalOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Создание роли</DialogTitle>
           <DialogDescription>
-            Добавление новой роли в таблицу "roles"
+            Введите название новой роли и при необходимости добавьте её описание. 
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -622,7 +592,7 @@ export default function RolesTab() {
         <DialogHeader>
           <DialogTitle>Удаление роли</DialogTitle>
           <DialogDescription>
-            Выберите роль для удаления
+            Выберите роль, которую хотите удалить. Обратите внимание, что системные роли (Администратор и Пользователь) удалить нельзя.
           </DialogDescription>
         </DialogHeader>
         <Select value={selectedRoleId} onValueChange={setSelectedRoleId} disabled={loading}>
@@ -630,7 +600,7 @@ export default function RolesTab() {
             <SelectValue placeholder="Выберите роль" />
           </SelectTrigger>
           <SelectContent>
-            {roles.map(role => (
+            {roles.filter(role => !isProtectedRole(role.name)).map(role => (
               <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
             ))}
           </SelectContent>
@@ -664,8 +634,7 @@ export default function RolesTab() {
             Удаление роли
           </DialogTitle>
           <DialogDescription>
-            Вы уверены, что хотите удалить роль "{selectedRole?.name}"? 
-            Это действие нельзя отменить.
+            Вы собираетесь удалить роль "{selectedRole?.name}". Это действие приведет к удалению всех связанных разрешений и не может быть отменено. Пользователи с этой ролью потеряют соответствующие права доступа.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -702,8 +671,7 @@ export default function RolesTab() {
         <DialogHeader>
           <DialogTitle>Сохранение изменений</DialogTitle>
           <DialogDescription>
-            Вы уверены, что хотите сохранить эти изменения? 
-            Это действие нельзя отменить.
+            Вы внесли изменения в разрешения ролей. После сохранения эти изменения вступят в силу немедленно и повлияют на права доступа пользователей с измененными ролями.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -735,7 +703,6 @@ export default function RolesTab() {
 
   return (
     <div className="mb-6 space-y-6">
-      {/* Верхний блок с заголовком и кнопками */}
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -769,14 +736,12 @@ export default function RolesTab() {
         </CardContent>
       </Card>
 
-      {/* Таблица-матрица разрешений */}
       <Card>
         <CardContent className="p-0">
           {renderPermissionMatrix()}
         </CardContent>
       </Card>
 
-      {/* Модальные окна */}
       {renderCreateRoleModal()}
       {renderDeleteRoleModal()}
       {renderDeleteConfirmModal()}

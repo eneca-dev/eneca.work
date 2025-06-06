@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
-import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { useUserStore } from "@/stores/useUserStore"
+import { WeeklyCalendar } from "@/components/weekly-calendar"
 
 interface SidebarProps {
   user: {
@@ -62,7 +62,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     },
     {
       title: "Декомпозиция",
-      href: "/dashboard/decomposition", 
+      href: "/dashboard/decomposition",
       icon: Network,
     },
 
