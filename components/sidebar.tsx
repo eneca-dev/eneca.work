@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, Settings } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
@@ -65,11 +65,13 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       href: "/dashboard/decomposition",
       icon: Network,
     },
+
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
   const isUsersActive = pathname === "/dashboard/users"
   const isDebugActive = pathname === "/dashboard/debug"
+  const isReportActive = pathname === "/dashboard/report"
 
   return (
     <div
@@ -173,6 +175,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                 </Button>
               </Link>
 
+              <Link href="/dashboard/report">
+                <Button
+                  variant={isReportActive ? "secondary" : "ghost"}
+                  size="icon"
+                  className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
+                >
+                  <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                </Button>
+              </Link>
+
               <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -199,6 +211,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                     className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                   >
                     <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
+                  </Button>
+                </Link>
+                
+                <Link href="/dashboard/report">
+                  <Button
+                    variant={isReportActive ? "secondary" : "ghost"}
+                    size="icon"
+                    className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
+                  >
+                    <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
                 
