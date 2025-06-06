@@ -18,24 +18,29 @@ export function RichTextEditor({ value, onChange, placeholder, label, required }
   const editorRef = useRef<HTMLDivElement>(null)
 
   // Конвертируем markdown в HTML для отображения
-  const markdownToHtml = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/__(.*?)__/g, '<u>$1</u>')
-      .replace(/\n/g, '<br>')
-  }
+const markdownToHtml = (text: string) => {
+  return text
+    .replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^\*]+)\*/g, '<em>$1</em>')
+    .replace(/__([^_]+)__/g, '<u>$1</u>')
+    .replace(/\n/g, '<br>')
+}
 
   // Конвертируем HTML обратно в markdown
-  const htmlToMarkdown = (html: string) => {
-    return html
-      .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
-      .replace(/<em>(.*?)<\/em>/g, '*$1*')
-      .replace(/<u>(.*?)<\/u>/g, '__$1__')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<div><br><\/div>/g, '\n')
-      .replace(/<div>(.*?)<\/div>/g, '\n$1')
-  }
+const htmlToMarkdown = (html: string) => {
+ // Sanitize HTML to prevent XSS
+ const tempDiv = document.createElement('div')
+ tempDiv.textContent = html
+ const sanitizedHtml = tempDiv.innerHTML
+ 
+  return html
+    .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+    .replace(/<em>(.*?)<\/em>/g, '*$1*')
+    .replace(/<u>(.*?)<\/u>/g, '__$1__')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<div><br><\/div>/g, '\n')
+    .replace(/<div>(.*?)<\/div>/g, '\n$1')
+}
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== markdownToHtml(value)) {
@@ -101,17 +106,23 @@ export function RichTextEditor({ value, onChange, placeholder, label, required }
       </div>
 
       {/* Редактор */}
-      <div
-        ref={editorRef}
-        contentEditable
-        onInput={handleInput}
-        onMouseUp={handleSelectionChange}
-        onKeyUp={handleSelectionChange}
-        className="min-h-[100px] p-3 border border-gray-200 dark:border-gray-700 rounded-b-md bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-        style={{ whiteSpace: 'pre-wrap' }}
-        data-placeholder={placeholder}
-        suppressContentEditableWarning={true}
-      />
+<div
+  ref={editorRef}
+  contentEditable
+ role="textbox"
+ aria-label={label || "Rich text editor"}
+ aria-multiline="true"
+ aria-required={required}
+  onInput={handleInput}
+  onMouseUp={handleSelectionChange}
+  onKeyUp={handleSelectionChange}
+ onFocus={handleSelectionChange}
+ onBlur={handleSelectionChange}
+  className="min-h-[100px] p-3 border border-gray-200 dark:border-gray-700 rounded-b-md bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
+  style={{ whiteSpace: 'pre-wrap' }}
+  data-placeholder={placeholder}
+  suppressContentEditableWarning={true}
+/>
       
       <style jsx>{`
         [contenteditable]:empty:before {
