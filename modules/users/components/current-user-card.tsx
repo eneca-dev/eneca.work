@@ -22,118 +22,95 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const userState = useUserStore() // Получаем все состояние без деструктурирования
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [departmentName, setDepartmentName] = useState<string>("")
-  const [teamName, setTeamName] = useState<string>("")
-  const [positionName, setPositionName] = useState<string>("")
-  const [categoryName, setCategoryName] = useState<string>("")
-  const [roleName, setRoleName] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
   
   // Используем существующий клиент Supabase
   const supabase = createClient()
   const updateAvatar = useUserStore((state) => state.updateAvatar)
 
-  // Получаем имена отделов, команд и должностей из Supabase
+  // Получаем полные данные пользователя из view_users
   useEffect(() => {
-    async function fetchMetadata() {
-      if (!userState.profile) return
+    async function fetchUserData() {
+      if (!userState.isAuthenticated || !userState.id) return
 
+      setIsLoading(true)
       try {
-        // Получаем информацию об отделе
-        if (userState.profile.departmentId) {
-          const { data: departmentData } = await supabase
-            .from("departments")
-            .select("department_name")
-            .eq("department_id", userState.profile.departmentId)
-            .single()
-          
-          if (departmentData) {
-            setDepartmentName(departmentData.department_name || "")
+        console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
+        
+        const { data: userData, error } = await supabase
+          .from("view_users")
+          .select("*")
+          .eq("user_id", userState.id)
+          .single()
+
+        if (error) {
+          console.error("Ошибка получения данных пользователя из view_users:", error)
+          // Если не удалось получить данные из view, используем данные из Zustand
+          if (userState.profile) {
+            setCurrentUser(createUserFromZustand())
           }
+          return
         }
 
-        // Получаем информацию о команде
-        if (userState.profile.teamId) {
-          const { data: teamData } = await supabase
-            .from("teams")
-            .select("team_name")
-            .eq("team_id", userState.profile.teamId)
-            .single()
+        if (userData) {
+          console.log("CurrentUserCard: Получены данные из view_users:", userData)
           
-          if (teamData) {
-            setTeamName(teamData.team_name || "")
+          // Формируем объект пользователя из данных view_users
+          const formattedUser: User = {
+            id: userData.user_id,
+            email: userData.email || "",
+            name: userData.full_name?.trim() || 
+                  (userData.first_name && userData.last_name 
+                    ? `${userData.first_name} ${userData.last_name}`.trim()
+                    : userState.name || ""),
+            avatar_url: userData.avatar_url || "",
+            position: userData.position_name === "Без должности" ? "" : userData.position_name || "",
+            department: userData.department_name === "Без отдела" ? "" : userData.department_name || "",
+            team: userData.team_name === "Без команды" ? "" : userData.team_name || "",
+            category: userData.category_name === "Не применяется" ? "" : userData.category_name || "",
+            role: userData.role_name || "",
+            isActive: userData.is_active ?? true,
+            dateJoined: userData.created_at || "",
+            workLocation: 
+              userData.work_format === "Гибридный" ? "hybrid" : 
+              userData.work_format === "В офисе" ? "office" : 
+              userData.work_format === "Удаленно" ? "remote" : 
+              "office",
+            address: userData.address || "",
+            employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) * 100 : 100,
+            salary: userData.salary || 0,
+            isHourly: userData.is_hourly || false
           }
-        }
-
-        // Получаем информацию о должности
-        if (userState.profile.positionId) {
-          const { data: positionData } = await supabase
-            .from("positions")
-            .select("position_name")
-            .eq("position_id", userState.profile.positionId)
-            .single()
           
-          if (positionData) {
-            setPositionName(positionData.position_name || "")
-          }
-        }
-
-        // Получаем информацию о категории
-        if (userState.profile.categoryId) {
-          const { data: categoryData } = await supabase
-            .from("categories")
-            .select("category_name")
-            .eq("category_id", userState.profile.categoryId)
-            .single()
-          
-          if (categoryData) {
-            setCategoryName(categoryData.category_name || "")
-          }
-        }
-
-        // Получаем информацию о роли
-        if (userState.profile.roleId) {
-          const { data: roleData } = await supabase
-            .from("roles")
-            .select("name")
-            .eq("id", userState.profile.roleId)
-            .single()
-          
-          if (roleData) {
-            setRoleName(roleData.name || "")
-          }
+          console.log("CurrentUserCard: Сформирован пользователь из view_users:", formattedUser)
+          setCurrentUser(formattedUser)
         }
 
       } catch (error) {
-        console.error("Ошибка получения метаданных:", error)
+        console.error("Критическая ошибка при получении данных пользователя:", error)
+        // Fallback к данным из Zustand
+        if (userState.profile) {
+          setCurrentUser(createUserFromZustand())
+        }
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    fetchMetadata()
-  }, [userState.profile])
-
-  // Отладочный вывод для понимания, что содержится в хранилище
-  useEffect(() => {
-    console.log("CurrentUserCard: Состояние из Zustand:", userState)
-  }, [userState])
-
-  // Подготавливаем данные для отображения
-  useEffect(() => {
-    if (userState.isAuthenticated && userState.id) {
-      console.log("CurrentUserCard: Начинаем формировать пользователя из Zustand")
-      
-      // Преобразуем данные из Zustand в формат User
-      const formattedUser: User = {
-        id: userState.id,
+    // Функция для создания пользователя из данных Zustand (fallback)
+    function createUserFromZustand(): User {
+      return {
+        id: userState.id!,
         email: userState.email || "",
         name: userState.profile?.firstName && userState.profile?.lastName 
           ? `${userState.profile.firstName} ${userState.profile.lastName}`
           : userState.name || "",
-        avatar_url: userState.profile?.avatar_url || "", // Используем avatar_url из профиля
-        position: positionName,
-        department: departmentName,
-        team: teamName,
-        category: categoryName,
-        role: "", // Роль больше не отображается в карточке
+        avatar_url: userState.profile?.avatar_url || "",
+        position: "",
+        department: "",
+        team: "",
+        category: "",
+        role: "",
         isActive: true,
         dateJoined: "",
         workLocation: 
@@ -146,16 +123,23 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         salary: userState.profile?.salary || 0,
         isHourly: userState.profile?.isHourly || false
       }
-      
-      console.log("CurrentUserCard: Сформирован пользователь:", formattedUser)
-      setCurrentUser(formattedUser)
-    } else if (fallbackUser) {
-      console.log("CurrentUserCard: Используем fallbackUser, т.к. в Zustand нет данных")
-      setCurrentUser(fallbackUser)
-    } else {
-      console.log("CurrentUserCard: Нет данных ни в Zustand, ни в fallbackUser")
     }
-  }, [userState, fallbackUser, departmentName, teamName, positionName, categoryName, roleName])
+
+    fetchUserData()
+  }, [userState.isAuthenticated, userState.id, supabase])
+
+  // Отладочный вывод для понимания, что содержится в хранилище
+  useEffect(() => {
+    console.log("CurrentUserCard: Состояние из Zustand:", userState)
+  }, [userState])
+
+  // Fallback к переданному пользователю, если нет данных
+  useEffect(() => {
+    if (!currentUser && !isLoading && fallbackUser) {
+      console.log("CurrentUserCard: Используем fallbackUser, т.к. нет данных из view_users")
+      setCurrentUser(fallbackUser)
+    }
+  }, [currentUser, isLoading, fallbackUser])
 
   // Функция для отображения значка и цвета в зависимости от расположения
   const getLocationBadge = (location: "office" | "remote" | "hybrid") => {
@@ -208,13 +192,15 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
   }
 
   // Если данных нет, показываем пустую карточку или индикатор загрузки
-  if (!currentUser) {
-    console.log("CurrentUserCard: Отображаем заглушку, т.к. currentUser = null")
+  if (isLoading || !currentUser) {
+    console.log("CurrentUserCard: Отображаем заглушку, загрузка:", isLoading, "currentUser:", !!currentUser)
     return (
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-center h-16">
-            <p className="text-gray-500 dark:text-gray-400">Загрузка профиля...</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              {isLoading ? "Загрузка профиля..." : "Профиль недоступен"}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -260,11 +246,13 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
                       </TooltipContent>
                     </Tooltip>
                   )}
-                  {roleName && (currentUser.workLocation || currentUser.position || currentUser.department || currentUser.team) && (
+                  {currentUser.role && (currentUser.workLocation || currentUser.position || currentUser.department || currentUser.team) && (
                     <span>•</span>
                   )}
-                  {roleName && (
-                    <span className="text-gray-400 dark:text-gray-500">{roleName}</span>
+                  {currentUser.role && (
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                      {currentUser.role}
+                    </span>
                   )}
                 </div>
               </div>

@@ -32,82 +32,41 @@ export async function getUsers(): Promise<User[]> {
   console.log("=== getUsers function ===");
   const supabase = createClient();
   
-  // Получаем профили пользователей
-  const { data: profiles, error } = await supabase.from("profiles").select(`
-      user_id,
-      first_name,
-      last_name,
-      email,
-      created_at,
-      work_format,
-      address,
-      employment_rate,
-      salary,
-      is_hourly,
-      avatar_url,
-      departments!profiles_department_membership_fkey(department_id, department_name),
-      teams(team_id, team_name),
-      positions(position_id, position_name),
-      categories(category_id, category_name)
-    `)
+  // Используем новое представление view_users для получения всех данных одним запросом
+  const { data: users, error } = await supabase
+    .from("view_users")
+    .select("*")
+    .order("last_name", { ascending: true })
 
   if (error) {
-    console.error("Error fetching users:", error)
+    console.error("Error fetching users from view:", error)
     return []
   }
 
-  console.log("Получено профилей из БД:", profiles?.length || 0);
+  console.log("Получено пользователей из представления:", users?.length || 0);
 
-  // Получаем все роли отдельным запросом
-  const { data: rolesData, error: rolesError } = await supabase
-    .from("roles")
-    .select("id, name")
-  
-  if (rolesError) {
-    console.error("Error fetching roles:", rolesError)
-  }
+  // Преобразуем данные из представления в формат User
+  const formattedUsers = users?.map((user) => ({
+    id: user.user_id,
+    name: user.full_name || `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+    email: user.email || "",
+    avatar_url: user.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`,
+    position: user.position_name || "",
+    department: user.department_name || "",
+    team: user.team_name || "",
+    category: user.category_name || "",
+    role: user.role_name || "",
+    isActive: user.is_active || true,
+    dateJoined: user.created_at,
+    workLocation: mapWorkFormat(user.work_format),
+    address: user.address || "",
+    employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
+    salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
+    isHourly: user.is_hourly !== null ? user.is_hourly : true,
+  })) || []
 
-  console.log("Получено ролей из БД:", rolesData?.length || 0);
-
-  // Создаем карту ролей для быстрого поиска
-  const rolesMap = new Map<string, string>()
-  if (rolesData) {
-    rolesData.forEach((role) => {
-      rolesMap.set(role.id, role.name)
-    })
-  }
-
-  const users = profiles.map((profile) => {
-    const department = profile.departments as unknown as { department_name: string } | null
-    const team = profile.teams as unknown as { team_name: string } | null
-    const position = profile.positions as unknown as { position_name: string } | null
-    const category = profile.categories as unknown as { category_name: string } | null
-    
-    // Получаем имя роли по role_id
-    const roleName = profile.role_id ? rolesMap.get(profile.role_id) : ""
-
-    return {
-      id: profile.user_id,
-      name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
-      email: profile.email || "",
-      avatar_url: profile.avatar_url || `/placeholder.svg?height=40&width=40&text=${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`,
-      position: position?.position_name || "",
-      department: department?.department_name || "",
-      team: team?.team_name || "",
-      category: category?.category_name || "",
-      role: roleName || "",
-      isActive: true, // Предполагаем, что все пользователи активны
-      dateJoined: profile.created_at,
-      workLocation: mapWorkFormat(profile.work_format),
-      address: profile.address || "",
-      employmentRate: profile.employment_rate !== null ? profile.employment_rate : 1,
-      salary: profile.salary !== null ? profile.salary : profile.is_hourly ? 15 : 1500, // Разумные значения по умолчанию
-      isHourly: profile.is_hourly !== null ? profile.is_hourly : true,
-    }
-  })
-
-  console.log("Обработано пользователей:", users.length);
-  return users
+  console.log("Обработано пользователей:", formattedUsers.length);
+  return formattedUsers
 }
 
 // Получение всех отделов

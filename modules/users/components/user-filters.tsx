@@ -5,12 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronUp, Filter, Building2, Home, Briefcase } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { User } from "@/types/db"
 
-// Обновим интерфейс UserFiltersProps, чтобы включить workLocations
+// Обновим интерфейс UserFiltersProps, чтобы включить roles
 interface UserFiltersProps {
   onFilterChange?: (filters: {
     departments: string[]
@@ -18,6 +17,7 @@ interface UserFiltersProps {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }) => void
   users: User[] // Добавим пользователей для фильтрации
 }
@@ -27,13 +27,15 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [openTeams, setOpenTeams] = useState(true)
   const [openCategories, setOpenCategories] = useState(true)
   const [openPositions, setOpenPositions] = useState(true)
-  const [openWorkLocations, setOpenWorkLocations] = useState(true) // Добавим состояние для расположения
+  const [openWorkLocations, setOpenWorkLocations] = useState(true)
+  const [openRoles, setOpenRoles] = useState(true) // Добавим состояние для ролей
 
   const [departments, setDepartments] = useState<string[]>([])
   const [teams, setTeams] = useState<string[]>([])
   const [positions, setPositions] = useState<string[]>([])
   const [categories, setCategories] = useState<string[]>([])
-  const [workLocations, setWorkLocations] = useState<string[]>([]) // Добавим состояние для расположений
+  const [workLocations, setWorkLocations] = useState<string[]>([])
+  const [roles, setRoles] = useState<string[]>([]) // Добавим состояние для ролей
   const [isLoading, setIsLoading] = useState(true)
 
   // Состояние для выбранных фильтров
@@ -41,7 +43,8 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedPositions, setSelectedPositions] = useState<string[]>([])
-  const [selectedWorkLocations, setSelectedWorkLocations] = useState<string[]>([]) // Добавим состояние для выбранных расположений
+  const [selectedWorkLocations, setSelectedWorkLocations] = useState<string[]>([])
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]) // Добавим состояние для выбранных ролей
 
   // Состояния для поиска
   const [searchDepartment, setSearchDepartment] = useState("")
@@ -58,12 +61,14 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
       const uniquePositions = [...new Set(users.map((user) => user.position))].filter(Boolean).sort()
       const uniqueCategories = [...new Set(users.map((user) => user.category))].filter(Boolean).sort()
       const uniqueWorkLocations = [...new Set(users.map((user) => user.workLocation))].filter(Boolean).sort()
+      const uniqueRoles = [...new Set(users.map((user) => user.role))].filter(Boolean).sort() as string[]
 
       setDepartments(uniqueDepartments)
       setTeams(uniqueTeams)
       setPositions(uniquePositions)
       setCategories(uniqueCategories)
       setWorkLocations(uniqueWorkLocations as string[])
+      setRoles(uniqueRoles)
 
       setIsLoading(false)
     }
@@ -87,6 +92,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -104,6 +110,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -123,6 +130,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: newCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -142,6 +150,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: newPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -162,6 +171,28 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: newWorkLocations,
+        roles: selectedRoles,
+      })
+    }
+  }
+
+  // Добавим обработчик изменения фильтра по ролям
+  const handleRoleChange = (roleName: string, checked: boolean) => {
+    const newRoles = checked
+      ? [...selectedRoles, roleName]
+      : selectedRoles.filter((r) => r !== roleName)
+
+    setSelectedRoles(newRoles)
+
+    // Сразу применяем фильтр
+    if (onFilterChange) {
+      onFilterChange({
+        departments: selectedDepartments,
+        teams: selectedTeams,
+        categories: selectedCategories,
+        positions: selectedPositions,
+        workLocations: selectedWorkLocations,
+        roles: newRoles,
       })
     }
   }
@@ -173,6 +204,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
     setSelectedCategories([])
     setSelectedPositions([])
     setSelectedWorkLocations([])
+    setSelectedRoles([])
 
     if (onFilterChange) {
       onFilterChange({
@@ -181,6 +213,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: [],
         positions: [],
         workLocations: [],
+        roles: [],
       })
     }
   }
@@ -207,7 +240,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
           Фильтры
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {isLoading ? (
           <p className="secondary-text">Загрузка фильтров...</p>
         ) : (
@@ -221,8 +254,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
             >
               Сбросить все фильтры
             </Button>
-
-            <Separator className="my-4" />
 
             {/* Фильтр по отделам */}
             <Collapsible open={openDepartments} onOpenChange={setOpenDepartments}>
@@ -239,7 +270,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                   onChange={(e) => setSearchDepartment(e.target.value)}
                   className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
                 />
-                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 px-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {departments
                     .filter((department) =>
                       department.toLowerCase().includes(searchDepartment.toLowerCase()),
@@ -260,8 +291,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
             {/* Фильтр по командам */}
             <Collapsible open={openTeams} onOpenChange={setOpenTeams}>
               <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
@@ -277,7 +306,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                   onChange={(e) => setSearchTeam(e.target.value)}
                   className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
                 />
-                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 px-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {teams
                     .filter((team) => team.toLowerCase().includes(searchTeam.toLowerCase()))
                     .map((team) => (
@@ -296,8 +325,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
             {/* Фильтр по должностям */}
             <Collapsible open={openPositions} onOpenChange={setOpenPositions}>
               <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
@@ -305,7 +332,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openPositions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
-                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 px-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {positions.map((position) => (
                     <div key={position} className="flex items-center space-x-2">
                       <Checkbox
@@ -322,8 +349,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
             {/* Фильтр по категориям */}
             <Collapsible open={openCategories} onOpenChange={setOpenCategories}>
               <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
@@ -331,7 +356,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
-                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 px-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {categories.map((category) => (
                     <div key={category} className="flex items-center space-x-2">
                       <Checkbox
@@ -348,7 +373,29 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
+            {/* Фильтр по ролям */}
+            <Collapsible open={openRoles} onOpenChange={setOpenRoles}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Роли</h4>
+                {openRoles ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
+                  {roles.map((role) => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`role-${role}`}
+                        checked={selectedRoles.includes(role)}
+                        onCheckedChange={(checked) => handleRoleChange(role, checked as boolean)}
+                      />
+                      <Label htmlFor={`role-${role}`} className="body-text">
+                        {role}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Фильтр по расположению */}
             <Collapsible open={openWorkLocations} onOpenChange={setOpenWorkLocations}>
@@ -357,7 +404,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openWorkLocations ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
-                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-1 px-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {workLocations.map((location) => {
                     const { icon, label } = getWorkLocationInfo(location)
                     return (
@@ -377,8 +424,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-
-            <Separator />
           </>
         )}
       </CardContent>

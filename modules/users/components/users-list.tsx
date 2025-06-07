@@ -46,6 +46,7 @@ interface UsersListProps {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }
   onUserUpdated?: () => void
 }
@@ -107,6 +108,11 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
     // Добавим фильтрацию по расположению
     if (filters.workLocations.length > 0) {
       result = result.filter((user) => user.workLocation && filters.workLocations.includes(user.workLocation))
+    }
+
+    // Добавим фильтрацию по ролям
+    if (filters.roles.length > 0) {
+      result = result.filter((user) => filters.roles.includes(user.role))
     }
 
     setFilteredUsers(result)

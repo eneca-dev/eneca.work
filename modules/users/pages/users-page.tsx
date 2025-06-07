@@ -26,6 +26,7 @@ export default function UsersPage() {
     categories: [] as string[],
     positions: [] as string[],
     workLocations: [] as string[],
+    roles: [] as string[],
   })
   
   const searchParams = useSearchParams()
@@ -90,6 +91,7 @@ export default function UsersPage() {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }) => {
     setFilters(newFilters)
   }
@@ -106,7 +108,7 @@ export default function UsersPage() {
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
-          <p className="mt-4 text-gray-500">Loading data...</p>
+          <p className="mt-4 text-gray-500">Загрузка данных...</p>
         </div>
       </div>
     )
