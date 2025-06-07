@@ -14,6 +14,7 @@ import type { User } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
+import { Button } from "@/components/ui/button"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -133,7 +134,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Управление пользователями</h1>
+        <h1 className="page-title">Управление пользователями</h1>
       </div>
 
       <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />

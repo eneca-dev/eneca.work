@@ -56,11 +56,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       icon: Send,
     },
     {
-      title: "Прогресс проектов",
-      href: "/dashboard/progress",
-      icon: BarChart,
-    },
-    {
       title: "Декомпозиция",
       href: "/dashboard/decomposition",
       icon: Network,
@@ -115,7 +110,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center rounded-md px-3 py-2 nav-item transition-colors",
                     pathname === item.href
                       ? "bg-primary/10 text-primary"
                       : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
@@ -129,6 +124,23 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             ))}
           </ul>
         </nav>
+
+        {/* Сообщить о проблеме */}
+        <div className="px-2 mt-2">
+          <Link
+            href="/dashboard/report"
+            className={cn(
+              "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+              pathname === "/dashboard/report"
+                ? "bg-primary/10 text-primary"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <MessageSquare className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+            {!collapsed && <span>Сообщить о проблеме</span>}
+          </Link>
+        </div>
 
         {/* Weekly Calendar */}
         <WeeklyCalendar collapsed={collapsed} />
@@ -145,8 +157,8 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             />
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate dark:text-gray-200">{displayName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayEmail}</p>
+                <p className="list-item-title truncate dark:text-gray-200">{displayName}</p>
+                <p className="metadata truncate">{displayEmail}</p>
               </div>
             )}
           </div>
@@ -155,16 +167,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 flex flex-col items-center space-y-2">
               <ThemeToggle />
 
-              <Link href="/dashboard/debug">
-                <Button
-                  variant={isDebugActive ? "secondary" : "ghost"}
-                  size="icon"
-                  className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
-                >
-                  <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                </Button>
-              </Link>
-
               <Link href="/dashboard/users">
                 <Button
                   variant={isUsersActive ? "secondary" : "ghost"}
@@ -172,16 +174,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                   className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                 >
                   <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                </Button>
-              </Link>
-
-              <Link href="/dashboard/report">
-                <Button
-                  variant={isReportActive ? "secondary" : "ghost"}
-                  size="icon"
-                  className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
-                >
-                  <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                 </Button>
               </Link>
 
@@ -194,16 +186,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
               <div className="flex justify-between">
                 <ThemeToggle />
                 
-                <Link href="/dashboard/debug">
-                  <Button
-                    variant={isDebugActive ? "secondary" : "ghost"}
-                    size="icon"
-                    className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
-                  >
-                    <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                  </Button>
-                </Link>
-                
                 <Link href="/dashboard/users">
                   <Button
                     variant={isUsersActive ? "secondary" : "ghost"}
@@ -211,16 +193,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                     className={`h-9 w-9 ${isUsersActive ? "bg-primary/10 text-primary" : ""}`}
                   >
                     <Users className={`h-4 w-4 ${isUsersActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                  </Button>
-                </Link>
-                
-                <Link href="/dashboard/report">
-                  <Button
-                    variant={isReportActive ? "secondary" : "ghost"}
-                    size="icon"
-                    className={`h-9 w-9 ${isReportActive ? "bg-primary/10 text-primary" : ""}`}
-                  >
-                    <MessageSquare className={`h-4 w-4 ${isReportActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
                   </Button>
                 </Link>
                 

@@ -198,3 +198,80 @@
   background-color: hsl(var(--primary));
   opacity: 0.4;
 }
+
+/* Кастомный скроллбар для фильтров */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 8px;
+  min-height: 24px;
+  transition: background 0.2s;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+/* Единая система типографики */
+@layer components {
+  /* Заголовки страниц */
+  .page-title {
+    @apply text-2xl font-bold tracking-tight;
+  }
+
+  /* Заголовки секций */
+  .section-title {
+    @apply text-lg font-semibold;
+  }
+
+  /* Заголовки подсекций */
+  .subsection-title {
+    @apply text-base font-medium;
+  }
+
+  /* Заголовки карточек/виджетов */
+  .card-title {
+    @apply text-base font-medium;
+  }
+
+  /* Заголовки в списках/таблицах */
+  .list-item-title {
+    @apply text-sm font-medium;
+  }
+
+  /* Основной текст */
+  .body-text {
+    @apply text-sm;
+  }
+
+  /* Вторичный текст */
+  .secondary-text {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* Метаданные */
+  .metadata {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* Лейблы форм */
+  .form-label {
+    @apply text-sm font-medium;
+  }
+
+  /* Навигация */
+  .nav-item {
+    @apply text-sm font-medium;
+  }
+
+  /* Кнопки */
+  .button-text {
+    @apply text-sm font-medium;
+  }
+}

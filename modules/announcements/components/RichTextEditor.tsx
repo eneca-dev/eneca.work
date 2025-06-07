@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef } from "react"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Label } from "@/modules/calendar/components/ui/label"
 import { Bold, Italic, Underline } from "lucide-react"
@@ -14,61 +14,41 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ value, onChange, placeholder, label, required }: RichTextEditorProps) {
-  const [isActive, setIsActive] = useState({ bold: false, italic: false, underline: false })
-  const editorRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Конвертируем markdown в HTML для отображения
-const markdownToHtml = (text: string) => {
-  return text
-    .replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^\*]+)\*/g, '<em>$1</em>')
-    .replace(/__([^_]+)__/g, '<u>$1</u>')
-    .replace(/\n/g, '<br>')
-}
+  const insertMarkdown = (before: string, after: string = before) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
 
-  // Конвертируем HTML обратно в markdown
-const htmlToMarkdown = (html: string) => {
- // Sanitize HTML to prevent XSS
- const tempDiv = document.createElement('div')
- tempDiv.textContent = html
- const sanitizedHtml = tempDiv.innerHTML
- 
-  return html
-    .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
-    .replace(/<em>(.*?)<\/em>/g, '*$1*')
-    .replace(/<u>(.*?)<\/u>/g, '__$1__')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<div><br><\/div>/g, '\n')
-    .replace(/<div>(.*?)<\/div>/g, '\n$1')
-}
-
-  useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== markdownToHtml(value)) {
-      editorRef.current.innerHTML = markdownToHtml(value)
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = value.substring(start, end)
+    
+    let newText
+    if (selectedText) {
+      // Если есть выделенный текст, оборачиваем его
+      newText = value.substring(0, start) + before + selectedText + after + value.substring(end)
+    } else {
+      // Если нет выделения, просто вставляем разметку
+      newText = value.substring(0, start) + before + after + value.substring(end)
     }
-  }, [value])
-
-  const handleInput = () => {
-    if (editorRef.current) {
-      const htmlContent = editorRef.current.innerHTML
-      const markdownContent = htmlToMarkdown(htmlContent)
-      onChange(markdownContent)
-    }
+    
+    onChange(newText)
+    
+    // Устанавливаем курсор в правильное место
+    setTimeout(() => {
+      if (selectedText) {
+        textarea.setSelectionRange(start + before.length + selectedText.length + after.length, start + before.length + selectedText.length + after.length)
+      } else {
+        textarea.setSelectionRange(start + before.length, start + before.length)
+      }
+      textarea.focus()
+    }, 0)
   }
 
-  const applyFormat = (format: 'bold' | 'italic' | 'underline') => {
-    document.execCommand(format, false)
-    setIsActive(prev => ({ ...prev, [format]: !prev[format] }))
-    handleInput()
-  }
-
-  const handleSelectionChange = () => {
-    setIsActive({
-      bold: document.queryCommandState('bold'),
-      italic: document.queryCommandState('italic'),
-      underline: document.queryCommandState('underline')
-    })
-  }
+  const applyBold = () => insertMarkdown('**')
+  const applyItalic = () => insertMarkdown('*')
+  const applyUnderline = () => insertMarkdown('__')
 
   return (
     <div className="space-y-2">
@@ -78,59 +58,51 @@ const htmlToMarkdown = (html: string) => {
       <div className="flex gap-1 p-2 border border-gray-200 dark:border-gray-700 rounded-t-md bg-gray-50 dark:bg-gray-800">
         <Button
           type="button"
-          variant={isActive.bold ? "default" : "ghost"}
+          variant="ghost"
           size="sm"
-          onClick={() => applyFormat('bold')}
+          onClick={applyBold}
           className="h-8 w-8 p-0"
+          title="Жирный текст (**текст**)"
         >
           <Bold className="h-4 w-4" />
         </Button>
         <Button
           type="button"
-          variant={isActive.italic ? "default" : "ghost"}
+          variant="ghost"
           size="sm"
-          onClick={() => applyFormat('italic')}
+          onClick={applyItalic}
           className="h-8 w-8 p-0"
+          title="Курсив (*текст*)"
         >
           <Italic className="h-4 w-4" />
         </Button>
         <Button
           type="button"
-          variant={isActive.underline ? "default" : "ghost"}
+          variant="ghost"
           size="sm"
-          onClick={() => applyFormat('underline')}
+          onClick={applyUnderline}
           className="h-8 w-8 p-0"
+          title="Подчеркивание (__текст__)"
         >
           <Underline className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Редактор */}
-<div
-  ref={editorRef}
-  contentEditable
- role="textbox"
- aria-label={label || "Rich text editor"}
- aria-multiline="true"
- aria-required={required}
-  onInput={handleInput}
-  onMouseUp={handleSelectionChange}
-  onKeyUp={handleSelectionChange}
- onFocus={handleSelectionChange}
- onBlur={handleSelectionChange}
-  className="min-h-[100px] p-3 border border-gray-200 dark:border-gray-700 rounded-b-md bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-  style={{ whiteSpace: 'pre-wrap' }}
-  data-placeholder={placeholder}
-  suppressContentEditableWarning={true}
-/>
+      {/* Текстовое поле */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        required={required}
+        className="min-h-[100px] w-full p-3 border border-gray-200 dark:border-gray-700 rounded-b-md bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100 resize-vertical"
+        style={{ fontFamily: 'inherit' }}
+      />
       
-      <style jsx>{`
-        [contenteditable]:empty:before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          pointer-events: none;
-        }
-      `}</style>
+      {/* Подсказка по форматированию */}
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        Используйте: **жирный**, *курсив*, __подчеркнутый__
+      </div>
     </div>
   )
 } 

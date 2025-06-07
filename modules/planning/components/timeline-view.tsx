@@ -17,6 +17,7 @@ import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
 import { PermissionBadge } from "./permission-badge"
+import { Button } from "@/components/ui/button"
 
 
 
@@ -214,51 +215,12 @@ useEffect(() => {
   return (
     <div
       className={cn(
-        "min-h-screen p-6 font-sans overflow-x-hidden",
-        theme === "dark"
-          ? "bg-gradient-to-br from-slate-900 to-slate-800"
-          : "bg-gradient-to-br from-slate-50 to-slate-100",
+        "font-sans overflow-x-hidden",
       )}
       ref={containerRef}
     >
       {/* Header with improved styling */}
       <header className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "p-2 rounded-xl border",
-              theme === "dark"
-                ? "bg-slate-800 border-slate-700 text-slate-200"
-                : "bg-white border-slate-200 text-slate-800",
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-teal-500"></div>
-              <h1 className={cn("text-lg font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                Планирование загрузки
-              </h1>
-            </div>
-          </div>
-          
-          {/* Бейдж разрешений */}
-          {/* <PermissionBadge 
-            theme={theme} 
-            userRole="admin" // Здесь можно передавать реальную роль пользователя
-            debugInfo={{
-              reason: "Роль установлена статически для демонстрации",
-              permissions: [
-                "Просмотр всех проектов",
-                "Редактирование планирования",
-                "Управление пользователями",
-                "Доступ к отчетам"
-              ],
-              userId: "demo-user-123",
-              source: "Hardcoded в TimelineView"
-            }}
-            showDebug={true}
-          /> */}
-        </div>
-
         <TimelineHeaderTabs
           theme={theme}
           activeTab={activeTab}
@@ -303,15 +265,12 @@ useEffect(() => {
       </div>
 
       {/* Main content area with improved styling - new approach with fixed columns */}
-
-      {/* Передаем тему в TimelineGrid */}
       <div
         className={cn(
-          "w-full max-w-full rounded-xl border overflow-hidden relative",
-          "h-[calc(100vh-240px)] overflow-y-auto", // Возвращаем фиксированную высоту
+          "w-full border overflow-hidden relative overflow-y-auto",
           theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
         )}
-        style={{ borderCollapse: "collapse" }}
+        style={{ height: "calc(100vh - 250px)", borderCollapse: "collapse" }}
       >
         {isLoadingSections ? (
           <div className="flex justify-center items-center p-8">

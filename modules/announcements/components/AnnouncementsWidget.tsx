@@ -17,7 +17,7 @@ import { AnnouncementForm } from "./AnnouncementForm"
 import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements"
 import { useUserStore } from "@/stores/useUserStore"
 import { Announcement } from "@/modules/announcements/types"
-import { PlusIcon, PencilIcon, Loader2, UserIcon, SearchIcon } from "lucide-react"
+import { PlusIcon, PencilIcon, Loader2, UserIcon, SearchIcon, MegaphoneIcon } from "lucide-react"
 
 export function AnnouncementsWidget() {
   const { announcements, fetchAnnouncements, removeAnnouncement } = useAnnouncements()
@@ -98,12 +98,12 @@ export function AnnouncementsWidget() {
 
   if (!isAuthenticated) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center space-x-2 mb-4">
-          <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
-          <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
+          <MegaphoneIcon className="h-5 w-5 text-primary" />
+          <h2 className="card-title dark:text-gray-200">Объявления</h2>
         </div>
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="secondary-text">
           Для просмотра объявлений необходимо войти в систему
         </p>
       </div>
@@ -112,14 +112,14 @@ export function AnnouncementsWidget() {
 
   if (isPermissionsLoading) {
     return (
-      <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center space-x-2 mb-4">
-          <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
-          <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
+          <MegaphoneIcon className="h-5 w-5 text-primary" />
+          <h2 className="card-title dark:text-gray-200">Объявления</h2>
         </div>
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          <span className="text-gray-500 dark:text-gray-400">Загрузка...</span>
+          <span className="secondary-text">Загрузка...</span>
         </div>
       </div>
     )
@@ -127,11 +127,11 @@ export function AnnouncementsWidget() {
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-fade-in transition-colors duration-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <span className="h-5 w-5 text-primary flex items-center justify-center">📢</span>
-            <h2 className="text-lg font-medium dark:text-gray-200">Объявления</h2>
+            <MegaphoneIcon className="h-5 w-5 text-primary" />
+            <h2 className="card-title dark:text-gray-200">Объявления</h2>
           </div>
           {canCreateAndEdit && (
             <Button size="sm" onClick={handleCreateNew}>
@@ -153,29 +153,29 @@ export function AnnouncementsWidget() {
           />
         </div>
 
-        <div className="space-y-4 max-h-96 overflow-y-auto">
+        <div className="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
           {filteredAndSortedAnnouncements.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+            <p className="secondary-text text-center py-8">
               {searchQuery.trim() ? "Ничего не найдено" : "Пока нет объявлений"}
             </p>
           ) : (
             filteredAndSortedAnnouncements.map((announcement) => (
               <div
                 key={announcement.id}
-                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                    <h3 className="subsection-title text-gray-900 dark:text-gray-100 mb-2">
                       {announcement.header}
                     </h3>
                     {announcement.text && (
                       <div 
-                        className="text-gray-600 dark:text-gray-300 text-sm mb-2 whitespace-pre-wrap"
+                        className="body-text text-gray-600 dark:text-gray-300 mb-2 whitespace-pre-wrap"
                         dangerouslySetInnerHTML={{ __html: formatText(announcement.text) }}
                       />
                     )}
-                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-4 metadata">
                       <span>{formatDate(announcement.created_at)}</span>
                       {announcement.author_name && (
                         <div className="flex items-center gap-1">

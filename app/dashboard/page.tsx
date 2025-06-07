@@ -8,21 +8,23 @@ export default function DashboardPage() {
   const firstName = profile?.firstName || 'Пользователь'
 
   return (
-    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200">
+    <main className="w-full py-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full min-w-[1200px]">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200 w-full">
           <div className="flex items-center space-x-2 mb-4">
             <span className="h-5 w-5 text-primary flex items-center justify-center">🏠</span>
-            <h2 className="text-lg font-medium dark:text-gray-200">Добро пожаловать, {firstName}!</h2>
+            <h2 className="card-title dark:text-gray-200">Добро пожаловать, {firstName}!</h2>
           </div>
 
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
+          <p className="body-text text-gray-500 dark:text-gray-400 mb-4">
             eneca.work — это внутреннее корпоративное приложение для удобной и скоординированной работы внутри компании.
           </p>
         </div>
         
         {/* Виджет объявлений */}
-        <AnnouncementsWidget />
+        <div className="bg-white dark:bg-gray-800 shadow rounded-xl p-6 animate-fade-in transition-colors duration-200 w-full">
+          <AnnouncementsWidget />
+        </div>
       </div>
     </main>
   )

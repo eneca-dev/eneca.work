@@ -210,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева */}
-      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft} overflow-auto`}>
+      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
         {children}
       </div>
     </div>
