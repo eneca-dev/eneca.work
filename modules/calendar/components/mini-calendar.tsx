@@ -3,6 +3,16 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
+import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
+import { useUserStore } from "@/stores/useUserStore"
+import { CalendarEvent } from "@/modules/calendar/types"
+import { 
+  parseDateFromString, 
+  isSameDateOnly, 
+  isDateInRange,
+  isWeekend
+} from "@/modules/calendar/utils"
+import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
 
 interface MiniCalendarProps {
   /** Диапазон выбранных дат */
@@ -23,6 +33,143 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
 
   const today = new Date()
   const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
+
+  // Добавляем хуки для работы с событиями
+  const { events, fetchEvents } = useCalendarEvents()
+  const { workSchedules, fetchWorkSchedules } = useWorkSchedule()
+  const userStore = useUserStore()
+  const currentUserId = userStore.id
+  const isAuthenticated = userStore.isAuthenticated
+
+  // Загружаем события при инициализации
+  useEffect(() => {
+    if (!isAuthenticated || !currentUserId) {
+      return
+    }
+
+    const abortController = new AbortController()
+    let isMounted = true
+
+    const loadData = async () => {
+      try {
+        await Promise.allSettled([
+          fetchEvents(currentUserId),
+          fetchWorkSchedules(currentUserId)
+        ]).then((results) => {
+          if (!isMounted || abortController.signal.aborted) {
+            return
+          }
+
+          results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+              const operationName = index === 0 ? 'events' : 'work schedules'
+              console.error(`Failed to fetch ${operationName}:`, result.reason)
+            }
+          })
+        })
+      } catch (error) {
+        if (isMounted && !abortController.signal.aborted) {
+          console.error('Failed to load calendar data:', error)
+        }
+      }
+    }
+
+    loadData()
+
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
+  }, [currentUserId, isAuthenticated, fetchEvents, fetchWorkSchedules])
+
+  // Проверяем, является ли день рабочим с учетом событий пользователя
+  const isWorkingDay = (date: Date) => {
+    if (!currentUserId) return !isWeekend(date)
+
+    // Проверяем глобальные события (переносы, праздники)
+    const globalEvents = events.filter((event) => {
+      const eventDate = parseDateFromString(event.calendar_event_date_start)
+      return isSameDateOnly(date, eventDate) && event.calendar_event_is_global
+    })
+
+    // Если есть перенос, проверяем его is_weekday значение
+    const transferEvent = globalEvents.find((event) => event.calendar_event_type === "Перенос")
+    if (transferEvent && transferEvent.calendar_event_is_weekday !== null) {
+      return transferEvent.calendar_event_is_weekday
+    }
+
+    // Если есть праздник, это не рабочий день
+    const holidayEvent = globalEvents.find((event) => event.calendar_event_type === "Праздник")
+    if (holidayEvent) {
+      return false
+    }
+
+    // Проверяем личные события пользователя (отпуск, больничный, отгул)
+    const personalEvents = events.filter((event) => {
+      const eventDate = parseDateFromString(event.calendar_event_date_start)
+      const eventEndDate = event.calendar_event_date_end ? parseDateFromString(event.calendar_event_date_end) : eventDate
+      
+      const isInRange = event.calendar_event_date_end 
+        ? isDateInRange(date, eventDate, eventEndDate)
+        : isSameDateOnly(date, eventDate)
+      const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск"].includes(event.calendar_event_type)
+      const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
+      
+      return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser
+    })
+
+    // Если есть личные события, делающие день нерабочим
+    if (personalEvents.length > 0) {
+      return false
+    }
+
+    // Иначе проверяем, выходной ли это день
+    return !isWeekend(date)
+  }
+
+  // Получаем события для конкретного дня
+  const getDayEvents = (date: Date): CalendarEvent[] => {
+    if (!currentUserId) return []
+
+    return events.filter((event) => {
+      const eventDate = parseDateFromString(event.calendar_event_date_start)
+      const eventEndDate = event.calendar_event_date_end ? parseDateFromString(event.calendar_event_date_end) : eventDate
+      
+      const isInRange = event.calendar_event_date_end 
+        ? isDateInRange(date, eventDate, eventEndDate)
+        : isSameDateOnly(date, eventDate)
+      
+      // Показываем глобальные события и личные события текущего пользователя
+      return isInRange && (
+        event.calendar_event_is_global || 
+        event.calendar_event_created_by === currentUserId
+      )
+    })
+  }
+
+  // Получаем цвет для дня (аналогично weekly-calendar)
+  const getDayColor = (date: Date) => {
+    const isToday = isSameDateOnly(date, new Date())
+    const isWorking = isWorkingDay(date)
+    const dayEvents = getDayEvents(date)
+    
+    // Проверяем есть ли личные события (отпуск, больничный, отгул)
+    const personalNonWorkingEvents = dayEvents.filter(event => 
+      ["Отгул", "Больничный", "Отпуск"].includes(event.calendar_event_type) &&
+      event.calendar_event_created_by === currentUserId
+    )
+    
+    // Проверяем есть ли праздники
+    const holidayEvents = dayEvents.filter(event => event.calendar_event_type === "Праздник")
+    
+    // Если есть личные события, праздники или это выходной - делаем красным
+    if (personalNonWorkingEvents.length > 0 || holidayEvents.length > 0 || !isWorking) {
+      return "text-red-300 dark:text-red-400"
+    }
+    
+    // Обычный рабочий день
+    return "text-foreground"
+  }
 
   const handlePrev = (e: React.MouseEvent<HTMLButtonElement>) => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
@@ -91,7 +238,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
                 key={idx} 
                 className={cn(
                   "w-8 h-8 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-sm m-0.5 transition-colors hover:bg-accent/50",
-                  "text-foreground",
+                  getDayColor(d),
                   (isFrom || isTo) && "bg-primary text-primary-foreground border-primary shadow-sm",
                   isBetween && "bg-primary/10 text-primary border-primary/20",
                 )}
