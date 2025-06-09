@@ -32,6 +32,8 @@ export function TimelineView() {
     setSelectedDepartment,
     setSelectedTeam,
     setSelectedManager,
+    setSelectedStage,
+    setSelectedObject,
     resetFilters,
     fetchFilterOptions,
   } = usePlanningFiltersStore()
@@ -180,6 +182,18 @@ useEffect(() => {
    }
  }
 
+  // Добавляем обработчик для этапов
+  const handleStageChange = (stageId: string | null) => {
+    console.log("Изменение этапа:", stageId)
+    setSelectedStage(stageId)
+  }
+
+  // Добавляем обработчик для объектов
+  const handleObjectChange = (objectId: string | null) => {
+    console.log("Изменение объекта:", objectId)
+    setSelectedObject(objectId)
+  }
+
   const handleResetFilters = () => {
     console.log("Сброс фильтров")
     resetFilters()
@@ -236,6 +250,8 @@ useEffect(() => {
         onDepartmentChange={handleDepartmentChange}
         onTeamChange={handleTeamChange}
         onManagerChange={handleManagerChange}
+        onStageChange={handleStageChange}
+        onObjectChange={handleObjectChange}
         onResetFilters={handleResetFilters}
         showDepartments={showDepartments}
         toggleShowDepartments={toggleShowDepartments}

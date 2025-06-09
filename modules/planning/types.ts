@@ -98,3 +98,44 @@ export interface Department {
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
+
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  managerId?: string | null
+  managerName?: string | null
+  leadEngineerId?: string | null
+  leadEngineerName?: string | null
+  status?: string
+  clientId?: string | null
+  clientName?: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface Stage {
+  id: string
+  name: string
+  description?: string
+  projectId?: string | null
+  projectName?: string | null
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface ProjectObject {
+  id: string
+  name: string
+  description?: string
+  stageId?: string | null
+  stageName?: string | null
+  projectId?: string | null
+  projectName?: string | null
+  responsibleId?: string | null
+  responsibleName?: string | null
+  startDate?: Date
+  endDate?: Date
+  createdAt?: Date
+  updatedAt?: Date
+}

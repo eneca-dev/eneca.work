@@ -122,21 +122,31 @@ export function PlanningFilters() {
     availableDepartments: departments,
     availableTeams: teams,
     availableEmployees: employees, // Добавляем сотрудников
+    availableStages, // Добавляем этапы
+    availableObjects, // Добавляем объекты
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
     selectedManagerId, // Добавляем выбранного менеджера
     selectedEmployeeId, // Добавляем выбранного сотрудника
+    selectedStageId, // Добавляем выбранный этап
+    selectedObjectId, // Добавляем выбранный объект
     isLoading,
+    isLoadingStages, // Добавляем состояние загрузки этапов
+    isLoadingObjects, // Добавляем состояние загрузки объектов
     fetchFilterOptions,
     setSelectedProject,
     setSelectedDepartment,
     setSelectedTeam,
     setSelectedManager, // Добавляем метод для выбора менеджера
     setSelectedEmployee, // Добавляем метод для выбора сотрудника
+    setSelectedStage, // Добавляем метод для выбора этапа
+    setSelectedObject, // Добавляем метод для выбора объекта
     resetFilters,
     getFilteredProjects, // Добавляем метод для получения отфильтрованных проектов
     getFilteredEmployees, // Добавляем метод для получения отфильтрованных сотрудников
+    getFilteredStages, // Добавляем метод для получения отфильтрованных этапов
+    getFilteredObjects, // Добавляем метод для получения отфильтрованных объектов
     isFilterLocked, // Добавляем метод для проверки блокировки
   } = usePlanningFiltersStore()
 
@@ -167,6 +177,12 @@ export function PlanningFilters() {
   // Получаем отфильтрованных сотрудников на основе выбранного отдела и команды
   const filteredEmployees = getFilteredEmployees()
 
+  // Получаем отфильтрованные этапы на основе выбранного проекта
+  const filteredStages = getFilteredStages()
+
+  // Получаем отфильтрованные объекты на основе выбранного этапа
+  const filteredObjects = getFilteredObjects()
+
   // Перезагружаем разделы при изменении фильтров
   useEffect(() => {
     setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId)
@@ -193,7 +209,7 @@ export function PlanningFilters() {
           <PermissionBadge theme={theme} />
         </div>
 
-        {(selectedProjectId || selectedDepartmentId || selectedTeamId || selectedManagerId || selectedEmployeeId) && (
+        {(selectedProjectId || selectedDepartmentId || selectedTeamId || selectedManagerId || selectedEmployeeId || selectedStageId || selectedObjectId) && (
           <button
             onClick={resetFilters}
             className={cn(
@@ -209,7 +225,7 @@ export function PlanningFilters() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
         {/* Фильтр по менеджерам */}
         <FilterSelect
           id="manager-filter"
@@ -233,6 +249,48 @@ export function PlanningFilters() {
           locked={isFilterLocked('project')}
           options={availableProjects}
           placeholder={selectedManagerId ? "Все проекты менеджера" : "Все проекты"}
+          theme={theme}
+        />
+
+        {/* Фильтр по этапам */}
+        <FilterSelect
+          id="stage-filter"
+          label="Этап"
+          value={selectedStageId || ""}
+          onChange={(value) => setSelectedStage(value || null)}
+          disabled={isLoadingStages || (!selectedProjectId)}
+          locked={isFilterLocked('stage')}
+          options={filteredStages}
+          placeholder={
+            !selectedProjectId 
+              ? "Выберите проект" 
+              : isLoadingStages 
+                ? "Загрузка этапов..." 
+                : filteredStages.length === 0 
+                  ? "Нет этапов в проекте" 
+                  : "Все этапы проекта"
+          }
+          theme={theme}
+        />
+
+        {/* Фильтр по объектам */}
+        <FilterSelect
+          id="object-filter"
+          label="Объект"
+          value={selectedObjectId || ""}
+          onChange={(value) => setSelectedObject(value || null)}
+          disabled={isLoadingObjects || (!selectedStageId)}
+          locked={isFilterLocked('object')}
+          options={filteredObjects}
+          placeholder={
+            !selectedStageId 
+              ? "Выберите этап" 
+              : isLoadingObjects 
+                ? "Загрузка объектов..." 
+                : filteredObjects.length === 0 
+                  ? "Нет объектов в этапе" 
+                  : "Все объекты этапа"
+          }
           theme={theme}
         />
 

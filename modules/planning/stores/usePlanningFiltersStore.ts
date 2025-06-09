@@ -17,16 +17,34 @@ export interface Manager {
   projectsCount?: number
 }
 
+export interface Stage {
+  id: string
+  name: string
+  description?: string
+  projectId: string
+}
+
+export interface ProjectObject {
+  id: string
+  name: string
+  description?: string
+  stageId: string
+}
+
 interface PlanningFiltersState {
-  // Доступные проекты, отделы, команды, менеджеры и сотрудники
+  // Доступные проекты, отделы, команды, менеджеры, сотрудники, этапы и объекты
   availableProjects: Project[]
   availableDepartments: Department[]
   availableTeams: Team[]
   availableManagers: Manager[]
   availableEmployees: Employee[]
+  availableStages: Stage[]
+  availableObjects: ProjectObject[]
   managerProjects: Project[]
   isLoading: boolean
   isLoadingManagerProjects: boolean
+  isLoadingStages: boolean
+  isLoadingObjects: boolean
   isFilterPanelOpen: boolean
 
   // Выбранные фильтры
@@ -35,6 +53,8 @@ interface PlanningFiltersState {
   selectedTeamId: string | null
   selectedManagerId: string | null
   selectedEmployeeId: string | null
+  selectedStageId: string | null
+  selectedObjectId: string | null
 
   // Контроллер для отмены запросов
   abortController: AbortController | null
@@ -46,13 +66,19 @@ interface PlanningFiltersState {
   setSelectedTeam: (teamId: string | null) => void
   setSelectedManager: (managerId: string | null) => void
   setSelectedEmployee: (employeeId: string | null) => void
+  setSelectedStage: (stageId: string | null) => void
+  setSelectedObject: (objectId: string | null) => void
   resetFilters: () => void
   toggleFilterPanel: () => void
   getFilteredProjects: () => Project[]
   getFilteredEmployees: () => Employee[]
+  getFilteredStages: () => Stage[]
+  getFilteredObjects: () => ProjectObject[]
   fetchManagerProjects: (managerId: string) => Promise<void>
+  fetchProjectStages: (projectId: string) => Promise<void>
+  fetchStageObjects: (stageId: string) => Promise<void>
   applyPermissionBasedFilters: () => void
-  isFilterLocked: (filterType: 'project' | 'department' | 'team' | 'manager' | 'employee') => boolean
+  isFilterLocked: (filterType: 'project' | 'department' | 'team' | 'manager' | 'employee' | 'stage' | 'object') => boolean
   getActivePermission: () => string | null
 }
 
@@ -66,15 +92,21 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
         availableTeams: [],
         availableManagers: [],
         availableEmployees: [],
+        availableStages: [],
+        availableObjects: [],
         managerProjects: [],
         isLoading: false,
         isLoadingManagerProjects: false,
+        isLoadingStages: false,
+        isLoadingObjects: false,
         isFilterPanelOpen: false,
         selectedProjectId: null,
         selectedDepartmentId: null,
         selectedTeamId: null,
         selectedManagerId: null,
         selectedEmployeeId: null,
+        selectedStageId: null,
+        selectedObjectId: null,
         abortController: null,
 
         // Загрузка опций фильтров из базы данных (параллельно)
@@ -255,12 +287,28 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
         },
 
         // Установка выбранного проекта
-        setSelectedProject: (projectId) => {
+        setSelectedProject: async (projectId) => {
           if (get().isFilterLocked('project')) {
             console.warn("🔒 Изменение фильтра проекта заблокировано разрешениями пользователя");
             return;
           }
-          set({ selectedProjectId: projectId })
+          
+          set({ 
+            selectedProjectId: projectId,
+            selectedStageId: null, // Сбрасываем выбранный этап при смене проекта
+            selectedObjectId: null, // Сбрасываем выбранный объект при смене проекта
+            availableStages: [], // Очищаем список этапов
+            availableObjects: [], // Очищаем список объектов
+          })
+
+          // Если выбран проект, загружаем его этапы
+          if (projectId) {
+            try {
+              await get().fetchProjectStages(projectId)
+            } catch (error) {
+              console.error("Ошибка при загрузке этапов проекта:", error)
+            }
+          }
         },
 
         // Установка выбранного отдела
@@ -297,6 +345,38 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           set({ selectedEmployeeId: employeeId })
         },
 
+        // Установка выбранного этапа
+        setSelectedStage: async (stageId) => {
+          if (get().isFilterLocked('stage')) {
+            console.warn("🔒 Изменение фильтра этапа заблокировано разрешениями пользователя");
+            return;
+          }
+
+          set({
+            selectedStageId: stageId,
+            selectedObjectId: null, // Сбрасываем выбранный объект при смене этапа
+            availableObjects: [], // Очищаем список объектов
+          })
+
+          // Если выбран этап, загружаем его объекты
+          if (stageId) {
+            try {
+              await get().fetchStageObjects(stageId)
+            } catch (error) {
+              console.error("Ошибка при загрузке объектов этапа:", error)
+            }
+          }
+        },
+
+        // Установка выбранного объекта
+        setSelectedObject: (objectId) => {
+          if (get().isFilterLocked('object')) {
+            console.warn("🔒 Изменение фильтра объекта заблокировано разрешениями пользователя");
+            return;
+          }
+          set({ selectedObjectId: objectId })
+        },
+
         // Установка выбранного менеджера с механизмом отмены
         setSelectedManager: async (managerId) => {
           if (get().isFilterLocked('manager')) {
@@ -316,7 +396,11 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           set({
             selectedManagerId: managerId,
             selectedProjectId: null,
+            selectedStageId: null, // Сбрасываем этап при смене менеджера
+            selectedObjectId: null, // Сбрасываем объект при смене менеджера
             managerProjects: [],
+            availableStages: [], // Очищаем список этапов
+            availableObjects: [], // Очищаем список объектов
             abortController: newController,
           })
 
@@ -361,6 +445,28 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           }
 
           return filteredEmployees
+        },
+
+        // Получение отфильтрованных этапов
+        getFilteredStages: () => {
+          const { availableStages, selectedProjectId } = get()
+
+          if (!selectedProjectId) {
+            return []
+          }
+
+          return availableStages.filter(stage => stage.projectId === selectedProjectId)
+        },
+
+        // Получение отфильтрованных объектов
+        getFilteredObjects: () => {
+          const { availableObjects, selectedStageId } = get()
+
+          if (!selectedStageId) {
+            return []
+          }
+
+          return availableObjects.filter(obj => obj.stageId === selectedStageId)
         },
 
         // Загрузка проектов менеджера
@@ -419,6 +525,57 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           }
         },
 
+        // Загрузка этапов проекта
+        fetchProjectStages: async (projectId: string) => {
+          console.log("🔄 Начинаю загрузку этапов для проекта:", projectId)
+          set({ isLoadingStages: true })
+          try {
+            const { fetchProjectStages } = await import('@/lib/supabase-client')
+            const stagesResult = await fetchProjectStages(projectId)
+            
+            console.log("📊 Результат загрузки этапов:", stagesResult)
+            
+            // Проверяем, что результат является массивом этапов
+            const stages = Array.isArray(stagesResult) ? stagesResult : []
+            
+            console.log("✅ Обработанные этапы:", stages)
+            
+            set({
+              availableStages: stages,
+              isLoadingStages: false,
+            })
+          } catch (error) {
+            console.error("❌ Ошибка при загрузке этапов проекта:", error)
+            set({
+              availableStages: [],
+              isLoadingStages: false,
+            })
+          }
+        },
+
+        // Загрузка объектов этапа
+        fetchStageObjects: async (stageId: string) => {
+          set({ isLoadingObjects: true })
+          try {
+            const { fetchStageObjects } = await import('@/lib/supabase-client')
+            const objectsResult = await fetchStageObjects(stageId)
+            
+            // Проверяем, что результат является массивом объектов
+            const objects = Array.isArray(objectsResult) ? objectsResult : []
+            
+            set({
+              availableObjects: objects,
+              isLoadingObjects: false,
+            })
+          } catch (error) {
+            console.error("Ошибка при загрузке объектов этапа:", error)
+            set({
+              availableObjects: [],
+              isLoadingObjects: false,
+            })
+          }
+        },
+
         // Сброс всех фильтров
         resetFilters: () => {
           // Отменяем текущий запрос, если он есть
@@ -432,6 +589,8 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
             managerProjects: [],
             isLoadingManagerProjects: false,
             abortController: null,
+            availableStages: [], // Очищаем список этапов
+            availableObjects: [], // Очищаем список объектов
           };
 
           if (!get().isFilterLocked('project')) {
@@ -448,6 +607,12 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           }
           if (!get().isFilterLocked('employee')) {
             updates.selectedEmployeeId = null;
+          }
+          if (!get().isFilterLocked('stage')) {
+            updates.selectedStageId = null;
+          }
+          if (!get().isFilterLocked('object')) {
+            updates.selectedObjectId = null;
           }
 
           set(updates);
@@ -488,6 +653,10 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
                 selectedDepartmentId: null,
                 selectedTeamId: null,
                 selectedEmployeeId: null,
+                selectedStageId: null, // Сбрасываем этап
+                selectedObjectId: null, // Сбрасываем объект
+                availableStages: [], // Очищаем список этапов
+                availableObjects: [], // Очищаем список объектов
               });
               // Загружаем проекты менеджера
               if (userStore.id) {
@@ -503,6 +672,10 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
                 selectedEmployeeId: null,
                 selectedManagerId: null,
                 selectedProjectId: null,
+                selectedStageId: null, // Сбрасываем этап
+                selectedObjectId: null, // Сбрасываем объект
+                availableStages: [], // Очищаем список этапов
+                availableObjects: [], // Очищаем список объектов
               });
               break;
               
@@ -514,13 +687,17 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
                 selectedEmployeeId: null, // Сбрасываем сотрудника, чтобы показать всю команду
                 selectedManagerId: null,
                 selectedProjectId: null,
+                selectedStageId: null, // Сбрасываем этап
+                selectedObjectId: null, // Сбрасываем объект
+                availableStages: [], // Очищаем список этапов
+                availableObjects: [], // Очищаем список объектов
               });
               break;
           }
         },
 
         // Проверка блокировки изменения фильтра
-        isFilterLocked: (filterType: 'project' | 'department' | 'team' | 'manager' | 'employee') => {
+        isFilterLocked: (filterType: 'project' | 'department' | 'team' | 'manager' | 'employee' | 'stage' | 'object') => {
           const userStore = useUserStore.getState();
           const activePermission = userStore.getActivePermission();
           
@@ -564,6 +741,8 @@ export const usePlanningFiltersStore = create<PlanningFiltersState>()(
           selectedTeamId: state.selectedTeamId,
           selectedManagerId: state.selectedManagerId,
           selectedEmployeeId: state.selectedEmployeeId,
+          selectedStageId: state.selectedStageId,
+          selectedObjectId: state.selectedObjectId,
           isFilterPanelOpen: state.isFilterPanelOpen,
         }),
       },

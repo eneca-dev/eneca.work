@@ -881,3 +881,191 @@ export async function fetchProjectObjects(
     }
   }
 }
+
+// Функция для получения этапов проекта
+export async function fetchProjectStages(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<{ id: string; name: string; description?: string; projectId: string }[] | StructuredError> {
+  try {
+    if (!projectId) {
+      console.warn("fetchProjectStages: projectId не предоставлен")
+      return []
+    }
+
+    console.log("fetchProjectStages: начало загрузки этапов для проекта", projectId)
+
+    if (!supabase) {
+      console.error("fetchProjectStages: клиент Supabase не инициализирован")
+      return {
+        success: false,
+        error: "Клиент Supabase не инициализирован",
+        details: { projectId }
+      }
+    }
+
+    const query = supabase
+      .from("stages")
+      .select("stage_id, stage_name, stage_description")
+      .eq("stage_project_id", projectId)
+
+    console.log("fetchProjectStages: выполняем запрос к БД для проекта", projectId)
+
+    const { data, error } = signal 
+      ? await query.abortSignal(signal)
+      : await query
+
+    if (error) {
+      const errorInfo = {
+        projectId,
+        message: error.message || 'Неизвестная ошибка',
+        code: error.code || 'NO_CODE',
+        details: error.details || 'Нет деталей',
+        originalError: JSON.stringify(error, null, 2)
+      }
+      
+      console.error("fetchProjectStages: ошибка запроса к БД:", errorInfo)
+      return {
+        success: false,
+        error: `Не удалось загрузить этапы проекта: ${errorInfo.message}`,
+        details: errorInfo
+      }
+    }
+
+    console.log("fetchProjectStages: получены данные:", {
+      projectId,
+      dataLength: data?.length || 0,
+      sampleData: data?.slice(0, 3)
+    })
+
+    const result = data?.map((item) => ({
+      id: item.stage_id,
+      name: item.stage_name,
+      description: item.stage_description || undefined,
+      projectId: projectId,
+    })).sort((a, b) => a.name.localeCompare(b.name)) || []
+    
+    console.log("fetchProjectStages: успешно обработано этапов:", {
+      projectId,
+      totalStages: result.length,
+      stageNames: result.map(stage => stage.name)
+    })
+
+    return result
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log("fetchProjectStages: операция отменена для проекта", projectId)
+      throw error
+    }
+    
+    const errorInfo = {
+      projectId,
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : 'Нет стека',
+      originalError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+    }
+    
+    console.error("fetchProjectStages: неожиданная ошибка:", errorInfo)
+    
+    return {
+      success: false,
+      error: `Произошла неожиданная ошибка при загрузке этапов проекта: ${errorInfo.errorMessage}`,
+      details: errorInfo
+    }
+  }
+}
+
+// Функция для получения объектов этапа
+export async function fetchStageObjects(
+  stageId: string,
+  signal?: AbortSignal,
+): Promise<{ id: string; name: string; description?: string; stageId: string }[] | StructuredError> {
+  try {
+    if (!stageId) {
+      console.warn("fetchStageObjects: stageId не предоставлен")
+      return []
+    }
+
+    console.log("fetchStageObjects: начало загрузки объектов для этапа", stageId)
+
+    if (!supabase) {
+      console.error("fetchStageObjects: клиент Supabase не инициализирован")
+      return {
+        success: false,
+        error: "Клиент Supabase не инициализирован",
+        details: { stageId }
+      }
+    }
+
+    const query = supabase
+      .from("objects")
+      .select("object_id, object_name, object_description")
+      .eq("object_stage_id", stageId)
+
+    console.log("fetchStageObjects: выполняем запрос к БД для этапа", stageId)
+
+    const { data, error } = signal 
+      ? await query.abortSignal(signal)
+      : await query
+
+    if (error) {
+      const errorInfo = {
+        stageId,
+        message: error.message || 'Неизвестная ошибка',
+        code: error.code || 'NO_CODE',
+        details: error.details || 'Нет деталей',
+        originalError: JSON.stringify(error, null, 2)
+      }
+      
+      console.error("fetchStageObjects: ошибка запроса к БД:", errorInfo)
+      return {
+        success: false,
+        error: `Не удалось загрузить объекты этапа: ${errorInfo.message}`,
+        details: errorInfo
+      }
+    }
+
+    console.log("fetchStageObjects: получены данные:", {
+      stageId,
+      dataLength: data?.length || 0,
+      sampleData: data?.slice(0, 3)
+    })
+
+    const result = data?.map((item) => ({
+      id: item.object_id,
+      name: item.object_name,
+      description: item.object_description || undefined,
+      stageId: stageId,
+    })).sort((a, b) => a.name.localeCompare(b.name)) || []
+    
+    console.log("fetchStageObjects: успешно обработано объектов:", {
+      stageId,
+      totalObjects: result.length,
+      objectNames: result.map(obj => obj.name)
+    })
+
+    return result
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log("fetchStageObjects: операция отменена для этапа", stageId)
+      throw error
+    }
+    
+    const errorInfo = {
+      stageId,
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : 'Нет стека',
+      originalError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+    }
+    
+    console.error("fetchStageObjects: неожиданная ошибка:", errorInfo)
+    
+    return {
+      success: false,
+      error: `Произошла неожиданная ошибка при загрузке объектов этапа: ${errorInfo.errorMessage}`,
+      details: errorInfo
+    }
+  }
+}

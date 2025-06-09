@@ -74,9 +74,13 @@ export default function EntityModal({
       const supabase = createClient()
 
       if (mode === "create") {
+        // При создании исключаем поле ID, так как оно генерируется автоматически
+        const insertData = { ...formData }
+        delete insertData[idField]
+        
         const { error } = await supabase
           .from(table)
-          .insert([formData])
+          .insert([insertData])
 
         if (error) throw error
         toast.success("Запись успешно создана")

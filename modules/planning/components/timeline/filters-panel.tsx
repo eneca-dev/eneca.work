@@ -15,6 +15,7 @@ interface FiltersPanelProps {
   onTeamChange: (teamId: string | null) => void
   onManagerChange: (managerId: string | null) => void
   onObjectChange?: (objectId: string | null) => void // Make optional
+  onStageChange?: (stageId: string | null) => void // Add stage change handler
   onResetFilters: () => void
   showDepartments: boolean
   toggleShowDepartments: () => void
@@ -29,6 +30,14 @@ interface ProjectObject {
   projectId: string
 }
 
+// Define Stage interface
+interface Stage {
+  id: string
+  name: string
+  description?: string
+  projectId: string
+}
+
 export function FiltersPanel({
   theme,
   onProjectChange,
@@ -36,6 +45,7 @@ export function FiltersPanel({
   onTeamChange,
   onManagerChange,
   onObjectChange,
+  onStageChange,
   onResetFilters,
   showDepartments,
   toggleShowDepartments,
@@ -46,6 +56,9 @@ export function FiltersPanel({
   const [availableObjects, setAvailableObjects] = useState<ProjectObject[]>([])
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null)
   const [isLoadingObjects, setIsLoadingObjects] = useState(false)
+  
+  // Remove local state for stages - use store instead
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
 
   // Получаем данные из стора фильтров
   const {
@@ -53,14 +66,18 @@ export function FiltersPanel({
     availableManagers,
     availableDepartments,
     availableTeams,
+    availableStages, // Use stages from store
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
     selectedManagerId,
     isLoading,
     isLoadingManagerProjects,
+    isLoadingStages, // Use loading state from store
     fetchFilterOptions,
     getFilteredProjects,
+    getFilteredStages, // Add this to get filtered stages
+    fetchProjectStages,
   } = usePlanningFiltersStore()
 
   // Загружаем опции фильтров при монтировании компонента
@@ -68,28 +85,55 @@ export function FiltersPanel({
     fetchFilterOptions()
   }, [fetchFilterOptions])
 
-  // Загружаем объекты при изменении выбранного проекта
+  // Загружаем этапы при изменении выбранного проекта
   useEffect(() => {
     if (selectedProjectId) {
-      console.log("FiltersPanel: начинаем загрузку объектов для проекта", selectedProjectId)
+      console.log("FiltersPanel: начинаем загрузку этапов для проекта", selectedProjectId)
+      // Сбрасываем выбранный этап и объект при смене проекта
+      setSelectedStageId(null)
+      setSelectedObjectId(null)
+      setAvailableObjects([]) // Очищаем объекты при смене проекта
+
+      // Загружаем этапы из стора
+      fetchProjectStages(selectedProjectId)
+        .then(() => {
+          console.log("FiltersPanel: этапы успешно загружены из стора")
+        })
+        .catch((error) => {
+          console.error("FiltersPanel: ошибка при загрузке этапов:", error)
+        })
+    } else {
+      // Очищаем этапы и объекты, если проект не выбран
+      console.log("FiltersPanel: очищаем этапы и объекты, проект не выбран")
+      setSelectedStageId(null)
+      setAvailableObjects([])
+      setSelectedObjectId(null)
+    }
+  }, [selectedProjectId, fetchProjectStages])
+
+  // Загружаем объекты при изменении выбранного этапа
+  useEffect(() => {
+    if (selectedStageId) {
+      console.log("FiltersPanel: начинаем загрузку объектов для этапа", selectedStageId)
       setIsLoadingObjects(true)
-      // Сбрасываем выбранный объект при смене проекта
+      // Сбрасываем выбранный объект при смене этапа
       setSelectedObjectId(null)
 
       // Создаем AbortController для отмены запроса
       const abortController = new AbortController()
 
-      // Загружаем объекты из Supabase
-      fetchProjectObjects(selectedProjectId, abortController.signal)
+      // Здесь нужно будет создать функцию fetchStageObjects
+      // Пока используем fetchProjectObjects как заглушку
+      fetchProjectObjects(selectedProjectId!, abortController.signal)
         .then((objects) => {
           // Проверяем, не была ли операция отменена
           if (abortController.signal.aborted) {
-            console.log("FiltersPanel: загрузка объектов отменена для проекта", selectedProjectId)
+            console.log("FiltersPanel: загрузка объектов отменена для этапа", selectedStageId)
             return
           }
           
-          console.log("FiltersPanel: получен результат загрузки объектов:", {
-            projectId: selectedProjectId,
+          console.log("FiltersPanel: получен результат загрузки объектов для этапа:", {
+            stageId: selectedStageId,
             isArray: Array.isArray(objects),
             objectsCount: Array.isArray(objects) ? objects.length : 0,
             result: objects
@@ -97,11 +141,12 @@ export function FiltersPanel({
           
           // Проверяем, что результат не является ошибкой
           if (Array.isArray(objects)) {
+            // Фильтруем объекты по этапу (пока используем все объекты)
             setAvailableObjects(objects)
-            console.log("FiltersPanel: объекты успешно загружены:", objects.map(obj => obj.name))
+            console.log("FiltersPanel: объекты этапа успешно загружены:", objects.map(obj => obj.name))
           } else {
-            console.error("FiltersPanel: ошибка при загрузке объектов:", {
-              projectId: selectedProjectId,
+            console.error("FiltersPanel: ошибка при загрузке объектов этапа:", {
+              stageId: selectedStageId,
               error: objects.error,
               details: objects.details
             })
@@ -112,12 +157,12 @@ export function FiltersPanel({
         .catch((error) => {
           // Проверяем, не была ли операция отменена
           if (abortController.signal.aborted) {
-            console.log("FiltersPanel: загрузка объектов отменена (catch) для проекта", selectedProjectId)
+            console.log("FiltersPanel: загрузка объектов отменена (catch) для этапа", selectedStageId)
             return
           }
           
-          console.error("FiltersPanel: исключение при загрузке объектов:", {
-            projectId: selectedProjectId,
+          console.error("FiltersPanel: исключение при загрузке объектов этапа:", {
+            stageId: selectedStageId,
             error,
             errorName: error instanceof Error ? error.name : 'Unknown',
             errorMessage: error instanceof Error ? error.message : String(error),
@@ -129,16 +174,39 @@ export function FiltersPanel({
 
       // Функция очистки для отмены запроса
       return () => {
-        console.log("FiltersPanel: отменяем загрузку объектов для проекта", selectedProjectId)
+        console.log("FiltersPanel: отменяем загрузку объектов для этапа", selectedStageId)
         abortController.abort()
       }
     } else {
-      // Очищаем объекты, если проект не выбран
-      console.log("FiltersPanel: очищаем объекты, проект не выбран")
+      // Очищаем объекты, если этап не выбран
+      console.log("FiltersPanel: очищаем объекты, этап не выбран")
       setAvailableObjects([])
       setSelectedObjectId(null)
     }
-  }, [selectedProjectId])
+  }, [selectedStageId, selectedProjectId])
+
+  // Получаем отфильтрованные этапы для выбранного проекта
+  const filteredStages = getFilteredStages()
+
+  // Добавляем логирование для отладки
+  useEffect(() => {
+    console.log("FiltersPanel: состояние этапов изменилось:", {
+      selectedProjectId,
+      availableStagesCount: availableStages.length,
+      filteredStagesCount: filteredStages.length,
+      isLoadingStages,
+      availableStages: availableStages.map(s => ({ id: s.id, name: s.name, projectId: s.projectId })),
+      filteredStages: filteredStages.map(s => ({ id: s.id, name: s.name, projectId: s.projectId }))
+    })
+  }, [selectedProjectId, availableStages, filteredStages, isLoadingStages])
+
+  // Handle stage selection
+  const handleStageChange = (stageId: string | null) => {
+    setSelectedStageId(stageId)
+    if (onStageChange) {
+      onStageChange(stageId)
+    }
+  }
 
   // Handle object selection
   const handleObjectChange = (objectId: string | null) => {
@@ -150,9 +218,9 @@ export function FiltersPanel({
 
   // Получаем отфильтрованные проекты на основе выбранного менеджера
   const filteredProjects = getFilteredProjects()
-
+  
   // Количество активных фильтров
-  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedObjectId].filter(
+  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedStageId, selectedObjectId].filter(
     Boolean,
   ).length
 
@@ -243,8 +311,46 @@ export function FiltersPanel({
           </select>
         </div>
 
-        {/* Фильтр по объектам - показывается только при выбранном проекте */}
+        {/* Фильтр по этапам - показывается только при выбранном проекте */}
         {selectedProjectId && (
+          <div className="flex-shrink-0 min-w-[200px]">
+            <label
+              htmlFor="stage-filter"
+              className={cn("block text-xs font-medium mb-1", theme === "dark" ? "text-slate-400" : "text-slate-500")}
+            >
+              Этап
+            </label>
+            <select
+              id="stage-filter"
+              value={selectedStageId || ""}
+              onChange={(e) => handleStageChange(e.target.value || null)}
+              disabled={isLoadingStages}
+              className={cn(
+                "w-full text-sm rounded-md border px-3 py-2 pr-8",
+                "appearance-none bg-no-repeat bg-right",
+                "bg-[length:16px_16px] bg-[position:right_8px_center]",
+                theme === "dark"
+                  ? "bg-slate-700 border-slate-600 text-slate-200 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQgNkw4IDEwTDEyIDYiIHN0cm9rZT0iIzk0YTNiOCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
+                  : "bg-white border-slate-300 text-slate-800 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQgNkw4IDEwTDEyIDYiIHN0cm9rZT0iIzY0NzQ4YiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]",
+                "focus:outline-none focus:ring-1",
+                theme === "dark"
+                  ? "focus:ring-teal-500 focus:ring-offset-slate-800 focus:ring-offset-1"
+                  : "focus:ring-teal-500 focus:ring-offset-white focus:ring-offset-1",
+                "transition-colors duration-150 ease-in-out",
+              )}
+            >
+              <option value="">Все этапы</option>
+              {filteredStages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Фильтр по объектам - показывается только при выбранном этапе */}
+        {selectedStageId && (
           <div className="flex-shrink-0 min-w-[200px]">
             <label
               htmlFor="object-filter"
