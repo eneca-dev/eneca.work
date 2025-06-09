@@ -28,13 +28,6 @@ interface PlanningState {
   currentPage: number
   sectionsPerPage: number
 
-  // Фильтры
-  selectedProjectId: string | null
-  selectedDepartmentId: string | null
-  selectedTeamId: string | null
-  selectedManagerId: string | null
-  selectedEmployeeId: string | null
-
   // Состояние синхронизации фильтров и данных
   syncState: {
     isApplyingFilters: boolean
@@ -44,6 +37,8 @@ interface PlanningState {
       teamId: string | null
       managerId: string | null
       employeeId: string | null
+      stageId: string | null
+      objectId: string | null
     } | null
     currentFilters: {
       projectId: string | null
@@ -51,6 +46,8 @@ interface PlanningState {
       teamId: string | null
       managerId: string | null
       employeeId: string | null
+      stageId: string | null
+      objectId: string | null
     }
     filtersKey: string
     lastDataLoadTime: number | null
@@ -76,7 +73,11 @@ interface PlanningState {
     teamId: string | null,
     managerId?: string | null,
     employeeId?: string | null,
+    stageId?: string | null,
+    objectId?: string | null,
   ) => void
+  // Новый метод для синхронизации с новой системой фильтров
+  syncWithFilterStore: () => void
   addSection: (section: Section) => void
   updateSection: (id: string, updates: Partial<Section>) => void
   deleteSection: (id: string) => void
@@ -112,6 +113,8 @@ interface PlanningState {
     teamId: string | null
     managerId: string | null
     employeeId: string | null
+    stageId: string | null
+    objectId: string | null
   }) => string
   isDataSynced: () => boolean
   getDataSyncStatus: () => {
@@ -151,11 +154,6 @@ export const usePlanningStore = create<PlanningState>()(
         departments: [],
         isLoadingSections: false,
         isLoadingDepartments: false,
-        selectedProjectId: null,
-        selectedDepartmentId: null,
-        selectedTeamId: null,
-        selectedManagerId: null,
-        selectedEmployeeId: null,
         expandedSections: {},
         expandedDepartments: {},
         showDepartments: false,
@@ -175,6 +173,8 @@ export const usePlanningStore = create<PlanningState>()(
             teamId: null,
             managerId: null,
             employeeId: null,
+            stageId: null,
+            objectId: null,
           },
           filtersKey: "",
           lastDataLoadTime: null,
@@ -182,7 +182,7 @@ export const usePlanningStore = create<PlanningState>()(
         },
 
         // Установка фильтров
-        setFilters: (projectId, departmentId, teamId, managerId = null, employeeId = null) => {
+        setFilters: (projectId, departmentId, teamId, managerId = null, employeeId = null, stageId = null, objectId = null) => {
           const currentState = get()
           
           // Создаем новые фильтры
@@ -192,6 +192,8 @@ export const usePlanningStore = create<PlanningState>()(
             teamId,
             managerId,
             employeeId,
+            stageId,
+            objectId,
           }
           
           // Генерируем ключ для новых фильтров
@@ -209,6 +211,8 @@ export const usePlanningStore = create<PlanningState>()(
             teamId,
             managerId,
             employeeId,
+            stageId,
+            objectId,
             filtersChanged,
             needsInitialLoad,
             oldKey: currentState.syncState.filtersKey,
@@ -225,11 +229,6 @@ export const usePlanningStore = create<PlanningState>()(
           
           // Обновляем состояние фильтров и синхронизации
           set({
-            selectedProjectId: projectId,
-            selectedDepartmentId: departmentId,
-            selectedTeamId: teamId,
-            selectedManagerId: managerId,
-            selectedEmployeeId: employeeId,
             currentPage: 1,
             syncState: {
               ...currentState.syncState,
@@ -279,23 +278,28 @@ export const usePlanningStore = create<PlanningState>()(
         fetchSections: async () => {
           set({ isLoadingSections: true })
           try {
-            // Получаем текущие фильтры из состояния
+            // Получаем текущие фильтры из новой системы фильтров
+            const { useFilterStore } = await import('../filters/store')
             const {
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
               selectedEmployeeId,
-              sectionsPerPage,
-              currentPage,
-            } = get()
+              selectedStageId,
+              selectedObjectId,
+            } = useFilterStore.getState()
+            
+            const { sectionsPerPage, currentPage } = get()
 
             console.log("📋 Загрузка разделов с фильтрами:", {
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
-              selectedEmployeeId
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId
             })
 
             // Загружаем данные из нового представления (только активные загрузки)
@@ -305,6 +309,8 @@ export const usePlanningStore = create<PlanningState>()(
               selectedTeamId,
               selectedManagerId,
               selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId,
             )
 
             // Проверяем, что результат не является ошибкой
@@ -345,8 +351,9 @@ export const usePlanningStore = create<PlanningState>()(
         fetchDepartments: async () => {
           set({ isLoadingDepartments: true })
           try {
-            // Получаем текущие фильтры из состояния
-            const { selectedDepartmentId, selectedTeamId } = get()
+            // Получаем текущие фильтры из новой системы фильтров
+            const { useFilterStore } = await import('../filters/store')
+            const { selectedDepartmentId, selectedTeamId } = useFilterStore.getState()
 
             // Загружаем организационную структуру из нового представления
             let query = supabase.from("view_organizational_structure").select("*")
@@ -1318,23 +1325,28 @@ export const usePlanningStore = create<PlanningState>()(
         fetchSectionsWithSync: async (abortController: AbortController) => {
           set({ isLoadingSections: true })
           try {
-            // Получаем текущие фильтры из состояния
+            // Получаем текущие фильтры из новой системы фильтров
+            const { useFilterStore } = await import('../filters/store')
             const {
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
               selectedEmployeeId,
-              sectionsPerPage,
-              currentPage,
-            } = get()
+              selectedStageId,
+              selectedObjectId,
+            } = useFilterStore.getState()
+            
+            const { sectionsPerPage, currentPage } = get()
 
             console.log("📋 Синхронная загрузка разделов с фильтрами:", {
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
               selectedManagerId,
-              selectedEmployeeId
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId
             })
 
             // Проверяем, не был ли запрос отменен
@@ -1350,13 +1362,9 @@ export const usePlanningStore = create<PlanningState>()(
               selectedTeamId,
               selectedManagerId,
               selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId,
             )
-
-            // Проверяем, не был ли запрос отменен после загрузки
-            if (abortController.signal.aborted) {
-              console.log("🚫 Запрос загрузки разделов был отменен после получения данных")
-              return
-            }
 
             // Проверяем, что результат не является ошибкой
             if ('success' in result && !result.success) {
@@ -1403,8 +1411,9 @@ export const usePlanningStore = create<PlanningState>()(
         fetchDepartmentsWithSync: async (abortController: AbortController) => {
           set({ isLoadingDepartments: true })
           try {
-            // Получаем текущие фильтры из состояния
-            const { selectedDepartmentId, selectedTeamId } = get()
+            // Получаем текущие фильтры из новой системы фильтров
+            const { useFilterStore } = await import('../filters/store')
+            const { selectedDepartmentId, selectedTeamId } = useFilterStore.getState()
 
             console.log("🏢 Синхронная загрузка отделов с фильтрами:", {
               selectedDepartmentId,
@@ -1675,9 +1684,11 @@ export const usePlanningStore = create<PlanningState>()(
           teamId: string | null
           managerId: string | null
           employeeId: string | null
+          stageId: string | null
+          objectId: string | null
         }) => {
-          const { projectId, departmentId, teamId, managerId, employeeId } = filters
-          return `${projectId}-${departmentId}-${teamId}-${managerId}-${employeeId}`
+          const { projectId, departmentId, teamId, managerId, employeeId, stageId, objectId } = filters
+          return `${projectId}-${departmentId}-${teamId}-${managerId}-${employeeId}-${stageId}-${objectId}`
         },
         isDataSynced: () => {
           const { syncState } = get()
@@ -1704,15 +1715,87 @@ export const usePlanningStore = create<PlanningState>()(
             }
           }))
         },
+        // Новый метод для синхронизации с новой системой фильтров
+        syncWithFilterStore: () => {
+          // Динамический импорт для избежания циклических зависимостей
+          import('../filters/store').then(({ useFilterStore }) => {
+            const filterStore = useFilterStore.getState()
+            const {
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId,
+            } = filterStore
+
+            console.log("🔄 Синхронизация с новой системой фильтров:", {
+              selectedProjectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId
+            })
+
+            const currentState = get()
+            
+            // Создаем новые фильтры со всеми параметрами
+            const newFilters = {
+              projectId: selectedProjectId,
+              departmentId: selectedDepartmentId,
+              teamId: selectedTeamId,
+              managerId: selectedManagerId,
+              employeeId: selectedEmployeeId,
+              stageId: selectedStageId,
+              objectId: selectedObjectId,
+            }
+            
+            // Генерируем ключ для новых фильтров
+            const newFiltersKey = currentState.generateFiltersKey(newFilters)
+            
+            // Проверяем, изменились ли фильтры
+            const filtersChanged = currentState.syncState.filtersKey !== newFiltersKey
+            
+            // Проверяем, нужна ли первоначальная загрузка данных
+            const needsInitialLoad = currentState.syncState.lastDataLoadTime === null
+
+            if (filtersChanged || needsInitialLoad) {
+              // Отменяем предыдущие запросы
+              if (currentState.syncState.abortController) {
+                currentState.syncState.abortController.abort()
+              }
+              
+              // Создаем новый AbortController
+              const abortController = new AbortController()
+              
+              // Обновляем состояние фильтров и синхронизации
+              set({
+                currentPage: 1,
+                syncState: {
+                  ...currentState.syncState,
+                  isApplyingFilters: true,
+                  currentFilters: newFilters,
+                  filtersKey: newFiltersKey,
+                  abortController: abortController,
+                }
+              })
+
+              // Загружаем данные с новым AbortController
+              get().fetchSectionsWithSync(abortController)
+              // Если показаны отделы, загружаем их тоже
+              if (currentState.showDepartments) {
+                get().fetchDepartmentsWithSync(abortController)
+              }
+            }
+          })
+        },
       }),
       {
         name: "planning-data-storage",
         partialize: (state) => ({
-          selectedProjectId: state.selectedProjectId,
-          selectedDepartmentId: state.selectedDepartmentId,
-          selectedTeamId: state.selectedTeamId,
-          selectedManagerId: state.selectedManagerId,
-          selectedEmployeeId: state.selectedEmployeeId,
           expandedSections: state.expandedSections,
           expandedDepartments: state.expandedDepartments,
           showDepartments: state.showDepartments,

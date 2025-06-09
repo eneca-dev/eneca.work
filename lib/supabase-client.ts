@@ -240,6 +240,8 @@ export async function fetchSectionsWithLoadings(
   teamId: string | null = null,
   managerId: string | null = null,
   employeeId: string | null = null,
+  stageId: string | null = null,
+  objectId: string | null = null,
 ): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> } | StructuredError> {
   try {
     validateEnvironmentVariables()
@@ -249,10 +251,30 @@ export async function fetchSectionsWithLoadings(
       departmentId,
       teamId,
       managerId,
-      employeeId
+      employeeId,
+      stageId,
+      objectId
     })
 
     let query = supabase.from("view_sections_with_loadings").select("*")
+
+    // Добавляем фильтр по проекту, если он указан
+    if (projectId) {
+      console.log("📁 Применяю фильтр по проекту:", projectId)
+      query = query.eq("project_id", projectId)
+    }
+
+    // Добавляем фильтр по стадии, если она указана
+    if (stageId) {
+      console.log("🎯 Применяю фильтр по стадии:", stageId)
+      query = query.eq("stage_id", stageId)
+    }
+
+    // Добавляем фильтр по объекту, если он указан
+    if (objectId) {
+      console.log("🏗️ Применяю фильтр по объекту:", objectId)
+      query = query.eq("object_id", objectId)
+    }
 
     if (managerId) {
       // Получаем проекты менеджера
@@ -277,8 +299,10 @@ export async function fetchSectionsWithLoadings(
         return { sections: [], loadingsMap: {} }
       }
 
-      // Фильтруем по проектам менеджера
-      query = query.in("project_id", projectIds)
+      // Фильтруем по проектам менеджера (только если не указан конкретный проект)
+      if (!projectId) {
+        query = query.in("project_id", projectIds)
+      }
     }
 
     if (departmentId) {

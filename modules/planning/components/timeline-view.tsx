@@ -2,14 +2,16 @@
 import { Loader2 } from "lucide-react"
 // Импортируем сторы напрямую из их файлов
 import { usePlanningStore } from "../stores/usePlanningStore"
-import { usePlanningFiltersStore } from "../stores/usePlanningFiltersStore"
+// Заменяем старый стор фильтров на новый
+import { useFilterStore } from "../filters/store"
 import { usePlanningViewStore } from "../stores/usePlanningViewStore"
 import { useUserStore } from "@/stores/useUserStore"
 import { useUiStore } from "@/stores/useUiStore"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { TimelineGrid } from "./timeline-grid"
-import { FiltersPanel } from "./timeline/filters-panel"
+// Заменяем FiltersPanel на TimelineFilters
+import { TimelineFilters } from "../filters/TimelineFilters"
 import { NavigationControls } from "./timeline/navigation-controls"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
 import { Pagination } from "./pagination"
@@ -19,24 +21,17 @@ import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
 import { PermissionBadge } from "./permission-badge"
 import { Button } from "@/components/ui/button"
 
-
-
 export function TimelineView() {
-  // Получаем состояние и действия из стора фильтров
+  // Получаем состояние и действия из нового стора фильтров
   const {
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
-    selectedManagerId, // Добавляем выбранного менеджера
-    setSelectedProject,
-    setSelectedDepartment,
-    setSelectedTeam,
-    setSelectedManager,
-    setSelectedStage,
-    setSelectedObject,
+    selectedManagerId,
+    selectedStageId,
+    selectedObjectId,
     resetFilters,
-    fetchFilterOptions,
-  } = usePlanningFiltersStore()
+  } = useFilterStore()
 
   const {
     sections,
@@ -106,28 +101,52 @@ useEffect(() => {
   })
 
   // Количество активных фильтров
-  const activeFiltersCount = [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId].filter(Boolean).length
+  const activeFiltersCount = [
+    selectedProjectId, 
+    selectedDepartmentId, 
+    selectedTeamId, 
+    selectedManagerId,
+    selectedStageId,
+    selectedObjectId
+  ].filter(Boolean).length
 
   // Проверяем, есть ли активные фильтры
   const hasActiveFilters = activeFiltersCount > 0
 
   // Загружаем проекты и отделы при монтировании компонента
   useEffect(() => {
-    fetchFilterOptions()
-  }, [fetchFilterOptions])
+    fetchSections()
+  }, [fetchSections])
 
   // Применяем фильтры при их изменении или при монтировании компонента
   useEffect(() => {
     // Устанавливаем состояние загрузки перед применением фильтров
     setLoading(true)
 
-    // Применяем фильтры, включая команду
-    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId)
+    // Применяем фильтры из нового стора
+    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, null, selectedStageId, selectedObjectId)
 
     // Сбрасываем состояние загрузки после небольшой задержки
     const timer = setTimeout(() => setLoading(false), 300)
     return () => clearTimeout(timer)
-  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, setFilters, setLoading])
+  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
+
+  // Дополнительная подписка на изменения фильтров для немедленного обновления данных
+  useEffect(() => {
+    console.log("🔄 Фильтры изменились, обновляем данные:", {
+      selectedStageId,
+      selectedObjectId,
+      selectedProjectId,
+      selectedDepartmentId,
+      selectedTeamId,
+      selectedManagerId
+    })
+    
+    // Вызываем fetchSections для немедленного обновления данных
+    if (selectedProjectId || selectedDepartmentId || selectedTeamId || selectedManagerId || selectedStageId || selectedObjectId) {
+      fetchSections()
+    }
+  }, [selectedStageId, selectedObjectId, fetchSections])
 
   // Загружаем отделы при переключении showDepartments
   useEffect(() => {
@@ -158,40 +177,35 @@ useEffect(() => {
   // Обработчики для фильтров
   const handleProjectChange = (projectId: string | null) => {
     console.log("Изменение проекта:", projectId)
-    setSelectedProject(projectId)
+    // Новая система фильтров автоматически обновляет состояние
   }
 
   const handleDepartmentChange = (departmentId: string | null) => {
     console.log("Изменение отдела:", departmentId)
-    setSelectedDepartment(departmentId)
+    // Новая система фильтров автоматически обновляет состояние
   }
 
   const handleTeamChange = (teamId: string | null) => {
     console.log("Изменение команды:", teamId)
-    setSelectedTeam(teamId)
+    // Новая система фильтров автоматически обновляет состояние
   }
 
 // Добавляем обработчик для менеджера
- const handleManagerChange = async (managerId: string | null) => {
+ const handleManagerChange = (managerId: string | null) => {
    console.log("Изменение менеджера:", managerId)
-   try {
-     await setSelectedManager(managerId)
-   } catch (error) {
-     console.error("Error setting selected manager:", error)
-     // Optionally show user-friendly error message
-   }
+   // Новая система фильтров автоматически обновляет состояние
  }
 
   // Добавляем обработчик для этапов
   const handleStageChange = (stageId: string | null) => {
     console.log("Изменение этапа:", stageId)
-    setSelectedStage(stageId)
+    // Новая система фильтров автоматически обновляет состояние
   }
 
   // Добавляем обработчик для объектов
   const handleObjectChange = (objectId: string | null) => {
     console.log("Изменение объекта:", objectId)
-    setSelectedObject(objectId)
+    // Новая система фильтров автоматически обновляет состояние
   }
 
   const handleResetFilters = () => {
@@ -244,14 +258,12 @@ useEffect(() => {
       </header>
 
       {/* Панель фильтров всегда отображается */}
-      <FiltersPanel
-        theme={theme}
+      <TimelineFilters
         onProjectChange={handleProjectChange}
         onDepartmentChange={handleDepartmentChange}
         onTeamChange={handleTeamChange}
         onManagerChange={handleManagerChange}
         onStageChange={handleStageChange}
-        onObjectChange={handleObjectChange}
         onResetFilters={handleResetFilters}
         showDepartments={showDepartments}
         toggleShowDepartments={toggleShowDepartments}
