@@ -11,5 +11,7 @@ export function useAdminPermissions(): AdminPermissions {
     canManageTeams: permissions?.includes("team.manage") ?? false,
     canManagePositions: permissions?.includes("position.manage") ?? false,
     canManageCategories: permissions?.includes("category.manage") ?? false,
+    canChangeRoles: permissions?.includes("roles_can_add") ?? false,
+    canAddAdminRole: permissions?.includes("admin_role_can_add") ?? false,
   }
 } 

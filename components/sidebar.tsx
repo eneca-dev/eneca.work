@@ -7,10 +7,10 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
-import { WeeklyCalendar } from "@/components/weekly-calendar"
 import { useUserStore } from "@/stores/useUserStore"
+import { WeeklyCalendar } from "@/components/weekly-calendar"
 
 interface SidebarProps {
   user: {
@@ -56,20 +56,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
       icon: Send,
     },
     {
-      title: "Прогресс проектов",
-      href: "/dashboard/progress",
-      icon: BarChart,
-    },
-    {
       title: "Декомпозиция",
-      href: "/dashboard/decomposition", 
+      href: "/dashboard/decomposition",
       icon: Network,
     },
+
   ]
 
   const isSettingsActive = pathname === "/dashboard/settings"
   const isUsersActive = pathname === "/dashboard/users"
   const isDebugActive = pathname === "/dashboard/debug"
+  const isReportActive = pathname === "/dashboard/report"
 
   return (
     <div
@@ -113,7 +110,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                 <Link
                   href={item.href}
                   className={cn(
-                    "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center rounded-md px-3 py-2 nav-item transition-colors",
                     pathname === item.href
                       ? "bg-primary/10 text-primary"
                       : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
@@ -127,6 +124,23 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             ))}
           </ul>
         </nav>
+
+        {/* Сообщить о проблеме */}
+        <div className="px-2 mt-2">
+          <Link
+            href="/dashboard/report"
+            className={cn(
+              "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+              pathname === "/dashboard/report"
+                ? "bg-primary/10 text-primary"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <MessageSquare className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+            {!collapsed && <span>Сообщить о проблеме</span>}
+          </Link>
+        </div>
 
         {/* Weekly Calendar */}
         <WeeklyCalendar collapsed={collapsed} />
@@ -143,8 +157,8 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             />
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate dark:text-gray-200">{displayName}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayEmail}</p>
+                <p className="list-item-title truncate dark:text-gray-200">{displayName}</p>
+                <p className="metadata truncate">{displayEmail}</p>
               </div>
             )}
           </div>
@@ -152,16 +166,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
           {collapsed ? (
             <div className="mt-4 flex flex-col items-center space-y-2">
               <ThemeToggle />
-
-              <Link href="/dashboard/debug">
-                <Button
-                  variant={isDebugActive ? "secondary" : "ghost"}
-                  size="icon"
-                  className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
-                >
-                  <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                </Button>
-              </Link>
 
               <Link href="/dashboard/users">
                 <Button
@@ -181,16 +185,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             <div className="mt-4 space-y-2">
               <div className="flex justify-between">
                 <ThemeToggle />
-                
-                <Link href="/dashboard/debug">
-                  <Button
-                    variant={isDebugActive ? "secondary" : "ghost"}
-                    size="icon"
-                    className={`h-9 w-9 ${isDebugActive ? "bg-primary/10 text-primary" : ""}`}
-                  >
-                    <Bug className={`h-4 w-4 ${isDebugActive ? "text-primary" : "text-gray-600 dark:text-gray-400"}`} />
-                  </Button>
-                </Link>
                 
                 <Link href="/dashboard/users">
                   <Button

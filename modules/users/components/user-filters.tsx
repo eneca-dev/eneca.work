@@ -5,12 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronUp, Filter, Building2, Home, Briefcase } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { User } from "@/types/db"
 
-// Обновим интерфейс UserFiltersProps, чтобы включить workLocations
+// Обновим интерфейс UserFiltersProps, чтобы включить roles
 interface UserFiltersProps {
   onFilterChange?: (filters: {
     departments: string[]
@@ -18,6 +17,7 @@ interface UserFiltersProps {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }) => void
   users: User[] // Добавим пользователей для фильтрации
 }
@@ -27,13 +27,15 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [openTeams, setOpenTeams] = useState(true)
   const [openCategories, setOpenCategories] = useState(true)
   const [openPositions, setOpenPositions] = useState(true)
-  const [openWorkLocations, setOpenWorkLocations] = useState(true) // Добавим состояние для расположения
+  const [openWorkLocations, setOpenWorkLocations] = useState(true)
+  const [openRoles, setOpenRoles] = useState(true) // Добавим состояние для ролей
 
   const [departments, setDepartments] = useState<string[]>([])
   const [teams, setTeams] = useState<string[]>([])
   const [positions, setPositions] = useState<string[]>([])
   const [categories, setCategories] = useState<string[]>([])
-  const [workLocations, setWorkLocations] = useState<string[]>([]) // Добавим состояние для расположений
+  const [workLocations, setWorkLocations] = useState<string[]>([])
+  const [roles, setRoles] = useState<string[]>([]) // Добавим состояние для ролей
   const [isLoading, setIsLoading] = useState(true)
 
   // Состояние для выбранных фильтров
@@ -41,7 +43,12 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedPositions, setSelectedPositions] = useState<string[]>([])
-  const [selectedWorkLocations, setSelectedWorkLocations] = useState<string[]>([]) // Добавим состояние для выбранных расположений
+  const [selectedWorkLocations, setSelectedWorkLocations] = useState<string[]>([])
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]) // Добавим состояние для выбранных ролей
+
+  // Состояния для поиска
+  const [searchDepartment, setSearchDepartment] = useState("")
+  const [searchTeam, setSearchTeam] = useState("")
 
   // Загрузка данных при монтировании компонента
   useEffect(() => {
@@ -54,12 +61,14 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
       const uniquePositions = [...new Set(users.map((user) => user.position))].filter(Boolean).sort()
       const uniqueCategories = [...new Set(users.map((user) => user.category))].filter(Boolean).sort()
       const uniqueWorkLocations = [...new Set(users.map((user) => user.workLocation))].filter(Boolean).sort()
+      const uniqueRoles = [...new Set(users.map((user) => user.role))].filter(Boolean).sort() as string[]
 
       setDepartments(uniqueDepartments)
       setTeams(uniqueTeams)
       setPositions(uniquePositions)
       setCategories(uniqueCategories)
       setWorkLocations(uniqueWorkLocations as string[])
+      setRoles(uniqueRoles)
 
       setIsLoading(false)
     }
@@ -83,6 +92,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -100,6 +110,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -119,6 +130,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: newCategories,
         positions: selectedPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -138,6 +150,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: newPositions,
         workLocations: selectedWorkLocations,
+        roles: selectedRoles,
       })
     }
   }
@@ -158,6 +171,28 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: selectedCategories,
         positions: selectedPositions,
         workLocations: newWorkLocations,
+        roles: selectedRoles,
+      })
+    }
+  }
+
+  // Добавим обработчик изменения фильтра по ролям
+  const handleRoleChange = (roleName: string, checked: boolean) => {
+    const newRoles = checked
+      ? [...selectedRoles, roleName]
+      : selectedRoles.filter((r) => r !== roleName)
+
+    setSelectedRoles(newRoles)
+
+    // Сразу применяем фильтр
+    if (onFilterChange) {
+      onFilterChange({
+        departments: selectedDepartments,
+        teams: selectedTeams,
+        categories: selectedCategories,
+        positions: selectedPositions,
+        workLocations: selectedWorkLocations,
+        roles: newRoles,
       })
     }
   }
@@ -169,6 +204,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
     setSelectedCategories([])
     setSelectedPositions([])
     setSelectedWorkLocations([])
+    setSelectedRoles([])
 
     if (onFilterChange) {
       onFilterChange({
@@ -177,6 +213,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
         categories: [],
         positions: [],
         workLocations: [],
+        roles: [],
       })
     }
   }
@@ -196,86 +233,114 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-medium flex items-center">
-          <Filter className="mr-2 h-4 w-4" />
+        <CardTitle className="card-title flex items-center">
+          <Filter className="h-4 w-4 mr-2" />
           Фильтры
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 pt-0">
+      <CardContent className="space-y-6">
         {isLoading ? (
-          <div className="py-4 text-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500 mx-auto"></div>
-            <p className="mt-2 text-sm text-gray-500">Загрузка фильтров...</p>
-          </div>
+          <p className="secondary-text">Загрузка фильтров...</p>
         ) : (
           <>
+            {/* Кнопка сброса фильтров */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetFilters}
+              className="w-full mb-4"
+            >
+              Сбросить все фильтры
+            </Button>
+
+            {/* Фильтр по отделам */}
             <Collapsible open={openDepartments} onOpenChange={setOpenDepartments}>
-              <CollapsibleTrigger className="flex w-full items-center justify-between py-1">
-                <h4 className="text-sm font-medium">Отделы</h4>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Отделы</h4>
                 {openDepartments ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 pb-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                  {departments.map((department) => (
-                    <div key={department} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`department-${department}`}
-                        checked={selectedDepartments.includes(department)}
-                        onCheckedChange={(checked) => handleDepartmentChange(department, checked === true)}
-                      />
-                      <Label htmlFor={`department-${department}`} className="text-sm">
-                        {department}
-                      </Label>
-                    </div>
-                  ))}
+              <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по отделам */}
+                <input
+                  type="text"
+                  placeholder="Поиск отделов..."
+                  value={searchDepartment}
+                  onChange={(e) => setSearchDepartment(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
+                  {departments
+                    .filter((department) =>
+                      department.toLowerCase().includes(searchDepartment.toLowerCase()),
+                    )
+                    .map((department) => (
+                      <div key={department} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`department-${department}`}
+                          checked={selectedDepartments.includes(department)}
+                          onCheckedChange={(checked) => handleDepartmentChange(department, checked as boolean)}
+                        />
+                        <Label htmlFor={`department-${department}`} className="body-text">
+                          {department}
+                        </Label>
+                      </div>
+                    ))}
                 </div>
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
+            {/* Фильтр по командам */}
             <Collapsible open={openTeams} onOpenChange={setOpenTeams}>
-              <CollapsibleTrigger className="flex w-full items-center justify-between py-1">
-                <h4 className="text-sm font-medium">Команды</h4>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Команды</h4>
                 {openTeams ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 pb-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                  {teams.map((team) => (
-                    <div key={team} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`team-${team}`}
-                        checked={selectedTeams.includes(team)}
-                        onCheckedChange={(checked) => handleTeamChange(team, checked === true)}
-                      />
-                      <Label htmlFor={`team-${team}`} className="text-sm">
-                        {team}
-                      </Label>
-                    </div>
-                  ))}
+              <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по командам */}
+                <input
+                  type="text"
+                  placeholder="Поиск команд..."
+                  value={searchTeam}
+                  onChange={(e) => setSearchTeam(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
+                  {teams
+                    .filter((team) => team.toLowerCase().includes(searchTeam.toLowerCase()))
+                    .map((team) => (
+                      <div key={team} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`team-${team}`}
+                          checked={selectedTeams.includes(team)}
+                          onCheckedChange={(checked) => handleTeamChange(team, checked as boolean)}
+                        />
+                        <Label htmlFor={`team-${team}`} className="body-text">
+                          {team}
+                        </Label>
+                      </div>
+                    ))}
                 </div>
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
+            {/* Фильтр по должностям */}
             <Collapsible open={openPositions} onOpenChange={setOpenPositions}>
-              <CollapsibleTrigger className="flex w-full items-center justify-between py-1">
-                <h4 className="text-sm font-medium">Должности</h4>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Должности</h4>
                 {openPositions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 pb-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              <CollapsibleContent className="mt-2 space-y-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {positions.map((position) => (
                     <div key={position} className="flex items-center space-x-2">
                       <Checkbox
                         id={`position-${position}`}
                         checked={selectedPositions.includes(position)}
-                        onCheckedChange={(checked) => handlePositionChange(position, checked === true)}
+                        onCheckedChange={(checked) => handlePositionChange(position, checked as boolean)}
                       />
-                      <Label htmlFor={`position-${position}`} className="text-sm">
+                      <Label htmlFor={`position-${position}`} className="body-text">
                         {position}
                       </Label>
                     </div>
@@ -284,23 +349,22 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
-
+            {/* Фильтр по категориям */}
             <Collapsible open={openCategories} onOpenChange={setOpenCategories}>
-              <CollapsibleTrigger className="flex w-full items-center justify-between py-1">
-                <h4 className="text-sm font-medium">Категории</h4>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Категории</h4>
                 {openCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 pb-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              <CollapsibleContent className="mt-2 space-y-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {categories.map((category) => (
                     <div key={category} className="flex items-center space-x-2">
                       <Checkbox
                         id={`category-${category}`}
                         checked={selectedCategories.includes(category)}
-                        onCheckedChange={(checked) => handleCategoryChange(category, checked === true)}
+                        onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
                       />
-                      <Label htmlFor={`category-${category}`} className="text-sm">
+                      <Label htmlFor={`category-${category}`} className="body-text">
                         {category}
                       </Label>
                     </div>
@@ -309,28 +373,50 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator />
+            {/* Фильтр по ролям */}
+            <Collapsible open={openRoles} onOpenChange={setOpenRoles}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Роли</h4>
+                {openRoles ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
+                  {roles.map((role) => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`role-${role}`}
+                        checked={selectedRoles.includes(role)}
+                        onCheckedChange={(checked) => handleRoleChange(role, checked as boolean)}
+                      />
+                      <Label htmlFor={`role-${role}`} className="body-text">
+                        {role}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-            {/* Добавим секцию фильтра по расположению */}
+            {/* Фильтр по расположению */}
             <Collapsible open={openWorkLocations} onOpenChange={setOpenWorkLocations}>
-              <CollapsibleTrigger className="flex w-full items-center justify-between py-1">
-                <h4 className="text-sm font-medium">Расположение</h4>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <h4 className="list-item-title">Расположение</h4>
                 {openWorkLocations ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 pb-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+              <CollapsibleContent className="mt-2 space-y-2">
+                <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
                   {workLocations.map((location) => {
-                    const locationInfo = getWorkLocationInfo(location)
+                    const { icon, label } = getWorkLocationInfo(location)
                     return (
                       <div key={location} className="flex items-center space-x-2">
                         <Checkbox
                           id={`location-${location}`}
                           checked={selectedWorkLocations.includes(location)}
-                          onCheckedChange={(checked) => handleWorkLocationChange(location, checked === true)}
+                          onCheckedChange={(checked) => handleWorkLocationChange(location, checked as boolean)}
                         />
-                        <Label htmlFor={`location-${location}`} className="text-sm flex items-center">
-                          {locationInfo.icon}
-                          {locationInfo.label}
+                        <Label htmlFor={`location-${location}`} className="body-text flex items-center">
+                          {icon}
+                          {label}
                         </Label>
                       </div>
                     )
@@ -338,14 +424,6 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-
-            <Separator />
-
-            <div className="flex flex-col gap-2 pt-2">
-              <Button variant="outline" size="sm" className="w-full" onClick={resetFilters}>
-                Сбросить все фильтры
-              </Button>
-            </div>
           </>
         )}
       </CardContent>

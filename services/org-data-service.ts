@@ -29,54 +29,44 @@ export function mapWorkFormatToDb(format: "office" | "remote" | "hybrid"): WorkF
 
 // Получение всех пользователей с объединением данных из связанных таблиц
 export async function getUsers(): Promise<User[]> {
+  console.log("=== getUsers function ===");
   const supabase = createClient();
-  const { data: profiles, error } = await supabase.from("profiles").select(`
-      user_id,
-      first_name,
-      last_name,
-      email,
-      created_at,
-      work_format,
-      address,
-      employment_rate,
-      salary,
-      is_hourly,
-      avatar_url,
-      departments(department_id, department_name),
-      teams(team_id, team_name),
-      positions(position_id, position_name),
-      categories(category_id, category_name)
-    `)
+  
+  // Используем новое представление view_users для получения всех данных одним запросом
+  const { data: users, error } = await supabase
+    .from("view_users")
+    .select("*")
+    .order("last_name", { ascending: true })
 
   if (error) {
-    console.error("Error fetching users:", error)
+    console.error("Error fetching users from view:", error)
     return []
   }
 
-  return profiles.map((profile) => {
-    const department = profile.departments as unknown as { department_name: string } | null
-    const team = profile.teams as unknown as { team_name: string } | null
-    const position = profile.positions as unknown as { position_name: string } | null
-    const category = profile.categories as unknown as { category_name: string } | null
+  console.log("Получено пользователей из представления:", users?.length || 0);
 
-    return {
-      id: profile.user_id,
-      name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
-      email: profile.email || "",
-      avatar_url: profile.avatar_url || `/placeholder.svg?height=40&width=40&text=${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`,
-      position: position?.position_name || "",
-      department: department?.department_name || "",
-      team: team?.team_name || "",
-      category: category?.category_name || "",
-      isActive: true, // Предполагаем, что все пользователи активны
-      dateJoined: profile.created_at,
-      workLocation: mapWorkFormat(profile.work_format),
-      address: profile.address || "",
-      employmentRate: profile.employment_rate !== null ? profile.employment_rate : 1,
-      salary: profile.salary !== null ? profile.salary : profile.is_hourly ? 15 : 1500, // Разумные значения по умолчанию
-      isHourly: profile.is_hourly !== null ? profile.is_hourly : true,
-    }
-  })
+  // Преобразуем данные из представления в формат User
+  const formattedUsers = users?.map((user) => ({
+    id: user.user_id,
+    name: user.full_name || `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+    email: user.email || "",
+    avatar_url: user.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`,
+    position: user.position_name || "",
+    department: user.department_name || "",
+    team: user.team_name || "",
+    category: user.category_name || "",
+    role: user.role_name || "",
+    isActive: user.is_active || true,
+    dateJoined: user.created_at,
+    workLocation: mapWorkFormat(user.work_format),
+    address: user.address || "",
+    employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
+    salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
+    isHourly: user.is_hourly !== null ? user.is_hourly : true,
+  })) || []
+
+  console.log("Обработано пользователей:", formattedUsers.length);
+  return formattedUsers
 }
 
 // Получение всех отделов
@@ -130,111 +120,226 @@ export async function getPositions(): Promise<Position[]> {
 
 // Получение всех категорий
 export async function getCategories(): Promise<Category[]> {
-  const supabase = createClient();
+  const supabase = createClient()
   const { data, error } = await supabase.from("categories").select("category_id, category_name")
 
   if (error) {
     console.error("Error fetching categories:", error)
-    return []
+    throw error
   }
 
-  return data.map((cat) => ({
+  return data?.map((cat) => ({
     id: cat.category_id,
     name: cat.category_name || "",
-  }))
+  })) || []
+}
+
+/**
+ * Получить все роли
+ * @returns Promise<Role[]>
+ */
+export async function getRoles(): Promise<{ id: string; name: string; description?: string }[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("roles")
+    .select("id, name, description")
+    .order("name")
+
+  if (error) {
+    console.error("Error fetching roles:", error)
+    throw error
+  }
+
+  return data || []
+}
+
+/**
+ * Получить роли доступные для назначения пользователю
+ * @param canAddAdmin - может ли пользователь назначать роль admin
+ * @returns Promise<Role[]>
+ */
+export async function getAvailableRoles(canAddAdmin: boolean = false): Promise<{ id: string; name: string; description?: string }[]> {
+  const roles = await getRoles()
+  
+  if (canAddAdmin) {
+    return roles
+  }
+  
+  // Исключаем роль admin если нет соответствующего разрешения
+  return roles.filter(role => role.name !== 'admin')
 }
 
 // Обновление пользователя
 export async function updateUser(
   userId: string,
-  userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined" | "isActive">> & { firstName?: string; lastName?: string },
+  userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined">> & { firstName?: string; lastName?: string; roleId?: string },
 ) {
+  console.log("=== updateUser function ===");
+  console.log("updateUser вызван с данными:", { userId, userData });
+  
   const supabase = createClient();
   const updates: any = {}
 
   if (userData.firstName !== undefined) {
     updates.first_name = userData.firstName
+    console.log("Добавлено: first_name =", userData.firstName);
   }
   if (userData.lastName !== undefined) {
     updates.last_name = userData.lastName
+    console.log("Добавлено: last_name =", userData.lastName);
   }
 
   if (userData.email) {
     updates.email = userData.email
+    console.log("Добавлено: email =", userData.email);
   }
 
   // Найдем ID для связанных сущностей, если они изменились
-  if (userData.department) {
-    const { data: department } = await supabase
-      .from("departments")
-      .select("department_id")
-      .eq("department_name", userData.department)
-      .single()
+  if (userData.department && userData.department.trim() !== "") {
+    console.log("Ищем отдел:", userData.department);
+    try {
+      const { data: department, error: deptError } = await supabase
+        .from("departments")
+        .select("department_id")
+        .eq("department_name", userData.department)
+        .single()
 
-    if (department) {
-      updates.department_id = department.department_id
+      if (deptError) {
+        console.error("Ошибка поиска отдела:", deptError);
+      } else if (department) {
+        updates.department_id = department.department_id
+        console.log("Найден отдел, ID =", department.department_id);
+      } else {
+        console.warn("Отдел не найден:", userData.department);
+      }
+    } catch (error) {
+      console.error("Ошибка при обработке отдела:", error);
     }
   }
 
-  if (userData.team) {
-    const { data: team } = await supabase.from("teams").select("team_id").eq("team_name", userData.team).single()
+  if (userData.team && userData.team.trim() !== "") {
+    console.log("Ищем команду:", userData.team);
+    try {
+      const { data: team, error: teamError } = await supabase
+        .from("teams")
+        .select("team_id")
+        .eq("team_name", userData.team)
+        .single()
 
-    if (team) {
-      updates.team_id = team.team_id
+      if (teamError) {
+        console.error("Ошибка поиска команды:", teamError);
+      } else if (team) {
+        updates.team_id = team.team_id
+        console.log("Найдена команда, ID =", team.team_id);
+      } else {
+        console.warn("Команда не найдена:", userData.team);
+      }
+    } catch (error) {
+      console.error("Ошибка при обработке команды:", error);
     }
   }
 
-  if (userData.position) {
-    const { data: position } = await supabase
-      .from("positions")
-      .select("position_id")
-      .eq("position_name", userData.position)
-      .single()
+  if (userData.position && userData.position.trim() !== "") {
+    console.log("Ищем должность:", userData.position);
+    try {
+      const { data: position, error: posError } = await supabase
+        .from("positions")
+        .select("position_id")
+        .eq("position_name", userData.position)
+        .single()
 
-    if (position) {
-      updates.position_id = position.position_id
+      if (posError) {
+        console.error("Ошибка поиска должности:", posError);
+      } else if (position) {
+        updates.position_id = position.position_id
+        console.log("Найдена должность, ID =", position.position_id);
+      } else {
+        console.warn("Должность не найдена:", userData.position);
+      }
+    } catch (error) {
+      console.error("Ошибка при обработке должности:", error);
     }
   }
 
-  if (userData.category) {
-    const { data: category } = await supabase
-      .from("categories")
-      .select("category_id")
-      .eq("category_name", userData.category)
-      .single()
+  if (userData.category && userData.category.trim() !== "") {
+    console.log("Ищем категорию:", userData.category);
+    try {
+      const { data: category, error: catError } = await supabase
+        .from("categories")
+        .select("category_id")
+        .eq("category_name", userData.category)
+        .single()
 
-    if (category) {
-      updates.category_id = category.category_id
+      if (catError) {
+        console.error("Ошибка поиска категории:", catError);
+      } else if (category) {
+        updates.category_id = category.category_id
+        console.log("Найдена категория, ID =", category.category_id);
+      } else {
+        console.warn("Категория не найдена:", userData.category);
+      }
+    } catch (error) {
+      console.error("Ошибка при обработке категории:", error);
     }
   }
 
   if (userData.workLocation) {
     updates.work_format = mapWorkFormatToDb(userData.workLocation)
+    console.log("Добавлено: work_format =", updates.work_format);
   }
 
   if (userData.address !== undefined) {
     updates.address = userData.address
+    console.log("Добавлено: address =", userData.address);
   }
 
   if (userData.employmentRate !== undefined) {
     updates.employment_rate = userData.employmentRate
+    console.log("Добавлено: employment_rate =", userData.employmentRate);
   }
 
   if (userData.salary !== undefined) {
     updates.salary = userData.salary
+    console.log("Добавлено: salary =", userData.salary);
   }
 
   if (userData.isHourly !== undefined) {
     updates.is_hourly = userData.isHourly
+    console.log("Добавлено: is_hourly =", userData.isHourly);
   }
 
+  // Добавляем обработку поля isActive
+  // ВРЕМЕННО ОТКЛЮЧЕНО: колонка is_active отсутствует в таблице profiles
+  // TODO: Добавить колонку is_active в таблицу profiles через миграцию
+  // if (userData.isActive !== undefined) {
+  //   updates.is_active = userData.isActive
+  //   console.log("Добавлено: is_active =", userData.isActive);
+  // }
+
+  // Обновляем роль пользователя прямо в profiles, если она была передана
+  if (userData.roleId !== undefined) {
+    updates.role_id = userData.roleId || null
+    console.log("Добавлено: role_id =", userData.roleId);
+  }
+
+  console.log("Итоговые обновления для БД:", updates);
+
+  // Проверяем, что есть что обновлять
+  if (Object.keys(updates).length === 0) {
+    console.log("Нет данных для обновления");
+    return true;
+  }
+
+  // Обновляем профиль пользователя
+  console.log("Выполняем обновление в БД для пользователя:", userId);
   const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
 
   if (error) {
     console.error("Error updating user:", error)
-    throw error
+    throw new Error(`Ошибка обновления профиля: ${error.message || JSON.stringify(error)}`)
   }
 
+  console.log("Пользователь успешно обновлен в БД");
   return true
 }
 
@@ -259,7 +364,7 @@ export async function getUsersByDepartment() {
     .select(
       `
       department_name,
-      profiles!inner (
+      profiles!profiles_department_membership_fkey!inner (
         user_id
       )
     `,
@@ -433,131 +538,98 @@ export async function checkPaymentAccess(): Promise<boolean> {
 }
 
 /**
- * Получить роль и разрешения пользователя по userId
+ * Получить roleId и разрешения пользователя по userId (ИСПРАВЛЕННАЯ ВЕРСИЯ)
  * @param userId string
  * @param supabaseClient - опциональный экземпляр клиента Supabase
- * @returns { role: string | null, permissions: string[] }
+ * @returns { roleId: string | null, permissions: string[] }
  */
 export async function getUserRoleAndPermissions(userId: string, supabaseClient?: any) {
-  console.log("getUserRoleAndPermissions вызвана с userId (обновленная версия):", userId);
+  console.log("getUserRoleAndPermissions вызвана с userId:", userId);
   
   try {
-    // Используем переданный клиент Supabase или создаем новый
     const supabase = supabaseClient || createClient();
-    console.log("Используем экземпляр Supabase клиента:", supabaseClient ? "переданный" : "созданный внутри функции");
     
-    // Сначала пытаемся получить roleId из профиля пользователя
-    const { data: profileData, error: profileError } = await supabase
+    // Получаем roleId из profiles
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role_id")
       .eq("user_id", userId)
       .single();
     
-    console.log("Запрос profiles завершен:", { profileData, profileError });
-    
-    // Если в профиле есть role_id, используем его
-    if (profileData?.role_id && !profileError) {
-      console.log("Найден role_id в профиле:", profileData.role_id);
-      return await getUserRoleAndPermissionsByRoleId(profileData.role_id, supabaseClient);
+    if (profileError || !profile?.role_id) {
+      console.error("Ошибка при получении профиля:", profileError);
+      return { roleId: null, permissions: [] };
     }
     
-    // Если в профиле нет role_id, пытаемся найти в user_roles (старый способ)
-    console.log("role_id не найден в профиле, ищем в user_roles");
+    const roleId = profile.role_id;
     
-    // Шаг 1: Получаем запись из user_roles для пользователя
-    const { data: userRoles, error: userRolesError } = await supabase
-      .from("user_roles")
-      .select("role_id")
-      .eq("user_id", userId);
+    // Получаем разрешения для роли
+    const { data: rolePermissions, error: permissionsError } = await supabase
+      .from("role_permissions")
+      .select(`
+        permissions(name)
+      `)
+      .eq("role_id", roleId);
     
-    console.log("Запрос user_roles завершен:", { userRoles, userRolesError });
-    
-    if (userRolesError) {
-      console.error("Ошибка при получении ролей пользователя:", userRolesError);
-      return { role: null, permissions: [] };
+    if (permissionsError) {
+      console.error("Ошибка при получении разрешений:", permissionsError);
+      return { roleId, permissions: [] };
     }
     
-    if (!userRoles || userRoles.length === 0) {
-      console.warn("Роли для пользователя не найдены:", userId);
-      return { role: null, permissions: [] };
-    }
+    const permissions = rolePermissions
+      ?.map((rp: any) => rp.permissions?.name)
+      .filter(Boolean) || [];
     
-    const roleId = userRoles[0].role_id;
-    console.log("Найден role_id в user_roles:", roleId);
+    console.log("Возвращаемые данные:", { roleId, permissions });
+    return { roleId, permissions };
     
-    return await getUserRoleAndPermissionsByRoleId(roleId, supabaseClient);
   } catch (error) {
     console.error("Непредвиденная ошибка в getUserRoleAndPermissions:", error);
-    return { role: null, permissions: [] };
+    return { roleId: null, permissions: [] };
   }
 }
 
 /**
- * Получить роль и разрешения по roleId
- * @param roleId string
- * @param supabaseClient - опциональный экземпляр клиента Supabase
- * @returns { role: string | null, permissions: string[] }
+ * ОПТИМИЗИРОВАННАЯ функция получения разрешений
+ * Использует Zustand если доступен, иначе обращается к БД
+ * @param userId string - нужен только если нет данных в Zustand
+ * @param forceFromDB boolean - принудительно получить из БД
+ * @returns { roleId: string | null, permissions: string[] }
  */
-export async function getUserRoleAndPermissionsByRoleId(roleId: string, supabaseClient?: any) {
-  console.log("getUserRoleAndPermissionsByRoleId вызвана с roleId:", roleId);
-  
+export async function getUserPermissionsOptimized(userId?: string, forceFromDB: boolean = false) {
   try {
-    // Используем переданный клиент Supabase или создаем новый
-    const supabase = supabaseClient || createClient();
-    
-    // Шаг 1: Получаем имя роли из таблицы roles
-    const { data: roleData, error: roleError } = await supabase
-      .from("roles")
-      .select("name, description")
-      .eq("id", roleId)
-      .single();
-    
-    console.log("Запрос roles завершен для roleId:", { roleId, roleData, roleError });
-    
-    if (roleError) {
-      console.error("Ошибка при получении информации о роли:", roleError);
-      return { role: null, permissions: [] };
+    // Если не требуется принудительное обращение к БД, пытаемся использовать Zustand
+    if (!forceFromDB) {
+      // Динамически импортируем useUserStore чтобы избежать циклических зависимостей
+      const { useUserStore } = await import("@/stores/useUserStore");
+      const userState = useUserStore.getState();
+      
+      // Если в Zustand есть актуальные данные о разрешениях
+      if (userState.isAuthenticated && userState.permissions && userState.profile?.roleId) {
+        console.log("Используем данные из Zustand:", {
+          roleId: userState.profile.roleId,
+          permissions: userState.permissions
+        });
+        
+        return {
+          roleId: userState.profile.roleId,
+          permissions: userState.permissions
+        };
+      }
     }
     
-    // Шаг 2: Получаем разрешения для роли
-    const { data: rolePermissions, error: permissionsError } = await supabase
-      .from("role_permissions")
-      .select("permission_id")
-      .eq("role_id", roleId);
-    
-    console.log("Запрос role_permissions завершен:", { rolePermissions, permissionsError });
-    
-    if (permissionsError) {
-      console.error("Ошибка при получении разрешений для роли:", permissionsError);
-      return { role: roleData.name, permissions: [] };
+    // Если нет данных в Zustand или требуется обращение к БД
+    if (userId) {
+      console.log("Получаем данные из БД для userId:", userId);
+      return await getUserRoleAndPermissions(userId);
     }
     
-    if (!rolePermissions || rolePermissions.length === 0) {
-      console.warn("Разрешения для роли не найдены:", roleId);
-      return { role: roleData.name, permissions: [] };
-    }
+    console.warn("Нет userId для обращения к БД и нет данных в Zustand");
+    return { roleId: null, permissions: [] };
     
-    // Получаем имена разрешений из таблицы permissions
-    const permissionIds = rolePermissions.map((p: { permission_id: string }) => p.permission_id);
-    const { data: permissions, error: permNameError } = await supabase
-      .from("permissions")
-      .select("name")
-      .in("id", permissionIds);
-    
-    console.log("Запрос permissions завершен:", { permissions, permNameError });
-    
-    if (permNameError) {
-      console.error("Ошибка при получении имен разрешений:", permNameError);
-      return { role: roleData.name, permissions: [] };
-    }
-    
-    const permissionNames = permissions ? permissions.map((p: { name: string }) => p.name) : [];
-    
-    console.log("Возвращаемые данные по roleId:", { role: roleData.name, permissions: permissionNames });
-    return { role: roleData.name, permissions: permissionNames };
   } catch (error) {
-    console.error("Непредвиденная ошибка в getUserRoleAndPermissionsByRoleId:", error);
-    return { role: null, permissions: [] };
+    console.error("Ошибка в getUserPermissionsOptimized:", error);
+    return { roleId: null, permissions: [] };
   }
 }
 
@@ -588,15 +660,8 @@ export async function syncCurrentUserState() {
       return false;
     }
     
-    // Получаем роль и разрешения - используем roleId из профиля, если он есть
-    let rolePermissions;
-    if (profileData?.role_id) {
-      console.log("Синхронизация: используем role_id из профиля:", profileData.role_id);
-      rolePermissions = await getUserRoleAndPermissionsByRoleId(profileData.role_id);
-    } else {
-      console.log("Синхронизация: используем стандартный способ через user_roles");
-      rolePermissions = await getUserRoleAndPermissions(userId);
-    }
+    // Получаем роль и разрешения
+    const { roleId, permissions } = await getUserRoleAndPermissions(userId);
     
     // Импортируем useUserStore динамически, чтобы избежать циклических зависимостей
     const { useUserStore } = await import("@/stores/useUserStore");
@@ -628,9 +693,8 @@ export async function syncCurrentUserState() {
     });
     
     // Устанавливаем роль и разрешения
-    if (rolePermissions.role || rolePermissions.permissions.length > 0) {
-      useUserStore.getState().setRoleAndPermissions(rolePermissions.role, rolePermissions.permissions);
-      console.log("Синхронизация: установлены разрешения:", rolePermissions);
+    if (roleId) {
+      useUserStore.getState().setRoleAndPermissions(roleId, permissions);
     }
     
     console.log("Состояние пользователя успешно синхронизировано из Supabase");

@@ -285,7 +285,7 @@ export type Database = {
         }
         Insert: {
           department_id?: string | null
-          team_id: string
+          team_id?: string
           team_name?: string | null
           ws_team_id?: number | null
         }

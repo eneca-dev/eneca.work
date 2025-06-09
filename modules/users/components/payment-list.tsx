@@ -30,6 +30,7 @@ interface PaymentListProps {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }
 }
 
@@ -82,6 +83,10 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
 
     if (filters.workLocations.length > 0) {
       result = result.filter((user) => user.workLocation && filters.workLocations.includes(user.workLocation))
+    }
+
+    if (filters.roles.length > 0) {
+      result = result.filter((user) => filters.roles.includes(user.role))
     }
 
     setFilteredUsers(result)

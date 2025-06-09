@@ -15,7 +15,7 @@ const MAX_RETRY_DELAY = 5000
 
 // Типы для улучшения типизации
 interface FetchPermissionsResult {
-  role: string;
+  roleId: string | null;
   permissions: string[];
 }
 
@@ -84,16 +84,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Функция получения разрешений с правильной обработкой race condition
   const fetchPermissions = useCallback(async (userId: string): Promise<FetchPermissionsResult | null> => {
     try {
-      const { role, permissions } = await getUserRoleAndPermissions(userId, supabase)
+      const { roleId, permissions } = await getUserRoleAndPermissions(userId, supabase)
       
       if (!isMounted.current) return null
       
-      if (role) {
-        useUserStore.getState().setRoleAndPermissions(role, permissions)
-        console.log("Роль и разрешения обновлены:", { role, permissions })
+      if (roleId) {
+        useUserStore.getState().setRoleAndPermissions(roleId, permissions)
+        console.log("Роль и разрешения обновлены:", { roleId, permissions })
       }
       
-      return { role, permissions }
+      return { roleId, permissions }
     } catch (error) {
       console.error("Ошибка при получении разрешений:", error)
       throw error
@@ -210,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева */}
-      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft} overflow-auto`}>
+      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
         {children}
       </div>
     </div>

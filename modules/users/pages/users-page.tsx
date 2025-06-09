@@ -1,30 +1,32 @@
 "use client"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import React, { useState, useEffect } from "react"
 import UsersList from "../components/users-list"
+import { UserFilters } from "../components/user-filters"
 import UserAnalytics from "../components/user-analytics"
 import PaymentList from "../components/payment-list"
-import { UserFilters } from "../components/user-filters"
-import { CurrentUserCard } from "../components/current-user-card"
-import { getUsers } from "@/services/org-data-service"
-import { useState, useEffect } from "react"
-import type { User } from "@/types/db"
 import { PaymentAccessCheck } from "../components/payment-access-check"
+import { CurrentUserCard } from "../components/current-user-card"
 import { AdminPanel } from "@/modules/users/admin"
-import { useUserStore } from "@/stores/useUserStore"
 import { AdminAccessCheck } from "../components/admin-access-check"
+import { getUsers } from "@/services/org-data-service"
+import type { User } from "@/types/db"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
+import { useUserStore } from "@/stores/useUserStore"
+import { Button } from "@/components/ui/button"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [filters, setFilters] = useState({
     departments: [] as string[],
     teams: [] as string[],
     categories: [] as string[],
     positions: [] as string[],
     workLocations: [] as string[],
+    roles: [] as string[],
   })
   
   const searchParams = useSearchParams()
@@ -60,18 +62,22 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
+      console.log("=== UsersPage: loadUsers ===");
       setIsLoading(true)
       const loadedUsers = await getUsers()
+      console.log("Загружено пользователей:", loadedUsers.length);
       setUsers(loadedUsers)
 
       // Get current user (first in list for demonstration)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
+        console.log("Установлен текущий пользователь:", loadedUsers[0].name);
       }
     } catch (error) {
       console.error("Error loading users:", error)
     } finally {
       setIsLoading(false)
+      console.log("loadUsers завершен");
     }
   }
 
@@ -85,11 +91,13 @@ export default function UsersPage() {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }) => {
     setFilters(newFilters)
   }
 
   const handleUserUpdated = () => {
+    console.log("=== UsersPage: handleUserUpdated ===");
     // Reload user list after update
     loadUsers()
   }
@@ -100,7 +108,7 @@ export default function UsersPage() {
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
-          <p className="mt-4 text-gray-500">Loading data...</p>
+          <p className="mt-4 text-gray-500">Загрузка данных...</p>
         </div>
       </div>
     )
@@ -128,7 +136,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Управление пользователями</h1>
+        <h1 className="page-title">Управление пользователями</h1>
       </div>
 
       <CurrentUserCard fallbackUser={defaultUser} onUserUpdated={handleUserUpdated} />
@@ -146,7 +154,7 @@ export default function UsersPage() {
               <UserFilters onFilterChange={handleFilterChange} users={users} />
             </div>
             <div className="flex-1">
-              <UsersList users={users} filters={filters} />
+              <UsersList users={users} filters={filters} onUserUpdated={handleUserUpdated} />
             </div>
           </div>
         </TabsContent>

@@ -1,8 +1,7 @@
 "use client"
 
-import React from "react"
-import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   DropdownMenu,
@@ -31,9 +30,13 @@ import { UserDialog } from "./user-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { deleteUser } from "@/services/org-data-service"
-import type { User } from "@/types/db"
+import type { User, UsersFilter } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { useUserPermissions } from "../hooks/useUserPermissions"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/ui/empty-state"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface UsersListProps {
   users: User[]
@@ -43,13 +46,15 @@ interface UsersListProps {
     categories: string[]
     positions: string[]
     workLocations: string[]
+    roles: string[]
   }
+  onUserUpdated?: () => void
 }
 
 // Изменим тип для группировки
 type GroupBy = "none" | "department" | "nested"
 
-export default function UsersList({ users: initialUsers, filters: initialFilters }: UsersListProps) {
+export default function UsersList({ users: initialUsers, filters: initialFilters, onUserUpdated }: UsersListProps) {
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [filteredUsers, setFilteredUsers] = useState<User[]>(initialUsers)
   const [searchTerm, setSearchTerm] = useState("")
@@ -59,6 +64,9 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const router = useRouter()
+
+  // Получаем разрешения пользователя
+  const { canEditAllUsers } = useUserPermissions()
 
   // Состояние для фильтров
   const [filters, setFilters] = useState(initialFilters)
@@ -100,6 +108,11 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
     // Добавим фильтрацию по расположению
     if (filters.workLocations.length > 0) {
       result = result.filter((user) => user.workLocation && filters.workLocations.includes(user.workLocation))
+    }
+
+    // Добавим фильтрацию по ролям
+    if (filters.roles.length > 0) {
+      result = result.filter((user) => filters.roles.includes(user.role))
     }
 
     setFilteredUsers(result)
@@ -186,7 +199,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
       setIsDeleting(userId)
       try {
         await deleteUser(userId)
-        setUsers(users.filter((user) => user.id !== userId))
+        onUserUpdated?.()
         toast({
           title: "Успешно",
           description: "Пользователь успешно удален",
@@ -206,7 +219,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
 
   const handleUserUpdated = () => {
     // Обновляем список пользователей после изменения
-    router.refresh()
+    onUserUpdated?.()
   }
 
   // Функция для отображения значка и цвета в зависимости от расположения
@@ -312,8 +325,9 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                     <TableHead>Команда</TableHead>
                     <TableHead>Должность</TableHead>
                     <TableHead>Категория</TableHead>
+                    <TableHead>Роль</TableHead>
                     <TableHead>Расположение</TableHead>
-                    <TableHead className="text-right">Действия</TableHead>
+                    {canEditAllUsers && <TableHead className="text-center">Действия</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -323,7 +337,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                         <React.Fragment key={groupName || "ungrouped"}>
                           {groupName && (
                             <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
-                              <TableCell colSpan={7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
+                              <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
                                 <div
                                   className="flex items-center cursor-pointer"
                                   onClick={() => toggleGroup(groupName)}
@@ -369,49 +383,54 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                 <TableCell>{user.team}</TableCell>
                                 <TableCell>{user.position}</TableCell>
                                 <TableCell>{user.category}</TableCell>
+                                <TableCell>{user.role}</TableCell>
                                 <TableCell>
                                   {user.workLocation && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge
-                                          variant={getLocationBadge(user.workLocation).variant}
-                                          className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
-                                        >
-                                          {getLocationBadge(user.workLocation).icon}
-                                          {getLocationBadge(user.workLocation).label}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>{user.address}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge
+                                            variant={getLocationBadge(user.workLocation).variant}
+                                            className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
+                                          >
+                                            {getLocationBadge(user.workLocation).icon}
+                                            {getLocationBadge(user.workLocation).label}
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>{user.address}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right">
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                        <span className="sr-only">Меню</span>
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Редактировать
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-red-600 dark:text-red-400"
-                                        onClick={() => handleDeleteUser(user.id)}
-                                        disabled={isDeleting === user.id}
-                                      >
-                                        <Trash className="mr-2 h-4 w-4" />
-                                        {isDeleting === user.id ? "Удаление..." : "Удалить"}
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </TableCell>
+                                {canEditAllUsers && (
+                                  <TableCell className="text-center">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                          <span className="sr-only">Меню</span>
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                          <Edit className="mr-2 h-4 w-4" />
+                                          Редактировать
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-red-600 dark:text-red-400"
+                                          onClick={() => handleDeleteUser(user.id)}
+                                          disabled={isDeleting === user.id}
+                                        >
+                                          <Trash className="mr-2 h-4 w-4" />
+                                          {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                         </React.Fragment>
@@ -422,7 +441,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
                             <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
-                              <TableCell colSpan={7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
+                              <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
                                 <div
                                   className="flex items-center cursor-pointer"
                                   onClick={() => toggleGroup(department)}
@@ -447,7 +466,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                   {/* Заголовок команды */}
                                   <TableRow className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/70 dark:hover:bg-gray-800/40 transition-colors">
                                     <TableCell
-                                      colSpan={7}
+                                      colSpan={canEditAllUsers ? 8 : 7}
                                       className="py-1 pl-8 border-l-2 border-gray-200 dark:border-gray-700 ml-4"
                                     >
                                       <div
@@ -497,49 +516,54 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                         <TableCell>{user.team}</TableCell>
                                         <TableCell>{user.position}</TableCell>
                                         <TableCell>{user.category}</TableCell>
+                                        <TableCell>{user.role}</TableCell>
                                         <TableCell>
                                           {user.workLocation && (
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <Badge
-                                                  variant={getLocationBadge(user.workLocation).variant}
-                                                  className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
-                                                >
-                                                  {getLocationBadge(user.workLocation).icon}
-                                                  {getLocationBadge(user.workLocation).label}
-                                                </Badge>
-                                              </TooltipTrigger>
-                                              <TooltipContent>
-                                                <p>{user.address}</p>
-                                              </TooltipContent>
-                                            </Tooltip>
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Badge
+                                                    variant={getLocationBadge(user.workLocation).variant}
+                                                    className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
+                                                  >
+                                                    {getLocationBadge(user.workLocation).icon}
+                                                    {getLocationBadge(user.workLocation).label}
+                                                  </Badge>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p>{user.address}</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
                                           )}
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                              <Button variant="ghost" size="icon">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                                <span className="sr-only">Меню</span>
-                                              </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                              <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                                                <Edit className="mr-2 h-4 w-4" />
-                                                Редактировать
-                                              </DropdownMenuItem>
-                                              <DropdownMenuSeparator />
-                                              <DropdownMenuItem
-                                                className="text-red-600 dark:text-red-400"
-                                                onClick={() => handleDeleteUser(user.id)}
-                                                disabled={isDeleting === user.id}
-                                              >
-                                                <Trash className="mr-2 h-4 w-4" />
-                                                {isDeleting === user.id ? "Удаление..." : "Удалить"}
-                                              </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
-                                        </TableCell>
+                                        {canEditAllUsers && (
+                                          <TableCell className="text-center">
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                  <MoreHorizontal className="h-4 w-4" />
+                                                  <span className="sr-only">Меню</span>
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                                  <Edit className="mr-2 h-4 w-4" />
+                                                  Редактировать
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                  className="text-red-600 dark:text-red-400"
+                                                  onClick={() => handleDeleteUser(user.id)}
+                                                  disabled={isDeleting === user.id}
+                                                >
+                                                  <Trash className="mr-2 h-4 w-4" />
+                                                  {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </TableCell>
+                                        )}
                                       </TableRow>
                                     ))}
                                 </React.Fragment>
@@ -550,7 +574,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
 
                   {filteredUsers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={canEditAllUsers ? 8 : 7} className="h-24 text-center">
                         Пользователи не найдены.
                       </TableCell>
                     </TableRow>
