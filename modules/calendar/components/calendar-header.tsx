@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { formatMonthYear, addMonthsToDate } from "@/modules/calendar/utils"
 import { useCalendarStore } from "@/modules/calendar/store"
@@ -39,6 +39,15 @@ export function CalendarHeader() {
         </Button>
         <Button 
           variant="outline" 
+          size="icon"
+          onClick={handleToday}
+          className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+        >
+          <span className="sr-only">Сегодня</span>
+          <Calendar className="h-4 w-4" />
+        </Button>
+        <Button 
+          variant="outline" 
           size="icon" 
           onClick={handleNextMonth}
           className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -48,13 +57,6 @@ export function CalendarHeader() {
         </Button>
         <h2 className="text-xl font-bold ml-2 capitalize">{formatMonthYear(currentDate)}</h2>
       </div>
-      <Button 
-        variant="outline" 
-        onClick={handleToday}
-        className="hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-      >
-        Сегодня
-      </Button>
     </div>
   )
 }
