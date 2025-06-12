@@ -44,7 +44,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
 
   const calendarStore = useCalendarStore()
   const setSelectedDate = calendarStore.setSelectedDate
-  
+  const setCurrentDate = calendarStore.setCurrentDate  
   const { events, removeEvent } = useCalendarEvents()
 
   const userStore = useUserStore()
@@ -67,6 +67,16 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   const [eventToDelete, setEventToDelete] = useState<string | null>(null)
   const [showPersonalEvents, setShowPersonalEvents] = useState(true)
   const [showGlobalEvents, setShowGlobalEvents] = useState(true)
+  const [showPastEvents, setShowPastEvents] = useState(false)
+
+  // Helper function to check if event is past
+  const isEventPast = (event: CalendarEvent) => {
+    const now = new Date()
+    const eventEndDate = event.calendar_event_date_end 
+      ? parseDateFromString(event.calendar_event_date_end)
+      : parseDateFromString(event.calendar_event_date_start)
+    return eventEndDate < now
+  }
 
   // Filter events based on toggles and current user
   useEffect(() => {
@@ -92,6 +102,11 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
           event.calendar_event_type.toLowerCase().includes(term) ||
           formatDate(parseDateFromString(event.calendar_event_date_start)).includes(term),
       )
+    } else {
+      // Only apply past events filter when there's no search
+      if (!showPastEvents) {
+        filtered = filtered.filter((event) => !isEventPast(event))
+      }
     }
 
     // Apply sorting
@@ -102,7 +117,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
     })
 
     setFilteredEvents(filtered)
-  }, [events, currentUserId, isAuthenticated, searchTerm, sortDirection, showPersonalEvents, showGlobalEvents])
+  }, [events, currentUserId, isAuthenticated, searchTerm, sortDirection, showPersonalEvents, showGlobalEvents, showPastEvents])
 
   const handleSort = () => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
@@ -120,7 +135,9 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   }
 
   const handleShowOnCalendar = (event: CalendarEvent) => {
-    setSelectedDate(parseDateFromString(event.calendar_event_date_start))
+    const eventDate = parseDateFromString(event.calendar_event_date_start)
+    setCurrentDate(eventDate) // Переключаем календарь на месяц события
+    setSelectedDate(eventDate) // Выделяем дату зеленой обводкой
     onClose()
   }
 
@@ -168,6 +185,11 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
               <Switch id="show-global" checked={showGlobalEvents} onCheckedChange={setShowGlobalEvents} />
               <Label htmlFor="show-global">Общие события и график</Label>
             </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch id="show-past" checked={showPastEvents} onCheckedChange={setShowPastEvents} />
+              <Label htmlFor="show-past">Прошедшие события и график</Label>
+            </div>
           </div>
         </div>
 
@@ -206,44 +228,52 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredEvents.map((event) => (
-                <TableRow key={event.calendar_event_id}>
-                  <TableCell>
-                    <span
-                      className={cn("px-2 py-1 rounded text-xs font-medium", getEventColor(event.calendar_event_type))}
-                    >
-                      {event.calendar_event_type}
-                    </span>
-                  </TableCell>
-                  <TableCell>{event.calendar_event_comment || "-"}</TableCell>
-                  <TableCell>{formatDate(parseDateFromString(event.calendar_event_date_start))}</TableCell>
-                  <TableCell>
-                    {event.calendar_event_date_end ? formatDate(parseDateFromString(event.calendar_event_date_end)) : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        "px-2 py-1 rounded text-xs",
-                        event.calendar_event_is_global ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800",
-                      )}
-                    >
-                      {event.calendar_event_is_global ? "Общее" : "Личное"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleShowOnCalendar(event)}>
-                        Показать
-                      </Button>
-                      {canDeleteEvent(event) && (
-                        <Button variant="ghost" size="sm" onClick={() => setEventToDelete(event.calendar_event_id)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
+              filteredEvents.map((event) => {
+                const isPast = isEventPast(event)
+                return (
+                  <TableRow key={event.calendar_event_id} className={cn(isPast && "opacity-50")}>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded text-xs font-medium", 
+                          getEventColor(event.calendar_event_type),
+                          isPast && "opacity-70"
+                        )}
+                      >
+                        {event.calendar_event_type}
+                      </span>
+                    </TableCell>
+                    <TableCell className={cn(isPast && "text-gray-500")}>{event.calendar_event_comment || "-"}</TableCell>
+                    <TableCell className={cn(isPast && "text-gray-500")}>{formatDate(parseDateFromString(event.calendar_event_date_start))}</TableCell>
+                    <TableCell className={cn(isPast && "text-gray-500")}>
+                      {event.calendar_event_date_end ? formatDate(parseDateFromString(event.calendar_event_date_end)) : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded text-xs",
+                          event.calendar_event_is_global ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800",
+                          isPast && "opacity-70"
+                        )}
+                      >
+                        {event.calendar_event_is_global ? "Общее" : "Личное"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleShowOnCalendar(event)}>
+                          Показать
                         </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                        {canDeleteEvent(event) && (
+                          <Button variant="ghost" size="sm" onClick={() => setEventToDelete(event.calendar_event_id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>
