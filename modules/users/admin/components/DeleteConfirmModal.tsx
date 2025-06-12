@@ -47,7 +47,7 @@ export default function DeleteConfirmModal({
       onSuccess()
       onOpenChange(false)
     } catch (error) {
-      console.error("Error deleting:", error)
+      console.error("Error deleting:", error instanceof Error ? error.message : error)
       toast.error("Произошла ошибка при удалении")
     } finally {
       setLoading(false)

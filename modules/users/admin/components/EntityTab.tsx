@@ -203,7 +203,7 @@ export default function EntityTab({ config }: EntityTabProps) {
                         <Button variant="outline" onClick={() => handleEditEntity(entity)}>
                           Изменить
                         </Button>
-                        <Button variant="destructive" onClick={() => handleDeleteEntityClick(entity)}>
+                        <Button variant="outline" onClick={() => handleDeleteEntityClick(entity)}>
                           Удалить
                         </Button>
                       </div>
@@ -239,6 +239,8 @@ export default function EntityTab({ config }: EntityTabProps) {
         idField={config.idField}
         nameField={config.nameField}
         entity={entityData}
+        existingNames={entities.map(e => e.name)}
+        entityType={config.tableName.replace(/s$/, '')}
         onSuccess={fetchEntities}
       />
 

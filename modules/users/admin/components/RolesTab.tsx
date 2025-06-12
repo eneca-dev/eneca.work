@@ -22,6 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Check, Loader2, X, Save, Trash, AlertTriangle, Info, Key } from "lucide-react"
 import { useNotification } from "@/lib/notification-context"
+import { validateEntityName, validateRoleName, checkDuplicateName, getDuplicateErrorMessage } from "@/utils/validation"
 
 const ROLE_NAME_MAX_LENGTH = 20
 const ROLE_DESCRIPTION_MAX_LENGTH = 50
@@ -71,6 +72,7 @@ export default function RolesTab() {
 
   const [newRoleName, setNewRoleName] = useState("")
   const [newRoleDescription, setNewRoleDescription] = useState("")
+  const [roleValidation, setRoleValidation] = useState<{isValid: boolean, errors: string[], normalizedValue: string}>({isValid: true, errors: [], normalizedValue: ""})
 
   const notification = useNotification()
   
@@ -117,6 +119,22 @@ export default function RolesTab() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Живая валидация названия роли
+  useEffect(() => {
+    const validation = validateRoleName(newRoleName)
+    setRoleValidation(validation)
+  }, [newRoleName])
+
+  // Проверка дубликатов ролей
+  const roleDuplicateError = useMemo(() => {
+    if (!newRoleName.trim() || !roleValidation.isValid) return null
+    
+    const existingNames = roles.map(role => role.name)
+    const isDuplicate = checkDuplicateName(roleValidation.normalizedValue, existingNames)
+    
+    return isDuplicate ? getDuplicateErrorMessage("role") : null
+  }, [newRoleName, roleValidation, roles])
 
   const filteredRoles = useMemo(() => {
     return roles.filter(role =>
@@ -202,6 +220,7 @@ export default function RolesTab() {
   const handleCreateRole = useCallback(() => {
     setNewRoleName("")
     setNewRoleDescription("")
+    setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
     setCreateRoleModalOpen(true)
   }, [])
 
@@ -217,27 +236,25 @@ export default function RolesTab() {
   }, [hasChanges])
 
   const handleCreateRoleSubmit = useCallback(async () => {
-    if (!newRoleName.trim()) {
-      notification.error("Validation Error", "Role name cannot be empty")
-      return
-    }
-
-    if (newRoleName.trim().length > ROLE_NAME_MAX_LENGTH) {
-      notification.error("Validation Error", `Role name must not exceed ${ROLE_NAME_MAX_LENGTH} characters`)
+    // Валидация с помощью специальной функции для ролей
+    const validation = validateRoleName(newRoleName)
+    
+    if (!validation.isValid) {
+      notification.error("Ошибка валидации", validation.errors[0])
       return
     }
 
     if (newRoleDescription.trim().length > ROLE_DESCRIPTION_MAX_LENGTH) {
-      notification.error("Validation Error", `Role description must not exceed ${ROLE_DESCRIPTION_MAX_LENGTH} characters`)
+      notification.error("Ошибка валидации", `Описание роли не может быть длиннее ${ROLE_DESCRIPTION_MAX_LENGTH} символов`)
       return
     }
 
-    const existingRole = roles.find(role => 
-      role.name.toLowerCase() === newRoleName.trim().toLowerCase()
-    )
+    // Проверка дубликатов
+    const existingNames = roles.map(role => role.name)
+    const isDuplicate = checkDuplicateName(validation.normalizedValue, existingNames)
     
-    if (existingRole) {
-      notification.error("Validation Error", "A role with this name already exists")
+    if (isDuplicate) {
+      notification.error("Ошибка валидации", getDuplicateErrorMessage("role"))
       return
     }
 
@@ -249,7 +266,7 @@ export default function RolesTab() {
         .from("roles")
         .insert({
           id: generateUUID(),
-          name: newRoleName.trim(),
+          name: validation.normalizedValue,
           description: newRoleDescription.trim() || null
         })
       
@@ -260,6 +277,9 @@ export default function RolesTab() {
       
       notification.success("Role Created", `Role "${newRoleName}" was successfully created`)
       setCreateRoleModalOpen(false)
+      setNewRoleName("")
+      setNewRoleDescription("")
+      setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
       await fetchData()
     } catch (error) {
       console.error('Error creating role:', error)
@@ -458,7 +478,7 @@ export default function RolesTab() {
                             <Key className="h-3 w-3 stroke-[1.5] fill-transparent dark:stroke-white stroke-black" />
                           </TooltipTrigger>
                           <TooltipContent 
-                            className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/50 dark:border-green-700 dark:text-green-200"
+                            className="bg-green-600 border-green-700 text-white dark:bg-green-800 dark:border-green-900 dark:text-green-100"
                             side="top"
                           >
                             <p className="text-sm">Защищенная роль</p>
@@ -484,7 +504,7 @@ export default function RolesTab() {
                             <Info className="h-4 w-4 text-muted-foreground cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent 
-                            className="max-w-xs bg-green-50 border-green-200 text-green-800 dark:bg-green-900/50 dark:border-green-700 dark:text-green-200"
+                            className="max-w-xs bg-gray-900 border-gray-700 text-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
                             side="top"
                           >
                             <p className="text-sm">{permission.description}</p>
@@ -531,7 +551,14 @@ export default function RolesTab() {
   }
 
   const renderCreateRoleModal = () => (
-    <Dialog open={createRoleModalOpen} onOpenChange={setCreateRoleModalOpen}>
+    <Dialog open={createRoleModalOpen} onOpenChange={(open) => {
+      setCreateRoleModalOpen(open)
+      if (!open) {
+        setNewRoleName("")
+        setNewRoleDescription("")
+        setRoleValidation({isValid: true, errors: [], normalizedValue: ""})
+      }
+    }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Создание роли</DialogTitle>
@@ -546,12 +573,18 @@ export default function RolesTab() {
               value={newRoleName}
               onChange={(e) => setNewRoleName(e.target.value)}
               disabled={loading}
-              maxLength={ROLE_NAME_MAX_LENGTH}
+              className={!roleValidation.isValid ? "border-red-500" : ""}
             />
+            {roleValidation.errors.length > 0 && (
+              <p className="text-sm text-red-500 mt-1">{roleValidation.errors[0]}</p>
+            )}
+            {roleDuplicateError && roleValidation.errors.length === 0 && (
+              <p className="text-sm text-red-500 mt-1">{roleDuplicateError}</p>
+            )}
           </div>
           <div>
             <Input
-              placeholder="Описание (опционально)"
+              placeholder="Описание"
               value={newRoleDescription}
               onChange={(e) => setNewRoleDescription(e.target.value)}
               disabled={loading}
@@ -569,7 +602,7 @@ export default function RolesTab() {
           </Button>
           <Button 
             onClick={handleCreateRoleSubmit}
-            disabled={loading || !newRoleName.trim() || newRoleName.trim().length > ROLE_NAME_MAX_LENGTH || newRoleDescription.trim().length > ROLE_DESCRIPTION_MAX_LENGTH}
+            disabled={loading || !roleValidation.isValid || !!roleDuplicateError || !newRoleName.trim() || newRoleDescription.trim().length > ROLE_DESCRIPTION_MAX_LENGTH}
           >
             {loading ? (
               <>
