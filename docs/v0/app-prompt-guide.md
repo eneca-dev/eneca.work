@@ -344,27 +344,6 @@ export function ClientForm() {
 }
 ```
 
-### 7. Права доступа и permissions
-
-Учитывайте систему разрешений в UI и логике:
-
-```tsx
-import { useUserStore } from '@/stores/useUserStore';
-
-export function ClientActions() {
-  const { permissions } = useUserStore();
-  
-  const canEditClient = permissions.includes('client.edit');
-  const canDeleteClient = permissions.includes('client.delete');
-  
-  return (
-    <div className="flex gap-2">
-      {canEditClient && <Button>Редактировать</Button>}
-      {canDeleteClient && <Button variant="destructive">Удалить</Button>}
-    </div>
-  );
-}
-```
 
 ### 8. Работа с модальными окнами
 
@@ -400,20 +379,59 @@ export function ClientDialog() {
 }
 ```
 
-## Интеграция модуля в систему разрешений
-
-При разработке нового модуля определите необходимые permissions и добавьте их в документацию. Например, для модуля управления клиентами:
-
-```
-client.create      - Разрешение на создание клиентов
-client.edit        - Разрешение на редактирование клиентов
-client.delete      - Разрешение на удаление клиентов
-client.view        - Разрешение на просмотр клиентов
-```
 
 ## Работа с темой
 
-Все компоненты должны поддерживать темную и светлую тему. Используйте переменные CSS из файла `globals.css` и проверяйте отображение компонентов в обеих темах.
+Управление темой в приложении реализовано через комбинацию Zustand стора и next-themes с синхронизацией между ними.
+
+### Архитектура управления темой
+
+1. **Основной стор**: `stores/useSettingsStore.ts` - хранит настройки темы в состоянии приложения
+2. **Синхронизация**: `hooks/useThemeSync.ts` - синхронизирует состояние между Zustand и next-themes
+3. **UI компонент**: `components/theme-toggle.tsx` - кнопка переключения темы
+4. **Расположение**: кнопка находится в боковом меню (`components/sidebar.tsx`)
+
+### Использование темы в компонентах
+
+```typescript
+// Получение текущей темы из стора
+import { useSettingsStore } from '@/stores/useSettingsStore'
+
+const { theme } = useSettingsStore()
+// theme может быть: 'light' | 'dark' | 'system'
+
+// Для получения актуальной темы (учитывая system):
+import { useThemeSync } from '@/hooks/useThemeSync'
+const { resolvedTheme } = useThemeSync()
+// resolvedTheme будет 'light' или 'dark'
+```
+
+### Стили темы
+
+- CSS переменные для тем находятся в `globals.css`
+- Все компоненты должны поддерживать темную и светлую тему
+- Используйте Tailwind классы с префиксом `dark:` для темной темы
+- Проверяйте отображение компонентов в обеих темах
+
+### Интеграция в новые компоненты
+
+При создании новых компонентов, которые требуют знания текущей темы:
+
+```typescript
+import { useSettingsStore } from '@/stores/useSettingsStore'
+import { useTheme } from 'next-themes'
+
+// Для простых случаев
+const { theme } = useSettingsStore()
+
+// Для получения resolved темы
+const { resolvedTheme } = useTheme()
+const settingsTheme = useSettingsStore(state => state.theme)
+
+const effectiveTheme = settingsTheme === 'system' 
+  ? (resolvedTheme === 'dark' ? 'dark' : 'light')
+  : settingsTheme
+```
 
 ## Работа с базой данных Supabase
 
