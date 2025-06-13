@@ -65,6 +65,7 @@ export const useFilterStore = create<FilterStore>()(
         
         // Универсальный метод установки фильтра
         setFilter: (type: string, value: string | null) => {
+          console.log(`🔄 setFilter: ${type} = ${value}`)
           const state = get()
           const updates: any = {}
           
@@ -90,12 +91,23 @@ export const useFilterStore = create<FilterStore>()(
             state.loadObjects(value)
           }
           
-          if (type === 'department' && value) {
+          if (type === 'department') {
+            // Сбрасываем команду и сотрудника при любом изменении отдела (выбор или очистка)
+            console.log(`🔄 Сбрасываю команду и сотрудника при изменении отдела`)
             updates.selectedTeamId = null
             updates.selectedEmployeeId = null
-            state.loadTeams()
+            if (value) {
+              state.loadTeams()
+            }
           }
           
+          if (type === 'team') {
+            // Сбрасываем сотрудника при любом изменении команды (выбор или очистка)
+            console.log(`🔄 Сбрасываю сотрудника при изменении команды`)
+            updates.selectedEmployeeId = null
+          }
+          
+          console.log(`🔄 Применяю обновления:`, updates)
           set(updates)
         },
         
@@ -169,11 +181,11 @@ export const useFilterStore = create<FilterStore>()(
           let filtered = state.employees
           
           if (state.selectedDepartmentId) {
-            filtered = filtered.filter(e => e.departmentId === state.selectedDepartmentId)
+            filtered = filtered.filter(e => (e as any).departmentId === state.selectedDepartmentId)
           }
           
           if (state.selectedTeamId) {
-            filtered = filtered.filter(e => e.departmentId === state.selectedTeamId)
+            filtered = filtered.filter(e => (e as any).teamId === state.selectedTeamId)
           }
           
           return filtered
@@ -338,14 +350,20 @@ export const useFilterStore = create<FilterStore>()(
             
             if (error) throw error
             
-            const employees = data?.map(e => ({
-              id: e.user_id,
-              name: e.full_name,
-              teamId: e.final_team_id,
-              departmentId: e.final_department_id
-            })) || []
+            // Используем Map для дедупликации по user_id
+            const employeesMap = new Map()
+            data?.forEach(row => {
+              if (!employeesMap.has(row.user_id)) {
+                employeesMap.set(row.user_id, {
+                  id: row.user_id,
+                  name: row.full_name,
+                  teamId: row.final_team_id,
+                  departmentId: row.final_department_id
+                })
+              }
+            })
             
-            set({ employees })
+            set({ employees: Array.from(employeesMap.values()) })
           } catch (error) {
             console.error('Ошибка загрузки сотрудников:', error)
           }

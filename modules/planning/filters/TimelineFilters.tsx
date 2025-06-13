@@ -11,6 +11,7 @@ interface TimelineFiltersProps {
   onProjectChange: (projectId: string | null) => void
   onDepartmentChange: (departmentId: string | null) => void
   onTeamChange: (teamId: string | null) => void
+  onEmployeeChange: (employeeId: string | null) => void
   onManagerChange: (managerId: string | null) => void
   onStageChange?: (stageId: string | null) => void
   onObjectChange?: (objectId: string | null) => void
@@ -25,6 +26,7 @@ export function TimelineFilters({
   onProjectChange,
   onDepartmentChange,
   onTeamChange,
+  onEmployeeChange,
   onManagerChange,
   onStageChange,
   onObjectChange,
@@ -45,12 +47,14 @@ export function TimelineFilters({
     objects,
     departments,
     teams,
+    employees,
     selectedManagerId,
     selectedProjectId,
     selectedStageId,
     selectedObjectId,
     selectedDepartmentId,
     selectedTeamId,
+    selectedEmployeeId,
     isLoading,
     isLoadingProjects,
     isLoadingStages,
@@ -61,7 +65,8 @@ export function TimelineFilters({
     isFilterLocked,
     getFilteredProjects,
     getFilteredStages,
-    getFilteredObjects
+    getFilteredObjects,
+    getFilteredEmployees
   } = useFilterStore()
 
   useEffect(() => {
@@ -79,6 +84,10 @@ export function TimelineFilters({
   useEffect(() => {
     onTeamChange(selectedTeamId)
   }, [selectedTeamId, onTeamChange])
+
+  useEffect(() => {
+    onEmployeeChange(selectedEmployeeId)
+  }, [selectedEmployeeId, onEmployeeChange])
 
   useEffect(() => {
     onManagerChange(selectedManagerId)
@@ -107,6 +116,7 @@ export function TimelineFilters({
   const filteredTeams = teams.filter(team => 
     !selectedDepartmentId || team.departmentId === selectedDepartmentId
   )
+  const filteredEmployees = getFilteredEmployees()
 
   const hasActiveFilters = !!(
     selectedManagerId || 
@@ -114,7 +124,8 @@ export function TimelineFilters({
     selectedStageId || 
     selectedObjectId ||
     selectedDepartmentId || 
-    selectedTeamId
+    selectedTeamId ||
+    selectedEmployeeId
   )
 
   return (
@@ -211,7 +222,7 @@ export function TimelineFilters({
 
         {/* Организационные фильтры с кнопками управления */}
         <div className="flex gap-3 items-end">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
             <FilterSelect
               id="department"
               label="Отдел"
@@ -234,6 +245,19 @@ export function TimelineFilters({
               locked={isFilterLocked('team')}
               options={filteredTeams}
               placeholder="Выберите команду"
+              theme={theme}
+              loading={isLoading}
+            />
+
+            <FilterSelect
+              id="employee"
+              label="Сотрудник"
+              value={selectedEmployeeId}
+              onChange={(value) => setFilter('employee', value)}
+              disabled={isLoading || !selectedTeamId}
+              locked={isFilterLocked('employee')}
+              options={filteredEmployees}
+              placeholder={!selectedTeamId ? "Сначала выберите команду" : "Выберите сотрудника"}
               theme={theme}
               loading={isLoading}
             />

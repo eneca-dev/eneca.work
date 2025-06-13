@@ -58,6 +58,7 @@ export interface SectionWithLoadings {
   client_id: string | null
   responsible_department_id: string | null
   responsible_department_name: string | null
+  section_responsible_id: string | null
   section_responsible_name: string | null
   section_responsible_avatar: string | null
   section_start_date: string | null
@@ -319,7 +320,8 @@ export async function fetchSectionsWithLoadings(
     // Добавляем фильтр по сотруднику, если он указан
     if (employeeId) {
       console.log("👤 Применяю фильтр по сотруднику:", employeeId)
-      query = query.eq("loading_responsible", employeeId)
+      // Показываем разделы где сотрудник либо ответственный за раздел, либо имеет активную загрузку
+      query = query.or(`section_responsible_id.eq.${employeeId},loading_responsible.eq.${employeeId}`)
     }
 
     // Фильтруем только активные загрузки или записи без загрузок

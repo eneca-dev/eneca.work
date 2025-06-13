@@ -60,14 +60,7 @@ export function NavigationControls({
     <div className="flex items-center gap-2 flex-wrap w-full justify-end">
       {/* Информация о диапазоне дат с кнопкой "Сегодня" */}
       <div className="flex items-center gap-2">
-        <div
-          className={cn(
-            "p-2 rounded-lg border flex items-center",
-            theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-200"
-              : "bg-white border-slate-200 text-slate-800",
-          )}
-        >
+        <div className="flex items-center">
           <span className="text-xs font-medium">
             {formatDate(startDate)} — {formatDate(endDate)} ({daysToShow} дней)
           </span>
