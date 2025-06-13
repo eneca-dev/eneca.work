@@ -6,11 +6,14 @@ import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@
 import { createClient } from "@/utils/supabase/client"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Edit2 } from "lucide-react"
 import EntityModal from "./EntityModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import DepartmentHeadModal from "./DepartmentHeadModal"
+import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
 
 interface Department {
@@ -30,6 +33,7 @@ export default function DepartmentsTab() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [headModalOpen, setHeadModalOpen] = useState(false)
+  const [removeHeadModalOpen, setRemoveHeadModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -113,30 +117,10 @@ export default function DepartmentsTab() {
     setHeadModalOpen(true)
   }, [])
 
-  const handleRemoveHead = useCallback(async (department: Department) => {
-    if (!department.head_user_id) return
-
-    try {
-      const supabase = createClient()
-      
-      const { error } = await supabase
-        .from("department_heads")
-        .delete()
-        .eq("department_id", department.department_id)
-      
-      if (error) {
-        console.error("Ошибка при удалении руководителя:", error)
-        toast.error("Не удалось убрать руководителя")
-        return
-      }
-      
-      toast.success("Руководитель отдела убран")
-      fetchDepartments()
-    } catch (error) {
-      console.error("Ошибка при удалении руководителя:", error)
-      toast.error("Произошла ошибка")
-    }
-  }, [fetchDepartments])
+  const handleRemoveHeadClick = useCallback((department: Department) => {
+    setSelectedDepartment(department)
+    setRemoveHeadModalOpen(true)
+  }, [])
 
   // Данные для EntityModal
   const entityData = useMemo(() => {
@@ -237,29 +221,61 @@ export default function DepartmentsTab() {
                             <div className="font-medium">{department.head_full_name}</div>
                             <div className="text-sm text-muted-foreground">{department.head_email}</div>
                           </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <div className="flex flex-col">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleAssignHead(department)}
+                                  className="justify-start rounded-b-none border-b-0"
+                                >
+                                  Сменить
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleRemoveHeadClick(department)}
+                                  className="justify-start rounded-t-none"
+                                >
+                                  Убрать
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       ) : (
-                        <span className="text-muted-foreground">Не назначен</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground">Не назначен</span>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <div className="flex flex-col">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleAssignHead(department)}
+                                  className="justify-start"
+                                >
+                                  Назначить
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleAssignHead(department)}
-                        >
-                          {department.head_user_id ? "Сменить" : "Назначить"}
-                        </Button>
-                        {department.head_user_id && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleRemoveHead(department)}
-                          >
-                            Убрать
-                          </Button>
-                        )}
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -268,7 +284,7 @@ export default function DepartmentsTab() {
                           Изменить
                         </Button>
                         <Button 
-                          variant="destructive" 
+                          variant="outline" 
                           size="sm"
                           onClick={() => handleDeleteDepartment(department)}
                         >
@@ -308,6 +324,8 @@ export default function DepartmentsTab() {
         idField="department_id"
         nameField="department_name"
         entity={entityData}
+        existingNames={departments.map(d => d.department_name)}
+        entityType="department"
         onSuccess={fetchDepartments}
       />
 
@@ -331,6 +349,18 @@ export default function DepartmentsTab() {
           open={headModalOpen}
           onOpenChange={setHeadModalOpen}
           department={selectedDepartment}
+          onSuccess={fetchDepartments}
+        />
+      )}
+
+      {/* Модальное окно для подтверждения удаления руководителя отдела */}
+      {selectedDepartment && (
+        <RemoveHeadConfirmModal
+          open={removeHeadModalOpen}
+          onOpenChange={setRemoveHeadModalOpen}
+          type="department"
+          entityName={selectedDepartment.department_name}
+          entityId={selectedDepartment.department_id}
           onSuccess={fetchDepartments}
         />
       )}

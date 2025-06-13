@@ -5,9 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Edit2 } from "lucide-react"
 import EntityModal from "./EntityModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
+import TeamHeadModal from "./TeamHeadModal"
+import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
@@ -22,6 +26,13 @@ interface Team {
   id: string;
   name: string;
   departmentId: string | null;
+  departmentName: string | null;
+  headUserId: string | null;
+  headFirstName: string | null;
+  headLastName: string | null;
+  headFullName: string | null;
+  headEmail: string | null;
+  headAvatarUrl: string | null;
 }
 
 export default function TeamsTab() {
@@ -31,6 +42,8 @@ export default function TeamsTab() {
   const [activeDept, setActiveDept] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [headModalOpen, setHeadModalOpen] = useState(false)
+  const [removeHeadModalOpen, setRemoveHeadModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -40,10 +53,23 @@ export default function TeamsTab() {
       setIsLoading(true)
       const supabase = createClient()
       
-      // Получаем команды
+      // Получаем команды с руководителями из view_organizational_structure
       const { data: teamsData, error: teamsError } = await supabase
-        .from("teams")
-        .select("team_id, team_name, department_id")
+        .from("view_organizational_structure")
+        .select(`
+          team_id,
+          team_name,
+          department_id,
+          department_name,
+          team_lead_id,
+          team_lead_first_name,
+          team_lead_last_name,
+          team_lead_full_name,
+          team_lead_email,
+          team_lead_avatar_url
+        `)
+        .not("team_id", "is", null)
+        .order("team_name")
       
       if (teamsError) {
         console.error('Ошибка при загрузке команд:', teamsError)
@@ -62,16 +88,27 @@ export default function TeamsTab() {
         return
       }
       
+      // Дедупликация команд по team_id
+      const uniqueTeamsMap = new Map()
+      teamsData?.forEach(team => {
+        if (!uniqueTeamsMap.has(team.team_id)) {
+          uniqueTeamsMap.set(team.team_id, {
+            id: team.team_id,
+            name: team.team_name,
+            departmentId: team.department_id,
+            departmentName: team.department_name,
+            headUserId: team.team_lead_id,
+            headFirstName: team.team_lead_first_name,
+            headLastName: team.team_lead_last_name,
+            headFullName: team.team_lead_full_name,
+            headEmail: team.team_lead_email,
+            headAvatarUrl: team.team_lead_avatar_url
+          })
+        }
+      })
+      
       // Устанавливаем данные команд
-      setTeams(
-        teamsData ? 
-        teamsData.map(team => ({ 
-          id: team.team_id, 
-          name: team.team_name, 
-          departmentId: team.department_id 
-        })) : 
-        []
-      )
+      setTeams(Array.from(uniqueTeamsMap.values()))
       
       // Устанавливаем данные отделов
       setDepartments(
@@ -116,7 +153,8 @@ export default function TeamsTab() {
         name: "department_id",
         label: "Отдел",
         type: "select" as const,
-        options: departments.map(dep => ({ value: dep.id, label: dep.name }))
+        options: departments.map(dep => ({ value: dep.id, label: dep.name })),
+        required: true
       }
     ]
   }, [departments])
@@ -129,6 +167,20 @@ export default function TeamsTab() {
       team_id: selectedTeam.id,
       team_name: selectedTeam.name,
       department_id: selectedTeam.departmentId
+    }
+  }, [selectedTeam])
+
+  // Мемоизируем данные команды для TeamHeadModal
+  const teamHeadData = useMemo(() => {
+    if (!selectedTeam) return undefined
+    
+    return {
+      team_id: selectedTeam.id,
+      team_name: selectedTeam.name,
+      department_id: selectedTeam.departmentId,
+      department_name: selectedTeam.departmentName,
+      head_user_id: selectedTeam.headUserId,
+      head_full_name: selectedTeam.headFullName
     }
   }, [selectedTeam])
 
@@ -156,6 +208,17 @@ export default function TeamsTab() {
 
   const handleDeleteModalOpenChange = useCallback((open: boolean) => {
     setDeleteModalOpen(open)
+  }, [])
+
+  // Обработчики для управления руководителями
+  const handleAssignHead = useCallback((team: Team) => {
+    setSelectedTeam(team)
+    setHeadModalOpen(true)
+  }, [])
+
+  const handleRemoveHeadClick = useCallback((team: Team) => {
+    setSelectedTeam(team)
+    setRemoveHeadModalOpen(true)
   }, [])
 
   // Если данные загружаются, показываем индикатор загрузки
@@ -194,11 +257,12 @@ export default function TeamsTab() {
                 <TableRow>
                   <TableHead className="text-base">Название команды</TableHead>
                   <TableHead className="text-base">Отдел</TableHead>
-                  <TableHead className="w-48 text-right">Действия</TableHead>
+                  <TableHead className="text-base">Руководитель</TableHead>
+                  <TableHead className="w-64 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <LoadingState columnCount={3} />
+                <LoadingState columnCount={4} />
               </TableBody>
             </Table>
           </CardContent>
@@ -252,7 +316,8 @@ export default function TeamsTab() {
               <TableRow>
                 <TableHead className="text-base">Название команды</TableHead>
                 <TableHead className="text-base">Отдел</TableHead>
-                <TableHead className="w-48 text-right">Действия</TableHead>
+                <TableHead className="text-base">Руководитель</TableHead>
+                <TableHead className="w-64 text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -260,13 +325,87 @@ export default function TeamsTab() {
                 filtered.map(team => (
                   <TableRow key={team.id}>
                     <TableCell className="text-base font-medium">{team.name}</TableCell>
-                    <TableCell className="text-base">{team.departmentId ? getDepartmentName(team.departmentId) : "-"}</TableCell>
+                    <TableCell className="text-base">{team.departmentName || "-"}</TableCell>
+                    <TableCell className="text-base">
+                      {team.headUserId ? (
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={team.headAvatarUrl || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {team.headFirstName?.[0]}{team.headLastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{team.headFullName}</div>
+                            <div className="text-sm text-muted-foreground">{team.headEmail}</div>
+                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <div className="flex flex-col">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleAssignHead(team)}
+                                  className="justify-start rounded-b-none border-b-0"
+                                >
+                                  Сменить
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleRemoveHeadClick(team)}
+                                  className="justify-start rounded-t-none"
+                                >
+                                  Убрать
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground">Не назначен</span>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <div className="flex flex-col">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleAssignHead(team)}
+                                  className="justify-start"
+                                >
+                                  Назначить
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => handleEditTeam(team)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEditTeam(team)}
+                        >
                           Изменить
                         </Button>
-                        <Button variant="destructive" onClick={() => handleDeleteTeamClick(team)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteTeamClick(team)}
+                        >
                           Удалить
                         </Button>
                       </div>
@@ -275,7 +414,7 @@ export default function TeamsTab() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3}>
+                  <TableCell colSpan={4}>
                     <EmptyState 
                       message={
                         search || activeDept
@@ -303,6 +442,8 @@ export default function TeamsTab() {
         nameField="team_name"
         entity={entityData}
         extraFields={extraFields}
+        existingNames={teams.map(t => t.name)}
+        entityType="team"
         onSuccess={fetchData}
       />
 
@@ -314,6 +455,28 @@ export default function TeamsTab() {
           entityName={selectedTeam.name}
           table="teams"
           idField="team_id"
+          entityId={selectedTeam.id}
+          onSuccess={fetchData}
+        />
+      )}
+
+      {/* Модальное окно для назначения руководителя команды */}
+      {selectedTeam && teamHeadData && (
+        <TeamHeadModal
+          open={headModalOpen}
+          onOpenChange={setHeadModalOpen}
+          team={teamHeadData}
+          onSuccess={fetchData}
+        />
+      )}
+
+      {/* Модальное окно для подтверждения удаления руководителя команды */}
+      {selectedTeam && (
+        <RemoveHeadConfirmModal
+          open={removeHeadModalOpen}
+          onOpenChange={setRemoveHeadModalOpen}
+          type="team"
+          entityName={selectedTeam.name}
           entityId={selectedTeam.id}
           onSuccess={fetchData}
         />
