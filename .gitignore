@@ -16,3 +16,6 @@ coverage/
 .vscode/ 
 .cursor/
 .cursor/rules/
+
+# WS-to-Work Integration
+ws-to-work-integration/

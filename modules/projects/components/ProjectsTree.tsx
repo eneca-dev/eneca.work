@@ -1,11 +1,12 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
+import { EditProjectModal } from './EditProjectModal'
 
 interface ProjectNode {
   id: string
@@ -40,6 +41,7 @@ interface TreeNodeProps {
   expandedNodes: Set<string>
   onToggleNode: (nodeId: string) => void
   onAssignResponsible: (section: ProjectNode, e: React.MouseEvent) => void
+  onEditProject: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 const supabase = createClient()
@@ -50,7 +52,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   level, 
   expandedNodes, 
   onToggleNode, 
-  onAssignResponsible 
+  onAssignResponsible,
+  onEditProject 
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
@@ -58,7 +61,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const hasChildren = node.children && node.children.length > 0
   const isExpanded = expandedNodes.has(node.id)
 
-  const getNodeIcon = (type: string) => {
+  const getNodeIcon = (type: string, nodeName?: string) => {
+    // Специальная иконка для категории "Менеджер не назначен"
+    if (type === 'manager' && nodeName === 'Менеджер не назначен') {
+      return <User className="h-4 w-4 text-gray-500" />
+    }
+    
     switch (type) {
       case 'manager':
         return <User className="h-4 w-4 text-blue-600" />
@@ -239,7 +247,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             
             {/* Иконка типа */}
             <div className="flex-shrink-0 mr-2">
-              {getNodeIcon(node.type)}
+              {getNodeIcon(node.type, node.name)}
             </div>
             
             {/* Название */}
@@ -249,6 +257,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             )}>
               {node.name}
             </span>
+
+            {/* Кнопка редактирования для проектов */}
+            {node.type === 'project' && (
+              <button
+                onClick={(e) => onEditProject(node, e)}
+                className="ml-2 p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all"
+                title="Редактировать проект"
+              >
+                <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              </button>
+            )}
 
             {/* Даты для не-разделов */}
             {node.dates && (node.dates.start || node.dates.end) && (
@@ -272,6 +291,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               expandedNodes={expandedNodes}
               onToggleNode={onToggleNode}
               onAssignResponsible={onAssignResponsible}
+              onEditProject={onEditProject}
             />
           ))}
         </div>
@@ -291,6 +311,8 @@ export function ProjectsTree({
   const [loading, setLoading] = useState(true)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<ProjectNode | null>(null)
 
   // Загрузка данных
   useEffect(() => {
@@ -347,6 +369,15 @@ export function ProjectsTree({
     const stages = new Map<string, ProjectNode>()
     const objects = new Map<string, ProjectNode>()
 
+    // Создаем специальную категорию для проектов без менеджера
+    const NO_MANAGER_ID = 'no-manager'
+    const noManagerCategory: ProjectNode = {
+      id: NO_MANAGER_ID,
+      name: 'Менеджер не назначен',
+      type: 'manager',
+      children: []
+    }
+
     // Группируем данные по уровням
     data.forEach(row => {
       // Менеджеры
@@ -365,7 +396,7 @@ export function ProjectsTree({
           id: row.project_id,
           name: row.project_name,
           type: 'project',
-          managerId: row.project_manager_id,
+          managerId: row.project_manager_id || NO_MANAGER_ID, // Если нет менеджера, присваиваем специальный ID
           children: []
         })
       }
@@ -430,13 +461,29 @@ export function ProjectsTree({
       }
     })
 
+    // Проверяем, есть ли проекты без менеджера
+    let hasProjectsWithoutManager = false
+
     projects.forEach(project => {
-      if (project.managerId && managers.has(project.managerId)) {
+      if (project.managerId === NO_MANAGER_ID) {
+        // Добавляем проект к категории "Менеджер не назначен"
+        noManagerCategory.children!.push(project)
+        hasProjectsWithoutManager = true
+      } else if (project.managerId && managers.has(project.managerId)) {
+        // Добавляем проект к соответствующему менеджеру
         managers.get(project.managerId)!.children!.push(project)
       }
     })
 
-    return Array.from(managers.values())
+    // Собираем результат
+    const result = Array.from(managers.values())
+    
+    // Добавляем категорию "Менеджер не назначен" в начало списка, если есть такие проекты
+    if (hasProjectsWithoutManager) {
+      result.unshift(noManagerCategory)
+    }
+
+    return result
   }
 
   const toggleNode = (nodeId: string) => {
@@ -453,6 +500,12 @@ export function ProjectsTree({
     e.stopPropagation() // Предотвращаем раскрытие узла
     setSelectedSection(section)
     setShowAssignModal(true)
+  }
+
+  const handleEditProject = (project: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedProject(project)
+    setShowEditModal(true)
   }
 
   if (loading) {
@@ -507,6 +560,7 @@ export function ProjectsTree({
               expandedNodes={expandedNodes}
               onToggleNode={toggleNode}
               onAssignResponsible={handleAssignResponsible}
+              onEditProject={handleEditProject}
             />
           ))}
         </div>
@@ -518,6 +572,21 @@ export function ProjectsTree({
           section={selectedSection}
           setShowAssignModal={setShowAssignModal}
           theme="light" // Можно сделать динамическим
+        />
+      )}
+
+      {/* Модальное окно редактирования проекта */}
+      {showEditModal && selectedProject && (
+        <EditProjectModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false)
+            setSelectedProject(null)
+          }}
+          projectId={selectedProject.id}
+          onProjectUpdated={() => {
+            loadTreeData() // Перезагружаем данные после обновления
+          }}
         />
       )}
     </>

@@ -1,18 +1,12 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
+import { Modal, ModalButton } from '@/components/modals'
+import { UserCheck } from 'lucide-react'
 
 interface User {
   user_id: string
@@ -163,13 +157,11 @@ export default function TeamHeadModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>
-            {team.head_user_id ? "Сменить" : "Назначить"} руководителя команды
-          </DialogTitle>
-          <DialogDescription>
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="xl">
+      <Modal.Header 
+        title={team.head_user_id ? "Сменить руководителя команды" : "Назначить руководителя команды"}
+        subtitle={
+          <>
             Отдел: <strong>{team.department_name || "Не указан"}</strong>
             <br />
             Команда: <strong>{team.team_name}</strong>
@@ -179,72 +171,78 @@ export default function TeamHeadModal({
                 Текущий руководитель: <strong>{team.head_full_name}</strong>
               </>
             )}
-          </DialogDescription>
-        </DialogHeader>
+          </>
+        }
+      />
 
-        <div className="flex flex-col gap-4 flex-1 min-h-0">
-          <Input
-            placeholder="Поиск по имени, email, отделу или должности..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <Modal.Body className="flex flex-col gap-4 flex-1 min-h-0">
+        <Input
+          placeholder="Поиск по имени, email, отделу или должности..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-          <div className="flex-1 overflow-y-auto border rounded-md">
-            {isLoading ? (
-              <div className="p-4 text-center text-muted-foreground">
-                Загрузка пользователей...
-              </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground">
-                {search ? "Пользователи не найдены" : "Нет доступных пользователей"}
-              </div>
-            ) : (
-              <div className="p-2">
-                {filteredUsers.map((user) => (
-                  <div
-                    key={user.user_id}
-                    className={`flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-muted transition-colors ${
-                      selectedUser?.user_id === user.user_id ? "bg-muted border-2 border-primary" : ""
-                    }`}
-                    onClick={() => setSelectedUser(user)}
-                  >
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.avatar_url || undefined} />
-                      <AvatarFallback>
-                        {user.first_name?.[0]}{user.last_name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="font-medium">{getUserFullName(user)}</div>
-                      <div className="text-sm text-muted-foreground">{user.email}</div>
-                      {(user.position_name || user.department_name) && (
-                        <div className="text-xs text-muted-foreground">
-                          {user.position_name && user.department_name 
-                            ? `${user.position_name} • ${user.department_name}`
-                            : user.position_name || user.department_name
-                          }
-                        </div>
-                      )}
-                    </div>
+        <div className="flex-1 overflow-y-auto border rounded-md">
+          {isLoading ? (
+            <div className="p-4 text-center text-muted-foreground">
+              Загрузка пользователей...
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">
+              {search ? "Пользователи не найдены" : "Нет доступных пользователей"}
+            </div>
+          ) : (
+            <div className="p-2">
+              {filteredUsers.map((user) => (
+                <div
+                  key={user.user_id}
+                  className={`flex items-center gap-3 p-3 rounded-md cursor-pointer hover:bg-muted transition-colors ${
+                    selectedUser?.user_id === user.user_id ? "bg-muted border-2 border-primary" : ""
+                  }`}
+                  onClick={() => setSelectedUser(user)}
+                >
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={user.avatar_url || undefined} />
+                    <AvatarFallback>
+                      {user.first_name?.[0]}{user.last_name?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="font-medium">{getUserFullName(user)}</div>
+                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                    {(user.position_name || user.department_name) && (
+                      <div className="text-xs text-muted-foreground">
+                        {user.position_name && user.department_name 
+                          ? `${user.position_name} • ${user.department_name}`
+                          : user.position_name || user.department_name
+                        }
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      </Modal.Body>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button 
-            onClick={handleAssignHead} 
-            disabled={!selectedUser || isSaving}
-          >
-            {isSaving ? "Назначение..." : "Назначить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Modal.Footer>
+        <ModalButton 
+          variant="cancel"
+          onClick={() => onOpenChange(false)}
+        >
+          Отмена
+        </ModalButton>
+        <ModalButton 
+          variant="success"
+          onClick={handleAssignHead} 
+          disabled={!selectedUser}
+          loading={isSaving}
+          icon={<UserCheck />}
+        >
+          {isSaving ? 'Назначение...' : 'Назначить'}
+        </ModalButton>
+      </Modal.Footer>
+    </Modal>
   )
 } 

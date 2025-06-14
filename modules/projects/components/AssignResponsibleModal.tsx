@@ -6,6 +6,8 @@ import { Avatar } from "./Avatar"
 import { updateSectionResponsible } from "@/lib/supabase-client"
 import { useProjectsStore } from "../store"
 import { useUiStore } from "@/stores/useUiStore"
+import { Modal, ModalButton } from '@/components/modals'
+import { Save } from 'lucide-react'
 
 interface Employee {
   user_id: string
@@ -67,31 +69,34 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
             last_name,
             email,
             avatar_url,
-            position_name,
-            team_name,
-            department_name
+            departments!inner(department_name),
+            teams!inner(team_name),
+            positions!inner(position_name)
           `)
-          .eq("is_active", true)
+          .not('first_name', 'is', null)
+          .neq('first_name', '')
           .order("first_name")
 
         if (error) {
           console.error("Ошибка загрузки сотрудников:", error)
+          setNotification(`Ошибка загрузки сотрудников: ${error.message}`)
           return
         }
 
         const employeesList = data?.map((emp: any) => ({
           user_id: emp.user_id,
-          full_name: `${emp.first_name} ${emp.last_name}`,
+          full_name: `${emp.first_name} ${emp.last_name}`.trim(),
           email: emp.email,
           avatar_url: emp.avatar_url,
-          position_name: emp.position_name,
-          team_name: emp.team_name,
-          department_name: emp.department_name,
+          position_name: emp.positions?.position_name || null,
+          team_name: emp.teams?.team_name || null,
+          department_name: emp.departments?.department_name || null,
         })) || []
 
         setEmployees(employeesList)
       } catch (error) {
         console.error("Ошибка при загрузке сотрудников:", error)
+        setNotification(`Ошибка при загрузке сотрудников: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
       } finally {
         setIsLoadingEmployees(false)
       }
@@ -211,11 +216,13 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className={cn("rounded-lg p-6 w-96 max-w-[90vw]", theme === "dark" ? "bg-slate-800" : "bg-white")}>
-        <h3 className={cn("text-lg font-semibold mb-4", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-          Назначение ответственного
-        </h3>
+    <Modal isOpen={true} onClose={() => setShowAssignModal(false)} size="md">
+      <Modal.Header 
+        title="Назначение ответственного"
+        onClose={() => setShowAssignModal(false)}
+      />
+      
+      <Modal.Body>
 
         <div
           className={cn(
@@ -363,54 +370,26 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
           </div>
         )}
 
-        <div className="flex justify-end gap-3 mt-6">
-          <button
-            onClick={() => setShowAssignModal(false)}
-            disabled={isSaving}
-            className={cn(
-              "px-4 py-2 text-sm rounded border",
-              theme === "dark"
-                ? "border-slate-600 text-slate-300 hover:bg-slate-700"
-                : "border-slate-300 text-slate-600 hover:bg-slate-50",
-              isSaving ? "opacity-50 cursor-not-allowed" : "",
-            )}
-          >
-            Отмена
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !selectedEmployee}
-            className={cn(
-              "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
-              theme === "dark"
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-blue-500 text-white hover:bg-blue-600",
-              isSaving || !selectedEmployee ? "opacity-70 cursor-not-allowed" : "",
-            )}
-          >
-            {isSaving ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Назначение...
-              </>
-            ) : (
-              "Назначить"
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+      </Modal.Body>
+      
+      <Modal.Footer>
+        <ModalButton
+          variant="cancel"
+          onClick={() => setShowAssignModal(false)}
+          disabled={isSaving}
+        >
+          Отмена
+        </ModalButton>
+        <ModalButton
+          variant="success"
+          onClick={handleSave}
+          disabled={!selectedEmployee}
+          loading={isSaving}
+          icon={<Save />}
+        >
+          {isSaving ? 'Назначение...' : 'Назначить'}
+        </ModalButton>
+      </Modal.Footer>
+    </Modal>
   )
 } 

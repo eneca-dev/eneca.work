@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { validateEntityName, validateCategoryName, validatePositionName, checkDuplicateName, getDuplicateErrorMessage, ValidationResult } from "@/utils/validation"
+import { Modal, ModalButton } from '@/components/modals'
+import { Save } from 'lucide-react'
 
 interface EntityModalProps {
   open: boolean
@@ -208,26 +209,26 @@ export default function EntityModal({
   }, [formData, nameField, validation.isValid, duplicateError, extraFields])
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {mode === "create" 
-              ? table === "departments"
-                ? "Введите название нового отдела и нажмите кнопку «Сохранить»"
-                : table === "teams"
-                  ? "Введите название новой команды и нажмите кнопку «Сохранить»"
-                  : table === "positions"
-                    ? "Введите название новой должности и нажмите кнопку «Сохранить»"
-                    : table === "categories"
-                      ? "Введите название новой категории и нажмите кнопку «Сохранить»"
-                      : "Заполните необходимые поля для создания новой записи. После заполнения нажмите кнопку «Сохранить»."
-              : "Отредактируйте необходимые поля. Изменения вступят в силу после нажатия кнопки «Сохранить»."
-            }
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="md">
+      <Modal.Header 
+        title={title}
+        subtitle={mode === "create" 
+          ? table === "departments"
+            ? "Введите название нового отдела и нажмите кнопку «Сохранить»"
+            : table === "teams"
+              ? "Введите название новой команды и нажмите кнопку «Сохранить»"
+              : table === "positions"
+                ? "Введите название новой должности и нажмите кнопку «Сохранить»"
+                : table === "categories"
+                  ? "Введите название новой категории и нажмите кнопку «Сохранить»"
+                  : "Заполните необходимые поля для создания новой записи. После заполнения нажмите кнопку «Сохранить»."
+          : "Отредактируйте необходимые поля. Изменения вступят в силу после нажатия кнопки «Сохранить»."
+        }
+        onClose={() => onOpenChange(false)}
+      />
+      
+      <form onSubmit={handleSubmit}>
+        <Modal.Body className="space-y-4">
           <div>
             <Input
               id={nameField}
@@ -281,16 +282,27 @@ export default function EntityModal({
             </div>
           ))}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Отмена
-            </Button>
-            <Button type="submit" disabled={loading || !canSave}>
-              {loading ? "Сохранение..." : "Сохранить"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <ModalButton 
+            type="button" 
+            variant="cancel"
+            onClick={() => onOpenChange(false)}
+          >
+            Отмена
+          </ModalButton>
+          <ModalButton 
+            type="submit" 
+            variant="success"
+            disabled={!canSave}
+            loading={loading}
+            icon={<Save />}
+          >
+            {loading ? 'Сохранение...' : 'Сохранить'}
+          </ModalButton>
+        </Modal.Footer>
+      </form>
+    </Modal>
   )
 } 
