@@ -1413,11 +1413,12 @@ export const usePlanningStore = create<PlanningState>()(
           try {
             // Получаем текущие фильтры из новой системы фильтров
             const { useFilterStore } = await import('../filters/store')
-            const { selectedDepartmentId, selectedTeamId } = useFilterStore.getState()
+            const { selectedDepartmentId, selectedTeamId, selectedEmployeeId } = useFilterStore.getState()
 
             console.log("🏢 Синхронная загрузка отделов с фильтрами:", {
               selectedDepartmentId,
-              selectedTeamId
+              selectedTeamId,
+              selectedEmployeeId
             })
 
             // Проверяем, не был ли запрос отменен
@@ -1467,6 +1468,11 @@ export const usePlanningStore = create<PlanningState>()(
 
             if (selectedTeamId) {
               employeeQuery = employeeQuery.eq("final_team_id", selectedTeamId)
+            }
+
+            // Применяем фильтр по сотруднику, если он выбран
+            if (selectedEmployeeId) {
+              employeeQuery = employeeQuery.eq("user_id", selectedEmployeeId)
             }
 
             const { data: employeeData, error: employeeError } = await employeeQuery

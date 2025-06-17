@@ -3,11 +3,11 @@ import { X, ChevronDown, ChevronRight, Filter, RotateCcw, Eye, EyeOff, Expand, M
 import { cn } from '@/lib/utils'
 import { useFilterStore } from './store'
 import { FilterSelect } from './FilterSelect'
-import { timelineConfig } from './configs'
+import { projectsConfig } from './configs'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTheme } from 'next-themes'
 
-interface TimelineFiltersProps {
+interface ProjectsFiltersProps {
   onProjectChange: (projectId: string | null) => void
   onDepartmentChange: (departmentId: string | null) => void
   onTeamChange: (teamId: string | null) => void
@@ -22,7 +22,7 @@ interface TimelineFiltersProps {
   collapseAllDepartments: () => void
 }
 
-export function TimelineFilters({
+export function ProjectsFilters({
   onProjectChange,
   onDepartmentChange,
   onTeamChange,
@@ -35,7 +35,7 @@ export function TimelineFilters({
   toggleShowDepartments,
   expandAllDepartments,
   collapseAllDepartments
-}: TimelineFiltersProps) {
+}: ProjectsFiltersProps) {
   const { theme: systemTheme } = useTheme()
   const { theme: settingsTheme } = useSettingsStore()
   const theme = (settingsTheme === 'system' ? systemTheme : settingsTheme) as 'light' | 'dark'
@@ -70,8 +70,14 @@ export function TimelineFilters({
   } = useFilterStore()
 
   useEffect(() => {
-    initialize(timelineConfig)
+    console.log('🎯 Инициализация ProjectsFilters...')
+    initialize(projectsConfig)
   }, [initialize])
+
+  // Логируем состояние менеджеров
+  useEffect(() => {
+    console.log('👥 Менеджеры в компоненте:', managers)
+  }, [managers])
 
   useEffect(() => {
     onProjectChange(selectedProjectId)

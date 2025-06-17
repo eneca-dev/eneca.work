@@ -92,3 +92,32 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Исправление z-index для выпадающих списков в модальных окнах */
+@layer components {
+  /* Radix Select Content в портале */
+  [data-radix-select-content] {
+    z-index: 9999 !important;
+  }
+  
+  /* Radix Popper Content */
+  [data-radix-popper-content-wrapper] {
+    z-index: 9999 !important;
+  }
+  
+  /* Все Radix порталы */
+  [data-radix-portal] {
+    z-index: 9999 !important;
+  }
+  
+  /* Специфично для Select */
+  [role="listbox"] {
+    z-index: 9999 !important;
+  }
+  
+  /* Только для popover элементов с определенными атрибутами */
+  [data-state="open"].z-50,
+  [data-radix-collection-item].z-50 {
+    z-index: 9999 !important;
+  }
+}

@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import { supabase } from '@/lib/supabase-client'
+import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import type { FilterStore, FilterOption, FilterConfigs } from './types'
-import type { Department, Team, Employee } from '../types'
+
+const supabase = createClient()
 
 export const useFilterStore = create<FilterStore>()(
   devtools(
@@ -38,6 +39,7 @@ export const useFilterStore = create<FilterStore>()(
         
         // Инициализация с конфигурацией
         initialize: (config: FilterConfigs) => {
+          console.log('🚀 Инициализация фильтров проектов...')
           set({ config })
           // Загружаем базовые данные
           get().loadManagers()
@@ -193,6 +195,7 @@ export const useFilterStore = create<FilterStore>()(
         
         // Методы загрузки данных
         loadManagers: async () => {
+          console.log('🔄 Загружаю менеджеров...')
           try {
             const { data, error } = await supabase
               .from('view_manager_projects')
@@ -201,8 +204,10 @@ export const useFilterStore = create<FilterStore>()(
             
             if (error) throw error
             
+            console.log('📊 Данные менеджеров:', data)
+            
             const managerMap = new Map()
-            data?.forEach(row => {
+            data?.forEach((row: any) => {
               if (!managerMap.has(row.manager_id)) {
                 managerMap.set(row.manager_id, {
                   id: row.manager_id,
@@ -211,13 +216,16 @@ export const useFilterStore = create<FilterStore>()(
               }
             })
             
-            set({ managers: Array.from(managerMap.values()) })
+            const managers = Array.from(managerMap.values())
+            console.log('✅ Менеджеры загружены:', managers)
+            set({ managers })
           } catch (error) {
-            console.error('Ошибка загрузки менеджеров:', error)
+            console.error('❌ Ошибка загрузки менеджеров:', error)
           }
         },
         
         loadProjects: async (managerId?: string | null) => {
+          console.log('🔄 Загружаю проекты для менеджера:', managerId)
           set({ isLoadingProjects: true })
           try {
             let query = supabase
@@ -233,15 +241,18 @@ export const useFilterStore = create<FilterStore>()(
             const { data, error } = await query
             if (error) throw error
             
-            const projects = data?.map(p => ({
+            console.log('📊 Данные проектов:', data)
+            
+            const projects = data?.map((p: any) => ({
               id: p.project_id,
               name: p.project_name,
               managerId: p.project_manager
             })) || []
             
+            console.log('✅ Проекты загружены:', projects)
             set({ projects, isLoadingProjects: false })
           } catch (error) {
-            console.error('Ошибка загрузки проектов:', error)
+            console.error('❌ Ошибка загрузки проектов:', error)
             set({ isLoadingProjects: false })
           }
         },
@@ -257,7 +268,7 @@ export const useFilterStore = create<FilterStore>()(
             
             if (error) throw error
             
-            const stages = data?.map(s => ({
+            const stages = data?.map((s: any) => ({
               id: s.stage_id,
               name: s.stage_name
             })) || []
@@ -280,7 +291,7 @@ export const useFilterStore = create<FilterStore>()(
             
             if (error) throw error
             
-            const objects = data?.map(o => ({
+            const objects = data?.map((o: any) => ({
               id: o.object_id,
               name: o.object_name
             })) || []
@@ -304,7 +315,7 @@ export const useFilterStore = create<FilterStore>()(
             const departmentsMap = new Map()
             const teamsMap = new Map()
             
-            data?.forEach(row => {
+            data?.forEach((row: any) => {
               // Отделы
               if (!departmentsMap.has(row.department_id)) {
                 departmentsMap.set(row.department_id, {
@@ -352,7 +363,7 @@ export const useFilterStore = create<FilterStore>()(
             
             // Используем Map для дедупликации по user_id
             const employeesMap = new Map()
-            data?.forEach(row => {
+            data?.forEach((row: any) => {
               if (!employeesMap.has(row.user_id)) {
                 employeesMap.set(row.user_id, {
                   id: row.user_id,

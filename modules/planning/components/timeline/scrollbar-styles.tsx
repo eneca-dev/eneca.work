@@ -13,7 +13,7 @@ export function ScrollbarStyles({ theme }: ScrollbarStylesProps) {
         width: 6px;
       }
       div::-webkit-scrollbar-track {
-        background: ${theme === "dark" ? "rgba(30, 41, 59, 0.2)" : "rgba(241, 245, 249, 0.2)"};
+        background: transparent;
         border-radius: 3px;
       }
       div::-webkit-scrollbar-thumb {
