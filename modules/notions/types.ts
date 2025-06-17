@@ -46,4 +46,5 @@ export interface NotionsMutations {
   setSearchQuery: (query: string) => void
   selectAllNotions: () => void
   clearSelectedNotions: () => void
+  markNotionsAsDone: (ids: string[]) => Promise<void>
 } 

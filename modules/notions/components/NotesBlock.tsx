@@ -10,7 +10,7 @@ import { NoteCard } from './NoteCard'
 import { NewNoteModal } from './NewNoteModal'
 import { BulkDeleteConfirm } from './BulkDeleteConfirm'
 import { useNotionsStore } from '../store'
-import { Plus, Search, CheckSquare, Square, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function NotesBlock() {
@@ -28,12 +28,12 @@ export function NotesBlock() {
     setSelectedNotions,
     setSearchQuery,
     selectAllNotions,
-    clearSelectedNotions
+    clearSelectedNotions,
+    markNotionsAsDone
   } = useNotionsStore()
 
   const [showNewNoteModal, setShowNewNoteModal] = useState(false)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
-  const [showSelection, setShowSelection] = useState(false)
 
   // Загружаем заметки при монтировании компонента
   useEffect(() => {
@@ -63,11 +63,16 @@ export function NotesBlock() {
     }
   }
 
+  const handleMarkAsDone = async () => {
+    if (selectedNotions.length > 0) {
+      await markNotionsAsDone(selectedNotions)
+    }
+  }
+
   const handleBulkDelete = async () => {
     if (selectedNotions.length > 0) {
       await deleteNotions(selectedNotions)
       setShowBulkDeleteModal(false)
-      setShowSelection(false)
     }
   }
 
@@ -120,48 +125,42 @@ export function NotesBlock() {
           />
         </div>
 
-        {/* Переключатель режима выбора */}
-        {totalCount > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setShowSelection(!showSelection)
-              if (showSelection) {
-                clearSelectedNotions()
-              }
-            }}
-            className="gap-2"
-          >
-            {showSelection ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-            {showSelection ? 'Отменить выбор' : 'Выбрать'}
-          </Button>
-        )}
+        {/* Кнопки управления выбранными заметками */}
+        {selectedNotions.length > 0 && (
+          <>
+            {/* Выбрать все / Снять выделение */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAll}
+              className="gap-2"
+            >
+              {selectedNotions.length === notions.length ? <Square className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+              {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
+            </Button>
 
-        {/* Выбрать все */}
-        {showSelection && totalCount > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSelectAll}
-            className="gap-2"
-          >
-            <CheckSquare className="h-4 w-4" />
-            {selectedNotions.length === notions.length ? 'Снять все' : 'Выбрать все'}
-          </Button>
-        )}
+            {/* Отметить выполненным */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMarkAsDone}
+              className="gap-2"
+            >
+              <Check className="h-4 w-4" />
+              Отметить выполненным
+            </Button>
 
-        {/* Удалить выделенные */}
-        {showSelection && selectedNotions.length > 0 && (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setShowBulkDeleteModal(true)}
-            className="gap-2"
-          >
-            <Trash2 className="h-4 w-4" />
-            Удалить ({selectedNotions.length})
-          </Button>
+            {/* Удалить выделенное */}
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Удалить выделенное ({selectedNotions.length})
+            </Button>
+          </>
         )}
       </div>
 
@@ -196,7 +195,7 @@ export function NotesBlock() {
               onUpdate={handleUpdateNote}
               onToggleDone={toggleNotionDone}
               onDelete={deleteNotion}
-              showSelection={showSelection}
+              showSelection={true}
             />
           ))
         )}

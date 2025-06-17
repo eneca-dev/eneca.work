@@ -83,10 +83,10 @@ export function NoteCard({
       )}
     >
       <div className="flex items-start gap-3">
-        {/* Чекбокс для отметки выполнения */}
+        {/* Чекбокс для выбора заметки */}
         <Checkbox
-          checked={notion.notion_done}
-          onCheckedChange={() => onToggleDone(notion.notion_id)}
+          checked={isSelected}
+          onCheckedChange={() => onToggleSelect(notion.notion_id)}
           className="mt-1"
         />
 
@@ -97,23 +97,23 @@ export function NoteCard({
             const parsed = parseNotionContent(notion)
             return (
               <>
-                {/* Заголовок заметки - большой и жирный */}
+                {/* Заголовок заметки - как h1 */}
                 {parsed.title && (
-                  <h2 className={cn(
-                    "text-lg font-bold mb-3",
+                  <h1 className={cn(
+                    "text-2xl font-bold mb-3",
                     notion.notion_done && "line-through text-gray-500"
                   )}>
                     {parsed.title}
-                  </h2>
+                  </h1>
                 )}
 
                 {/* Содержимое markdown с правильными заголовками и переносами строк */}
                 {parsed.content && (
                   <div className={cn(
                     "prose dark:prose-invert prose-sm max-w-none",
-                    "[&>h1]:text-xl [&>h1]:font-bold [&>h1]:mb-2 [&>h1]:mt-4",
-                    "[&>h2]:text-lg [&>h2]:font-bold [&>h2]:mb-2 [&>h2]:mt-3", 
-                    "[&>h3]:text-base [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-2",
+                    "[&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-2 [&>h1]:mt-4",
+                    "[&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-2 [&>h2]:mt-3", 
+                    "[&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-2",
                     "[&>p]:whitespace-pre-wrap [&>p]:mb-2",
                     notion.notion_done && "line-through text-gray-500"
                   )}>
@@ -125,7 +125,7 @@ export function NoteCard({
                           .replace(/__(.*?)__/g, '<u>$1</u>')
                           .replace(/^(#{1,3})\s+(.+)$/gm, (match, hashes, content) => {
                             const level = hashes.length
-                            const sizes = ['text-xl', 'text-lg', 'text-base']
+                            const sizes = ['text-2xl', 'text-xl', 'text-lg']
                             const margins = ['mt-4 mb-2', 'mt-3 mb-2', 'mt-2 mb-2']
                             return `<h${level} class="font-bold ${sizes[level-1]} ${margins[level-1]}">${content}</h${level}>`
                           })
@@ -151,15 +151,6 @@ export function NoteCard({
 
         {/* Действия */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Чекбокс для массового выбора */}
-          {showSelection && (
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => onToggleSelect(notion.notion_id)}
-              className="mr-2"
-            />
-          )}
-
           {/* Кнопка отметки выполнения */}
           <Button
             variant="ghost"

@@ -38,7 +38,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
 
       if (error) throw error
 
-      set({ notions: data || [], isLoading: false })
+      // Сортируем заметки: невыполненные сначала, потом выполненные
+      const sortedData = (data || []).sort((a, b) => {
+        if (a.notion_done !== b.notion_done) {
+          return a.notion_done ? 1 : -1
+        }
+        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+      })
+
+      set({ notions: sortedData, isLoading: false })
     } catch (error) {
       console.error('Error fetching notions:', error)
       set({ error: 'Ошибка при загрузке заметок', isLoading: false })
@@ -164,6 +172,17 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
     if (!notion) return
 
     await get().updateNotion(id, { notion_done: !notion.notion_done })
+    
+    // Пересортируем список после изменения статуса
+    const currentNotions = get().notions
+    const sortedNotions = [...currentNotions].sort((a, b) => {
+      if (a.notion_done !== b.notion_done) {
+        return a.notion_done ? 1 : -1
+      }
+      return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+    })
+    
+    set({ notions: sortedNotions })
   },
 
   setSelectedNotions: (ids: string[]) => {
@@ -188,5 +207,44 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
 
   clearSelectedNotions: () => {
     set({ selectedNotions: [] })
+  },
+
+  markNotionsAsDone: async (ids: string[]) => {
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('notions')
+        .update({ 
+          notion_done: true,
+          notion_updated_at: new Date().toISOString()
+        })
+        .in('notion_id', ids)
+
+      if (error) throw error
+
+      // Обновляем заметки в локальном состоянии и пересортируем
+      const currentNotions = get().notions
+      const updatedNotions = currentNotions.map(notion =>
+        ids.includes(notion.notion_id) 
+          ? { ...notion, notion_done: true, notion_updated_at: new Date().toISOString() }
+          : notion
+      )
+      
+      // Сортируем обновленный список
+      const sortedNotions = updatedNotions.sort((a, b) => {
+        if (a.notion_done !== b.notion_done) {
+          return a.notion_done ? 1 : -1
+        }
+        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+      })
+      
+      set({ notions: sortedNotions, selectedNotions: [] })
+      
+      toast.success(`Отмечено как выполненное: ${ids.length} заметок`)
+    } catch (error) {
+      console.error('Error marking notions as done:', error)
+      toast.error('Ошибка при отметке заметок как выполненных')
+    }
   }
 })) 
