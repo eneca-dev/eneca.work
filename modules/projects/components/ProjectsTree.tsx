@@ -324,14 +324,16 @@ export function ProjectsTree({
     console.log('🔍 Фильтры:', { selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId })
     setLoading(true)
     try {
-      // Базовый запрос для получения структуры
+      // Используем новое представление view_project_tree
       let query = supabase
-        .from('view_section_hierarchy')
+        .from('view_project_tree')
         .select('*')
 
       // Применяем фильтры
-      if (selectedManagerId) {
-        query = query.eq('project_manager_id', selectedManagerId)
+      if (selectedManagerId && selectedManagerId !== 'no-manager') {
+        query = query.eq('manager_id', selectedManagerId)
+      } else if (selectedManagerId === 'no-manager') {
+        query = query.is('manager_id', null)
       }
       if (selectedProjectId) {
         query = query.eq('project_id', selectedProjectId)
@@ -350,10 +352,10 @@ export function ProjectsTree({
         return
       }
 
-      console.log('📊 Данные из view_section_hierarchy:', data)
+      console.log('📊 Данные из view_project_tree:', data)
 
       // Преобразуем данные в иерархическую структуру
-      const tree = buildTreeStructure(data || [])
+      const tree = buildTreeStructureFromProjectTree(data || [])
       console.log('🌳 Построенное дерево:', tree)
       setTreeData(tree)
     } catch (error) {
@@ -363,7 +365,7 @@ export function ProjectsTree({
     }
   }
 
-  const buildTreeStructure = (data: any[]): ProjectNode[] => {
+  const buildTreeStructureFromProjectTree = (data: any[]): ProjectNode[] => {
     const managers = new Map<string, ProjectNode>()
     const projects = new Map<string, ProjectNode>()
     const stages = new Map<string, ProjectNode>()
@@ -378,30 +380,31 @@ export function ProjectsTree({
       children: []
     }
 
-    // Группируем данные по уровням
+    // Обрабатываем все записи из view_project_tree
     data.forEach(row => {
-      // Менеджеры
-      if (row.project_manager_id && !managers.has(row.project_manager_id)) {
-        managers.set(row.project_manager_id, {
-          id: row.project_manager_id,
-          name: row.project_manager_name || 'Неизвестный менеджер',
+      // 1. Менеджеры
+      const managerId = row.manager_id || NO_MANAGER_ID
+      if (row.manager_id && !managers.has(row.manager_id)) {
+        managers.set(row.manager_id, {
+          id: row.manager_id,
+          name: row.manager_name || 'Неизвестный менеджер',
           type: 'manager',
           children: []
         })
       }
 
-      // Проекты
+      // 2. Проекты
       if (!projects.has(row.project_id)) {
         projects.set(row.project_id, {
           id: row.project_id,
           name: row.project_name,
           type: 'project',
-          managerId: row.project_manager_id || NO_MANAGER_ID, // Если нет менеджера, присваиваем специальный ID
+          managerId: managerId,
           children: []
         })
       }
 
-      // Стадии
+      // 3. Стадии
       if (row.stage_id && !stages.has(row.stage_id)) {
         stages.set(row.stage_id, {
           id: row.stage_id,
@@ -412,7 +415,7 @@ export function ProjectsTree({
         })
       }
 
-      // Объекты
+      // 4. Объекты
       if (row.object_id && !objects.has(row.object_id)) {
         objects.set(row.object_id, {
           id: row.object_id,
@@ -423,7 +426,7 @@ export function ProjectsTree({
         })
       }
 
-      // Разделы
+      // 5. Разделы
       if (row.section_id) {
         const section: ProjectNode = {
           id: row.section_id,
@@ -438,7 +441,7 @@ export function ProjectsTree({
           responsibleAvatarUrl: row.section_responsible_avatar,
           projectName: row.project_name,
           stageName: row.stage_name,
-          departmentName: row.department_name
+          departmentName: row.responsible_department_name
         }
 
         // Добавляем раздел к объекту
@@ -449,28 +452,28 @@ export function ProjectsTree({
     })
 
     // Строим иерархию
+    // Добавляем объекты к стадиям
     objects.forEach(object => {
       if (object.stageId && stages.has(object.stageId)) {
         stages.get(object.stageId)!.children!.push(object)
       }
     })
 
+    // Добавляем стадии к проектам
     stages.forEach(stage => {
       if (stage.projectId && projects.has(stage.projectId)) {
         projects.get(stage.projectId)!.children!.push(stage)
       }
     })
 
-    // Проверяем, есть ли проекты без менеджера
+    // Добавляем проекты к менеджерам
     let hasProjectsWithoutManager = false
 
     projects.forEach(project => {
       if (project.managerId === NO_MANAGER_ID) {
-        // Добавляем проект к категории "Менеджер не назначен"
         noManagerCategory.children!.push(project)
         hasProjectsWithoutManager = true
       } else if (project.managerId && managers.has(project.managerId)) {
-        // Добавляем проект к соответствующему менеджеру
         managers.get(project.managerId)!.children!.push(project)
       }
     })
