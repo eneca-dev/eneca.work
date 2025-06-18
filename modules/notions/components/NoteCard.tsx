@@ -100,9 +100,11 @@ export function NoteCard({
                 {/* Заголовок заметки - как h1 */}
                 {parsed.title && (
                   <h1 className={cn(
-                    "text-2xl font-bold mb-3",
+                    "text-2xl font-bold leading-none",
                     notion.notion_done && "line-through text-gray-500"
-                  )}>
+                  )}
+                  style={{ marginBottom: '-8px' }}
+                  >
                     {parsed.title}
                   </h1>
                 )}
@@ -110,13 +112,14 @@ export function NoteCard({
                 {/* Содержимое markdown с правильными заголовками и переносами строк */}
                 {parsed.content && (
                   <div className={cn(
-                    "prose dark:prose-invert prose-sm max-w-none",
-                    "[&>h1]:text-2xl [&>h1]:font-bold [&>h1]:mb-2 [&>h1]:mt-4",
-                    "[&>h2]:text-xl [&>h2]:font-bold [&>h2]:mb-2 [&>h2]:mt-3", 
-                    "[&>h3]:text-lg [&>h3]:font-bold [&>h3]:mb-2 [&>h3]:mt-2",
-                    "[&>p]:whitespace-pre-wrap [&>p]:mb-2",
+                    "max-w-none",
                     notion.notion_done && "line-through text-gray-500"
-                  )}>
+                  )}
+                  style={{
+                    fontSize: '14px',
+                    lineHeight: '1.4'
+                  }}
+                  >
                     <div 
                       dangerouslySetInnerHTML={{ 
                         __html: parsed.content
@@ -125,9 +128,9 @@ export function NoteCard({
                           .replace(/__(.*?)__/g, '<u>$1</u>')
                           .replace(/^(#{1,3})\s+(.+)$/gm, (match, hashes, content) => {
                             const level = hashes.length
-                            const sizes = ['text-2xl', 'text-xl', 'text-lg']
-                            const margins = ['mt-4 mb-2', 'mt-3 mb-2', 'mt-2 mb-2']
-                            return `<h${level} class="font-bold ${sizes[level-1]} ${margins[level-1]}">${content}</h${level}>`
+                            const sizes = ['24px', '20px', '18px']
+                            const topMargins = ['16px', '12px', '8px']
+                            return `<h${level} style="font-size: ${sizes[level-1]}; font-weight: bold; margin-top: ${topMargins[level-1]}; margin-bottom: -8px; line-height: 1.1;">${content}</h${level}>`
                           })
                           .replace(/\n/g, '<br/>')
                       }} 
