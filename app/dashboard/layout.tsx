@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 import { getUserRoleAndPermissions } from "@/services/org-data-service"
 import { toast } from "@/components/ui/use-toast"
+import { ChatInterface } from "@/modules/chat"
 
 // Константы для retry логики
 const MAX_RETRIES = 3
@@ -213,6 +214,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
         {children}
       </div>
+      
+      {/* Chat Interface */}
+      <ChatInterface />
     </div>
   )
 }

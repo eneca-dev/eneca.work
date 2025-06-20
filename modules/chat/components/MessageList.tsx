@@ -1,0 +1,70 @@
+import { useEffect, useRef } from 'react'
+import { ChatMessage } from '../types/chat'
+
+interface MessageListProps {
+  messages: ChatMessage[]
+  isLoading: boolean
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start mt-1">
+      <div className="bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 shadow-sm">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Печатаю</span>
+          <div className="flex items-center space-x-1">
+            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0s'}}>•</span>
+            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0.2s'}}>•</span>
+            <span className="text-lg text-gray-400 dark:text-gray-500 animate-bounce inline-block" style={{animationDelay: '0.4s'}}>•</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function MessageList({ messages, isLoading }: MessageListProps) {
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Автоскролл к новым сообщениям
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/30 dark:bg-gray-900/30">
+      {messages.map((message) => (
+        <div
+          key={message.id}
+          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+        >
+          <div
+            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm relative break-words overflow-wrap-anywhere ${
+              message.role === 'user'
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'
+                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
+            }`}
+          >
+            <p className="text-sm leading-snug pr-12">
+              {message.content}
+            </p>
+            <span className={`absolute bottom-2 right-3 text-xs ${
+              message.role === 'user' 
+                ? 'text-emerald-100' 
+                : 'text-gray-500 dark:text-gray-400'
+            }`}>
+              {message.timestamp.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}
+            </span>
+          </div>
+        </div>
+      ))}
+      
+      {isLoading && <TypingIndicator />}
+      
+      <div ref={messagesEndRef} />
+    </div>
+  )
+} 
