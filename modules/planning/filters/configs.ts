@@ -39,6 +39,7 @@ export const planningConfig: FilterConfigs = {
   employee: {
     id: 'employee',
     label: 'Сотрудник',
+    dependencies: ['team'],
     fetchFunction: 'loadEmployees'
   }
 }
@@ -72,6 +73,12 @@ export const timelineConfig: FilterConfigs = {
     label: 'Команда',
     dependencies: ['department'],
     fetchFunction: 'loadTeams'
+  },
+  employee: {
+    id: 'employee',
+    label: 'Сотрудник',
+    dependencies: ['team'],
+    fetchFunction: 'loadEmployees'
   }
 }
 
@@ -91,6 +98,7 @@ export const workloadConfig: FilterConfigs = {
   employee: {
     id: 'employee',
     label: 'Сотрудник',
+    dependencies: ['team'],
     fetchFunction: 'loadEmployees'
   },
   project: {

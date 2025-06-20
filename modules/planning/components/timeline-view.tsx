@@ -12,9 +12,8 @@ import { cn } from "@/lib/utils"
 import { TimelineGrid } from "./timeline-grid"
 // Заменяем FiltersPanel на TimelineFilters
 import { TimelineFilters } from "../filters/TimelineFilters"
-import { NavigationControls } from "./timeline/navigation-controls"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
-import { Pagination } from "./pagination"
+import { FloatingNavigationPanel } from "./timeline/floating-navigation-panel"
 import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
@@ -27,6 +26,7 @@ export function TimelineView() {
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
+    selectedEmployeeId,
     selectedManagerId,
     selectedStageId,
     selectedObjectId,
@@ -105,6 +105,7 @@ useEffect(() => {
     selectedProjectId, 
     selectedDepartmentId, 
     selectedTeamId, 
+    selectedEmployeeId,
     selectedManagerId,
     selectedStageId,
     selectedObjectId
@@ -124,12 +125,12 @@ useEffect(() => {
     setLoading(true)
 
     // Применяем фильтры из нового стора
-    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, null, selectedStageId, selectedObjectId)
+    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId)
 
     // Сбрасываем состояние загрузки после небольшой задержки
     const timer = setTimeout(() => setLoading(false), 300)
     return () => clearTimeout(timer)
-  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
+  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
 
   // Дополнительная подписка на изменения фильтров для немедленного обновления данных
   useEffect(() => {
@@ -139,14 +140,15 @@ useEffect(() => {
       selectedProjectId,
       selectedDepartmentId,
       selectedTeamId,
+      selectedEmployeeId,
       selectedManagerId
     })
     
     // Вызываем fetchSections для немедленного обновления данных
-    if (selectedProjectId || selectedDepartmentId || selectedTeamId || selectedManagerId || selectedStageId || selectedObjectId) {
+    if (selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
       fetchSections()
     }
-  }, [selectedStageId, selectedObjectId, fetchSections])
+  }, [selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
 
   // Загружаем отделы при переключении showDepartments
   useEffect(() => {
@@ -208,6 +210,12 @@ useEffect(() => {
     // Новая система фильтров автоматически обновляет состояние
   }
 
+  // Добавляем обработчик для сотрудников
+  const handleEmployeeChange = (employeeId: string | null) => {
+    console.log("Изменение сотрудника:", employeeId)
+    // Новая система фильтров автоматически обновляет состояние
+  }
+
   const handleResetFilters = () => {
     console.log("Сброс фильтров")
     resetFilters()
@@ -258,47 +266,30 @@ useEffect(() => {
       </header>
 
       {/* Панель фильтров всегда отображается */}
-      <TimelineFilters
-        onProjectChange={handleProjectChange}
-        onDepartmentChange={handleDepartmentChange}
-        onTeamChange={handleTeamChange}
-        onManagerChange={handleManagerChange}
-        onStageChange={handleStageChange}
-        onResetFilters={handleResetFilters}
-        showDepartments={showDepartments}
-        toggleShowDepartments={toggleShowDepartments}
-        expandAllDepartments={expandAllDepartments}
-        collapseAllDepartments={collapseAllDepartments}
-      />
-
-      {/* Перемещаем пагинацию наверх, рядом с блоком дат */}
-      <div className="flex justify-between items-center mb-4">
-        {/* Пустое место слева */}
-        <div></div>
-
-        {/* Пагинация теперь здесь, в центре */}
-        {totalPages > 1 && (
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} theme={theme} />
-        )}
-
-        {/* Блок с датами справа */}
-        <NavigationControls
-          theme={theme}
-          onScrollBackward={scrollBackward}
-          onScrollForward={scrollForward}
-          startDate={startDate}
-          daysToShow={daysToShow}
-          onTodayClick={handleTodayPeriod}
+      <div className="mb-6">
+        <TimelineFilters
+          onProjectChange={handleProjectChange}
+          onDepartmentChange={handleDepartmentChange}
+          onTeamChange={handleTeamChange}
+          onEmployeeChange={handleEmployeeChange}
+          onManagerChange={handleManagerChange}
+          onStageChange={handleStageChange}
+          onObjectChange={handleObjectChange}
+          onResetFilters={handleResetFilters}
+          showDepartments={showDepartments}
+          toggleShowDepartments={toggleShowDepartments}
+          expandAllDepartments={expandAllDepartments}
+          collapseAllDepartments={collapseAllDepartments}
         />
       </div>
 
       {/* Main content area with improved styling - new approach with fixed columns */}
       <div
         className={cn(
-          "w-full border overflow-hidden relative overflow-y-auto",
+          "w-full border overflow-hidden relative overflow-y-auto rounded-lg",
           theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
         )}
-        style={{ height: "calc(100vh - 250px)", borderCollapse: "collapse" }}
+        style={{ height: "calc(100vh - 300px)", borderCollapse: "collapse" }}
       >
         {isLoadingSections ? (
           <div className="flex justify-center items-center p-8">
@@ -324,6 +315,19 @@ useEffect(() => {
           </div>
         )}
       </div>
+
+      {/* Парящая панель с датами и пагинацией */}
+      <FloatingNavigationPanel
+        theme={theme as 'light' | 'dark'}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        onScrollBackward={scrollBackward}
+        onScrollForward={scrollForward}
+        startDate={startDate}
+        daysToShow={daysToShow}
+        onTodayClick={handleTodayPeriod}
+      />
     </div>
   )
 }

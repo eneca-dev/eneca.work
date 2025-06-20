@@ -2,14 +2,8 @@
 
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Modal, ModalButton } from '@/components/modals'
+import { Save } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -129,13 +123,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       // Устанавливаем значение роли для Select (роль как есть, без fallback на "none")
       const roleValue = user.role || ""
 
+      // Получаем ID команды по её названию
+      const teamId = teams.find(t => t.name === user.team)?.id || ""
+
       setFormData({
         firstName,
         lastName,
         email: user.email,
         position: user.position,
         department: user.department,
-        team: user.team,
+        team: teamId, // Теперь используем ID команды
         category: user.category,
         role: roleValue,
         roleId,
@@ -169,7 +166,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
 
       // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
       if (formData.team) {
-        const teamExists = filteredTeams.some((t) => t.name === formData.team)
+        const teamExists = filteredTeams.some((t) => t.id === formData.team)
         if (!teamExists) {
           setFormData((prev) => ({ ...prev, team: "" }))
         }
@@ -214,7 +211,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         // Добавляем организационные поля только если пользователь может их редактировать
         if (canEditOrganizationalFields) {
           if (formData.department) updateData.department = formData.department
-          if (formData.team) updateData.team = formData.team
+          if (formData.team) {
+            // Преобразуем ID команды обратно в название для API
+            const selectedTeam = teams.find(t => t.id === formData.team)
+            if (selectedTeam) {
+              updateData.team = selectedTeam.name
+            }
+          }
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
           // Добавляем roleId если пользователь может редактировать роли И роль выбрана
@@ -304,17 +307,17 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}</DialogTitle>
-            <DialogDescription>
-              {isSelfEdit
-                ? "Измените информацию о своем профиле и нажмите Сохранить, когда закончите."
-                : "Измените информацию о пользователе и нажмите Сохранить, когда закончите."}
-            </DialogDescription>
-          </DialogHeader>
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
+      <form onSubmit={handleSubmit}>
+        <Modal.Header 
+          title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
+          subtitle={
+            isSelfEdit
+              ? "Измените информацию о своем профиле и нажмите Сохранить, когда закончите."
+              : "Измените информацию о пользователе и нажмите Сохранить, когда закончите."
+          }
+        />
+        <Modal.Body>
           <div className="grid gap-4 py-4">
             {/* Существующие поля формы */}
             <div className="grid grid-cols-4 items-center gap-4">
@@ -385,7 +388,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 </SelectTrigger>
                 <SelectContent>
                   {filteredTeams.map((team) => (
-                    <SelectItem key={team.id} value={team.name}>
+                    <SelectItem key={team.id} value={team.id}>
                       {team.name}
                     </SelectItem>
                   ))}
@@ -506,16 +509,27 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-              Отмена
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Сохранение..." : "Сохранить"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <ModalButton 
+            type="button" 
+            variant="cancel"
+            onClick={() => onOpenChange(false)} 
+            disabled={isLoading}
+          >
+            Отмена
+          </ModalButton>
+          <ModalButton 
+            type="submit" 
+            variant="success"
+            loading={isLoading}
+            icon={<Save />}
+          >
+            {isLoading ? "Сохранение..." : "Сохранить"}
+          </ModalButton>
+        </Modal.Footer>
+      </form>
+    </Modal>
   )
 }

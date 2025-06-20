@@ -2,14 +2,8 @@
 
 import type React from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Modal, ModalButton } from '@/components/modals'
+import { Save } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -102,12 +96,12 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
 
   return (
     <TooltipProvider>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
-          <form onSubmit={handleSubmit}>
-            <DialogHeader>
-              <DialogTitle>Редактирование оплаты</DialogTitle>
-              <DialogDescription>
+      <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
+        <form onSubmit={handleSubmit}>
+          <Modal.Header 
+            title="Редактирование оплаты"
+            subtitle={
+              <>
                 {user && (
                   <div className="flex items-center gap-2 mt-2">
                     <span className="font-medium">{user.name}</span>
@@ -116,8 +110,10 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
                   </div>
                 )}
                 Измените информацию об оплате и нажмите Сохранить, когда закончите.
-              </DialogDescription>
-            </DialogHeader>
+              </>
+            }
+          />
+          <Modal.Body>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="employmentRate" className="text-right">
@@ -216,17 +212,28 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
                 </div>
               )}
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-                Отмена
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Сохранение..." : "Сохранить"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </Modal.Body>
+          
+          <Modal.Footer>
+            <ModalButton 
+              type="button" 
+              variant="cancel"
+              onClick={() => onOpenChange(false)} 
+              disabled={isLoading}
+            >
+              Отмена
+            </ModalButton>
+            <ModalButton 
+              type="submit" 
+              variant="success"
+              loading={isLoading}
+              icon={<Save />}
+            >
+              {isLoading ? "Сохранение..." : "Сохранить"}
+            </ModalButton>
+          </Modal.Footer>
+        </form>
+      </Modal>
     </TooltipProvider>
   )
 }

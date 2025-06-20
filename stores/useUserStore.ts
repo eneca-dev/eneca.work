@@ -102,6 +102,7 @@ export const useUserStore = create<UserState>()(
             isAuthenticated: true,
             permissions: shouldPreserveRoleData ? currentState.permissions : []
           });
+        
         },
         
         clearUser: () => set({

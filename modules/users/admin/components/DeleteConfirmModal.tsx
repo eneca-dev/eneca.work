@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Trash2 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
+import { Modal, ModalButton } from '@/components/modals'
 
 interface DeleteConfirmModalProps {
   open: boolean
@@ -55,35 +55,41 @@ export default function DeleteConfirmModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <AlertTriangle className="h-5 w-5 text-destructive mr-2" />
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="sm">
+      <Modal.Header 
+        title={
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
             {title}
-          </DialogTitle>
-          <DialogDescription>
-            Вы уверены, что хотите удалить "{entityName}"? 
-            Это действие нельзя отменить.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Отмена
-          </Button>
-          <Button 
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={loading}
-          >
-            {loading ? "Удаление..." : "Удалить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+        }
+        onClose={() => onOpenChange(false)}
+      />
+      
+      <Modal.Body>
+        <p className="text-gray-600 dark:text-slate-400">
+          Вы уверены, что хотите удалить "{entityName}"? 
+          Это действие нельзя отменить.
+        </p>
+      </Modal.Body>
+      
+      <Modal.Footer>
+        <ModalButton 
+          variant="cancel"
+          onClick={() => onOpenChange(false)}
+          disabled={loading}
+        >
+          Отмена
+        </ModalButton>
+        <ModalButton 
+          variant="danger"
+          onClick={handleDelete}
+          loading={loading}
+          icon={<Trash2 />}
+        >
+          {loading ? 'Удаление...' : 'Удалить'}
+        </ModalButton>
+      </Modal.Footer>
+    </Modal>
   )
 } 

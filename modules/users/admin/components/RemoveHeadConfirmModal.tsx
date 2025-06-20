@@ -1,16 +1,10 @@
 "use client"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
+import { Modal, ModalButton } from '@/components/modals'
+import { UserMinus, AlertTriangle } from 'lucide-react'
 
 interface RemoveHeadConfirmModalProps {
   open: boolean
@@ -78,31 +72,39 @@ export default function RemoveHeadConfirmModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="sm">
+      <Modal.Header 
+        title={
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
             Убрать руководителя {type === "department" ? "отдела" : "команды"}
-          </DialogTitle>
-          <DialogDescription>
-            Вы уверены, что хотите убрать руководителя {type === "department" ? "отдела" : "команды"} <strong>"{entityName}"</strong>? 
-            Это действие нельзя отменить.
-          </DialogDescription>
-        </DialogHeader>
+          </div>
+        }
+      />
+      
+      <Modal.Body>
+        <p className="text-gray-600 dark:text-slate-400">
+          Вы уверены, что хотите убрать руководителя {type === "department" ? "отдела" : "команды"} <strong>"{entityName}"</strong>? 
+          Это действие нельзя отменить.
+        </p>
+      </Modal.Body>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отменить
-          </Button>
-          <Button 
-            variant="destructive"
-            onClick={handleRemoveHead} 
-            disabled={isRemoving}
-          >
-            {isRemoving ? "Удаление..." : "Убрать"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Modal.Footer>
+        <ModalButton 
+          variant="cancel"
+          onClick={() => onOpenChange(false)}
+        >
+          Отменить
+        </ModalButton>
+        <ModalButton 
+          variant="danger"
+          onClick={handleRemoveHead} 
+          loading={isRemoving}
+          icon={<UserMinus />}
+        >
+          {isRemoving ? 'Удаление...' : 'Убрать'}
+        </ModalButton>
+      </Modal.Footer>
+    </Modal>
   )
 } 

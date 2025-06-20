@@ -1,18 +1,12 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
+import { Modal, ModalButton } from '@/components/modals'
+import { UserCheck } from 'lucide-react'
 
 interface User {
   user_id: string
@@ -160,13 +154,11 @@ export default function DepartmentHeadModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>
-            {department.head_user_id ? "Сменить" : "Назначить"} руководителя отдела
-          </DialogTitle>
-          <DialogDescription>
+    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="xl">
+      <Modal.Header 
+        title={`${department.head_user_id ? "Сменить" : "Назначить"} руководителя отдела`}
+        subtitle={
+          <>
             Отдел: <strong>{department.department_name}</strong>
             {department.head_user_id && (
               <>
@@ -174,10 +166,12 @@ export default function DepartmentHeadModal({
                 Текущий руководитель: <strong>{department.head_full_name}</strong>
               </>
             )}
-          </DialogDescription>
-        </DialogHeader>
+          </>
+        }
+        onClose={() => onOpenChange(false)}
+      />
 
-        <div className="flex flex-col gap-4 flex-1 min-h-0">
+      <Modal.Body className="flex flex-col gap-4 max-h-[60vh]">
           <Input
             placeholder="Поиск по имени, email, отделу или должности..."
             value={search}
@@ -226,20 +220,25 @@ export default function DepartmentHeadModal({
               </div>
             )}
           </div>
-        </div>
+        </Modal.Body>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button 
-            onClick={handleAssignHead} 
-            disabled={!selectedUser || isSaving}
-          >
-            {isSaving ? "Назначение..." : "Назначить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Modal.Footer>
+        <ModalButton 
+          variant="cancel"
+          onClick={() => onOpenChange(false)}
+        >
+          Отмена
+        </ModalButton>
+        <ModalButton 
+          variant="success"
+          onClick={handleAssignHead} 
+          disabled={!selectedUser}
+          loading={isSaving}
+          icon={<UserCheck />}
+        >
+          {isSaving ? 'Назначение...' : 'Назначить'}
+        </ModalButton>
+      </Modal.Footer>
+    </Modal>
   )
 } 

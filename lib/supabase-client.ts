@@ -58,6 +58,7 @@ export interface SectionWithLoadings {
   client_id: string | null
   responsible_department_id: string | null
   responsible_department_name: string | null
+  section_responsible_id: string | null
   section_responsible_name: string | null
   section_responsible_avatar: string | null
   section_start_date: string | null
@@ -319,7 +320,8 @@ export async function fetchSectionsWithLoadings(
     // Добавляем фильтр по сотруднику, если он указан
     if (employeeId) {
       console.log("👤 Применяю фильтр по сотруднику:", employeeId)
-      query = query.eq("loading_responsible", employeeId)
+      // Показываем разделы где сотрудник либо ответственный за раздел, либо имеет активную загрузку
+      query = query.or(`section_responsible_id.eq.${employeeId},loading_responsible.eq.${employeeId}`)
     }
 
     // Фильтруем только активные загрузки или записи без загрузок
@@ -760,6 +762,58 @@ export async function updateSectionResponsible(
     return { success: true, data: data?.[0] }
   } catch (error) {
     console.error("updateSectionResponsible: неожиданная ошибка:", error)
+    return { success: false, error: "Произошла неожиданная ошибка" }
+  }
+}
+
+// Функция для обновления проекта
+export async function updateProject(
+  projectId: string,
+  updates: {
+    project_name?: string
+    project_description?: string | null
+    project_manager?: string | null
+    project_lead_engineer?: string | null
+    project_status?: 'active' | 'archive' | 'paused' | 'canceled'
+    client_id?: string | null
+  }
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    console.log("updateProject: начало обновления", { projectId, updates })
+
+    // Сначала проверим, существует ли проект
+    const { data: existingProject, error: checkError } = await supabase
+      .from("projects")
+      .select("project_id, project_name")
+      .eq("project_id", projectId)
+      .single()
+
+    if (checkError) {
+      console.error("updateProject: ошибка при проверке проекта:", checkError)
+      return { success: false, error: `Проект не найден: ${checkError.message}` }
+    }
+
+    console.log("updateProject: найден проект:", existingProject)
+
+    // Обновляем проект
+    const { data, error } = await supabase
+      .from("projects")
+      .update({
+        ...updates,
+        project_updated: new Date().toISOString(),
+      })
+      .eq("project_id", projectId)
+      .select()
+
+    if (error) {
+      console.error("updateProject: ошибка при обновлении:", error)
+      return { success: false, error: error.message }
+    }
+
+    console.log("updateProject: успешное обновление:", data)
+    return { success: true, data: data?.[0] }
+  } catch (error) {
+    console.error("updateProject: неожиданная ошибка:", error)
     return { success: false, error: "Произошла неожиданная ошибка" }
   }
 }
