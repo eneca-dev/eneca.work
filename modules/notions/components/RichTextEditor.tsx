@@ -3,34 +3,27 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { Save, Bold, Italic, Underline, List, Type, Hash } from 'lucide-react'
+import { Save, Bold, Italic, Underline, List, Hash } from 'lucide-react'
 import { combineNotionContent, markdownToHtml, htmlToMarkdown } from '../utils'
 import React from 'react'
 
-interface MarkdownEditorProps {
+interface RichTextEditorProps {
   initialTitle?: string
   initialValue: string
   onSave: (content: string) => void
   onCancel: () => void
-  placeholder?: string
   titlePlaceholder?: string
-  autoFocus?: boolean
   showTitle?: boolean
-  startInPreview?: boolean
 }
 
-export function MarkdownEditor({ 
+export function RichTextEditor({ 
   initialTitle = "",
   initialValue, 
   onSave, 
   onCancel, 
-  placeholder = "Введите текст заметки...",
   titlePlaceholder = "Заголовок заметки",
-  autoFocus = true,
-  showTitle = true,
-  startInPreview = false
-}: MarkdownEditorProps) {
+  showTitle = true
+}: RichTextEditorProps) {
   const [title, setTitle] = useState(initialTitle)
   const titleRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
@@ -40,19 +33,22 @@ export function MarkdownEditor({
   // Инициализация содержимого редактора
   useEffect(() => {
     if (editorRef.current && initialValue) {
-      editorRef.current.innerHTML = markdownToHtml(initialValue)
+      console.log('Initializing editor with:', initialValue)
+      const htmlContent = markdownToHtml(initialValue)
+      console.log('Converted to HTML:', htmlContent)
+      
+      // Очищаем редактор и вставляем содержимое
+      editorRef.current.innerHTML = htmlContent
     }
-  }, [])
+  }, [initialValue])
 
   useEffect(() => {
-    if (autoFocus) {
-      if (showTitle && titleRef.current && !title.trim()) {
-        titleRef.current.focus()
-      } else if (editorRef.current) {
-        editorRef.current.focus()
-      }
+    if (showTitle && titleRef.current && !title.trim()) {
+      titleRef.current.focus()
+    } else if (editorRef.current) {
+      editorRef.current.focus()
     }
-  }, [autoFocus, showTitle])
+  }, [showTitle, title])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -66,17 +62,14 @@ export function MarkdownEditor({
           handleSave()
           break
         case 'b':
-        case 'и':
           e.preventDefault()
           formatText('bold')
           break
         case 'i':
-        case 'ш':
           e.preventDefault()
           formatText('italic')
           break
         case 'u':
-        case 'г':
           e.preventDefault()
           formatText('underline')
           break
@@ -131,7 +124,7 @@ export function MarkdownEditor({
           } else if (listElement.classList.contains('checkbox-line')) {
             const newCheckbox = document.createElement('div')
             newCheckbox.className = 'checkbox-line'
-            newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> '
+            newCheckbox.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
             
             listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
             
@@ -154,8 +147,6 @@ export function MarkdownEditor({
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
 
-    const range = selection.getRangeAt(0)
-    
     switch (command) {
       case 'bold':
         document.execCommand('bold', false)
@@ -214,7 +205,7 @@ export function MarkdownEditor({
 
     const checkboxDiv = document.createElement('div')
     checkboxDiv.className = 'checkbox-line'
-    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> '
+    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
@@ -245,7 +236,7 @@ export function MarkdownEditor({
 
   const handleBlur = () => {
     setTimeout(() => {
-      if (document.activeElement?.closest('.markdown-editor-container')) {
+      if (document.activeElement?.closest('.rich-editor-container')) {
         return
       }
       
@@ -263,67 +254,37 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className="markdown-editor-container space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="flex-1" />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onCancel}
-        >
-          Отмена
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleSave}
-          disabled={!((editorRef.current?.textContent?.trim()) || title.trim())}
-        >
-          <Save className="h-4 w-4 mr-1" />
-          Сохранить
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        {showTitle && (
-          <Input
-            ref={titleRef}
-            value={title}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-            placeholder={titlePlaceholder}
-            className="font-medium"
-          />
-        )}
-        
+    <div className="rich-editor-container space-y-4 h-full flex flex-col">
+      {/* Панель управления */}
+      <div className="flex items-center justify-between gap-2">
         {/* Кнопки форматирования */}
-        <div className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-gray-800 rounded-md border">
+        <div className="flex items-center gap-1">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('bold')}
-            className="h-7 px-2"
-            title="Жирный текст (Ctrl+B)"
+            className="h-8 px-3"
+            title="Жирный (Ctrl+B)"
           >
             <Bold className="h-4 w-4" />
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('italic')}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Курсив (Ctrl+I)"
           >
             <Italic className="h-4 w-4" />
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('underline')}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Подчеркнутый (Ctrl+U)"
           >
             <Underline className="h-4 w-4" />
@@ -331,10 +292,10 @@ export function MarkdownEditor({
           <div className="w-px h-6 bg-gray-300 mx-1" />
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('h1')}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Заголовок 1 (Ctrl+1)"
           >
             <Hash className="h-4 w-4" />
@@ -342,10 +303,10 @@ export function MarkdownEditor({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('h2')}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Заголовок 2 (Ctrl+2)"
           >
             <Hash className="h-4 w-4" />
@@ -353,10 +314,10 @@ export function MarkdownEditor({
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => formatText('h3')}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Заголовок 3 (Ctrl+3)"
           >
             <Hash className="h-4 w-4" />
@@ -365,50 +326,85 @@ export function MarkdownEditor({
           <div className="w-px h-6 bg-gray-300 mx-1" />
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={insertBulletList}
-            className="h-7 px-2"
-            title="Буллет-лист"
+            className="h-8 px-3"
+            title="Список"
           >
             <List className="h-4 w-4" />
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={insertCheckbox}
-            className="h-7 px-2"
+            className="h-8 px-3"
             title="Чекбокс"
           >
             ☐
           </Button>
         </div>
-        
-        <Card className="p-4 min-h-[120px]">
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+          >
+            Закрыть
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={!((editorRef.current?.textContent?.trim()) || title.trim())}
+          >
+            <Save className="h-4 w-4 mr-1" />
+            Сохранить
+          </Button>
+        </div>
+      </div>
+
+      {/* Редактор */}
+      <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900 border rounded-lg">
+        <div className="p-6 h-full overflow-y-auto">
+          {showTitle && (
+            <Input
+              ref={titleRef}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={titlePlaceholder}
+              className="font-bold text-2xl border-none shadow-none px-0 mb-6 bg-transparent"
+              style={{ fontSize: '28px' }}
+            />
+          )}
+          
+          {/* WYSIWYG редактор */}
           <div
             ref={editorRef}
             contentEditable
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            className="outline-none min-h-[80px] prose prose-sm max-w-none
+            className="outline-none min-h-[300px] prose prose-sm max-w-none dark:prose-invert
                      [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
                      [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
                      [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
                      [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2  
                      [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2"
             suppressContentEditableWarning={true}
-            data-placeholder={placeholder}
+            data-placeholder="Начните печатать... Используйте кнопки выше для форматирования или горячие клавиши"
             style={{
-              minHeight: '80px',
+              fontSize: '14px',
+              lineHeight: '1.5'
             }}
           />
-        </Card>
-        
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый)</p>
-          <p>Ctrl+1,2,3 (заголовки), Ctrl+Enter (сохранить), Esc (отмена)</p>
         </div>
+      </div>
+
+      <div className="text-xs text-gray-500">
+        <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый), Ctrl+1,2,3 (заголовки), Ctrl+Enter (сохранить), Esc (закрыть)</p>
       </div>
     </div>
   )

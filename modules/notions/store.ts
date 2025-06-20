@@ -246,5 +246,44 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
       console.error('Error marking notions as done:', error)
       toast.error('Ошибка при отметке заметок как выполненных')
     }
+  },
+
+  markNotionsAsUndone: async (ids: string[]) => {
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('notions')
+        .update({ 
+          notion_done: false,
+          notion_updated_at: new Date().toISOString()
+        })
+        .in('notion_id', ids)
+
+      if (error) throw error
+
+      // Обновляем заметки в локальном состоянии и пересортируем
+      const currentNotions = get().notions
+      const updatedNotions = currentNotions.map(notion =>
+        ids.includes(notion.notion_id) 
+          ? { ...notion, notion_done: false, notion_updated_at: new Date().toISOString() }
+          : notion
+      )
+      
+      // Сортируем обновленный список
+      const sortedNotions = updatedNotions.sort((a, b) => {
+        if (a.notion_done !== b.notion_done) {
+          return a.notion_done ? 1 : -1
+        }
+        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+      })
+      
+      set({ notions: sortedNotions, selectedNotions: [] })
+      
+      toast.success(`Отмечено как невыполненное: ${ids.length} заметок`)
+    } catch (error) {
+      console.error('Error marking notions as undone:', error)
+      toast.error('Ошибка при отметке заметок как невыполненных')
+    }
   }
 })) 

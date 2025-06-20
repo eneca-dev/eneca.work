@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { MarkdownEditor } from './MarkdownEditor'
+import { RichTextEditor } from './RichTextEditor'
 
 interface NewNoteModalProps {
   open: boolean
@@ -38,13 +38,12 @@ export function NewNoteModal({ open, onOpenChange, onSave }: NewNoteModalProps) 
           <DialogTitle>Новая заметка</DialogTitle>
         </DialogHeader>
         
-        <div className="mt-4">
-          <MarkdownEditor
+        <div className="mt-4 h-[500px]">
+          <RichTextEditor
             initialValue=""
             onSave={handleSave}
             onCancel={handleCancel}
-            placeholder="Введите текст заметки. Поддерживается Markdown форматирование..."
-            autoFocus={true}
+            showTitle={true}
           />
         </div>
       </DialogContent>

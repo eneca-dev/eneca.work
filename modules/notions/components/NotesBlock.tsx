@@ -9,9 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { NoteCard } from './NoteCard'
 import { NewNoteModal } from './NewNoteModal'
 import { BulkDeleteConfirm } from './BulkDeleteConfirm'
+import { RichTextEditor } from './RichTextEditor'
 import { useNotionsStore } from '../store'
-import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check } from 'lucide-react'
+import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { parseNotionContent } from '../utils'
+import type { Notion } from '../types'
 
 export function NotesBlock() {
   const {
@@ -29,11 +32,13 @@ export function NotesBlock() {
     setSearchQuery,
     selectAllNotions,
     clearSelectedNotions,
-    markNotionsAsDone
+    markNotionsAsDone,
+    markNotionsAsUndone
   } = useNotionsStore()
 
   const [showNewNoteModal, setShowNewNoteModal] = useState(false)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
 
   // Загружаем заметки при монтировании компонента
   useEffect(() => {
@@ -47,6 +52,16 @@ export function NotesBlock() {
   const handleUpdateNote = async (id: string, content: string) => {
     await updateNotion(id, { notion_content: content })
   }
+
+  // Обновляем fullViewNotion когда изменяется список заметок
+  useEffect(() => {
+    if (fullViewNotion) {
+      const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
+      if (updatedNotion) {
+        setFullViewNotion(updatedNotion)
+      }
+    }
+  }, [notions, fullViewNotion])
 
   const handleToggleSelect = (id: string) => {
     const newSelected = selectedNotions.includes(id)
@@ -69,6 +84,12 @@ export function NotesBlock() {
     }
   }
 
+  const handleMarkAsUndone = async () => {
+    if (selectedNotions.length > 0) {
+      await markNotionsAsUndone(selectedNotions)
+    }
+  }
+
   const handleBulkDelete = async () => {
     if (selectedNotions.length > 0) {
       await deleteNotions(selectedNotions)
@@ -76,12 +97,90 @@ export function NotesBlock() {
     }
   }
 
+  const handleOpenFullView = (notion: Notion) => {
+    setFullViewNotion(notion)
+  }
+
+  const handleCloseFullView = () => {
+    setFullViewNotion(null)
+  }
+
+  const handleSaveFullView = (content: string) => {
+    if (fullViewNotion) {
+      handleUpdateNote(fullViewNotion.notion_id, content)
+    }
+  }
+
   const selectedNotionsData = notions.filter(notion => 
     selectedNotions.includes(notion.notion_id)
   )
 
+  // Считаем количество выполненных и невыполненных среди выбранных
+  const selectedDoneCount = selectedNotionsData.filter(notion => notion.notion_done).length
+  const selectedNotDoneCount = selectedNotionsData.length - selectedDoneCount
+  const shouldShowMarkAsUndone = selectedDoneCount > selectedNotDoneCount
+
   const completedCount = notions.filter(notion => notion.notion_done).length
   const totalCount = notions.length
+
+  // Если открыта полная версия заметки
+  if (fullViewNotion) {
+    const parsed = parseNotionContent(fullViewNotion)
+    
+    return (
+      <Card className="p-6 h-full flex flex-col">
+        {/* Заголовок с кнопкой назад */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCloseFullView}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Назад к списку
+            </Button>
+            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
+            <h2 className="text-xl font-semibold">
+              {parsed.title || 'Заметка без заголовка'}
+            </h2>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* Кнопка отметки выполнения */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await toggleNotionDone(fullViewNotion.notion_id)
+                // Обновляем локальное состояние fullViewNotion
+                setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
+              }}
+              className="gap-2"
+            >
+              <Check className={cn(
+                "h-4 w-4",
+                fullViewNotion.notion_done ? "text-green-600" : "text-gray-400"
+              )} />
+              {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Содержимое заметки */}
+        <div className="flex-1 overflow-hidden">
+          <RichTextEditor
+            initialTitle={parsed.title}
+            initialValue={parsed.content}
+            onSave={handleSaveFullView}
+            onCancel={handleCloseFullView}
+            showTitle={true}
+          />
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card className="p-6">
@@ -139,15 +238,15 @@ export function NotesBlock() {
               {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
             </Button>
 
-            {/* Отметить выполненным */}
+            {/* Отметить выполненным/невыполненным */}
             <Button
               variant="outline"
               size="sm"
-              onClick={handleMarkAsDone}
+              onClick={shouldShowMarkAsUndone ? handleMarkAsUndone : handleMarkAsDone}
               className="gap-2"
             >
               <Check className="h-4 w-4" />
-              Отметить выполненным
+              {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
             </Button>
 
             {/* Удалить выделенное */}
@@ -195,6 +294,7 @@ export function NotesBlock() {
               onUpdate={handleUpdateNote}
               onToggleDone={toggleNotionDone}
               onDelete={deleteNotion}
+              onOpenFullView={handleOpenFullView}
               showSelection={true}
             />
           ))

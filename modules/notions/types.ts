@@ -47,4 +47,5 @@ export interface NotionsMutations {
   selectAllNotions: () => void
   clearSelectedNotions: () => void
   markNotionsAsDone: (ids: string[]) => Promise<void>
+  markNotionsAsUndone: (ids: string[]) => Promise<void>
 } 
