@@ -12,7 +12,7 @@ interface BulkDeleteConfirmProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedNotions: Notion[]
-  onConfirm: () => void
+  onConfirm: () => Promise<void>
 }
 
 export function BulkDeleteConfirm({ 

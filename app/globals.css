@@ -135,14 +135,14 @@
   /* ContentEditable placeholder */
 [contenteditable]:empty:before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
   font-style: italic;
   pointer-events: none;
 }
 
 [contenteditable]:focus:empty:before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: hsl(var(--muted-foreground));
   font-style: italic;
   pointer-events: none;
 }
@@ -235,7 +235,7 @@
   }
 
   .wysiwyg-editor .bullet {
-    color: #666;
+    color: hsl(var(--muted-foreground));
     font-weight: bold;
     margin-top: 2px;
     user-select: none;
@@ -249,20 +249,20 @@
   }
 
   .wysiwyg-editor .checkbox-unchecked {
-    color: #d1d5db;
+    color: hsl(var(--border));
     font-size: 16px;
     user-select: none;
   }
 
   .wysiwyg-editor .checkbox-checked {
-    color: #10b981;
+    color: hsl(var(--primary));
     font-size: 16px;
     user-select: none;
   }
 
   .wysiwyg-editor .completed-text {
     text-decoration: line-through;
-    color: #6b7280;
+    color: hsl(var(--muted-foreground));
   }
 
   .wysiwyg-editor strong {

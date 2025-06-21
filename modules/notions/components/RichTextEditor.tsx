@@ -43,12 +43,10 @@ export function RichTextEditor({
   }, [initialValue])
 
   useEffect(() => {
-    if (showTitle && titleRef.current && !title.trim()) {
+    if (showTitle && titleRef.current && !title.trim() && !document.activeElement?.closest('.rich-editor-container')) {
       titleRef.current.focus()
-    } else if (editorRef.current) {
-      editorRef.current.focus()
     }
-  }, [showTitle, title])
+  }, [showTitle])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -109,33 +107,75 @@ export function RichTextEditor({
           e.preventDefault()
           
           if (listElement.classList.contains('bullet-line')) {
-            const newBullet = document.createElement('div')
-            newBullet.className = 'bullet-line'
-            newBullet.innerHTML = '• '
+            // Проверяем, пустой ли буллет (содержит только • и пробел)
+            const textContent = listElement.textContent?.trim() || ''
+            const isBulletEmpty = textContent === '•' || textContent === ''
             
-            listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
-            
-            // Устанавливаем курсор
-            const newRange = document.createRange()
-            newRange.setStart(newBullet, 1)
-            newRange.collapse(true)
-            selection.removeAllRanges()
-            selection.addRange(newRange)
-          } else if (listElement.classList.contains('checkbox-line')) {
-            const newCheckbox = document.createElement('div')
-            newCheckbox.className = 'checkbox-line'
-            newCheckbox.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
-            
-            listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
-            
-            // Устанавливаем курсор после чекбокса
-            const textNode = newCheckbox.childNodes[1]
-            if (textNode) {
+            if (isBulletEmpty) {
+              // Если буллет пустой, создаем обычную строку
+              const newDiv = document.createElement('div')
+              newDiv.innerHTML = '<br>'
+              
+              listElement.parentNode?.insertBefore(newDiv, listElement.nextSibling)
+              listElement.remove()
+              
+              // Устанавливаем курсор в начало новой строки
               const newRange = document.createRange()
-              newRange.setStart(textNode, 1)
+              newRange.setStart(newDiv, 0)
               newRange.collapse(true)
               selection.removeAllRanges()
               selection.addRange(newRange)
+            } else {
+              // Если буллет не пустой, создаем новый буллет
+              const newBullet = document.createElement('div')
+              newBullet.className = 'bullet-line'
+              newBullet.innerHTML = '• &nbsp;'
+              
+              listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
+              
+              // Устанавливаем курсор в конец строки буллета
+              const newRange = document.createRange()
+              newRange.selectNodeContents(newBullet)
+              newRange.collapse(false)
+              selection.removeAllRanges()
+              selection.addRange(newRange)
+            }
+          } else if (listElement.classList.contains('checkbox-line')) {
+            // Проверяем, пустой ли чекбокс (содержит только чекбокс и пробел)
+            const textContent = listElement.textContent?.trim() || ''
+            const isCheckboxEmpty = textContent === '' || textContent === ' '
+            
+            if (isCheckboxEmpty) {
+              // Если чекбокс пустой, создаем обычную строку
+              const newDiv = document.createElement('div')
+              newDiv.innerHTML = '<br>'
+              
+              listElement.parentNode?.insertBefore(newDiv, listElement.nextSibling)
+              listElement.remove()
+              
+              // Устанавливаем курсор в начало новой строки
+              const newRange = document.createRange()
+              newRange.setStart(newDiv, 0)
+              newRange.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(newRange)
+            } else {
+              // Если чекбокс не пустой, создаем новый чекбокс
+              const newCheckbox = document.createElement('div')
+              newCheckbox.className = 'checkbox-line'
+              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
+              
+              listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
+              
+              // Устанавливаем курсор после чекбокса
+              const textNode = newCheckbox.childNodes[1]
+              if (textNode) {
+                const newRange = document.createRange()
+                newRange.setStart(textNode, 1)
+                newRange.collapse(true)
+                selection.removeAllRanges()
+                selection.addRange(newRange)
+              }
             }
           }
         }
@@ -173,8 +213,6 @@ export function RichTextEditor({
         }, 0)
         break
     }
-    
-    editorRef.current?.focus()
   }
 
   const insertBulletList = () => {
@@ -183,20 +221,18 @@ export function RichTextEditor({
 
     const bulletDiv = document.createElement('div')
     bulletDiv.className = 'bullet-line'
-    bulletDiv.innerHTML = '• '
+    bulletDiv.innerHTML = '• &nbsp;'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(bulletDiv)
     
-    // Устанавливаем курсор после буллета
+    // Устанавливаем курсор в конец строки буллета
     const newRange = document.createRange()
-    newRange.setStart(bulletDiv, 1)
-    newRange.collapse(true)
+    newRange.selectNodeContents(bulletDiv)
+    newRange.collapse(false)
     selection.removeAllRanges()
     selection.addRange(newRange)
-    
-    editorRef.current?.focus()
   }
 
   const insertCheckbox = () => {
@@ -220,8 +256,6 @@ export function RichTextEditor({
       selection.removeAllRanges()
       selection.addRange(newRange)
     }
-    
-    editorRef.current?.focus()
   }
 
   const handleSave = () => {

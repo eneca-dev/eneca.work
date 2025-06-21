@@ -6,7 +6,20 @@ import type { Notion, NotionInput, NotionUpdate, NotionsFilter, NotionsState, No
 
 type NotionsStore = NotionsState & NotionsMutations
 
-export const useNotionsStore = create<NotionsStore>((set, get) => ({
+// Helper function to sort notions: undone first, then by creation date descending
+const sortNotions = (notions: Notion[]): Notion[] => {
+  return [...notions].sort((a, b) => {
+    if (a.notion_done !== b.notion_done) {
+      return a.notion_done ? 1 : -1
+    }
+    return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+  })
+}
+
+export const useNotionsStore = create<NotionsStore>((set, get) => {
+  let searchTimeoutId: NodeJS.Timeout | null = null
+
+  return {
   // State
   notions: [],
   selectedNotions: [],
@@ -175,12 +188,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
     
     // Пересортируем список после изменения статуса
     const currentNotions = get().notions
-    const sortedNotions = [...currentNotions].sort((a, b) => {
-      if (a.notion_done !== b.notion_done) {
-        return a.notion_done ? 1 : -1
-      }
-      return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
-    })
+    const sortedNotions = sortNotions(currentNotions)
     
     set({ notions: sortedNotions })
   },
@@ -191,9 +199,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
 
   setSearchQuery: (query: string) => {
     set({ searchQuery: query })
-    // Автоматически применяем поиск с debounce
+    
+    // Очищаем предыдущий таймаут
+    if (searchTimeoutId) {
+      clearTimeout(searchTimeoutId)
+    }
+    
+    // Устанавливаем новый таймаут с debounce
     const fetchNotions = get().fetchNotions
-    setTimeout(() => {
+    searchTimeoutId = setTimeout(() => {
       if (get().searchQuery === query) {
         fetchNotions({ search: query || undefined })
       }
@@ -232,12 +246,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
       )
       
       // Сортируем обновленный список
-      const sortedNotions = updatedNotions.sort((a, b) => {
-        if (a.notion_done !== b.notion_done) {
-          return a.notion_done ? 1 : -1
-        }
-        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
-      })
+      const sortedNotions = sortNotions(updatedNotions)
       
       set({ notions: sortedNotions, selectedNotions: [] })
       
@@ -271,12 +280,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
       )
       
       // Сортируем обновленный список
-      const sortedNotions = updatedNotions.sort((a, b) => {
-        if (a.notion_done !== b.notion_done) {
-          return a.notion_done ? 1 : -1
-        }
-        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
-      })
+      const sortedNotions = sortNotions(updatedNotions)
       
       set({ notions: sortedNotions, selectedNotions: [] })
       
@@ -286,4 +290,5 @@ export const useNotionsStore = create<NotionsStore>((set, get) => ({
       toast.error('Ошибка при отметке заметок как невыполненных')
     }
   }
-})) 
+  }
+})

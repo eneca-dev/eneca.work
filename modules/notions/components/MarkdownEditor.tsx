@@ -34,25 +34,77 @@ export function MarkdownEditor({
   const [title, setTitle] = useState(initialTitle)
   const titleRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<MutationObserver | null>(null)
 
-
-
-  // Инициализация содержимого редактора
+  // Инициализация содержимого редактора и MutationObserver
   useEffect(() => {
     if (editorRef.current && initialValue) {
       editorRef.current.innerHTML = markdownToHtml(initialValue)
+    }
+
+    // Настройка MutationObserver для отслеживания изменений в редакторе
+    if (editorRef.current) {
+      observerRef.current = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'childList') {
+            // Проверяем добавленные узлы
+            mutation.addedNodes.forEach((node) => {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as Element
+                applyHeaderClass(element)
+              }
+            })
+          } else if (mutation.type === 'characterData' && mutation.target.parentElement) {
+            // Проверяем изменения текста в заголовках
+            applyHeaderClass(mutation.target.parentElement)
+          }
+        })
+      })
+
+      observerRef.current.observe(editorRef.current, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      })
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
     }
   }, [])
 
   useEffect(() => {
     if (autoFocus) {
-      if (showTitle && titleRef.current && !title.trim()) {
-        titleRef.current.focus()
-      } else if (editorRef.current) {
-        editorRef.current.focus()
-      }
+      // Даем время на рендер и затем фокусируемся
+      setTimeout(() => {
+        if (showTitle && titleRef.current && !title.trim()) {
+          titleRef.current.focus()
+        } else if (editorRef.current) {
+          editorRef.current.focus()
+        }
+      }, 100)
     }
   }, [autoFocus, showTitle])
+
+  // Функция для применения классов к заголовкам
+  const applyHeaderClass = (element: Element) => {
+    if (['H1', 'H2', 'H3'].includes(element.tagName)) {
+      const headerClass = element.tagName === 'H1' ? 'text-2xl font-bold mt-4 mb-2' :
+                         element.tagName === 'H2' ? 'text-xl font-bold mt-4 mb-2' :
+                         'text-lg font-bold mt-4 mb-2'
+      element.className = headerClass
+    }
+    
+    // Также проверяем дочерние элементы
+    element.querySelectorAll('h1, h2, h3').forEach(header => {
+      const headerClass = header.tagName === 'H1' ? 'text-2xl font-bold mt-4 mb-2' :
+                         header.tagName === 'H2' ? 'text-xl font-bold mt-4 mb-2' :
+                         'text-lg font-bold mt-4 mb-2'
+      header.className = headerClass
+    })
+  }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey) {
@@ -99,52 +151,97 @@ export function MarkdownEditor({
       onCancel()
     }
 
-    // Обработка Enter для списков
+    // Обработка Enter для списков и обычного текста
     if (e.key === 'Enter') {
       const selection = window.getSelection()
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0)
-        const container = range.commonAncestorContainer
+        let container = range.commonAncestorContainer
         
-        // Проверяем, находимся ли в списке
-        let listElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container as Element
-        while (listElement && !listElement.classList.contains('bullet-line') && !listElement.classList.contains('checkbox-line')) {
-          listElement = listElement.parentElement
+        // Поднимаемся до элемента
+        if (container.nodeType === Node.TEXT_NODE) {
+          container = container.parentElement!
         }
         
-        if (listElement) {
+        // Ищем родительский bullet-line или checkbox-line
+        let listElement = container as Element
+        let depth = 0
+        const maxDepth = 10
+        while (listElement && !listElement.classList.contains('bullet-line') && !listElement.classList.contains('checkbox-line') && depth < maxDepth) {
+          listElement = listElement.parentElement as Element
+          depth++
+        }
+        
+        if (listElement && (listElement.classList.contains('bullet-line') || listElement.classList.contains('checkbox-line'))) {
           e.preventDefault()
           
-          if (listElement.classList.contains('bullet-line')) {
-            const newBullet = document.createElement('div')
-            newBullet.className = 'bullet-line'
-            newBullet.innerHTML = '• '
+          // Проверяем, пустая ли строка (только bullet или только checkbox + пробел)
+          const textContent = listElement.textContent?.trim() || ''
+          const isBulletEmpty = listElement.classList.contains('bullet-line') && (textContent === '•' || textContent === '')
+          const isCheckboxEmpty = listElement.classList.contains('checkbox-line') && textContent === ''
+          
+          if (isBulletEmpty || isCheckboxEmpty) {
+            // Если строка пустая, создаем обычную строку и удаляем текущую
+            const newDiv = document.createElement('div')
+            newDiv.innerHTML = '<br>'
             
-            listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
+            listElement.parentNode?.insertBefore(newDiv, listElement.nextSibling)
+            listElement.remove()
             
-            // Устанавливаем курсор
+            // Устанавливаем курсор в новую строку
             const newRange = document.createRange()
-            newRange.setStart(newBullet, 1)
+            newRange.setStart(newDiv, 0)
             newRange.collapse(true)
             selection.removeAllRanges()
             selection.addRange(newRange)
-          } else if (listElement.classList.contains('checkbox-line')) {
-            const newCheckbox = document.createElement('div')
-            newCheckbox.className = 'checkbox-line'
-            newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> '
-            
-            listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
-            
-            // Устанавливаем курсор после чекбокса
-            const textNode = newCheckbox.childNodes[1]
-            if (textNode) {
+          } else {
+            // Создаем новый элемент списка
+            if (listElement.classList.contains('bullet-line')) {
+              const newBullet = document.createElement('div')
+              newBullet.className = 'bullet-line'
+              newBullet.innerHTML = '• &nbsp;'
+              
+              listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
+              
+              // Устанавливаем курсор после буллета и пробела
               const newRange = document.createRange()
-              newRange.setStart(textNode, 1)
+              newRange.setStart(newBullet.childNodes[1] || newBullet, newBullet.childNodes[1] ? 1 : 0)
               newRange.collapse(true)
               selection.removeAllRanges()
               selection.addRange(newRange)
+            } else if (listElement.classList.contains('checkbox-line')) {
+              const newCheckbox = document.createElement('div')
+              newCheckbox.className = 'checkbox-line'
+              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> &nbsp;'
+              
+              listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
+              
+              // Устанавливаем курсор после чекбокса и пробела
+              const textNode = newCheckbox.childNodes[1]
+              if (textNode) {
+                const newRange = document.createRange()
+                newRange.setStart(textNode, 1)
+                newRange.collapse(true)
+                selection.removeAllRanges()
+                selection.addRange(newRange)
+              }
             }
           }
+        } else {
+          // Обычный перенос строки - не создаем bullet list
+          e.preventDefault()
+          const newDiv = document.createElement('div')
+          newDiv.innerHTML = '<br>'
+          
+          range.deleteContents()
+          range.insertNode(newDiv)
+          
+          // Устанавливаем курсор в новую строку
+          const newRange = document.createRange()
+          newRange.setStart(newDiv, 0)
+          newRange.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(newRange)
         }
       }
     }
@@ -169,17 +266,8 @@ export function MarkdownEditor({
       case 'h1':
       case 'h2':
       case 'h3':
-        const headerClass = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2' :
-                           command === 'h2' ? 'text-xl font-bold mt-4 mb-2' :
-                           'text-lg font-bold mt-4 mb-2'
         document.execCommand('formatBlock', false, command)
-        // Добавляем класс к созданному заголовку
-        setTimeout(() => {
-          const element = selection.anchorNode?.parentElement
-          if (element && ['H1', 'H2', 'H3'].includes(element.tagName)) {
-            element.className = headerClass
-          }
-        }, 0)
+        // Классы будут применены автоматически через MutationObserver
         break
     }
     
@@ -192,15 +280,15 @@ export function MarkdownEditor({
 
     const bulletDiv = document.createElement('div')
     bulletDiv.className = 'bullet-line'
-    bulletDiv.innerHTML = '• '
+    bulletDiv.innerHTML = '• &nbsp;'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(bulletDiv)
     
-    // Устанавливаем курсор после буллета
+    // Устанавливаем курсор после буллета и пробела
     const newRange = document.createRange()
-    newRange.setStart(bulletDiv, 1)
+    newRange.setStart(bulletDiv.childNodes[1] || bulletDiv, bulletDiv.childNodes[1] ? 1 : 0)
     newRange.collapse(true)
     selection.removeAllRanges()
     selection.addRange(newRange)
@@ -214,13 +302,13 @@ export function MarkdownEditor({
 
     const checkboxDiv = document.createElement('div')
     checkboxDiv.className = 'checkbox-line'
-    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> '
+    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> &nbsp;'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(checkboxDiv)
     
-    // Устанавливаем курсор после чекбокса
+    // Устанавливаем курсор после чекбокса и пробела
     const textNode = checkboxDiv.childNodes[1]
     if (textNode) {
       const newRange = document.createRange()
@@ -262,6 +350,17 @@ export function MarkdownEditor({
     }, 100)
   }
 
+  const handleTitleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Предотвращаем переход в editor при обычном вводе
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      editorRef.current?.focus()
+    } else if (e.key === 'Escape') {
+      onCancel()
+    }
+    // Не блокируем другие клавиши для нормального ввода в title
+  }
+
   return (
     <div className="markdown-editor-container space-y-3">
       <div className="flex items-center gap-2">
@@ -291,6 +390,7 @@ export function MarkdownEditor({
             ref={titleRef}
             value={title}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+            onKeyDown={handleTitleKeyDown}
             placeholder={titlePlaceholder}
             className="font-medium"
           />
