@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -7,6 +8,7 @@ import { Check, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { parseNotionContent, markdownToHtml } from '../utils'
+import { SingleDeleteConfirm } from './SingleDeleteConfirm'
 import type { Notion } from '../types'
 
 interface NoteCardProps {
@@ -30,13 +32,14 @@ export function NoteCard({
   onOpenFullView,
   showSelection = false
 }: NoteCardProps) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const handleDelete = () => {
-    if (window.confirm('Вы действительно хотите удалить эту заметку?')) {
-      if (window.confirm('Подтвердите удаление. Это действие нельзя отменить.')) {
-        onDelete(notion.notion_id)
-      }
-    }
+    setShowDeleteModal(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    onDelete(notion.notion_id)
   }
 
   const formatDate = (dateString: string) => {
@@ -162,6 +165,14 @@ export function NoteCard({
           </p>
         </div>
       </div>
+
+      {/* Диалог подтверждения удаления */}
+      <SingleDeleteConfirm
+        open={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        notion={notion}
+        onConfirm={handleConfirmDelete}
+      />
     </Card>
   )
 } 

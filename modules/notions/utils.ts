@@ -104,6 +104,14 @@ export function markdownToHtml(text: string): string {
       // Буллет-лист
       const text = line.trim().replace(/^- /, '')
       htmlLines.push(`<div class="bullet-line">• ${text}</div>`)
+    } else if (/^\d+\. (.+)$/.test(line.trim())) {
+      // Нумерованный список
+      const match = line.trim().match(/^(\d+)\. (.+)$/)
+      if (match) {
+        const number = match[1]
+        const text = match[2]
+        htmlLines.push(`<div class="numbered-line">${number}. ${text}</div>`)
+      }
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
       let formattedLine = line.trim()
@@ -201,7 +209,7 @@ function normalizeContentEditableHTML(html: string): string {
     
     // Сохраняем только наши специальные классы
     const classList = element.classList
-    const keepClasses = ['bullet-line', 'checkbox-line', 'header-placeholder']
+    const keepClasses = ['bullet-line', 'checkbox-line', 'numbered-line', 'header-placeholder']
     const classesToKeep = Array.from(classList).filter(cls => keepClasses.includes(cls))
     element.className = classesToKeep.join(' ')
     
@@ -303,6 +311,9 @@ export function htmlToMarkdown(html: string): string {
             // Убираем символ буллета, если он есть
             const cleanContent = content.replace(/^•\s*/, '').trim()
             return `- ${cleanContent}`
+          } else if (element.classList.contains('numbered-line')) {
+            // Обрабатываем нумерованный список
+            return content
           } else if (element.classList.contains('checkbox-line')) {
             // Обрабатываем чекбоксы
             const checkbox = element.querySelector('input[type="checkbox"]')
@@ -328,6 +339,35 @@ export function htmlToMarkdown(html: string): string {
               return content
             }
           }
+        case 'ol':
+          // Нумерованный список - обрабатываем li элементы
+          const olItems: string[] = []
+          let itemIndex = 1
+          for (const child of Array.from(element.childNodes)) {
+            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
+              const itemContent = processNode(child).trim()
+              if (itemContent) {
+                olItems.push(`${itemIndex}. ${itemContent}`)
+                itemIndex++
+              }
+            }
+          }
+          return olItems.join('\n')
+        case 'ul':
+          // Маркированный список - обрабатываем li элементы
+          const ulItems: string[] = []
+          for (const child of Array.from(element.childNodes)) {
+            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
+              const itemContent = processNode(child).trim()
+              if (itemContent) {
+                ulItems.push(`- ${itemContent}`)
+              }
+            }
+          }
+          return ulItems.join('\n')
+        case 'li':
+          // Элемент списка - если не обработан выше, возвращаем только содержимое
+          return content
         case 'span':
           return content
         case 'input':
