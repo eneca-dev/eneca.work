@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react'
+import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Save, Bold, Italic, Underline, List, Hash } from 'lucide-react'
+import { Bold, Italic, Underline, List, Hash } from 'lucide-react'
 import { combineNotionContent, markdownToHtml, htmlToMarkdown } from '../utils'
 import React from 'react'
 
@@ -16,19 +16,161 @@ interface RichTextEditorProps {
   showTitle?: boolean
 }
 
-export function RichTextEditor({ 
+export interface EditorRef {
+  save: () => void
+}
+
+export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({ 
   initialTitle = "",
   initialValue, 
   onSave, 
   onCancel, 
   titlePlaceholder = "Заголовок заметки",
   showTitle = true
-}: RichTextEditorProps) {
+}, ref) => {
   const [title, setTitle] = useState(initialTitle)
   const titleRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
+  const hasChangedRef = useRef(false)
 
+  // Предоставляем метод save через ref
+  useImperativeHandle(ref, () => ({
+    save: handleSave
+  }))
 
+  // Отслеживание изменений
+  useEffect(() => {
+    const checkChanges = () => {
+      const editorContent = editorRef.current?.innerHTML || ''
+      const markdownContent = htmlToMarkdown(editorContent)
+      const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
+      const originalCombined = combineNotionContent(initialTitle, initialValue)
+      
+      hasChangedRef.current = combinedContent !== originalCombined
+    }
+
+    checkChanges()
+  }, [title, initialTitle, initialValue])
+
+  // Автосохранение при закрытии страницы/браузера
+  useEffect(() => {
+    let lastSaveTime = 0
+    const MIN_SAVE_INTERVAL = 500 // минимальный интервал между сохранениями
+
+    const saveIfNeeded = () => {
+      const now = Date.now()
+      if (hasChangedRef.current && (now - lastSaveTime) > MIN_SAVE_INTERVAL) {
+        handleSave()
+        lastSaveTime = now
+      }
+    }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChangedRef.current) {
+        // Синхронное сохранение перед уходом
+        handleSave()
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasChangedRef.current) {
+        handleSave()
+      }
+    }
+
+    // Отслеживание кликов по элементам навигации
+    const handleNavigationClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      
+      // Проверяем клики по элементам навигации
+      const isNavigationElement = target.closest(`
+        a[href],
+        button[data-navigate],
+        .nav-item,
+        .sidebar,
+        [href*="/dashboard"],
+        .weekly-calendar,
+        .calendar-grid,
+        [title*="календарю"],
+        [title*="календарь"],
+        .cursor-pointer[onclick],
+        [role="menuitem"]
+      `)
+      
+      if (isNavigationElement && hasChangedRef.current) {
+        // Немедленное сохранение при навигации
+        handleSave()
+      }
+    }
+
+    // Отслеживание фокуса окна
+    const handleWindowBlur = () => {
+      if (hasChangedRef.current) {
+        handleSave()
+      }
+    }
+
+    // Автосохранение при нажатии клавиш навигации
+    const handleKeyDown = (e: Event) => {
+      const keyboardEvent = e as globalThis.KeyboardEvent
+      // Сохраняем при Alt+Tab, Ctrl+Tab и других комбинациях навигации
+      if ((keyboardEvent.altKey && keyboardEvent.key === 'Tab') || 
+          (keyboardEvent.ctrlKey && keyboardEvent.key === 'Tab') ||
+          (keyboardEvent.ctrlKey && keyboardEvent.key === 'w') || // Ctrl+W (закрытие вкладки)
+          (keyboardEvent.key === 'F5') || // F5 (обновление)
+          (keyboardEvent.ctrlKey && keyboardEvent.key === 'r')) { // Ctrl+R (обновление)
+        if (hasChangedRef.current) {
+          keyboardEvent.preventDefault()
+          handleSave()
+          // Позволяем продолжить действие после небольшой задержки
+          setTimeout(() => {
+            if (keyboardEvent.ctrlKey && keyboardEvent.key === 'w') {
+              window.close()
+            } else if (keyboardEvent.key === 'F5' || (keyboardEvent.ctrlKey && keyboardEvent.key === 'r')) {
+              window.location.reload()
+            }
+          }, 100)
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    document.addEventListener('click', handleNavigationClick, true)
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('click', handleNavigationClick, true)
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  // Обработчик кликов по чекбоксам
+  const handleCheckboxClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
+      e.stopPropagation()
+      const checkbox = target as HTMLInputElement
+      checkbox.checked = !checkbox.checked
+      
+      // Обновляем визуальное состояние
+      const parentDiv = checkbox.closest('.checkbox-line')
+      if (parentDiv) {
+        const textSpan = parentDiv.querySelector('span')
+        if (textSpan) {
+          if (checkbox.checked) {
+            textSpan.classList.add('line-through', 'opacity-60')
+          } else {
+            textSpan.classList.remove('line-through', 'opacity-60')
+          }
+        }
+      }
+    }
+  }
 
   // Инициализация содержимого редактора
   useEffect(() => {
@@ -39,6 +181,17 @@ export function RichTextEditor({
       
       // Очищаем редактор и вставляем содержимое
       editorRef.current.innerHTML = htmlContent
+    }
+    
+    // Добавляем обработчик кликов по чекбоксам
+    if (editorRef.current) {
+      editorRef.current.addEventListener('click', handleCheckboxClick)
+    }
+    
+    return () => {
+      if (editorRef.current) {
+        editorRef.current.removeEventListener('click', handleCheckboxClick)
+      }
     }
   }, [initialValue])
 
@@ -90,6 +243,101 @@ export function RichTextEditor({
       onCancel()
     }
 
+    // Автоматическое создание чекбоксов при вводе "- [ ]" или "- [x]"
+    if (e.key === ']') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const container = range.startContainer
+        
+        if (container.nodeType === Node.TEXT_NODE) {
+          const textContent = container.textContent || ''
+          const cursorPosition = range.startOffset
+          
+          // Проверяем шаблоны для чекбоксов
+          const beforeCursor = textContent.substring(0, cursorPosition)
+          const checkboxPattern = /- \[([ x])\]$/
+          const match = beforeCursor.match(checkboxPattern)
+          
+          if (match) {
+            e.preventDefault()
+            
+            const isChecked = match[1] === 'x'
+            const parentElement = container.parentElement || editorRef.current
+            
+            // Создаем checkbox-line элемент
+            const checkboxDiv = document.createElement('div')
+            checkboxDiv.className = 'checkbox-line'
+            const remainingText = textContent.substring(cursorPosition)
+            checkboxDiv.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''} class="mr-2"> <span${isChecked ? ' class="line-through opacity-60"' : ''}>${remainingText}</span>`
+            
+            // Заменяем текущий элемент на checkbox
+            if (container.parentElement && container.parentElement !== editorRef.current) {
+              container.parentElement.replaceWith(checkboxDiv)
+            } else {
+              // Если мы в корневом элементе, удаляем шаблон и вставляем checkbox
+              container.textContent = ''
+              range.insertNode(checkboxDiv)
+            }
+            
+            // Устанавливаем курсор в span после чекбокса
+            const newRange = document.createRange()
+            const span = checkboxDiv.querySelector('span')
+            if (span) {
+              newRange.setStart(span, span.textContent?.length || 0)
+              newRange.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(newRange)
+            }
+          }
+        }
+      }
+    }
+
+    // Автоматическое создание bullet list при вводе "- "
+    if (e.key === ' ') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const container = range.startContainer
+        
+        // Проверяем, что курсор находится в начале строки после дефиса
+        if (container.nodeType === Node.TEXT_NODE) {
+          const textContent = container.textContent || ''
+          const cursorPosition = range.startOffset
+          
+          // Проверяем, что текст начинается с "-" и курсор после дефиса
+          if (textContent === '-' && cursorPosition === 1) {
+            e.preventDefault()
+            
+            // Получаем родительский элемент
+            const parentElement = container.parentElement || editorRef.current
+            
+            // Создаем bullet-line элемент
+            const bulletDiv = document.createElement('div')
+            bulletDiv.className = 'bullet-line'
+            bulletDiv.innerHTML = '•&nbsp;'
+            
+            // Заменяем текущий элемент на bullet
+            if (container.parentElement && container.parentElement !== editorRef.current) {
+              container.parentElement.replaceWith(bulletDiv)
+            } else {
+              // Если мы в корневом элементе, удаляем текст и вставляем bullet
+              container.textContent = ''
+              range.insertNode(bulletDiv)
+            }
+            
+            // Устанавливаем курсор в конец bullet строки
+            const newRange = document.createRange()
+            newRange.selectNodeContents(bulletDiv)
+            newRange.collapse(false)
+            selection.removeAllRanges()
+            selection.addRange(newRange)
+          }
+        }
+      }
+    }
+
     // Обработка Enter для списков
     if (e.key === 'Enter') {
       const selection = window.getSelection()
@@ -129,7 +377,7 @@ export function RichTextEditor({
               // Если буллет не пустой, создаем новый буллет
               const newBullet = document.createElement('div')
               newBullet.className = 'bullet-line'
-              newBullet.innerHTML = '• &nbsp;'
+              newBullet.innerHTML = '•&nbsp;'
               
               listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
               
@@ -163,15 +411,15 @@ export function RichTextEditor({
               // Если чекбокс не пустой, создаем новый чекбокс
               const newCheckbox = document.createElement('div')
               newCheckbox.className = 'checkbox-line'
-              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
+              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> <span></span>'
               
               listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
               
-              // Устанавливаем курсор после чекбокса
-              const textNode = newCheckbox.childNodes[1]
-              if (textNode) {
+              // Устанавливаем курсор в span элемент
+              const span = newCheckbox.querySelector('span')
+              if (span) {
                 const newRange = document.createRange()
-                newRange.setStart(textNode, 1)
+                newRange.setStart(span, 0)
                 newRange.collapse(true)
                 selection.removeAllRanges()
                 selection.addRange(newRange)
@@ -187,71 +435,68 @@ export function RichTextEditor({
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
 
-    switch (command) {
-      case 'bold':
-        document.execCommand('bold', false)
-        break
-      case 'italic':
-        document.execCommand('italic', false)
-        break
-      case 'underline':
-        document.execCommand('underline', false)
-        break
-      case 'h1':
-      case 'h2':
-      case 'h3':
-        const headerClass = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2' :
-                           command === 'h2' ? 'text-xl font-bold mt-4 mb-2' :
-                           'text-lg font-bold mt-4 mb-2'
-        document.execCommand('formatBlock', false, command)
-        // Добавляем класс к созданному заголовку
-        setTimeout(() => {
-          const element = selection.anchorNode?.parentElement
-          if (element && ['H1', 'H2', 'H3'].includes(element.tagName)) {
-            element.className = headerClass
-          }
-        }, 0)
-        break
+    const range = selection.getRangeAt(0)
+    
+    if (command === 'h1' || command === 'h2' || command === 'h3') {
+      const selectedText = selection.toString()
+      
+      const headerElement = document.createElement(command)
+      headerElement.textContent = selectedText || 'Заголовок'
+      headerElement.className = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2' :
+                                command === 'h2' ? 'text-xl font-bold mt-4 mb-2' :
+                                'text-lg font-bold mt-4 mb-2'
+      
+      range.deleteContents()
+      range.insertNode(headerElement)
+      
+      // Устанавливаем курсор в конец заголовка
+      const newRange = document.createRange()
+      newRange.selectNodeContents(headerElement)
+      newRange.collapse(false)
+      selection.removeAllRanges()
+      selection.addRange(newRange)
+    } else {
+      document.execCommand(command, false, undefined)
     }
   }
 
   const insertBulletList = () => {
     const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
-
+    if (!selection) return
+    
     const bulletDiv = document.createElement('div')
     bulletDiv.className = 'bullet-line'
-    bulletDiv.innerHTML = '• &nbsp;'
+    bulletDiv.innerHTML = '•&nbsp;'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(bulletDiv)
     
-    // Устанавливаем курсор в конец строки буллета
+    // Устанавливаем курсор после bullet
     const newRange = document.createRange()
-    newRange.selectNodeContents(bulletDiv)
-    newRange.collapse(false)
+    newRange.setStartAfter(bulletDiv.firstChild!)
+    newRange.collapse(true)
     selection.removeAllRanges()
     selection.addRange(newRange)
   }
 
   const insertCheckbox = () => {
     const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
-
+    if (!selection) return
+    
     const checkboxDiv = document.createElement('div')
     checkboxDiv.className = 'checkbox-line'
-    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2 pointer-events-none"> '
+    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> <span></span>'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(checkboxDiv)
     
-    // Устанавливаем курсор после чекбокса
-    const textNode = checkboxDiv.childNodes[1]
-    if (textNode) {
+    // Устанавливаем курсор в span элемент
+    const span = checkboxDiv.querySelector('span')
+    if (span) {
       const newRange = document.createRange()
-      newRange.setStart(textNode, 1)
+      newRange.setStart(span, 0)
       newRange.collapse(true)
       selection.removeAllRanges()
       selection.addRange(newRange)
@@ -264,7 +509,9 @@ export function RichTextEditor({
     
     if (markdownContent.trim() || title.trim()) {
       const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
+      console.log('💾 Автосохранение заметки:', { title: title.trim(), hasContent: !!markdownContent.trim() })
       onSave(combinedContent)
+      hasChangedRef.current = false
     }
   }
 
@@ -274,22 +521,15 @@ export function RichTextEditor({
         return
       }
       
-      const editorContent = editorRef.current?.innerHTML || ''
-      const markdownContent = htmlToMarkdown(editorContent)
-      
-      if ((markdownContent.trim() || title.trim()) && (markdownContent !== initialValue || title !== initialTitle)) {
-        const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
-        const originalCombined = combineNotionContent(initialTitle, initialValue)
-        if (combinedContent !== originalCombined) {
-          handleSave()
-        }
+      if (hasChangedRef.current) {
+        handleSave()
       }
     }, 100)
   }
 
   return (
     <div className="rich-editor-container space-y-4 h-full flex flex-col">
-      {/* Панель управления */}
+      {/* Панель управления - убрал кнопки "Закрыть" и "Сохранить" */}
       <div className="flex items-center justify-between gap-2">
         {/* Кнопки форматирования */}
         <div className="flex items-center gap-1">
@@ -379,26 +619,6 @@ export function RichTextEditor({
             ☐
           </Button>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-          >
-            Закрыть
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={!((editorRef.current?.textContent?.trim()) || title.trim())}
-          >
-            <Save className="h-4 w-4 mr-1" />
-            Сохранить
-          </Button>
-        </div>
       </div>
 
       {/* Редактор */}
@@ -438,8 +658,11 @@ export function RichTextEditor({
       </div>
 
       <div className="text-xs text-gray-500">
-        <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый), Ctrl+1,2,3 (заголовки), Ctrl+Enter (сохранить), Esc (закрыть)</p>
+        <p>Заметка автоматически сохраняется при потере фокуса или закрытии страницы</p>
+        <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый), Ctrl+1,2,3 (заголовки)</p>
       </div>
     </div>
   )
-} 
+})
+
+RichTextEditor.displayName = 'RichTextEditor' 

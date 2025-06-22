@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { Save, Bold, Italic, Underline, List, Type, Hash } from 'lucide-react'
+import { Bold, Italic, Underline, List, Type, Hash } from 'lucide-react'
 import { combineNotionContent, markdownToHtml, htmlToMarkdown } from '../utils'
 import React from 'react'
 
@@ -35,6 +35,67 @@ export function MarkdownEditor({
   const titleRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<MutationObserver | null>(null)
+  const hasChangedRef = useRef(false)
+
+  // Отслеживание изменений
+  useEffect(() => {
+    const checkChanges = () => {
+      const editorContent = editorRef.current?.innerHTML || ''
+      const markdownContent = htmlToMarkdown(editorContent)
+      const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
+      const originalCombined = combineNotionContent(initialTitle, initialValue)
+      
+      hasChangedRef.current = combinedContent !== originalCombined
+    }
+
+    checkChanges()
+  }, [title, initialTitle, initialValue])
+
+  // Автосохранение при закрытии страницы/браузера
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChangedRef.current) {
+        handleSave()
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasChangedRef.current) {
+        handleSave()
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
+  // Обработчик кликов по чекбоксам
+  const handleCheckboxClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
+      e.stopPropagation()
+      const checkbox = target as HTMLInputElement
+      checkbox.checked = !checkbox.checked
+      
+      // Обновляем визуальное состояние
+      const parentDiv = checkbox.closest('.checkbox-line')
+      if (parentDiv) {
+        const textSpan = parentDiv.querySelector('span')
+        if (textSpan) {
+          if (checkbox.checked) {
+            textSpan.classList.add('line-through', 'opacity-60')
+          } else {
+            textSpan.classList.remove('line-through', 'opacity-60')
+          }
+        }
+      }
+    }
+  }
 
   // Инициализация содержимого редактора и MutationObserver
   useEffect(() => {
@@ -66,11 +127,17 @@ export function MarkdownEditor({
         subtree: true,
         characterData: true
       })
+      
+      // Добавляем обработчик кликов по чекбоксам
+      editorRef.current.addEventListener('click', handleCheckboxClick)
     }
 
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect()
+      }
+      if (editorRef.current) {
+        editorRef.current.removeEventListener('click', handleCheckboxClick)
       }
     }
   }, [])
@@ -151,6 +218,99 @@ export function MarkdownEditor({
       onCancel()
     }
 
+    // Автоматическое создание чекбоксов при вводе "- [ ]" или "- [x]"
+    if (e.key === ']') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const container = range.startContainer
+        
+        if (container.nodeType === Node.TEXT_NODE) {
+          const textContent = container.textContent || ''
+          const cursorPosition = range.startOffset
+          
+          // Проверяем шаблоны для чекбоксов
+          const beforeCursor = textContent.substring(0, cursorPosition)
+          const checkboxPattern = /- \[([ x])\]$/
+          const match = beforeCursor.match(checkboxPattern)
+          
+          if (match) {
+            e.preventDefault()
+            
+            const isChecked = match[1] === 'x'
+            const parentElement = container.parentElement || editorRef.current
+            
+                         // Создаем checkbox-line элемент
+             const checkboxDiv = document.createElement('div')
+             checkboxDiv.className = 'checkbox-line'
+             const remainingText = textContent.substring(cursorPosition)
+             checkboxDiv.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''} class="mr-2"> <span${isChecked ? ' class="line-through opacity-60"' : ''}>${remainingText}</span>`
+             
+             // Заменяем текущий элемент на checkbox
+             if (container.parentElement && container.parentElement !== editorRef.current) {
+               container.parentElement.replaceWith(checkboxDiv)
+             } else {
+               // Если мы в корневом элементе, удаляем шаблон и вставляем checkbox
+               container.textContent = ''
+               range.insertNode(checkboxDiv)
+             }
+             
+             // Устанавливаем курсор в span после чекбокса
+             const newRange = document.createRange()
+             const span = checkboxDiv.querySelector('span')
+             if (span) {
+               newRange.setStart(span, span.textContent?.length || 0)
+               newRange.collapse(true)
+               selection.removeAllRanges()
+               selection.addRange(newRange)
+             }
+          }
+        }
+      }
+    }
+
+    // Автоматическое создание bullet list при вводе "- "
+    if (e.key === ' ') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const container = range.startContainer
+        
+        if (container.nodeType === Node.TEXT_NODE) {
+          const textContent = container.textContent || ''
+          const cursorPosition = range.startOffset
+          
+          // Проверяем, что текст начинается с "-" и курсор после дефиса
+          if (textContent === '-' && cursorPosition === 1) {
+            e.preventDefault()
+            
+            const parentElement = container.parentElement || editorRef.current
+            
+            // Создаем bullet-line элемент
+            const bulletDiv = document.createElement('div')
+            bulletDiv.className = 'bullet-line'
+            bulletDiv.innerHTML = '•&nbsp;'
+            
+            // Заменяем текущий элемент на bullet
+            if (container.parentElement && container.parentElement !== editorRef.current) {
+              container.parentElement.replaceWith(bulletDiv)
+            } else {
+              // Если мы в корневом элементе, удаляем текст и вставляем bullet
+              container.textContent = ''
+              range.insertNode(bulletDiv)
+            }
+            
+            // Устанавливаем курсор в конец bullet строки
+            const newRange = document.createRange()
+            newRange.setStart(bulletDiv.childNodes[1] || bulletDiv, bulletDiv.childNodes[1] ? 1 : 0)
+            newRange.collapse(true)
+            selection.removeAllRanges()
+            selection.addRange(newRange)
+          }
+        }
+      }
+    }
+
     // Обработка Enter для списков и обычного текста
     if (e.key === 'Enter') {
       const selection = window.getSelection()
@@ -199,7 +359,7 @@ export function MarkdownEditor({
             if (listElement.classList.contains('bullet-line')) {
               const newBullet = document.createElement('div')
               newBullet.className = 'bullet-line'
-              newBullet.innerHTML = '• &nbsp;'
+              newBullet.innerHTML = '•&nbsp;'
               
               listElement.parentNode?.insertBefore(newBullet, listElement.nextSibling)
               
@@ -212,15 +372,15 @@ export function MarkdownEditor({
             } else if (listElement.classList.contains('checkbox-line')) {
               const newCheckbox = document.createElement('div')
               newCheckbox.className = 'checkbox-line'
-              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> &nbsp;'
+              newCheckbox.innerHTML = '<input type="checkbox" class="mr-2"> <span></span>'
               
               listElement.parentNode?.insertBefore(newCheckbox, listElement.nextSibling)
               
-              // Устанавливаем курсор после чекбокса и пробела
-              const textNode = newCheckbox.childNodes[1]
-              if (textNode) {
+              // Устанавливаем курсор в span элемент
+              const span = newCheckbox.querySelector('span')
+              if (span) {
                 const newRange = document.createRange()
-                newRange.setStart(textNode, 1)
+                newRange.setStart(span, 0)
                 newRange.collapse(true)
                 selection.removeAllRanges()
                 selection.addRange(newRange)
@@ -280,7 +440,7 @@ export function MarkdownEditor({
 
     const bulletDiv = document.createElement('div')
     bulletDiv.className = 'bullet-line'
-    bulletDiv.innerHTML = '• &nbsp;'
+    bulletDiv.innerHTML = '•&nbsp;'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
@@ -302,17 +462,17 @@ export function MarkdownEditor({
 
     const checkboxDiv = document.createElement('div')
     checkboxDiv.className = 'checkbox-line'
-    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> &nbsp;'
+    checkboxDiv.innerHTML = '<input type="checkbox" class="mr-2"> <span></span>'
     
     const range = selection.getRangeAt(0)
     range.deleteContents()
     range.insertNode(checkboxDiv)
     
-    // Устанавливаем курсор после чекбокса и пробела
-    const textNode = checkboxDiv.childNodes[1]
-    if (textNode) {
+    // Устанавливаем курсор в span элемент
+    const span = checkboxDiv.querySelector('span')
+    if (span) {
       const newRange = document.createRange()
-      newRange.setStart(textNode, 1)
+      newRange.setStart(span, 0)
       newRange.collapse(true)
       selection.removeAllRanges()
       selection.addRange(newRange)
@@ -328,6 +488,7 @@ export function MarkdownEditor({
     if (markdownContent.trim() || title.trim()) {
       const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
       onSave(combinedContent)
+      hasChangedRef.current = false
     }
   }
 
@@ -337,15 +498,8 @@ export function MarkdownEditor({
         return
       }
       
-      const editorContent = editorRef.current?.innerHTML || ''
-      const markdownContent = htmlToMarkdown(editorContent)
-      
-      if ((markdownContent.trim() || title.trim()) && (markdownContent !== initialValue || title !== initialTitle)) {
-        const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
-        const originalCombined = combineNotionContent(initialTitle, initialValue)
-        if (combinedContent !== originalCombined) {
-          handleSave()
-        }
+      if (hasChangedRef.current) {
+        handleSave()
       }
     }, 100)
   }
@@ -363,27 +517,6 @@ export function MarkdownEditor({
 
   return (
     <div className="markdown-editor-container space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="flex-1" />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onCancel}
-        >
-          Отмена
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleSave}
-          disabled={!((editorRef.current?.textContent?.trim()) || title.trim())}
-        >
-          <Save className="h-4 w-4 mr-1" />
-          Сохранить
-        </Button>
-      </div>
-
       <div className="space-y-3">
         {showTitle && (
           <Input
@@ -506,8 +639,8 @@ export function MarkdownEditor({
         </Card>
         
         <div className="text-xs text-gray-500 space-y-1">
-          <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый)</p>
-          <p>Ctrl+1,2,3 (заголовки), Ctrl+Enter (сохранить), Esc (отмена)</p>
+          <p>Заметка автоматически сохраняется при потере фокуса или закрытии страницы</p>
+          <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый), Ctrl+1,2,3 (заголовки)</p>
         </div>
       </div>
     </div>

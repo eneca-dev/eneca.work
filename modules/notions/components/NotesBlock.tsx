@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { NoteCard } from './NoteCard'
 import { NewNoteModal } from './NewNoteModal'
 import { BulkDeleteConfirm } from './BulkDeleteConfirm'
-import { RichTextEditor } from './RichTextEditor'
+import { RichTextEditor, EditorRef } from './RichTextEditor'
 import { useNotionsStore } from '../store'
 import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,11 @@ export function NotesBlock() {
   const [showNewNoteModal, setShowNewNoteModal] = useState(false)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
+  const editorRef = useRef<EditorRef>(null)
+  
+  const router = useRouter()
+  const pathname = usePathname()
+  const previousPathnameRef = useRef(pathname)
 
   // Загружаем заметки при монтировании компонента
   useEffect(() => {
@@ -52,16 +58,6 @@ export function NotesBlock() {
   const handleUpdateNote = async (id: string, content: string) => {
     await updateNotion(id, { notion_content: content })
   }
-
-  // Обновляем fullViewNotion когда изменяется список заметок
-  useEffect(() => {
-    if (fullViewNotion) {
-      const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
-      if (updatedNotion) {
-        setFullViewNotion(updatedNotion)
-      }
-    }
-  }, [notions, fullViewNotion])
 
   const handleToggleSelect = (id: string) => {
     const newSelected = selectedNotions.includes(id)
@@ -102,6 +98,10 @@ export function NotesBlock() {
   }
 
   const handleCloseFullView = () => {
+    // Сохраняем перед закрытием
+    if (editorRef.current) {
+      editorRef.current.save()
+    }
     setFullViewNotion(null)
   }
 
@@ -110,6 +110,185 @@ export function NotesBlock() {
       handleUpdateNote(fullViewNotion.notion_id, content)
     }
   }
+
+  // Обновляем fullViewNotion когда изменяется список заметок
+  useEffect(() => {
+    if (fullViewNotion) {
+      const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
+      if (updatedNotion) {
+        setFullViewNotion(updatedNotion)
+      }
+    }
+  }, [notions, fullViewNotion])
+
+  // Автосохранение при изменении маршрута или закрытии приложения
+  useEffect(() => {
+    if (!fullViewNotion) return
+
+    let isNavigating = false
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (editorRef.current) {
+        editorRef.current.save()
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && editorRef.current) {
+        editorRef.current.save()
+      }
+    }
+
+    // Отслеживание изменения URL для автосохранения при навигации
+    const handlePopState = () => {
+      if (editorRef.current) {
+        editorRef.current.save()
+      }
+    }
+
+    // Глобальное отслеживание кликов по ссылкам для автосохранения
+    const handleLinkClick = (e: MouseEvent) => {
+      if (isNavigating) return
+      
+      const target = e.target as HTMLElement
+      
+      // Проверяем, является ли цель или её родитель ссылкой
+      const link = target.closest('a[href]') as HTMLAnchorElement
+      if (link && editorRef.current) {
+        // Проверяем, что это внутренняя навигация (не внешняя ссылка)
+        const href = link.getAttribute('href')
+        if (href && (href.startsWith('/') || href.startsWith('#'))) {
+          isNavigating = true
+          editorRef.current.save()
+          
+          // Сбрасываем флаг через небольшое время
+          setTimeout(() => {
+            isNavigating = false
+          }, 100)
+        }
+      }
+    }
+
+    // Отслеживание кликов по любым элементам навигации и интерактивным элементам
+    const handleNavigationClick = (e: MouseEvent) => {
+      if (isNavigating) return
+      
+      const target = e.target as HTMLElement
+      
+      // Расширенный список селекторов для всех возможных элементов навигации
+      const navigationElement = target.closest(`
+        button[data-navigate],
+        .nav-button,
+        .nav-item,
+        nav a,
+        [role="menuitem"],
+        [data-testid*="nav"],
+        .sidebar a,
+        .menu-item,
+        .navigation-link,
+        [href="/dashboard/planning"],
+        [href="/dashboard/decomposition"],
+        [href="/dashboard/projects"],
+        [href="/dashboard/tasks"],
+        [href="/dashboard/users"],
+        [href="/dashboard/settings"],
+        [href="/dashboard/calendar"],
+        [href*="/dashboard"],
+        .weekly-calendar,
+        [title*="календарю"],
+        [title*="календарь"],
+        .calendar-grid,
+        button[title*="неделя"],
+        button[title*="текущая"],
+        [onclick*="calendar"],
+        [onclick*="router"],
+        .cursor-pointer
+      `) as HTMLElement
+      
+      // Специальная проверка для календарных элементов
+      const isCalendarElement = target.closest('.weekly-calendar, .calendar-grid, [title*="календарю"], [title*="календарь"]')
+      
+      if ((navigationElement || isCalendarElement) && editorRef.current) {
+        console.log('🔄 Обнаружена навигация, сохраняем заметку:', {
+          targetElement: target.tagName,
+          targetClasses: target.className,
+          targetTitle: target.title,
+          isCalendarElement: !!isCalendarElement,
+          navigationElement: navigationElement?.tagName,
+          navigationClasses: navigationElement?.className
+        })
+        
+        isNavigating = true
+        
+        // Синхронное сохранение для критических переходов
+        try {
+          editorRef.current.save()
+        } catch (error) {
+          console.warn('Failed to save note during navigation:', error)
+        }
+        
+        // Сбрасываем флаг через небольшое время
+        setTimeout(() => {
+          isNavigating = false
+        }, 200)
+      }
+    }
+
+    // Перехватываем router.push вызовы
+    const originalPush = router.push
+    router.push = (...args) => {
+      if (editorRef.current && !isNavigating) {
+        console.log('🔄 router.push обнаружен, сохраняем заметку:', args[0])
+        isNavigating = true
+        editorRef.current.save()
+        
+        setTimeout(() => {
+          isNavigating = false
+        }, 100)
+      }
+      return originalPush.apply(router, args)
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)  
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('popstate', handlePopState)
+    document.addEventListener('click', handleLinkClick, true) // capture phase
+    document.addEventListener('click', handleNavigationClick, true) // capture phase
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('popstate', handlePopState)
+      document.removeEventListener('click', handleLinkClick, true)
+      document.removeEventListener('click', handleNavigationClick, true)
+      
+      // Восстанавливаем оригинальный router.push
+      router.push = originalPush
+    }
+  }, [fullViewNotion, router])
+
+  // Отслеживание изменения pathname для автосохранения при навигации через Link
+  useEffect(() => {
+    if (fullViewNotion && pathname !== previousPathnameRef.current) {
+      if (editorRef.current) {
+        editorRef.current.save()
+      }
+      previousPathnameRef.current = pathname
+    }
+  }, [pathname, fullViewNotion])
+
+  // Дополнительное автосохранение каждые 30 секунд при активном редактировании
+  useEffect(() => {
+    if (!fullViewNotion) return
+
+    const intervalId = setInterval(() => {
+      if (editorRef.current) {
+        editorRef.current.save()
+      }
+    }, 30000) // каждые 30 секунд
+
+    return () => clearInterval(intervalId)
+  }, [fullViewNotion])
 
   const selectedNotionsData = notions.filter(notion => 
     selectedNotions.includes(notion.notion_id)
@@ -129,7 +308,7 @@ export function NotesBlock() {
     
     return (
       <Card className="p-6 h-full flex flex-col">
-        {/* Заголовок с кнопкой назад */}
+        {/* Заголовок только с кнопкой назад - убрал название заметки */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Button
@@ -141,10 +320,6 @@ export function NotesBlock() {
               <ArrowLeft className="h-4 w-4" />
               Назад к списку
             </Button>
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
-            <h2 className="text-xl font-semibold">
-              {parsed.title || 'Заметка без заголовка'}
-            </h2>
           </div>
           
           <div className="flex items-center gap-2">
@@ -171,6 +346,7 @@ export function NotesBlock() {
         {/* Содержимое заметки */}
         <div className="flex-1 overflow-hidden">
           <RichTextEditor
+            ref={editorRef}
             initialTitle={parsed.title}
             initialValue={parsed.content}
             onSave={handleSaveFullView}

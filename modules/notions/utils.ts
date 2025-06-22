@@ -206,7 +206,8 @@ export function htmlToMarkdown(html: string): string {
             // Обрабатываем чекбоксы
             const checkbox = element.querySelector('input[type="checkbox"]')
             const isChecked = checkbox?.hasAttribute('checked')
-            const textContent = content.replace(/^\s*/, '').trim()
+            const span = element.querySelector('span')
+            const textContent = span ? span.textContent?.trim() || '' : content.replace(/^\s*/, '').trim()
             return `- [${isChecked ? 'x' : ' '}] ${textContent}`
           } else {
             return content
