@@ -48,8 +48,9 @@ export function combineNotionContent(title: string, content: string): string {
     return trimmedContent
   }
   
+  // Если есть заголовок, всегда добавляем разделитель, даже если контент пустой
   if (!trimmedContent) {
-    return trimmedTitle
+    return `${trimmedTitle}\n:::\n`
   }
   
   return `${trimmedTitle}\n:::\n${trimmedContent}`
@@ -59,36 +60,63 @@ export function combineNotionContent(title: string, content: string): string {
  * Конвертирует markdown в HTML для отображения
  */
 export function markdownToHtml(text: string): string {
-  let html = text
-    // Сначала обрабатываем заголовки (чтобы они не попали в обработку переносов)
-    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>')
-    // Чекбоксы
-    .replace(/^- \[ \] (.+)$/gm, '<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> $1</div>')
-    .replace(/^- \[x\] (.+)$/gm, '<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">$1</span></div>')
-    // Буллет-листы (не чекбоксы)
-    .replace(/^- (?!\[[ x]\])(.+)$/gm, '<div class="bullet-line">• $1</div>')
-    // Форматирование текста
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/__(.*?)__/g, '<u>$1</u>')
+  // Сначала исправляем слитые заголовки - разделяем их переносами строк
+  let processedText = text
+    // Заменяем все варианты слитых заголовков
+    .replace(/###([^#\n]+)##([^#\n]+)/g, '### $1\n## $2')
+    .replace(/##([^#\n]+)###([^#\n]+)/g, '## $1\n### $2')
+    .replace(/##([^#\n]+)#([^#\n]+)/g, '## $1\n# $2')
+    .replace(/#([^#\n]+)##([^#\n]+)/g, '# $1\n## $2')
+    .replace(/#([^#\n]+)###([^#\n]+)/g, '# $1\n### $2')
+    .replace(/###([^#\n]+)#([^#\n]+)/g, '### $1\n# $2')
 
-  // Обрабатываем переносы строк последними
-  // Двойные переносы становятся абзацами
-  html = html.replace(/\n\n/g, '</p><p>')
+  // Разбиваем на строки и обрабатываем каждую
+  const lines = processedText.split('\n')
+  const htmlLines: string[] = []
   
-  // Одиночные переносы становятся <br/>, но НЕ перед/после блочных элементов
-  html = html.replace(/\n(?!<\/?(h[1-6]|div|p))/g, '<br/>')
-  html = html.replace(/(?<=<\/(h[1-6]|div|p)>)\n/g, '')
-  html = html.replace(/\n(?=<(h[1-6]|div|p))/g, '')
-  
-  // Оборачиваем в параграфы если есть </p><p>
-  if (html.includes('</p><p>')) {
-    html = '<p>' + html + '</p>'
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    
+    if (!line.trim()) {
+      // Пустая строка - НЕ добавляем <br/>, оставляем как есть
+      htmlLines.push('')
+    } else if (/^### (.+)$/.test(line.trim())) {
+      // Заголовок 3
+      const text = line.trim().replace(/^### /, '')
+      htmlLines.push(`<h3 class="text-lg font-bold mt-4 mb-2 header-placeholder">${text}</h3>`)
+    } else if (/^## (.+)$/.test(line.trim())) {
+      // Заголовок 2
+      const text = line.trim().replace(/^## /, '')
+      htmlLines.push(`<h2 class="text-xl font-bold mt-4 mb-2 header-placeholder">${text}</h2>`)
+    } else if (/^# (.+)$/.test(line.trim())) {
+      // Заголовок 1
+      const text = line.trim().replace(/^# /, '')
+      htmlLines.push(`<h1 class="text-2xl font-bold mt-4 mb-2 header-placeholder">${text}</h1>`)
+    } else if (/^- \[ \] (.+)$/.test(line.trim())) {
+      // Пустой чекбокс
+      const text = line.trim().replace(/^- \[ \] /, '')
+      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> ${text}</div>`)
+    } else if (/^- \[x\] (.+)$/.test(line.trim())) {
+      // Отмеченный чекбокс
+      const text = line.trim().replace(/^- \[x\] /, '')
+      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">${text}</span></div>`)
+    } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
+      // Буллет-лист
+      const text = line.trim().replace(/^- /, '')
+      htmlLines.push(`<div class="bullet-line">• ${text}</div>`)
+    } else if (line.trim()) {
+      // Обычный текст с форматированием (только если не пустая строка)
+      let formattedLine = line.trim()
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+      htmlLines.push(formattedLine)
+    }
   }
   
-  return html
+  // Фильтруем пустые строки и соединяем без лишних переносов
+  const filteredLines = htmlLines.filter(line => line.trim() !== '')
+  return filteredLines.join('\n')
 }
 
 /**
@@ -101,6 +129,71 @@ function normalizeContentEditableHTML(html: string): string {
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = html
   
+  // Сначала исправляем вложенные заголовки
+  function flattenHeaders(parent: Element) {
+    const headersToFlatten: { parent: Element, header: Element, children: Node[] }[] = []
+    
+    // Находим заголовки, которые содержат другие элементы
+    const headers = parent.querySelectorAll('h1, h2, h3')
+    headers.forEach(header => {
+      const childElements = Array.from(header.children)
+      if (childElements.length > 0) {
+        headersToFlatten.push({
+          parent: header.parentElement!,
+          header,
+          children: Array.from(header.childNodes)
+        })
+      }
+    })
+    
+    // Исправляем каждый вложенный заголовок
+    headersToFlatten.forEach(({ parent, header, children }) => {
+      // Создаем правильную структуру
+      const newElements: Node[] = []
+      
+      // Сначала создаем очищенный заголовок
+      const cleanHeader = header.cloneNode(false) as Element
+      const headerText = header.firstChild?.textContent || ''
+      if (headerText.trim()) {
+        cleanHeader.textContent = headerText.trim()
+        newElements.push(cleanHeader)
+      }
+      
+      // Затем добавляем остальные элементы как отдельные блоки
+      children.forEach(child => {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const element = child as Element
+          if (!['H1', 'H2', 'H3'].includes(element.tagName)) {
+            newElements.push(child.cloneNode(true))
+          } else {
+            // Вложенный заголовок - добавляем отдельно
+            newElements.push(child.cloneNode(true))
+          }
+        } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+          // Текстовый узел - создаем div
+          const div = document.createElement('div')
+          div.textContent = child.textContent.trim()
+          newElements.push(div)
+        }
+      })
+      
+      // Заменяем исходный заголовок на новые элементы
+      const nextSibling = header.nextSibling
+      parent.removeChild(header)
+      
+      newElements.forEach(element => {
+        if (nextSibling) {
+          parent.insertBefore(element, nextSibling)
+        } else {
+          parent.appendChild(element)
+        }
+      })
+    })
+  }
+  
+  // Исправляем вложенные заголовки
+  flattenHeaders(tempDiv)
+  
   // Рекурсивно очищаем элементы
   function cleanElement(element: Element) {
     // Удаляем все style атрибуты и классы, кроме наших специальных классов
@@ -108,7 +201,7 @@ function normalizeContentEditableHTML(html: string): string {
     
     // Сохраняем только наши специальные классы
     const classList = element.classList
-    const keepClasses = ['bullet-line', 'checkbox-line']
+    const keepClasses = ['bullet-line', 'checkbox-line', 'header-placeholder']
     const classesToKeep = Array.from(classList).filter(cls => keepClasses.includes(cls))
     element.className = classesToKeep.join(' ')
     
@@ -156,8 +249,6 @@ export function htmlToMarkdown(html: string): string {
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = normalizedHtml
   
-  let markdown = ''
-  
   // Рекурсивно обрабатываем элементы
   function processNode(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -176,10 +267,22 @@ export function htmlToMarkdown(html: string): string {
       
       switch (tagName) {
         case 'h1':
+          // Пропускаем пустые заголовки с плейсхолдерами
+          if (!content.trim()) {
+            return ''
+          }
           return `# ${content}`
         case 'h2':
+          // Пропускаем пустые заголовки с плейсхолдерами
+          if (!content.trim()) {
+            return ''
+          }
           return `## ${content}`
         case 'h3':
+          // Пропускаем пустые заголовки с плейсхолдерами
+          if (!content.trim()) {
+            return ''
+          }
           return `### ${content}`
         case 'strong':
         case 'b':
@@ -190,12 +293,10 @@ export function htmlToMarkdown(html: string): string {
         case 'u':
           return `__${content}__`
         case 'br':
-          return '\n'
+          // Не добавляем лишние переносы - br уже означает перенос
+          return ''
         case 'p':
-          // Игнорируем пустые параграфы
-          if (!content.trim()) {
-            return ''
-          }
+          // Сохраняем параграфы, даже пустые (они могут быть намеренными пустыми строками)
           return content
         case 'div':
           if (element.classList.contains('bullet-line')) {
@@ -210,7 +311,22 @@ export function htmlToMarkdown(html: string): string {
             const textContent = span ? span.textContent?.trim() || '' : content.replace(/^\s*/, '').trim()
             return `- [${isChecked ? 'x' : ' '}] ${textContent}`
           } else {
-            return content
+            // Обычные div - проверяем, содержат ли они заголовки
+            const hasHeaders = element.querySelector('h1, h2, h3')
+            if (hasHeaders) {
+              // Если div содержит заголовки, обрабатываем дочерние элементы отдельно
+              const childParts: string[] = []
+              for (const child of Array.from(element.childNodes)) {
+                const childResult = processNode(child)
+                if (childResult.trim()) {
+                  childParts.push(childResult.trim())
+                }
+              }
+              return childParts.join('\n')
+            } else {
+              // Обычный div без заголовков
+              return content
+            }
           }
         case 'span':
           return content
@@ -225,25 +341,19 @@ export function htmlToMarkdown(html: string): string {
     return ''
   }
   
-  // Обрабатываем все дочерние узлы
+  // Обрабатываем все дочерние узлы и соединяем их с переносами строк
   const parts: string[] = []
   for (const child of Array.from(tempDiv.childNodes)) {
     const result = processNode(child)
+    
+    // Добавляем результат только если он не пустой
     if (result.trim()) {
-      parts.push(result)
+      parts.push(result.trim())
     }
   }
   
-  // Соединяем части с правильными переносами строк
-  markdown = parts.join('\n')
-  
-  // Очищаем результат
-  markdown = markdown
-    .replace(/\n\s*\n\s*\n+/g, '\n\n') // Максимум два перевода строки подряд
-    .replace(/^\n+/, '') // Убираем переносы в начале
-    .replace(/\n+$/, '') // Убираем переносы в конце
-    .replace(/[ \t]+/g, ' ') // Убираем лишние пробелы
-    .trim()
+  // Соединяем части с одним переносом строки между ними
+  const markdown = parts.join('\n')
 
   console.log('Converted to markdown:', markdown)
   return markdown

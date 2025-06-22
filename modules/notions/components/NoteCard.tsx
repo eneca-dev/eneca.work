@@ -113,12 +113,7 @@ export function NoteCard({
                           }} 
                         />
                       </div>
-                      {/* Индикатор того, что содержимое обрезано */}
-                      {parsed.content.split('\n').length > (parsed.title ? 3 : 4) && (
-                        <div className="absolute bottom-0 right-0 bg-gradient-to-l from-white dark:from-gray-900 to-transparent pl-8 pr-2">
-                          <span className="text-xs text-gray-400 italic">нажмите для просмотра</span>
-                        </div>
-                      )}
+
                     </div>
                   )}
 

@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { NoteCard } from './NoteCard'
-import { NewNoteModal } from './NewNoteModal'
 import { BulkDeleteConfirm } from './BulkDeleteConfirm'
 import { RichTextEditor, EditorRef } from './RichTextEditor'
 import { useNotionsStore } from '../store'
@@ -37,9 +36,9 @@ export function NotesBlock() {
     markNotionsAsUndone
   } = useNotionsStore()
 
-  const [showNewNoteModal, setShowNewNoteModal] = useState(false)
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
+  const [isCreatingNewNote, setIsCreatingNewNote] = useState(false)
   const editorRef = useRef<EditorRef>(null)
   
   const router = useRouter()
@@ -51,8 +50,17 @@ export function NotesBlock() {
     fetchNotions()
   }, [fetchNotions])
 
-  const handleCreateNote = async (content: string) => {
-    await createNotion({ notion_content: content })
+  const handleCreateNote = () => {
+    // Создаем новую пустую заметку для редактирования
+    setIsCreatingNewNote(true)
+    setFullViewNotion({
+      notion_id: 'new',
+      notion_content: '',
+      notion_done: false,
+      notion_created_by: '',
+      notion_created_at: new Date().toISOString(),
+      notion_updated_at: new Date().toISOString()
+    })
   }
 
   const handleUpdateNote = async (id: string, content: string) => {
@@ -102,11 +110,37 @@ export function NotesBlock() {
     if (editorRef.current) {
       editorRef.current.save()
     }
+    if (isCreatingNewNote) {
+      setIsCreatingNewNote(false)
+    }
     setFullViewNotion(null)
   }
 
-  const handleSaveFullView = (content: string) => {
-    if (fullViewNotion) {
+  const handleSaveFullView = async (content: string) => {
+    if (!fullViewNotion) return
+    
+    // Проверяем, пустая ли заметка (нет ни заголовка, ни контента)
+    const trimmedContent = content.trim()
+    if (!trimmedContent) {
+      // Если контент пустой, просто закрываем редактор без сохранения
+      if (isCreatingNewNote) {
+        setIsCreatingNewNote(false)
+      }
+      setFullViewNotion(null)
+      return
+    }
+    
+    if (isCreatingNewNote) {
+      // Создаем новую заметку
+      try {
+        await createNotion({ notion_content: content })
+        setIsCreatingNewNote(false)
+        setFullViewNotion(null)
+      } catch (error) {
+        console.error('Ошибка при создании заметки:', error)
+      }
+    } else {
+      // Обновляем существующую заметку
       handleUpdateNote(fullViewNotion.notion_id, content)
     }
   }
@@ -306,10 +340,10 @@ export function NotesBlock() {
   if (fullViewNotion) {
     const parsed = parseNotionContent(fullViewNotion)
     
-    return (
-      <Card className="p-6 h-full flex flex-col">
-        {/* Заголовок только с кнопкой назад - убрал название заметки */}
-        <div className="flex items-center justify-between mb-6">
+          return (
+        <Card className="p-6 h-[calc(100vh-8rem)] flex flex-col max-h-[calc(100vh-8rem)]">
+        {/* Заголовок */}
+        <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -320,31 +354,36 @@ export function NotesBlock() {
               <ArrowLeft className="h-4 w-4" />
               Назад к списку
             </Button>
+            {isCreatingNewNote && (
+              <span className="text-lg font-medium text-gray-600">Новая заметка</span>
+            )}
           </div>
           
-          <div className="flex items-center gap-2">
-            {/* Кнопка отметки выполнения */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                await toggleNotionDone(fullViewNotion.notion_id)
-                // Обновляем локальное состояние fullViewNotion
-                setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
-              }}
-              className="gap-2"
-            >
-              <Check className={cn(
-                "h-4 w-4",
-                fullViewNotion.notion_done ? "text-green-600" : "text-gray-400"
-              )} />
-              {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
-            </Button>
-          </div>
+          {!isCreatingNewNote && (
+            <div className="flex items-center gap-2">
+              {/* Кнопка отметки выполнения */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  await toggleNotionDone(fullViewNotion.notion_id)
+                  // Обновляем локальное состояние fullViewNotion
+                  setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
+                }}
+                className="gap-2"
+              >
+                <Check className={cn(
+                  "h-4 w-4",
+                  fullViewNotion.notion_done ? "text-green-600" : "text-gray-400"
+                )} />
+                {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Содержимое заметки */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           <RichTextEditor
             ref={editorRef}
             initialTitle={parsed.title}
@@ -359,9 +398,9 @@ export function NotesBlock() {
   }
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 h-[calc(100vh-8rem)] flex flex-col max-h-[calc(100vh-8rem)]">
       {/* Заголовок блока */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-semibold">Заметки</h2>
           {totalCount > 0 && (
@@ -378,7 +417,7 @@ export function NotesBlock() {
         </div>
         
         <Button
-          onClick={() => setShowNewNoteModal(true)}
+          onClick={handleCreateNote}
           size="sm"
           className="gap-2"
         >
@@ -388,7 +427,7 @@ export function NotesBlock() {
       </div>
 
       {/* Панель управления */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-shrink-0">
         {/* Поиск */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -439,51 +478,47 @@ export function NotesBlock() {
         )}
       </div>
 
-      {/* Список заметок */}
-      <div className="space-y-3">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Загрузка заметок...</span>
-          </div>
-        ) : notions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            {searchQuery ? (
-              <div>
-                <p>Заметки не найдены</p>
-                <p className="text-sm mt-1">Попробуйте изменить поисковый запрос</p>
-              </div>
-            ) : (
-              <div>
-                <p>У вас пока нет заметок</p>
-                <p className="text-sm mt-1">Нажмите "Добавить", чтобы создать первую заметку</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          notions.map((notion) => (
-            <NoteCard
-              key={notion.notion_id}
-              notion={notion}
-              isSelected={selectedNotions.includes(notion.notion_id)}
-              onToggleSelect={handleToggleSelect}
-              onUpdate={handleUpdateNote}
-              onToggleDone={toggleNotionDone}
-              onDelete={deleteNotion}
-              onOpenFullView={handleOpenFullView}
-              showSelection={true}
-            />
-          ))
-        )}
+      {/* Список заметок с скроллом */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="space-y-3 pr-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Загрузка заметок...</span>
+            </div>
+          ) : notions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {searchQuery ? (
+                <div>
+                  <p>Заметки не найдены</p>
+                  <p className="text-sm mt-1">Попробуйте изменить поисковый запрос</p>
+                </div>
+              ) : (
+                <div>
+                  <p>У вас пока нет заметок</p>
+                  <p className="text-sm mt-1">Нажмите "Добавить", чтобы создать первую заметку</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            notions.map((notion) => (
+              <NoteCard
+                key={notion.notion_id}
+                notion={notion}
+                isSelected={selectedNotions.includes(notion.notion_id)}
+                onToggleSelect={handleToggleSelect}
+                onUpdate={handleUpdateNote}
+                onToggleDone={toggleNotionDone}
+                onDelete={deleteNotion}
+                onOpenFullView={handleOpenFullView}
+                showSelection={true}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {/* Модальные окна */}
-      <NewNoteModal
-        open={showNewNoteModal}
-        onOpenChange={setShowNewNoteModal}
-        onSave={handleCreateNote}
-      />
-
       <BulkDeleteConfirm
         open={showBulkDeleteModal}
         onOpenChange={setShowBulkDeleteModal}

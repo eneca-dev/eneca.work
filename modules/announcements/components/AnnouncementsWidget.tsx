@@ -153,7 +153,7 @@ export function AnnouncementsWidget() {
           />
         </div>
 
-        <div className="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
+        <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
           {filteredAndSortedAnnouncements.length === 0 ? (
             <p className="secondary-text text-center py-8">
               {searchQuery.trim() ? "Ничего не найдено" : "Пока нет объявлений"}

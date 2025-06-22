@@ -100,7 +100,23 @@ export function MarkdownEditor({
   // Инициализация содержимого редактора и MutationObserver
   useEffect(() => {
     if (editorRef.current && initialValue) {
+      // Сохраняем позицию курсора если редактор уже имеет содержимое
+      const savedCursorPosition = editorRef.current.innerHTML.trim() ? saveCursorPosition() : null
+      
       editorRef.current.innerHTML = markdownToHtml(initialValue)
+      
+      // Восстанавливаем курсор если он был сохранен
+      if (savedCursorPosition !== null) {
+        setTimeout(() => {
+          restoreCursorPosition(savedCursorPosition)
+          updateHeaderPlaceholders()
+        }, 0)
+      } else {
+        // При первой инициализации обновляем плейсхолдеры
+        setTimeout(() => {
+          updateHeaderPlaceholders()
+        }, 0)
+      }
     }
 
     // Настройка MutationObserver для отслеживания изменений в редакторе
@@ -154,6 +170,92 @@ export function MarkdownEditor({
       }, 100)
     }
   }, [autoFocus, showTitle])
+
+    // Функция для сохранения позиции курсора
+  const saveCursorPosition = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return null
+    
+    const range = selection.getRangeAt(0)
+    const walker = document.createTreeWalker(
+      editorRef.current!,
+      NodeFilter.SHOW_TEXT,
+      null
+    )
+    
+    let charCount = 0
+    let node
+    
+    while (node = walker.nextNode()) {
+      if (node === range.startContainer) {
+        return charCount + range.startOffset
+      }
+      charCount += node.textContent?.length || 0
+    }
+    
+    return charCount
+  }
+  
+  // Функция для восстановления позиции курсора
+  const restoreCursorPosition = (savedPosition: number) => {
+    if (!editorRef.current || savedPosition === null) return
+    
+    const walker = document.createTreeWalker(
+      editorRef.current,
+      NodeFilter.SHOW_TEXT,
+      null
+    )
+    
+    let charCount = 0
+    let node
+    
+    while (node = walker.nextNode()) {
+      const nodeLength = node.textContent?.length || 0
+      
+      if (charCount + nodeLength >= savedPosition) {
+        const selection = window.getSelection()
+        const range = document.createRange()
+        
+        try {
+          range.setStart(node, savedPosition - charCount)
+          range.collapse(true)
+          
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        } catch (e) {
+          // Если не удалось установить курсор в точную позицию, ставим в конец
+          range.selectNodeContents(editorRef.current)
+          range.collapse(false)
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        }
+        break
+      }
+      
+      charCount += nodeLength
+    }
+  }
+
+  // Функция для обновления состояния плейсхолдеров заголовков
+  const updateHeaderPlaceholders = () => {
+    if (!editorRef.current) return
+    
+    // Находим все заголовки с классом header-placeholder
+    const headers = editorRef.current.querySelectorAll('h1.header-placeholder, h2.header-placeholder, h3.header-placeholder')
+    
+    headers.forEach((header) => {
+      const hasText = (header.textContent?.trim().length ?? 0) > 0
+      
+      if (hasText) {
+        // Если есть текст, убираем атрибут data-placeholder
+        header.removeAttribute('data-placeholder')
+      } else {
+        // Если текста нет, добавляем атрибут data-placeholder
+        const headerNumber = header.tagName === 'H1' ? '1' : header.tagName === 'H2' ? '2' : '3'
+        header.setAttribute('data-placeholder', `Заголовок ${headerNumber}`)
+      }
+    })
+  }
 
   // Функция для применения классов к заголовкам
   const applyHeaderClass = (element: Element) => {
@@ -311,7 +413,7 @@ export function MarkdownEditor({
       }
     }
 
-    // Обработка Enter для списков и обычного текста
+    // Обработка Enter для заголовков, списков и обычного текста
     if (e.key === 'Enter') {
       const selection = window.getSelection()
       if (selection && selection.rangeCount > 0) {
@@ -321,6 +423,31 @@ export function MarkdownEditor({
         // Поднимаемся до элемента
         if (container.nodeType === Node.TEXT_NODE) {
           container = container.parentElement!
+        }
+        
+        // Проверяем, находимся ли в заголовке
+        let headerElement = container as Element
+        while (headerElement && !['H1', 'H2', 'H3'].includes(headerElement.tagName) && headerElement !== editorRef.current) {
+          headerElement = headerElement.parentElement as Element
+        }
+        
+        if (headerElement && ['H1', 'H2', 'H3'].includes(headerElement.tagName)) {
+          e.preventDefault()
+          
+          // Создаем обычный div для новой строки
+          const newDiv = document.createElement('div')
+          newDiv.innerHTML = '<br>'
+          
+          // Вставляем после заголовка
+          headerElement.parentNode?.insertBefore(newDiv, headerElement.nextSibling)
+          
+          // Устанавливаем курсор в новую строку
+          const newRange = document.createRange()
+          newRange.setStart(newDiv, 0)
+          newRange.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(newRange)
+          return
         }
         
         // Ищем родительский bullet-line или checkbox-line
@@ -426,8 +553,29 @@ export function MarkdownEditor({
       case 'h1':
       case 'h2':
       case 'h3':
-        document.execCommand('formatBlock', false, command)
-        // Классы будут применены автоматически через MutationObserver
+        const selectedText = selection.toString()
+        
+        const headerElement = document.createElement(command)
+        headerElement.textContent = selectedText || ''
+        headerElement.className = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2 header-placeholder' :
+                                  command === 'h2' ? 'text-xl font-bold mt-4 mb-2 header-placeholder' :
+                                  'text-lg font-bold mt-4 mb-2 header-placeholder'
+        
+        // Добавляем атрибут data-placeholder только если нет выделенного текста
+        if (!selectedText) {
+          const headerNumber = command === 'h1' ? '1' : command === 'h2' ? '2' : '3'
+          headerElement.setAttribute('data-placeholder', `Заголовок ${headerNumber}`)
+        }
+        
+        range.deleteContents()
+        range.insertNode(headerElement)
+        
+        // Устанавливаем курсор внутрь заголовка
+        const newRange = document.createRange()
+        newRange.setStart(headerElement, 0)
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
         break
     }
     
@@ -493,6 +641,9 @@ export function MarkdownEditor({
   }
 
   const handleBlur = () => {
+    // Обновляем плейсхолдеры при потере фокуса
+    updateHeaderPlaceholders()
+    
     setTimeout(() => {
       if (document.activeElement?.closest('.markdown-editor-container')) {
         return
@@ -624,12 +775,16 @@ export function MarkdownEditor({
             contentEditable
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
+            onInput={updateHeaderPlaceholders}
             className="outline-none min-h-[80px] prose prose-sm max-w-none
                      [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
                      [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
                      [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
                      [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2  
-                     [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2"
+                     [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2
+                     [&_h1.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h1.header-placeholder:empty]:before:text-gray-400 [&_h1.header-placeholder:empty]:before:opacity-60
+                     [&_h2.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h2.header-placeholder:empty]:before:text-gray-400 [&_h2.header-placeholder:empty]:before:opacity-60
+                     [&_h3.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h3.header-placeholder:empty]:before:text-gray-400 [&_h3.header-placeholder:empty]:before:opacity-60"
             suppressContentEditableWarning={true}
             data-placeholder={placeholder}
             style={{

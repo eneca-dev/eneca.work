@@ -150,6 +150,92 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
   }, [])
 
   // Обработчик кликов по чекбоксам
+  // Функция для сохранения позиции курсора
+  const saveCursorPosition = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return null
+    
+    const range = selection.getRangeAt(0)
+    const walker = document.createTreeWalker(
+      editorRef.current!,
+      NodeFilter.SHOW_TEXT,
+      null
+    )
+    
+    let charCount = 0
+    let node
+    
+    while (node = walker.nextNode()) {
+      if (node === range.startContainer) {
+        return charCount + range.startOffset
+      }
+      charCount += node.textContent?.length || 0
+    }
+    
+    return charCount
+  }
+  
+  // Функция для восстановления позиции курсора
+  const restoreCursorPosition = (savedPosition: number) => {
+    if (!editorRef.current || savedPosition === null) return
+    
+    const walker = document.createTreeWalker(
+      editorRef.current,
+      NodeFilter.SHOW_TEXT,
+      null
+    )
+    
+    let charCount = 0
+    let node
+    
+    while (node = walker.nextNode()) {
+      const nodeLength = node.textContent?.length || 0
+      
+      if (charCount + nodeLength >= savedPosition) {
+        const selection = window.getSelection()
+        const range = document.createRange()
+        
+        try {
+          range.setStart(node, savedPosition - charCount)
+          range.collapse(true)
+          
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        } catch (e) {
+          // Если не удалось установить курсор в точную позицию, ставим в конец
+          range.selectNodeContents(editorRef.current)
+          range.collapse(false)
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        }
+        break
+      }
+      
+      charCount += nodeLength
+    }
+  }
+
+  // Функция для обновления состояния плейсхолдеров заголовков
+  const updateHeaderPlaceholders = () => {
+    if (!editorRef.current) return
+    
+    // Находим все заголовки с классом header-placeholder
+    const headers = editorRef.current.querySelectorAll('h1.header-placeholder, h2.header-placeholder, h3.header-placeholder')
+    
+    headers.forEach((header) => {
+      const hasText = (header.textContent?.trim().length ?? 0) > 0
+      
+      if (hasText) {
+        // Если есть текст, убираем атрибут data-placeholder
+        header.removeAttribute('data-placeholder')
+      } else {
+        // Если текста нет, добавляем атрибут data-placeholder
+        const headerNumber = header.tagName === 'H1' ? '1' : header.tagName === 'H2' ? '2' : '3'
+        header.setAttribute('data-placeholder', `Заголовок ${headerNumber}`)
+      }
+    })
+  }
+
   const handleCheckboxClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement
     if (target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
@@ -179,8 +265,24 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
       const htmlContent = markdownToHtml(initialValue)
       console.log('Converted to HTML:', htmlContent)
       
+      // Сохраняем позицию курсора если редактор уже имеет содержимое
+      const savedCursorPosition = editorRef.current.innerHTML.trim() ? saveCursorPosition() : null
+      
       // Очищаем редактор и вставляем содержимое
       editorRef.current.innerHTML = htmlContent
+      
+      // Восстанавливаем курсор если он был сохранен
+      if (savedCursorPosition !== null) {
+        setTimeout(() => {
+          restoreCursorPosition(savedCursorPosition)
+          updateHeaderPlaceholders()
+        }, 0)
+      } else {
+        // При первой инициализации обновляем плейсхолдеры
+        setTimeout(() => {
+          updateHeaderPlaceholders()
+        }, 0)
+      }
     }
     
     // Добавляем обработчик кликов по чекбоксам
@@ -338,12 +440,39 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
       }
     }
 
-    // Обработка Enter для списков
+    // Обработка Enter для заголовков и списков
     if (e.key === 'Enter') {
       const selection = window.getSelection()
       if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0)
         const container = range.commonAncestorContainer
+        
+        // Проверяем, находимся ли в заголовке
+        let headerElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container as Element
+        
+        // Поднимаемся по DOM дереву, ища заголовок
+        while (headerElement && !['H1', 'H2', 'H3'].includes(headerElement.tagName) && headerElement !== editorRef.current) {
+          headerElement = headerElement.parentElement
+        }
+        
+        if (headerElement && ['H1', 'H2', 'H3'].includes(headerElement.tagName)) {
+          e.preventDefault()
+          
+          // Создаем обычный div для новой строки
+          const newDiv = document.createElement('div')
+          newDiv.innerHTML = '<br>'
+          
+          // Вставляем после заголовка
+          headerElement.parentNode?.insertBefore(newDiv, headerElement.nextSibling)
+          
+          // Устанавливаем курсор в новую строку
+          const newRange = document.createRange()
+          newRange.setStart(newDiv, 0)
+          newRange.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(newRange)
+          return
+        }
         
         // Проверяем, находимся ли в списке
         let listElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container as Element
@@ -440,21 +569,69 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
     if (command === 'h1' || command === 'h2' || command === 'h3') {
       const selectedText = selection.toString()
       
-      const headerElement = document.createElement(command)
-      headerElement.textContent = selectedText || 'Заголовок'
-      headerElement.className = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2' :
-                                command === 'h2' ? 'text-xl font-bold mt-4 mb-2' :
-                                'text-lg font-bold mt-4 mb-2'
+      // Проверяем, находимся ли мы уже в заголовке
+      let currentElement = range.startContainer.nodeType === Node.TEXT_NODE 
+        ? range.startContainer.parentElement 
+        : range.startContainer as Element
       
-      range.deleteContents()
-      range.insertNode(headerElement)
+      // Поднимаемся до блочного элемента
+      while (currentElement && currentElement !== editorRef.current) {
+        if (['H1', 'H2', 'H3', 'DIV', 'P'].includes(currentElement.tagName)) {
+          break
+        }
+        currentElement = currentElement.parentElement
+      }
       
-      // Устанавливаем курсор в конец заголовка
-      const newRange = document.createRange()
-      newRange.selectNodeContents(headerElement)
-      newRange.collapse(false)
-      selection.removeAllRanges()
-      selection.addRange(newRange)
+      // Если мы в заголовке, заменяем его
+      if (currentElement && ['H1', 'H2', 'H3'].includes(currentElement.tagName)) {
+        const headerElement = document.createElement(command)
+        headerElement.textContent = currentElement.textContent || ''
+        headerElement.className = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2 header-placeholder' :
+                                  command === 'h2' ? 'text-xl font-bold mt-4 mb-2 header-placeholder' :
+                                  'text-lg font-bold mt-4 mb-2 header-placeholder'
+        
+        // Добавляем атрибут data-placeholder только если нет текста
+        if (!headerElement.textContent?.trim()) {
+          const headerNumber = command === 'h1' ? '1' : command === 'h2' ? '2' : '3'
+          headerElement.setAttribute('data-placeholder', `Заголовок ${headerNumber}`)
+        }
+        
+        currentElement.parentNode?.replaceChild(headerElement, currentElement)
+        
+        // Устанавливаем курсор в заголовок
+        const newRange = document.createRange()
+        if (headerElement.firstChild) {
+          newRange.setStart(headerElement.firstChild, headerElement.firstChild.textContent?.length || 0)
+        } else {
+          newRange.setStart(headerElement, 0)
+        }
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+      } else {
+        // Создаем новый заголовок
+        const headerElement = document.createElement(command)
+        headerElement.textContent = selectedText || ''
+        headerElement.className = command === 'h1' ? 'text-2xl font-bold mt-4 mb-2 header-placeholder' :
+                                  command === 'h2' ? 'text-xl font-bold mt-4 mb-2 header-placeholder' :
+                                  'text-lg font-bold mt-4 mb-2 header-placeholder'
+        
+        // Добавляем атрибут data-placeholder только если нет выделенного текста
+        if (!selectedText) {
+          const headerNumber = command === 'h1' ? '1' : command === 'h2' ? '2' : '3'
+          headerElement.setAttribute('data-placeholder', `Заголовок ${headerNumber}`)
+        }
+        
+        range.deleteContents()
+        range.insertNode(headerElement)
+        
+        // Устанавливаем курсор внутрь заголовка
+        const newRange = document.createRange()
+        newRange.setStart(headerElement, 0)
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+      }
     } else {
       document.execCommand(command, false, undefined)
     }
@@ -506,16 +683,17 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
   const handleSave = () => {
     const editorContent = editorRef.current?.innerHTML || ''
     const markdownContent = htmlToMarkdown(editorContent)
+    const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
     
-    if (markdownContent.trim() || title.trim()) {
-      const combinedContent = combineNotionContent(title.trim(), markdownContent.trim())
-      console.log('💾 Автосохранение заметки:', { title: title.trim(), hasContent: !!markdownContent.trim() })
-      onSave(combinedContent)
-      hasChangedRef.current = false
-    }
+    console.log('💾 Автосохранение заметки:', { title: title.trim(), hasContent: !!markdownContent.trim() })
+    onSave(combinedContent)
+    hasChangedRef.current = false
   }
 
   const handleBlur = () => {
+    // Обновляем плейсхолдеры при потере фокуса
+    updateHeaderPlaceholders()
+    
     setTimeout(() => {
       if (document.activeElement?.closest('.rich-editor-container')) {
         return
@@ -530,7 +708,7 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
   return (
     <div className="rich-editor-container space-y-4 h-full flex flex-col">
       {/* Панель управления - убрал кнопки "Закрыть" и "Сохранить" */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-shrink-0">
         {/* Кнопки форматирования */}
         <div className="flex items-center gap-1">
           <Button
@@ -621,43 +799,51 @@ export const RichTextEditor = forwardRef<EditorRef, RichTextEditorProps>(({
         </div>
       </div>
 
-      {/* Редактор */}
-      <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900 border rounded-lg">
-        <div className="p-6 h-full overflow-y-auto">
+      {/* Редактор с фиксированной высотой и скроллом */}
+      <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900 border rounded-lg min-h-0">
+        <div className="p-6 h-full flex flex-col">
           {showTitle && (
-            <Input
-              ref={titleRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={titlePlaceholder}
-              className="font-bold text-2xl border-none shadow-none px-0 mb-6 bg-transparent"
-              style={{ fontSize: '28px' }}
-            />
+            <div className="flex-shrink-0 mb-6">
+              <Input
+                ref={titleRef}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={titlePlaceholder}
+                className="font-bold text-2xl border-none shadow-none px-0 bg-transparent"
+                style={{ fontSize: '28px' }}
+              />
+            </div>
           )}
           
-          {/* WYSIWYG редактор */}
-          <div
-            ref={editorRef}
-            contentEditable
-            onKeyDown={handleKeyDown}
-            onBlur={handleBlur}
-            className="outline-none min-h-[300px] prose prose-sm max-w-none dark:prose-invert
-                     [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
-                     [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
-                     [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
-                     [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2  
-                     [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2"
-            suppressContentEditableWarning={true}
-            data-placeholder="Начните печатать... Используйте кнопки выше для форматирования или горячие клавиши"
-            style={{
-              fontSize: '14px',
-              lineHeight: '1.5'
-            }}
-          />
+          {/* WYSIWYG редактор с скроллом */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div
+              ref={editorRef}
+              contentEditable
+              onKeyDown={handleKeyDown}
+              onBlur={handleBlur}
+              onInput={updateHeaderPlaceholders}
+              className="outline-none min-h-[300px] prose prose-sm max-w-none dark:prose-invert
+                       [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
+                       [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
+                       [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2
+                       [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2  
+                       [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2
+                       [&_h1.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h1.header-placeholder:empty]:before:text-gray-400 [&_h1.header-placeholder:empty]:before:opacity-60
+                       [&_h2.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h2.header-placeholder:empty]:before:text-gray-400 [&_h2.header-placeholder:empty]:before:opacity-60
+                       [&_h3.header-placeholder:empty]:before:content-[attr(data-placeholder)] [&_h3.header-placeholder:empty]:before:text-gray-400 [&_h3.header-placeholder:empty]:before:opacity-60"
+              suppressContentEditableWarning={true}
+              data-placeholder="Начните печатать... Используйте кнопки выше для форматирования или горячие клавиши"
+              style={{
+                fontSize: '14px',
+                lineHeight: '1.5'
+              }}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-gray-500 flex-shrink-0">
         <p>Заметка автоматически сохраняется при потере фокуса или закрытии страницы</p>
         <p>Горячие клавиши: Ctrl+S (сохранить), Ctrl+B (жирный), Ctrl+I (курсив), Ctrl+U (подчеркнутый), Ctrl+1,2,3 (заголовки)</p>
       </div>
