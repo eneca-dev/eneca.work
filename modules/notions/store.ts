@@ -6,13 +6,16 @@ import type { Notion, NotionInput, NotionUpdate, NotionsFilter, NotionsState, No
 
 type NotionsStore = NotionsState & NotionsMutations
 
-// Helper function to sort notions: undone first, then by creation date descending
+// Helper function to sort notions: undone first (by updated_at), then done (by updated_at)
 const sortNotions = (notions: Notion[]): Notion[] => {
   return [...notions].sort((a, b) => {
     if (a.notion_done !== b.notion_done) {
       return a.notion_done ? 1 : -1
     }
-    return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
+    // Сортируем по последнему изменению (updated_at), затем по created_at если updated_at одинаковы
+    const aTime = new Date(a.notion_updated_at || a.notion_created_at).getTime()
+    const bTime = new Date(b.notion_updated_at || b.notion_created_at).getTime()
+    return bTime - aTime
   })
 }
 
@@ -51,13 +54,8 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
 
       if (error) throw error
 
-      // Сортируем заметки: невыполненные сначала, потом выполненные
-      const sortedData = (data || []).sort((a, b) => {
-        if (a.notion_done !== b.notion_done) {
-          return a.notion_done ? 1 : -1
-        }
-        return new Date(b.notion_created_at).getTime() - new Date(a.notion_created_at).getTime()
-      })
+      // Сортируем заметки: невыполненные сначала, потом выполненные, внутри групп по последнему изменению
+      const sortedData = sortNotions(data || [])
 
       set({ notions: sortedData, isLoading: false })
     } catch (error) {
@@ -89,9 +87,11 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
 
       if (error) throw error
 
-      // Добавляем новую заметку в начало списка
+      // Добавляем новую заметку и пересортируем список
       const currentNotions = get().notions
-      set({ notions: [data[0], ...currentNotions] })
+      const updatedNotions = [data[0], ...currentNotions]
+      const sortedNotions = sortNotions(updatedNotions)
+      set({ notions: sortedNotions })
       
       toast.success('Заметка создана')
     } catch (error) {
@@ -120,12 +120,13 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
 
       if (error) throw error
 
-      // Обновляем заметку в локальном состоянии
+      // Обновляем заметку в локальном состоянии и пересортируем
       const currentNotions = get().notions
       const updatedNotions = currentNotions.map(notion =>
         notion.notion_id === id ? { ...notion, ...data[0] } : notion
       )
-      set({ notions: updatedNotions })
+      const sortedNotions = sortNotions(updatedNotions)
+      set({ notions: sortedNotions })
       
       toast.success('Заметка обновлена')
     } catch (error) {
