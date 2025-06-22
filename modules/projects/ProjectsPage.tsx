@@ -86,16 +86,28 @@ export default function ProjectsPage() {
       {/* Уведомления */}
       {notification && (
         <div className="fixed top-4 right-4 z-50 max-w-md">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg">
+          <div className={`border rounded-lg p-4 shadow-lg ${
+            notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-red-50 border-red-200'
+          }`}>
             <div className="flex items-start">
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-800">
+                <p className={`text-sm font-medium ${
+                  notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
+                    ? 'text-green-800' 
+                    : 'text-red-800'
+                }`}>
                   {notification}
                 </p>
               </div>
               <button
                 onClick={clearNotification}
-                className="ml-3 flex-shrink-0 text-green-400 hover:text-green-600"
+                className={`ml-3 flex-shrink-0 ${
+                  notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
+                    ? 'text-green-400 hover:text-green-600' 
+                    : 'text-red-400 hover:text-red-600'
+                }`}
               >
                 <X className="h-4 w-4" />
               </button>

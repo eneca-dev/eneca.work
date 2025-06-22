@@ -46,7 +46,15 @@ export const useUiStore = create<UiStore>()(
       
       // Существующие методы для управления общим состоянием
       setLoading: (loading: boolean) => set({ loading }),
-      setNotification: (notification: string | null) => set({ notification }),
+      setNotification: (notification: string | null) => {
+        set({ notification })
+        // Автоматически скрываем уведомление через 5 секунд
+        if (notification) {
+          setTimeout(() => {
+            set({ notification: null })
+          }, 5000)
+        }
+      },
       clearNotification: () => set({ notification: null }),
       
       // Новые методы для управления календарем
