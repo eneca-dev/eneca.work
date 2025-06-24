@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { RichTextEditor } from './RichTextEditor'
+import { TipTapEditor } from '@/modules/text-editor'
 
 interface NewNoteModalProps {
   open: boolean
@@ -39,7 +39,7 @@ export function NewNoteModal({ open, onOpenChange, onSave }: NewNoteModalProps) 
         </DialogHeader>
         
         <div className="mt-4 h-[500px]">
-          <RichTextEditor
+          <TipTapEditor
             initialValue=""
             onSave={handleSave}
             onCancel={handleCancel}

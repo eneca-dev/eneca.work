@@ -7,14 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { NoteCard } from './NoteCard'
-import { BulkDeleteConfirm } from './BulkDeleteConfirm'
-import { RichTextEditor, EditorRef } from './RichTextEditor'
-import { useNotionsStore } from '../store'
+import { NoteCard } from '@/modules/notions/components/NoteCard'
+import { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
+import { TipTapEditor } from '@/modules/text-editor'
+import type { EditorRef } from '@/modules/text-editor'
+import { useNotionsStore } from '@/modules/notions/store'
 import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { parseNotionContent } from '../utils'
-import type { Notion } from '../types'
+import { parseNotionContent } from '@/modules/notions/utils'
+import type { Notion } from '@/modules/notions/types'
 
 export function NotesBlock() {
   const {
@@ -39,6 +40,7 @@ export function NotesBlock() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
   const [isCreatingNewNote, setIsCreatingNewNote] = useState(false)
+
   const editorRef = useRef<EditorRef>(null)
   
   const router = useRouter()
@@ -62,6 +64,8 @@ export function NotesBlock() {
       notion_updated_at: new Date().toISOString()
     })
   }
+
+
 
   const handleUpdateNote = async (id: string, content: string) => {
     await updateNotion(id, { notion_content: content })
@@ -384,7 +388,7 @@ export function NotesBlock() {
 
         {/* Содержимое заметки */}
         <div className="flex-1 overflow-hidden min-h-0">
-          <RichTextEditor
+          <TipTapEditor
             ref={editorRef}
             initialTitle={parsed.title}
             initialValue={parsed.content}
@@ -416,14 +420,16 @@ export function NotesBlock() {
           )}
         </div>
         
-        <Button
-          onClick={handleCreateNote}
-          size="sm"
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Добавить
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleCreateNote}
+            size="sm"
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Добавить
+          </Button>
+        </div>
       </div>
 
       {/* Панель управления */}
@@ -511,6 +517,7 @@ export function NotesBlock() {
                 onToggleDone={toggleNotionDone}
                 onDelete={deleteNotion}
                 onOpenFullView={handleOpenFullView}
+
                 showSelection={true}
               />
             ))

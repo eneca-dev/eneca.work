@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { combineNotionContent } from './utils'
-import type { Notion, NotionInput, NotionUpdate, NotionsFilter, NotionsState, NotionsMutations } from './types'
+import { combineNotionContent } from '@/modules/notions/utils'
+import type { Notion, NotionInput, NotionUpdate, NotionsFilter, NotionsState, NotionsMutations } from '@/modules/notions/types'
 
 type NotionsStore = NotionsState & NotionsMutations
 

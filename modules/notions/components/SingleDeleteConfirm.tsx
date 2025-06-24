@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle } from 'lucide-react'
-import { getNotionDisplayTitle } from '../utils'
-import type { Notion } from '../types'
+import { getNotionDisplayTitle } from '@/modules/notions/utils'
+import type { Notion } from '@/modules/notions/types'
 
 interface SingleDeleteConfirmProps {
   open: boolean

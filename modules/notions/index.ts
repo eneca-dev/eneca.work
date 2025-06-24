@@ -1,10 +1,9 @@
 // Основные компоненты
-export { NotesBlock } from './components/NotesBlock'
-export { NoteCard } from './components/NoteCard'
-export { MarkdownEditor } from './components/MarkdownEditor'
-export { NewNoteModal } from './components/NewNoteModal'
-export { BulkDeleteConfirm } from './components/BulkDeleteConfirm'
+export { NotesBlock } from '@/modules/notions/components/NotesBlock'
+export { NoteCard } from '@/modules/notions/components/NoteCard'
+export { NewNoteModal } from '@/modules/notions/components/NewNoteModal'
+export { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
 
 // Store и типы
-export { useNotionsStore } from './store'
-export type * from './types' 
+export { useNotionsStore } from '@/modules/notions/store'
+export type * from '@/modules/notions/types' 

@@ -7,9 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Check, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { parseNotionContent, markdownToHtml } from '../utils'
-import { SingleDeleteConfirm } from './SingleDeleteConfirm'
-import type { Notion } from '../types'
+import { parseNotionContent, markdownToHtml } from '@/modules/notions/utils'
+import { SingleDeleteConfirm } from '@/modules/notions/components/SingleDeleteConfirm'
+import type { Notion } from '@/modules/notions/types'
 
 interface NoteCardProps {
   notion: Notion
@@ -19,6 +19,7 @@ interface NoteCardProps {
   onToggleDone: (id: string) => void
   onDelete: (id: string) => void
   onOpenFullView: (notion: Notion) => void
+
   showSelection?: boolean
 }
 
@@ -30,6 +31,7 @@ export function NoteCard({
   onToggleDone,
   onDelete,
   onOpenFullView,
+
   showSelection = false
 }: NoteCardProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -62,6 +64,8 @@ export function NoteCard({
     }
     onOpenFullView(notion)
   }
+
+
 
   return (
     <Card 
