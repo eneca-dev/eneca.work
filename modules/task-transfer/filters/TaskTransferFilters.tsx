@@ -64,7 +64,6 @@ export function TaskTransferFilters({
   // Инициализация фильтров после загрузки основных данных
   useEffect(() => {
     if (!isMainStoreLoading) {
-      console.log('🔧 Инициализация фильтров после загрузки данных...')
       initialize(taskTransferConfig)
     }
   }, [initialize, isMainStoreLoading])

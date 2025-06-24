@@ -259,6 +259,117 @@ export const getSectionName = (sectionId: string): string => {
   return section ? section.name : "Неизвестный раздел"
 }
 
+// Group assignments by section based on direction
+export const groupAssignmentsBySection = (
+  filteredAssignments: Assignment[],
+  direction: AssignmentDirection,
+  sections: any[], // sections from store
+  getSectionNameFn: (sectionId: string) => string
+): Record<string, {
+  sectionId: string
+  sectionName: string
+  outgoingAssignments: Assignment[]
+  incomingAssignments: Assignment[]
+}> => {
+  if (direction === 'all') {
+    // Для режима 'all' собираем все уникальные разделы и группируем задания правильно
+    const sectionsMap = new Map<string, {
+      sectionId: string
+      sectionName: string
+      outgoingAssignments: Assignment[]
+      incomingAssignments: Assignment[]
+    }>()
+
+    // Проходим по всем заданиям и собираем уникальные разделы
+    filteredAssignments.forEach(assignment => {
+      // Добавляем раздел-отправитель
+      if (assignment.from_section_id && !sectionsMap.has(assignment.from_section_id)) {
+        sectionsMap.set(assignment.from_section_id, {
+          sectionId: assignment.from_section_id,
+          sectionName: assignment.from_section_name || getSectionNameFn(assignment.from_section_id),
+          outgoingAssignments: [],
+          incomingAssignments: []
+        })
+      }
+
+      // Добавляем раздел-получатель
+      if (assignment.to_section_id && !sectionsMap.has(assignment.to_section_id)) {
+        sectionsMap.set(assignment.to_section_id, {
+          sectionId: assignment.to_section_id,
+          sectionName: assignment.to_section_name || getSectionNameFn(assignment.to_section_id),
+          outgoingAssignments: [],
+          incomingAssignments: []
+        })
+      }
+    })
+
+    // Теперь распределяем задания по разделам
+    filteredAssignments.forEach(assignment => {
+      // Исходящее задание для раздела-отправителя
+      if (assignment.from_section_id && sectionsMap.has(assignment.from_section_id)) {
+        sectionsMap.get(assignment.from_section_id)!.outgoingAssignments.push(assignment)
+      }
+
+      // Входящее задание для раздела-получателя
+      if (assignment.to_section_id && sectionsMap.has(assignment.to_section_id)) {
+        sectionsMap.get(assignment.to_section_id)!.incomingAssignments.push(assignment)
+      }
+    })
+
+    const result: Record<string, {
+      sectionId: string
+      sectionName: string
+      outgoingAssignments: Assignment[]
+      incomingAssignments: Assignment[]
+    }> = {}
+    
+    sectionsMap.forEach((value, key) => {
+      result[key] = value
+    })
+    
+    return result
+  } else {
+    // Для режимов 'outgoing' и 'incoming' используем простую группировку
+    return filteredAssignments.reduce((acc, assignment) => {
+      let sectionId: string
+      let sectionName: string
+      let assignmentType: 'outgoing' | 'incoming'
+
+      if (direction === 'outgoing') {
+        sectionId = assignment.from_section_id
+        sectionName = assignment.from_section_name || getSectionNameFn(assignment.from_section_id)
+        assignmentType = 'outgoing'
+      } else {
+        sectionId = assignment.to_section_id
+        sectionName = assignment.to_section_name || getSectionNameFn(assignment.to_section_id)
+        assignmentType = 'incoming'
+      }
+
+      if (!acc[sectionId]) {
+        acc[sectionId] = {
+          sectionId,
+          sectionName,
+          outgoingAssignments: [],
+          incomingAssignments: []
+        }
+      }
+
+      if (assignmentType === 'outgoing') {
+        acc[sectionId].outgoingAssignments.push(assignment)
+      } else {
+        acc[sectionId].incomingAssignments.push(assignment)
+      }
+
+      return acc
+    }, {} as Record<string, {
+      sectionId: string
+      sectionName: string
+      outgoingAssignments: Assignment[]
+      incomingAssignments: Assignment[]
+    }>)
+  }
+}
+
 // Устаревшие функции для совместимости (будут удалены позже)
 export const getFilteredTasks = getFilteredAssignments
 export const getAllTasks = getAllAssignments

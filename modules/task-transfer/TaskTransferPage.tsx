@@ -99,12 +99,39 @@ export default function TaskTransferPage() {
     setLink("")
   }, [])
 
+  // Обработчик изменения раздела "Из"
+  const handleFromSectionChange = useCallback((value: string) => {
+    setFromSectionId(value)
+    // Если выбранный раздел "В" совпадает с новым разделом "Из", очищаем его
+    if (toSectionId === value) {
+      setToSectionId("")
+    }
+  }, [toSectionId])
+
+  // Обработчик изменения раздела "В"
+  const handleToSectionChange = useCallback((value: string) => {
+    // Не позволяем выбрать тот же раздел, что и "Из"
+    if (value !== fromSectionId) {
+      setToSectionId(value)
+    }
+  }, [fromSectionId])
+
   // Функция для создания задания
   const handleCreateAssignment = useCallback(async () => {
     if (!selectedProjectId || !fromSectionId || !toSectionId || !shortTitle || !description) {
       toast({
         title: "Ошибка",
         description: "Пожалуйста, заполните все обязательные поля",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Проверяем что выбраны разные разделы
+    if (fromSectionId === toSectionId) {
+      toast({
+        title: "Ошибка",
+        description: "Нельзя передать задание в тот же раздел. Выберите разные разделы для передачи.",
         variant: "destructive",
       })
       return
@@ -222,7 +249,7 @@ export default function TaskTransferPage() {
                   <Label htmlFor="fromDepartment" className="text-sm font-medium">
                     Из раздела
                   </Label>
-                  <Select disabled={!selectedProjectId} value={fromSectionId} onValueChange={setFromSectionId}>
+                  <Select disabled={!selectedProjectId} value={fromSectionId} onValueChange={handleFromSectionChange}>
                     <SelectTrigger>
                       <SelectValue placeholder={selectedProjectId ? "Выберите раздел" : "Сначала выберите проект"} />
                     </SelectTrigger>
@@ -239,14 +266,21 @@ export default function TaskTransferPage() {
                   <Label htmlFor="toDepartment" className="text-sm font-medium">
                     В раздел
                   </Label>
-                  <Select disabled={!selectedProjectId} value={toSectionId} onValueChange={setToSectionId}>
+                  <Select disabled={!selectedProjectId} value={toSectionId} onValueChange={handleToSectionChange}>
                     <SelectTrigger>
                       <SelectValue placeholder={selectedProjectId ? "Выберите раздел" : "Сначала выберите проект"} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableSections.map((section) => (
-                        <SelectItem key={section.id} value={section.id}>
+                        <SelectItem 
+                          key={section.id} 
+                          value={section.id}
+                          disabled={section.id === fromSectionId}
+                        >
                           {section.name}
+                          {section.id === fromSectionId && (
+                            <span className="text-muted-foreground ml-2">(уже выбран как исходный)</span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -27,6 +27,93 @@ interface AssignmentFromDB {
 }
 
 // Функция для получения заданий с фильтрацией
+// Функция для получения карты проектов
+async function fetchProjectsMap(projectIds: string[]): Promise<Map<string, string>> {
+  const projectsMap = new Map<string, string>()
+  
+  if (projectIds.length === 0) return projectsMap
+
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('project_id, project_name')
+    .in('project_id', projectIds)
+  
+  projects?.forEach(p => projectsMap.set(p.project_id, p.project_name))
+  console.log('✅ Проекты загружены:', projects?.length || 0)
+  
+  return projectsMap
+}
+
+// Функция для получения карты разделов
+async function fetchSectionsMap(sectionIds: string[]): Promise<Map<string, string>> {
+  const sectionsMap = new Map<string, string>()
+  
+  if (sectionIds.length === 0) return sectionsMap
+
+  const { data: sections } = await supabase
+    .from('sections')
+    .select('section_id, section_name')
+    .in('section_id', sectionIds)
+  
+  sections?.forEach(s => sectionsMap.set(s.section_id, s.section_name))
+  console.log('✅ Разделы загружены:', sections?.length || 0)
+  
+  return sectionsMap
+}
+
+// Функция для получения карты пользователей
+async function fetchUsersMap(userIds: string[]): Promise<Map<string, string>> {
+  const usersMap = new Map<string, string>()
+  
+  if (userIds.length === 0) return usersMap
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('user_id, first_name, last_name')
+    .in('user_id', userIds)
+  
+  profiles?.forEach(p => usersMap.set(p.user_id, `${p.first_name} ${p.last_name}`))
+  console.log('✅ Профили загружены:', profiles?.length || 0)
+  
+  return usersMap
+}
+
+// Функция обогащения заданий метаданными
+function enrichAssignmentsWithMetadata(
+  rawAssignments: any[],
+  projectsMap: Map<string, string>,
+  sectionsMap: Map<string, string>,
+  usersMap: Map<string, string>
+): Assignment[] {
+  return rawAssignments.map((assignment: any) => ({
+    assignment_id: assignment.assignment_id,
+    project_id: assignment.project_id,
+    from_section_id: assignment.from_section_id,
+    to_section_id: assignment.to_section_id,
+    title: assignment.title,
+    description: assignment.description,
+    status: assignment.status,
+    created_at: assignment.created_at,
+    updated_at: assignment.updated_at,
+    due_date: assignment.due_date,
+    link: assignment.link,
+    created_by: assignment.created_by,
+    updated_by: assignment.updated_by,
+    planned_transmitted_date: assignment.planned_transmitted_date,
+    planned_duration: assignment.planned_duration,
+    actual_transmitted_date: assignment.actual_transmitted_date,
+    actual_accepted_date: assignment.actual_accepted_date,
+    actual_worked_out_date: assignment.actual_worked_out_date,
+    actual_agreed_date: assignment.actual_agreed_date,
+    // Дополнительная информация из отдельных запросов
+    project_name: projectsMap.get(assignment.project_id),
+    from_section_name: sectionsMap.get(assignment.from_section_id),
+    to_section_name: sectionsMap.get(assignment.to_section_id),
+    created_by_name: assignment.created_by ? usersMap.get(assignment.created_by) : undefined,
+    updated_by_name: assignment.updated_by ? usersMap.get(assignment.updated_by) : undefined
+  }))
+}
+
 export async function fetchAssignments(filters: TaskFilters = {}): Promise<Assignment[]> {
   try {
     let query = supabase
@@ -34,7 +121,6 @@ export async function fetchAssignments(filters: TaskFilters = {}): Promise<Assig
       .select('*')
       .order('created_at', { ascending: false })
     
-
     // Применяем фильтры
     if (filters.projectId) {
       query = query.eq('project_id', filters.projectId)
@@ -59,7 +145,7 @@ export async function fetchAssignments(filters: TaskFilters = {}): Promise<Assig
 
     console.log('✅ Задания загружены:', data.length)
     
-    // Получаем дополнительную информацию отдельными запросами
+    // Извлекаем уникальные ID для дополнительных запросов
     const projectIds = [...new Set(data.map(a => a.project_id).filter(Boolean))]
     const sectionIds = [...new Set([
       ...data.map(a => a.from_section_id).filter(Boolean),
@@ -76,70 +162,15 @@ export async function fetchAssignments(filters: TaskFilters = {}): Promise<Assig
       userIds: userIds.length
     })
 
-    // Получаем проекты
-    const projectsMap = new Map()
-    if (projectIds.length > 0) {
-      const { data: projects } = await supabase
-        .from('projects')
-        .select('project_id, project_name')
-        .in('project_id', projectIds)
-      
-      projects?.forEach(p => projectsMap.set(p.project_id, p.project_name))
-      console.log('✅ Проекты загружены:', projects?.length || 0)
-    }
-
-    // Получаем разделы
-    const sectionsMap = new Map()
-    if (sectionIds.length > 0) {
-      const { data: sections } = await supabase
-        .from('sections')
-        .select('section_id, section_name')
-        .in('section_id', sectionIds)
-      
-      sections?.forEach(s => sectionsMap.set(s.section_id, s.section_name))
-      console.log('✅ Разделы загружены:', sections?.length || 0)
-    }
-
-    // Получаем профили пользователей
-    const usersMap = new Map()
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, first_name, last_name')
-        .in('user_id', userIds)
-      
-      profiles?.forEach(p => usersMap.set(p.user_id, `${p.first_name} ${p.last_name}`))
-      console.log('✅ Профили загружены:', profiles?.length || 0)
-    }
+    // Параллельно загружаем все карты данных
+    const [projectsMap, sectionsMap, usersMap] = await Promise.all([
+      fetchProjectsMap(projectIds),
+      fetchSectionsMap(sectionIds),
+      fetchUsersMap(userIds)
+    ])
     
-    // Преобразуем данные в нужный формат
-    const assignments = data.map((assignment: any) => ({
-      assignment_id: assignment.assignment_id,
-      project_id: assignment.project_id,
-      from_section_id: assignment.from_section_id,
-      to_section_id: assignment.to_section_id,
-      title: assignment.title,
-      description: assignment.description,
-      status: assignment.status,
-      created_at: assignment.created_at,
-      updated_at: assignment.updated_at,
-      due_date: assignment.due_date,
-      link: assignment.link,
-      created_by: assignment.created_by,
-      updated_by: assignment.updated_by,
-      planned_transmitted_date: assignment.planned_transmitted_date,
-      planned_duration: assignment.planned_duration,
-      actual_transmitted_date: assignment.actual_transmitted_date,
-      actual_accepted_date: assignment.actual_accepted_date,
-      actual_worked_out_date: assignment.actual_worked_out_date,
-      actual_agreed_date: assignment.actual_agreed_date,
-      // Дополнительная информация из отдельных запросов
-      project_name: projectsMap.get(assignment.project_id),
-      from_section_name: sectionsMap.get(assignment.from_section_id),
-      to_section_name: sectionsMap.get(assignment.to_section_id),
-      created_by_name: assignment.created_by ? usersMap.get(assignment.created_by) : undefined,
-      updated_by_name: assignment.updated_by ? usersMap.get(assignment.updated_by) : undefined
-    }))
+    // Обогащаем задания метаданными
+    const assignments = enrichAssignmentsWithMetadata(data, projectsMap, sectionsMap, usersMap)
 
     console.log('🎉 Задания обработаны и готовы к возврату:', assignments.length)
     return assignments

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "../store"
-import { getFilteredAssignments, getSectionName, getStatusColor, formatDate } from "../utils"
+import { getFilteredAssignments, getSectionName, getStatusColor, formatDate, groupAssignmentsBySection } from "../utils"
 import { ChevronDown, ChevronRight, ExternalLink, User, Calendar, Clock, ChevronUp, ChevronDown as ChevronDownIcon, ArrowRight, RotateCcw, Edit3 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -192,105 +192,12 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
   }
 
         // Группируем задания по разделам
-  const assignmentsBySection = (() => {
-    if (direction === 'all') {
-      // Для режима 'all' собираем все уникальные разделы и группируем задания правильно
-      const sectionsMap = new Map<string, {
-        sectionId: string
-        sectionName: string
-        outgoingAssignments: Assignment[]
-        incomingAssignments: Assignment[]
-      }>()
-
-      // Проходим по всем заданиям и собираем уникальные разделы
-      filteredAssignments.forEach(assignment => {
-        // Добавляем раздел-отправитель
-        if (assignment.from_section_id && !sectionsMap.has(assignment.from_section_id)) {
-          sectionsMap.set(assignment.from_section_id, {
-            sectionId: assignment.from_section_id,
-            sectionName: assignment.from_section_name || getSectionName(assignment.from_section_id),
-            outgoingAssignments: [],
-            incomingAssignments: []
-          })
-        }
-
-        // Добавляем раздел-получатель
-        if (assignment.to_section_id && !sectionsMap.has(assignment.to_section_id)) {
-          sectionsMap.set(assignment.to_section_id, {
-            sectionId: assignment.to_section_id,
-            sectionName: assignment.to_section_name || getSectionName(assignment.to_section_id),
-            outgoingAssignments: [],
-            incomingAssignments: []
-          })
-        }
-      })
-
-      // Теперь распределяем задания по разделам
-      filteredAssignments.forEach(assignment => {
-        // Исходящее задание для раздела-отправителя
-        if (assignment.from_section_id && sectionsMap.has(assignment.from_section_id)) {
-          sectionsMap.get(assignment.from_section_id)!.outgoingAssignments.push(assignment)
-        }
-
-        // Входящее задание для раздела-получателя
-        if (assignment.to_section_id && sectionsMap.has(assignment.to_section_id)) {
-          sectionsMap.get(assignment.to_section_id)!.incomingAssignments.push(assignment)
-        }
-      })
-
-      const result: Record<string, {
-        sectionId: string
-        sectionName: string
-        outgoingAssignments: Assignment[]
-        incomingAssignments: Assignment[]
-      }> = {}
-      
-      sectionsMap.forEach((value, key) => {
-        result[key] = value
-      })
-      
-      return result
-    } else {
-      // Для режимов 'outgoing' и 'incoming' используем простую группировку
-      return filteredAssignments.reduce((acc, assignment) => {
-        let sectionId: string
-        let sectionName: string
-        let assignmentType: 'outgoing' | 'incoming'
-
-        if (direction === 'outgoing') {
-          sectionId = assignment.from_section_id
-          sectionName = assignment.from_section_name || getSectionName(assignment.from_section_id)
-          assignmentType = 'outgoing'
-        } else {
-          sectionId = assignment.to_section_id
-          sectionName = assignment.to_section_name || getSectionName(assignment.to_section_id)
-          assignmentType = 'incoming'
-        }
-
-        if (!acc[sectionId]) {
-          acc[sectionId] = {
-            sectionId,
-            sectionName,
-            outgoingAssignments: [],
-            incomingAssignments: []
-          }
-        }
-
-        if (assignmentType === 'outgoing') {
-          acc[sectionId].outgoingAssignments.push(assignment)
-        } else {
-          acc[sectionId].incomingAssignments.push(assignment)
-            }
-
-            return acc
-      }, {} as Record<string, {
-        sectionId: string
-        sectionName: string
-        outgoingAssignments: Assignment[]
-        incomingAssignments: Assignment[]
-      }>)
-    }
-  })()
+  const assignmentsBySection = groupAssignmentsBySection(
+    filteredAssignments,
+    direction,
+    sections,
+    getSectionName
+  )
 
   return (
     <div className="space-y-6">
