@@ -95,7 +95,7 @@ export function NoteCard({
                   {/* Заголовок заметки */}
                   {parsed.title && (
                     <h1 className={cn(
-                      "text-lg font-bold leading-tight mb-2 line-clamp-2",
+                      "text-2xl font-bold leading-none mb-2 line-clamp-2",
                       notion.notion_done && "line-through text-gray-500"
                     )}>
                       {parsed.title}

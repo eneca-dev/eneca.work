@@ -383,7 +383,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               }
             }}
             placeholder={titlePlaceholder}
-            className="text-xl font-bold border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-primary focus:ring-0"
+            className="text-2xl font-bold leading-none mb-2 border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-primary focus:ring-0"
             autoFocus={autoFocus}
           />
         </div>
@@ -403,7 +403,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Заголовок 1"
+            title="Заголовок 1 (# )"
           >
             <Heading1 className="h-4 w-4" />
           </Button>
@@ -417,7 +417,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Заголовок 2"
+            title="Заголовок 2 (## )"
           >
             <Heading2 className="h-4 w-4" />
           </Button>
@@ -431,7 +431,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Заголовок 3"
+            title="Заголовок 3 (### )"
           >
             <Heading3 className="h-4 w-4" />
           </Button>
@@ -452,7 +452,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Жирный"
+            title="Жирный (Ctrl+B)"
           >
             <Bold className="h-4 w-4" />
           </Button>
@@ -466,7 +466,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Курсив"
+            title="Курсив (Ctrl+I)"
           >
             <Italic className="h-4 w-4" />
           </Button>
@@ -480,7 +480,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Подчеркнутый"
+            title="Подчеркнутый (Ctrl+U)"
           >
             <UnderlineIcon className="h-4 w-4" />
           </Button>
@@ -494,7 +494,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Зачеркнутый"
+            title="Зачеркнутый (Ctrl+Shift+S)"
           >
             <Strikethrough className="h-4 w-4" />
           </Button>
@@ -529,7 +529,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                 ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
                 : 'hover:bg-gray-200'
             )}
-            title="Маркированный список"
+            title="Маркированный список (- )"
           >
             <List className="h-4 w-4" />
           </Button>

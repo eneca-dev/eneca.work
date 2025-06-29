@@ -358,9 +358,6 @@ export function NotesBlock() {
               <ArrowLeft className="h-4 w-4" />
               Назад к списку
             </Button>
-            {isCreatingNewNote && (
-              <span className="text-lg font-medium text-gray-600">Новая заметка</span>
-            )}
           </div>
           
           {!isCreatingNewNote && (

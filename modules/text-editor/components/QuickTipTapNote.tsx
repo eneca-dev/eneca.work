@@ -189,7 +189,7 @@ export function QuickTipTapNote({
             }
           }}
           placeholder={titlePlaceholder}
-          className="font-medium border-0 bg-transparent px-0 focus:ring-0 text-base"
+          className="text-2xl font-bold leading-none mb-2 border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-primary focus:ring-0"
         />
       </div>
 

@@ -570,16 +570,6 @@ export function getNotionDisplayTitle(notion: Notion): string {
     return parsed.title
   }
   
-  // Если нет заголовка, берем первые 50 символов из содержимого
-  const text = parsed.content.replace(/[#*_`\[\]]/g, '').trim()
-  if (text.length > 50) {
-    return text.substring(0, 50) + '...'
-  }
-  
-  // Если есть текст, но он короткий - возвращаем его
-  if (text) {
-    return text
-  }
   
   // Если совсем нет содержимого - возвращаем "Без названия"
   return 'Без названия'
