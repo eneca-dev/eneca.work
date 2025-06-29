@@ -65,15 +65,30 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     const cleanContent = editorContent.trim()
     
     if (!cleanTitle && !cleanContent) return ''
-    if (!cleanTitle) return cleanContent
+    
+    // Если нет заголовка, но есть контент, устанавливаем "Без названия"
+    if (!cleanTitle) {
+      if (cleanContent) {
+        return `# Без названия\n\n${cleanContent}`
+      }
+      return cleanContent
+    }
+    
+    // Если есть заголовок, но нет контента
     if (!cleanContent) return `# ${cleanTitle}`
     
+    // Если есть и заголовок, и контент
     return `# ${cleanTitle}\n\n${cleanContent}`
   }
 
   // Парсинг исходного содержимого
-  const parseInitialContent = (content: string) => {
+  const parseInitialContent = (content: string, hasExternalTitle: boolean) => {
     if (!content) return { title: '', editorContent: '' }
+    
+    // Если заголовок уже передан извне (через initialTitle), не извлекаем его из контента
+    if (hasExternalTitle) {
+      return { title: '', editorContent: content }
+    }
     
     const lines = content.split('\n')
     const firstLine = lines[0]?.trim()
@@ -90,7 +105,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     return { title: '', editorContent: content }
   }
 
-  const { title: parsedTitle, editorContent: parsedContent } = parseInitialContent(initialValue)
+  const { title: parsedTitle, editorContent: parsedContent } = parseInitialContent(initialValue, !!initialTitle)
 
   // Инициализируем заголовок
   useEffect(() => {
@@ -531,7 +546,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                      [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic
                      [&_.ProseMirror_code]:bg-gray-100 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm
                      [&_.ProseMirror_mark]:bg-yellow-200
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input]:m-0
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-center [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
                      [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold"
         />
       </div>

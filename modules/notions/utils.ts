@@ -29,9 +29,19 @@ export function combineNotionContent(title: string, content: string): string {
   const cleanContent = content.trim()
   
   if (!cleanTitle && !cleanContent) return ''
-  if (!cleanTitle) return cleanContent
+  
+  // Если нет заголовка, но есть контент, устанавливаем "Без названия"
+  if (!cleanTitle) {
+    if (cleanContent) {
+      return `# Без названия\n\n${cleanContent}`
+    }
+    return cleanContent
+  }
+  
+  // Если есть заголовок, но нет контента
   if (!cleanContent) return `# ${cleanTitle}`
   
+  // Если есть и заголовок, и контент
   return `# ${cleanTitle}\n\n${cleanContent}`
 }
 
@@ -566,5 +576,11 @@ export function getNotionDisplayTitle(notion: Notion): string {
     return text.substring(0, 50) + '...'
   }
   
-  return text || 'Пустая заметка'
+  // Если есть текст, но он короткий - возвращаем его
+  if (text) {
+    return text
+  }
+  
+  // Если совсем нет содержимого - возвращаем "Без названия"
+  return 'Без названия'
 } 
