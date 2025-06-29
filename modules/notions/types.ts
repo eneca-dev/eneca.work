@@ -37,8 +37,10 @@ export interface NotionsState {
 
 export interface NotionsMutations {
   fetchNotions: (filter?: NotionsFilter) => Promise<void>
-  createNotion: (input: NotionInput) => Promise<void>
+  createNotion: (input: NotionInput) => Promise<Notion>
+  createNotionSilent: (input: NotionInput) => Promise<Notion>
   updateNotion: (id: string, update: NotionUpdate) => Promise<void>
+  updateNotionSilent: (id: string, update: NotionUpdate) => Promise<Notion>
   deleteNotion: (id: string) => Promise<void>
   deleteNotions: (ids: string[]) => Promise<void>
   toggleNotionDone: (id: string) => Promise<void>

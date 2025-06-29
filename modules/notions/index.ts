@@ -3,9 +3,11 @@ export { NotesBlock } from '@/modules/notions/components/NotesBlock'
 export { NoteCard } from '@/modules/notions/components/NoteCard'
 export { NewNoteModal } from '@/modules/notions/components/NewNoteModal'
 export { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
+export { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
 
-// Store, типы и утилиты
+// Store, хуки, типы и утилиты
 export { useNotionsStore } from '@/modules/notions/store'
+export { useAutoSave } from '@/modules/notions/hooks/useAutoSave'
 export type * from '@/modules/notions/types'
 export { 
   parseNotionContent, 

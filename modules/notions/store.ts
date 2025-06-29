@@ -94,6 +94,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       set({ notions: sortedNotions })
       
       toast.success('Заметка создана')
+      return data[0]
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 
                           typeof error === 'string' ? error :
@@ -101,6 +102,41 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       
       console.error('Error creating notion:', errorMessage)
       toast.error(errorMessage)
+      throw error
+    }
+  },
+
+  createNotionSilent: async (input: NotionInput) => {
+    try {
+      const supabase = createClient()
+      
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
+      const { data, error } = await supabase
+        .from('notions')
+        .insert([{
+          notion_content: input.notion_content,
+          notion_done: false,
+          notion_created_by: user.id
+        }])
+        .select()
+
+      if (error) throw error
+
+      // Добавляем новую заметку и пересортируем список
+      const currentNotions = get().notions
+      const updatedNotions = [data[0], ...currentNotions]
+      const sortedNotions = sortNotions(updatedNotions)
+      set({ notions: sortedNotions })
+      
+      return data[0]
+    } catch (error) {
+      console.error('Error creating notion silently:', error)
       throw error
     }
   },
@@ -132,6 +168,36 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error updating notion:', error)
       toast.error('Ошибка при обновлении заметки')
+    }
+  },
+
+  updateNotionSilent: async (id: string, update: NotionUpdate) => {
+    try {
+      const supabase = createClient()
+      
+      const { data, error } = await supabase
+        .from('notions')
+        .update({
+          ...update,
+          notion_updated_at: new Date().toISOString()
+        })
+        .eq('notion_id', id)
+        .select()
+
+      if (error) throw error
+
+      // Обновляем заметку в локальном состоянии и пересортируем
+      const currentNotions = get().notions
+      const updatedNotions = currentNotions.map(notion =>
+        notion.notion_id === id ? { ...notion, ...data[0] } : notion
+      )
+      const sortedNotions = sortNotions(updatedNotions)
+      set({ notions: sortedNotions })
+      
+      return data[0]
+    } catch (error) {
+      console.error('Error updating notion silently:', error)
+      throw error
     }
   },
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useEffect, useState } from 'react'
+import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -35,7 +35,6 @@ import {
   Link as LinkIcon,
   Undo,
   Redo,
-  Save,
   X,
   CheckSquare,
   Type,
@@ -44,6 +43,8 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { htmlToMarkdown, markdownToTipTapHTML } from '@/modules/notions'
+import { useAutoSave } from '@/modules/notions/hooks/useAutoSave'
+import { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
 import type { TipTapEditorProps, TipTapEditorRef } from '@/modules/text-editor/types'
 
 export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
@@ -54,10 +55,19 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   titlePlaceholder = 'Заголовок заметки',
   showTitle = true,
   autoFocus = true,
-  className
+  className,
+  notionId,
+  enableAutoSave = true
 }, ref) => {
   const [title, setTitle] = useState(initialTitle)
   const [hasChanges, setHasChanges] = useState(false)
+  
+  // Хук автосохранения
+  const { saveStatus, triggerSave, forceSave } = useAutoSave({
+    notionId,
+    enabled: enableAutoSave && !!notionId,
+    delay: 300 // Ещё быстрее для мгновенной реакции
+  })
 
   // Комбинирование заголовка и содержимого
   const combineContent = (titleValue: string, editorContent: string) => {
@@ -172,12 +182,63 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     },
     onUpdate: ({ editor }) => {
       setHasChanges(true)
+      
+      // Автосохранение при изменении контента
+      if (enableAutoSave && notionId) {
+        try {
+          const editorHTML = editor.getHTML()
+          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const combinedContent = combineContent(title, editorMarkdown)
+          triggerSave(combinedContent)
+        } catch (error) {
+          console.error('Ошибка при автосохранении:', error)
+        }
+      }
+    },
+    onBlur: ({ editor }) => {
+      // Принудительно сохраняем при потере фокуса
+      if (enableAutoSave && notionId && hasChanges) {
+        try {
+          const editorHTML = editor.getHTML()
+          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const combinedContent = combineContent(title, editorMarkdown)
+          // Используем forceSave для немедленного сохранения без debounce
+          forceSave(combinedContent)
+        } catch (error) {
+          console.error('Ошибка при сохранении на blur:', error)
+        }
+      }
     },
     autofocus: autoFocus && !showTitle
   })
 
   useImperativeHandle(ref, () => ({
-    save: handleSave,
+    save: async () => {
+      // Принудительное автосохранение
+      if (enableAutoSave && notionId && editor) {
+        try {
+          const editorHTML = editor.getHTML()
+          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const combinedContent = combineContent(title, editorMarkdown)
+          await forceSave(combinedContent)
+        } catch (error) {
+          console.error('Ошибка при принудительном сохранении:', error)
+        }
+      } else {
+        // Обычное сохранение через callback для режимов без автосохранения
+        if (editor) {
+          try {
+            const editorHTML = editor.getHTML()
+            const editorMarkdown = htmlToMarkdown(editorHTML)
+            const combinedContent = combineContent(title, editorMarkdown)
+            onSave(combinedContent)
+            setHasChanges(false)
+          } catch (error) {
+            console.error('Ошибка при сохранении:', error)
+          }
+        }
+      }
+    },
     focus: () => {
       if (showTitle && !title.trim()) {
         document.getElementById('title-input')?.focus()
@@ -199,63 +260,101 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     }
   }))
 
-  const handleSave = () => {
-    if (!editor) return
+
+
+  // Функция принудительного сохранения
+  const performForceSave = useCallback(async () => {
+    if (!enableAutoSave || !notionId || !editor) return
     
     try {
-      // Получаем HTML-контент вместо обычного текста
       const editorHTML = editor.getHTML()
-      // Конвертируем HTML в markdown
       const editorMarkdown = htmlToMarkdown(editorHTML)
       const combinedContent = combineContent(title, editorMarkdown)
-      
-      onSave(combinedContent)
-      setHasChanges(false)
-      toast.success('Заметка сохранена')
+      await forceSave(combinedContent)
     } catch (error) {
-      console.error('Ошибка при сохранении:', error)
-      toast.error('Ошибка при сохранении заметки')
+      console.error('Ошибка при принудительном сохранении:', error)
     }
-  }
+  }, [enableAutoSave, notionId, editor, title, forceSave, combineContent])
 
   const handleTitleChange = (value: string) => {
     setTitle(value)
     setHasChanges(true)
+    
+    // Автосохранение при изменении заголовка
+    if (enableAutoSave && notionId && editor) {
+      try {
+        const editorHTML = editor.getHTML()
+        const editorMarkdown = htmlToMarkdown(editorHTML)
+        const combinedContent = combineContent(value, editorMarkdown)
+        triggerSave(combinedContent)
+      } catch (error) {
+        console.error('Ошибка при автосохранении заголовка:', error)
+      }
+    }
   }
 
-  // Проверка на изменения при закрытии
+  // Принудительное сохранение при различных событиях
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasChanges) {
+      // Если автосохранение включено, принудительно сохраняем
+      if (enableAutoSave && notionId && hasChanges) {
+        // Немедленно запускаем сохранение
+        performForceSave()
+        
+        // Задерживаем закрытие на короткое время для завершения сохранения
         e.preventDefault()
         e.returnValue = ''
+        
+        // Через короткое время убираем блокировку
+        setTimeout(() => {
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+        }, 100)
+      }
+      
+      // Если автосохранение выключено, показываем предупреждение
+      if (!enableAutoSave && hasChanges) {
+        e.preventDefault()
+        e.returnValue = 'У вас есть несохраненные изменения. Вы уверены, что хотите покинуть страницу?'
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      // Сохраняем при скрытии вкладки
+      if (document.hidden && enableAutoSave && hasChanges) {
+        performForceSave()
+      }
+    }
+
+    const handlePageHide = () => {
+      // Сохраняем при скрытии страницы (iOS Safari)
+      if (enableAutoSave && hasChanges) {
+        performForceSave()
       }
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasChanges])
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handlePageHide)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handlePageHide)
+    }
+  }, [hasChanges, enableAutoSave, notionId, title, editor, performForceSave, combineContent])
 
   // Горячие клавиши
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case 's':
-            e.preventDefault()
-            handleSave()
-            break
-          case 'Escape':
-            e.preventDefault()
-            onCancel()
-            break
-        }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [onCancel])
 
   if (!editor) {
     return null
@@ -270,6 +369,19 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             id="title-input"
             value={title}
             onChange={(e) => handleTitleChange(e.target.value)}
+            onBlur={() => {
+              // Принудительно сохраняем при потере фокуса заголовка
+              if (enableAutoSave && notionId && hasChanges && editor) {
+                try {
+                  const editorHTML = editor.getHTML()
+                  const editorMarkdown = htmlToMarkdown(editorHTML)
+                  const combinedContent = combineContent(title, editorMarkdown)
+                  forceSave(combinedContent)
+                } catch (error) {
+                  console.error('Ошибка при сохранении заголовка на blur:', error)
+                }
+              }
+            }}
             placeholder={titlePlaceholder}
             className="text-xl font-bold border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-primary focus:ring-0"
             autoFocus={autoFocus}
@@ -287,7 +399,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 1 }) && 'bg-accent'
+              editor.isActive('heading', { level: 1 }) 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Заголовок 1"
           >
@@ -299,7 +413,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 2 }) && 'bg-accent'
+              editor.isActive('heading', { level: 2 }) 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Заголовок 2"
           >
@@ -311,7 +427,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('heading', { level: 3 }) && 'bg-accent'
+              editor.isActive('heading', { level: 3 }) 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Заголовок 3"
           >
@@ -330,7 +448,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('bold') && 'bg-accent'
+              editor.isActive('bold') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Жирный"
           >
@@ -342,7 +462,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleItalic().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('italic') && 'bg-accent'
+              editor.isActive('italic') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Курсив"
           >
@@ -354,7 +476,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('underline') && 'bg-accent'
+              editor.isActive('underline') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Подчеркнутый"
           >
@@ -366,7 +490,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleStrike().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('strike') && 'bg-accent'
+              editor.isActive('strike') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Зачеркнутый"
           >
@@ -378,7 +504,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleHighlight().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('highlight') && 'bg-accent'
+              editor.isActive('highlight') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Выделение"
           >
@@ -397,7 +525,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('bulletList') && 'bg-accent'
+              editor.isActive('bulletList') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Маркированный список"
           >
@@ -409,7 +539,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('orderedList') && 'bg-accent'
+              editor.isActive('orderedList') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Нумерованный список"
           >
@@ -421,7 +553,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleTaskList().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('taskList') && 'bg-accent'
+              editor.isActive('taskList') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Список задач"
           >
@@ -440,7 +574,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('blockquote') && 'bg-accent'
+              editor.isActive('blockquote') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Цитата"
           >
@@ -452,7 +588,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
             onClick={() => editor.chain().focus().toggleCode().run()}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('code') && 'bg-accent'
+              editor.isActive('code') 
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+                : 'hover:bg-gray-200'
             )}
             title="Код"
           >
@@ -503,31 +641,13 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           </Button>
         </div>
 
-        {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        {/* Индикатор автосохранения */}
+        {enableAutoSave && (
+          <div className="flex items-center ml-auto mr-2">
+            <SaveIndicator status={saveStatus} />
+          </div>
+        )}
 
-        {/* Действия */}
-        <div className="flex gap-1 ml-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
-            className="h-8 px-3 text-gray-600 hover:text-gray-800"
-            title="Отмена"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Отмена
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            className="h-8 px-3"
-            title="Сохранить (Ctrl+S)"
-          >
-            <Save className="h-4 w-4 mr-1" />
-            Сохранить
-          </Button>
-        </div>
       </div>
 
       {/* Редактор */}
@@ -539,20 +659,20 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                      [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-4 [&_.ProseMirror_h1]:mt-6
                      [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5
                      [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4
-                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-gray-500
                      [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2
                      [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2
                      [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
                      [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic
                      [&_.ProseMirror_code]:bg-gray-100 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm
                      [&_.ProseMirror_mark]:bg-yellow-200
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-center [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
                      [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold"
         />
       </div>
 
-      {/* Индикатор изменений */}
-      {hasChanges && (
+      {/* Индикатор изменений - только если автосохранение выключено */}
+      {hasChanges && !enableAutoSave && (
         <div className="mt-2 text-sm text-muted-foreground flex items-center gap-1 flex-shrink-0">
           <div className="w-2 h-2 bg-foreground rounded-full animate-pulse" />
           Есть несохраненные изменения

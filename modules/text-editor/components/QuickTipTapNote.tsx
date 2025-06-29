@@ -18,12 +18,14 @@ import {
   List,
   CheckSquare,
   Highlighter,
-  Save,
   X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { htmlToMarkdown } from '@/modules/notions'
+import { useAutoSave } from '@/modules/notions/hooks/useAutoSave'
+import { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
+import { useNotionsStore } from '@/modules/notions/store'
 import type { QuickTipTapNoteProps } from '@/modules/text-editor/types'
 
 export function QuickTipTapNote({
@@ -35,6 +37,15 @@ export function QuickTipTapNote({
 }: QuickTipTapNoteProps) {
   const [title, setTitle] = useState('')
   const [hasChanges, setHasChanges] = useState(false)
+  const [createdNotionId, setCreatedNotionId] = useState<string | null>(null)
+  const { createNotionSilent } = useNotionsStore()
+  
+  // Хук автосохранения
+  const { saveStatus, triggerSave } = useAutoSave({
+    notionId: createdNotionId || undefined,
+    enabled: !!createdNotionId,
+    delay: 300
+  })
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -60,54 +71,62 @@ export function QuickTipTapNote({
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[120px] p-3 prose-headings:font-bold prose-h1:text-xl prose-h1:mb-2 prose-h2:text-lg prose-h2:mb-2 prose-h3:text-base prose-h3:mb-2 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-4 prose-ol:list-decimal prose-ol:ml-4 prose-li:my-1',
       },
     },
-    onUpdate: () => {
+    onUpdate: async ({ editor }) => {
       setHasChanges(true)
+      
+      // Автосоздание заметки при первом изменении
+      if (!createdNotionId) {
+        try {
+          const editorHTML = editor.getHTML()
+          const editorMarkdown = htmlToMarkdown(editorHTML).trim()
+          const titleContent = title.trim()
+          
+          // Создаем заметку только если есть контент
+          if (titleContent || editorMarkdown) {
+            let combinedContent = ''
+            if (titleContent && editorMarkdown) {
+              combinedContent = `# ${titleContent}\n\n${editorMarkdown}`
+            } else if (titleContent) {
+              combinedContent = `# ${titleContent}`
+            } else {
+              combinedContent = editorMarkdown
+            }
+            
+                         const newNotion = await createNotionSilent({ notion_content: combinedContent })
+             setCreatedNotionId(newNotion.notion_id)
+          }
+        } catch (error) {
+          console.error('Ошибка при автосоздании заметки:', error)
+        }
+      } else {
+        // Автосохранение существующей заметки
+        try {
+          const editorHTML = editor.getHTML()
+          const editorMarkdown = htmlToMarkdown(editorHTML).trim()
+          const titleContent = title.trim()
+          
+          let combinedContent = ''
+          if (titleContent && editorMarkdown) {
+            combinedContent = `# ${titleContent}\n\n${editorMarkdown}`
+          } else if (titleContent) {
+            combinedContent = `# ${titleContent}`
+          } else {
+            combinedContent = editorMarkdown
+          }
+          
+          triggerSave(combinedContent)
+        } catch (error) {
+          console.error('Ошибка при автосохранении:', error)
+        }
+      }
     },
     autofocus: autoFocus
   })
 
-  const handleSave = () => {
-    if (!editor) return
-    
-    try {
-      // Получаем HTML-контент и конвертируем в markdown
-      const editorHTML = editor.getHTML()
-      const editorMarkdown = htmlToMarkdown(editorHTML).trim()
-      const titleContent = title.trim()
-      
-      if (!titleContent && !editorMarkdown) {
-        toast.error('Введите заголовок или текст заметки')
-        return
-      }
-      
-      let combinedContent = ''
-      if (titleContent && editorMarkdown) {
-        combinedContent = `# ${titleContent}\n\n${editorMarkdown}`
-      } else if (titleContent) {
-        combinedContent = `# ${titleContent}`
-      } else {
-        combinedContent = editorMarkdown
-      }
-      
-      onSave(combinedContent)
-      setHasChanges(false)
-      
-      // Очищаем редактор
-      setTitle('')
-      editor.commands.clearContent()
-      
-      toast.success('Заметка создана')
-    } catch (error) {
-      console.error('Ошибка при сохранении:', error)
-      toast.error('Ошибка при создании заметки')
-    }
-  }
+
 
   const handleCancel = () => {
-    // Очищаем редактор
-    setTitle('')
-    editor?.commands.clearContent()
-    setHasChanges(false)
+    // Заметка уже автоматически сохранена, просто вызываем onCancel
     onCancel()
   }
 
@@ -121,9 +140,53 @@ export function QuickTipTapNote({
       <div className="mb-3">
         <Input
           value={title}
-          onChange={(e) => {
-            setTitle(e.target.value)
+          onChange={async (e) => {
+            const newTitle = e.target.value
+            setTitle(newTitle)
             setHasChanges(true)
+            
+            // Автосоздание заметки при изменении заголовка
+            if (!createdNotionId && newTitle.trim()) {
+              try {
+                const editorHTML = editor?.getHTML() || ''
+                const editorMarkdown = htmlToMarkdown(editorHTML).trim()
+                
+                let combinedContent = ''
+                if (newTitle.trim() && editorMarkdown) {
+                  combinedContent = `# ${newTitle.trim()}\n\n${editorMarkdown}`
+                } else if (newTitle.trim()) {
+                  combinedContent = `# ${newTitle.trim()}`
+                } else {
+                  combinedContent = editorMarkdown
+                }
+                
+                if (combinedContent) {
+                  const newNotion = await createNotionSilent({ notion_content: combinedContent })
+                  setCreatedNotionId(newNotion.notion_id)
+                }
+              } catch (error) {
+                console.error('Ошибка при автосоздании заметки из заголовка:', error)
+              }
+            } else if (createdNotionId) {
+              // Автосохранение существующей заметки
+              try {
+                const editorHTML = editor?.getHTML() || ''
+                const editorMarkdown = htmlToMarkdown(editorHTML).trim()
+                
+                let combinedContent = ''
+                if (newTitle.trim() && editorMarkdown) {
+                  combinedContent = `# ${newTitle.trim()}\n\n${editorMarkdown}`
+                } else if (newTitle.trim()) {
+                  combinedContent = `# ${newTitle.trim()}`
+                } else {
+                  combinedContent = editorMarkdown
+                }
+                
+                triggerSave(combinedContent)
+              } catch (error) {
+                console.error('Ошибка при автосохранении заголовка:', error)
+              }
+            }
           }}
           placeholder={titlePlaceholder}
           className="font-medium border-0 bg-transparent px-0 focus:ring-0 text-base"
@@ -138,7 +201,9 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('bold') && 'bg-accent'
+            editor.isActive('bold') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Жирный"
         >
@@ -150,7 +215,9 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('italic') && 'bg-accent'
+            editor.isActive('italic') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Курсив"
         >
@@ -162,7 +229,9 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('underline') && 'bg-accent'
+            editor.isActive('underline') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Подчеркнутый"
         >
@@ -177,7 +246,9 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('bulletList') && 'bg-accent'
+            editor.isActive('bulletList') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Список"
         >
@@ -189,7 +260,9 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleTaskList().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('taskList') && 'bg-accent'
+            editor.isActive('taskList') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Задачи"
         >
@@ -201,14 +274,17 @@ export function QuickTipTapNote({
           onClick={() => editor.chain().focus().toggleHighlight().run()}
           className={cn(
             'h-7 w-7 p-0',
-            editor.isActive('highlight') && 'bg-accent'
+            editor.isActive('highlight') 
+              ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              : 'hover:bg-gray-200'
           )}
           title="Выделение"
         >
           <Highlighter className="h-3 w-3" />
         </Button>
 
-        <div className="flex gap-1 ml-auto">
+        <div className="flex items-center gap-2 ml-auto">
+          <SaveIndicator status={saveStatus} />
           <Button
             variant="ghost"
             size="sm"
@@ -216,15 +292,7 @@ export function QuickTipTapNote({
             className="h-7 px-2 text-xs text-gray-600"
           >
             <X className="h-3 w-3 mr-1" />
-            Отмена
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            className="h-7 px-2 text-xs"
-          >
-            <Save className="h-3 w-3 mr-1" />
-            Сохранить
+            Закрыть
           </Button>
         </div>
       </div>
@@ -238,22 +306,19 @@ export function QuickTipTapNote({
                      [&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-2
                      [&_.ProseMirror_h2]:text-lg [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-2
                      [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2
-                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-gray-500
                      [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-4 [&_.ProseMirror_ul]:my-1
                      [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-4 [&_.ProseMirror_ol]:my-1
                      [&_.ProseMirror_li]:leading-relaxed
                      [&_.ProseMirror_mark]:bg-yellow-200
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-center [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through"
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through"
         />
       </div>
 
-      {/* Индикатор изменений */}
-      {hasChanges && (
-        <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
-          <div className="w-1.5 h-1.5 bg-foreground rounded-full animate-pulse" />
-          Есть несохраненные изменения
-        </div>
-      )}
+      {/* Подсказка об автосохранении */}
+      <div className="mt-2 text-xs text-muted-foreground text-center">
+        Изменения сохраняются автоматически при вводе
+      </div>
     </Card>
   )
 } 

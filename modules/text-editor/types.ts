@@ -7,10 +7,12 @@ export interface TipTapEditorProps {
   showTitle?: boolean
   autoFocus?: boolean
   className?: string
+  notionId?: string // Для автосохранения
+  enableAutoSave?: boolean // Включить автосохранение
 }
 
 export interface TipTapEditorRef {
-  save: () => void
+  save: () => Promise<void>
   focus: () => void
   getContent: () => string
 }
