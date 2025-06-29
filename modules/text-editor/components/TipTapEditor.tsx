@@ -43,6 +43,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { htmlToMarkdown, markdownToTipTapHTML } from '@/modules/notions'
 import type { TipTapEditorProps, TipTapEditorRef } from '@/modules/text-editor/types'
 
 export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
@@ -101,6 +102,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   }, [initialTitle, parsedTitle])
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: {
@@ -147,10 +149,10 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       TableHeader,
       TableCell
     ],
-    content: parsedContent,
+    content: parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>',
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 border rounded-md',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 border rounded-md prose-headings:font-bold prose-h1:text-2xl prose-h1:mb-2 prose-h1:mt-4 prose-h2:text-xl prose-h2:mb-2 prose-h2:mt-4 prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-6 prose-ol:list-decimal prose-ol:ml-6 prose-li:my-1',
       },
     },
     onUpdate: ({ editor }) => {
@@ -169,20 +171,36 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       }
     },
     getContent: () => {
-      const editorContent = editor?.getText() || ''
-      return combineContent(title, editorContent)
+      if (!editor) return combineContent(title, '')
+      try {
+        // Получаем HTML-контент и конвертируем в markdown
+        const editorHTML = editor.getHTML()
+        const editorMarkdown = htmlToMarkdown(editorHTML)
+        return combineContent(title, editorMarkdown)
+      } catch (error) {
+        console.error('Ошибка при получении контента:', error)
+        return combineContent(title, '')
+      }
     }
   }))
 
   const handleSave = () => {
     if (!editor) return
     
-    const editorContent = editor.getText()
-    const combinedContent = combineContent(title, editorContent)
-    
-    onSave(combinedContent)
-    setHasChanges(false)
-    toast.success('Заметка сохранена')
+    try {
+      // Получаем HTML-контент вместо обычного текста
+      const editorHTML = editor.getHTML()
+      // Конвертируем HTML в markdown
+      const editorMarkdown = htmlToMarkdown(editorHTML)
+      const combinedContent = combineContent(title, editorMarkdown)
+      
+      onSave(combinedContent)
+      setHasChanges(false)
+      toast.success('Заметка сохранена')
+    } catch (error) {
+      console.error('Ошибка при сохранении:', error)
+      toast.error('Ошибка при сохранении заметки')
+    }
   }
 
   const handleTitleChange = (value: string) => {
@@ -229,10 +247,10 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   }
 
   return (
-    <div className={cn('w-full max-w-4xl mx-auto', className)}>
+    <div className={cn('w-full max-w-4xl mx-auto h-full flex flex-col', className)}>
       {/* Заголовок */}
       {showTitle && (
-        <div className="mb-4">
+        <div className="mb-4 flex-shrink-0">
           <Input
             id="title-input"
             value={title}
@@ -245,7 +263,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       )}
 
       {/* Панель инструментов */}
-      <div className="border border-gray-200 rounded-t-lg bg-gray-50 p-2 flex flex-wrap gap-1">
+      <div className="border border-gray-200 rounded-t-lg bg-gray-50 p-2 flex flex-wrap gap-1 flex-shrink-0">
         {/* Заголовки */}
         <div className="flex gap-1 mr-2">
           <Button
@@ -498,16 +516,29 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       </div>
 
       {/* Редактор */}
-      <div className="border border-t-0 border-gray-200 rounded-b-lg bg-white">
+      <div className="border border-t-0 border-gray-200 rounded-b-lg bg-white overflow-y-auto flex-1 min-h-0">
         <EditorContent 
           editor={editor} 
-          className="prose prose-sm max-w-none [&_.ProseMirror]:min-h-[200px] [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input]:m-0 [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold"
+          className="prose prose-sm max-w-none h-full
+                     [&_.ProseMirror]:min-h-full [&_.ProseMirror]:p-4 [&_.ProseMirror]:focus:outline-none
+                     [&_.ProseMirror_h1]:text-2xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-4 [&_.ProseMirror_h1]:mt-6
+                     [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5
+                     [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through
+                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2
+                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2
+                     [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
+                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic
+                     [&_.ProseMirror_code]:bg-gray-100 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm
+                     [&_.ProseMirror_mark]:bg-yellow-200
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input]:m-0
+                     [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold"
         />
       </div>
 
       {/* Индикатор изменений */}
       {hasChanges && (
-        <div className="mt-2 text-sm text-muted-foreground flex items-center gap-1">
+        <div className="mt-2 text-sm text-muted-foreground flex items-center gap-1 flex-shrink-0">
           <div className="w-2 h-2 bg-foreground rounded-full animate-pulse" />
           Есть несохраненные изменения
         </div>

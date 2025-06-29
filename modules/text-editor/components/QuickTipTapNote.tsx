@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { htmlToMarkdown } from '@/modules/notions'
 import type { QuickTipTapNoteProps } from '@/modules/text-editor/types'
 
 export function QuickTipTapNote({
@@ -36,6 +37,7 @@ export function QuickTipTapNote({
   const [hasChanges, setHasChanges] = useState(false)
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: {
@@ -55,7 +57,7 @@ export function QuickTipTapNote({
     content: '',
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[120px] p-3',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[120px] p-3 prose-headings:font-bold prose-h1:text-xl prose-h1:mb-2 prose-h2:text-lg prose-h2:mb-2 prose-h3:text-base prose-h3:mb-2 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-4 prose-ol:list-decimal prose-ol:ml-4 prose-li:my-1',
       },
     },
     onUpdate: () => {
@@ -67,31 +69,38 @@ export function QuickTipTapNote({
   const handleSave = () => {
     if (!editor) return
     
-    const editorContent = editor.getText().trim()
-    const titleContent = title.trim()
-    
-    if (!titleContent && !editorContent) {
-      toast.error('Введите заголовок или текст заметки')
-      return
+    try {
+      // Получаем HTML-контент и конвертируем в markdown
+      const editorHTML = editor.getHTML()
+      const editorMarkdown = htmlToMarkdown(editorHTML).trim()
+      const titleContent = title.trim()
+      
+      if (!titleContent && !editorMarkdown) {
+        toast.error('Введите заголовок или текст заметки')
+        return
+      }
+      
+      let combinedContent = ''
+      if (titleContent && editorMarkdown) {
+        combinedContent = `# ${titleContent}\n\n${editorMarkdown}`
+      } else if (titleContent) {
+        combinedContent = `# ${titleContent}`
+      } else {
+        combinedContent = editorMarkdown
+      }
+      
+      onSave(combinedContent)
+      setHasChanges(false)
+      
+      // Очищаем редактор
+      setTitle('')
+      editor.commands.clearContent()
+      
+      toast.success('Заметка создана')
+    } catch (error) {
+      console.error('Ошибка при сохранении:', error)
+      toast.error('Ошибка при создании заметки')
     }
-    
-    let combinedContent = ''
-    if (titleContent && editorContent) {
-      combinedContent = `# ${titleContent}\n\n${editorContent}`
-    } else if (titleContent) {
-      combinedContent = `# ${titleContent}`
-    } else {
-      combinedContent = editorContent
-    }
-    
-    onSave(combinedContent)
-    setHasChanges(false)
-    
-    // Очищаем редактор
-    setTitle('')
-    editor.commands.clearContent()
-    
-    toast.success('Заметка создана')
   }
 
   const handleCancel = () => {
@@ -224,7 +233,17 @@ export function QuickTipTapNote({
       <div className="bg-white border rounded-md">
         <EditorContent 
           editor={editor}
-          className="[&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:focus:outline-none [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2"
+          className="prose prose-sm max-w-none
+                     [&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:focus:outline-none
+                     [&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mb-2
+                     [&_.ProseMirror_h2]:text-lg [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-2
+                     [&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2
+                     [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through
+                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-4 [&_.ProseMirror_ul]:my-1
+                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-4 [&_.ProseMirror_ol]:my-1
+                     [&_.ProseMirror_li]:leading-relaxed
+                     [&_.ProseMirror_mark]:bg-yellow-200
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2"
         />
       </div>
 

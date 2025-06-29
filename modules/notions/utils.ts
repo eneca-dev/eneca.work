@@ -236,6 +236,51 @@ export function htmlToMarkdown(html: string): string {
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = normalizedHtml
   
+  // Обрабатываем элементы списка с учетом вложенности
+  function processListItems(listElement: Element, marker: string, depth: number = 0): string {
+    const items: string[] = []
+    const indent = '  '.repeat(depth) // 2 пробела на уровень вложенности
+    
+    for (const child of Array.from(listElement.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
+        const liElement = child as Element
+        let itemContent = ''
+        let nestedLists = ''
+        
+        // Обрабатываем содержимое li, исключая вложенные списки
+        for (const liChild of Array.from(liElement.childNodes)) {
+          if (liChild.nodeType === Node.ELEMENT_NODE) {
+            const childElement = liChild as Element
+            if (childElement.tagName.toLowerCase() === 'ul') {
+              // Вложенный маркированный список
+              nestedLists += '\n' + processListItems(childElement, '-', depth + 1)
+            } else if (childElement.tagName.toLowerCase() === 'ol') {
+              // Вложенный нумерованный список
+              nestedLists += '\n' + processListItems(childElement, '1.', depth + 1)
+            } else {
+              // Обычное содержимое
+              itemContent += processNode(liChild)
+            }
+          } else {
+            itemContent += processNode(liChild)
+          }
+        }
+        
+        if (itemContent.trim()) {
+          if (marker === '1.') {
+            // Для нумерованных списков нужен правильный номер
+            const itemNumber = items.length + 1
+            items.push(`${indent}${itemNumber}. ${itemContent.trim()}${nestedLists}`)
+          } else {
+            items.push(`${indent}${marker} ${itemContent.trim()}${nestedLists}`)
+          }
+        }
+      }
+    }
+    
+    return items.join('\n')
+  }
+
   // Рекурсивно обрабатываем элементы
   function processNode(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -279,6 +324,9 @@ export function htmlToMarkdown(html: string): string {
           return `*${content}*`
         case 'u':
           return `__${content}__`
+        case 's':
+        case 'del':
+          return `~~${content}~~`
         case 'br':
           // Не добавляем лишние переносы - br уже означает перенос
           return ''
@@ -319,39 +367,52 @@ export function htmlToMarkdown(html: string): string {
             }
           }
         case 'ol':
-          // Нумерованный список - обрабатываем li элементы
-          const olItems: string[] = []
-          let itemIndex = 1
-          for (const child of Array.from(element.childNodes)) {
-            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
-              const itemContent = processNode(child).trim()
-              if (itemContent) {
-                olItems.push(`${itemIndex}. ${itemContent}`)
-                itemIndex++
-              }
-            }
-          }
-          return olItems.join('\n')
+          // Нумерованный список - обрабатываем вложенность
+          return processListItems(element, '1.')
         case 'ul':
-          // Маркированный список - обрабатываем li элементы
-          const ulItems: string[] = []
-          for (const child of Array.from(element.childNodes)) {
-            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
-              const itemContent = processNode(child).trim()
-              if (itemContent) {
-                ulItems.push(`- ${itemContent}`)
+          // Проверяем, является ли это списком задач
+          if (element.getAttribute('data-type') === 'taskList') {
+            const taskItems: string[] = []
+            for (const child of Array.from(element.childNodes)) {
+              if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
+                const liElement = child as Element
+                const isChecked = liElement.getAttribute('data-checked') === 'true'
+                
+                // Ищем текст в div или непосредственно в элементе
+                const div = liElement.querySelector('div')
+                let itemContent = ''
+                if (div) {
+                  itemContent = processNode(div).trim()
+                } else {
+                  // Получаем весь текст, исключая input элементы
+                  const textNodes = Array.from(liElement.childNodes).filter(node => 
+                    node.nodeType === Node.TEXT_NODE || 
+                    (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName.toLowerCase() !== 'input')
+                  )
+                  itemContent = textNodes.map(node => processNode(node)).join('').trim()
+                }
+                
+                if (itemContent) {
+                  taskItems.push(`- [${isChecked ? 'x' : ' '}] ${itemContent}`)
+                }
               }
             }
+            return taskItems.join('\n')
+          } else {
+            // Обычный маркированный список - обрабатываем вложенность
+            return processListItems(element, '-')
           }
-          return ulItems.join('\n')
         case 'li':
           // Элемент списка - если не обработан выше, возвращаем только содержимое
           return content
         case 'span':
           return content
         case 'input':
-          // Игнорируем input элементы, они обрабатываются в родительском div
+          // Игнорируем input элементы, они обрабатываются в родительском элементе
           return ''
+        case 'label':
+          // Обрабатываем label элементы (для задач)
+          return content
         default:
           return content
       }
@@ -376,6 +437,117 @@ export function htmlToMarkdown(html: string): string {
 
   console.log('Converted to markdown:', markdown)
   return markdown
+}
+
+/**
+ * Конвертирует markdown в HTML для TipTap редактора
+ */
+export function markdownToTipTapHTML(markdown: string): string {
+  if (!markdown.trim()) return '<p></p>'
+  
+  const lines = markdown.split('\n')
+  const htmlParts: string[] = []
+  let currentList: { type: 'ul' | 'ol' | 'taskList', items: string[] } | null = null
+  
+  const flushCurrentList = () => {
+    if (currentList) {
+      if (currentList.type === 'taskList') {
+        htmlParts.push(`<ul data-type="taskList">${currentList.items.join('')}</ul>`)
+      } else if (currentList.type === 'ul') {
+        htmlParts.push(`<ul>${currentList.items.join('')}</ul>`)
+      } else if (currentList.type === 'ol') {
+        htmlParts.push(`<ol>${currentList.items.join('')}</ol>`)
+      }
+      currentList = null
+    }
+  }
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    
+    if (!line.trim()) {
+      flushCurrentList()
+      htmlParts.push('<p></p>')
+    } else if (/^### (.+)$/.test(line.trim())) {
+      flushCurrentList()
+      const text = line.trim().replace(/^### /, '')
+      htmlParts.push(`<h3>${text}</h3>`)
+    } else if (/^## (.+)$/.test(line.trim())) {
+      flushCurrentList()
+      const text = line.trim().replace(/^## /, '')
+      htmlParts.push(`<h2>${text}</h2>`)
+    } else if (/^# (.+)$/.test(line.trim())) {
+      flushCurrentList()
+      const text = line.trim().replace(/^# /, '')
+      htmlParts.push(`<h1>${text}</h1>`)
+    } else if (/^- \[ \] (.+)$/.test(line.trim())) {
+      const text = line.trim().replace(/^- \[ \] /, '')
+      // Обрабатываем форматирование в тексте чекбокса
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      if (currentList?.type !== 'taskList') {
+        flushCurrentList()
+        currentList = { type: 'taskList', items: [] }
+      }
+      currentList.items.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>${formattedText}</p></div></li>`)
+    } else if (/^- \[x\] (.+)$/.test(line.trim())) {
+      const text = line.trim().replace(/^- \[x\] /, '')
+      // Обрабатываем форматирование в тексте чекбокса
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      if (currentList?.type !== 'taskList') {
+        flushCurrentList()
+        currentList = { type: 'taskList', items: [] }
+      }
+      currentList.items.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>${formattedText}</p></div></li>`)
+    } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
+      const text = line.trim().replace(/^- /, '')
+      // Обрабатываем форматирование в тексте списка
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      if (currentList?.type !== 'ul') {
+        flushCurrentList()
+        currentList = { type: 'ul', items: [] }
+      }
+      currentList.items.push(`<li><p>${formattedText}</p></li>`)
+    } else if (/^\d+\. (.+)$/.test(line.trim())) {
+      const match = line.trim().match(/^(\d+)\. (.+)$/)
+      if (match) {
+        const text = match[2]
+        // Обрабатываем форматирование в тексте списка
+        const formattedText = text
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/~~(.*?)~~/g, '<s>$1</s>')
+          .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        if (currentList?.type !== 'ol') {
+          flushCurrentList()
+          currentList = { type: 'ol', items: [] }
+        }
+        currentList.items.push(`<li><p>${formattedText}</p></li>`)
+      }
+    } else if (line.trim()) {
+      flushCurrentList()
+      let formattedLine = line.trim()
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      htmlParts.push(`<p>${formattedLine}</p>`)
+    }
+  }
+  
+  flushCurrentList()
+  return htmlParts.join('')
 }
 
 /**

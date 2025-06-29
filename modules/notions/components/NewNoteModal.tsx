@@ -33,12 +33,12 @@ export function NewNoteModal({ open, onOpenChange, onSave }: NewNoteModalProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Новая заметка</DialogTitle>
         </DialogHeader>
         
-        <div className="mt-4 h-[500px]">
+        <div className="mt-4 h-[700px] overflow-y-auto">
           <TipTapEditor
             initialValue=""
             onSave={handleSave}

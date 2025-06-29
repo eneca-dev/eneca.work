@@ -345,7 +345,7 @@ export function NotesBlock() {
     const parsed = parseNotionContent(fullViewNotion)
     
           return (
-        <Card className="p-6 h-[calc(100vh-8rem)] flex flex-col max-h-[calc(100vh-8rem)]">
+        <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
         {/* Заголовок */}
         <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -387,7 +387,7 @@ export function NotesBlock() {
         </div>
 
         {/* Содержимое заметки */}
-        <div className="flex-1 overflow-hidden min-h-0">
+        <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">
           <TipTapEditor
             ref={editorRef}
             initialTitle={parsed.title}
@@ -402,7 +402,7 @@ export function NotesBlock() {
   }
 
   return (
-    <Card className="p-6 h-[calc(100vh-8rem)] flex flex-col max-h-[calc(100vh-8rem)]">
+    <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
       {/* Заголовок блока */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">

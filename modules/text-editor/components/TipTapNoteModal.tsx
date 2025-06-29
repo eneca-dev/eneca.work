@@ -50,14 +50,14 @@ export function TipTapNoteModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-full h-[80vh] flex flex-col p-0">
+      <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle className="text-lg font-semibold">
             {mode === 'create' ? 'Создать заметку' : 'Редактировать заметку'}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="flex-1 overflow-hidden px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {open && (
             <TipTapEditor
               ref={editorRef}
