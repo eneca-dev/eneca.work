@@ -62,9 +62,35 @@ export function markdownToHtml(text: string): string {
   // Разбиваем на строки и обрабатываем каждую
   const lines = processedText.split('\n')
   const htmlLines: string[] = []
+  let inCodeBlock = false
+  let codeBlockContent: string[] = []
+  let codeBlockLanguage = ''
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    
+    // Обработка блоков кода
+    if (line.trim().startsWith('```')) {
+      if (!inCodeBlock) {
+        // Начало блока кода
+        inCodeBlock = true
+        codeBlockLanguage = line.trim().replace(/^```/, '')
+        codeBlockContent = []
+      } else {
+        // Конец блока кода
+        inCodeBlock = false
+        const codeContent = codeBlockContent.join('\n')
+        htmlLines.push(`<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code class="font-mono text-sm ${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${codeContent}</code></pre>`)
+        codeBlockContent = []
+        codeBlockLanguage = ''
+      }
+      continue
+    }
+    
+    if (inCodeBlock) {
+      codeBlockContent.push(line)
+      continue
+    }
     
     if (!line.trim()) {
       // Пустая строка - НЕ добавляем <br/>, оставляем как есть
@@ -84,29 +110,61 @@ export function markdownToHtml(text: string): string {
     } else if (/^- \[ \] (.+)$/.test(line.trim())) {
       // Пустой чекбокс
       const text = line.trim().replace(/^- \[ \] /, '')
-      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> ${text}</div>`)
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> ${formattedText}</div>`)
     } else if (/^- \[x\] (.+)$/.test(line.trim())) {
       // Отмеченный чекбокс
       const text = line.trim().replace(/^- \[x\] /, '')
-      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">${text}</span></div>`)
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      htmlLines.push(`<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">${formattedText}</span></div>`)
     } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
       // Буллет-лист
       const text = line.trim().replace(/^- /, '')
-      htmlLines.push(`<div class="bullet-line">• ${text}</div>`)
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      htmlLines.push(`<div class="bullet-line">• ${formattedText}</div>`)
     } else if (/^\d+\. (.+)$/.test(line.trim())) {
       // Нумерованный список
       const match = line.trim().match(/^(\d+)\. (.+)$/)
       if (match) {
         const number = match[1]
         const text = match[2]
-        htmlLines.push(`<div class="numbered-line">${number}. ${text}</div>`)
+        const formattedText = text
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        htmlLines.push(`<div class="numbered-line">${number}. ${formattedText}</div>`)
       }
+    } else if (/^> (.+)$/.test(line.trim())) {
+      // Цитата
+      const text = line.trim().replace(/^> /, '')
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+      htmlLines.push(`<blockquote class="border-l-4 border-gray-300 pl-4 italic">${formattedText}</blockquote>`)
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
       let formattedLine = line.trim()
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
       htmlLines.push(formattedLine)
     }
   }
@@ -417,6 +475,37 @@ export function htmlToMarkdown(html: string): string {
           return content
         case 'span':
           return content
+        case 'blockquote':
+          // Цитата - обрабатываем каждый дочерний элемент отдельно
+          const quoteLines: string[] = []
+          for (const child of Array.from(element.childNodes)) {
+            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'p') {
+              const pContent = processNode(child).trim()
+              if (pContent) {
+                quoteLines.push(`> ${pContent}`)
+              }
+            } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
+              // Обрабатываем прямой текст в blockquote
+              const textLines = child.textContent.trim().split('\n')
+              textLines.forEach(line => {
+                if (line.trim()) {
+                  quoteLines.push(`> ${line.trim()}`)
+                }
+              })
+            }
+          }
+          return quoteLines.join('\n')
+        case 'code':
+          // Инлайн код
+          return `\`${content}\``
+        case 'pre':
+          // Блок кода
+          const codeElement = element.querySelector('code')
+          if (codeElement) {
+            const language = codeElement.className.match(/language-(\w+)/)?.[1] || ''
+            return `\`\`\`${language}\n${codeElement.textContent || ''}\n\`\`\``
+          }
+          return `\`\`\`\n${content}\n\`\`\``
         case 'input':
           // Игнорируем input элементы, они обрабатываются в родительском элементе
           return ''
@@ -458,6 +547,10 @@ export function markdownToTipTapHTML(markdown: string): string {
   const lines = markdown.split('\n')
   const htmlParts: string[] = []
   let currentList: { type: 'ul' | 'ol' | 'taskList', items: string[] } | null = null
+  let currentBlockquote: string[] = []
+  let inCodeBlock = false
+  let codeBlockContent: string[] = []
+  let codeBlockLanguage = ''
   
   const flushCurrentList = () => {
     if (currentList) {
@@ -471,23 +564,72 @@ export function markdownToTipTapHTML(markdown: string): string {
       currentList = null
     }
   }
+
+  const flushCurrentBlockquote = () => {
+    if (currentBlockquote.length > 0) {
+      const blockquoteContent = currentBlockquote.map(line => `<p>${line}</p>`).join('')
+      htmlParts.push(`<blockquote>${blockquoteContent}</blockquote>`)
+      currentBlockquote = []
+    }
+  }
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     
+    // Обработка блоков кода
+    if (line.trim().startsWith('```')) {
+      if (!inCodeBlock) {
+        // Начало блока кода
+        flushCurrentList()
+        flushCurrentBlockquote()
+        inCodeBlock = true
+        codeBlockLanguage = line.trim().replace(/^```/, '')
+        codeBlockContent = []
+      } else {
+        // Конец блока кода
+        inCodeBlock = false
+        const codeContent = codeBlockContent.join('\n')
+        htmlParts.push(`<pre><code class="${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${codeContent}</code></pre>`)
+        codeBlockContent = []
+        codeBlockLanguage = ''
+      }
+      continue
+    }
+    
+    if (inCodeBlock) {
+      codeBlockContent.push(line)
+      continue
+    }
+    
     if (!line.trim()) {
       flushCurrentList()
+      flushCurrentBlockquote()
       htmlParts.push('<p></p>')
+    } else if (/^> (.+)$/.test(line.trim())) {
+      // Цитата
+      flushCurrentList()
+      const text = line.trim().replace(/^> /, '')
+      // Обрабатываем форматирование в тексте цитаты
+      const formattedText = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+      currentBlockquote.push(formattedText)
     } else if (/^### (.+)$/.test(line.trim())) {
       flushCurrentList()
+      flushCurrentBlockquote()
       const text = line.trim().replace(/^### /, '')
       htmlParts.push(`<h3>${text}</h3>`)
     } else if (/^## (.+)$/.test(line.trim())) {
       flushCurrentList()
+      flushCurrentBlockquote()
       const text = line.trim().replace(/^## /, '')
       htmlParts.push(`<h2>${text}</h2>`)
     } else if (/^# (.+)$/.test(line.trim())) {
       flushCurrentList()
+      flushCurrentBlockquote()
       const text = line.trim().replace(/^# /, '')
       htmlParts.push(`<h1>${text}</h1>`)
     } else if (/^- \[ \] (.+)$/.test(line.trim())) {
@@ -498,8 +640,10 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'taskList') {
         flushCurrentList()
+        flushCurrentBlockquote()
         currentList = { type: 'taskList', items: [] }
       }
       currentList.items.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>${formattedText}</p></div></li>`)
@@ -511,8 +655,10 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'taskList') {
         flushCurrentList()
+        flushCurrentBlockquote()
         currentList = { type: 'taskList', items: [] }
       }
       currentList.items.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>${formattedText}</p></div></li>`)
@@ -524,8 +670,10 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'ul') {
         flushCurrentList()
+        flushCurrentBlockquote()
         currentList = { type: 'ul', items: [] }
       }
       currentList.items.push(`<li><p>${formattedText}</p></li>`)
@@ -539,24 +687,29 @@ export function markdownToTipTapHTML(markdown: string): string {
           .replace(/~~(.*?)~~/g, '<s>$1</s>')
           .replace(/__(.*?)__/g, '<u>$1</u>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/`(.*?)`/g, '<code>$1</code>')
         if (currentList?.type !== 'ol') {
           flushCurrentList()
+          flushCurrentBlockquote()
           currentList = { type: 'ol', items: [] }
         }
         currentList.items.push(`<li><p>${formattedText}</p></li>`)
       }
     } else if (line.trim()) {
       flushCurrentList()
+      flushCurrentBlockquote()
       let formattedLine = line.trim()
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
       htmlParts.push(`<p>${formattedLine}</p>`)
     }
   }
   
   flushCurrentList()
+  flushCurrentBlockquote()
   return htmlParts.join('')
 }
 

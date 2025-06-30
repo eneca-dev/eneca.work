@@ -72,7 +72,7 @@ export function NoteCard({
       className={cn(
         "p-4 transition-all duration-200 hover:shadow-md cursor-pointer",
         notion.notion_done && "opacity-50 bg-gray-50 dark:bg-gray-900/50",
-        isSelected && "ring-2 ring-primary"
+        isSelected && "border-2 border-primary"
       )}
       onClick={handleCardClick}
     >
@@ -82,7 +82,7 @@ export function NoteCard({
           <Checkbox
             checked={isSelected}
             onCheckedChange={() => onToggleSelect(notion.notion_id)}
-            className="mt-1 flex-shrink-0"
+            className="flex-shrink-0 mt-[0.4rem]"
           />
 
           {/* Основное содержимое с ограничением высоты */}
@@ -95,7 +95,7 @@ export function NoteCard({
                   {/* Заголовок заметки */}
                   {parsed.title && (
                     <h1 className={cn(
-                      "text-2xl font-bold leading-none mb-2 line-clamp-2",
+                      "text-2xl font-bold leading-tight mb-2 line-clamp-2",
                       notion.notion_done && "line-through text-gray-500"
                     )}>
                       {parsed.title}
@@ -114,7 +114,8 @@ export function NoteCard({
                         <div 
                           className="prose prose-sm max-w-none
                                    [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
-                                   [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1"
+                                   [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
+                                   [&_s]:line-through [&_s]:text-gray-500 [&_s]:opacity-61"
                           dangerouslySetInnerHTML={{ 
                             __html: markdownToHtml(parsed.content)
                           }} 
