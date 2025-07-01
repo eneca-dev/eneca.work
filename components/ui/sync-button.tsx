@@ -38,7 +38,7 @@ export function SyncButton({
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-      alert(`❌ Ошибка синхронизации с Worksection:\n\n${errorMessage}\n\nПроверьте:\n• Запущен ли сервер ws-to-work на порту 3001\n• Правильность настроек API Worksection\n• Подключение к интернету`)
+      alert(`❌ Ошибка синхронизации с Worksection:\n\n${errorMessage}\n\nПроверьте:\n• Доступность сервера интеграции\n• Правильность настроек API Worksection\n• Подключение к интернету`)
     }
   }
 

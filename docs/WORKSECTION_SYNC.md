@@ -63,7 +63,7 @@ const { isSyncing, syncStatus, syncWithWorksection } = useWorksectionSync()
 ### Процесс синхронизации
 
 1. **Запуск**: Пользователь нажимает кнопку "Синхронизировать с Worksection"
-2. **Выполнение**: Отправляется POST-запрос на `http://localhost:3001/api/sync/full`
+2. **Выполнение**: Отправляется POST-запрос на `https://ws-to-work-integration-eneca-7cab192e5438.herokuapp.com/api/sync/full`
 3. **Обратная связь**: 
    - Во время синхронизации: анимация загрузки, кнопка заблокирована
    - При успехе: зеленый цвет кнопки, диалог с результатами
@@ -87,7 +87,7 @@ const { isSyncing, syncStatus, syncWithWorksection } = useWorksectionSync()
 
 ## Требования
 
-1. **Сервис ws-to-work-integration** должен быть запущен на порту 3001
+1. **Сервис ws-to-work-integration** должен быть доступен на Heroku
 2. **Настройки API Worksection** должны быть корректно сконфигурированы
 3. **Подключение к интернету** для доступа к API Worksection
 
@@ -112,5 +112,5 @@ import { SyncButton } from '@/components/ui/sync-button'
 ## Мониторинг
 
 - Все операции синхронизации логируются в консоль браузера
-- Детальные логи доступны в веб-интерфейсе ws-to-work-integration (порт 3001)
+- Детальные логи доступны в веб-интерфейсе ws-to-work-integration на Heroku
 - Статистика операций отображается в диалогах результатов 

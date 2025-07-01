@@ -32,7 +32,9 @@ export function useWorksectionSync(): UseSyncReturn {
     try {
       console.log('🚀 Запуск синхронизации с Worksection...')
       
-      const response = await fetch('http://localhost:3001/api/sync/full', {
+      const integrationUrl = process.env.NEXT_PUBLIC_WS_INTEGRATION_URL || 'https://ws-to-work-integration-eneca-7cab192e5438.herokuapp.com'
+      
+      const response = await fetch(`${integrationUrl}/api/sync/full`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

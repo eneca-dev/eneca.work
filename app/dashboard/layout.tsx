@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { getUserRoleAndPermissions } from "@/services/org-data-service"
+import { getUserRoleAndPermissions } from "@/utils/role-utils"
 import { toast } from "@/components/ui/use-toast"
 
 // Константы для retry логики
