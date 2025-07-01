@@ -610,41 +610,6 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           </Button>
         </div>
 
-        {/* Отступы для списков */}
-        <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (editor.isActive('listItem')) {
-                editor.chain().focus().sinkListItem('listItem').run()
-              } else if (editor.isActive('taskItem')) {
-                editor.chain().focus().sinkListItem('taskItem').run()
-              }
-            }}
-            disabled={!editor.can().sinkListItem('listItem') && !editor.can().sinkListItem('taskItem')}
-            className="h-8 w-8 p-0"
-            title="Увеличить отступ (Tab)"
-          >
-            <Indent className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (editor.isActive('listItem')) {
-                editor.chain().focus().liftListItem('listItem').run()
-              } else if (editor.isActive('taskItem')) {
-                editor.chain().focus().liftListItem('taskItem').run()
-              }
-            }}
-            disabled={!editor.can().liftListItem('listItem') && !editor.can().liftListItem('taskItem')}
-            className="h-8 w-8 p-0"
-            title="Уменьшить отступ (Shift+Tab)"
-          >
-            <Outdent className="h-4 w-4" />
-          </Button>
-        </div>
 
         {/* Разделитель */}
         <div className="w-px h-8 bg-gray-300 mx-1 self-center" />

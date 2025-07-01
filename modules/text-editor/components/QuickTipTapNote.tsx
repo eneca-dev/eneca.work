@@ -334,22 +334,7 @@ export function QuickTipTapNote({
         >
           <Indent className="h-3 w-3" />
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            if (editor.isActive('listItem')) {
-              editor.chain().focus().liftListItem('listItem').run()
-            } else if (editor.isActive('taskItem')) {
-              editor.chain().focus().liftListItem('taskItem').run()
-            }
-          }}
-          disabled={!editor.can().liftListItem('listItem') && !editor.can().liftListItem('taskItem')}
-          className="h-7 w-7 p-0"
-          title="Уменьшить отступ"
-        >
-          <Outdent className="h-3 w-3" />
-        </Button>
+
         
         <div className="w-px h-7 bg-gray-300 mx-1 self-center" />
         
