@@ -238,7 +238,7 @@ export function QuickTipTapNote({
           <UnderlineIcon className="h-3 w-3" />
         </Button>
         
-        <div className="w-px h-4 bg-gray-300 mx-1" />
+        <div className="w-px h-7 bg-gray-300 mx-1 self-center" />
         
         <Button
           variant="ghost"

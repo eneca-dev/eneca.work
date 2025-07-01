@@ -443,7 +443,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
         {/* Форматирование текста */}
         <div className="flex gap-1 mr-2">
@@ -520,7 +520,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
         {/* Списки */}
         <div className="flex gap-1 mr-2">
@@ -569,7 +569,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
         {/* Цитата и код */}
         <div className="flex gap-1 mr-2">
@@ -618,7 +618,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
         {/* Отмена/Повтор */}
         <div className="flex gap-1 mr-2">
@@ -645,7 +645,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         </div>
 
         {/* Разделитель */}
-        <div className="w-px h-6 bg-gray-300 mx-1" />
+        <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
         {/* Таблицы */}
         <div className="flex gap-1 mr-2">

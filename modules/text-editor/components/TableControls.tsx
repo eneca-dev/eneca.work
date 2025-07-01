@@ -25,7 +25,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
   return (
     <div className={cn('flex items-center gap-1', className)}>
       {/* Разделитель */}
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
       
       {/* Управление строками */}
       <div className="flex gap-1">
@@ -57,7 +57,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
       </div>
 
       {/* Разделитель */}
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
       {/* Управление столбцами */}
       <div className="flex gap-1">
@@ -89,7 +89,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
       </div>
 
       {/* Разделитель */}
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
       <Button
           variant="ghost"
           size="sm"
