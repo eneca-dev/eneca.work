@@ -46,6 +46,8 @@ import { toast } from 'sonner'
 import { htmlToMarkdown, markdownToTipTapHTML } from '@/modules/notions'
 import { useAutoSave } from '@/modules/notions/hooks/useAutoSave'
 import { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
+import { TableSizeSelector } from '@/modules/text-editor/components/TableSizeSelector'
+import { TableControls } from '@/modules/text-editor/components/TableControls'
 import type { TipTapEditorProps, TipTapEditorRef } from '@/modules/text-editor/types'
 
 export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
@@ -169,7 +171,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         placeholder: 'Начните писать свою заметку...'
       }),
       Table.configure({
-        resizable: true
+        resizable: true,
+        allowTableNodeSelection: true,
+        cellMinWidth: 50
       }),
       TableRow,
       TableHeader,
@@ -645,16 +649,52 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 
         {/* Таблицы */}
         <div className="flex gap-1 mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-            className="h-8 w-8 p-0"
-            title="Вставить таблицу"
-          >
-            <TableIcon className="h-4 w-4" />
-          </Button>
+          <TableSizeSelector 
+            onSelect={(rows, cols) => {
+              // Вставляем таблицу
+              editor.chain()
+                .focus()
+                .insertTable({ 
+                  rows, 
+                  cols, 
+                  withHeaderRow: true 
+                })
+                .run()
+              
+              // Добавляем пустой параграф после таблицы
+              setTimeout(() => {
+                const { state } = editor
+                const { tr } = state
+                const doc = state.doc
+                
+                // Находим последнюю созданную таблицу
+                let tableEnd = -1
+                doc.descendants((node, pos) => {
+                  if (node.type.name === 'table') {
+                    tableEnd = pos + node.nodeSize
+                  }
+                })
+                
+                if (tableEnd > -1) {
+                  // Создаем пустой параграф
+                  const paragraph = state.schema.nodes.paragraph.create()
+                  
+                  // Вставляем параграф после таблицы
+                  const newTr = tr.insert(tableEnd, paragraph)
+                  editor.view.dispatch(newTr)
+                  
+                  // Устанавливаем курсор в новый параграф
+                  setTimeout(() => {
+                    editor.commands.setTextSelection(tableEnd + 1)
+                  }, 10)
+                }
+              }, 100)
+            }} 
+          />
         </div>
+
+        {/* Управление таблицами - показывается только когда курсор в таблице */}
+        <TableControls editor={editor} />
 
         {/* Индикатор автосохранения */}
         {enableAutoSave && (
@@ -683,7 +723,22 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                      [&_.ProseMirror_pre]:bg-gray-100 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:my-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0
                      [&_.ProseMirror_mark]:bg-yellow-200
                      [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
-                     [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold"
+                     [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:max-w-full [&_.ProseMirror_table]:min-w-[200px] [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_table]:relative
+                     [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_td]:min-w-[50px] [&_.ProseMirror_td]:relative [&_.ProseMirror_td]:transition-all [&_.ProseMirror_td]:duration-200
+                     [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold [&_.ProseMirror_th]:min-w-[50px] [&_.ProseMirror_th]:relative [&_.ProseMirror_th]:transition-all [&_.ProseMirror_th]:duration-200
+                     [&_.ProseMirror_.tableWrapper]:overflow-x-auto [&_.ProseMirror_.tableWrapper]:max-w-full
+                     [&_.ProseMirror_th:not(:last-child)::after]:content-[''] [&_.ProseMirror_th:not(:last-child)::after]:absolute [&_.ProseMirror_th:not(:last-child)::after]:right-[-2px] [&_.ProseMirror_th:not(:last-child)::after]:top-0 [&_.ProseMirror_th:not(:last-child)::after]:bottom-0 [&_.ProseMirror_th:not(:last-child)::after]:w-[4px] [&_.ProseMirror_th:not(:last-child)::after]:cursor-col-resize [&_.ProseMirror_th:not(:last-child)::after]:z-10
+                     [&_.ProseMirror_th:not(:last-child)::after]:bg-transparent [&_.ProseMirror_th:not(:last-child)::after]:transition-all [&_.ProseMirror_th:not(:last-child)::after]:duration-200 [&_.ProseMirror_th:not(:last-child)::after]:opacity-0
+                     [&_.ProseMirror_th:not(:last-child):hover::after]:opacity-100 [&_.ProseMirror_th:not(:last-child):hover::after]:bg-blue-400
+                     [&_.ProseMirror_th:last-child::after]:content-[''] [&_.ProseMirror_th:last-child::after]:absolute [&_.ProseMirror_th:last-child::after]:right-[-2px] [&_.ProseMirror_th:last-child::after]:top-0 [&_.ProseMirror_th:last-child::after]:bottom-0 [&_.ProseMirror_th:last-child::after]:w-[4px] [&_.ProseMirror_th:last-child::after]:cursor-col-resize [&_.ProseMirror_th:last-child::after]:z-10
+                     [&_.ProseMirror_th:last-child::after]:bg-transparent [&_.ProseMirror_th:last-child::after]:transition-all [&_.ProseMirror_th:last-child::after]:duration-200 [&_.ProseMirror_th:last-child::after]:opacity-0
+                     [&_.ProseMirror_th:last-child:hover::after]:opacity-100 [&_.ProseMirror_th:last-child:hover::after]:bg-green-400
+                     [&_.ProseMirror_th::before]:content-['↔'] [&_.ProseMirror_th::before]:absolute [&_.ProseMirror_th::before]:right-[-6px] [&_.ProseMirror_th::before]:top-1/2 [&_.ProseMirror_th::before]:transform [&_.ProseMirror_th::before]:-translate-y-1/2
+                     [&_.ProseMirror_th::before]:w-3 [&_.ProseMirror_th::before]:h-3 [&_.ProseMirror_th::before]:bg-blue-500 [&_.ProseMirror_th::before]:text-white [&_.ProseMirror_th::before]:text-[10px] [&_.ProseMirror_th::before]:font-bold [&_.ProseMirror_th::before]:rounded-full
+                     [&_.ProseMirror_th::before]:flex [&_.ProseMirror_th::before]:items-center [&_.ProseMirror_th::before]:justify-center [&_.ProseMirror_th::before]:z-20 [&_.ProseMirror_th::before]:cursor-col-resize
+                     [&_.ProseMirror_th::before]:opacity-0 [&_.ProseMirror_th::before]:transition-all [&_.ProseMirror_th::before]:duration-200 [&_.ProseMirror_th::before]:scale-75
+                     [&_.ProseMirror_th:hover::before]:opacity-100 [&_.ProseMirror_th:hover::before]:scale-100
+                     [&_.ProseMirror_th:last-child::before]:bg-green-500 [&_.ProseMirror_th:last-child::before]:content-['⟷']"
         />
       </div>
 

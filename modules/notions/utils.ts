@@ -114,6 +114,7 @@ export function markdownToHtml(text: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
       htmlLines.push(`<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> ${formattedText}</div>`)
     } else if (/^- \[x\] (.+)$/.test(line.trim())) {
@@ -123,6 +124,7 @@ export function markdownToHtml(text: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
       htmlLines.push(`<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">${formattedText}</span></div>`)
     } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
@@ -132,6 +134,7 @@ export function markdownToHtml(text: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
       htmlLines.push(`<div class="bullet-line">• ${formattedText}</div>`)
     } else if (/^\d+\. (.+)$/.test(line.trim())) {
@@ -144,6 +147,7 @@ export function markdownToHtml(text: string): string {
           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>')
           .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/==(.*?)==/g, '<mark>$1</mark>')
           .replace(/~~(.*?)~~/g, '<s>$1</s>')
         htmlLines.push(`<div class="numbered-line">${number}. ${formattedText}</div>`)
       }
@@ -154,15 +158,119 @@ export function markdownToHtml(text: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       htmlLines.push(`<blockquote class="border-l-4 border-gray-300 pl-4 italic">${formattedText}</blockquote>`)
+    } else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      // Обработка таблиц в markdown формате
+      const tableLines: string[] = []
+      let currentIndex = i
+      
+      // Собираем все строки таблицы
+      while (currentIndex < lines.length && lines[currentIndex].trim().startsWith('|') && lines[currentIndex].trim().endsWith('|')) {
+        tableLines.push(lines[currentIndex])
+        currentIndex++
+      }
+      
+      if (tableLines.length >= 2) {
+        // Парсим таблицу
+        const headerRow = tableLines[0].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        const separatorRow = tableLines[1].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        
+        // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
+        const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
+        
+        if (isSeparator) {
+          const tableRows: string[][] = []
+          
+          // Добавляем заголовки
+          tableRows.push(headerRow)
+          
+          // Добавляем остальные строки данных
+          for (let j = 2; j < tableLines.length; j++) {
+            const dataRow = tableLines[j].trim().slice(1, -1).split('|').map(cell => cell.trim())
+            tableRows.push(dataRow)
+          }
+          
+          // Создаем HTML таблицу
+          const tableHtml: string[] = ['<table class="border-collapse border border-gray-300 w-full my-4">']
+          
+          if (tableRows.length > 0) {
+            // Заголовок
+            tableHtml.push('<thead>')
+            tableHtml.push('<tr>')
+            tableRows[0].forEach(cell => {
+              const formattedCell = cell
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/~~(.*?)~~/g, '<s>$1</s>')
+                .replace(/__(.*?)__/g, '<u>$1</u>')
+                .replace(/==(.*?)==/g, '<mark>$1</mark>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+              tableHtml.push(`<th class="border border-gray-300 p-2 bg-gray-50 font-semibold">${formattedCell}</th>`)
+            })
+            tableHtml.push('</tr>')
+            tableHtml.push('</thead>')
+            
+            // Тело таблицы
+            if (tableRows.length > 1) {
+              tableHtml.push('<tbody>')
+              for (let j = 1; j < tableRows.length; j++) {
+                tableHtml.push('<tr>')
+                tableRows[j].forEach(cell => {
+                  const formattedCell = cell
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+                    .replace(/__(.*?)__/g, '<u>$1</u>')
+                    .replace(/==(.*?)==/g, '<mark>$1</mark>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+                  tableHtml.push(`<td class="border border-gray-300 p-2">${formattedCell}</td>`)
+                })
+                tableHtml.push('</tr>')
+              }
+              tableHtml.push('</tbody>')
+            }
+          }
+          
+          tableHtml.push('</table>')
+          htmlLines.push(tableHtml.join(''))
+          
+          // Добавляем пустую строку после таблицы
+          htmlLines.push('<br>')
+          
+          // Обновляем индекс, чтобы пропустить обработанные строки таблицы
+          i = currentIndex - 1
+        } else {
+          // Если это не таблица, обрабатываем как обычный текст
+          let formattedLine = line.trim()
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/__(.*?)__/g, '<u>$1</u>')
+            .replace(/==(.*?)==/g, '<mark>$1</mark>')
+            .replace(/~~(.*?)~~/g, '<s>$1</s>')
+            .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+          htmlLines.push(formattedLine)
+        }
+      } else {
+        // Если только одна строка с |, обрабатываем как обычный текст
+        let formattedLine = line.trim()
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/==(.*?)==/g, '<mark>$1</mark>')
+          .replace(/~~(.*?)~~/g, '<s>$1</s>')
+          .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+        htmlLines.push(formattedLine)
+      }
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
       let formattedLine = line.trim()
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
       htmlLines.push(formattedLine)
@@ -395,6 +503,8 @@ export function htmlToMarkdown(html: string): string {
         case 's':
         case 'del':
           return `~~${content}~~`
+        case 'mark':
+          return `==${content}==`
         case 'br':
           // Не добавляем лишние переносы - br уже означает перенос
           return ''
@@ -506,6 +616,61 @@ export function htmlToMarkdown(html: string): string {
             return `\`\`\`${language}\n${codeElement.textContent || ''}\n\`\`\``
           }
           return `\`\`\`\n${content}\n\`\`\``
+        case 'table':
+          // Обработка таблиц
+          const rows: string[][] = []
+          const tableRows = element.querySelectorAll('tr')
+          
+          tableRows.forEach((row, rowIndex) => {
+            const cells: string[] = []
+            const rowCells = row.querySelectorAll('th, td')
+            
+            rowCells.forEach(cell => {
+              const cellContent = processNode(cell).trim() || ' '
+              cells.push(cellContent)
+            })
+            
+            if (cells.length > 0) {
+              rows.push(cells)
+            }
+          })
+          
+          if (rows.length > 0) {
+            const maxCols = Math.max(...rows.map(row => row.length))
+            
+            // Нормализуем все строки до одинакового количества колонок
+            const normalizedRows = rows.map(row => {
+              while (row.length < maxCols) {
+                row.push(' ')
+              }
+              return row
+            })
+            
+            // Создаем markdown таблицу
+            const markdownRows: string[] = []
+            
+            // Первая строка (заголовки)
+            if (normalizedRows.length > 0) {
+              markdownRows.push(`| ${normalizedRows[0].join(' | ')} |`)
+              
+              // Разделительная строка
+              const separator = Array(maxCols).fill('---').join(' | ')
+              markdownRows.push(`| ${separator} |`)
+              
+              // Остальные строки
+              for (let i = 1; i < normalizedRows.length; i++) {
+                markdownRows.push(`| ${normalizedRows[i].join(' | ')} |`)
+              }
+            }
+            
+            return markdownRows.join('\n') + '\n'
+          }
+          return ''
+        case 'tr':
+        case 'th':
+        case 'td':
+          // Эти элементы обрабатываются в table
+          return content
         case 'input':
           // Игнорируем input элементы, они обрабатываются в родительском элементе
           return ''
@@ -614,6 +779,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       currentBlockquote.push(formattedText)
@@ -639,6 +805,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'taskList') {
@@ -654,6 +821,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'taskList') {
@@ -669,6 +837,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       if (currentList?.type !== 'ul') {
@@ -686,6 +855,7 @@ export function markdownToTipTapHTML(markdown: string): string {
           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
           .replace(/~~(.*?)~~/g, '<s>$1</s>')
           .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/==(.*?)==/g, '<mark>$1</mark>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>')
           .replace(/`(.*?)`/g, '<code>$1</code>')
         if (currentList?.type !== 'ol') {
@@ -695,6 +865,111 @@ export function markdownToTipTapHTML(markdown: string): string {
         }
         currentList.items.push(`<li><p>${formattedText}</p></li>`)
       }
+    } else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      // Обработка таблиц в markdown формате
+      flushCurrentList()
+      flushCurrentBlockquote()
+      
+      const tableLines: string[] = []
+      let currentIndex = i
+      
+      // Собираем все строки таблицы
+      while (currentIndex < lines.length && lines[currentIndex].trim().startsWith('|') && lines[currentIndex].trim().endsWith('|')) {
+        tableLines.push(lines[currentIndex])
+        currentIndex++
+      }
+      
+      if (tableLines.length >= 2) {
+        // Парсим таблицу
+        const headerRow = tableLines[0].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        const separatorRow = tableLines[1].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        
+        // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
+        const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
+        
+        if (isSeparator) {
+          const tableRows: string[][] = []
+          
+          // Добавляем заголовки
+          tableRows.push(headerRow)
+          
+          // Добавляем остальные строки данных
+          for (let j = 2; j < tableLines.length; j++) {
+            const dataRow = tableLines[j].trim().slice(1, -1).split('|').map(cell => cell.trim())
+            tableRows.push(dataRow)
+          }
+          
+          // Создаем HTML таблицу
+          const tableHtml: string[] = ['<table>']
+          
+          if (tableRows.length > 0) {
+            // Заголовок
+            tableHtml.push('<thead>')
+            tableHtml.push('<tr>')
+            tableRows[0].forEach(cell => {
+              const formattedCell = cell
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/~~(.*?)~~/g, '<s>$1</s>')
+                .replace(/__(.*?)__/g, '<u>$1</u>')
+                .replace(/==(.*?)==/g, '<mark>$1</mark>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+              tableHtml.push(`<th>${formattedCell}</th>`)
+            })
+            tableHtml.push('</tr>')
+            tableHtml.push('</thead>')
+            
+            // Тело таблицы
+            if (tableRows.length > 1) {
+              tableHtml.push('<tbody>')
+              for (let j = 1; j < tableRows.length; j++) {
+                tableHtml.push('<tr>')
+                tableRows[j].forEach(cell => {
+                  const formattedCell = cell
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+                    .replace(/__(.*?)__/g, '<u>$1</u>')
+                    .replace(/==(.*?)==/g, '<mark>$1</mark>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code>$1</code>')
+                  tableHtml.push(`<td>${formattedCell}</td>`)
+                })
+                tableHtml.push('</tr>')
+              }
+              tableHtml.push('</tbody>')
+            }
+          }
+          
+          tableHtml.push('</table>')
+          htmlParts.push(tableHtml.join(''))
+          
+          // Добавляем пустой параграф после таблицы
+          htmlParts.push('<p></p>')
+          
+          // Обновляем индекс, чтобы пропустить обработанные строки таблицы
+          i = currentIndex - 1
+        } else {
+          // Если это не таблица, обрабатываем как обычный текст
+          let formattedLine = line.trim()
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/~~(.*?)~~/g, '<s>$1</s>')
+            .replace(/__(.*?)__/g, '<u>$1</u>')
+            .replace(/==(.*?)==/g, '<mark>$1</mark>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+          htmlParts.push(`<p>${formattedLine}</p>`)
+        }
+      } else {
+        // Если только одна строка с |, обрабатываем как обычный текст
+        let formattedLine = line.trim()
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/~~(.*?)~~/g, '<s>$1</s>')
+          .replace(/__(.*?)__/g, '<u>$1</u>')
+          .replace(/==(.*?)==/g, '<mark>$1</mark>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/`(.*?)`/g, '<code>$1</code>')
+        htmlParts.push(`<p>${formattedLine}</p>`)
+      }
     } else if (line.trim()) {
       flushCurrentList()
       flushCurrentBlockquote()
@@ -702,6 +977,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/~~(.*?)~~/g, '<s>$1</s>')
         .replace(/__(.*?)__/g, '<u>$1</u>')
+        .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
       htmlParts.push(`<p>${formattedLine}</p>`)
