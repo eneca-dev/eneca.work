@@ -429,7 +429,11 @@ export function htmlToMarkdown(html: string): string {
             const childElement = liChild as Element
             if (childElement.tagName.toLowerCase() === 'ul') {
               // Вложенный маркированный список
-              nestedLists += '\n' + processListItems(childElement, '-', depth + 1)
+              if (childElement.getAttribute('data-type') === 'taskList') {
+                nestedLists += '\n' + processTaskList(childElement, depth + 1)
+              } else {
+                nestedLists += '\n' + processListItems(childElement, '-', depth + 1)
+              }
             } else if (childElement.tagName.toLowerCase() === 'ol') {
               // Вложенный нумерованный список
               nestedLists += '\n' + processListItems(childElement, '1.', depth + 1)
@@ -450,6 +454,52 @@ export function htmlToMarkdown(html: string): string {
           } else {
             items.push(`${indent}${marker} ${itemContent.trim()}${nestedLists}`)
           }
+        }
+      }
+    }
+    
+    return items.join('\n')
+  }
+
+  // Обрабатываем task list с учетом вложенности
+  function processTaskList(listElement: Element, depth: number = 0): string {
+    const items: string[] = []
+    const indent = '  '.repeat(depth) // 2 пробела на уровень вложенности
+    
+    for (const child of Array.from(listElement.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
+        const liElement = child as Element
+        const isChecked = liElement.getAttribute('data-checked') === 'true'
+        let itemContent = ''
+        let nestedLists = ''
+        
+        // Сначала получаем основной контент из div, исключая вложенные списки
+        const divElement = liElement.querySelector('div')
+        if (divElement) {
+          // Клонируем div и удаляем из него все вложенные ul/ol
+          const clonedDiv = divElement.cloneNode(true) as Element
+          const nestedListsInDiv = clonedDiv.querySelectorAll('ul, ol')
+          nestedListsInDiv.forEach(list => list.remove())
+          itemContent = processNode(clonedDiv)
+        }
+        
+        // Затем обрабатываем вложенные списки отдельно
+        const nestedUls = liElement.querySelectorAll(':scope > div > ul, :scope > div > ol')
+        for (const nestedList of Array.from(nestedUls)) {
+          if (nestedList.tagName.toLowerCase() === 'ul') {
+            if (nestedList.getAttribute('data-type') === 'taskList') {
+              nestedLists += '\n' + processTaskList(nestedList, depth + 1)
+            } else {
+              nestedLists += '\n' + processListItems(nestedList, '-', depth + 1)
+            }
+          } else if (nestedList.tagName.toLowerCase() === 'ol') {
+            nestedLists += '\n' + processListItems(nestedList, '1.', depth + 1)
+          }
+        }
+        
+        if (itemContent.trim() || nestedLists) {
+          const checkboxMarker = isChecked ? '[x]' : '[ ]'
+          items.push(`${indent}- ${checkboxMarker} ${itemContent.trim()}${nestedLists}`)
         }
       }
     }
@@ -550,32 +600,8 @@ export function htmlToMarkdown(html: string): string {
         case 'ul':
           // Проверяем, является ли это списком задач
           if (element.getAttribute('data-type') === 'taskList') {
-            const taskItems: string[] = []
-            for (const child of Array.from(element.childNodes)) {
-              if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
-                const liElement = child as Element
-                const isChecked = liElement.getAttribute('data-checked') === 'true'
-                
-                // Ищем текст в div или непосредственно в элементе
-                const div = liElement.querySelector('div')
-                let itemContent = ''
-                if (div) {
-                  itemContent = processNode(div).trim()
-                } else {
-                  // Получаем весь текст, исключая input элементы
-                  const textNodes = Array.from(liElement.childNodes).filter(node => 
-                    node.nodeType === Node.TEXT_NODE || 
-                    (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName.toLowerCase() !== 'input')
-                  )
-                  itemContent = textNodes.map(node => processNode(node)).join('').trim()
-                }
-                
-                if (itemContent) {
-                  taskItems.push(`- [${isChecked ? 'x' : ' '}] ${itemContent}`)
-                }
-              }
-            }
-            return taskItems.join('\n')
+            // Обрабатываем task list с учетом вложенности
+            return processTaskList(element)
           } else {
             // Обычный маркированный список - обрабатываем вложенность
             return processListItems(element, '-')
@@ -711,22 +737,23 @@ export function markdownToTipTapHTML(markdown: string): string {
   
   const lines = markdown.split('\n')
   const htmlParts: string[] = []
-  let currentList: { type: 'ul' | 'ol' | 'taskList', items: string[] } | null = null
+  let listStack: Array<{ type: 'ul' | 'ol' | 'taskList', depth: number }> = []
   let currentBlockquote: string[] = []
   let inCodeBlock = false
   let codeBlockContent: string[] = []
   let codeBlockLanguage = ''
   
-  const flushCurrentList = () => {
-    if (currentList) {
-      if (currentList.type === 'taskList') {
-        htmlParts.push(`<ul data-type="taskList">${currentList.items.join('')}</ul>`)
-      } else if (currentList.type === 'ul') {
-        htmlParts.push(`<ul>${currentList.items.join('')}</ul>`)
-      } else if (currentList.type === 'ol') {
-        htmlParts.push(`<ol>${currentList.items.join('')}</ol>`)
+  const flushListStack = () => {
+    // Закрываем все открытые списки
+    while (listStack.length > 0) {
+      const list = listStack.pop()!
+      if (list.type === 'taskList') {
+        htmlParts.push('</ul>')
+      } else if (list.type === 'ul') {
+        htmlParts.push('</ul>')
+      } else if (list.type === 'ol') {
+        htmlParts.push('</ol>')
       }
-      currentList = null
     }
   }
 
@@ -737,6 +764,39 @@ export function markdownToTipTapHTML(markdown: string): string {
       currentBlockquote = []
     }
   }
+
+  const getIndentLevel = (line: string): number => {
+    const match = line.match(/^(\s*)/)
+    return match ? Math.floor(match[1].length / 2) : 0
+  }
+
+  const adjustListStack = (targetDepth: number, newType: 'ul' | 'ol' | 'taskList') => {
+    // Закрываем списки глубже чем нужно
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
+      const list = listStack.pop()!
+      if (list.type === 'taskList') {
+        htmlParts.push('</ul>')
+      } else if (list.type === 'ul') {
+        htmlParts.push('</ul>')
+      } else if (list.type === 'ol') {
+        htmlParts.push('</ol>')
+      }
+    }
+
+    // Открываем новые списки до нужной глубины
+    while (listStack.length === 0 || listStack[listStack.length - 1].depth < targetDepth) {
+      const currentDepth = listStack.length === 0 ? 0 : listStack[listStack.length - 1].depth + 1
+      listStack.push({ type: newType, depth: currentDepth })
+      
+      if (newType === 'taskList') {
+        htmlParts.push('<ul data-type="taskList">')
+      } else if (newType === 'ul') {
+        htmlParts.push('<ul>')
+      } else if (newType === 'ol') {
+        htmlParts.push('<ol>')
+      }
+    }
+  }
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -745,7 +805,7 @@ export function markdownToTipTapHTML(markdown: string): string {
     if (line.trim().startsWith('```')) {
       if (!inCodeBlock) {
         // Начало блока кода
-        flushCurrentList()
+        flushListStack()
         flushCurrentBlockquote()
         inCodeBlock = true
         codeBlockLanguage = line.trim().replace(/^```/, '')
@@ -767,12 +827,12 @@ export function markdownToTipTapHTML(markdown: string): string {
     }
     
     if (!line.trim()) {
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       htmlParts.push('<p></p>')
     } else if (/^> (.+)$/.test(line.trim())) {
       // Цитата
-      flushCurrentList()
+      flushListStack()
       const text = line.trim().replace(/^> /, '')
       // Обрабатываем форматирование в тексте цитаты
       const formattedText = text
@@ -784,22 +844,23 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/`(.*?)`/g, '<code>$1</code>')
       currentBlockquote.push(formattedText)
     } else if (/^### (.+)$/.test(line.trim())) {
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^### /, '')
       htmlParts.push(`<h3>${text}</h3>`)
     } else if (/^## (.+)$/.test(line.trim())) {
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^## /, '')
       htmlParts.push(`<h2>${text}</h2>`)
     } else if (/^# (.+)$/.test(line.trim())) {
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^# /, '')
       htmlParts.push(`<h1>${text}</h1>`)
-    } else if (/^- \[ \] (.+)$/.test(line.trim())) {
-      const text = line.trim().replace(/^- \[ \] /, '')
+    } else if (/^\s*- \[ \] (.+)$/.test(line)) {
+      const indentLevel = getIndentLevel(line)
+      const text = line.replace(/^\s*- \[ \] /, '')
       // Обрабатываем форматирование в тексте чекбокса
       const formattedText = text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -808,14 +869,13 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
-      if (currentList?.type !== 'taskList') {
-        flushCurrentList()
-        flushCurrentBlockquote()
-        currentList = { type: 'taskList', items: [] }
-      }
-      currentList.items.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>${formattedText}</p></div></li>`)
-    } else if (/^- \[x\] (.+)$/.test(line.trim())) {
-      const text = line.trim().replace(/^- \[x\] /, '')
+      
+      flushCurrentBlockquote()
+      adjustListStack(indentLevel, 'taskList')
+      htmlParts.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>${formattedText}</p></div></li>`)
+    } else if (/^\s*- \[x\] (.+)$/.test(line)) {
+      const indentLevel = getIndentLevel(line)
+      const text = line.replace(/^\s*- \[x\] /, '')
       // Обрабатываем форматирование в тексте чекбокса
       const formattedText = text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -824,14 +884,13 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
-      if (currentList?.type !== 'taskList') {
-        flushCurrentList()
-        flushCurrentBlockquote()
-        currentList = { type: 'taskList', items: [] }
-      }
-      currentList.items.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>${formattedText}</p></div></li>`)
-    } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
-      const text = line.trim().replace(/^- /, '')
+      
+      flushCurrentBlockquote()
+      adjustListStack(indentLevel, 'taskList')
+      htmlParts.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>${formattedText}</p></div></li>`)
+    } else if (/^\s*- (?!\[[ x]\])(.+)$/.test(line)) {
+      const indentLevel = getIndentLevel(line)
+      const text = line.replace(/^\s*- /, '')
       // Обрабатываем форматирование в тексте списка
       const formattedText = text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -840,14 +899,13 @@ export function markdownToTipTapHTML(markdown: string): string {
         .replace(/==(.*?)==/g, '<mark>$1</mark>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
-      if (currentList?.type !== 'ul') {
-        flushCurrentList()
-        flushCurrentBlockquote()
-        currentList = { type: 'ul', items: [] }
-      }
-      currentList.items.push(`<li><p>${formattedText}</p></li>`)
-    } else if (/^\d+\. (.+)$/.test(line.trim())) {
-      const match = line.trim().match(/^(\d+)\. (.+)$/)
+      
+      flushCurrentBlockquote()
+      adjustListStack(indentLevel, 'ul')
+      htmlParts.push(`<li><p>${formattedText}</p></li>`)
+    } else if (/^\s*\d+\. (.+)$/.test(line)) {
+      const indentLevel = getIndentLevel(line)
+      const match = line.match(/^\s*(\d+)\. (.+)$/)
       if (match) {
         const text = match[2]
         // Обрабатываем форматирование в тексте списка
@@ -858,16 +916,14 @@ export function markdownToTipTapHTML(markdown: string): string {
           .replace(/==(.*?)==/g, '<mark>$1</mark>')
           .replace(/\*(.*?)\*/g, '<em>$1</em>')
           .replace(/`(.*?)`/g, '<code>$1</code>')
-        if (currentList?.type !== 'ol') {
-          flushCurrentList()
-          flushCurrentBlockquote()
-          currentList = { type: 'ol', items: [] }
-        }
-        currentList.items.push(`<li><p>${formattedText}</p></li>`)
+        
+        flushCurrentBlockquote()
+        adjustListStack(indentLevel, 'ol')
+        htmlParts.push(`<li><p>${formattedText}</p></li>`)
       }
     } else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
       // Обработка таблиц в markdown формате
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       
       const tableLines: string[] = []
@@ -971,7 +1027,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         htmlParts.push(`<p>${formattedLine}</p>`)
       }
     } else if (line.trim()) {
-      flushCurrentList()
+      flushListStack()
       flushCurrentBlockquote()
       let formattedLine = line.trim()
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -984,7 +1040,7 @@ export function markdownToTipTapHTML(markdown: string): string {
     }
   }
   
-  flushCurrentList()
+  flushListStack()
   flushCurrentBlockquote()
   return htmlParts.join('')
 }

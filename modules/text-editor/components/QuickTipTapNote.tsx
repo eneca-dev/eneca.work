@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -18,7 +18,9 @@ import {
   List,
   CheckSquare,
   Highlighter,
-  X
+  X,
+  Indent,
+  Outdent
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -53,6 +55,14 @@ export function QuickTipTapNote({
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3]
+        },
+        bulletList: {
+          keepMarks: true,
+          keepAttributes: true
+        },
+        orderedList: {
+          keepMarks: true,
+          keepAttributes: true
         }
       }),
       Underline,
@@ -129,6 +139,45 @@ export function QuickTipTapNote({
     // Заметка уже автоматически сохранена, просто вызываем onCancel
     onCancel()
   }
+
+  // Обработчик клавиш для отступов в списках
+  useEffect(() => {
+    if (!editor) return
+
+    const handleTabKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        const isInListItem = editor.isActive('listItem')
+        const isInTaskItem = editor.isActive('taskItem')
+        
+        if (isInListItem || isInTaskItem) {
+          event.preventDefault()
+          
+          if (event.shiftKey) {
+            // Shift+Tab - уменьшить отступ
+            if (isInListItem && editor.can().liftListItem('listItem')) {
+              editor.chain().focus().liftListItem('listItem').run()
+            } else if (isInTaskItem && editor.can().liftListItem('taskItem')) {
+              editor.chain().focus().liftListItem('taskItem').run()
+            }
+          } else {
+            // Tab - увеличить отступ
+            if (isInListItem && editor.can().sinkListItem('listItem')) {
+              editor.chain().focus().sinkListItem('listItem').run()
+            } else if (isInTaskItem && editor.can().sinkListItem('taskItem')) {
+              editor.chain().focus().sinkListItem('taskItem').run()
+            }
+          }
+        }
+      }
+    }
+
+    const editorElement = editor.view.dom
+    editorElement.addEventListener('keydown', handleTabKeyDown)
+
+    return () => {
+      editorElement.removeEventListener('keydown', handleTabKeyDown)
+    }
+  }, [editor])
 
   if (!editor) {
     return null
@@ -268,6 +317,42 @@ export function QuickTipTapNote({
         >
           <CheckSquare className="h-3 w-3" />
         </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (editor.isActive('listItem')) {
+              editor.chain().focus().sinkListItem('listItem').run()
+            } else if (editor.isActive('taskItem')) {
+              editor.chain().focus().sinkListItem('taskItem').run()
+            }
+          }}
+          disabled={!editor.can().sinkListItem('listItem') && !editor.can().sinkListItem('taskItem')}
+          className="h-7 w-7 p-0"
+          title="Увеличить отступ"
+        >
+          <Indent className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (editor.isActive('listItem')) {
+              editor.chain().focus().liftListItem('listItem').run()
+            } else if (editor.isActive('taskItem')) {
+              editor.chain().focus().liftListItem('taskItem').run()
+            }
+          }}
+          disabled={!editor.can().liftListItem('listItem') && !editor.can().liftListItem('taskItem')}
+          className="h-7 w-7 p-0"
+          title="Уменьшить отступ"
+        >
+          <Outdent className="h-3 w-3" />
+        </Button>
+        
+        <div className="w-px h-7 bg-gray-300 mx-1 self-center" />
+        
         <Button
           variant="ghost"
           size="sm"
@@ -310,8 +395,13 @@ export function QuickTipTapNote({
                      [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-4 [&_.ProseMirror_ul]:my-1
                      [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-4 [&_.ProseMirror_ol]:my-1
                      [&_.ProseMirror_li]:leading-relaxed
+                     [&_.ProseMirror_ul_ul]:list-[circle] [&_.ProseMirror_ul_ul]:ml-4
+                     [&_.ProseMirror_ul_ul_ul]:list-[square] [&_.ProseMirror_ul_ul_ul]:ml-4
+                     [&_.ProseMirror_ol_ol]:list-[lower-alpha] [&_.ProseMirror_ol_ol]:ml-4
+                     [&_.ProseMirror_ol_ol_ol]:list-[lower-roman] [&_.ProseMirror_ol_ol_ol]:ml-4
                      [&_.ProseMirror_mark]:bg-yellow-200
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through"
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                     [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4 [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4"
         />
       </div>
 

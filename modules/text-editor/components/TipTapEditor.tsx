@@ -39,7 +39,9 @@ import {
   X,
   CheckSquare,
   Type,
-  Table as TableIcon
+  Table as TableIcon,
+  Indent,
+  Outdent
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -184,6 +186,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 border rounded-md prose-headings:font-bold prose-h1:text-2xl prose-h1:mb-2 prose-h1:mt-4 prose-h2:text-xl prose-h2:mb-2 prose-h2:mt-4 prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-6 prose-ol:list-decimal prose-ol:ml-6 prose-li:my-1',
       },
+
     },
     onUpdate: ({ editor }) => {
       setHasChanges(true)
@@ -360,6 +363,45 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onCancel])
+
+  // Обработчик клавиш для отступов в списках
+  useEffect(() => {
+    if (!editor) return
+
+    const handleTabKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        const isInListItem = editor.isActive('listItem')
+        const isInTaskItem = editor.isActive('taskItem')
+        
+        if (isInListItem || isInTaskItem) {
+          event.preventDefault()
+          
+          if (event.shiftKey) {
+            // Shift+Tab - уменьшить отступ
+            if (isInListItem && editor.can().liftListItem('listItem')) {
+              editor.chain().focus().liftListItem('listItem').run()
+            } else if (isInTaskItem && editor.can().liftListItem('taskItem')) {
+              editor.chain().focus().liftListItem('taskItem').run()
+            }
+          } else {
+            // Tab - увеличить отступ
+            if (isInListItem && editor.can().sinkListItem('listItem')) {
+              editor.chain().focus().sinkListItem('listItem').run()
+            } else if (isInTaskItem && editor.can().sinkListItem('taskItem')) {
+              editor.chain().focus().sinkListItem('taskItem').run()
+            }
+          }
+        }
+      }
+    }
+
+    const editorElement = editor.view.dom
+    editorElement.addEventListener('keydown', handleTabKeyDown)
+
+    return () => {
+      editorElement.removeEventListener('keydown', handleTabKeyDown)
+    }
+  }, [editor])
 
   if (!editor) {
     return null
@@ -568,6 +610,42 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           </Button>
         </div>
 
+        {/* Отступы для списков */}
+        <div className="flex gap-1 mr-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (editor.isActive('listItem')) {
+                editor.chain().focus().sinkListItem('listItem').run()
+              } else if (editor.isActive('taskItem')) {
+                editor.chain().focus().sinkListItem('taskItem').run()
+              }
+            }}
+            disabled={!editor.can().sinkListItem('listItem') && !editor.can().sinkListItem('taskItem')}
+            className="h-8 w-8 p-0"
+            title="Увеличить отступ (Tab)"
+          >
+            <Indent className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (editor.isActive('listItem')) {
+                editor.chain().focus().liftListItem('listItem').run()
+              } else if (editor.isActive('taskItem')) {
+                editor.chain().focus().liftListItem('taskItem').run()
+              }
+            }}
+            disabled={!editor.can().liftListItem('listItem') && !editor.can().liftListItem('taskItem')}
+            className="h-8 w-8 p-0"
+            title="Уменьшить отступ (Shift+Tab)"
+          >
+            <Outdent className="h-4 w-4" />
+          </Button>
+        </div>
+
         {/* Разделитель */}
         <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
 
@@ -718,11 +796,16 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                      [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2
                      [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2
                      [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
+                     [&_.ProseMirror_ul_ul]:list-[circle] [&_.ProseMirror_ul_ul]:ml-4
+                     [&_.ProseMirror_ul_ul_ul]:list-[square] [&_.ProseMirror_ul_ul_ul]:ml-4
+                     [&_.ProseMirror_ol_ol]:list-[lower-alpha] [&_.ProseMirror_ol_ol]:ml-4
+                     [&_.ProseMirror_ol_ol_ol]:list-[lower-roman] [&_.ProseMirror_ol_ol_ol]:ml-4
                      [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic
                      [&_.ProseMirror_code]:bg-gray-100 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm
                      [&_.ProseMirror_pre]:bg-gray-100 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:my-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0
                      [&_.ProseMirror_mark]:bg-yellow-200
                      [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                     [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4 [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4
                      [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:table [&_.ProseMirror_table]:max-w-full [&_.ProseMirror_table]:min-w-[200px] [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_table]:relative
                      [&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-gray-300 [&_.ProseMirror_td]:p-2 [&_.ProseMirror_td]:min-w-[50px] [&_.ProseMirror_td]:relative [&_.ProseMirror_td]:transition-all [&_.ProseMirror_td]:duration-200
                      [&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-gray-300 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:bg-gray-50 [&_.ProseMirror_th]:font-semibold [&_.ProseMirror_th]:min-w-[50px] [&_.ProseMirror_th]:relative [&_.ProseMirror_th]:transition-all [&_.ProseMirror_th]:duration-200
