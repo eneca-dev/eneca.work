@@ -1,0 +1,81 @@
+/* Table Styles for TipTap Editor */
+
+/* Basic table styles */
+.ProseMirror table {
+  @apply border-collapse table max-w-full min-w-[200px] border border-gray-300 relative;
+}
+
+/* Table wrapper for horizontal scrolling */
+.ProseMirror .tableWrapper {
+  @apply overflow-x-auto max-w-full;
+}
+
+/* Table cell styles */
+.ProseMirror td {
+  @apply border border-gray-300 p-2 min-w-[50px] relative transition-all duration-200;
+}
+
+/* Table header styles */
+.ProseMirror th {
+  @apply border border-gray-300 p-2 bg-gray-50 font-semibold min-w-[50px] relative transition-all duration-200;
+}
+
+/* Ensure first row always looks like header */
+.ProseMirror table tr:first-child td,
+.ProseMirror table tr:first-child th {
+  @apply bg-gray-50 font-semibold text-center;
+}
+
+/* Regular cells in non-first rows */
+.ProseMirror table tr:not(:first-child) th,
+.ProseMirror table tr:not(:first-child) td {
+  @apply bg-white font-normal text-left;
+}
+
+/* Column resize handle for all headers except last */
+.ProseMirror th:not(:last-child)::after {
+  content: '';
+  @apply absolute right-[-2px] top-0 bottom-0 w-[4px] cursor-col-resize z-10;
+  @apply bg-transparent transition-all duration-200 opacity-0;
+}
+
+.ProseMirror th:not(:last-child):hover::after {
+  @apply opacity-100 bg-blue-400;
+}
+
+/* Column resize handle for last header */
+.ProseMirror th:last-child::after {
+  content: '';
+  @apply absolute right-[-2px] top-0 bottom-0 w-[4px] cursor-col-resize z-10;
+  @apply bg-transparent transition-all duration-200 opacity-0;
+}
+
+.ProseMirror th:last-child:hover::after {
+  @apply opacity-100 bg-green-400;
+}
+
+/* Resize indicator icon for all headers except last */
+.ProseMirror th:not(:last-child)::before {
+  content: '↔';
+  @apply absolute right-[-6px] top-1/2 transform -translate-y-1/2;
+  @apply w-3 h-3 bg-blue-500 text-white text-[10px] font-bold rounded-full;
+  @apply flex items-center justify-center z-20 cursor-col-resize;
+  @apply opacity-0 transition-all duration-200 scale-75;
+}
+
+.ProseMirror th:not(:last-child):hover::before {
+  @apply opacity-100 scale-100;
+}
+
+/* Resize indicator icon for last header */
+.ProseMirror th:last-child::before {
+  content: '⟷';
+  @apply absolute right-[-6px] top-1/2 transform -translate-y-1/2;
+  @apply w-3 h-3 bg-green-500 text-white text-[10px] font-bold rounded-full;
+  @apply flex items-center justify-center z-20 cursor-col-resize;
+  @apply opacity-0 transition-all duration-200 scale-75;
+}
+
+.ProseMirror th:last-child:hover::before {
+  @apply opacity-100 scale-100;
+} 

@@ -14,5 +14,8 @@ export {
   markdownToHtml, 
   htmlToMarkdown, 
   markdownToTipTapHTML,
-  getNotionDisplayTitle 
+  getNotionDisplayTitle,
+  splitTableRow,
+  analyzeAndFixTableStructure,
+  preprocessMarkdownTables
 } from '@/modules/notions/utils' 

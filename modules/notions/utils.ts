@@ -1,6 +1,216 @@
 import type { Notion, ParsedNotion } from '@/modules/notions/types'
 
 /**
+ * Splits a table row string into cells while respecting escaped pipes (\|) and special pipe symbols (│).
+ * Escaped pipes and special pipe symbols are preserved in the cell content.
+ * 
+ * @param rowString - The table row string (e.g., "| cell1 | cell2 with \| pipe | cell3 |")
+ * @returns Array of cell contents with escaped pipes and special symbols preserved
+ */
+export function splitTableRow(rowString: string): string[] {
+  // Remove leading and trailing |
+  const content = rowString.trim().slice(1, -1)
+  
+  const cells: string[] = []
+  let currentCell = ''
+  let i = 0
+  
+  while (i < content.length) {
+    if (content[i] === '\\' && content[i + 1] === '|') {
+      // Escaped pipe - add literal pipe to current cell and skip both characters
+      currentCell += '|'
+      i += 2
+    } else if (content[i] === '│') {
+      // Special pipe symbol (U+2502) - treat as regular content, not a separator
+      currentCell += content[i]
+      i++
+    } else if (content[i] === '|') {
+      // Unescaped pipe - end current cell and start new one
+      cells.push(currentCell.trim())
+      currentCell = ''
+      i++
+    } else {
+      // Regular character
+      currentCell += content[i]
+      i++
+    }
+  }
+  
+  // Add the last cell
+  cells.push(currentCell.trim())
+  
+  return cells
+}
+
+/**
+ * Analyzes table rows to determine the most common column count and fixes inconsistent rows.
+ * This prevents creating extra columns when cell content contains "|" characters.
+ * 
+ * @param tableLines - Array of table row strings
+ * @returns Object with fixed table lines and expected column count
+ */
+export function analyzeAndFixTableStructure(tableLines: string[]): { 
+  fixedLines: string[], 
+  expectedColumns: number 
+} {
+  if (tableLines.length < 2) {
+    return { fixedLines: tableLines, expectedColumns: 0 }
+  }
+
+  // Parse all rows and count columns
+  const rowData: Array<{ cells: string[], originalLine: string }> = []
+  const columnCounts: Map<number, number> = new Map()
+
+  for (const line of tableLines) {
+    const cells = splitTableRow(line)
+    const columnCount = cells.length
+    
+    rowData.push({ cells, originalLine: line })
+    columnCounts.set(columnCount, (columnCounts.get(columnCount) || 0) + 1)
+  }
+
+  // Find the most common column count (excluding separator row)
+  let maxCount = 0
+  let expectedColumns = 0
+  
+  for (const [columns, count] of columnCounts.entries()) {
+    if (count > maxCount) {
+      maxCount = count
+      expectedColumns = columns
+    }
+  }
+
+  // If no clear majority, use the separator row (index 1) as reference
+  if (maxCount <= 1 && tableLines.length >= 2) {
+    const separatorCells = splitTableRow(tableLines[1])
+    expectedColumns = separatorCells.length
+  }
+
+  // Fix rows that have too many columns by merging extra cells
+  const fixedLines: string[] = []
+  
+  for (let i = 0; i < rowData.length; i++) {
+    const { cells, originalLine } = rowData[i]
+    
+    // Skip separator row (usually index 1) - don't modify it
+    if (i === 1 && cells.every(cell => /^-+$/.test(cell.trim()))) {
+      fixedLines.push(originalLine)
+      continue
+    }
+    
+    if (cells.length > expectedColumns) {
+      // Too many columns - merge extra cells into the last expected column
+      const fixedCells = cells.slice(0, expectedColumns - 1)
+      const lastCell = cells.slice(expectedColumns - 1).join(' | ')
+      fixedCells.push(lastCell)
+      
+      // Reconstruct the line
+      const fixedLine = `| ${fixedCells.join(' | ')} |`
+      fixedLines.push(fixedLine)
+    } else if (cells.length < expectedColumns) {
+      // Too few columns - pad with empty cells
+      const fixedCells = [...cells]
+      while (fixedCells.length < expectedColumns) {
+        fixedCells.push('')
+      }
+      
+      // Reconstruct the line
+      const fixedLine = `| ${fixedCells.join(' | ')} |`
+      fixedLines.push(fixedLine)
+    } else {
+      // Correct number of columns
+      fixedLines.push(originalLine)
+    }
+  }
+
+  return { fixedLines, expectedColumns }
+}
+
+/**
+ * Предварительно обрабатывает markdown контент для исправления таблиц с неэкранированными "|".
+ * Используется при загрузке существующих заметок.
+ * 
+ * @param markdown - Исходный markdown контент
+ * @returns Исправленный markdown контент
+ */
+export function preprocessMarkdownTables(markdown: string): string {
+  if (!markdown) return markdown
+  
+  const lines = markdown.split('\n')
+  const processedLines: string[] = []
+  let i = 0
+  
+  while (i < lines.length) {
+    const line = lines[i]
+    
+    // Проверяем, начинается ли строка таблицы
+    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      const tableLines: string[] = []
+      let currentIndex = i
+      
+      // Собираем все строки таблицы
+      while (currentIndex < lines.length && 
+             lines[currentIndex].trim().startsWith('|') && 
+             lines[currentIndex].trim().endsWith('|')) {
+        tableLines.push(lines[currentIndex])
+        currentIndex++
+      }
+      
+      if (tableLines.length >= 2) {
+        // Проверяем, является ли это действительно таблицей (есть ли разделитель)
+        const separatorRow = splitTableRow(tableLines[1])
+        const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
+        
+        if (isSeparator) {
+          // Это таблица - применяем исправление
+          const { fixedLines } = analyzeAndFixTableStructure(tableLines)
+          // Преобразуем специальные символы "│" обратно в экранированные "|" для хранения
+          const normalizedLines = fixedLines.map(line => 
+            line.replace(/│/g, '\\|')
+          )
+          processedLines.push(...normalizedLines)
+          i = currentIndex // Переходим к следующей строке после таблицы
+          continue
+        }
+      }
+    }
+    
+    // Не таблица или одиночная строка - также нормализуем специальные символы
+    processedLines.push(line.replace(/│/g, '\\|'))
+    i++
+  }
+  
+  return processedLines.join('\n')
+}
+
+/**
+ * Применяет все markdown форматирования к тексту
+ */
+function applyMarkdownFormatting(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/__(.*?)__/g, '<u>$1</u>')
+    .replace(/==(.*?)==/g, '<mark>$1</mark>')
+    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+}
+
+/**
+ * Применяет markdown форматирования для TipTap редактора (упрощенная версия)
+ */
+function applyMarkdownFormattingForTipTap(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~(.*?)~~/g, '<s>$1</s>')
+    .replace(/__(.*?)__/g, '<u>$1</u>')
+    .replace(/==(.*?)==/g, '<mark>$1</mark>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\\(\|)/g, '│') // Преобразуем экранированные "|" в визуальный символ "│" для отображения
+}
+
+/**
  * Парсит заголовок и контент из notion_content
  */
 export function parseNotionContent(notion: Notion): ParsedNotion {
@@ -110,32 +320,17 @@ export function markdownToHtml(text: string): string {
     } else if (/^- \[ \] (.+)$/.test(line.trim())) {
       // Пустой чекбокс
       const text = line.trim().replace(/^- \[ \] /, '')
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      const formattedText = applyMarkdownFormatting(text)
       htmlLines.push(`<div class="checkbox-line"><input type="checkbox" class="mr-2 pointer-events-none"> ${formattedText}</div>`)
     } else if (/^- \[x\] (.+)$/.test(line.trim())) {
       // Отмеченный чекбокс
       const text = line.trim().replace(/^- \[x\] /, '')
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      const formattedText = applyMarkdownFormatting(text)
       htmlLines.push(`<div class="checkbox-line"><input type="checkbox" checked class="mr-2 pointer-events-none"> <span class="line-through opacity-60">${formattedText}</span></div>`)
     } else if (/^- (?!\[[ x]\])(.+)$/.test(line.trim())) {
       // Буллет-лист
       const text = line.trim().replace(/^- /, '')
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
+      const formattedText = applyMarkdownFormatting(text)
       htmlLines.push(`<div class="bullet-line">• ${formattedText}</div>`)
     } else if (/^\d+\. (.+)$/.test(line.trim())) {
       // Нумерованный список
@@ -143,24 +338,13 @@ export function markdownToHtml(text: string): string {
       if (match) {
         const number = match[1]
         const text = match[2]
-        const formattedText = text
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/__(.*?)__/g, '<u>$1</u>')
-          .replace(/==(.*?)==/g, '<mark>$1</mark>')
-          .replace(/~~(.*?)~~/g, '<s>$1</s>')
+        const formattedText = applyMarkdownFormatting(text)
         htmlLines.push(`<div class="numbered-line">${number}. ${formattedText}</div>`)
       }
     } else if (/^> (.+)$/.test(line.trim())) {
       // Цитата
       const text = line.trim().replace(/^> /, '')
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      const formattedText = applyMarkdownFormatting(text)
       htmlLines.push(`<blockquote class="border-l-4 border-gray-300 pl-4 italic">${formattedText}</blockquote>`)
     } else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
       // Обработка таблиц в markdown формате
@@ -175,8 +359,8 @@ export function markdownToHtml(text: string): string {
       
       if (tableLines.length >= 2) {
         // Парсим таблицу
-        const headerRow = tableLines[0].trim().slice(1, -1).split('|').map(cell => cell.trim())
-        const separatorRow = tableLines[1].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        const headerRow = splitTableRow(tableLines[0])
+        const separatorRow = splitTableRow(tableLines[1])
         
         // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
         const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
@@ -189,7 +373,7 @@ export function markdownToHtml(text: string): string {
           
           // Добавляем остальные строки данных
           for (let j = 2; j < tableLines.length; j++) {
-            const dataRow = tableLines[j].trim().slice(1, -1).split('|').map(cell => cell.trim())
+            const dataRow = splitTableRow(tableLines[j])
             tableRows.push(dataRow)
           }
           
@@ -201,13 +385,7 @@ export function markdownToHtml(text: string): string {
             tableHtml.push('<thead>')
             tableHtml.push('<tr>')
             tableRows[0].forEach(cell => {
-              const formattedCell = cell
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/~~(.*?)~~/g, '<s>$1</s>')
-                .replace(/__(.*?)__/g, '<u>$1</u>')
-                .replace(/==(.*?)==/g, '<mark>$1</mark>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+              const formattedCell = applyMarkdownFormatting(cell)
               tableHtml.push(`<th class="border border-gray-300 p-2 bg-gray-50 font-semibold">${formattedCell}</th>`)
             })
             tableHtml.push('</tr>')
@@ -219,13 +397,7 @@ export function markdownToHtml(text: string): string {
               for (let j = 1; j < tableRows.length; j++) {
                 tableHtml.push('<tr>')
                 tableRows[j].forEach(cell => {
-                  const formattedCell = cell
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/~~(.*?)~~/g, '<s>$1</s>')
-                    .replace(/__(.*?)__/g, '<u>$1</u>')
-                    .replace(/==(.*?)==/g, '<mark>$1</mark>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+                  const formattedCell = applyMarkdownFormatting(cell)
                   tableHtml.push(`<td class="border border-gray-300 p-2">${formattedCell}</td>`)
                 })
                 tableHtml.push('</tr>')
@@ -244,35 +416,17 @@ export function markdownToHtml(text: string): string {
           i = currentIndex - 1
         } else {
           // Если это не таблица, обрабатываем как обычный текст
-          let formattedLine = line.trim()
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/__(.*?)__/g, '<u>$1</u>')
-            .replace(/==(.*?)==/g, '<mark>$1</mark>')
-            .replace(/~~(.*?)~~/g, '<s>$1</s>')
-            .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+          let formattedLine = applyMarkdownFormatting(line.trim())
           htmlLines.push(formattedLine)
         }
       } else {
         // Если только одна строка с |, обрабатываем как обычный текст
-        let formattedLine = line.trim()
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/__(.*?)__/g, '<u>$1</u>')
-          .replace(/==(.*?)==/g, '<mark>$1</mark>')
-          .replace(/~~(.*?)~~/g, '<s>$1</s>')
-          .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+        let formattedLine = applyMarkdownFormatting(line.trim())
         htmlLines.push(formattedLine)
       }
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
-      let formattedLine = line.trim()
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+      let formattedLine = applyMarkdownFormatting(line.trim())
       htmlLines.push(formattedLine)
     }
   }
@@ -415,7 +569,7 @@ export function htmlToMarkdown(html: string): string {
   // Обрабатываем элементы списка с учетом вложенности
   function processListItems(listElement: Element, marker: string, depth: number = 0): string {
     const items: string[] = []
-    const indent = '  '.repeat(depth) // 2 пробела на уровень вложенности
+    const indent = ' '.repeat(depth * INDENT_SPACES_PER_LEVEL) // Configurable spaces per indent level
     
     for (const child of Array.from(listElement.childNodes)) {
       if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
@@ -464,7 +618,7 @@ export function htmlToMarkdown(html: string): string {
   // Обрабатываем task list с учетом вложенности
   function processTaskList(listElement: Element, depth: number = 0): string {
     const items: string[] = []
-    const indent = '  '.repeat(depth) // 2 пробела на уровень вложенности
+    const indent = ' '.repeat(depth * INDENT_SPACES_PER_LEVEL) // Configurable spaces per indent level
     
     for (const child of Array.from(listElement.childNodes)) {
       if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
@@ -652,7 +806,9 @@ export function htmlToMarkdown(html: string): string {
             const rowCells = row.querySelectorAll('th, td')
             
             rowCells.forEach(cell => {
-              const cellContent = processNode(cell).trim() || ' '
+              let cellContent = processNode(cell).trim() || ' '
+              // Экранируем символы "|" и заменяем специальные символы "│" на экранированные "|"
+              cellContent = cellContent.replace(/\|/g, '\\|').replace(/│/g, '\\|')
               cells.push(cellContent)
             })
             
@@ -730,12 +886,28 @@ export function htmlToMarkdown(html: string): string {
 }
 
 /**
+ * Number of spaces per indentation level for markdown lists
+ * This constant controls how many spaces constitute one level of indentation
+ * when parsing and generating markdown content. The default value of 2 follows
+ * common markdown conventions, but can be adjusted if needed.
+ * 
+ * Used by:
+ * - getIndentLevel(): Calculates indentation depth from leading spaces
+ * - processListItems(): Generates proper indentation for nested bullet/numbered lists
+ * - processTaskList(): Generates proper indentation for nested task lists
+ */
+const INDENT_SPACES_PER_LEVEL = 2
+
+/**
  * Конвертирует markdown в HTML для TipTap редактора
  */
 export function markdownToTipTapHTML(markdown: string): string {
   if (!markdown.trim()) return '<p></p>'
   
-  const lines = markdown.split('\n')
+  // Предварительно обрабатываем markdown для исправления таблиц
+  const processedMarkdown = preprocessMarkdownTables(markdown)
+  
+  const lines = processedMarkdown.split('\n')
   const htmlParts: string[] = []
   let listStack: Array<{ type: 'ul' | 'ol' | 'taskList', depth: number }> = []
   let currentBlockquote: string[] = []
@@ -765,9 +937,15 @@ export function markdownToTipTapHTML(markdown: string): string {
     }
   }
 
-  const getIndentLevel = (line: string): number => {
+  /**
+   * Calculates the indentation level of a line based on leading whitespaces
+   * @param line - The line to analyze
+   * @param spacesPerLevel - Number of spaces per indentation level (default: INDENT_SPACES_PER_LEVEL)
+   * @returns The indentation level (0-based)
+   */
+  const getIndentLevel = (line: string, spacesPerLevel: number = INDENT_SPACES_PER_LEVEL): number => {
     const match = line.match(/^(\s*)/)
-    return match ? Math.floor(match[1].length / 2) : 0
+    return match ? Math.floor(match[1].length / spacesPerLevel) : 0
   }
 
   const adjustListStack = (targetDepth: number, newType: 'ul' | 'ol' | 'taskList') => {
@@ -835,13 +1013,7 @@ export function markdownToTipTapHTML(markdown: string): string {
       flushListStack()
       const text = line.trim().replace(/^> /, '')
       // Обрабатываем форматирование в тексте цитаты
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      const formattedText = applyMarkdownFormattingForTipTap(text)
       currentBlockquote.push(formattedText)
     } else if (/^### (.+)$/.test(line.trim())) {
       flushListStack()
@@ -862,13 +1034,7 @@ export function markdownToTipTapHTML(markdown: string): string {
       const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- \[ \] /, '')
       // Обрабатываем форматирование в тексте чекбокса
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      const formattedText = applyMarkdownFormattingForTipTap(text)
       
       flushCurrentBlockquote()
       adjustListStack(indentLevel, 'taskList')
@@ -877,13 +1043,7 @@ export function markdownToTipTapHTML(markdown: string): string {
       const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- \[x\] /, '')
       // Обрабатываем форматирование в тексте чекбокса
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      const formattedText = applyMarkdownFormattingForTipTap(text)
       
       flushCurrentBlockquote()
       adjustListStack(indentLevel, 'taskList')
@@ -892,13 +1052,7 @@ export function markdownToTipTapHTML(markdown: string): string {
       const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- /, '')
       // Обрабатываем форматирование в тексте списка
-      const formattedText = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      const formattedText = applyMarkdownFormattingForTipTap(text)
       
       flushCurrentBlockquote()
       adjustListStack(indentLevel, 'ul')
@@ -909,13 +1063,7 @@ export function markdownToTipTapHTML(markdown: string): string {
       if (match) {
         const text = match[2]
         // Обрабатываем форматирование в тексте списка
-        const formattedText = text
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/~~(.*?)~~/g, '<s>$1</s>')
-          .replace(/__(.*?)__/g, '<u>$1</u>')
-          .replace(/==(.*?)==/g, '<mark>$1</mark>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`(.*?)`/g, '<code>$1</code>')
+        const formattedText = applyMarkdownFormattingForTipTap(text)
         
         flushCurrentBlockquote()
         adjustListStack(indentLevel, 'ol')
@@ -936,9 +1084,12 @@ export function markdownToTipTapHTML(markdown: string): string {
       }
       
       if (tableLines.length >= 2) {
-        // Парсим таблицу
-        const headerRow = tableLines[0].trim().slice(1, -1).split('|').map(cell => cell.trim())
-        const separatorRow = tableLines[1].trim().slice(1, -1).split('|').map(cell => cell.trim())
+        // Анализируем и исправляем структуру таблицы
+        const { fixedLines, expectedColumns } = analyzeAndFixTableStructure(tableLines)
+        
+        // Парсим исправленную таблицу
+        const headerRow = splitTableRow(fixedLines[0])
+        const separatorRow = splitTableRow(fixedLines[1])
         
         // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
         const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
@@ -949,9 +1100,9 @@ export function markdownToTipTapHTML(markdown: string): string {
           // Добавляем заголовки
           tableRows.push(headerRow)
           
-          // Добавляем остальные строки данных
-          for (let j = 2; j < tableLines.length; j++) {
-            const dataRow = tableLines[j].trim().slice(1, -1).split('|').map(cell => cell.trim())
+          // Добавляем остальные строки данных из исправленных строк
+          for (let j = 2; j < fixedLines.length; j++) {
+            const dataRow = splitTableRow(fixedLines[j])
             tableRows.push(dataRow)
           }
           
@@ -963,13 +1114,7 @@ export function markdownToTipTapHTML(markdown: string): string {
             tableHtml.push('<thead>')
             tableHtml.push('<tr>')
             tableRows[0].forEach(cell => {
-              const formattedCell = cell
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/~~(.*?)~~/g, '<s>$1</s>')
-                .replace(/__(.*?)__/g, '<u>$1</u>')
-                .replace(/==(.*?)==/g, '<mark>$1</mark>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`(.*?)`/g, '<code>$1</code>')
+              const formattedCell = applyMarkdownFormattingForTipTap(cell)
               tableHtml.push(`<th>${formattedCell}</th>`)
             })
             tableHtml.push('</tr>')
@@ -981,13 +1126,7 @@ export function markdownToTipTapHTML(markdown: string): string {
               for (let j = 1; j < tableRows.length; j++) {
                 tableHtml.push('<tr>')
                 tableRows[j].forEach(cell => {
-                  const formattedCell = cell
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/~~(.*?)~~/g, '<s>$1</s>')
-                    .replace(/__(.*?)__/g, '<u>$1</u>')
-                    .replace(/==(.*?)==/g, '<mark>$1</mark>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`(.*?)`/g, '<code>$1</code>')
+                  const formattedCell = applyMarkdownFormattingForTipTap(cell)
                   tableHtml.push(`<td>${formattedCell}</td>`)
                 })
                 tableHtml.push('</tr>')
@@ -1006,36 +1145,18 @@ export function markdownToTipTapHTML(markdown: string): string {
           i = currentIndex - 1
         } else {
           // Если это не таблица, обрабатываем как обычный текст
-          let formattedLine = line.trim()
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/~~(.*?)~~/g, '<s>$1</s>')
-            .replace(/__(.*?)__/g, '<u>$1</u>')
-            .replace(/==(.*?)==/g, '<mark>$1</mark>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
+          let formattedLine = applyMarkdownFormattingForTipTap(line.trim())
           htmlParts.push(`<p>${formattedLine}</p>`)
         }
       } else {
         // Если только одна строка с |, обрабатываем как обычный текст
-        let formattedLine = line.trim()
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/~~(.*?)~~/g, '<s>$1</s>')
-          .replace(/__(.*?)__/g, '<u>$1</u>')
-          .replace(/==(.*?)==/g, '<mark>$1</mark>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`(.*?)`/g, '<code>$1</code>')
+        let formattedLine = applyMarkdownFormattingForTipTap(line.trim())
         htmlParts.push(`<p>${formattedLine}</p>`)
       }
     } else if (line.trim()) {
       flushListStack()
       flushCurrentBlockquote()
-      let formattedLine = line.trim()
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~(.*?)~~/g, '<s>$1</s>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/==(.*?)==/g, '<mark>$1</mark>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
+      let formattedLine = applyMarkdownFormattingForTipTap(line.trim())
       htmlParts.push(`<p>${formattedLine}</p>`)
     }
   }

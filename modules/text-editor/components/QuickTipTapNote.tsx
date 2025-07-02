@@ -28,8 +28,10 @@ import { htmlToMarkdown } from '@/modules/notions'
 import { useAutoSave } from '@/modules/notions/hooks/useAutoSave'
 import { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
 import { useNotionsStore } from '@/modules/notions/store'
+import { useListIndentation } from '@/hooks/useListIndentation'
 import type { QuickTipTapNoteProps } from '@/modules/text-editor/types'
 
+export const TOOLBAR_SEPARATOR_HEIGHT = 'h-7'
 export function QuickTipTapNote({
   onSave,
   onCancel,
@@ -141,43 +143,7 @@ export function QuickTipTapNote({
   }
 
   // Обработчик клавиш для отступов в списках
-  useEffect(() => {
-    if (!editor) return
-
-    const handleTabKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Tab') {
-        const isInListItem = editor.isActive('listItem')
-        const isInTaskItem = editor.isActive('taskItem')
-        
-        if (isInListItem || isInTaskItem) {
-          event.preventDefault()
-          
-          if (event.shiftKey) {
-            // Shift+Tab - уменьшить отступ
-            if (isInListItem && editor.can().liftListItem('listItem')) {
-              editor.chain().focus().liftListItem('listItem').run()
-            } else if (isInTaskItem && editor.can().liftListItem('taskItem')) {
-              editor.chain().focus().liftListItem('taskItem').run()
-            }
-          } else {
-            // Tab - увеличить отступ
-            if (isInListItem && editor.can().sinkListItem('listItem')) {
-              editor.chain().focus().sinkListItem('listItem').run()
-            } else if (isInTaskItem && editor.can().sinkListItem('taskItem')) {
-              editor.chain().focus().sinkListItem('taskItem').run()
-            }
-          }
-        }
-      }
-    }
-
-    const editorElement = editor.view.dom
-    editorElement.addEventListener('keydown', handleTabKeyDown)
-
-    return () => {
-      editorElement.removeEventListener('keydown', handleTabKeyDown)
-    }
-  }, [editor])
+  useListIndentation(editor)
 
   if (!editor) {
     return null
@@ -287,8 +253,7 @@ export function QuickTipTapNote({
           <UnderlineIcon className="h-3 w-3" />
         </Button>
         
-        <div className="w-px h-7 bg-gray-300 mx-1 self-center" />
-        
+        <div className={`w-px ${TOOLBAR_SEPARATOR_HEIGHT} bg-gray-300 mx-1 self-center`} />        
         <Button
           variant="ghost"
           size="sm"
@@ -336,8 +301,8 @@ export function QuickTipTapNote({
         </Button>
 
         
-        <div className="w-px h-7 bg-gray-300 mx-1 self-center" />
-        
+        <div className={`w-px ${TOOLBAR_SEPARATOR_HEIGHT} bg-gray-300 mx-1 self-center`} />
+                
         <Button
           variant="ghost"
           size="sm"
