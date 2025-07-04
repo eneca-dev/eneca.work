@@ -1,15 +1,22 @@
 import type { Notion, ParsedNotion } from '@/modules/notions/types'
 
 /**
- * Splits a table row string into cells while respecting escaped pipes (\|) and special pipe symbols (│).
- * Escaped pipes and special pipe symbols are preserved in the cell content.
+ * Splits a table row string into cells while respecting escaped pipes (\|).
+ * Escaped pipes are preserved in the cell content.
  * 
  * @param rowString - The table row string (e.g., "| cell1 | cell2 with \| pipe | cell3 |")
- * @returns Array of cell contents with escaped pipes and special symbols preserved
+ * @returns Array of cell contents with escaped pipes preserved
  */
 export function splitTableRow(rowString: string): string[] {
+  // Validate that the row string starts and ends with '|'
+  const trimmed = rowString.trim()
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
+    console.warn(`Invalid table row format: "${rowString}". Expected format: "| cell1 | cell2 |"`)
+    return []
+  }
+  
   // Remove leading and trailing |
-  const content = rowString.trim().slice(1, -1)
+  const content = trimmed.slice(1, -1)
   
   const cells: string[] = []
   let currentCell = ''
@@ -20,10 +27,6 @@ export function splitTableRow(rowString: string): string[] {
       // Escaped pipe - add literal pipe to current cell and skip both characters
       currentCell += '|'
       i += 2
-    } else if (content[i] === '│') {
-      // Special pipe symbol (U+2502) - treat as regular content, not a separator
-      currentCell += content[i]
-      i++
     } else if (content[i] === '|') {
       // Unescaped pipe - end current cell and start new one
       cells.push(currentCell.trim())
@@ -49,6 +52,67 @@ export function splitTableRow(rowString: string): string[] {
  * @param tableLines - Array of table row strings
  * @returns Object with fixed table lines and expected column count
  */
+/**
+ * Разделяет последовательность строк таблицы на отдельные таблицы
+ * Новая таблица начинается, когда встречается разделитель после строк данных
+ */
+export function splitIntoSeparateTables(tableLines: string[]): string[][] {
+  if (tableLines.length < 2) {
+    return [tableLines]
+  }
+
+  // Находим все индексы разделителей
+  const separatorIndices: number[] = []
+  
+  for (let i = 0; i < tableLines.length; i++) {
+    const line = tableLines[i]
+    const cells = splitTableRow(line)
+    
+    // Разделитель - это строка, где все непустые ячейки содержат только дефисы
+    const isSeparator = cells.length > 0 && cells.every(cell => {
+      const trimmed = cell.trim()
+      return trimmed === '' || /^-+$/.test(trimmed)
+    }) && cells.some(cell => /^-+$/.test(cell.trim()))
+    
+    if (isSeparator) {
+      separatorIndices.push(i)
+    }
+  }
+  
+  if (separatorIndices.length <= 1) {
+    return [tableLines] // Одна таблица или нет разделителей
+  }
+  
+  // ИСПРАВЛЕНИЕ: Правильно разделяем таблицы
+  // Каждая таблица состоит из: заголовок -> разделитель -> данные (опционально)
+  const tables: string[][] = []
+  
+  for (let i = 0; i < separatorIndices.length; i++) {
+    const separatorIndex = separatorIndices[i]
+    
+    // Заголовок должен быть прямо перед разделителем
+    const headerIndex = separatorIndex - 1
+    if (headerIndex < 0) continue
+    
+    // Конец таблицы - до следующего заголовка (который перед следующим разделителем) или до конца
+    let endIndex = tableLines.length
+    if (i < separatorIndices.length - 1) {
+      // Следующий заголовок начинается перед следующим разделителем
+      endIndex = separatorIndices[i + 1] - 1
+    }
+    
+    // Извлекаем таблицу: заголовок + разделитель + данные
+    const table = tableLines.slice(headerIndex, endIndex)
+    
+    // Валидируем таблицу: минимум заголовок + разделитель
+    if (table.length >= 2) {
+      tables.push(table)
+    }
+  }
+  
+  return tables.length > 0 ? tables : [tableLines]
+}
+
 export function analyzeAndFixTableStructure(tableLines: string[]): { 
   fixedLines: string[], 
   expectedColumns: number 
@@ -69,32 +133,37 @@ export function analyzeAndFixTableStructure(tableLines: string[]): {
     columnCounts.set(columnCount, (columnCounts.get(columnCount) || 0) + 1)
   }
 
-  // Find the most common column count (excluding separator row)
-  let maxCount = 0
-  let expectedColumns = 0
-  
-  for (const [columns, count] of columnCounts.entries()) {
-    if (count > maxCount) {
-      maxCount = count
-      expectedColumns = columns
+  // ИСПРАВЛЕНИЕ: Всегда используем заголовок (первую строку) для определения количества столбцов
+  // Это предотвращает расширение таблиц с малым количеством столбцов
+  const headerCells = splitTableRow(tableLines[0])
+  let expectedColumns = headerCells.length
+
+  // Если заголовок пустой или проблемный, используем наиболее частое количество столбцов
+  if (expectedColumns === 0) {
+    let maxCount = 0
+    for (const [columns, count] of columnCounts.entries()) {
+      if (count > maxCount) {
+        maxCount = count
+        expectedColumns = columns
+      }
     }
   }
 
-  // If no clear majority, use the separator row (index 1) as reference
-  if (maxCount <= 1 && tableLines.length >= 2) {
-    const separatorCells = splitTableRow(tableLines[1])
-    expectedColumns = separatorCells.length
-  }
+
 
   // Fix rows that have too many columns by merging extra cells
+  // Fix separator row to match header column count
   const fixedLines: string[] = []
   
   for (let i = 0; i < rowData.length; i++) {
     const { cells, originalLine } = rowData[i]
     
-    // Skip separator row (usually index 1) - don't modify it
+    // Специальная обработка для разделительной строки (обычно индекс 1)
     if (i === 1 && cells.every(cell => /^-+$/.test(cell.trim()))) {
-      fixedLines.push(originalLine)
+      // Создаем правильную разделительную строку с нужным количеством столбцов
+      const separatorCells = Array(expectedColumns).fill('---')
+      const fixedLine = `| ${separatorCells.join(' | ')} |`
+      fixedLines.push(fixedLine)
       continue
     }
     
@@ -157,26 +226,40 @@ export function preprocessMarkdownTables(markdown: string): string {
       }
       
       if (tableLines.length >= 2) {
-        // Проверяем, является ли это действительно таблицей (есть ли разделитель)
-        const separatorRow = splitTableRow(tableLines[1])
-        const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
+        // ИСПРАВЛЕНИЕ: Сначала разделяем на отдельные таблицы, затем обрабатываем каждую
+        const separateTables = splitIntoSeparateTables(tableLines)
         
-        if (isSeparator) {
-          // Это таблица - применяем исправление
-          const { fixedLines } = analyzeAndFixTableStructure(tableLines)
-          // Преобразуем специальные символы "│" обратно в экранированные "|" для хранения
-          const normalizedLines = fixedLines.map(line => 
-            line.replace(/│/g, '\\|')
-          )
-          processedLines.push(...normalizedLines)
-          i = currentIndex // Переходим к следующей строке после таблицы
-          continue
-        }
+        // Обрабатываем каждую таблицу отдельно
+        separateTables.forEach(tableLines => {
+          if (tableLines.length >= 2) {
+            // Проверяем, является ли это действительно таблицей (есть ли разделитель)
+            const separatorRow = splitTableRow(tableLines[1])
+            const isSeparator = separatorRow.every(cell => {
+              const trimmed = cell.trim()
+              return trimmed === '' || /^-+$/.test(trimmed)
+            }) && tableLines[1].includes('-')
+            
+            if (isSeparator) {
+              // Это таблица - применяем исправление только к этой таблице
+              const { fixedLines } = analyzeAndFixTableStructure(tableLines)
+              processedLines.push(...fixedLines)
+            } else {
+              // Не таблица - добавляем как есть
+              processedLines.push(...tableLines)
+            }
+          } else {
+            // Менее 2 строк - добавляем как есть
+            processedLines.push(...tableLines)
+          }
+        })
+        
+        i = currentIndex // Переходим к следующей строке после таблицы
+        continue
       }
     }
     
-    // Не таблица или одиночная строка - также нормализуем специальные символы
-    processedLines.push(line.replace(/│/g, '\\|'))
+    // Не таблица или одиночная строка - добавляем как есть
+    processedLines.push(line)
     i++
   }
   
@@ -194,6 +277,7 @@ function applyMarkdownFormatting(text: string): string {
     .replace(/==(.*?)==/g, '<mark>$1</mark>')
     .replace(/~~(.*?)~~/g, '<s>$1</s>')
     .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>')
+    .replace(/⏎/g, '<br>') // Преобразуем символы переноса строки в <br> теги
 }
 
 /**
@@ -207,7 +291,7 @@ function applyMarkdownFormattingForTipTap(text: string): string {
     .replace(/==(.*?)==/g, '<mark>$1</mark>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\\(\|)/g, '│') // Преобразуем экранированные "|" в визуальный символ "│" для отображения
+    .replace(/⏎/g, '<br>') // Преобразуем символы переноса строки в <br> теги
 }
 
 /**
@@ -377,8 +461,8 @@ export function markdownToHtml(text: string): string {
             tableRows.push(dataRow)
           }
           
-          // Создаем HTML таблицу
-          const tableHtml: string[] = ['<table class="border-collapse border border-gray-300 w-full my-4">']
+          // Создаем HTML таблицу с теми же стилями, что в TipTap редакторе
+          const tableHtml: string[] = ['<table class="border-collapse table max-w-full min-w-[200px] border border-gray-300 relative my-4">']
           
           if (tableRows.length > 0) {
             // Заголовок
@@ -386,7 +470,7 @@ export function markdownToHtml(text: string): string {
             tableHtml.push('<tr>')
             tableRows[0].forEach(cell => {
               const formattedCell = applyMarkdownFormatting(cell)
-              tableHtml.push(`<th class="border border-gray-300 p-2 bg-gray-50 font-semibold">${formattedCell}</th>`)
+              tableHtml.push(`<th class="border border-gray-300 p-2 bg-gray-50 font-semibold min-w-[50px] relative text-center" style="white-space: pre-wrap; word-wrap: break-word; vertical-align: top;">${formattedCell}</th>`)
             })
             tableHtml.push('</tr>')
             tableHtml.push('</thead>')
@@ -398,7 +482,7 @@ export function markdownToHtml(text: string): string {
                 tableHtml.push('<tr>')
                 tableRows[j].forEach(cell => {
                   const formattedCell = applyMarkdownFormatting(cell)
-                  tableHtml.push(`<td class="border border-gray-300 p-2">${formattedCell}</td>`)
+                  tableHtml.push(`<td class="border border-gray-300 p-2 bg-white font-normal text-left min-w-[50px] relative" style="white-space: pre-wrap; word-wrap: break-word; vertical-align: top;">${formattedCell}</td>`)
                 })
                 tableHtml.push('</tr>')
               }
@@ -557,7 +641,6 @@ function normalizeContentEditableHTML(html: string): string {
  * Конвертирует HTML обратно в markdown
  */
 export function htmlToMarkdown(html: string): string {
-  console.log('Converting HTML to markdown:', html)
   
   // Сначала нормализуем HTML, удаляя лишние стили
   const normalizedHtml = normalizeContentEditableHTML(html)
@@ -613,6 +696,51 @@ export function htmlToMarkdown(html: string): string {
     }
     
     return items.join('\n')
+  }
+
+  // Специальная функция для обработки содержимого ячеек таблицы
+  function processTableCell(cell: Element): string {
+    let content = ''
+    
+    // Обрабатываем дочерние узлы, заменяя <br> на специальный символ переноса
+    for (const child of Array.from(cell.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const childElement = child as Element
+        if (childElement.tagName.toLowerCase() === 'br') {
+          content += '⏎' // Специальный символ для переноса строки
+        } else if (childElement.tagName.toLowerCase() === 'p') {
+          // Специальная обработка параграфа в ячейке таблицы - заменяем <br> на ⏎
+          const pContent = processTableCellParagraph(childElement)
+          content += pContent
+        } else {
+          content += processNode(childElement)
+        }
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        content += child.textContent || ''
+      }
+    }
+    
+    return content
+  }
+
+  // Специальная функция для обработки параграфов внутри ячеек таблицы
+  function processTableCellParagraph(paragraph: Element): string {
+    let content = ''
+    
+    for (const child of Array.from(paragraph.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const childElement = child as Element
+        if (childElement.tagName.toLowerCase() === 'br') {
+          content += '⏎' // Специальный символ для переноса строки
+        } else {
+          content += processNode(childElement)
+        }
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        content += child.textContent || ''
+      }
+    }
+    
+    return content
   }
 
   // Обрабатываем task list с учетом вложенности
@@ -710,7 +838,8 @@ export function htmlToMarkdown(html: string): string {
         case 'mark':
           return `==${content}==`
         case 'br':
-          // Не добавляем лишние переносы - br уже означает перенос
+          // В контексте таблицы сохраняем переносы как специальные символы
+          // В других контекстах не добавляем лишние переносы
           return ''
         case 'p':
           // Сохраняем параграфы, даже пустые (они могут быть намеренными пустыми строками)
@@ -797,7 +926,7 @@ export function htmlToMarkdown(html: string): string {
           }
           return `\`\`\`\n${content}\n\`\`\``
         case 'table':
-          // Обработка таблиц
+          // Обработка таблиц - каждая таблица обрабатывается отдельно
           const rows: string[][] = []
           const tableRows = element.querySelectorAll('tr')
           
@@ -806,9 +935,10 @@ export function htmlToMarkdown(html: string): string {
             const rowCells = row.querySelectorAll('th, td')
             
             rowCells.forEach(cell => {
-              let cellContent = processNode(cell).trim() || ' '
-              // Экранируем символы "|" и заменяем специальные символы "│" на экранированные "|"
-              cellContent = cellContent.replace(/\|/g, '\\|').replace(/│/g, '\\|')
+              // Специальная обработка для ячеек таблицы - сохраняем переносы строк
+              let cellContent = processTableCell(cell).trim() || ' '
+              // Экранируем символы "|" 
+              cellContent = cellContent.replace(/\|/g, '\\|')
               cells.push(cellContent)
             })
             
@@ -818,11 +948,22 @@ export function htmlToMarkdown(html: string): string {
           })
           
           if (rows.length > 0) {
-            const maxCols = Math.max(...rows.map(row => row.length))
+            // ИСПРАВЛЕНИЕ: Используем количество колонок из ЭТОЙ таблицы, а не максимальное среди всех
+            // Определяем количество колонок из первой строки (заголовков)
+            const expectedCols = rows[0].length
             
-            // Нормализуем все строки до одинакового количества колонок
+            // Нормализуем все строки до количества колонок этой таблицы
             const normalizedRows = rows.map(row => {
-              while (row.length < maxCols) {
+              // Если строка имеет больше колонок, обрезаем
+              if (row.length > expectedCols) {
+                // Объединяем лишние колонки в последнюю
+                const fixedRow = row.slice(0, expectedCols - 1)
+                const lastCell = row.slice(expectedCols - 1).join(' | ')
+                fixedRow.push(lastCell)
+                return fixedRow
+              }
+              // Если строка имеет меньше колонок, дополняем пустыми
+              while (row.length < expectedCols) {
                 row.push(' ')
               }
               return row
@@ -836,7 +977,7 @@ export function htmlToMarkdown(html: string): string {
               markdownRows.push(`| ${normalizedRows[0].join(' | ')} |`)
               
               // Разделительная строка
-              const separator = Array(maxCols).fill('---').join(' | ')
+              const separator = Array(expectedCols).fill('---').join(' | ')
               markdownRows.push(`| ${separator} |`)
               
               // Остальные строки
@@ -845,7 +986,10 @@ export function htmlToMarkdown(html: string): string {
               }
             }
             
-            return markdownRows.join('\n') + '\n'
+            // ИСПРАВЛЕНИЕ: Добавляем дополнительную пустую строку для разделения таблиц
+            const result = markdownRows.join('\n') + '\n\n'
+            
+            return result
           }
           return ''
         case 'tr':
@@ -881,7 +1025,6 @@ export function htmlToMarkdown(html: string): string {
   // Соединяем части с одним переносом строки между ними
   const markdown = parts.join('\n')
 
-  console.log('Converted to markdown:', markdown)
   return markdown
 }
 
@@ -1074,80 +1217,90 @@ export function markdownToTipTapHTML(markdown: string): string {
       flushListStack()
       flushCurrentBlockquote()
       
-      const tableLines: string[] = []
+      const allTableLines: string[] = []
       let currentIndex = i
       
-      // Собираем все строки таблицы
+      // Собираем все подряд идущие строки таблицы
       while (currentIndex < lines.length && lines[currentIndex].trim().startsWith('|') && lines[currentIndex].trim().endsWith('|')) {
-        tableLines.push(lines[currentIndex])
+        allTableLines.push(lines[currentIndex])
         currentIndex++
       }
       
-      if (tableLines.length >= 2) {
-        // Анализируем и исправляем структуру таблицы
-        const { fixedLines, expectedColumns } = analyzeAndFixTableStructure(tableLines)
+      if (allTableLines.length >= 2) {
+                // Разделяем на отдельные таблицы
+        const separateTables = splitIntoSeparateTables(allTableLines)
         
-        // Парсим исправленную таблицу
-        const headerRow = splitTableRow(fixedLines[0])
-        const separatorRow = splitTableRow(fixedLines[1])
-        
-        // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
-        const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
-        
-        if (isSeparator) {
-          const tableRows: string[][] = []
-          
-          // Добавляем заголовки
-          tableRows.push(headerRow)
-          
-          // Добавляем остальные строки данных из исправленных строк
-          for (let j = 2; j < fixedLines.length; j++) {
-            const dataRow = splitTableRow(fixedLines[j])
-            tableRows.push(dataRow)
+        // Обрабатываем каждую таблицу отдельно
+        separateTables.forEach((tableLines, tableIndex) => {
+          if (tableLines.length < 2) {
+            return
           }
           
-          // Создаем HTML таблицу
-          const tableHtml: string[] = ['<table>']
+          // Анализируем и исправляем структуру таблицы
+          const { fixedLines, expectedColumns } = analyzeAndFixTableStructure(tableLines)
           
-          if (tableRows.length > 0) {
-            // Заголовок
-            tableHtml.push('<thead>')
-            tableHtml.push('<tr>')
-            tableRows[0].forEach(cell => {
-              const formattedCell = applyMarkdownFormattingForTipTap(cell)
-              tableHtml.push(`<th>${formattedCell}</th>`)
-            })
-            tableHtml.push('</tr>')
-            tableHtml.push('</thead>')
+          // Парсим исправленную таблицу
+          const headerRow = splitTableRow(fixedLines[0])
+          const separatorRow = splitTableRow(fixedLines[1])
+          
+          // Проверяем, что вторая строка - это разделитель (содержит только --- или подобное)
+          const isSeparator = separatorRow.every(cell => /^-+$/.test(cell.trim()))
+          
+          if (isSeparator) {
+            const tableRows: string[][] = []
             
-            // Тело таблицы
-            if (tableRows.length > 1) {
-              tableHtml.push('<tbody>')
-              for (let j = 1; j < tableRows.length; j++) {
-                tableHtml.push('<tr>')
-                tableRows[j].forEach(cell => {
-                  const formattedCell = applyMarkdownFormattingForTipTap(cell)
-                  tableHtml.push(`<td>${formattedCell}</td>`)
-                })
-                tableHtml.push('</tr>')
-              }
-              tableHtml.push('</tbody>')
+            // Добавляем заголовки
+            tableRows.push(headerRow)
+            
+            // Добавляем остальные строки данных из исправленных строк
+            for (let j = 2; j < fixedLines.length; j++) {
+              const dataRow = splitTableRow(fixedLines[j])
+              tableRows.push(dataRow)
             }
+            
+            // Создаем HTML таблицу
+            const tableHtml: string[] = ['<table>']
+            
+            if (tableRows.length > 0) {
+              // Заголовок
+                                tableHtml.push('<thead>')
+                  tableHtml.push('<tr>')
+                  tableRows[0].forEach(cell => {
+                    const formattedCell = applyMarkdownFormattingForTipTap(cell)
+                    // Восстанавливаем переносы строк в ячейках заголовка
+                    const cellWithBreaks = formattedCell.replace(/⏎/g, '<br>')
+                    tableHtml.push(`<th>${cellWithBreaks}</th>`)
+                  })
+                  tableHtml.push('</tr>')
+                  tableHtml.push('</thead>')
+                  
+                  // Тело таблицы
+                  if (tableRows.length > 1) {
+                    tableHtml.push('<tbody>')
+                    for (let j = 1; j < tableRows.length; j++) {
+                      tableHtml.push('<tr>')
+                      tableRows[j].forEach(cell => {
+                        const formattedCell = applyMarkdownFormattingForTipTap(cell)
+                        // Восстанавливаем переносы строк в ячейках
+                        const cellWithBreaks = formattedCell.replace(/⏎/g, '<br>')
+                        tableHtml.push(`<td>${cellWithBreaks}</td>`)
+                      })
+                      tableHtml.push('</tr>')
+                    }
+                    tableHtml.push('</tbody>')
+                  }
+            }
+            
+            tableHtml.push('</table>')
+            htmlParts.push(tableHtml.join(''))
+            
+            // Добавляем пустой параграф после каждой таблицы (кроме последней, чтобы не было лишнего отступа)
+            htmlParts.push('<p></p>')
           }
-          
-          tableHtml.push('</table>')
-          htmlParts.push(tableHtml.join(''))
-          
-          // Добавляем пустой параграф после таблицы
-          htmlParts.push('<p></p>')
-          
-          // Обновляем индекс, чтобы пропустить обработанные строки таблицы
-          i = currentIndex - 1
-        } else {
-          // Если это не таблица, обрабатываем как обычный текст
-          let formattedLine = applyMarkdownFormattingForTipTap(line.trim())
-          htmlParts.push(`<p>${formattedLine}</p>`)
-        }
+        })
+        
+        // Обновляем индекс, чтобы пропустить обработанные строки таблицы
+        i = currentIndex - 1
       } else {
         // Если только одна строка с |, обрабатываем как обычный текст
         let formattedLine = applyMarkdownFormattingForTipTap(line.trim())
@@ -1163,7 +1316,8 @@ export function markdownToTipTapHTML(markdown: string): string {
   
   flushListStack()
   flushCurrentBlockquote()
-  return htmlParts.join('')
+  const finalHtml = htmlParts.join('')
+  return finalHtml
 }
 
 /**

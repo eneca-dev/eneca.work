@@ -282,26 +282,6 @@ export function QuickTipTapNote({
         >
           <CheckSquare className="h-3 w-3" />
         </Button>
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            if (editor.isActive('listItem')) {
-              editor.chain().focus().sinkListItem('listItem').run()
-            } else if (editor.isActive('taskItem')) {
-              editor.chain().focus().sinkListItem('taskItem').run()
-            }
-          }}
-          disabled={!editor.can().sinkListItem('listItem') && !editor.can().sinkListItem('taskItem')}
-          className="h-7 w-7 p-0"
-          title="Увеличить отступ"
-        >
-          <Indent className="h-3 w-3" />
-        </Button>
-
-        
-        <div className={`w-px ${TOOLBAR_SEPARATOR_HEIGHT} bg-gray-300 mx-1 self-center`} />
                 
         <Button
           variant="ghost"

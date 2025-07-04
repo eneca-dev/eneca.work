@@ -3,6 +3,9 @@
 import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { Transaction } from '@tiptap/pm/state'
+import { EditorState } from '@tiptap/pm/state'
+import { ChainedCommands } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Image from '@tiptap/extension-image'
@@ -14,6 +17,7 @@ import TextStyle from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import Typography from '@tiptap/extension-typography'
 import Placeholder from '@tiptap/extension-placeholder'
+import HardBreak from '@tiptap/extension-hard-break'
 import Table from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
@@ -70,6 +74,15 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 }, ref) => {
   const [title, setTitle] = useState(initialTitle)
   const [hasChanges, setHasChanges] = useState(false)
+  const [tooltipState, setTooltipState] = useState<{
+    show: boolean
+    message: string
+    duration: number
+  }>({
+    show: false,
+    message: '',
+    duration: 0
+  })
   
   // Хук автосохранения
   const { saveStatus, triggerSave, forceSave } = useAutoSave({
@@ -77,6 +90,34 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     enabled: enableAutoSave && !!notionId,
     delay: 300 // Ещё быстрее для мгновенной реакции
   })
+
+  // Функция для показа подсказки о невозможности создания таблицы
+  const showTableBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать таблицу внутри таблицы',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
+  // Функция для показа подсказки о замене символов "|"
+  const showTablePipeWarningTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'По техническим причинам все символы "|" внутри таблицы будут заменены на "/"',
+      duration: 5000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 5000)
+  }, [])
+
+  // Отслеживание изменений состояния подсказки
+  useEffect(() => {
+  }, [tooltipState])
 
   // Комбинирование заголовка и содержимого
   const combineContent = (titleValue: string, editorContent: string) => {
@@ -176,14 +217,28 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       Placeholder.configure({
         placeholder: 'Начните писать свою заметку...'
       }),
+      HardBreak.configure({
+        keepMarks: false,
+        HTMLAttributes: {
+          class: 'table-line-break'
+        }
+      }),
       Table.configure({
         resizable: true,
         allowTableNodeSelection: true,
         cellMinWidth: 50
       }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'table-header-cell'
+        }
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'table-data-cell'
+        }
+      }),
       TableWithFirstRowHeader
     ],
     content: parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>',
@@ -372,12 +427,97 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   // Обработчик клавиш для отступов в списках
   useListIndentation(editor)
 
+  // Функция для вставки таблицы с проверками и дополнительной логикой
+  const handleTableInsertion = useCallback((rows: number, cols: number, editor: any) => {
+    // Проверяем, не находимся ли мы уже внутри ячейки таблицы
+    const { selection } = editor.state
+    const { $anchor } = selection
+    
+    let inTableCell = false
+    for (let depth = $anchor.depth; depth > 0; depth--) {
+      const node = $anchor.node(depth)
+      if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+        inTableCell = true
+        break
+      }
+    }
+    
+    // Если мы в ячейке таблицы, не создаем новую таблицу
+    if (inTableCell) {
+      showTableBlockedTooltip()
+      return
+    }
+    
+    // Вставляем таблицу и сразу добавляем параграф после неё в одной атомарной операции
+    editor.chain()
+      .focus()
+      .insertTable({ 
+        rows, 
+        cols, 
+        withHeaderRow: true 
+      })
+      .command(({ tr, state }: { tr: Transaction; state: EditorState }) => {
+        // Получаем текущую позицию после вставки таблицы
+        const { selection } = state
+        const { $anchor } = selection
+        
+        // Находим таблицу, которая содержит текущую позицию
+        let tableNode = null
+        let tablePos = -1
+        
+        // Ищем таблицу от текущей позиции вверх по дереву
+        for (let depth = $anchor.depth; depth > 0; depth--) {
+          const node = $anchor.node(depth)
+          if (node.type.name === 'table') {
+            tableNode = node
+            tablePos = $anchor.before(depth)
+            break
+          }
+        }
+        
+        if (tableNode && tablePos >= 0) {
+          // Позиция после таблицы
+          const afterTablePos = tablePos + tableNode.nodeSize
+          
+          // Создаем пустой параграф
+          const paragraph = state.schema.nodes.paragraph.create()
+          
+          // Вставляем параграф после таблицы
+          tr.insert(afterTablePos, paragraph)
+          
+          // Устанавливаем курсор в новый параграф
+          const $pos = tr.doc.resolve(afterTablePos + 1)
+          tr.setSelection(TextSelection.near($pos))
+          
+          return true
+        }
+        
+        return false
+      })
+      .command(({ commands }: { commands: ChainedCommands }) => {
+        // Убеждаемся, что курсор находится после таблицы
+        return commands.focus()
+      })
+      .run()
+    
+    // Показываем подсказку о замене символов "|"
+    showTablePipeWarningTooltip()
+  }, [showTableBlockedTooltip, showTablePipeWarningTooltip])
+
   if (!editor) {
     return null
   }
 
   return (
-    <div className={cn('w-full max-w-4xl mx-auto h-full flex flex-col', className)}>
+    <div className={cn('w-full max-w-4xl mx-auto h-full flex flex-col relative', className)}>
+      {/* Подсказка о таблицах */}
+      {tooltipState.show && (
+        <div 
+          className="absolute top-16 right-2 bg-white-100 text-red-800 text-sm px-3 py-1 rounded-xl shadow-xl whitespace-nowrap border border-red-600 z-50"
+        >
+          {tooltipState.message}
+        </div>
+      )}
       {/* Заголовок */}
       {showTitle && (
         <div className="mb-4 flex-shrink-0">
@@ -663,57 +803,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         <div className="flex gap-1 mr-2">
           <TableSizeSelector 
             onSelect={(rows, cols) => {
-              // Вставляем таблицу и сразу добавляем параграф после неё в одной атомарной операции
-              editor.chain()
-                .focus()
-                .insertTable({ 
-                  rows, 
-                  cols, 
-                  withHeaderRow: true 
-                })
-                .command(({ tr, state }) => {
-                  // Получаем текущую позицию после вставки таблицы
-                  const { selection } = state
-                  const { $anchor } = selection
-                  
-                  // Находим таблицу, которая содержит текущую позицию
-                  let tableNode = null
-                  let tablePos = -1
-                  
-                  // Ищем таблицу от текущей позиции вверх по дереву
-                  for (let depth = $anchor.depth; depth > 0; depth--) {
-                    const node = $anchor.node(depth)
-                    if (node.type.name === 'table') {
-                      tableNode = node
-                      tablePos = $anchor.before(depth)
-                      break
-                    }
-                  }
-                  
-                  if (tableNode && tablePos >= 0) {
-                    // Позиция после таблицы
-                    const afterTablePos = tablePos + tableNode.nodeSize
-                    
-                    // Создаем пустой параграф
-                    const paragraph = state.schema.nodes.paragraph.create()
-                    
-                    // Вставляем параграф после таблицы
-                    tr.insert(afterTablePos, paragraph)
-                    
-                    // Устанавливаем курсор в новый параграф
-                    const $pos = tr.doc.resolve(afterTablePos + 1)
-                    tr.setSelection(TextSelection.near($pos))
-                    
-                    return true
-                  }
-                  
-                  return false
-                })
-                .command(({ commands }) => {
-                  // Убеждаемся, что курсор находится после таблицы
-                  return commands.focus()
-                })
-                .run()
+              handleTableInsertion(rows, cols, editor)
             }} 
           />
         </div>

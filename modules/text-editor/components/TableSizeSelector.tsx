@@ -60,11 +60,11 @@ export function TableSizeSelector({
           
           {/* Сетка для выбора размера */}
           <div 
-            className="grid gap-1 p-2 border rounded-md bg-gray-50"
+            className="table-size-grid"
             style={{
-              gridTemplateColumns: `repeat(${maxCols}, 1fr)`,
-              gridTemplateRows: `repeat(${maxRows}, 1fr)`
-            }}
+              '--grid-cols': `repeat(${maxCols}, 1fr)`,
+              '--grid-rows': `repeat(${maxRows}, 1fr)`
+            } as React.CSSProperties}
             onMouseLeave={handleMouseLeave}
           >
             {Array.from({ length: maxRows }, (_, row) =>
