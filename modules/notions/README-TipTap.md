@@ -33,20 +33,7 @@ import { TipTapEditor } from '@/modules/notions'
 />
 ```
 
-### 2. TipTapNoteModal
-Модальное окно для редактирования заметок.
 
-**Использование:**
-```tsx
-import { TipTapNoteModal } from '@/modules/notions'
-
-<TipTapNoteModal
-  open={isModalOpen}
-  onOpenChange={setIsModalOpen}
-  notion={selectedNotion}
-  onSave={handleSave}
-  mode="edit" // или "create"
-/>
 ```
 
 ## Интеграция в NotesBlock

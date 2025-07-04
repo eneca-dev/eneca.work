@@ -19,3 +19,4 @@ coverage/
 
 # WS-to-Work Integration
 ws-to-work-integration/
+tsconfig.tsbuildinfo

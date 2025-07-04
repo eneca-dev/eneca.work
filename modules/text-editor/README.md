@@ -31,34 +31,7 @@ import { TipTapEditor } from '@/modules/text-editor'
 />
 ```
 
-### TipTapNoteModal
-Модальное окно с TipTap редактором для создания/редактирования заметок.
 
-**Использование:**
-```tsx
-import { TipTapNoteModal } from '@/modules/text-editor'
-
-<TipTapNoteModal
-  open={isOpen}
-  onOpenChange={setIsOpen}
-  notion={notion}
-  onSave={handleSave}
-  mode="edit"
-/>
-```
-
-### QuickTipTapNote
-Упрощенный редактор для быстрого создания заметок.
-
-**Использование:**
-```tsx
-import { QuickTipTapNote } from '@/modules/text-editor'
-
-<QuickTipTapNote
-  onSave={handleSave}
-  onCancel={handleCancel}
-  placeholder="Введите текст заметки..."
-/>
 ```
 
 ## Горячие клавиши
