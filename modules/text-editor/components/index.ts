@@ -1,5 +1,2 @@
-export { TipTapEditor } from '@/modules/text-editor/components/TipTapEditor'
-export { TipTapNoteModal } from '@/modules/text-editor/components/TipTapNoteModal'
-export { QuickTipTapNote } from '@/modules/text-editor/components/QuickTipTapNote'
-export { TableSizeSelector } from '@/modules/text-editor/components/TableSizeSelector'
-export { TableControls } from '@/modules/text-editor/components/TableControls' 
+// All components are client-side and should be imported from './client'
+// This file is kept empty to maintain the barrel export pattern 

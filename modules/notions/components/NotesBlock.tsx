@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { NoteCard } from '@/modules/notions/components/NoteCard'
 import { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
-import { TipTapEditor } from '@/modules/text-editor'
+import { TipTapEditor } from '@/modules/text-editor/components/client'
 import type { EditorRef } from '@/modules/text-editor'
 import { useNotionsStore } from '@/modules/notions/store'
 import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
@@ -345,7 +345,7 @@ export function NotesBlock() {
     const parsed = parseNotionContent(fullViewNotion)
     
           return (
-        <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
+        <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
         {/* Заголовок */}
         <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -353,7 +353,7 @@ export function NotesBlock() {
               variant="ghost"
               size="sm"
               onClick={handleCloseFullView}
-              className="gap-2"
+              className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <ArrowLeft className="h-4 w-4" />
               Назад к списку
@@ -371,11 +371,11 @@ export function NotesBlock() {
                   // Обновляем локальное состояние fullViewNotion
                   setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
                 }}
-                className="gap-2"
+                className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <Check className={cn(
                   "h-4 w-4",
-                  fullViewNotion.notion_done ? "text-green-600" : "text-gray-400"
+                  fullViewNotion.notion_done ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
                 )} />
                 {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
               </Button>
@@ -399,17 +399,17 @@ export function NotesBlock() {
   }
 
   return (
-    <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
+    <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
       {/* Заголовок блока */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-semibold">Заметки</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Заметки</h2>
           {totalCount > 0 && (
-            <Badge variant="secondary">
+            <Badge variant="secondary" className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
               {totalCount} {totalCount === 1 ? 'заметка' : 
                           totalCount <= 4 ? 'заметки' : 'заметок'}
               {completedCount > 0 && (
-                <span className="ml-1 text-green-600">
+                <span className="ml-1 text-green-600 dark:text-green-400">
                   ({completedCount} выполнено)
                 </span>
               )}
@@ -433,12 +433,12 @@ export function NotesBlock() {
       <div className="flex items-center gap-3 mb-4 flex-shrink-0">
         {/* Поиск */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
           <Input
             placeholder="Поиск по заметкам..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
           />
         </div>
 
@@ -450,7 +450,7 @@ export function NotesBlock() {
               variant="outline"
               size="sm"
               onClick={handleSelectAll}
-              className="gap-2"
+              className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               {selectedNotions.length === notions.length ? <Square className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
               {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
@@ -461,7 +461,7 @@ export function NotesBlock() {
               variant="outline"
               size="sm"
               onClick={shouldShowMarkAsUndone ? handleMarkAsUndone : handleMarkAsDone}
-              className="gap-2"
+              className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Check className="h-4 w-4" />
               {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
@@ -486,11 +486,11 @@ export function NotesBlock() {
         <div className="space-y-3 pr-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span className="ml-2">Загрузка заметок...</span>
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
+              <span className="ml-2 text-gray-500 dark:text-gray-400">Загрузка заметок...</span>
             </div>
           ) : notions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               {searchQuery ? (
                 <div>
                   <p>Заметки не найдены</p>

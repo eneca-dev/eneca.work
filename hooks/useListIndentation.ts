@@ -104,11 +104,9 @@ export function useListIndentation(editor: Editor | null) {
 
     const itemType = currentListItem.type.name === 'taskItem' ? 'taskItem' : 'listItem'
     
-    console.log('Nesting level:', nestingLevel, 'Current item depth:', currentListItemDepth, 'Root list depth:', rootListDepth)
     
     // If we're already at the root level of the list, don't lift
     if (nestingLevel <= 1) {
-      console.log('Already at root level, not lifting')
       return
     }
     
@@ -126,7 +124,6 @@ export function useListIndentation(editor: Editor | null) {
         setTimeout(() => {
           const isStillInList = editor.isActive('listItem') || editor.isActive('taskItem')
           if (!isStillInList) {
-            console.log('Item was lifted out of list, attempting to fix...')
             // Try to undo and use an alternative approach
             if (editor.can().undo()) {
               editor.chain().focus().undo().run()

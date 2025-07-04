@@ -17,20 +17,6 @@ export interface TipTapEditorRef {
   getContent: () => string
 }
 
-export interface TipTapNoteModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  notion?: {
-    notion_id: string
-    notion_content: string
-    notion_done: boolean
-    notion_created_by: string
-    notion_created_at: string
-    notion_updated_at: string
-  }
-  onSave: (content: string) => void
-  mode: 'create' | 'edit'
-}
 
 export interface QuickTipTapNoteProps {
   onSave: (content: string) => void

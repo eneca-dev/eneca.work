@@ -8,6 +8,23 @@ import { AlertTriangle } from 'lucide-react'
 import { getNotionDisplayTitle } from '@/modules/notions/utils'
 import type { Notion } from '@/modules/notions/types'
 
+// Reusable DestructiveAlert component
+interface DestructiveAlertProps {
+  children: React.ReactNode
+  className?: string
+}
+
+function DestructiveAlert({ children, className }: DestructiveAlertProps) {
+  return (
+    <Alert className={`bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 ${className || ''}`}>
+      <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
+      <AlertDescription className="text-red-700 dark:text-red-300">
+        {children}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 interface BulkDeleteConfirmProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -47,10 +64,10 @@ export function BulkDeleteConfirm({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+          <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+            <AlertTriangle className="h-5 w-5 text-red-500 dark:text-red-400" />
             {showSecondConfirm ? 'Окончательное подтверждение' : 'Подтверждение удаления'}
           </DialogTitle>
         </DialogHeader>
@@ -58,18 +75,15 @@ export function BulkDeleteConfirm({
         <div className="space-y-4">
           {!showSecondConfirm ? (
             <>
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Вы действительно хотите удалить {selectedNotions.length} 
-                  {selectedNotions.length === 1 ? ' заметку' : 
-                   selectedNotions.length <= 4 ? ' заметки' : ' заметок'}?
-                </AlertDescription>
-              </Alert>
+              <DestructiveAlert>
+                Вы действительно хотите удалить {selectedNotions.length} 
+                {selectedNotions.length === 1 ? ' заметку' : 
+                 selectedNotions.length <= 4 ? ' заметки' : ' заметок'}?
+              </DestructiveAlert>
 
               {selectedNotions.length <= 5 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Выбранные заметки:</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Выбранные заметки:</p>
                   <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     {selectedNotions.map((notion) => (
                       <li key={notion.notion_id} className="truncate">
@@ -82,14 +96,14 @@ export function BulkDeleteConfirm({
 
               {selectedNotions.length > 5 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Выбранные заметки:</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Выбранные заметки:</p>
                   <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     {selectedNotions.slice(0, 3).map((notion) => (
                       <li key={notion.notion_id} className="truncate">
                         • {getNotionDisplayTitle(notion) || 'Пустая заметка'}
                       </li>
                     ))}
-                    <li className="text-gray-500 italic">
+                    <li className="text-gray-500 dark:text-gray-400 italic">
                       ... и еще {selectedNotions.length - 3} заметок
                     </li>
                   </ul>
@@ -97,13 +111,10 @@ export function BulkDeleteConfirm({
               )}
             </>
           ) : (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Внимание!</strong> Это действие нельзя отменить. 
-                Все выбранные заметки будут удалены навсегда.
-              </AlertDescription>
-            </Alert>
+            <DestructiveAlert>
+              <strong>Внимание!</strong> Это действие нельзя отменить. 
+              Все выбранные заметки будут удалены навсегда.
+            </DestructiveAlert>
           )}
         </div>
 
@@ -112,6 +123,8 @@ export function BulkDeleteConfirm({
             variant="outline"
             onClick={handleClose}
             disabled={isDeleting}
+            className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+            aria-label="Отмена удаления"
           >
             Отмена
           </Button>

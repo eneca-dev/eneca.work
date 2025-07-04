@@ -2,7 +2,6 @@
 export { NotesBlock } from '@/modules/notions/components/NotesBlock'
 export { NoteCard } from '@/modules/notions/components/NoteCard'
 export { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
-export { SaveIndicator } from '@/modules/notions/components/SaveIndicator'
 
 // Store, хуки, типы и утилиты
 export { useNotionsStore } from '@/modules/notions/store'

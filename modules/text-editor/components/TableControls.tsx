@@ -25,7 +25,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
   return (
     <div className={cn('flex items-center gap-1', className)}>
       {/* Разделитель */}
-      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
+      <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
       
       {/* Управление строками */}
       <div className="flex gap-1">
@@ -33,7 +33,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().addRowBefore().run()}
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-600"
           title="Добавить строку выше активной строки"
         >
           <div className="flex flex-col items-center">
@@ -45,7 +45,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().addRowAfter().run()}
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-600"
           title="Добавить строку ниже активной строки"
         >
           <div className="flex flex-col items-center">
@@ -57,7 +57,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
       </div>
 
       {/* Разделитель */}
-      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
+      <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
 
       {/* Управление столбцами */}
       <div className="flex gap-1">
@@ -65,7 +65,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().addColumnBefore().run()}
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-600"
           title="Добавить столбец слева от активного столбца"
         >
           <div className="flex items-center">
@@ -77,7 +77,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().addColumnAfter().run()}
-          className="h-8 w-8 p-0"
+          className="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-600"
           title="Добавить столбец справа от активного столбца"
         >
           <div className="flex items-center">
@@ -88,13 +88,13 @@ export function TableControls({ editor, className }: TableControlsProps) {
 
       </div>
 
-      {/* Разделитель */}
-      <div className="w-px h-8 bg-gray-300 mx-1 self-center" />
+            {/* Разделитель */}
+      <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 mx-1 self-center" />
       <Button
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().deleteRow().run()}
-          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-400/20"
           title="Удалить активную строку"
         >
           <div className="flex items-center">
@@ -107,7 +107,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().deleteColumn().run()}
-          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-400/20"
           title="Удалить активный столбец"
         >
           <div className="flex items-center">
@@ -120,7 +120,7 @@ export function TableControls({ editor, className }: TableControlsProps) {
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().deleteTable().run()}
-        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-400/20"
         title="Удалить всю таблицу"
       >
         <Trash2 className="h-4 w-4" />
