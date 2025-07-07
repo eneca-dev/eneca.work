@@ -9,5 +9,23 @@ export { useChat } from './hooks/useChat'
 // Экспорт API
 export { sendChatMessage } from './api/chat'
 
+// Экспорт утилит
+export { formatMessageTime, formatMessageDate, formatMessageDateTime } from './utils/formatTime'
+export { 
+  saveMessage, 
+  getHistory, 
+  getContextForRequest, 
+  clearHistory, 
+  getMessagesCount, 
+  hasHistory 
+} from './utils/chatCache'
+
 // Экспорт типов
-export type { ChatMessage, ChatRequest, ChatResponse } from './types/chat' 
+export type { 
+  ChatMessage, 
+  ChatRequest, 
+  ChatResponse, 
+  ChatHistory,
+  ChatContextMessage,
+  ChatRequestWithHistory 
+} from './types/chat' 

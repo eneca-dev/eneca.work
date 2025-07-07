@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ChatMessage } from '../types/chat'
+import { formatMessageTime } from '../utils/formatTime'
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -53,10 +54,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                 ? 'text-emerald-100' 
                 : 'text-gray-500 dark:text-gray-400'
             }`}>
-              {message.timestamp.toLocaleTimeString('ru-RU', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
+              {formatMessageTime(message.timestamp)}
             </span>
           </div>
         </div>

@@ -8,7 +8,8 @@ import { useUserStore } from "@/stores/useUserStore"
 export function ProfileDebug() {
   const [refreshCounter, setRefreshCounter] = useState(0)
   const userState = useUserStore()
-  const { role, permissions } = userState
+  const { permissions } = userState
+  const role = userState.profile?.roleId
   
   useEffect(() => {
     console.log("ProfileDebug компонент смонтирован с состоянием:", userState)

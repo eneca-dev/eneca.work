@@ -30,7 +30,7 @@ export function ChatInterface() {
         <div 
           className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl flex flex-col mb-2 animate-slide-up ${
             isFullscreen 
-              ? 'fixed top-4 right-4 bottom-4 w-[28.57%]' // 2/7 от ширины экрана
+              ? 'fixed top-4 right-4 bottom-4 w-[28%]' 
               : 'relative min-w-[280px] min-h-[400px] max-w-[90vw] max-h-[90vh]'
           }`}
           style={!isFullscreen ? { width: chatSize.width, height: chatSize.height } : {}}
@@ -52,14 +52,9 @@ export function ChatInterface() {
               <div className="w-6 h-6 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center">
                 <MessageCircle size={12} className="text-white" />
               </div>
-              <div className="flex items-center space-x-2">
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                  Eneca чат
-                </h3>
-                <span className={`text-xs ${input.length > 80 ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {input.length}/100
-                </span>
-              </div>
+              <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                Eneca чат
+              </h3>
             </div>
             <div className="flex items-center space-x-1">
               <button

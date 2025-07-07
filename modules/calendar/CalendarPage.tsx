@@ -39,7 +39,7 @@ export default function CalendarPage() {
                    userStore.hasPermission("calendar_can_create_and_edit_global_events")
     
     return result
-  }, [userStore.id, userStore.role, userStore.permissions])
+  }, [userStore.id, userStore.profile?.roleId, userStore.permissions])
 
   const currentUser = userStore
 

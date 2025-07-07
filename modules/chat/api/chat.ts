@@ -1,6 +1,7 @@
-import { ChatRequest, ChatResponse } from '../types/chat'
+import { ChatRequest, ChatResponse, ChatRequestWithHistory } from '../types/chat'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
+import { getContextForRequest } from '../utils/chatCache'
 
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   try {
@@ -14,6 +15,12 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
 
     // Получаем информацию о пользователе из JWT и store
     const userStore = useUserStore.getState()
+    const userId = userStore.id
+    
+    // Получаем контекст предыдущих сообщений только для авторизованного пользователя
+    const conversationHistory = userId && typeof window !== 'undefined' 
+      ? getContextForRequest(userId) 
+      : []
     
     // Отправляем запрос на сервер чата
     const response = await fetch('http://localhost:5000/api/chat', {
@@ -24,14 +31,16 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       body: JSON.stringify({
         message: request.message,
         userContext: {
-          jwt: session.user,
+          jwt: session.access_token,
+          user: session.user,
           store: {
             name: userStore.name,
             email: userStore.email,
             permissionLabel: userStore.getActivePermission() ? userStore.getPermissionLabel(userStore.getActivePermission()!) : null,
             profile: userStore.profile
           }
-        }
+        },
+        conversationHistory: conversationHistory
       })
     })
 
@@ -72,22 +81,3 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
     throw new Error('Неизвестная ошибка при отправке сообщения')
   }
 }
-
-// Реальная реализация (будет раскомментирована после создания Edge Function)
-/*
-import { createClient } from '@/utils/supabase/client'
-
-export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
-  const supabase = createClient()
-  
-  const { data, error } = await supabase.functions.invoke('chat', {
-    body: request
-  })
-  
-  if (error) {
-    throw new Error(error.message || 'Ошибка чата')
-  }
-  
-  return data
-}
-*/ 

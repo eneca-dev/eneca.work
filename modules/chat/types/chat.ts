@@ -5,6 +5,18 @@ export interface ChatMessage {
   timestamp: Date
 }
 
+export interface ChatHistory {
+  messages: ChatMessage[]
+  lastUpdated: Date
+  sessionId: string
+}
+
+export interface ChatContextMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+}
+
 export interface JWTUserData {
   id: string
   email: string | undefined
@@ -16,19 +28,16 @@ export interface JWTUserData {
 }
 
 export interface UserStoreData {
-  id: string | null
-  email: string | null
   name: string
-  profile: any
-  permissions: string[]
-  activePermission: string | null
+  email: string | null
   permissionLabel: string | null
-  isAuthenticated: boolean
+  profile: any
 }
 
 export interface UserContext {
-  jwt: JWTUserData
-  store: UserStoreData
+  jwt: string // JWT токен для аутентификации
+  user: JWTUserData // Данные пользователя из сессии
+  store: UserStoreData // Данные из store приложения
 }
 
 export interface ChatRequest {
@@ -36,6 +45,10 @@ export interface ChatRequest {
   userId?: string
   userContext?: UserContext
   systemRules?: string
+}
+
+export interface ChatRequestWithHistory extends ChatRequest {
+  conversationHistory?: ChatContextMessage[]
 }
 
 export interface ChatResponse {

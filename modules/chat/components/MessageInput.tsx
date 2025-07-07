@@ -45,7 +45,7 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
           className="flex-1 resize-none bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-24 disabled:opacity-50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-system"
           rows={1}
           disabled={isLoading}
-          maxLength={100}
+          maxLength={500}
         />
         
         <button

@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../types/chat'
 import { sendChatMessage } from '../api/chat'
+import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
+import { useUserStore } from '@/stores/useUserStore'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -11,6 +13,22 @@ export function useChat() {
   const [chatSize, setChatSize] = useState({ width: 320, height: 448 }) // 28rem = 448px
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
+
+  const userStore = useUserStore()
+  const userId = userStore.id
+
+  // Загружаем историю только при наличии авторизованного пользователя
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userId && userStore.isAuthenticated) {
+      const cachedMessages = getHistory(userId)
+      if (cachedMessages.length > 0) {
+        setMessages(cachedMessages)
+      }
+    } else {
+      // Очищаем состояние если пользователь не авторизован
+      setMessages([])
+    }
+  }, [userId, userStore.isAuthenticated])
 
   const toggleChat = useCallback(() => {
     setIsOpen(!isOpen)
@@ -70,7 +88,7 @@ export function useChat() {
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return
+    if (!content.trim() || isLoading || !userId) return
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -79,6 +97,8 @@ export function useChat() {
       timestamp: new Date()
     }
 
+    // Сохраняем сообщение пользователя в кеш с userId
+    saveMessage(userMessage, userId)
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
 
@@ -94,6 +114,8 @@ export function useChat() {
         timestamp: new Date()
       }
 
+      // Сохраняем ответ бота в кеш с userId
+      saveMessage(botMessage, userId)
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
       console.error('Chat error:', error)
@@ -116,15 +138,22 @@ export function useChat() {
         content: errorText,
         timestamp: new Date()
       }
+      
+      // Сохраняем сообщение об ошибке в кеш с userId
+      saveMessage(errorMessage, userId)
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading])
+  }, [isLoading, userId])
 
   const clearMessages = useCallback(() => {
+    if (!userId) return
+    
+    // Очищаем и кеш, и состояние с userId
+    clearHistory(userId)
     setMessages([])
-  }, [])
+  }, [userId])
 
   return {
     messages,
