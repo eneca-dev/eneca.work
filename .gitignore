@@ -16,6 +16,7 @@ coverage/
 .vscode/ 
 .cursor/
 .cursor/rules/
+tsconfig.tsbuildinfo
 
 # WS-to-Work Integration
 ws-to-work-integration/
