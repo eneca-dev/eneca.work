@@ -1,0 +1,30 @@
+{
+  "name": "eneca-mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol сервер для системы планирования проектов Eneca",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "eneca-mcp": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "start": "node build/index.js",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "@supabase/supabase-js": "^2.50.3",
+    "dotenv": "^17.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  }
+}
