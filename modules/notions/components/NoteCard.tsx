@@ -115,6 +115,7 @@ export function NoteCard({
                           className="prose prose-sm max-w-none dark:prose-invert
                                    [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
                                    [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
+                                   [&_.checkbox-line_input[type='checkbox']:checked]:accent-primary dark:[&_.checkbox-line_input[type='checkbox']:checked]:accent-primary
                                    [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-61
                                    [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100
                                    [&_em]:text-gray-700 dark:[&_em]:text-gray-300
