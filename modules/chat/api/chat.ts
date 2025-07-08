@@ -3,6 +3,9 @@ import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import { getContextForRequest } from '../utils/chatCache'
 
+// Чат теперь работает через n8n webhook
+// n8n принимает запрос и пересылает его на backend сервер
+
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   try {
     // Получаем JWT токен из Supabase
@@ -22,8 +25,8 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       ? getContextForRequest(userId) 
       : []
     
-    // Отправляем запрос на сервер чата
-    const response = await fetch('http://localhost:5000/api/chat', {
+    // Отправляем запрос на n8n webhook
+    const response = await fetch('https://eneca.app.n8n.cloud/webhook-test/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -69,7 +72,7 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
     
     // Более детальное логирование для отладки
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Не удалось подключиться к серверу. Проверьте что сервер запущен на порту 5000.')
+      throw new Error('Не удалось подключиться к n8n webhook. Проверьте интернет-соединение и доступность сервиса.')
     }
     
     if (error instanceof Error) {
