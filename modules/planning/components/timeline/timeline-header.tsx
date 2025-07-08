@@ -73,9 +73,9 @@ export function TimelineHeader({
   // const objectWidth = columnWidth * columnWidths.object
 
   // На фиксированные значения:
-  const sectionWidth = 320 // Фиксированная ширина для раздела
-  const projectWidth = 160 // Фиксированная ширина для проекта
-  const objectWidth = 120 // Фиксированная ширина для объекта
+  const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
+  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
+  const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
   const totalFixedWidth =

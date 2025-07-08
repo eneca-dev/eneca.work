@@ -12,7 +12,7 @@ import { CreateStageModal } from './CreateStageModal'
 import { EditObjectModal } from './EditObjectModal'
 import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
-import { SectionPanel } from './SectionPanel'
+import { SectionPanel } from '@/components/modals'
 
 interface ProjectNode {
   id: string

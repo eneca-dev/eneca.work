@@ -54,7 +54,7 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
       setIsLoadingEmployees(true)
       try {
         const { data, error } = await supabase
-          .from("view_employees")
+          .from("view_users")
           .select(`
           user_id,
           first_name,
@@ -71,14 +71,16 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
           .abortSignal(abortController.signal)
 
         if (error) {
-          console.error("Ошибка при загрузке сотрудников:", error)
+          if (!abortController.signal.aborted) {
+            console.error("Ошибка при загрузке сотрудников:", error.message || error)
+          }
           return
         }
 
         setEmployees(data || [])
       } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error("Ошибка при загрузке сотрудников:", error)
+        if (error instanceof Error && error.name !== 'AbortError' && !abortController.signal.aborted) {
+          console.error("Ошибка при загрузке сотрудников:", error.message || error)
         }
       } finally {
         if (!abortController.signal.aborted) {

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
-import { DeleteSectionModal } from './'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -46,7 +45,6 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'details'>('overview')
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
   
   // Состояние для inline редактирования отдельных полей
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -260,36 +258,36 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
 
   const handleFieldEdit = (fieldName: string) => {
     setEditingField(fieldName)
-    setEditValues({ [fieldName]: sectionData?.[fieldName as keyof SectionData] })
-    if (fieldName === 'section_responsible') {
-      setSearchResponsible('')
-    }
+    setEditValues({
+      ...editValues,
+      [fieldName]: sectionData?.[fieldName as keyof SectionData] || ''
+    })
   }
 
   const handleFieldSave = async (fieldName: string) => {
-    const value = editValues[fieldName as keyof SectionData]
+    if (!sectionData) return
     
-    if (fieldName === 'section_name' && !value?.toString().trim()) {
-      setNotification('Название раздела обязательно')
-      return
-    }
-
+    const fieldValue = editValues[fieldName as keyof SectionData]
     setSavingField(fieldName)
+    
     try {
       const { error } = await supabase
         .from('sections')
-        .update({ [fieldName]: value })
+        .update({ [fieldName]: fieldValue })
         .eq('section_id', sectionId)
 
       if (error) throw error
 
-      setNotification('Поле успешно обновлено')
+      setSectionData({
+        ...sectionData,
+        [fieldName]: fieldValue
+      })
+      
       setEditingField(null)
-      setEditValues({})
-      loadSectionData()
+      setNotification('Поле успешно обновлено')
     } catch (error) {
-      console.error('Ошибка сохранения поля:', error)
-      setNotification(error instanceof Error ? error.message : 'Ошибка сохранения поля')
+      console.error('Ошибка сохранения:', error)
+      setNotification('Ошибка сохранения изменений')
     } finally {
       setSavingField(null)
     }
@@ -298,22 +296,20 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   const handleFieldCancel = () => {
     setEditingField(null)
     setEditValues({})
-    setShowResponsibleDropdown(false)
     setSearchResponsible('')
+    setShowResponsibleDropdown(false)
   }
 
   const getProfileName = (profile: Profile) => {
-    const fullName = `${profile.first_name} ${profile.last_name}`.trim()
-    return fullName || profile.email
+    return `${profile.first_name} ${profile.last_name}`.trim() || profile.email
   }
 
   const getSelectedResponsibleName = () => {
-    const responsibleId = editingField === 'section_responsible' 
-      ? editValues.section_responsible 
-      : sectionData?.section_responsible
-    if (!responsibleId) return ''
-    const profile = profiles.find(p => p.user_id === responsibleId)
-    return profile ? getProfileName(profile) : ''
+    const selectedId = editValues.section_responsible
+    if (!selectedId) return 'Не назначен'
+    
+    const profile = profiles.find(p => p.user_id === selectedId)
+    return profile ? getProfileName(profile) : 'Не найден'
   }
 
   const filteredResponsible = profiles.filter(profile =>
@@ -344,59 +340,37 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
         <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
           {label}
         </label>
-        
         {isEditing ? (
-          <div className="space-y-2">
-            {type === 'text' && (
-              <input
-                type="text"
-                value={editValues[fieldName] || ''}
-                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
-                placeholder={`Введите ${label.toLowerCase()}`}
-                disabled={isSaving}
-              />
-            )}
-            
-            {type === 'textarea' && (
+          <div className="space-y-3">
+            {type === 'textarea' ? (
               <textarea
                 value={editValues[fieldName] || ''}
-                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value || null })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value })}
+                className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={4}
                 placeholder={`Введите ${label.toLowerCase()}`}
                 disabled={isSaving}
               />
-            )}
-            
-            {type === 'date' && (
+            ) : type === 'date' ? (
               <input
                 type="date"
                 value={editValues[fieldName] || ''}
-                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value || null })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value })}
+                className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isSaving}
               />
-            )}
-            
-            {type === 'responsible' && (
+            ) : type === 'responsible' ? (
               <div className="relative">
                 <input
                   type="text"
-                  value={showResponsibleDropdown ? searchResponsible : getSelectedResponsibleName()}
+                  value={searchResponsible || getSelectedResponsibleName()}
                   onChange={(e) => {
                     setSearchResponsible(e.target.value)
                     setShowResponsibleDropdown(true)
                   }}
-                  onFocus={() => {
-                    setSearchResponsible('')
-                    setShowResponsibleDropdown(true)
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowResponsibleDropdown(false), 200)
-                  }}
-                  placeholder={getSelectedResponsibleName() || "Поиск ответственного..."}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                  onFocus={() => setShowResponsibleDropdown(true)}
+                  className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Поиск ответственного..."
                   disabled={isSaving}
                 />
                 {showResponsibleDropdown && (
@@ -434,6 +408,15 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                   </div>
                 )}
               </div>
+            ) : (
+              <input
+                type="text"
+                value={editValues[fieldName] || ''}
+                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value })}
+                className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={`Введите ${label.toLowerCase()}`}
+                disabled={isSaving}
+              />
             )}
             
             <div className="flex items-center gap-2">
@@ -461,13 +444,13 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                                 {type === 'responsible' ? (
-                   <div className="flex items-center gap-2">
-                     <User className="h-4 w-4 text-slate-500" />
-                     <span className="dark:text-slate-300 text-slate-600">
-                       {sectionData?.responsible_name || 'Не назначен'}
-                     </span>
-                   </div>
+                {type === 'responsible' ? (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-slate-500" />
+                    <span className="dark:text-slate-300 text-slate-600">
+                      {sectionData?.responsible_name || 'Не назначен'}
+                    </span>
+                  </div>
                 ) : type === 'date' ? (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-slate-500" />
@@ -511,13 +494,6 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-              title="Удалить раздел"
-            >
-              <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-            </button>
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -697,19 +673,6 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
           )}
         </div>
       </div>
-
-      {showDeleteModal && sectionData && (
-        <DeleteSectionModal
-          isOpen={showDeleteModal}
-          onClose={() => setShowDeleteModal(false)}
-          sectionId={sectionData.section_id}
-          sectionName={sectionData.section_name}
-          onSuccess={() => {
-            setShowDeleteModal(false)
-            onClose()
-          }}
-        />
-      )}
     </>
   )
 } 

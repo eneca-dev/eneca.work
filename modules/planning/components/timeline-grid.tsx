@@ -28,6 +28,7 @@ interface TimelineGridProps {
   cellWidth?: number
   windowWidth?: number // Добавляем ширину окна для перерисовки
   hasActiveFilters?: boolean // Добавляем новый пропс
+  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
 }
 
 export function TimelineGrid({
@@ -44,6 +45,7 @@ export function TimelineGrid({
   cellWidth = 22,
   windowWidth = 0, // Значение по умолчанию
   hasActiveFilters = false, // Добавляем с значением по умолчанию
+  onOpenSectionPanel, // Добавляем обработчик открытия панели раздела
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -75,9 +77,9 @@ export function TimelineGrid({
 
   // Канонические ширины колонок - единый источник истины
   const COLUMN_WIDTHS = {
-    section: 320,  // Фиксированная ширина для раздела
-    project: 160,  // Фиксированная ширина для проекта
-    object: 120,   // Фиксированная ширина для объекта
+    section: 430,  // Ширина для раздела (уменьшена на 10px)
+    project: 170,  // Ширина для проекта (увеличена на 10px)
+    object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
 
@@ -280,6 +282,7 @@ export function TimelineGrid({
               stickyColumnShadow={stickyColumnShadow}
               totalExpandedSections={totalExpandedSections}
               totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+              onOpenSectionPanel={onOpenSectionPanel}
             />
           ))}
 
