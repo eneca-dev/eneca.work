@@ -62,9 +62,9 @@ export function DepartmentRow({
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
-    section: 320,  // Фиксированная ширина для раздела
-    project: 160,  // Фиксированная ширина для проекта
-    object: 120,   // Фиксированная ширина для объекта
+    section: 430,  // Ширина для раздела (уменьшена на 10px)
+    project: 170,  // Ширина для проекта (увеличена на 10px)
+    object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
 
@@ -147,7 +147,7 @@ export function DepartmentRow({
                 <div className="flex flex-col min-w-0">
                   <span
                     className={cn(
-                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[300px]",
                       theme === "dark" ? "text-slate-200" : "text-slate-800",
                     )}
                   >
@@ -156,7 +156,7 @@ export function DepartmentRow({
                   {department.departmentHeadName && (
                     <span
                       className={cn(
-                        "text-xs truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                        "text-xs truncate whitespace-nowrap overflow-hidden max-w-[300px]",
                         theme === "dark" ? "text-slate-400" : "text-slate-500",
                       )}
                     >
@@ -527,24 +527,23 @@ function EmployeeRow({
                     </div>
                   </div>
 
-                  {/* Команда сотрудника */}
-                  {employee.teamName && (
-                    <div className="ml-4">
-                      <span
-                        className={cn(
-                          "text-xs px-2 py-0.5 rounded",
-                          theme === "dark" ? "bg-slate-700 text-slate-300" : "bg-slate-100 text-slate-600",
-                        )}
-                      >
-                        {employee.teamCode ? `${employee.teamCode} - ` : ""}
-                        {employee.teamName}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Правая часть с кнопкой добавления и ставкой */}
+                {/* Правая часть с командой, кнопкой добавления и ставкой */}
                 <div className="flex items-center gap-2">
+                  {/* Команда сотрудника */}
+                  {employee.teamName && (
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded",
+                        theme === "dark" ? "bg-slate-700 text-slate-300" : "bg-slate-100 text-slate-600",
+                      )}
+                    >
+                      {employee.teamCode ? `${employee.teamCode} - ` : ""}
+                      {employee.teamName}
+                    </span>
+                  )}
+
                   {/* Кнопка добавления загрузки - появляется при наведении */}
                   <button
                     className={cn(

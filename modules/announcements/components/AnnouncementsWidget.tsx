@@ -127,8 +127,8 @@ export function AnnouncementsWidget() {
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-fade-in transition-colors duration-200 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 animate-fade-in transition-colors duration-200">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
             <MegaphoneIcon className="h-5 w-5 text-primary" />
             <h2 className="card-title dark:text-gray-200">Объявления</h2>
@@ -142,7 +142,7 @@ export function AnnouncementsWidget() {
         </div>
 
         {/* Поле поиска */}
-        <div className="relative mb-4 flex-shrink-0">
+        <div className="relative mb-4">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
@@ -153,8 +153,7 @@ export function AnnouncementsWidget() {
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="space-y-4 pr-2">
+        <div className="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar">
           {filteredAndSortedAnnouncements.length === 0 ? (
             <p className="secondary-text text-center py-8">
               {searchQuery.trim() ? "Ничего не найдено" : "Пока нет объявлений"}
@@ -201,7 +200,6 @@ export function AnnouncementsWidget() {
               </div>
             ))
           )}
-          </div>
         </div>
       </div>
 

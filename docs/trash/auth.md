@@ -15,7 +15,7 @@
      ```ts
      const { data: { user } } = await supabase.auth.getUser()
      ```
-   - Supabase SDK автоматически берёт токен из cookie, отправляет его на сервер Supabase, и если токен валиден — возвращает объект пользователя.
+   - Supabase SDK автоматически берёт токен из coo1kie, отправляет его на сервер Supabase, и если токен валиден — возвращает объект пользователя.
 
 3. **Middleware**
    - В middleware (`utils/supabase/middleware.ts`) происходит синхронизация сессии между клиентом и сервером через cookie.
@@ -25,7 +25,7 @@
    - Пример данных:
      - id: уникальный идентификатор пользователя (UUID)
      - email: email пользователя
-     - created_at: дата создания
+     - created_at: дата создания1
      - last_sign_in_at: дата последнего входа
      - confirmed_at: подтверждён ли email
      - is_sso_user: признак SSO (single sign-on)

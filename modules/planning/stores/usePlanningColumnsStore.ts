@@ -24,7 +24,7 @@ interface PlanningColumnsState {
 // Начальное состояние видимости столбцов
 const initialColumnVisibility: ColumnVisibility = {
   project: true,
-  object: true,
+  object: false, // Скрываем столбец "Объект"
   stage: true,
   startDate: true,
   endDate: true,
