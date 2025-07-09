@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from "react"
 import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { Search } from "lucide-react"
+import { Search, Eye, EyeOff } from "lucide-react"
 
 interface TimelineHeaderProps {
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
@@ -64,7 +64,7 @@ export function TimelineHeader({
   }, [filterSectionsByName, filterSectionsByProject])
 
   // Получаем видимость столбцов из стора
-  const { columnVisibility } = usePlanningColumnsStore()
+  const { columnVisibility, toggleColumnVisibility } = usePlanningColumnsStore()
 
   // Заменяем сложные расчеты ширины на фиксированные значения
   // Заменяем эти строки:
@@ -122,8 +122,27 @@ export function TimelineHeader({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-              Раздел
+            <div className="flex items-center justify-between w-full">
+              <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                Раздел
+              </div>
+              {/* Кнопка управления видимостью столбца "Проект" */}
+              <button
+                onClick={() => toggleColumnVisibility('project')}
+                className={cn(
+                  "ml-2 p-1 rounded hover:bg-opacity-80 transition-colors",
+                  theme === "dark" 
+                    ? "hover:bg-slate-700 text-slate-400 hover:text-slate-200" 
+                    : "hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+                )}
+                title={columnVisibility.project ? "Скрыть столбец 'Проект'" : "Показать столбец 'Проект'"}
+              >
+                {columnVisibility.project ? (
+                  <Eye size={14} />
+                ) : (
+                  <EyeOff size={14} />
+                )}
+              </button>
             </div>
           </div>
 

@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3 } from "lucide-react"
 import type { Section, Loading } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
@@ -162,13 +162,14 @@ export function TimelineRow({
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
                   {section.responsibleName ? (
-                    // Если есть ответственный, показываем аватар
+                    // Если есть ответственный, показываем кликабельный аватар
                     <div
-                      className="flex items-center justify-center h-full"
+                      className="flex items-center justify-center h-full cursor-pointer hover:opacity-80 transition-opacity relative"
+                      onClick={handleAddResponsible}
                       onMouseEnter={() => setHoveredSpecialist(true)}
                       onMouseLeave={() => setHoveredSpecialist(false)}
                     >
-                      <Tooltip content={section.responsibleName} isVisible={hoveredSpecialist}>
+                      <Tooltip content={`${section.responsibleName} (кликните для изменения)`} isVisible={hoveredSpecialist}>
                         <Avatar
                           name={section.responsibleName}
                           avatarUrl={section.responsibleAvatarUrl}
@@ -176,6 +177,12 @@ export function TimelineRow({
                           size="sm" // Уменьшаем размер аватара
                         />
                       </Tooltip>
+                      {/* Иконка редактирования появляется при наведении */}
+                      {hoveredSpecialist && (
+                        <div className="absolute -top-1 -right-1 bg-teal-500 rounded-full p-0.5">
+                          <Edit3 size={8} className="text-white" />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     // Если нет ответственного, показываем кнопку добавления
@@ -255,10 +262,10 @@ export function TimelineRow({
                   </span>
                 </div>
 
-                {/* Дополнительная информация в одну строку */}
-                <div className="flex items-center gap-3 ml-auto text-xs">
-                  {/* Даты */}
-                  <div className="flex items-center">
+                {/* Дополнительная информация в две строки */}
+                <div className="flex flex-col gap-1 ml-auto text-xs justify-center">
+                  {/* Первая строка - даты */}
+                  <div className="flex items-center justify-start gap-2">
                     {/* Дата начала */}
                     {columnVisibility.startDate && (
                       <div
@@ -285,21 +292,24 @@ export function TimelineRow({
                     )}
                   </div>
 
-                  {/* Стадия */}
-                  {columnVisibility.stage && (
-                    <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                      <Milestone size={10} className="mr-1" />
-                      <span className="truncate max-w-[60px]">{section.stageName || "-"}</span>
-                    </div>
-                  )}
+                  {/* Вторая строка - стадия и отдел */}
+                  <div className="flex items-center justify-start gap-2">
+                    {/* Стадия */}
+                    {columnVisibility.stage && (
+                      <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                        <Milestone size={10} className="mr-1" />
+                        <span className="truncate max-w-[60px]">{section.stageName || "-"}</span>
+                      </div>
+                    )}
 
-                  {/* Отдел */}
-                  {columnVisibility.sectionResponsible && (
-                    <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                      <Users size={10} className="mr-1" />
-                      <span className="truncate max-w-[60px]">{section.departmentName || "-"}</span>
-                    </div>
-                  )}
+                    {/* Отдел */}
+                    {columnVisibility.sectionResponsible && (
+                      <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                        <Users size={10} className="mr-1" />
+                        <span className="truncate max-w-[60px]">{section.departmentName || "-"}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
