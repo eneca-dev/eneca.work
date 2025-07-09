@@ -7,6 +7,12 @@ import { createClient } from '@/utils/supabase/client'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
 import { EditProjectModal } from './EditProjectModal'
+import { EditStageModal } from './EditStageModal'
+import { CreateStageModal } from './CreateStageModal'
+import { EditObjectModal } from './EditObjectModal'
+import { CreateObjectModal } from './CreateObjectModal'
+import { CreateSectionModal } from './CreateSectionModal'
+import { SectionPanel } from '@/components/modals'
 
 interface ProjectNode {
   id: string
@@ -42,6 +48,12 @@ interface TreeNodeProps {
   onToggleNode: (nodeId: string) => void
   onAssignResponsible: (section: ProjectNode, e: React.MouseEvent) => void
   onEditProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onEditStage: (stage: ProjectNode, e: React.MouseEvent) => void
+  onEditObject: (object: ProjectNode, e: React.MouseEvent) => void
+  onOpenSection: (section: ProjectNode, e: React.MouseEvent) => void
+  onCreateStage: (project: ProjectNode, e: React.MouseEvent) => void
+  onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
+  onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
 }
 
 const supabase = createClient()
@@ -53,7 +65,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   expandedNodes, 
   onToggleNode, 
   onAssignResponsible,
-  onEditProject 
+  onEditProject,
+  onEditStage,
+  onEditObject,
+  onOpenSection,
+  onCreateStage,
+  onCreateObject,
+  onCreateSection
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
@@ -170,7 +188,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                   <div className="h-3 w-3 rounded bg-teal-500" />
                 )}
               </div>
-              <span className="font-semibold text-sm dark:text-slate-200 text-slate-800">
+              <span 
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                onClick={(e) => onOpenSection(node, e)}
+              >
                 {node.name}
               </span>
             </div>
@@ -258,15 +279,62 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               {node.name}
             </span>
 
-            {/* Кнопка редактирования для проектов */}
+            {/* Кнопки редактирования для проектов и стадий */}
             {node.type === 'project' && (
-              <button
-                onClick={(e) => onEditProject(node, e)}
-                className="ml-2 p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all"
-                title="Редактировать проект"
-              >
-                <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-              </button>
+              <div className="flex items-center ml-2">
+                <button
+                  onClick={(e) => onCreateStage(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-all mr-1"
+                  title="Создать стадию"
+                >
+                  <PlusCircle className="h-3 w-3 text-green-600 dark:text-green-400" />
+                </button>
+                <button
+                  onClick={(e) => onEditProject(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all"
+                  title="Редактировать проект"
+                >
+                  <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                </button>
+              </div>
+            )}
+            
+            {node.type === 'stage' && (
+              <div className="flex items-center ml-2">
+                <button
+                  onClick={(e) => onCreateObject(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-all mr-1"
+                  title="Создать объект"
+                >
+                  <PlusCircle className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                </button>
+                <button
+                  onClick={(e) => onEditStage(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-all"
+                  title="Редактировать стадию"
+                >
+                  <Edit className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                </button>
+              </div>
+            )}
+            
+            {node.type === 'object' && (
+              <div className="flex items-center ml-2">
+                <button
+                  onClick={(e) => onCreateSection(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-teal-100 dark:hover:bg-teal-900/30 rounded transition-all mr-1"
+                  title="Создать раздел"
+                >
+                  <PlusCircle className="h-3 w-3 text-teal-600 dark:text-teal-400" />
+                </button>
+                <button
+                  onClick={(e) => onEditObject(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-all"
+                  title="Редактировать объект"
+                >
+                  <Edit className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                </button>
+              </div>
             )}
 
             {/* Даты для не-разделов */}
@@ -292,6 +360,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onToggleNode={onToggleNode}
               onAssignResponsible={onAssignResponsible}
               onEditProject={onEditProject}
+              onEditStage={onEditStage}
+              onEditObject={onEditObject}
+              onOpenSection={onOpenSection}
+              onCreateStage={onCreateStage}
+              onCreateObject={onCreateObject}
+              onCreateSection={onCreateSection}
             />
           ))}
         </div>
@@ -312,7 +386,20 @@ export function ProjectsTree({
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedProject, setSelectedProject] = useState<ProjectNode | null>(null)
+  const [showEditStageModal, setShowEditStageModal] = useState(false)
+  const [selectedStage, setSelectedStage] = useState<ProjectNode | null>(null)
+  const [showEditObjectModal, setShowEditObjectModal] = useState(false)
+  const [selectedObject, setSelectedObject] = useState<ProjectNode | null>(null)
+  const [showSectionPanel, setShowSectionPanel] = useState(false)
+  const [selectedSectionForPanel, setSelectedSectionForPanel] = useState<ProjectNode | null>(null)
+  const [showCreateStageModal, setShowCreateStageModal] = useState(false)
+  const [selectedProjectForStage, setSelectedProjectForStage] = useState<ProjectNode | null>(null)
+  const [showCreateObjectModal, setShowCreateObjectModal] = useState(false)
+  const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
+  const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
+  const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
 
   // Загрузка данных
   useEffect(() => {
@@ -422,6 +509,7 @@ export function ProjectsTree({
           name: row.object_name,
           type: 'object',
           stageId: row.stage_id,
+          projectId: row.project_id,
           children: []
         })
       }
@@ -511,6 +599,48 @@ export function ProjectsTree({
     setShowEditModal(true)
   }
 
+  const handleDeleteProject = (project: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedProject(project)
+    setShowDeleteModal(true)
+  }
+
+  const handleEditStage = (stage: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedStage(stage)
+    setShowEditStageModal(true)
+  }
+
+  const handleEditObject = (object: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedObject(object)
+    setShowEditObjectModal(true)
+  }
+
+  const handleOpenSection = (section: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedSectionForPanel(section)
+    setShowSectionPanel(true)
+  }
+
+  const handleCreateStage = (project: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedProjectForStage(project)
+    setShowCreateStageModal(true)
+  }
+
+  const handleCreateObject = (stage: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedStageForObject(stage)
+    setShowCreateObjectModal(true)
+  }
+
+  const handleCreateSection = (object: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedObjectForSection(object)
+    setShowCreateSectionModal(true)
+  }
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
@@ -564,6 +694,12 @@ export function ProjectsTree({
               onToggleNode={toggleNode}
               onAssignResponsible={handleAssignResponsible}
               onEditProject={handleEditProject}
+              onEditStage={handleEditStage}
+              onEditObject={handleEditObject}
+              onOpenSection={handleOpenSection}
+              onCreateStage={handleCreateStage}
+              onCreateObject={handleCreateObject}
+              onCreateSection={handleCreateSection}
             />
           ))}
         </div>
@@ -592,6 +728,98 @@ export function ProjectsTree({
           }}
         />
       )}
+
+      {/* Модальное окно редактирования стадии */}
+      {showEditStageModal && selectedStage && (
+        <EditStageModal
+          isOpen={showEditStageModal}
+          onClose={() => {
+            setShowEditStageModal(false)
+            setSelectedStage(null)
+          }}
+          stageId={selectedStage.id}
+          onStageUpdated={() => {
+            loadTreeData() // Перезагружаем данные после обновления
+          }}
+        />
+      )}
+
+      {/* Модальное окно редактирования объекта */}
+      {showEditObjectModal && selectedObject && (
+        <EditObjectModal
+          isOpen={showEditObjectModal}
+          onClose={() => {
+            setShowEditObjectModal(false)
+            setSelectedObject(null)
+          }}
+          objectId={selectedObject.id}
+          onObjectUpdated={() => {
+            loadTreeData() // Перезагружаем данные после обновления
+          }}
+        />
+      )}
+
+      {/* Боковая панель раздела */}
+      {showSectionPanel && selectedSectionForPanel && (
+        <SectionPanel
+          isOpen={showSectionPanel}
+          onClose={() => {
+            setShowSectionPanel(false)
+            setSelectedSectionForPanel(null)
+          }}
+          sectionId={selectedSectionForPanel.id}
+        />
+      )}
+
+      {/* Модальное окно создания стадии */}
+      {showCreateStageModal && selectedProjectForStage && (
+        <CreateStageModal
+          isOpen={showCreateStageModal}
+          onClose={() => {
+            setShowCreateStageModal(false)
+            setSelectedProjectForStage(null)
+          }}
+          projectId={selectedProjectForStage.id}
+          projectName={selectedProjectForStage.name}
+          onSuccess={() => {
+            loadTreeData() // Перезагружаем данные после создания стадии
+          }}
+        />
+      )}
+
+      {/* Модальное окно создания объекта */}
+      {showCreateObjectModal && selectedStageForObject && (
+        <CreateObjectModal
+          isOpen={showCreateObjectModal}
+          onClose={() => {
+            setShowCreateObjectModal(false)
+            setSelectedStageForObject(null)
+          }}
+          stageId={selectedStageForObject.id}
+          stageName={selectedStageForObject.name}
+          onSuccess={() => {
+            loadTreeData() // Перезагружаем данные после создания объекта
+          }}
+        />
+      )}
+
+      {/* Модальное окно создания раздела */}
+      {showCreateSectionModal && selectedObjectForSection && (
+        <CreateSectionModal
+          isOpen={showCreateSectionModal}
+          onClose={() => {
+            setShowCreateSectionModal(false)
+            setSelectedObjectForSection(null)
+          }}
+          objectId={selectedObjectForSection.id}
+          objectName={selectedObjectForSection.name}
+          projectId={selectedObjectForSection.projectId}
+          onSuccess={() => {
+            loadTreeData() // Перезагружаем данные после создания раздела
+          }}
+        />
+      )}
+
     </>
   )
 } 

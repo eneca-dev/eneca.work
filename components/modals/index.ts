@@ -7,6 +7,9 @@ export { ModalFooter } from './base/ModalFooter'
 export { ModalProvider } from './base/ModalProvider'
 export { ModalButton } from './base/ModalButton'
 
+// Специализированные модальные окна
+export { SectionPanel } from './SectionPanel'
+
 // Хуки
 export { useModal, useModalState } from './base/useModal'
 export { useModalRegistry } from './base/ModalProvider'

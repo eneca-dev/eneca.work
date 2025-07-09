@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { createClient } from "@/utils/supabase/client"
-import { getUserRoleAndPermissions } from "@/services/org-data-service"
 
 
 // Интерфейс данных профиля пользователя

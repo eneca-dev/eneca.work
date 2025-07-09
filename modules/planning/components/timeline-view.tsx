@@ -19,6 +19,7 @@ import { useSettingsStore } from "@/stores/useSettingsStore"
 import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
 import { PermissionBadge } from "./permission-badge"
 import { Button } from "@/components/ui/button"
+import { SectionPanel } from "@/components/modals"
 
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
@@ -99,6 +100,10 @@ useEffect(() => {
     width: typeof window !== "undefined" ? window.innerWidth : 0,
     height: typeof window !== "undefined" ? window.innerHeight : 0,
   })
+
+  // Состояние для SectionPanel
+  const [showSectionPanel, setShowSectionPanel] = useState(false)
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
 
   // Количество активных фильтров
   const activeFiltersCount = [
@@ -221,6 +226,18 @@ useEffect(() => {
     resetFilters()
   }
 
+  // Обработчик открытия SectionPanel
+  const handleOpenSectionPanel = (sectionId: string) => {
+    setSelectedSectionId(sectionId)
+    setShowSectionPanel(true)
+  }
+
+  // Обработчик закрытия SectionPanel
+  const handleCloseSectionPanel = () => {
+    setShowSectionPanel(false)
+    setSelectedSectionId(null)
+  }
+
 
  const handleTodayPeriod = () => {
    const today = new Date()
@@ -311,6 +328,7 @@ useEffect(() => {
               cellWidth={22}
               windowWidth={windowSize.width}
               hasActiveFilters={hasActiveFilters}
+              onOpenSectionPanel={handleOpenSectionPanel}
             />
           </div>
         )}
@@ -328,6 +346,15 @@ useEffect(() => {
         daysToShow={daysToShow}
         onTodayClick={handleTodayPeriod}
       />
+
+      {/* Панель информации о разделе */}
+      {showSectionPanel && selectedSectionId && (
+        <SectionPanel
+          isOpen={showSectionPanel}
+          onClose={handleCloseSectionPanel}
+          sectionId={selectedSectionId}
+        />
+      )}
     </div>
   )
 }

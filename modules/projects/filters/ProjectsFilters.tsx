@@ -6,6 +6,7 @@ import { FilterSelect } from './FilterSelect'
 import { projectsConfig } from './configs'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTheme } from 'next-themes'
+import { SyncButton } from '@/components/ui/sync-button'
 
 interface ProjectsFiltersProps {
   onProjectChange: (projectId: string | null) => void
@@ -116,6 +117,8 @@ export function ProjectsFilters({
     onResetFilters()
   }
 
+
+
   const filteredProjects = getFilteredProjects()
   const filteredStages = getFilteredStages()
   const filteredObjects = getFilteredObjects()
@@ -141,7 +144,7 @@ export function ProjectsFilters({
         ? "bg-slate-800/50 border-slate-700" 
         : "bg-white border-slate-200"
     )}>
-      {/* Заголовок и сброс */}
+      {/* Заголовок и кнопки */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Filter size={16} className={theme === 'dark' ? "text-teal-400" : "text-teal-600"} />
@@ -153,20 +156,30 @@ export function ProjectsFilters({
           </span>
         </div>
         
-        {hasActiveFilters && (
-          <button
-            onClick={handleReset}
-            className={cn(
-              "flex items-center gap-1 px-2 py-1 text-xs rounded-md",
-              theme === 'dark'
-                ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            )}
-          >
-            <RotateCcw size={12} />
-            Сбросить
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Кнопка синхронизации с Worksection */}
+          <SyncButton 
+            size="md"
+            theme={theme}
+            showText={true}
+          />
+
+          {/* Кнопка сброса фильтров */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleReset}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 text-xs rounded-md",
+                theme === 'dark'
+                  ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              )}
+            >
+              <RotateCcw size={12} />
+              Сбросить
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Фильтры в две строки */}
