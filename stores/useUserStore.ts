@@ -182,7 +182,7 @@ export const useUserStore = create<UserState>()(
         getPermissionLabel: (permission: string) => {
           const labels: Record<string, string> = {
             'is_top_manager': 'Топ-менеджер',
-            'is_project_manager': 'Менеджер проектов',
+            'is_project_manager': 'Руководитель проектов',
             'is_head_of_department': 'Руководитель отдела',
             'is_teamlead': 'Руководитель команды'
           };

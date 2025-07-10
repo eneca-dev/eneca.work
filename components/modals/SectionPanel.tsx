@@ -477,14 +477,41 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   return (
     <>
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+        className="fixed bg-black bg-opacity-50 z-40"
         onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: '0px',
+          left: '0px',
+          right: '0px',
+          bottom: '0px',
+          width: '100vw',
+          height: '100vh',
+          margin: '0px',
+          padding: '0px'
+        }}
       />
       
-      <div className="fixed right-0 top-0 h-screen w-[600px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b dark:border-slate-700">
+      <div 
+        className="fixed right-0 h-screen w-[600px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
+        style={{ 
+          position: 'fixed',
+          top: '0px',
+          right: '0px',
+          margin: '0px',
+          padding: '0px'
+        }}
+      >
+        {/* Заголовок прилегает к верху */}
+        <div 
+          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900" 
+          style={{ 
+            paddingTop: '16px',
+            margin: '0px'
+          }}
+        >
           <div>
-            <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800">
+            <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800" style={{ margin: '0px' }}>
               Информация о разделе
             </h2>
             {sectionData && (
@@ -493,17 +520,16 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-            >
-              <X className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <X className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+          </button>
         </div>
 
-        <div className="px-4 py-3 border-b dark:border-slate-700">
+        {/* Табы без лишних отступов */}
+        <div className="px-6 py-3 border-b dark:border-slate-700 bg-white dark:bg-slate-900">
           <div className="inline-flex h-10 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 p-1 text-slate-600 dark:text-slate-400">
             <button
               onClick={() => setActiveTab('overview')}
@@ -554,7 +580,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                       {sectionData.manager_name && (
                         <div className="flex items-center gap-2 text-sm">
                           <User className="h-4 w-4 text-blue-500" />
-                          <span className="text-slate-500">Менеджер:</span>
+                          <span className="text-slate-500">Руководитель проекта:</span>
                           <span className="dark:text-slate-300 text-slate-700">{sectionData.manager_name}</span>
                         </div>
                       )}

@@ -40,7 +40,7 @@ export function PermissionBadge({
       case "manager":
         return {
           icon: ShieldCheck,
-          label: "Менеджер",
+          label: "Руководитель проекта",
           bgColor: theme === "dark" ? "bg-blue-900/20" : "bg-blue-50",
           borderColor: theme === "dark" ? "border-blue-700" : "border-blue-200",
           textColor: theme === "dark" ? "text-blue-400" : "text-blue-700",

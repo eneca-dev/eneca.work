@@ -4,7 +4,7 @@ import { FilterConfigs } from './types'
 export const planningConfig: FilterConfigs = {
   manager: {
     id: 'manager',
-    label: 'Менеджер',
+    label: 'Руководитель проекта',
     fetchFunction: 'loadManagers'
   },
   project: {
@@ -48,7 +48,7 @@ export const planningConfig: FilterConfigs = {
 export const projectsConfig: FilterConfigs = {
   manager: {
     id: 'manager',
-    label: 'Менеджер',
+    label: 'Руководитель проекта',
     fetchFunction: 'loadManagers'
   },
   project: {
@@ -92,7 +92,7 @@ export const projectsConfig: FilterConfigs = {
 export const timelineConfig: FilterConfigs = {
   manager: {
     id: 'manager',
-    label: 'Менеджер',
+    label: 'Руководитель проекта',
     fetchFunction: 'loadManagers'
   },
   project: {

@@ -19,15 +19,14 @@ export default function ProjectsPage() {
   // Получаем уведомления из UI стора
   const { notification, clearNotification } = useUiStore();
 
-  // Состояние для управления отображением отделов (как в планировании)
-  const [showDepartments, setShowDepartments] = useState(true);
-  const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
-
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
 
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
@@ -35,15 +34,15 @@ export default function ProjectsPage() {
   };
 
   const handleDepartmentChange = (departmentId: string | null) => {
-    console.log('Department changed:', departmentId);
+    setSelectedDepartmentId(departmentId);
   };
 
   const handleTeamChange = (teamId: string | null) => {
-    console.log('Team changed:', teamId);
+    setSelectedTeamId(teamId);
   };
 
   const handleEmployeeChange = (employeeId: string | null) => {
-    console.log('Employee changed:', employeeId);
+    setSelectedEmployeeId(employeeId);
   };
 
   const handleManagerChange = (managerId: string | null) => {
@@ -64,20 +63,9 @@ export default function ProjectsPage() {
     setSelectedProjectId(null);
     setSelectedStageId(null);
     setSelectedObjectId(null);
-  };
-
-  const toggleShowDepartments = () => {
-    setShowDepartments(!showDepartments);
-  };
-
-  const expandAllDepartments = () => {
-    // Логика для развертывания всех отделов
-    console.log('Expand all departments');
-  };
-
-  const collapseAllDepartments = () => {
-    // Логика для свертывания всех отделов
-    console.log('Collapse all departments');
+    setSelectedDepartmentId(null);
+    setSelectedTeamId(null);
+    setSelectedEmployeeId(null);
   };
 
   return (
@@ -126,10 +114,6 @@ export default function ProjectsPage() {
         onStageChange={handleStageChange}
         onObjectChange={handleObjectChange}
         onResetFilters={handleResetFilters}
-        showDepartments={showDepartments}
-        toggleShowDepartments={toggleShowDepartments}
-        expandAllDepartments={expandAllDepartments}
-        collapseAllDepartments={collapseAllDepartments}
       />
       
       {/* Структура проектов */}
@@ -138,6 +122,9 @@ export default function ProjectsPage() {
         selectedProjectId={selectedProjectId}
         selectedStageId={selectedStageId}
         selectedObjectId={selectedObjectId}
+        selectedDepartmentId={selectedDepartmentId}
+        selectedTeamId={selectedTeamId}
+        selectedEmployeeId={selectedEmployeeId}
       />
     </div>
   );

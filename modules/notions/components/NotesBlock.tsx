@@ -227,7 +227,6 @@ export function NotesBlock() {
         [href="/dashboard/planning"],
         [href="/dashboard/decomposition"],
         [href="/dashboard/projects"],
-        [href="/dashboard/tasks"],
         [href="/dashboard/users"],
         [href="/dashboard/settings"],
         [href="/dashboard/calendar"],

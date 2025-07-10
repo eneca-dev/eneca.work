@@ -293,10 +293,6 @@ useEffect(() => {
           onStageChange={handleStageChange}
           onObjectChange={handleObjectChange}
           onResetFilters={handleResetFilters}
-          showDepartments={showDepartments}
-          toggleShowDepartments={toggleShowDepartments}
-          expandAllDepartments={expandAllDepartments}
-          collapseAllDepartments={collapseAllDepartments}
         />
       </div>
 
@@ -329,6 +325,9 @@ useEffect(() => {
               windowWidth={windowSize.width}
               hasActiveFilters={hasActiveFilters}
               onOpenSectionPanel={handleOpenSectionPanel}
+              toggleShowDepartments={toggleShowDepartments}
+              expandAllDepartments={expandAllDepartments}
+              collapseAllDepartments={collapseAllDepartments}
             />
           </div>
         )}

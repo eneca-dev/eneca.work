@@ -29,6 +29,9 @@ interface TimelineGridProps {
   windowWidth?: number // Добавляем ширину окна для перерисовки
   hasActiveFilters?: boolean // Добавляем новый пропс
   onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  toggleShowDepartments: () => void
+  expandAllDepartments: () => void
+  collapseAllDepartments: () => void
 }
 
 export function TimelineGrid({
@@ -46,6 +49,9 @@ export function TimelineGrid({
   windowWidth = 0, // Значение по умолчанию
   hasActiveFilters = false, // Добавляем с значением по умолчанию
   onOpenSectionPanel, // Добавляем обработчик открытия панели раздела
+  toggleShowDepartments,
+  expandAllDepartments,
+  collapseAllDepartments,
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -263,6 +269,10 @@ export function TimelineGrid({
             leftOffset={LEFT_OFFSET}
             cellWidth={cellWidth}
             stickyColumnShadow={stickyColumnShadow}
+            showDepartments={showDepartments}
+            toggleShowDepartments={toggleShowDepartments}
+            expandAllDepartments={expandAllDepartments}
+            collapseAllDepartments={collapseAllDepartments}
           />
 
           {/* Строки с разделами */}

@@ -169,13 +169,13 @@ export function TimelineFilters({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <FilterSelect
             id="manager"
-            label="Менеджер"
+            label="Руководитель проекта"
             value={selectedManagerId}
             onChange={(value) => setFilter('manager', value)}
             disabled={isLoading}
             locked={isFilterLocked('manager')}
             options={managers}
-            placeholder="Выберите менеджера"
+            placeholder="Выберите руководителя проекта"
             theme={theme}
             loading={isLoading}
           />

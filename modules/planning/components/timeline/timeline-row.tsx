@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3 } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
 import type { Section, Loading } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
@@ -119,6 +119,47 @@ export function TimelineRow({
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
+
+  // Функция для расчета суммы ставок по загрузкам в разделе
+  const calculateTotalRate = (): number => {
+    if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
+    return uniqueLoadings.reduce((total, loading) => total + (loading.rate || 0), 0)
+  }
+
+  // Вычисляем суммарную ставку
+  const totalRate = calculateTotalRate()
+
+  // Функция для проверки, активна ли загрузка в указанную дату
+  const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
+    try {
+      const loadingStart = new Date(loading.startDate)
+      const loadingEnd = new Date(loading.endDate)
+
+      // Сбрасываем время для корректного сравнения
+      loadingStart.setHours(0, 0, 0, 0)
+      loadingEnd.setHours(23, 59, 59, 999)
+
+      const periodDate = new Date(date)
+      periodDate.setHours(0, 0, 0, 0)
+
+      return periodDate >= loadingStart && periodDate <= loadingEnd
+    } catch (error) {
+      console.error("Ошибка при проверке активности загрузки:", error)
+      return false
+    }
+  }
+
+  // Функция для расчета суммарной нагрузки раздела на конкретную дату
+  const getSectionWorkloadForDate = (date: Date): number => {
+    if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
+    
+    return uniqueLoadings.reduce((total, loading) => {
+      if (isLoadingActiveInPeriod(loading, date)) {
+        return total + (loading.rate || 0)
+      }
+      return total
+    }, 0)
+  }
 
   // Вычисляем позицию строки раздела с учетом загрузок предыдущих разделов
   const sectionPosition = headerHeight * 2 + sectionIndex * rowHeight + totalLoadingsBeforeSection * reducedRowHeight
@@ -310,6 +351,20 @@ export function TimelineRow({
                       </div>
                     )}
                   </div>
+
+                  {/* Третья строка - общая нагрузка (сумма ставок) */}
+                  {totalRate > 0 && (
+                    <div className="flex items-center justify-start">
+                      <div className={cn("flex items-center", theme === "dark" ? "text-teal-400" : "text-teal-600")}>
+                        <TrendingUp size={10} className="mr-1" />
+                        <span className="text-xs font-medium">
+                          {totalRate === 1 ? '1 ставка' : 
+                           totalRate > 1 && totalRate === Math.floor(totalRate) ? `${totalRate} ставки` : 
+                           `${totalRate.toFixed(1)} ставки`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -373,6 +428,9 @@ export function TimelineRow({
               const isTodayDate = isToday(unit.date)
               const isActive = isSectionActiveInPeriod(section, unit.date)
               const isMonthStart = isFirstDayOfMonth(unit.date)
+              
+              // Получаем суммарную нагрузку на эту дату
+              const sectionWorkload = getSectionWorkloadForDate(unit.date)
 
               return (
                 <div
@@ -404,6 +462,7 @@ export function TimelineRow({
                     borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                   }}
                 >
+                  {/* Фоновая подсветка активности раздела */}
                   {isActive && (
                     <div
                       className={cn(
@@ -412,6 +471,32 @@ export function TimelineRow({
                         theme === "dark" ? "opacity-70" : "opacity-50",
                       )}
                     ></div>
+                  )}
+                  
+                  {/* Графическое отображение суммарной нагрузки */}
+                  {sectionWorkload > 0 && (
+                    <div className="absolute inset-0 flex items-end justify-center p-1">
+                      <div
+                        className={cn(
+                          "rounded-t-sm transition-all duration-200",
+                          theme === "dark" ? "bg-blue-400" : "bg-blue-500"  // Нейтральный синий цвет
+                        )}
+                        style={{
+                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы (почти на всю ячейку)
+                          height: `${Math.max(
+                            Math.min(
+                              (sectionWorkload / 3) * (rowHeight - 10),  // Высота пропорционально нагрузке (3 ставки = полная высота)
+                              rowHeight - 6  // Максимальная высота
+                            ),
+                            3  // Минимальная высота для видимости
+                          )}px`,
+                          opacity: theme === "dark" ? 0.8 : 0.7
+                        }}
+                        title={`Нагрузка: ${sectionWorkload === Math.floor(sectionWorkload) 
+                          ? sectionWorkload.toString() 
+                          : sectionWorkload.toFixed(1)} ставки`}
+                      ></div>
+                    </div>
                   )}
                 </div>
               )

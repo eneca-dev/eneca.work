@@ -255,24 +255,6 @@ export function DepartmentRow({
                         : "border-l border-l-slate-300"
                       : "",
                     isLastDayOfMonthDate ? "border-r-0" : "",
-                    // Добавляем фоновый цвет в зависимости от загрузки
-                    departmentLoadPercentage > 100
-                      ? theme === "dark"
-                        ? "bg-red-500/30"
-                        : "bg-red-200"
-                      : departmentLoadPercentage > 80
-                        ? theme === "dark"
-                          ? "bg-green-500/30"
-                          : "bg-green-200"
-                        : departmentLoadPercentage > 50
-                          ? theme === "dark"
-                            ? "bg-yellow-500/30"
-                            : "bg-yellow-200"
-                          : departmentLoadPercentage >= 1
-                            ? theme === "dark"
-                              ? "bg-blue-500/30"
-                              : "bg-blue-200"
-                            : "",
                   )}
                   style={{
                     height: `${rowHeight}px`,
@@ -290,23 +272,30 @@ export function DepartmentRow({
                   }}
                 >
                   {departmentLoadPercentage > 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span
+                    <div className="absolute inset-0 flex items-end justify-center p-1">
+                      <div
                         className={cn(
-                          "text-[10px] font-medium transform -rotate-90",
-                          theme === "dark" 
-                            ? "text-white" 
-                            : departmentLoadPercentage > 100
-                              ? "text-red-800"
-                              : departmentLoadPercentage > 80
-                                ? "text-green-800"
-                                : departmentLoadPercentage > 50
-                                  ? "text-yellow-800"
-                                  : "text-blue-800"
+                          "rounded-t-sm transition-all duration-200",
+                          // Цветовая градация от красного к зеленому
+                          departmentLoadPercentage <= 40 
+                            ? theme === "dark" ? "bg-red-400" : "bg-red-500"        // Красный: 1-40%
+                            : departmentLoadPercentage <= 80 
+                              ? theme === "dark" ? "bg-amber-400" : "bg-amber-500"  // Желтый: 40-80%
+                              : theme === "dark" ? "bg-emerald-400" : "bg-emerald-500" // Зеленый: 80-100%+
                         )}
-                      >
-                        {departmentLoadPercentage}%
-                      </span>
+                        style={{
+                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы
+                          height: `${Math.max(
+                            Math.min(
+                              (departmentLoadPercentage / 100) * (rowHeight - 10), // Высота пропорционально проценту
+                              rowHeight - 6  // Максимальная высота
+                            ),
+                            3  // Минимальная высота для видимости
+                          )}px`,
+                          opacity: theme === "dark" ? 0.8 : 0.7
+                        }}
+                        title={`Загрузка отдела: ${departmentLoadPercentage}%`}
+                      ></div>
                     </div>
                   )}
                 </div>
