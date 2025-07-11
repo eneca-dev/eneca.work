@@ -37,10 +37,16 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
   const isAuthenticated = userStore.isAuthenticated
 
   const [calendarDate, setCalendarDate] = useState<Date>(selectedDate || new Date())
+  const [mounted, setMounted] = useState(false)
+
+  // Проверяем, что компонент полностью гидратировался
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Загружаем события и график только при инициализации
   useEffect(() => {
-    if (!isAuthenticated || !currentUserId) {
+    if (!mounted || !isAuthenticated || !currentUserId) {
       return
     }
 
@@ -83,14 +89,14 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
       isMounted = false
       abortController.abort()
     }
-  }, [currentUserId, isAuthenticated, fetchEvents, fetchWorkSchedules])
+  }, [mounted, currentUserId, isAuthenticated, fetchEvents, fetchWorkSchedules])
 
   // Обновляем дату календаря при изменении выбранной даты
   useEffect(() => {
-    if (selectedDate) {
+    if (mounted && selectedDate) {
       setCalendarDate(selectedDate)
     }
-  }, [selectedDate])
+  }, [mounted, selectedDate])
 
   const weekStart = startOfWeek(calendarDate, { weekStartsOn: 1 })
   const weekDays = [...Array(7)].map((_, i) => addDays(weekStart, i))
@@ -224,8 +230,8 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
     return monthYear.charAt(0).toUpperCase() + monthYear.slice(1)
   }
 
-  if (collapsed) {
-    return null // Не показываем календарь в свернутом состоянии
+  if (collapsed || !mounted) {
+    return null // Не показываем календарь в свернутом состоянии или до гидратации
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 
@@ -15,28 +15,40 @@ export function useThemeSync() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const zustandTheme = useSettingsStore(state => state.theme)
   const setZustandTheme = useSettingsStore(state => state.setTheme)
+  const [mounted, setMounted] = useState(false)
   
+  // Проверяем, что компонент полностью гидратировался
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // При первой загрузке устанавливаем тему из Zustand стора в next-themes
   useEffect(() => {
+    if (!mounted) return
+    
     // Применяем тему из Zustand к next-themes
     if (zustandTheme !== theme && zustandTheme !== 'system') {
       setTheme(zustandTheme)
     }
-  }, [])
+  }, [mounted, zustandTheme, theme, setTheme])
 
   // Обновляем Zustand при изменении темы через next-themes
   useEffect(() => {
+    if (!mounted) return
+    
     if (theme && theme !== zustandTheme) {
       setZustandTheme(theme as 'light' | 'dark' | 'system')
     }
-  }, [theme, zustandTheme, setZustandTheme])
+  }, [mounted, theme, zustandTheme, setZustandTheme])
 
   return {
     theme,
     setTheme: (newTheme: string) => {
+      if (!mounted) return
       setTheme(newTheme)
       setZustandTheme(newTheme as 'light' | 'dark' | 'system')
     },
-    resolvedTheme
+    resolvedTheme,
+    mounted
   }
 } 
