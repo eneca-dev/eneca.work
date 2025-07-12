@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useProjectsStore } from './store';
 import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
-import { Card, CardContent } from '@/components/ui/card';
 import { useUiStore } from '@/stores/useUiStore';
 import { X } from 'lucide-react';
 
@@ -18,6 +17,8 @@ export default function ProjectsPage() {
 
   // Получаем уведомления из UI стора
   const { notification, clearNotification } = useUiStore();
+
+
 
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);

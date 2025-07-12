@@ -1,7 +1,8 @@
 import React from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, FileText, AlertCircle, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWorksectionSync } from '@/hooks/useWorksectionSync'
+import { Modal, ModalButton, useModalState } from '@/components/modals'
 
 interface SyncButtonProps {
   className?: string
@@ -20,25 +21,24 @@ export function SyncButton({
   onSyncComplete,
   theme = 'light'
 }: SyncButtonProps) {
-  const { isSyncing, syncStatus, syncWithWorksection } = useWorksectionSync()
+  const { isSyncing, syncStatus, syncWithWorksection, lastSyncResult } = useWorksectionSync()
+  const { isOpen, openModal, closeModal } = useModalState()
 
   const handleSync = async () => {
     try {
       const result = await syncWithWorksection()
       
       if (result) {
-        // Показываем уведомление об успехе
-        if (window.confirm(`✅ Синхронизация завершена успешно!\n\n📊 Статистика:\n• Создано: ${result.summary.created}\n• Обновлено: ${result.summary.updated}\n• Ошибок: ${result.summary.errors}\n• Время: ${result.duration} сек\n\nОбновить страницу для отображения новых данных?`)) {
-          window.location.reload()
-        }
+        // Сразу показываем модальное окно с детальным отчётом
+        openModal()
         
         // Вызываем колбэк если передан
         onSyncComplete?.()
       }
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-      alert(`❌ Ошибка синхронизации с Worksection:\n\n${errorMessage}\n\nПроверьте:\n• Доступность сервера интеграции\n• Правильность настроек API Worksection\n• Подключение к интернету`)
+      // Показываем модальное окно с ошибкой
+      openModal()
     }
   }
 
@@ -96,26 +96,176 @@ export function SyncButton({
     }
   }
 
+  const formatDuration = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000)
+    const minutes = Math.floor(seconds / 60)
+    if (minutes > 0) {
+      return `${minutes}м ${seconds % 60}с`
+    }
+    return `${seconds}с`
+  }
+
+  const renderSyncModal = () => {
+    if (!lastSyncResult) return null
+
+    const { success, summary, issues, logs, metadata } = lastSyncResult
+
+    return (
+      <Modal isOpen={isOpen} onClose={closeModal} size="xl">
+        <Modal.Header 
+          title={
+            <div className="flex items-center gap-2">
+              {success ? (
+                <CheckCircle className="text-green-600" size={20} />
+              ) : (
+                <AlertCircle className="text-red-600" size={20} />
+              )}
+              Отчёт о синхронизации
+            </div>
+          }
+          subtitle={metadata?.timestamp ? `Завершено ${new Date(metadata.timestamp).toLocaleString('ru-RU')}` : 'Завершено'}
+        />
+        
+        <Modal.Body>
+          <div className="space-y-4">
+            {/* Краткая статистика */}
+            <div className="bg-slate-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-slate-800">📊 Результат синхронизации</h4>
+                <div className="text-sm text-slate-600">
+                  {metadata?.duration_ms ? formatDuration(metadata.duration_ms) : 'Н/Д'}
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-4 mt-3">
+                <div className="text-center">
+                  <div className="text-xl font-bold text-green-600">{summary?.created || 0}</div>
+                  <div className="text-xs text-slate-600">Создано</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-blue-600">{summary?.updated || 0}</div>
+                  <div className="text-xs text-slate-600">Обновлено</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-slate-600">{summary?.unchanged || 0}</div>
+                  <div className="text-xs text-slate-600">Без изменений</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold text-red-600">{summary?.errors || 0}</div>
+                  <div className="text-xs text-slate-600">Ошибки</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Подробности изменений (только если есть) */}
+            {logs && logs.length > 0 && ((summary?.created || 0) > 0 || (summary?.updated || 0) > 0 || (summary?.errors || 0) > 0) && (
+              <div className="bg-slate-50 rounded-lg p-4">
+                <h4 className="font-medium text-slate-800 mb-3">📋 Детали изменений</h4>
+                <div className="bg-white rounded p-3 max-h-48 overflow-y-auto border">
+                  <div className="text-sm space-y-1">
+                    {logs.filter(log => 
+                      log.includes('создано') || 
+                      log.includes('обновлено') || 
+                      log.includes('ошибка') ||
+                      log.includes('Создан') ||
+                      log.includes('Обновлен') ||
+                      log.includes('❌') ||
+                      log.includes('✅') ||
+                      log.includes('📝')
+                    ).slice(-15).map((log, index) => (
+                      <div key={index} className="font-mono text-slate-700 text-xs">
+                        {log.replace(/^\[.*?\]\s*/, '')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Ошибки */}
+            {issues?.critical_errors?.length > 0 && (
+              <div className="bg-red-50 rounded-lg p-4">
+                <h4 className="font-medium text-red-800 mb-2 flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  Ошибки ({issues.critical_errors.length})
+                </h4>
+                <div className="space-y-1">
+                  {issues.critical_errors.map((error, index) => (
+                    <div key={index} className="text-sm text-red-700">
+                      • {error}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Предупреждения */}
+            {issues?.warnings?.length > 0 && (
+              <div className="bg-amber-50 rounded-lg p-4">
+                <h4 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  Предупреждения ({issues.warnings.length})
+                </h4>
+                <div className="space-y-1">
+                  {issues.warnings.slice(0, 3).map((warning, index) => (
+                    <div key={index} className="text-sm text-amber-700">
+                      • {warning}
+                    </div>
+                  ))}
+                  {issues.warnings.length > 3 && (
+                    <div className="text-sm text-amber-600 italic">
+                      ... и ещё {issues.warnings.length - 3} предупреждений
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <ModalButton variant="cancel" onClick={closeModal}>
+            Закрыть
+          </ModalButton>
+          {((summary?.created || 0) > 0 || (summary?.updated || 0) > 0) && (
+            <ModalButton 
+              variant="success" 
+              onClick={() => {
+                closeModal()
+                window.location.reload()
+              }}
+            >
+              Обновить страницу
+            </ModalButton>
+          )}
+        </Modal.Footer>
+      </Modal>
+    )
+  }
+
   return (
-    <button
-      onClick={handleSync}
-      disabled={isSyncing}
-      title="Синхронизировать данные с Worksection"
-      className={cn(
-        getVariantClasses(),
-        sizeClasses[size],
-        className
-      )}
-    >
-      <RefreshCw 
-        size={iconSizes[size]} 
+    <>
+      <button
+        onClick={handleSync}
+        disabled={isSyncing}
+        title="Синхронизировать данные с Worksection"
         className={cn(
-          isSyncing && "animate-spin"
-        )} 
-      />
-      {showText && (
-        isSyncing ? 'Синхронизация...' : 'Синхронизировать с Worksection'
-      )}
-    </button>
+          getVariantClasses(),
+          sizeClasses[size],
+          className
+        )}
+      >
+        <RefreshCw 
+          size={iconSizes[size]} 
+          className={cn(
+            isSyncing && "animate-spin"
+          )} 
+        />
+        {showText && (
+          isSyncing ? 'Синхронизация...' : 'Синхронизировать с Worksection'
+        )}
+      </button>
+      
+      {renderSyncModal()}
+    </>
   )
 } 

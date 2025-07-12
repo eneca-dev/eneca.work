@@ -4,10 +4,45 @@ interface SyncResult {
   success: boolean
   duration: string
   summary: {
+    total_operations: number
     created: number
     updated: number
+    unchanged: number
     errors: number
-    total_operations: number
+    warnings: number
+    critical_errors: number
+    performance: number
+  }
+  details: {
+    projects?: any
+    stages?: any
+    objects?: any
+    sections?: any
+  }
+  issues: {
+    warnings: string[]
+    critical_errors: string[]
+  }
+  logs: string[]
+  detailed_logs: Array<{
+    timestamp: string
+    level: string
+    message: string
+    details?: any
+  }>
+  metadata: {
+    timestamp: string
+    duration_ms: number
+    environment: {
+      platform: string
+      node_version: string
+      working_directory: string
+    }
+    configuration: {
+      supabase_configured: boolean
+      worksection_configured: boolean
+      retry_attempts: number
+    }
   }
   error?: string
 }
@@ -17,11 +52,13 @@ interface UseSyncReturn {
   syncStatus: 'idle' | 'success' | 'error'
   syncWithWorksection: () => Promise<SyncResult | null>
   resetStatus: () => void
+  lastSyncResult: SyncResult | null
 }
 
 export function useWorksectionSync(): UseSyncReturn {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
 
   const syncWithWorksection = async (): Promise<SyncResult | null> => {
     if (isSyncing) return null
@@ -47,8 +84,40 @@ export function useWorksectionSync(): UseSyncReturn {
       
       const result: SyncResult = await response.json()
       
+      console.log('📊 Детальный результат синхронизации:', result)
+      
+      // Логируем подробную статистику
+      if (result.summary) {
+        console.log('📈 Статистика синхронизации:')
+        console.log(`  🆕 Создано: ${result.summary.created}`)
+        console.log(`  🔄 Обновлено: ${result.summary.updated}`)
+        console.log(`  ✅ Без изменений: ${result.summary.unchanged}`)
+        console.log(`  ❌ Ошибки: ${result.summary.errors}`)
+        console.log(`  ⚠️ Предупреждения: ${result.summary.warnings}`)
+        console.log(`  🎯 Всего операций: ${result.summary.total_operations}`)
+        console.log(`  ⚡ Производительность: ${result.summary.performance} оп/сек`)
+      }
+      
+      // Логируем критические ошибки
+      if (result.issues && result.issues.critical_errors.length > 0) {
+        console.warn('🚨 Критические ошибки:')
+        result.issues.critical_errors.forEach((error, index) => {
+          console.warn(`  ${index + 1}. ${error}`)
+        })
+      }
+      
+      // Логируем предупреждения
+      if (result.issues && result.issues.warnings.length > 0) {
+        console.warn('⚠️ Предупреждения:')
+        result.issues.warnings.forEach((warning, index) => {
+          console.warn(`  ${index + 1}. ${warning}`)
+        })
+      }
+      
+      setLastSyncResult(result)
+      
       if (result.success) {
-        console.log('✅ Синхронизация завершена успешно:', result)
+        console.log('✅ Синхронизация завершена успешно')
         setSyncStatus('success')
         return result
       } else {
@@ -80,6 +149,7 @@ export function useWorksectionSync(): UseSyncReturn {
     isSyncing,
     syncStatus,
     syncWithWorksection,
-    resetStatus
+    resetStatus,
+    lastSyncResult
   }
 } 
