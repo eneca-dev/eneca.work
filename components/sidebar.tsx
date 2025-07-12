@@ -156,11 +156,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       icon: ClipboardList,
     },
     {
-      title: "Передача заданий",
-      href: "/dashboard/tasks",
-      icon: Send,
-    },
-    {
       title: "Декомпозиция",
       href: "/dashboard/decomposition",
       icon: Network,

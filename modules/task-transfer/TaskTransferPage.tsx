@@ -197,7 +197,7 @@ export default function TaskTransferPage() {
   // Показываем индикатор загрузки при инициализации
   if (isLoading) {
     return (
-      <div className="container mx-auto py-6 px-4">
+      <div className="w-full py-6 px-6">
         <div className="flex justify-center items-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -209,7 +209,7 @@ export default function TaskTransferPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="w-full py-6 px-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-foreground">Модуль передачи заданий между разделами</h1>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

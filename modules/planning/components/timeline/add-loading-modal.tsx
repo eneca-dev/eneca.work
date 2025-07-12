@@ -40,6 +40,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
+  const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
   // Локальное состояние для формы
   const [formData, setFormData] = useState({
@@ -249,6 +250,9 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         rate: formData.rate,
         projectName: selectedProject?.project_name,
         sectionName: selectedSection?.section_name,
+        responsibleName: employee.fullName || employee.name,
+        responsibleAvatarUrl: employee.avatarUrl,
+        responsibleTeamName: employee.teamName,
       })
 
       if (!result.success) {
@@ -258,6 +262,9 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       // Показываем уведомление об успехе
       const projectName = selectedProject?.project_name || "Неизвестный проект"
       setNotification(`Загрузка для сотрудника ${employee.fullName} на проект "${projectName}" успешно создана`)
+
+      // Автоматически раскрываем раздел, чтобы показать новую загрузку
+      toggleSectionExpanded(formData.sectionId)
 
       // Автоматически скрываем уведомление через 3 секунды
       successTimeoutRef.current = setTimeout(() => {

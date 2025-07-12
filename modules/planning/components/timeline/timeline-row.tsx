@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
 import type { Section, Loading } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
@@ -12,6 +12,7 @@ import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useState } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
+import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
 
 interface TimelineRowProps {
   section: Section
@@ -27,6 +28,7 @@ interface TimelineRowProps {
   stickyColumnShadow: string
   totalExpandedSections: number // Добавляем счетчик раскрытых разделов
   totalLoadingsBeforeSection: number // Добавляем счетчик загрузок перед текущим разделом
+  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
 }
 
 export function TimelineRow({
@@ -43,11 +45,14 @@ export function TimelineRow({
   stickyColumnShadow,
   totalExpandedSections,
   totalLoadingsBeforeSection,
+  onOpenSectionPanel,
 }: TimelineRowProps) {
   // Состояние для отслеживания наведения на аватары
   const [hoveredSpecialist, setHoveredSpecialist] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
+  const [hoveredLoadingCounter, setHoveredLoadingCounter] = useState(false)
   const [showAssignResponsibleModal, setShowAssignResponsibleModal] = useState(false)
+  const [showCreateLoadingModal, setShowCreateLoadingModal] = useState(false)
 
   // Получаем видимость и ширину столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
@@ -63,9 +68,9 @@ export function TimelineRow({
   const hasLoadings = section.hasLoadings || false
 
   // На фиксированные значения:
-  const sectionWidth = 320 // Фиксированная ширина для раздела
-  const projectWidth = 160 // Фиксированная ширина для проекта
-  const objectWidth = 120 // Фиксированная ширина для объекта
+  const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
+  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
+  const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
   const stageWidth = 80 // Фиксированная ширина для стадии
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
@@ -106,9 +111,55 @@ export function TimelineRow({
 
   // Получаем загрузки раздела
   const loadings = section.loadings || []
+  
+  // Фильтруем дубликаты загрузок по ID для избежания проблем с React ключами
+  const uniqueLoadings = loadings.filter((loading, index, array) => 
+    array.findIndex(l => l.id === loading.id) === index
+  )
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
+
+  // Функция для расчета суммы ставок по загрузкам в разделе
+  const calculateTotalRate = (): number => {
+    if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
+    return uniqueLoadings.reduce((total, loading) => total + (loading.rate || 0), 0)
+  }
+
+  // Вычисляем суммарную ставку
+  const totalRate = calculateTotalRate()
+
+  // Функция для проверки, активна ли загрузка в указанную дату
+  const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
+    try {
+      const loadingStart = new Date(loading.startDate)
+      const loadingEnd = new Date(loading.endDate)
+
+      // Сбрасываем время для корректного сравнения
+      loadingStart.setHours(0, 0, 0, 0)
+      loadingEnd.setHours(23, 59, 59, 999)
+
+      const periodDate = new Date(date)
+      periodDate.setHours(0, 0, 0, 0)
+
+      return periodDate >= loadingStart && periodDate <= loadingEnd
+    } catch (error) {
+      console.error("Ошибка при проверке активности загрузки:", error)
+      return false
+    }
+  }
+
+  // Функция для расчета суммарной нагрузки раздела на конкретную дату
+  const getSectionWorkloadForDate = (date: Date): number => {
+    if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
+    
+    return uniqueLoadings.reduce((total, loading) => {
+      if (isLoadingActiveInPeriod(loading, date)) {
+        return total + (loading.rate || 0)
+      }
+      return total
+    }, 0)
+  }
 
   // Вычисляем позицию строки раздела с учетом загрузок предыдущих разделов
   const sectionPosition = headerHeight * 2 + sectionIndex * rowHeight + totalLoadingsBeforeSection * reducedRowHeight
@@ -134,7 +185,7 @@ export function TimelineRow({
             {/* Столбец "Раздел" (всегда видимый) с аватаром */}
             <div
               className={cn(
-                "p-2 font-medium border-r flex flex-col justify-between transition-colors h-full", // Уменьшаем padding с p-3 до p-2
+                "p-2 font-medium border-r flex items-center transition-colors h-full", // Изменяем на flex items-center для горизонтального выравнивания
                 theme === "dark"
                   ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
                   : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
@@ -152,13 +203,14 @@ export function TimelineRow({
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
                   {section.responsibleName ? (
-                    // Если есть ответственный, показываем аватар
+                    // Если есть ответственный, показываем кликабельный аватар
                     <div
-                      className="flex items-center justify-center h-full"
+                      className="flex items-center justify-center h-full cursor-pointer hover:opacity-80 transition-opacity relative"
+                      onClick={handleAddResponsible}
                       onMouseEnter={() => setHoveredSpecialist(true)}
                       onMouseLeave={() => setHoveredSpecialist(false)}
                     >
-                      <Tooltip content={section.responsibleName} isVisible={hoveredSpecialist}>
+                      <Tooltip content={`${section.responsibleName} (кликните для изменения)`} isVisible={hoveredSpecialist}>
                         <Avatar
                           name={section.responsibleName}
                           avatarUrl={section.responsibleAvatarUrl}
@@ -166,6 +218,12 @@ export function TimelineRow({
                           size="sm" // Уменьшаем размер аватара
                         />
                       </Tooltip>
+                      {/* Иконка редактирования появляется при наведении */}
+                      {hoveredSpecialist && (
+                        <div className="absolute -top-1 -right-1 bg-teal-500 rounded-full p-0.5">
+                          <Edit3 size={8} className="text-white" />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     // Если нет ответственного, показываем кнопку добавления
@@ -189,6 +247,34 @@ export function TimelineRow({
                   )}
                 </div>
 
+                {/* Счетчик загрузок справа от аватара */}
+                <div
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowCreateLoadingModal(true)
+                  }}
+                  onMouseEnter={() => setHoveredLoadingCounter(true)}
+                  onMouseLeave={() => setHoveredLoadingCounter(false)}
+                >
+                  <Tooltip 
+                    content="Создать загрузку в этом разделе" 
+                    isVisible={hoveredLoadingCounter}
+                    position="top"
+                  >
+                    <span
+                      className={cn(
+                        "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0 transition-colors",
+                        theme === "dark" 
+                          ? "text-slate-400 bg-slate-600 hover:text-slate-200 hover:bg-slate-500" 
+                          : "text-slate-500 bg-slate-200 hover:text-slate-700 hover:bg-slate-300"
+                      )}
+                    >
+                      {uniqueLoadings.length}
+                    </span>
+                  </Tooltip>
+                </div>
+
                 {/* Иконка раскрытия и название раздела */}
                 <div className="flex items-center mr-3">
                   <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-1">
@@ -202,56 +288,58 @@ export function TimelineRow({
                       <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
                     )}
                   </div>
+                  
                   <span
                     className={cn(
-                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[120px]",
-                      theme === "dark" ? "text-slate-200" : "text-slate-800",
+                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[185px] cursor-pointer hover:underline",
+                      theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
                     )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpenSectionPanel?.(section.id)
+                    }}
                   >
                     {section.name}
                   </span>
                 </div>
 
-                {/* Дополнительная информация в компактном виде */}
-                <div className="flex flex-col gap-1 ml-auto text-xs">
-                  {/* Первая строка - только даты */}
-                  <div className="flex items-center gap-2">
-                    {/* Даты */}
-                    <div className="flex items-center">
-                      {/* Дата начала */}
-                      {columnVisibility.startDate && (
-                        <div
-                          className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-                        >
-                          <Calendar size={10} className="mr-1" />
-                          <span>{formatDate(section.startDate)}</span>
-                        </div>
-                      )}
+                {/* Дополнительная информация в две строки */}
+                <div className="flex flex-col gap-1 ml-auto text-xs justify-center">
+                  {/* Первая строка - даты */}
+                  <div className="flex items-center justify-start gap-2">
+                    {/* Дата начала */}
+                    {columnVisibility.startDate && (
+                      <div
+                        className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}
+                      >
+                        <Calendar size={10} className="mr-1" />
+                        <span>{formatDate(section.startDate)}</span>
+                      </div>
+                    )}
 
-                      {/* Разделитель между датами */}
-                      {columnVisibility.startDate && columnVisibility.endDate && (
-                        <span className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}>-</span>
-                      )}
+                    {/* Разделитель между датами */}
+                    {columnVisibility.startDate && columnVisibility.endDate && (
+                      <span className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}>-</span>
+                    )}
 
-                      {/* Дата окончания */}
-                      {columnVisibility.endDate && (
-                        <div
-                          className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-                        >
-                          <CalendarRange size={10} className="mr-1" />
-                          <span>{formatDate(section.endDate)}</span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Дата окончания */}
+                    {columnVisibility.endDate && (
+                      <div
+                        className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}
+                      >
+                        <CalendarRange size={10} className="mr-1" />
+                        <span>{formatDate(section.endDate)}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Вторая строка - стадия и отдел */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-start gap-2">
                     {/* Стадия */}
                     {columnVisibility.stage && (
                       <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
                         <Milestone size={10} className="mr-1" />
-                        <span className="truncate max-w-[80px]">{section.stageName || "-"}</span>
+                        <span className="truncate max-w-[60px]">{section.stageName || "-"}</span>
                       </div>
                     )}
 
@@ -259,10 +347,24 @@ export function TimelineRow({
                     {columnVisibility.sectionResponsible && (
                       <div className={cn("flex items-center", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
                         <Users size={10} className="mr-1" />
-                        <span className="truncate max-w-[80px]">{section.departmentName || "-"}</span>
+                        <span className="truncate max-w-[60px]">{section.departmentName || "-"}</span>
                       </div>
                     )}
                   </div>
+
+                  {/* Третья строка - общая нагрузка (сумма ставок) */}
+                  {totalRate > 0 && (
+                    <div className="flex items-center justify-start">
+                      <div className={cn("flex items-center", theme === "dark" ? "text-teal-400" : "text-teal-600")}>
+                        <TrendingUp size={10} className="mr-1" />
+                        <span className="text-xs font-medium">
+                          {totalRate === 1 ? '1 ставка' : 
+                           totalRate > 1 && totalRate === Math.floor(totalRate) ? `${totalRate} ставки` : 
+                           `${totalRate.toFixed(1)} ставки`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -271,7 +373,7 @@ export function TimelineRow({
             {columnVisibility.project && (
               <div
                 className={cn(
-                  "p-3 border-r transition-colors h-full",
+                  "p-3 border-r transition-colors h-full flex flex-col justify-center",
                   theme === "dark"
                     ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
                     : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
@@ -284,8 +386,13 @@ export function TimelineRow({
                   borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
-                <span className={cn("text-xs truncate block", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                {/* Первая строка - проект */}
+                <span className={cn("text-xs truncate block", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
                   {section.projectName || "-"}
+                </span>
+                {/* Вторая строка - объект */}
+                <span className={cn("text-xs truncate block mt-0.5 opacity-75", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                  {section.objectName || "-"}
                 </span>
               </div>
             )}
@@ -321,6 +428,9 @@ export function TimelineRow({
               const isTodayDate = isToday(unit.date)
               const isActive = isSectionActiveInPeriod(section, unit.date)
               const isMonthStart = isFirstDayOfMonth(unit.date)
+              
+              // Получаем суммарную нагрузку на эту дату
+              const sectionWorkload = getSectionWorkloadForDate(unit.date)
 
               return (
                 <div
@@ -352,6 +462,7 @@ export function TimelineRow({
                     borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                   }}
                 >
+                  {/* Фоновая подсветка активности раздела */}
                   {isActive && (
                     <div
                       className={cn(
@@ -360,6 +471,32 @@ export function TimelineRow({
                         theme === "dark" ? "opacity-70" : "opacity-50",
                       )}
                     ></div>
+                  )}
+                  
+                  {/* Графическое отображение суммарной нагрузки */}
+                  {sectionWorkload > 0 && (
+                    <div className="absolute inset-0 flex items-end justify-center p-1">
+                      <div
+                        className={cn(
+                          "rounded-t-sm transition-all duration-200",
+                          theme === "dark" ? "bg-blue-400" : "bg-blue-500"  // Нейтральный синий цвет
+                        )}
+                        style={{
+                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы (почти на всю ячейку)
+                          height: `${Math.max(
+                            Math.min(
+                              (sectionWorkload / 3) * (rowHeight - 10),  // Высота пропорционально нагрузке (3 ставки = полная высота)
+                              rowHeight - 6  // Максимальная высота
+                            ),
+                            3  // Минимальная высота для видимости
+                          )}px`,
+                          opacity: theme === "dark" ? 0.8 : 0.7
+                        }}
+                        title={`Нагрузка: ${sectionWorkload === Math.floor(sectionWorkload) 
+                          ? sectionWorkload.toString() 
+                          : sectionWorkload.toFixed(1)} ставки`}
+                      ></div>
+                    </div>
                   )}
                 </div>
               )
@@ -370,9 +507,9 @@ export function TimelineRow({
 
       {/* Отображаем загрузки, если раздел раскрыт */}
       {isExpanded &&
-        loadings.map((loading, loadingIndex) => (
+        uniqueLoadings.map((loading, loadingIndex) => (
           <LoadingRow
-            key={loading.id}
+            key={`${loading.id}-${loadingIndex}`}
             loading={loading}
             sectionPosition={sectionPosition}
             loadingIndex={loadingIndex}
@@ -389,6 +526,15 @@ export function TimelineRow({
       {/* Модальное окно назначения ответственного */}
       {showAssignResponsibleModal && (
         <AssignResponsibleModal section={section} setShowAssignModal={setShowAssignResponsibleModal} theme={theme} />
+      )}
+
+      {/* Модальное окно создания загрузки по разделу */}
+      {showCreateLoadingModal && (
+        <CreateLoadingBySectionModal 
+          section={section} 
+          setShowModal={setShowCreateLoadingModal} 
+          theme={theme} 
+        />
       )}
     </>
   )
@@ -460,6 +606,44 @@ function LoadingRow({
     } catch (error) {
       console.error("Ошибка при проверке активности загрузки:", error)
       return false
+    }
+  }
+
+  // Функция для получения стилей прямоугольника в зависимости от ставки
+  const getLoadingBarStyles = (rate: number) => {
+    let backgroundColor = ""
+    let height = "calc(100% - 8px)" // inset-1 = 4px отступ сверху и снизу
+    let opacity = ""
+
+    if (rate === 1) {
+      // Ставка = 1: синий цвет (как сейчас)
+      backgroundColor = theme === "dark" ? "rgb(59, 130, 246)" : "rgb(59, 130, 246)" // blue-500
+      opacity = theme === "dark" ? "0.7" : "0.5"
+    } else if (rate < 1) {
+      // Ставка < 1: жёлтый цвет, пропорционально уменьшенная высота
+      backgroundColor = theme === "dark" ? "rgb(234, 179, 8)" : "rgb(234, 179, 8)" // yellow-500
+      opacity = theme === "dark" ? "0.7" : "0.6"
+      // Высота пропорционально ставке, но минимум 20%
+      const heightPercent = Math.max(rate * 100, 20)
+      height = `${heightPercent}%`
+    } else {
+      // Ставка > 1: красный цвет
+      backgroundColor = theme === "dark" ? "rgb(239, 68, 68)" : "rgb(239, 68, 68)" // red-500
+      opacity = theme === "dark" ? "0.7" : "0.6"
+    }
+
+    return {
+      backgroundColor,
+      opacity,
+      height,
+      // Для ставки < 1 выравниваем по нижнему краю
+      ...(rate < 1 && {
+        position: "absolute" as const,
+        bottom: "4px", // inset-1
+        left: "4px",   // inset-1
+        right: "4px",  // inset-1
+        top: "auto"
+      })
     }
   }
 
@@ -611,10 +795,18 @@ function LoadingRow({
               >
                 {isActive && (
                   <div
-                    className={cn(
-                      "absolute inset-1 rounded-sm",
-                      theme === "dark" ? "bg-blue-500 opacity-70" : "bg-blue-500 opacity-50",
-                    )}
+                    className="rounded-sm"
+                    style={{
+                      ...getLoadingBarStyles(loading.rate),
+                      // Для полной ставки (= 1) и переработки (> 1) используем inset-1
+                      ...(loading.rate >= 1 && {
+                        position: "absolute",
+                        top: "4px",
+                        bottom: "4px", 
+                        left: "4px",
+                        right: "4px"
+                      })
+                    }}
                   ></div>
                 )}
               </div>

@@ -36,9 +36,18 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     
     try {
       const supabase = createClient()
+      
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
       let query = supabase
         .from('notions')
         .select('*')
+        .eq('notion_created_by', user.id) // 🔒 ФИЛЬТРУЕМ ПО ТЕКУЩЕМУ ПОЛЬЗОВАТЕЛЮ
         .order('notion_created_at', { ascending: false })
 
       // Применяем фильтры
@@ -145,6 +154,13 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     try {
       const supabase = createClient()
       
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
       const { data, error } = await supabase
         .from('notions')
         .update({
@@ -152,9 +168,14 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
           notion_updated_at: new Date().toISOString()
         })
         .eq('notion_id', id)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
         .select()
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметка не найдена или у вас нет прав на её изменение')
+      }
 
       // Обновляем заметку в локальном состоянии и пересортируем
       const currentNotions = get().notions
@@ -167,13 +188,21 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       toast.success('Заметка обновлена')
     } catch (error) {
       console.error('Error updating notion:', error)
-      toast.error('Ошибка при обновлении заметки')
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка при обновлении заметки'
+      toast.error(errorMessage)
     }
   },
 
   updateNotionSilent: async (id: string, update: NotionUpdate) => {
     try {
       const supabase = createClient()
+      
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
       
       const { data, error } = await supabase
         .from('notions')
@@ -182,9 +211,14 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
           notion_updated_at: new Date().toISOString()
         })
         .eq('notion_id', id)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
         .select()
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметка не найдена или у вас нет прав на её изменение')
+      }
 
       // Обновляем заметку в локальном состоянии и пересортируем
       const currentNotions = get().notions
@@ -205,12 +239,25 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     try {
       const supabase = createClient()
       
-      const { error } = await supabase
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
+      const { data, error } = await supabase
         .from('notions')
         .delete()
         .eq('notion_id', id)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
+        .select('notion_id')
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметка не найдена или у вас нет прав на её удаление')
+      }
 
       // Удаляем заметку из локального состояния
       const currentNotions = get().notions
@@ -220,7 +267,8 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       toast.success('Заметка удалена')
     } catch (error) {
       console.error('Error deleting notion:', error)
-      toast.error('Ошибка при удалении заметки')
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка при удалении заметки'
+      toast.error(errorMessage)
     }
   },
 
@@ -228,22 +276,36 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     try {
       const supabase = createClient()
       
-      const { error } = await supabase
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
+      const { data, error } = await supabase
         .from('notions')
         .delete()
         .in('notion_id', ids)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
+        .select('notion_id')
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметки не найдены или у вас нет прав на их удаление')
+      }
 
       // Удаляем заметки из локального состояния
       const currentNotions = get().notions
       const filteredNotions = currentNotions.filter(notion => !ids.includes(notion.notion_id))
       set({ notions: filteredNotions, selectedNotions: [] })
       
-      toast.success(`Удалено заметок: ${ids.length}`)
+      toast.success(`Удалено заметок: ${data.length}`)
     } catch (error) {
       console.error('Error deleting notions:', error)
-      toast.error('Ошибка при удалении заметок')
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка при удалении заметок'
+      toast.error(errorMessage)
     }
   },
 
@@ -294,15 +356,28 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     try {
       const supabase = createClient()
       
-      const { error } = await supabase
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
+      const { data, error } = await supabase
         .from('notions')
         .update({ 
           notion_done: true,
           notion_updated_at: new Date().toISOString()
         })
         .in('notion_id', ids)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
+        .select('notion_id')
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметки не найдены или у вас нет прав на их изменение')
+      }
 
       // Обновляем заметки в локальном состоянии и пересортируем
       const currentNotions = get().notions
@@ -317,10 +392,11 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       
       set({ notions: sortedNotions, selectedNotions: [] })
       
-      toast.success(`Отмечено как выполненное: ${ids.length} заметок`)
+      toast.success(`Отмечено как выполненное: ${data.length} заметок`)
     } catch (error) {
       console.error('Error marking notions as done:', error)
-      toast.error('Ошибка при отметке заметок как выполненных')
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка при отметке заметок как выполненных'
+      toast.error(errorMessage)
     }
   },
 
@@ -328,15 +404,28 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     try {
       const supabase = createClient()
       
-      const { error } = await supabase
+      // Получаем текущего пользователя
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('Пользователь не авторизован')
+      }
+      
+      const { data, error } = await supabase
         .from('notions')
         .update({ 
           notion_done: false,
           notion_updated_at: new Date().toISOString()
         })
         .in('notion_id', ids)
+        .eq('notion_created_by', user.id) // 🔒 ПРОВЕРЯЕМ ПРИНАДЛЕЖНОСТЬ
+        .select('notion_id')
 
       if (error) throw error
+      
+      if (!data || data.length === 0) {
+        throw new Error('Заметки не найдены или у вас нет прав на их изменение')
+      }
 
       // Обновляем заметки в локальном состоянии и пересортируем
       const currentNotions = get().notions
@@ -351,10 +440,11 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       
       set({ notions: sortedNotions, selectedNotions: [] })
       
-      toast.success(`Отмечено как невыполненное: ${ids.length} заметок`)
+      toast.success(`Отмечено как невыполненное: ${data.length} заметок`)
     } catch (error) {
       console.error('Error marking notions as undone:', error)
-      toast.error('Ошибка при отметке заметок как невыполненных')
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка при отметке заметок как невыполненных'
+      toast.error(errorMessage)
     }
   }
   }

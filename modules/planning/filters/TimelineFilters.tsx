@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { X, ChevronDown, ChevronRight, Filter, RotateCcw, Eye, EyeOff, Expand, Minimize } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFilterStore } from './store'
@@ -16,10 +16,6 @@ interface TimelineFiltersProps {
   onStageChange?: (stageId: string | null) => void
   onObjectChange?: (objectId: string | null) => void
   onResetFilters: () => void
-  showDepartments: boolean
-  toggleShowDepartments: () => void
-  expandAllDepartments: () => void
-  collapseAllDepartments: () => void
 }
 
 export function TimelineFilters({
@@ -30,15 +26,14 @@ export function TimelineFilters({
   onManagerChange,
   onStageChange,
   onObjectChange,
-  onResetFilters,
-  showDepartments,
-  toggleShowDepartments,
-  expandAllDepartments,
-  collapseAllDepartments
+  onResetFilters
 }: TimelineFiltersProps) {
   const { theme: systemTheme } = useTheme()
   const { theme: settingsTheme } = useSettingsStore()
   const theme = (settingsTheme === 'system' ? systemTheme : settingsTheme) as 'light' | 'dark'
+  
+  // Состояние для сворачивания фильтров
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   const {
     managers,
@@ -128,6 +123,17 @@ export function TimelineFilters({
     selectedEmployeeId
   )
 
+  // Подсчёт количества активных фильтров
+  const activeFiltersCount = [
+    selectedManagerId,
+    selectedProjectId,
+    selectedStageId,
+    selectedObjectId,
+    selectedDepartmentId,
+    selectedTeamId,
+    selectedEmployeeId
+  ].filter(Boolean).length
+
   return (
     <div className={cn(
       "rounded-lg border p-4 space-y-3",
@@ -135,16 +141,38 @@ export function TimelineFilters({
         ? "bg-slate-800/50 border-slate-700" 
         : "bg-white border-slate-200"
     )}>
-      {/* Заголовок и сброс */}
+      {/* Заголовок и кнопки */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Filter size={16} className={theme === 'dark' ? "text-teal-400" : "text-teal-600"} />
-          <span className={cn(
-            "text-sm font-medium",
-            theme === 'dark' ? "text-white" : "text-slate-900"
-          )}>
-            Фильтры
-          </span>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={cn(
+              "flex items-center gap-2 p-1 rounded-md transition-colors",
+              theme === 'dark' 
+                ? "hover:bg-slate-700 text-slate-300" 
+                : "hover:bg-slate-100 text-slate-700"
+            )}
+          >
+            {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            <Filter size={16} className={theme === 'dark' ? "text-teal-400" : "text-teal-600"} />
+            <span className={cn(
+              "text-sm font-medium",
+              theme === 'dark' ? "text-white" : "text-slate-900"
+            )}>
+              Фильтры
+            </span>
+            {/* Индикатор активных фильтров в свёрнутом состоянии */}
+            {isCollapsed && hasActiveFilters && (
+              <div className={cn(
+                "flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-xs font-medium ml-2",
+                theme === 'dark' 
+                  ? "bg-teal-500 text-white" 
+                  : "bg-teal-500 text-white"
+              )}>
+                {activeFiltersCount}
+              </div>
+            )}
+          </button>
         </div>
         
         {hasActiveFilters && (
@@ -164,18 +192,19 @@ export function TimelineFilters({
       </div>
 
       {/* Фильтры в две строки */}
-      <div className="space-y-3">
+      {!isCollapsed && (
+        <div className="space-y-3">
         {/* Проектные фильтры */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <FilterSelect
             id="manager"
-            label="Менеджер"
+            label="Руководитель проекта"
             value={selectedManagerId}
             onChange={(value) => setFilter('manager', value)}
             disabled={isLoading}
             locked={isFilterLocked('manager')}
             options={managers}
-            placeholder="Выберите менеджера"
+            placeholder="Выберите руководителя проекта"
             theme={theme}
             loading={isLoading}
           />
@@ -220,91 +249,49 @@ export function TimelineFilters({
           />
         </div>
 
-        {/* Организационные фильтры с кнопками управления */}
-        <div className="flex gap-3 items-end">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
-            <FilterSelect
-              id="department"
-              label="Отдел"
-              value={selectedDepartmentId}
-              onChange={(value) => setFilter('department', value)}
-              disabled={isLoading}
-              locked={isFilterLocked('department')}
-              options={departments}
-              placeholder="Выберите отдел"
-              theme={theme}
-              loading={isLoading}
-            />
+        {/* Организационные фильтры */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <FilterSelect
+            id="department"
+            label="Отдел"
+            value={selectedDepartmentId}
+            onChange={(value) => setFilter('department', value)}
+            disabled={isLoading}
+            locked={isFilterLocked('department')}
+            options={departments}
+            placeholder="Выберите отдел"
+            theme={theme}
+            loading={isLoading}
+          />
 
-            <FilterSelect
-              id="team"
-              label="Команда"
-              value={selectedTeamId}
-              onChange={(value) => setFilter('team', value)}
-              disabled={isLoading || !selectedDepartmentId}
-              locked={isFilterLocked('team')}
-              options={filteredTeams}
-              placeholder="Выберите команду"
-              theme={theme}
-              loading={isLoading}
-            />
+          <FilterSelect
+            id="team"
+            label="Команда"
+            value={selectedTeamId}
+            onChange={(value) => setFilter('team', value)}
+            disabled={isLoading || !selectedDepartmentId}
+            locked={isFilterLocked('team')}
+            options={filteredTeams}
+            placeholder="Выберите команду"
+            theme={theme}
+            loading={isLoading}
+          />
 
-            <FilterSelect
-              id="employee"
-              label="Сотрудник"
-              value={selectedEmployeeId}
-              onChange={(value) => setFilter('employee', value)}
-              disabled={isLoading || !selectedTeamId}
-              locked={isFilterLocked('employee')}
-              options={filteredEmployees}
-              placeholder={!selectedTeamId ? "Сначала выберите команду" : "Выберите сотрудника"}
-              theme={theme}
-              loading={isLoading}
-            />
-          </div>
-
-          <div className="flex gap-1">
-            <button
-              onClick={toggleShowDepartments}
-              title={showDepartments ? 'Скрыть отделы' : 'Показать отделы'}
-              className={cn(
-                "flex items-center justify-center p-2 rounded-md h-[38px] w-[38px]",
-                theme === 'dark'
-                  ? "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
-                  : "bg-slate-50 text-slate-700 hover:bg-slate-100"
-              )}
-            >
-              {showDepartments ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-
-            <button
-              onClick={expandAllDepartments}
-              title="Развернуть все отделы"
-              className={cn(
-                "flex items-center justify-center p-2 rounded-md h-[38px] w-[38px]",
-                theme === 'dark'
-                  ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-                  : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
-              )}
-            >
-              <Expand size={16} />
-            </button>
-
-            <button
-              onClick={collapseAllDepartments}
-              title="Свернуть все отделы"
-              className={cn(
-                "flex items-center justify-center p-2 rounded-md h-[38px] w-[38px]",
-                theme === 'dark'
-                  ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
-                  : "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"
-              )}
-            >
-              <Minimize size={16} />
-            </button>
-          </div>
+          <FilterSelect
+            id="employee"
+            label="Сотрудник"
+            value={selectedEmployeeId}
+            onChange={(value) => setFilter('employee', value)}
+            disabled={isLoading || !selectedTeamId}
+            locked={isFilterLocked('employee')}
+            options={filteredEmployees}
+            placeholder={!selectedTeamId ? "Сначала выберите команду" : "Выберите сотрудника"}
+            theme={theme}
+            loading={isLoading}
+          />
         </div>
-      </div>
+        </div>
+      )}
     </div>
   )
 } 
