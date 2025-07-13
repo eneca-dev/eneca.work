@@ -98,12 +98,33 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
   let title = 'Новое уведомление'
   let message = 'Нет описания'
   
+  // Отладочная информация (можно убрать после тестирования)
+  // console.log('Трансформация уведомления:', {
+  //   entityType,
+  //   payload,
+  //   userNotificationId: un.id,
+  //   notificationId: un.notification_id
+  // })
+  
   // Генерируем текст на лету в зависимости от типа уведомления
-  if (entityType === 'assignment' && payload.assignment) {
-    const generated = generateAssignmentNotificationText(payload.assignment)
-    title = generated.title
-    message = generated.message
-  } else if (entityType === 'announcement') {
+  if (entityType === 'assignment' || entityType === 'assignments') {
+    // Проверяем, есть ли данные в payload.assignment или прямо в payload
+    const assignmentData = payload.assignment || {
+      project: payload.project,
+      from_section: payload.from_section,
+      amount: Number(payload.amount) || payload.amount
+    }
+    
+    if (assignmentData.project && assignmentData.from_section && assignmentData.amount) {
+      const generated = generateAssignmentNotificationText(assignmentData)
+      title = generated.title
+      message = generated.message
+    } else {
+      // Fallback для заданий
+      title = payload.title || payload.project || 'Передача заданий'
+      message = payload.message || `Вам передано ${payload.amount || 'несколько'} заданий`
+    }
+  } else if (entityType === 'announcement' || entityType === 'announcements') {
     // Проверяем, есть ли данные в payload.announcement или прямо в payload
     const announcementData = payload.announcement || {
       user_name: payload.user_name,

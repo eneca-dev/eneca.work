@@ -1,16 +1,23 @@
 import "https://deno.land/std@0.152.0/dotenv/load.ts";
-import { serve } from "https://deno.land/std@0.152.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.191.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.3";
 
 // Ожидаемые переменные окружения
 const SUPABASE_URL = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing");
+const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY");
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  console.error("SUPABASE_URL or SERVICE_ROLE_KEY is missing");
   Deno.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+// Хелпер для CORS заголовков
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey'
+};
 
 interface FilterOptions {
   departmentId?: string;
@@ -40,22 +47,30 @@ const filterMapping: Record<keyof FilterOptions, string> = {
   isHourly:       'is_hourly',
 };
 
-serve(async (req) => {
-  const url = new URL(req.url);
-  if (req.method !== "POST" || url.pathname !== "/notifications") {
-    return new Response("Not Found", { status: 404 });
+serve(async (req: Request) => {
+  const { pathname } = new URL(req.url);
+  
+  // CORS для браузера
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders
+    });
+  }
+
+  if (req.method !== "POST") {
+    return new Response("Not Found", { status: 404, headers: corsHeaders });
   }
 
   let body: RequestBody;
   try {
     body = await req.json();
   } catch {
-    return new Response("Invalid JSON", { status: 400 });
+    return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
   }
 
   const { entityType, payload, userIds, filters } = body;
   if (!entityType || typeof payload !== 'object') {
-    return new Response("Missing required fields", { status: 400 });
+    return new Response("Missing required fields", { status: 400, headers: corsHeaders });
   }
 
   // 1. Определяем список пользователей
@@ -77,16 +92,16 @@ serve(async (req) => {
 
     if (profErr) {
       console.error('Error fetching profiles:', profErr);
-      return new Response('Profile fetch error', { status: 500 });
+      return new Response('Profile fetch error', { status: 500, headers: corsHeaders });
     }
     targetUserIds = profiles!.map((p: { user_id: string }) => p.user_id);
   }
 
   if (!targetUserIds || targetUserIds.length === 0) {
-    return new Response("No users to notify", { status: 400 });
+    return new Response("No users to notify", { status: 400, headers: corsHeaders });
   }
 
-  // 2. Находим или создаём тип сущности
+  // 2. Находим тип сущности
   const { data: etData, error: etErr } = await supabase
     .from('entity_types')
     .select('id')
@@ -95,22 +110,15 @@ serve(async (req) => {
 
   if (etErr) {
     console.error('Error fetching entity type:', etErr);
-    return new Response('Could not fetch entity type', { status: 500 });
+    return new Response('Could not fetch entity type', { status: 500, headers: corsHeaders });
   }
 
-  let entityTypeId = etData?.id;
-  if (!entityTypeId) {
-    const { data: newEt, error: createEtErr } = await supabase
-      .from('entity_types')
-      .insert({ entity_name: entityType })
-      .select('id')
-      .single();
-    if (createEtErr || !newEt) {
-      console.error('Error creating entity type:', createEtErr);
-      return new Response('Could not create entity type', { status: 500 });
-    }
-    entityTypeId = newEt.id;
+  if (!etData?.id) {
+    console.error('Entity type not found:', entityType);
+    return new Response('Entity type not found', { status: 400, headers: corsHeaders });
   }
+
+  const entityTypeId = etData.id;
 
   // 3. Создаём уведомление
   const { data: notif, error: notifErr } = await supabase
@@ -125,7 +133,7 @@ serve(async (req) => {
 
   if (notifErr || !notif) {
     console.error('Error inserting notification:', notifErr);
-    return new Response('Could not create notification', { status: 500 });
+    return new Response('Could not create notification', { status: 500, headers: corsHeaders });
   }
   const notificationId = notif.id;
 
@@ -140,12 +148,15 @@ serve(async (req) => {
 
   if (unErr) {
     console.error('Error inserting user notifications:', unErr);
-    return new Response('Could not notify users', { status: 500 });
+    return new Response('Could not notify users', { status: 500, headers: corsHeaders });
   }
 
   // 5. Возвращаем результат
   return new Response(JSON.stringify({ notificationId }), {
     status: 201,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 
+      'Content-Type': 'application/json',
+      ...corsHeaders
+    }
   });
 });

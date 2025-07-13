@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useEffect, ReactNode, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useNotificationsStore } from '@/stores/useNotificationsStore'
 
@@ -9,6 +9,7 @@ interface NotificationsProviderProps {
 }
 
 export function NotificationsProvider({ children }: NotificationsProviderProps) {
+  const [mounted, setMounted] = useState(false)
   const {
     setCurrentUserId,
     fetchNotifications,
@@ -18,6 +19,12 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
   } = useNotificationsStore()
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return
+    
     // Получаем текущего пользователя
     const getCurrentUser = async () => {
       const supabase = createClient()
@@ -29,9 +36,11 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     }
 
     getCurrentUser()
-  }, [setCurrentUserId])
+  }, [setCurrentUserId, mounted])
 
   useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return
+    
     if (currentUserId) {
       // Загружаем существующие уведомления
       fetchNotifications()
@@ -44,7 +53,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     return () => {
       unsubscribeFromNotifications()
     }
-  }, [currentUserId, fetchNotifications, initializeRealtime, unsubscribeFromNotifications])
+  }, [currentUserId, fetchNotifications, initializeRealtime, unsubscribeFromNotifications, mounted])
 
   return <>{children}</>
 }

@@ -24,17 +24,17 @@ export function useThemeSync() {
 
   // При первой загрузке устанавливаем тему из Zustand стора в next-themes
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || typeof window === 'undefined') return
     
-    // Применяем тему из Zustand к next-themes
-    if (zustandTheme !== theme && zustandTheme !== 'system') {
+    // Применяем тему из Zustand к next-themes только если она отличается
+    if (zustandTheme && zustandTheme !== theme && zustandTheme !== 'system') {
       setTheme(zustandTheme)
     }
   }, [mounted, zustandTheme, theme, setTheme])
 
   // Обновляем Zustand при изменении темы через next-themes
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted || typeof window === 'undefined') return
     
     if (theme && theme !== zustandTheme) {
       setZustandTheme(theme as 'light' | 'dark' | 'system')
@@ -44,7 +44,7 @@ export function useThemeSync() {
   return {
     theme,
     setTheme: (newTheme: string) => {
-      if (!mounted) return
+      if (!mounted || typeof window === 'undefined') return
       setTheme(newTheme)
       setZustandTheme(newTheme as 'light' | 'dark' | 'system')
     },

@@ -149,14 +149,14 @@ export interface CreateAnnouncementNotificationRequest {
 // Функции для генерации текста уведомлений
 export function generateAssignmentNotificationText(payload: AssignmentPayload): { title: string; message: string } {
   return {
-    title: 'Передача заданий',
-    message: `Вам передано ${payload.amount} заданий по проекту "${payload.project}" из раздела "${payload.from_section}"`
+    title: `${payload.project}`,
+    message: `Вам передано ${payload.amount} заданий`
   }
 }
 
 export function generateAnnouncementNotificationText(payload: AnnouncementPayload): { title: string; message: string } {
   return {
-    title: `Новое объявление ${payload.title} от ${payload.user_name}`,
+    title: `${payload.title}`,
     message: `${payload.body}`
   }
 } 
