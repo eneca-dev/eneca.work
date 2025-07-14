@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Expand, Minimize, List, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
+import { useProjectsStore } from '../store'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
 import { EditProjectModal } from './EditProjectModal'
@@ -116,6 +117,25 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     }
   }
 
+  const countSections = (node: ProjectNode): number => {
+    if (!node.children) return 0;
+    
+    let count = 0;
+    const traverse = (nodes: ProjectNode[]) => {
+      nodes.forEach(child => {
+        if (child.type === 'section') {
+          count++;
+        }
+        if (child.children) {
+          traverse(child.children);
+        }
+      });
+    };
+    
+    traverse(node.children);
+    return count;
+  };
+
   return (
     <div className="group/row select-none">
       <div
@@ -147,13 +167,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     <Avatar
                       name={node.responsibleName}
                       avatarUrl={node.responsibleAvatarUrl}
-                      size="sm"
+                      size="md"
                     />
                   </Tooltip>
                 </div>
               ) : (
                 <div
-                  className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-full border-2 border-dashed transition-colors"
+                  className="cursor-pointer w-9 h-9 flex items-center justify-center rounded-full border-2 border-dashed transition-colors"
                   onClick={(e) => onAssignResponsible(node, e)}
                   onMouseEnter={() => setHoveredAddButton(true)}
                   onMouseLeave={() => setHoveredAddButton(false)}
@@ -165,7 +185,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <Tooltip content="Назначить ответственного" isVisible={hoveredAddButton} position="bottom">
                     <PlusCircle
-                      size={14}
+                      size={16}
                       className={cn(
                         "transition-colors",
                         hoveredAddButton 
@@ -179,7 +199,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center mr-2">
+            <div className="flex items-center" style={{ maxWidth: 'calc(100% - 360px)' }}>
               <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
                 {hasChildren ? (
                   isExpanded ? (
@@ -192,65 +212,64 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
               <span 
-                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors break-words"
                 onClick={(e) => onOpenSection(node, e)}
+                style={{ wordBreak: 'break-word', hyphens: 'auto' }}
               >
                 {node.name}
               </span>
             </div>
 
-            {/* Дополнительная информация справа */}
-            <div className="flex flex-col gap-1 ml-auto text-xs min-w-0 pr-4">
-              {/* Первая строка - даты */}
-              {(node.dates?.start || node.dates?.end) && (
-                <div className="flex items-center gap-1 justify-end">
-                  <span className="dark:text-slate-400 text-slate-500">
-                    {formatDate(node.dates?.start)}
-                  </span>
-                  {node.dates?.start && node.dates?.end && (
-                    <span className="dark:text-slate-500 text-slate-400">-</span>
+            {/* Информация справа с фиксированными ширинами */}
+            <div className="flex items-center text-xs ml-auto mr-8">
+              {/* Даты - фиксированная ширина */}
+              <div className="flex items-center gap-1 w-24 justify-end">
+                <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                <span className="text-blue-700 dark:text-blue-300">
+                  {(node.dates?.start || node.dates?.end) ? (
+                    <>
+                      {formatDate(node.dates?.start) || '—'}
+                      {node.dates?.start && node.dates?.end && <span className="text-blue-500 dark:text-blue-400 mx-1">-</span>}
+                      {node.dates?.end && formatDate(node.dates?.end)}
+                    </>
+                  ) : (
+                    '— — —'
                   )}
-                  <span className="dark:text-slate-400 text-slate-500">
-                    {formatDate(node.dates?.end)}
-                  </span>
-                </div>
-              )}
-              
-              {/* Вторая строка - проект */}
-              {node.projectName && (
-                <div className="flex items-center justify-end">
-                  <span className="dark:text-slate-500 text-slate-400 text-right">
+                </span>
+              </div>
+
+              {/* Отдел - фиксированная ширина */}
+              <div className="w-20 flex justify-end ml-4">
+                {node.departmentName && (
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1">
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate">
+                        {node.departmentName}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Проект, стадия и ответственный - фиксированная ширина */}
+              <div className="w-36 flex flex-col gap-1 text-right ml-4">
+                {node.projectName && (
+                  <span className="dark:text-slate-500 text-slate-400 truncate">
                     {node.projectName}
                   </span>
-                </div>
-              )}
-
-              {/* Третья строка - стадия */}
-              {node.stageName && (
-                <div className="flex items-center justify-end">
-                  <span className="dark:text-slate-500 text-slate-400 text-right">
+                )}
+                {node.stageName && (
+                  <span className="dark:text-slate-500 text-slate-400 truncate">
                     Стадия: {node.stageName}
                   </span>
-                </div>
-              )}
-
-              {/* Четвертая строка - отдел */}
-              {node.departmentName && (
-                <div className="flex items-center justify-end">
-                  <span className="dark:text-slate-500 text-slate-400 text-right">
-                    Отдел: {node.departmentName}
-                  </span>
-                </div>
-              )}
-
-              {/* Пятая строка - ответственный (если есть) */}
-              {node.responsibleName && (
-                <div className="flex items-center justify-end">
-                  <span className="dark:text-slate-400 text-slate-500 text-right">
+                )}
+                {node.responsibleName && (
+                  <span className="dark:text-slate-400 text-slate-500 truncate">
                     {node.responsibleName}
                   </span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -282,7 +301,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               {node.name}
             </span>
 
-            {/* Кнопки редактирования для проектов и стадий */}
+
+
+            {/* Кнопки редактирования для проектов */}
             {node.type === 'project' && (
               <div className="flex items-center ml-2">
                 <button
@@ -301,6 +322,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 </button>
               </div>
             )}
+
+
             
             {node.type === 'stage' && (
               <div className="flex items-center ml-2">
@@ -340,9 +363,47 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
             )}
 
-            {/* Даты для не-разделов */}
-            {node.dates && (node.dates.start || node.dates.end) && (
-              <span className="text-xs dark:text-slate-400 text-slate-500 ml-auto">
+            {/* Суммарная информация для объектов */}
+            {node.type === 'object' && (
+              <div className="flex items-center gap-3 ml-auto text-xs mr-8">
+                {/* Количество разделов */}
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {countSections(node)}
+                  </span>
+                  <span className="dark:text-slate-400 text-slate-500">
+                    разделов
+                  </span>
+                </div>
+                
+                {/* Даты */}
+                {node.dates && (node.dates.start || node.dates.end) && (
+                  <span className="dark:text-slate-400 text-slate-500">
+                    {node.dates.start && node.dates.end && 
+                      `${formatDate(node.dates.start)} - ${formatDate(node.dates.end)}`
+                    }
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Суммарная информация для стадий */}
+            {node.type === 'stage' && (
+              <div className="flex items-center ml-auto text-xs mr-8">
+                {/* Даты */}
+                {node.dates && (node.dates.start || node.dates.end) && (
+                  <span className="dark:text-slate-400 text-slate-500">
+                    {node.dates.start && node.dates.end && 
+                      `${formatDate(node.dates.start)} - ${formatDate(node.dates.end)}`
+                    }
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Даты для остальных типов узлов */}
+            {node.type !== 'stage' && node.type !== 'object' && node.dates && (node.dates.start || node.dates.end) && (
+              <span className="text-xs dark:text-slate-400 text-slate-500 ml-auto mr-8">
                 {node.dates.start && node.dates.end && 
                   `${formatDate(node.dates.start)} - ${formatDate(node.dates.end)}`
                 }
@@ -387,7 +448,7 @@ export function ProjectsTree({
   selectedEmployeeId
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const { expandedNodes, toggleNode: toggleNodeInStore } = useProjectsStore()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -605,13 +666,7 @@ export function ProjectsTree({
   }
 
   const toggleNode = (nodeId: string) => {
-    const newExpanded = new Set(expandedNodes)
-    if (newExpanded.has(nodeId)) {
-      newExpanded.delete(nodeId)
-    } else {
-      newExpanded.add(nodeId)
-    }
-    setExpandedNodes(newExpanded)
+    toggleNodeInStore(nodeId)
   }
 
   // Функция для сбора всех ID узлов рекурсивно
@@ -632,12 +687,19 @@ export function ProjectsTree({
   // Развернуть все узлы
   const expandAllNodes = () => {
     const allNodeIds = collectAllNodeIds(getFilteredTreeData())
-    setExpandedNodes(new Set(allNodeIds))
+    allNodeIds.forEach(nodeId => {
+      if (!expandedNodes.has(nodeId)) {
+        toggleNodeInStore(nodeId)
+      }
+    })
   }
 
   // Свернуть все узлы
   const collapseAllNodes = () => {
-    setExpandedNodes(new Set())
+    // Закрываем все открытые узлы
+    Array.from(expandedNodes).forEach(nodeId => {
+      toggleNodeInStore(nodeId)
+    })
   }
 
   // Переключить режим "только разделы"
@@ -785,24 +847,7 @@ export function ProjectsTree({
     )
   }
 
-  if (getFilteredTreeData().length === 0) {
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
-        <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
-          <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">
-            Структура проектов
-          </h3>
-        </div>
-        <div className="p-8 text-center">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <Package className="w-6 h-6 dark:text-slate-400 text-slate-500" />
-          </div>
-          <p className="dark:text-slate-300 text-slate-700 font-medium">Нет данных для отображения</p>
-          <p className="text-sm dark:text-slate-400 text-slate-500 mt-1">Попробуйте изменить фильтры</p>
-        </div>
-      </div>
-    )
-  }
+  const filteredData = getFilteredTreeData();
 
   return (
     <>
@@ -868,23 +913,33 @@ export function ProjectsTree({
           </div>
         </div>
         <div>
-          {getFilteredTreeData().map((node, index) => (
-            <TreeNode
-              key={`root-${node.id}-${index}`}
-              node={node}
-              level={0}
-              expandedNodes={expandedNodes}
-              onToggleNode={toggleNode}
-              onAssignResponsible={handleAssignResponsible}
-              onEditProject={handleEditProject}
-              onEditStage={handleEditStage}
-              onEditObject={handleEditObject}
-              onOpenSection={handleOpenSection}
-              onCreateStage={handleCreateStage}
-              onCreateObject={handleCreateObject}
-              onCreateSection={handleCreateSection}
-            />
-          ))}
+          {filteredData.length === 0 ? (
+            <div className="p-8 text-center">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                <Package className="w-6 h-6 dark:text-slate-400 text-slate-500" />
+              </div>
+              <p className="dark:text-slate-300 text-slate-700 font-medium">Нет данных для отображения</p>
+              <p className="text-sm dark:text-slate-400 text-slate-500 mt-1">Попробуйте изменить фильтры</p>
+            </div>
+          ) : (
+            filteredData.map((node, index) => (
+              <TreeNode
+                key={`root-${node.id}-${index}`}
+                node={node}
+                level={0}
+                expandedNodes={expandedNodes}
+                onToggleNode={toggleNode}
+                onAssignResponsible={handleAssignResponsible}
+                onEditProject={handleEditProject}
+                onEditStage={handleEditStage}
+                onEditObject={handleEditObject}
+                onOpenSection={handleOpenSection}
+                onCreateStage={handleCreateStage}
+                onCreateObject={handleCreateObject}
+                onCreateSection={handleCreateSection}
+              />
+            ))
+          )}
         </div>
       </div>
 

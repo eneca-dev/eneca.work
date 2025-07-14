@@ -13,7 +13,6 @@ import { TimelineGrid } from "./timeline-grid"
 // Заменяем FiltersPanel на TimelineFilters
 import { TimelineFilters } from "../filters/TimelineFilters"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
-import { FloatingNavigationPanel } from "./timeline/floating-navigation-panel"
 import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
@@ -52,6 +51,7 @@ export function TimelineView() {
     expandAllDepartments,
     collapseAllDepartments,
     toggleShowDepartments,
+    showSections,
     showDepartments,
     currentPage,
     sectionsPerPage,
@@ -283,7 +283,7 @@ useEffect(() => {
       </header>
 
       {/* Панель фильтров всегда отображается */}
-      <div className="mb-6">
+      <div className="mb-6" id="filters-container">
         <TimelineFilters
           onProjectChange={handleProjectChange}
           onDepartmentChange={handleDepartmentChange}
@@ -293,6 +293,14 @@ useEffect(() => {
           onStageChange={handleStageChange}
           onObjectChange={handleObjectChange}
           onResetFilters={handleResetFilters}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          onScrollBackward={scrollBackward}
+          onScrollForward={scrollForward}
+          startDate={startDate}
+          daysToShow={daysToShow}
+          onTodayClick={handleTodayPeriod}
         />
       </div>
 
@@ -302,7 +310,10 @@ useEffect(() => {
           "w-full border overflow-hidden relative overflow-y-auto rounded-lg",
           theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
         )}
-        style={{ height: "calc(100vh - 300px)", borderCollapse: "collapse" }}
+        style={{ 
+          height: "calc(100vh - 180px)", 
+          borderCollapse: "collapse" 
+        }}
       >
         {isLoadingSections ? (
           <div className="flex justify-center items-center p-8">
@@ -313,6 +324,7 @@ useEffect(() => {
             <TimelineGrid
               sections={sections}
               departments={departments}
+              showSections={showSections}
               showDepartments={showDepartments}
               startDate={startDate}
               daysToShow={daysToShow}
@@ -325,7 +337,6 @@ useEffect(() => {
               windowWidth={windowSize.width}
               hasActiveFilters={hasActiveFilters}
               onOpenSectionPanel={handleOpenSectionPanel}
-              toggleShowDepartments={toggleShowDepartments}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
             />
@@ -333,18 +344,7 @@ useEffect(() => {
         )}
       </div>
 
-      {/* Парящая панель с датами и пагинацией */}
-      <FloatingNavigationPanel
-        theme={theme as 'light' | 'dark'}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={handlePageChange}
-        onScrollBackward={scrollBackward}
-        onScrollForward={scrollForward}
-        startDate={startDate}
-        daysToShow={daysToShow}
-        onTodayClick={handleTodayPeriod}
-      />
+
 
       {/* Панель информации о разделе */}
       {showSectionPanel && selectedSectionId && (

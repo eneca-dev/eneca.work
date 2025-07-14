@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check } from 'lucide-react'
+import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 
@@ -53,6 +53,10 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
   
+  // Состояние для подтверждения удаления
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  
   const { setNotification } = useUiStore()
 
   useEffect(() => {
@@ -68,6 +72,8 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       setEditValues({})
       setSectionData(null)
       setSavingField(null)
+      setShowDeleteConfirm(false)
+      setIsDeleting(false)
     }
   }, [isOpen])
 
@@ -300,6 +306,33 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
     setShowResponsibleDropdown(false)
   }
 
+  const handleDeleteSection = async () => {
+    if (!sectionData || isDeleting) return
+    
+    setIsDeleting(true)
+    try {
+      // Удаляем раздел
+      const { error } = await supabase
+        .from('sections')
+        .delete()
+        .eq('section_id', sectionId)
+
+      if (error) throw error
+
+      setNotification('Раздел успешно удален')
+      onClose() // Закрываем модальное окно
+      
+      // Обновляем страницу или список проектов
+      window.location.reload()
+    } catch (error) {
+      console.error('Ошибка удаления раздела:', error)
+      setNotification('Ошибка при удалении раздела')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   const getProfileName = (profile: Profile) => {
     return `${profile.first_name} ${profile.last_name}`.trim() || profile.email
   }
@@ -355,7 +388,36 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
               <input
                 type="date"
                 value={editValues[fieldName] || ''}
-                onChange={(e) => setEditValues({ ...editValues, [fieldName]: e.target.value })}
+                onChange={async (e) => {
+                  const newValue = e.target.value;
+                  setEditValues({ ...editValues, [fieldName]: newValue });
+                  
+                  // Автоматически сохраняем изменения для дат
+                  if (fieldName === 'section_start_date' || fieldName === 'section_end_date') {
+                    setSavingField(fieldName);
+                    try {
+                      const { error } = await supabase
+                        .from('sections')
+                        .update({ [fieldName]: newValue })
+                        .eq('section_id', sectionId);
+
+                      if (error) throw error;
+
+                      setSectionData(prev => prev ? {
+                        ...prev,
+                        [fieldName]: newValue
+                      } : null);
+                      
+                      setEditingField(null);
+                      setNotification('Дата успешно обновлена');
+                    } catch (error) {
+                      console.error('Ошибка сохранения:', error);
+                      setNotification('Ошибка сохранения изменений');
+                    } finally {
+                      setSavingField(null);
+                    }
+                  }
+                }}
                 className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isSaving}
               />
@@ -419,23 +481,43 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
               />
             )}
             
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleFieldSave(fieldName)}
-                disabled={isSaving}
-                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-              >
-                {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                Сохранить
-              </button>
-              <button
-                onClick={handleFieldCancel}
-                disabled={isSaving}
-                className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
-              >
-                Отмена
-              </button>
-            </div>
+            {/* Кнопки управления - не показываем для полей дат (они автоматически сохраняются) */}
+            {type !== 'date' && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleFieldSave(fieldName)}
+                  disabled={isSaving}
+                  className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                >
+                  {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Сохранить
+                </button>
+                <button
+                  onClick={handleFieldCancel}
+                  disabled={isSaving}
+                  className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                >
+                  Отмена
+                </button>
+              </div>
+            )}
+            
+            {/* Индикатор состояния для полей дат */}
+            {type === 'date' && (
+              <div className="flex items-center gap-2 text-sm">
+                {isSaving ? (
+                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Сохранение...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                    <Check className="h-3 w-3" />
+                    Дата будет сохранена автоматически
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div 
@@ -565,11 +647,30 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                 <>
                   {renderEditableField('section_name', 'Название раздела', sectionData.section_name, 'text')}
                   {renderEditableField('section_description', 'Описание', sectionData.section_description, 'textarea')}
-                  {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
+                  
+                  {/* Блок ответственного */}
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">
+                        Ответственный за раздел
+                      </h3>
+                    </div>
+                    {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-6">
-                    {renderEditableField('section_start_date', 'Дата начала', sectionData.section_start_date, 'date')}
-                    {renderEditableField('section_end_date', 'Дата окончания', sectionData.section_end_date, 'date')}
+                  {/* Блок дат разработки */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                        Сроки разработки
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      {renderEditableField('section_start_date', 'Дата начала', sectionData.section_start_date, 'date')}
+                      {renderEditableField('section_end_date', 'Дата окончания', sectionData.section_end_date, 'date')}
+                    </div>
                   </div>
 
                   <div>
@@ -689,6 +790,26 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                       </p>
                     </div>
                   </div>
+
+                  {/* Опасная зона */}
+                  <div className="border-t border-red-200 dark:border-red-900 pt-6">
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        <span className="text-sm font-medium text-red-800 dark:text-red-200">Опасная зона</span>
+                      </div>
+                      <p className="text-xs text-red-600 dark:text-red-400 mb-3">
+                        Удаление раздела необратимо. Все связанные данные будут потеряны.
+                      </p>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Удалить раздел
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -698,6 +819,64 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
             </div>
           )}
         </div>
+
+        {/* Модальное окно подтверждения удаления */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md mx-4 border border-red-200 dark:border-red-800">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+                    Подтвердите удаление
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Это действие необратимо
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  Вы действительно хотите удалить раздел{' '}
+                  <span className="font-semibold">"{sectionData?.section_name}"</span>?
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  Все связанные данные, включая задачи и загрузки, будут удалены безвозвратно.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDeleteSection}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Удаление...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3 w-3" />
+                      Удалить
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

@@ -108,7 +108,19 @@ export function SyncButton({
   const renderSyncModal = () => {
     if (!lastSyncResult) return null
 
-    const { success, summary, issues, logs, metadata } = lastSyncResult
+    const { success, summary, detailed_report, duration } = lastSyncResult
+
+    // Используем правильные данные из summary.total
+    const totalCreated = summary?.total?.created || 0
+    const totalUpdated = summary?.total?.updated || 0
+    const totalUnchanged = summary?.total?.unchanged || 0
+    const totalErrors = summary?.total?.errors || 0
+    const totalSkipped = summary?.total?.skipped || 0
+
+    // Если нет detailed_report, используем основные данные
+    const assignmentSuccess = detailed_report?.assignment_summary?.successful_assignments || summary?.assignments?.successful || 0
+    const assignmentTotal = detailed_report?.assignment_summary?.total_assignments_attempted || summary?.assignments?.attempted || 0
+    const assignmentRate = detailed_report?.assignment_summary?.success_rate || (assignmentTotal > 0 ? ((assignmentSuccess / assignmentTotal) * 100).toFixed(1) : '0.0')
 
     return (
       <Modal isOpen={isOpen} onClose={closeModal} size="xl">
@@ -123,7 +135,7 @@ export function SyncButton({
               Отчёт о синхронизации
             </div>
           }
-          subtitle={metadata?.timestamp ? `Завершено ${new Date(metadata.timestamp).toLocaleString('ru-RU')}` : 'Завершено'}
+          subtitle={detailed_report?.sync_summary?.timestamp ? `Завершено ${new Date(detailed_report.sync_summary.timestamp).toLocaleString('ru-RU')}` : 'Завершено'}
         />
         
         <Modal.Body>
@@ -133,47 +145,76 @@ export function SyncButton({
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-slate-800">📊 Результат синхронизации</h4>
                 <div className="text-sm text-slate-600">
-                  {metadata?.duration_ms ? formatDuration(metadata.duration_ms) : 'Н/Д'}
+                  {detailed_report?.sync_summary?.duration_readable || (duration ? formatDuration(duration) : 'Н/Д')}
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4 mt-3">
                 <div className="text-center">
-                  <div className="text-xl font-bold text-green-600">{summary?.created || 0}</div>
+                  <div className="text-xl font-bold text-green-600">{totalCreated}</div>
                   <div className="text-xs text-slate-600">Создано</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-bold text-blue-600">{summary?.updated || 0}</div>
+                  <div className="text-xl font-bold text-blue-600">{totalUpdated}</div>
                   <div className="text-xs text-slate-600">Обновлено</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-bold text-slate-600">{summary?.unchanged || 0}</div>
+                  <div className="text-xl font-bold text-slate-600">{totalUnchanged}</div>
                   <div className="text-xs text-slate-600">Без изменений</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-bold text-red-600">{summary?.errors || 0}</div>
+                  <div className="text-xl font-bold text-red-600">{totalErrors}</div>
                   <div className="text-xs text-slate-600">Ошибки</div>
                 </div>
               </div>
+              {totalSkipped > 0 && (
+                <div className="mt-3 text-center">
+                  <div className="text-sm text-amber-600">
+                    🚫 Пропущено записей: <span className="font-semibold">{totalSkipped}</span> (начинаются с "!")
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* Статистика назначений */}
+            {assignmentTotal > 0 && (
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h4 className="font-medium text-blue-800 mb-2">👤 Назначения ответственных</h4>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-blue-700">
+                    Успешных: <span className="font-semibold">{assignmentSuccess}</span> из <span className="font-semibold">{assignmentTotal}</span>
+                  </div>
+                  <div className="text-sm font-semibold text-blue-700">
+                    {assignmentRate}% успеха
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Подробности изменений (только если есть) */}
-            {logs && logs.length > 0 && ((summary?.created || 0) > 0 || (summary?.updated || 0) > 0 || (summary?.errors || 0) > 0) && (
+            {detailed_report?.all_actions && detailed_report.all_actions.length > 0 && (totalCreated > 0 || totalUpdated > 0 || totalErrors > 0) && (
               <div className="bg-slate-50 rounded-lg p-4">
                 <h4 className="font-medium text-slate-800 mb-3">📋 Детали изменений</h4>
                 <div className="bg-white rounded p-3 max-h-48 overflow-y-auto border">
                   <div className="text-sm space-y-1">
-                    {logs.filter(log => 
-                      log.includes('создано') || 
-                      log.includes('обновлено') || 
-                      log.includes('ошибка') ||
-                      log.includes('Создан') ||
-                      log.includes('Обновлен') ||
-                      log.includes('❌') ||
-                      log.includes('✅') ||
-                      log.includes('📝')
-                    ).slice(-15).map((log, index) => (
+                    {detailed_report.all_actions.filter(action => 
+                      action.action === 'created' || 
+                      action.action === 'updated' || 
+                      action.action === 'error'
+                    ).slice(-15).map((action, index) => (
                       <div key={index} className="font-mono text-slate-700 text-xs">
-                        {log.replace(/^\[.*?\]\s*/, '')}
+                        {action.action === 'created' && '🆕 Создан'}
+                        {action.action === 'updated' && '🔄 Обновлен'}
+                        {action.action === 'error' && '❌ Ошибка'}
+                        {' '}
+                        {action.type === 'project' && '📋 проект'}
+                        {action.type === 'stage' && '🎯 стадия'}
+                        {action.type === 'object' && '📦 объект'}
+                        {action.type === 'section' && '📑 раздел'}
+                        {' '}
+                        <span className="font-semibold">{action.name}</span>
+                        {action.responsible_assigned && ' (назначен ответственный)'}
+                        {action.manager_assigned && ' (назначен менеджер)'}
+                        {action.error && ` - ${action.error}`}
                       </div>
                     ))}
                   </div>
@@ -181,41 +222,19 @@ export function SyncButton({
               </div>
             )}
 
-            {/* Ошибки */}
-            {issues?.critical_errors?.length > 0 && (
-              <div className="bg-red-50 rounded-lg p-4">
-                <h4 className="font-medium text-red-800 mb-2 flex items-center gap-2">
-                  <AlertCircle size={16} />
-                  Ошибки ({issues.critical_errors.length})
-                </h4>
-                <div className="space-y-1">
-                  {issues.critical_errors.map((error, index) => (
-                    <div key={index} className="text-sm text-red-700">
-                      • {error}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Предупреждения */}
-            {issues?.warnings?.length > 0 && (
+            {/* Рекомендации по улучшению */}
+            {detailed_report?.user_search_analysis?.recommendations && detailed_report.user_search_analysis.recommendations.length > 0 && (
               <div className="bg-amber-50 rounded-lg p-4">
                 <h4 className="font-medium text-amber-800 mb-2 flex items-center gap-2">
                   <AlertCircle size={16} />
-                  Предупреждения ({issues.warnings.length})
+                  Рекомендации по улучшению
                 </h4>
                 <div className="space-y-1">
-                  {issues.warnings.slice(0, 3).map((warning, index) => (
+                  {detailed_report.user_search_analysis.recommendations.map((rec, index) => (
                     <div key={index} className="text-sm text-amber-700">
-                      • {warning}
+                      • {rec}
                     </div>
                   ))}
-                  {issues.warnings.length > 3 && (
-                    <div className="text-sm text-amber-600 italic">
-                      ... и ещё {issues.warnings.length - 3} предупреждений
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -226,7 +245,7 @@ export function SyncButton({
           <ModalButton variant="cancel" onClick={closeModal}>
             Закрыть
           </ModalButton>
-          {((summary?.created || 0) > 0 || (summary?.updated || 0) > 0) && (
+          {(totalCreated > 0 || totalUpdated > 0) && (
             <ModalButton 
               variant="success" 
               onClick={() => {
