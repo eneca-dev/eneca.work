@@ -22,6 +22,7 @@ interface PlanningState {
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
+  showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
 
   // Пагинация
@@ -105,6 +106,7 @@ interface PlanningState {
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
   setCurrentPage: (page: number) => void
+  toggleShowSections: () => void
   toggleShowDepartments: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
@@ -173,6 +175,7 @@ export const usePlanningStore = create<PlanningState>()(
         isLoadingDepartments: false,
         expandedSections: {},
         expandedDepartments: {},
+        showSections: true, // По умолчанию разделы показываются
         showDepartments: false,
         currentPage: 1,
         sectionsPerPage: 20,
@@ -1183,6 +1186,12 @@ export const usePlanningStore = create<PlanningState>()(
             expandedDepartments: {},
             departments: state.departments.map((d) => ({ ...d, isExpanded: false })),
           }))
+        },
+
+        // Добавляем функцию переключения показа разделов
+        toggleShowSections: () => {
+          const { showSections } = get()
+          set({ showSections: !showSections })
         },
 
         // Добавляем функцию переключения показа отделов

@@ -20,6 +20,8 @@ interface TimelineHeaderProps {
   cellWidth: number
   stickyColumnShadow: string
   showDepartments: boolean
+  showSections: boolean
+  toggleShowSections: () => void
   toggleShowDepartments: () => void
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
@@ -35,6 +37,8 @@ export function TimelineHeader({
   cellWidth,
   stickyColumnShadow,
   showDepartments,
+  showSections,
+  toggleShowSections,
   toggleShowDepartments,
   expandAllDepartments,
   collapseAllDepartments,
@@ -136,6 +140,43 @@ export function TimelineHeader({
               </div>
               {/* Кнопки управления */}
               <div className="flex gap-1">
+                {/* Кнопки переключения видимости */}
+                <button
+                  onClick={toggleShowSections}
+                  title={showSections ? 'Скрыть разделы' : 'Показать разделы'}
+                  className={cn(
+                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
+                    showSections
+                      ? theme === "dark" 
+                        ? "text-teal-400 hover:text-teal-300" 
+                        : "text-teal-600 hover:text-teal-700"
+                      : theme === "dark" 
+                        ? "text-gray-400 hover:text-gray-300" 
+                        : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  {showSections ? <Eye size={12} /> : <EyeOff size={12} />}
+                  <span>Разделы</span>
+                </button>
+
+                <button
+                  onClick={toggleShowDepartments}
+                  title={showDepartments ? 'Скрыть отделы' : 'Показать отделы'}
+                  className={cn(
+                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
+                    showDepartments
+                      ? theme === "dark" 
+                        ? "text-teal-400 hover:text-teal-300" 
+                        : "text-teal-600 hover:text-teal-700"
+                      : theme === "dark" 
+                        ? "text-gray-400 hover:text-gray-300" 
+                        : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  {showDepartments ? <Eye size={12} /> : <EyeOff size={12} />}
+                  <span>Отделы</span>
+                </button>
+
                 <button
                   onClick={() => toggleColumnVisibility('project')}
                   title={columnVisibility.project ? 'Скрыть колонку "Проект"' : 'Показать колонку "Проект"'}
@@ -147,20 +188,6 @@ export function TimelineHeader({
                   )}
                 >
                   <Columns3 size={14} />
-                </button>
-
-                <button
-                  onClick={toggleShowDepartments}
-                  title={showDepartments ? 'Скрыть сотрудников' : 'Показать сотрудников'}
-                  className={cn(
-                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
-                    theme === "dark" 
-                      ? "hover:bg-slate-700 text-slate-400 hover:text-slate-200" 
-                      : "hover:bg-slate-100 text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  <Users size={12} />
-                  {showDepartments ? 'Скрыть' : 'Показать'}
                 </button>
 
                 <button

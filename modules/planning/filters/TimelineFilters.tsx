@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { X, ChevronDown, ChevronRight, Filter, RotateCcw, Eye, EyeOff, Expand, Minimize } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, Filter, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFilterStore } from './store'
 import { FilterSelect } from './FilterSelect'
 import { timelineConfig } from './configs'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTheme } from 'next-themes'
+import { usePlanningStore } from '../stores/usePlanningStore'
+import { NavigationControls } from '../components/timeline/navigation-controls'
+import { Pagination } from '../components/pagination'
 
 interface TimelineFiltersProps {
   onProjectChange: (projectId: string | null) => void
@@ -16,6 +19,15 @@ interface TimelineFiltersProps {
   onStageChange?: (stageId: string | null) => void
   onObjectChange?: (objectId: string | null) => void
   onResetFilters: () => void
+  // Добавляем пропсы для элементов управления
+  currentPage?: number
+  totalPages?: number
+  onPageChange?: (page: number) => void
+  onScrollBackward?: () => void
+  onScrollForward?: () => void
+  startDate?: Date | string
+  daysToShow?: number
+  onTodayClick?: () => void
 }
 
 export function TimelineFilters({
@@ -26,7 +38,15 @@ export function TimelineFilters({
   onManagerChange,
   onStageChange,
   onObjectChange,
-  onResetFilters
+  onResetFilters,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onScrollBackward,
+  onScrollForward,
+  startDate,
+  daysToShow,
+  onTodayClick
 }: TimelineFiltersProps) {
   const { theme: systemTheme } = useTheme()
   const { theme: settingsTheme } = useSettingsStore()
@@ -34,6 +54,9 @@ export function TimelineFilters({
   
   // Состояние для сворачивания фильтров
   const [isCollapsed, setIsCollapsed] = useState(false)
+
+  // Состояние видимости разделов и отделов (не используется в данном компоненте)
+  // const { showSections, showDepartments } = usePlanningStore()
 
   const {
     managers,
@@ -175,20 +198,46 @@ export function TimelineFilters({
           </button>
         </div>
         
-        {hasActiveFilters && (
-          <button
-            onClick={handleReset}
-            className={cn(
-              "flex items-center gap-1 px-2 py-1 text-xs rounded-md",
-              theme === 'dark'
-                ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            )}
-          >
-            <RotateCcw size={12} />
-            Сбросить
-          </button>
-        )}
+        {/* Элементы управления и кнопка сброса */}
+        <div className="flex items-center gap-4">
+          {/* Пагинация */}
+          {totalPages && totalPages > 1 && onPageChange && currentPage && (
+            <Pagination 
+              currentPage={currentPage} 
+              totalPages={totalPages} 
+              onPageChange={onPageChange} 
+              theme={theme} 
+            />
+          )}
+
+          {/* Элементы управления навигацией */}
+          {onScrollBackward && onScrollForward && startDate && daysToShow && onTodayClick && (
+            <NavigationControls
+              theme={theme}
+              onScrollBackward={onScrollBackward}
+              onScrollForward={onScrollForward}
+              startDate={startDate}
+              daysToShow={daysToShow}
+              onTodayClick={onTodayClick}
+            />
+          )}
+
+          {/* Кнопка сброса фильтров */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleReset}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 text-xs rounded-md",
+                theme === 'dark'
+                  ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              )}
+            >
+              <RotateCcw size={12} />
+              Сбросить
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Фильтры в две строки */}
@@ -290,6 +339,8 @@ export function TimelineFilters({
             loading={isLoading}
           />
         </div>
+
+
         </div>
       )}
     </div>
