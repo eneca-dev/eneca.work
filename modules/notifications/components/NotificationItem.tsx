@@ -2,12 +2,14 @@
 
 import type React from "react"
 import { useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow } from "date-fns"
 import { ru } from "date-fns/locale"
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useAnnouncementsStore } from "@/modules/announcements/store"
 import { cn } from "@/lib/utils"
 
 interface NotificationItemProps {
@@ -61,6 +63,7 @@ export function NotificationItem({ notification }: NotificationItemProps) {
   const elementRef = useRef<HTMLDivElement>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const hasBeenMarkedAsRead = useRef(false)
+  const router = useRouter()
   
   // Получаем имя пользователя из payload для объявлений
   const userName = (notification.entityType === 'announcement' || notification.entityType === 'announcements') 
@@ -73,6 +76,46 @@ export function NotificationItem({ notification }: NotificationItemProps) {
     : null
 
   const { markAsRead, markAsReadInDB } = useNotificationsStore()
+  const { highlightAnnouncement } = useAnnouncementsStore()
+
+  // Функция для обработки клика на уведомление
+  const handleClick = useCallback(() => {
+    console.log('🖱️ Клик на уведомление:', {
+      id: notification.id,
+      entityType: notification.entityType,
+      payload: notification.payload,
+      title: notification.title
+    })
+
+    // Помечаем уведомление как прочитанное
+    if (!notification.isRead) {
+      markAsRead(notification.id)
+      markAsReadInDB(notification.id)
+    }
+
+    // Если это уведомление об объявлении, переходим к нему
+    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+      const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
+      
+      console.log('📢 Обрабатываем уведомление об объявлении:', {
+        announcementId,
+        payload: notification.payload,
+        fullNotification: notification
+      })
+      
+      if (announcementId) {
+        console.log('✅ Переходим к объявлению:', announcementId)
+        
+        // Выделяем объявление в store
+        highlightAnnouncement(announcementId)
+        
+        // Переходим на страницу dashboard
+        router.push('/dashboard')
+      } else {
+        console.warn('⚠️ ID объявления не найден в payload')
+      }
+    }
+  }, [notification, markAsRead, markAsReadInDB, highlightAnnouncement, router])
 
   // Функция для пометки уведомления как прочитанного
   const handleMarkAsRead = useCallback(async () => {
@@ -140,8 +183,9 @@ export function NotificationItem({ notification }: NotificationItemProps) {
     <div
       ref={elementRef}
       data-notification-id={notification.id}
+      onClick={handleClick}
       className={cn(
-        "relative p-3 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50",
+        "relative p-3 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
         notification.isRead
           ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
           : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",

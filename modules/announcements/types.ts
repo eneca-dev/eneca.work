@@ -16,4 +16,5 @@ export interface AnnouncementsState {
   announcements: Announcement[];
   isLoading: boolean;
   error: string | null;
+  highlightedAnnouncementId: string | null;
 } 

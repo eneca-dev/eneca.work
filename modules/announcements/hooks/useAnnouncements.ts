@@ -165,6 +165,12 @@ export function useAnnouncements() {
                title: announcementData.header,
                body: announcementData.text || '',
                user_name: userName,
+               announcement_id: data.id, // Добавляем ID объявления
+               action: {
+                 type: 'navigate',
+                 url: '/dashboard',
+                 data: { announcementId: data.id }
+               }
              },
              userIds: userIds,
            }, supabase);
