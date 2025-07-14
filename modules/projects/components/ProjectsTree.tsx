@@ -654,6 +654,39 @@ export function ProjectsTree({
       }
     })
 
+    // Функция умной сортировки для названий с числами
+    const smartSort = (a: ProjectNode, b: ProjectNode): number => {
+      // Извлекаем числа из названий
+      const aNumbers = a.name.match(/\d+/g)
+      const bNumbers = b.name.match(/\d+/g)
+      
+      // Если оба содержат числа, сортируем по числам
+      if (aNumbers && bNumbers) {
+        const aFirstNumber = parseInt(aNumbers[0])
+        const bFirstNumber = parseInt(bNumbers[0])
+        if (aFirstNumber !== bFirstNumber) {
+          return aFirstNumber - bFirstNumber
+        }
+      }
+      
+      // Если только одно содержит число, число идёт первым
+      if (aNumbers && !bNumbers) return -1
+      if (!aNumbers && bNumbers) return 1
+      
+      // Иначе сортируем по алфавиту
+      return a.name.localeCompare(b.name, 'ru', { numeric: true })
+    }
+
+    // Рекурсивно сортируем все дочерние элементы в дереве
+    const sortTreeRecursively = (nodes: ProjectNode[]): ProjectNode[] => {
+      return nodes
+        .sort(smartSort)
+        .map(node => ({
+          ...node,
+          children: node.children ? sortTreeRecursively(node.children) : undefined
+        }))
+    }
+
     // Собираем результат
     const result = Array.from(managers.values())
     
@@ -662,7 +695,8 @@ export function ProjectsTree({
       result.unshift(noManagerCategory)
     }
 
-    return result
+    // Применяем сортировку ко всему дереву
+    return sortTreeRecursively(result)
   }
 
   const toggleNode = (nodeId: string) => {
