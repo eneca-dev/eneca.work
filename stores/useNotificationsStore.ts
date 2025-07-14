@@ -98,13 +98,14 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
   let title = 'Новое уведомление'
   let message = 'Нет описания'
   
-  // Отладочная информация (можно убрать после тестирования)
-  // console.log('Трансформация уведомления:', {
-  //   entityType,
-  //   payload,
-  //   userNotificationId: un.id,
-  //   notificationId: un.notification_id
-  // })
+  // Отладочная информация
+  console.log('🔄 Трансформация уведомления:', {
+    entityType,
+    payload,
+    userNotificationId: un.id,
+    notificationId: un.notification_id,
+    fullNotification: notification
+  })
   
   // Генерируем текст на лету в зависимости от типа уведомления
   if (entityType === 'assignment' || entityType === 'assignments') {
@@ -308,20 +309,31 @@ export const useNotificationsStore = create<NotificationsState>()(
       // Загрузка уведомлений
       fetchNotifications: async () => {
         const state = get()
-        if (!state.currentUserId) return
+        console.log('🔄 Загрузка уведомлений для пользователя:', state.currentUserId)
+        
+        if (!state.currentUserId) {
+          console.warn('⚠️ Нет currentUserId для загрузки уведомлений')
+          return
+        }
 
         try {
           set({ isLoading: true, error: null })
           
+          console.log('📥 Получение уведомлений из базы данных...')
           const { notifications: userNotifications } = await getUserNotifications(state.currentUserId)
+          console.log('📦 Получено уведомлений из базы:', userNotifications?.length || 0)
+          
           const unreadCount = await getUnreadNotificationsCount(state.currentUserId)
+          console.log('📊 Количество непрочитанных:', unreadCount)
 
           // Преобразуем данные в формат UI
           const notifications: Notification[] = userNotifications.map(transformNotificationData)
+          console.log('✨ Преобразованные уведомления:', notifications.length)
 
           set({ notifications, unreadCount })
+          console.log('✅ Уведомления успешно загружены в стор')
         } catch (error) {
-          console.error('Ошибка при загрузке уведомлений:', error)
+          console.error('❌ Ошибка при загрузке уведомлений:', error)
           set({ error: 'Ошибка при загрузке уведомлений' })
         } finally {
           set({ isLoading: false })

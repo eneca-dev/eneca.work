@@ -466,6 +466,9 @@ export async function getUserNotifications(
   const supabase = createClient()
   const offset = (page - 1) * limit
 
+  console.log('🔍 getUserNotifications: запрос для пользователя:', userId)
+  console.log('🔍 getUserNotifications: параметры:', { page, limit, onlyUnread, offset })
+
   let query = supabase
     .from('user_notifications')
     .select(`
@@ -485,6 +488,13 @@ export async function getUserNotifications(
   const { data, error, count } = await query
     .range(offset, offset + limit - 1)
     .limit(limit)
+
+  console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
+  console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)
+  
+  if (data && data.length > 0) {
+    console.log('🔍 getUserNotifications: первая запись:', data[0])
+  }
 
   if (error) {
     console.error('Ошибка при получении уведомлений:', error)
@@ -646,4 +656,60 @@ export async function getRecentNotifications(
   }
 
   return data || []
+} 
+
+/**
+ * Временная функция для отладки - проверяет все записи в user_notifications
+ */
+export async function debugUserNotifications(userId: string): Promise<void> {
+  const supabase = createClient()
+  
+  console.log('🔍 DEBUG: Проверка user_notifications для пользователя:', userId)
+  
+  // Проверяем все записи в user_notifications для этого пользователя
+  const { data: userNotifications, error: userError } = await supabase
+    .from('user_notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+    
+  console.log('🔍 DEBUG: user_notifications записи:', userNotifications?.length || 0)
+  if (userNotifications && userNotifications.length > 0) {
+    console.log('🔍 DEBUG: последние user_notifications:', userNotifications)
+  }
+  
+  if (userError) {
+    console.error('🔍 DEBUG: ошибка user_notifications:', userError)
+  }
+  
+  // Проверяем все записи в notifications
+  const { data: notifications, error: notifError } = await supabase
+    .from('notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(5)
+    
+  console.log('🔍 DEBUG: notifications записи:', notifications?.length || 0)
+  if (notifications && notifications.length > 0) {
+    console.log('🔍 DEBUG: последние notifications:', notifications)
+  }
+  
+  if (notifError) {
+    console.error('🔍 DEBUG: ошибка notifications:', notifError)
+  }
+  
+  // Проверяем entity_types
+  const { data: entityTypes, error: entityError } = await supabase
+    .from('entity_types')
+    .select('*')
+    
+  console.log('🔍 DEBUG: entity_types записи:', entityTypes?.length || 0)
+  if (entityTypes && entityTypes.length > 0) {
+    console.log('🔍 DEBUG: entity_types:', entityTypes)
+  }
+  
+  if (entityError) {
+    console.error('🔍 DEBUG: ошибка entity_types:', entityError)
+  }
 } 

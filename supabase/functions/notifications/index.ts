@@ -74,6 +74,8 @@ serve(async (req: Request) => {
   }
 
   // 1. Определяем список пользователей
+  console.log('📥 Получен запрос:', { entityType, payload, userIds: userIds?.length, filters });
+  
   let targetUserIds: string[] | undefined = userIds;
   if ((!targetUserIds || targetUserIds.length === 0) && filters) {
     // Собираем объект для match()
@@ -98,8 +100,17 @@ serve(async (req: Request) => {
   }
 
   if (!targetUserIds || targetUserIds.length === 0) {
+    console.log('❌ Нет пользователей для отправки уведомлений');
     return new Response("No users to notify", { status: 400, headers: corsHeaders });
   }
+  
+  console.log('👥 Список пользователей для уведомлений:', targetUserIds.length);
+  console.log('👥 Первые 5 пользователей:', targetUserIds.slice(0, 5));
+  
+  // Проверяем, включен ли конкретный пользователь (для отладки)
+  const testUserId = '5f115156-6362-492f-b202-ac0da43b80d9';
+  const isTestUserIncluded = targetUserIds.includes(testUserId);
+  console.log('🔍 Тестовый пользователь включен:', isTestUserIncluded, testUserId);
 
   // 2. Находим тип сущности
   const { data: etData, error: etErr } = await supabase
@@ -121,6 +132,8 @@ serve(async (req: Request) => {
   const entityTypeId = etData.id;
 
   // 3. Создаём уведомление
+  console.log('📝 Создаем уведомление:', { entityTypeId, payload });
+  
   const { data: notif, error: notifErr } = await supabase
     .from('notifications')
     .insert({
@@ -132,23 +145,34 @@ serve(async (req: Request) => {
     .single();
 
   if (notifErr || !notif) {
-    console.error('Error inserting notification:', notifErr);
+    console.error('❌ Error inserting notification:', notifErr);
     return new Response('Could not create notification', { status: 500, headers: corsHeaders });
   }
   const notificationId = notif.id;
+  console.log('✅ Уведомление создано:', notificationId);
 
   // 4. Создаём записи в user_notifications
   const records = targetUserIds.map((uid) => ({
     notification_id: notificationId,
     user_id: uid,
   }));
-  const { error: unErr } = await supabase
+  
+  console.log('📋 Создаем записи в user_notifications:', records.length);
+  console.log('📋 Первые 3 записи:', records.slice(0, 3));
+  
+  const { data: insertedRecords, error: unErr } = await supabase
     .from('user_notifications')
-    .insert(records);
+    .insert(records)
+    .select('id, user_id');
 
   if (unErr) {
-    console.error('Error inserting user notifications:', unErr);
+    console.error('❌ Error inserting user notifications:', unErr);
     return new Response('Could not notify users', { status: 500, headers: corsHeaders });
+  }
+  
+  console.log('✅ Записи в user_notifications созданы:', insertedRecords?.length || 0);
+  if (insertedRecords && insertedRecords.length > 0) {
+    console.log('✅ Первые 3 созданные записи:', insertedRecords.slice(0, 3));
   }
 
   // 5. Возвращаем результат
