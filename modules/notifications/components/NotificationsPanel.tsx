@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { NotificationItem } from "./NotificationItem"
@@ -16,29 +16,122 @@ interface NotificationsPanelProps {
 
 export function NotificationsPanel({ onClose, collapsed = false }: NotificationsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [visibleNotifications, setVisibleNotifications] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { 
     notifications, 
     isLoading, 
     error, 
     fetchNotifications, 
-    markAllAsRead,
-    markAllAsReadInDB,
+    markAsRead,
+    markAsReadInDB,
     clearAll 
   } = useNotificationsStore()
+
+  // Функция для пометки видимых уведомлений как прочитанных
+  const markVisibleAsRead = useCallback(async () => {
+    const readPromises = Array.from(visibleNotifications).map(async (notificationId) => {
+      const notification = notifications.find(n => n.id === notificationId)
+      if (notification && !notification.isRead) {
+        try {
+          // Сначала обновляем локальное состояние
+          markAsRead(notificationId)
+          // Затем обновляем в базе данных
+          await markAsReadInDB(notificationId)
+        } catch (error) {
+          console.error(`Ошибка при пометке уведомления ${notificationId} как прочитанного:`, error)
+        }
+      }
+    })
+    
+    await Promise.all(readPromises)
+  }, [visibleNotifications, notifications, markAsRead, markAsReadInDB])
+
+  // Функция для закрытия панели
+  const handleClose = useCallback(async () => {
+    console.log('🔒 handleClose вызвана, видимые уведомления:', Array.from(visibleNotifications))
+    
+    // Помечаем видимые уведомления как прочитанные
+    if (visibleNotifications.size > 0) {
+      console.log('📖 Помечаем видимые уведомления как прочитанные...')
+      await markVisibleAsRead()
+    } else {
+      console.log('⚠️ Нет видимых уведомлений для пометки как прочитанных')
+    }
+    
+    // Очищаем список видимых уведомлений
+    setVisibleNotifications(new Set())
+    onClose()
+  }, [visibleNotifications, markVisibleAsRead, onClose])
+
+    // Intersection Observer для отслеживания видимых уведомлений
+  useEffect(() => {
+    if (!scrollRef.current) return
+
+    console.log('👀 Инициализируем Intersection Observer для', notifications.length, 'уведомлений')
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const notificationId = entry.target.getAttribute('data-notification-id')
+          if (notificationId) {
+            console.log(`👁️ Уведомление ${notificationId} ${entry.isIntersecting ? 'стало видимым' : 'скрылось'}`)
+            
+            setVisibleNotifications(prev => {
+              const newSet = new Set(prev)
+              if (entry.isIntersecting) {
+                newSet.add(notificationId)
+                console.log('✅ Добавлено в видимые:', notificationId, 'Всего видимых:', newSet.size)
+              } else {
+                // Не убираем из списка видимых, так как оно уже было показано пользователю
+                console.log('ℹ️ Уведомление скрылось, но остается в списке видимых')
+              }
+              return newSet
+            })
+          }
+        })
+      },
+      {
+        root: scrollRef.current,
+        threshold: 0.5 // Считаем видимым, когда 50% элемента видно
+      }
+    )
+
+    // Наблюдаем за всеми элементами уведомлений
+    const notificationElements = scrollRef.current.querySelectorAll('[data-notification-id]')
+    console.log('🔍 Найдено элементов уведомлений для отслеживания:', notificationElements.length)
+    notificationElements.forEach(element => observer.observe(element))
+
+    return () => observer.disconnect()
+  }, [notifications.length])
 
   // Закрытие панели при клике вне её
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        onClose()
+        console.log('🖱️ Клик вне панели - закрываем')
+        handleClose()
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [onClose])
+  }, [handleClose])
+
+  // Обработка нажатия Escape
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        console.log('⌨️ Нажата Escape - закрываем панель')
+        handleClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape)
+    return () => document.removeEventListener("keydown", handleEscape)
+  }, [handleClose])
 
   // Фильтрация уведомлений по поисковому запросу
   const filteredNotifications = notifications
@@ -53,8 +146,6 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
   const handleRefresh = async () => {
     await fetchNotifications()
   }
-
-
 
   return (
     <div
@@ -79,7 +170,7 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-6 w-6">
+          <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -110,7 +201,7 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
       )}
 
       {/* Список уведомлений */}
-      <div className="h-80 overflow-y-auto">
+      <div ref={scrollRef} className="h-80 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -136,7 +227,11 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
         ) : (
           <div className="p-2 space-y-2">
             {filteredNotifications.map((notification) => (
-              <NotificationItem key={notification.id} notification={notification} />
+              <NotificationItem 
+                key={notification.id} 
+                notification={notification} 
+                isVisible={visibleNotifications.has(notification.id)}
+              />
             ))}
           </div>
         )}

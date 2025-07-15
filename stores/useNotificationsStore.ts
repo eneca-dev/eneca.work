@@ -205,11 +205,20 @@ export const useNotificationsStore = create<NotificationsState>()(
       markAsReadInDB: async (userNotificationId) => {
         try {
           const state = get()
-          if (!state.currentUserId) return
+          
+          console.log('🔄 markAsReadInDB вызвана:', {
+            userNotificationId,
+            currentUserId: state.currentUserId
+          })
+          
+          if (!state.currentUserId) {
+            console.warn('⚠️ currentUserId не установлен, пропускаем обновление БД')
+            return
+          }
           
           await markNotificationAsRead(state.currentUserId, userNotificationId)
         } catch (error) {
-          console.error('Ошибка при обновлении статуса уведомления:', error)
+          console.error('❌ Ошибка при обновлении статуса уведомления:', error)
           get().setError('Ошибка при обновлении статуса уведомления')
         }
       },

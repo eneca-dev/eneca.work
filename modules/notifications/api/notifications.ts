@@ -533,23 +533,31 @@ export async function getUnreadNotificationsCount(userId: string): Promise<numbe
  */
 export async function markNotificationAsRead(
   userId: string,
-  notificationId: string
+  userNotificationId: string
 ): Promise<void> {
   const supabase = createClient()
 
-  const { error } = await supabase
+  console.log('📝 Помечаем уведомление как прочитанное:', {
+    userId,
+    userNotificationId
+  })
+
+  const { error, data } = await supabase
     .from('user_notifications')
     .update({ 
       is_read: true,
       updated_at: new Date().toISOString()
     })
     .eq('user_id', userId)
-    .eq('notification_id', notificationId)
+    .eq('id', userNotificationId)
+    .select()
 
   if (error) {
-    console.error('Ошибка при отметке уведомления как прочитанного:', error)
+    console.error('❌ Ошибка при отметке уведомления как прочитанного:', error)
     throw error
   }
+
+  console.log('✅ Уведомление успешно помечено как прочитанное:', data)
 }
 
 /**

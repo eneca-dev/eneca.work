@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef, useCallback } from "react"
+import { useCallback } from "react"
 import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow } from "date-fns"
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 
 interface NotificationItemProps {
   notification: Notification
+  isVisible?: boolean // Для отслеживания видимости
 }
 
 const typeIcons = {
@@ -56,13 +57,10 @@ function getNotificationTag(entityType?: string) {
   return notificationTags[entityType as keyof typeof notificationTags]
 }
 
-export function NotificationItem({ notification }: NotificationItemProps) {
+export function NotificationItem({ notification, isVisible = false }: NotificationItemProps) {
   const Icon = typeIcons[notification.type || "info"]
   const iconColor = typeColors[notification.type || "info"]
   const notificationTag = getNotificationTag(notification.entityType)
-  const elementRef = useRef<HTMLDivElement>(null)
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const hasBeenMarkedAsRead = useRef(false)
   const router = useRouter()
   
   // Получаем имя пользователя из payload для объявлений
@@ -80,115 +78,29 @@ export function NotificationItem({ notification }: NotificationItemProps) {
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
-    console.log('🖱️ Клик на уведомление:', {
-      id: notification.id,
-      entityType: notification.entityType,
-      payload: notification.payload,
-      title: notification.title
-    })
-
-    // Помечаем уведомление как прочитанное
-    if (!notification.isRead) {
-      markAsRead(notification.id)
-      markAsReadInDB(notification.id)
-    }
-
     // Если это уведомление об объявлении, переходим к нему
     if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
       const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
       
-      console.log('📢 Обрабатываем уведомление об объявлении:', {
-        announcementId,
-        payload: notification.payload,
-        fullNotification: notification
-      })
-      
       if (announcementId) {
-        console.log('✅ Переходим к объявлению:', announcementId)
-        
         // Выделяем объявление в store
         highlightAnnouncement(announcementId)
         
         // Переходим на страницу dashboard
         router.push('/dashboard')
-      } else {
-        console.warn('⚠️ ID объявления не найден в payload')
       }
     }
-  }, [notification, markAsRead, markAsReadInDB, highlightAnnouncement, router])
-
-  // Функция для пометки уведомления как прочитанного
-  const handleMarkAsRead = useCallback(async () => {
-    if (notification.isRead || hasBeenMarkedAsRead.current) return
-
-    hasBeenMarkedAsRead.current = true
-    
-    try {
-      // Сначала обновляем локальное состояние
-      markAsRead(notification.id)
-      
-      // Затем обновляем в базе данных
-      await markAsReadInDB(notification.id)
-      
-      console.log(`Уведомление ${notification.id} помечено как прочитанное`)
-    } catch (error) {
-      console.error('Ошибка при пометке уведомления как прочитанного:', error)
-      // Откатываем изменения при ошибке
-      hasBeenMarkedAsRead.current = false
-    }
-  }, [notification.id, notification.isRead, markAsRead, markAsReadInDB])
-
-  // Инициализация Intersection Observer
-  useEffect(() => {
-    if (notification.isRead || !elementRef.current) return
-
-    // Создаем наблюдатель с порогом 50%
-    observerRef.current = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasBeenMarkedAsRead.current) {
-          console.log(`Уведомление ${notification.id} стало видимым`)
-          handleMarkAsRead()
-          
-          // Прекращаем наблюдение после первого срабатывания
-          if (observerRef.current && entry.target) {
-            observerRef.current.unobserve(entry.target)
-          }
-        }
-      },
-      { 
-        threshold: 0.5, // Срабатывает когда 50% элемента становится видимым
-        rootMargin: '0px 0px -50px 0px' // Дополнительный отступ снизу
-      }
-    )
-
-    // Начинаем наблюдение
-    observerRef.current.observe(elementRef.current)
-
-    // Очистка при размонтировании
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-    }
-  }, [notification.id, notification.isRead, handleMarkAsRead])
-
-  // Очистка observer при изменении статуса прочтения
-  useEffect(() => {
-    if (notification.isRead && observerRef.current) {
-      observerRef.current.disconnect()
-    }
-  }, [notification.isRead])
+  }, [notification, highlightAnnouncement, router])
 
   return (
     <div
-      ref={elementRef}
       data-notification-id={notification.id}
       onClick={handleClick}
       className={cn(
         "relative p-3 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
-        notification.isRead
-          ? "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-          : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+        "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700",
+        // Зеленая рамочка для новых непрочитанных уведомлений, которые видны в панели
+        !notification.isRead && isVisible && "border-l-4 border-l-green-500 bg-green-50/30 dark:bg-green-900/10"
       )}
     >
       <div className="flex items-start gap-3">
@@ -234,6 +146,7 @@ export function NotificationItem({ notification }: NotificationItemProps) {
         </div>
       </div>
 
+      {/* Индикатор нового уведомления */}
       {!notification.isRead && (
         <div className="absolute top-3 right-3 h-2 w-2 bg-blue-600 rounded-full"></div>
       )}

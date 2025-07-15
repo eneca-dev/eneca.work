@@ -61,16 +61,10 @@ export function AnnouncementsWidget() {
 
   // Функция для скролинга к конкретному объявлению
   const scrollToAnnouncement = (announcementId: string) => {
-    console.log('📜 Скролим к объявлению:', announcementId)
-    
-    if (!scrollContainerRef.current) {
-      console.warn('⚠️ Контейнер скрола не найден')
-      return
-    }
+    if (!scrollContainerRef.current) return
     
     const element = document.getElementById(`announcement-${announcementId}`)
     if (element) {
-      console.log('✅ Элемент найден, скролим:', element)
       element.scrollIntoView({ 
         behavior: 'smooth', 
         block: 'center' 
@@ -78,25 +72,14 @@ export function AnnouncementsWidget() {
       
       // Очищаем выделение через 3 секунды
       setTimeout(() => {
-        console.log('🧹 Очищаем выделение объявления')
         clearHighlight()
       }, 3000)
-    } else {
-      console.warn('⚠️ Элемент объявления не найден:', `announcement-${announcementId}`)
     }
   }
 
   // Эффект для скролинга к выделенному объявлению
   useEffect(() => {
-    console.log('🔍 Проверяем скролинг:', {
-      highlightedAnnouncementId,
-      announcementsCount: announcements.length,
-      shouldScroll: highlightedAnnouncementId && announcements.length > 0
-    })
-    
     if (highlightedAnnouncementId && announcements.length > 0) {
-      console.log('⏱️ Устанавливаем таймер для скролинга к объявлению:', highlightedAnnouncementId)
-      
       // Небольшая задержка для завершения рендеринга
       const timer = setTimeout(() => {
         scrollToAnnouncement(highlightedAnnouncementId)
