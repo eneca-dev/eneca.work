@@ -60,6 +60,9 @@ interface NotificationsState {
   realtimeChannel: RealtimeChannel | null
   currentUserId: string | null
   
+  // Колбэк для обновления модулей
+  onModuleUpdate: ((entityType: string) => void) | null
+  
   // Методы для работы с уведомлениями
   setNotifications: (notifications: Notification[]) => void
   addNotification: (notification: Notification) => void
@@ -74,6 +77,7 @@ interface NotificationsState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   setCurrentUserId: (userId: string | null) => void
+  setModuleUpdateCallback: (callback: ((entityType: string) => void) | null) => void
   
   // Методы для Realtime
   initializeRealtime: () => void
@@ -171,6 +175,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       error: null,
       realtimeChannel: null,
       currentUserId: null,
+      onModuleUpdate: null, // Инициализируем колбэк
 
       // Методы для работы с уведомлениями
       setNotifications: (notifications) => {
@@ -263,6 +268,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error }),
       setCurrentUserId: (userId) => set({ currentUserId: userId }),
+      setModuleUpdateCallback: (callback) => set({ onModuleUpdate: callback }),
 
       // Методы для Realtime
       initializeRealtime: () => {
@@ -402,6 +408,12 @@ export const useNotificationsStore = create<NotificationsState>()(
           
           // Добавляем в store
           get().addNotification(newNotification)
+
+          // Вызываем колбэк для обновления модулей, если тип уведомления соответствует
+          const state = get()
+          if (state.onModuleUpdate && newNotification.entityType) {
+            state.onModuleUpdate(newNotification.entityType)
+          }
           
         } catch (error) {
           console.error('Ошибка при обработке нового уведомления:', error)

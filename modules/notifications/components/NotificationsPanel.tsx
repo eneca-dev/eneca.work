@@ -17,8 +17,10 @@ interface NotificationsPanelProps {
 export function NotificationsPanel({ onClose, collapsed = false }: NotificationsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [visibleNotifications, setVisibleNotifications] = useState<Set<string>>(new Set())
+  const [processedNotifications, setProcessedNotifications] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const markAsReadRealtimeRef = useRef<(notificationId: string) => Promise<void>>()
 
   const { 
     notifications, 
@@ -30,43 +32,38 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
     clearAll 
   } = useNotificationsStore()
 
-  // Функция для пометки видимых уведомлений как прочитанных
-  const markVisibleAsRead = useCallback(async () => {
-    const readPromises = Array.from(visibleNotifications).map(async (notificationId) => {
-      const notification = notifications.find(n => n.id === notificationId)
-      if (notification && !notification.isRead) {
-        try {
-          // Сначала обновляем локальное состояние
-          markAsRead(notificationId)
-          // Затем обновляем в базе данных
-          await markAsReadInDB(notificationId)
-        } catch (error) {
-          console.error(`Ошибка при пометке уведомления ${notificationId} как прочитанного:`, error)
-        }
+  // Функция для пометки уведомления как прочитанного в реальном времени
+  const markNotificationAsReadRealtime = useCallback(async (notificationId: string) => {
+    const notification = notifications.find(n => n.id === notificationId)
+    if (notification && !notification.isRead) {
+      console.log('📖 Помечаем уведомление как прочитанное в реальном времени:', notificationId)
+      
+      // Сначала обновляем локальное состояние (счетчик уменьшится автоматически)
+      markAsRead(notificationId)
+      
+      // Затем обновляем в базе данных
+      try {
+        await markAsReadInDB(notificationId)
+      } catch (error) {
+        console.error(`❌ Ошибка при пометке уведомления ${notificationId} как прочитанного в БД:`, error)
       }
-    })
-    
-    await Promise.all(readPromises)
-  }, [visibleNotifications, notifications, markAsRead, markAsReadInDB])
+    }
+  }, [notifications, markAsRead, markAsReadInDB])
+
+  // Обновляем ref при изменении функции
+  markAsReadRealtimeRef.current = markNotificationAsReadRealtime
 
   // Функция для закрытия панели
-  const handleClose = useCallback(async () => {
-    console.log('🔒 handleClose вызвана, видимые уведомления:', Array.from(visibleNotifications))
+  const handleClose = useCallback(() => {
+    console.log('🔒 Закрываем панель уведомлений')
     
-    // Помечаем видимые уведомления как прочитанные
-    if (visibleNotifications.size > 0) {
-      console.log('📖 Помечаем видимые уведомления как прочитанные...')
-      await markVisibleAsRead()
-    } else {
-      console.log('⚠️ Нет видимых уведомлений для пометки как прочитанных')
-    }
-    
-    // Очищаем список видимых уведомлений
+    // Очищаем состояние
     setVisibleNotifications(new Set())
+    setProcessedNotifications(new Set())
     onClose()
-  }, [visibleNotifications, markVisibleAsRead, onClose])
+  }, [onClose])
 
-    // Intersection Observer для отслеживания видимых уведомлений
+  // Intersection Observer для отслеживания видимых уведомлений
   useEffect(() => {
     if (!scrollRef.current) return
 
@@ -76,20 +73,22 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
       (entries) => {
         entries.forEach((entry) => {
           const notificationId = entry.target.getAttribute('data-notification-id')
-          if (notificationId) {
-            console.log(`👁️ Уведомление ${notificationId} ${entry.isIntersecting ? 'стало видимым' : 'скрылось'}`)
+          if (notificationId && entry.isIntersecting) {
+            console.log(`👁️ Уведомление ${notificationId} стало видимым`)
             
-            setVisibleNotifications(prev => {
-              const newSet = new Set(prev)
-              if (entry.isIntersecting) {
-                newSet.add(notificationId)
-                console.log('✅ Добавлено в видимые:', notificationId, 'Всего видимых:', newSet.size)
-              } else {
-                // Не убираем из списка видимых, так как оно уже было показано пользователю
-                console.log('ℹ️ Уведомление скрылось, но остается в списке видимых')
+            // Добавляем в видимые
+            setVisibleNotifications(prev => new Set(prev).add(notificationId))
+            
+            // Помечаем как прочитанное, если еще не обработано
+            if (!processedNotifications.has(notificationId)) {
+              const notification = notifications.find(n => n.id === notificationId)
+              if (notification && !notification.isRead) {
+                if (markAsReadRealtimeRef.current) {
+                  markAsReadRealtimeRef.current(notificationId)
+                }
+                setProcessedNotifications(prev => new Set(prev).add(notificationId))
               }
-              return newSet
-            })
+            }
           }
         })
       },
@@ -105,7 +104,7 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
     notificationElements.forEach(element => observer.observe(element))
 
     return () => observer.disconnect()
-  }, [notifications.length])
+  }, [notifications, processedNotifications])
 
   // Закрытие панели при клике вне её
   useEffect(() => {

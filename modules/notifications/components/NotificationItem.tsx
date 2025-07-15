@@ -4,7 +4,7 @@ import type React from "react"
 import { useCallback } from "react"
 import { useRouter } from "next/navigation"
 
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
@@ -76,6 +76,10 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
   const { markAsRead, markAsReadInDB } = useNotificationsStore()
   const { highlightAnnouncement } = useAnnouncementsStore()
 
+  // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
+  const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
+  const shouldShowDateTime = hoursSinceCreation >= 24
+
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
     // Если это уведомление об объявлении, переходим к нему
@@ -108,7 +112,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-medium truncate text-gray-900 dark:text-gray-100">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {notification.title}
             </h4>
             {notificationTag && (
@@ -127,10 +131,13 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500 dark:text-gray-500">
-              {formatDistanceToNow(notification.createdAt, {
-                addSuffix: true,
-                locale: ru,
-              })}
+              {shouldShowDateTime 
+                ? format(notification.createdAt, "dd.MM.yyyy HH:mm", { locale: ru })
+                : formatDistanceToNow(notification.createdAt, {
+                    addSuffix: true,
+                    locale: ru,
+                  })
+              }
             </p>
             {userName && (
               <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
@@ -148,7 +155,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
       {/* Индикатор нового уведомления */}
       {!notification.isRead && (
-        <div className="absolute top-3 right-3 h-2 w-2 bg-blue-600 rounded-full"></div>
+        <div className="absolute top-3 right-3 h-2 w-2 bg-green-600 rounded-full"></div>
       )}
     </div>
   )
