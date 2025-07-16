@@ -106,6 +106,8 @@ export interface CreateNotificationRequest {
     workFormat?: string
     categoryId?: string
     isHourly?: boolean
+    cityId?: string
+    countryId?: string
   }
 }
 
@@ -127,6 +129,8 @@ export interface CreateAssignmentNotificationRequest {
     workFormat?: string
     categoryId?: string
     isHourly?: boolean
+    cityId?: string
+    countryId?: string
   }
 }
 
@@ -143,6 +147,8 @@ export interface CreateAnnouncementNotificationRequest {
     workFormat?: string
     categoryId?: string
     isHourly?: boolean
+    cityId?: string
+    countryId?: string
   }
 }
 

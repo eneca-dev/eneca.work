@@ -20,7 +20,7 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
   const [processedNotifications, setProcessedNotifications] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const markAsReadRealtimeRef = useRef<(notificationId: string) => Promise<void>>()
+  const markAsReadRealtimeRef = useRef<((notificationId: string) => Promise<void>) | undefined>(undefined)
 
   const { 
     notifications, 

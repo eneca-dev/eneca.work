@@ -198,6 +198,45 @@ await fetch('/api/notifications', {
 })
 ```
 
+### Географическая фильтрация
+```typescript
+// Отправка уведомления по городу
+await sendNotificationToCity(
+  'city_event',
+  {
+    title: 'Городское мероприятие',
+    message: 'Завтра в Киеве пройдет конференция',
+    type: 'info'
+  },
+  'city-uuid-123'
+)
+
+// Отправка уведомления по стране
+await sendNotificationToCountry(
+  'country_policy',
+  {
+    title: 'Новая политика',
+    message: 'Изменения в политике для сотрудников Украины',
+    type: 'info'
+  },
+  'country-uuid-456'
+)
+
+// Комбинированная фильтрация
+await sendNotificationByFilters(
+  'department_city_event',
+  {
+    title: 'Встреча IT-отдела',
+    message: 'Встреча всех разработчиков в киевском офисе',
+    type: 'info'
+  },
+  {
+    departmentId: 'dept-uuid-789',
+    cityId: 'city-uuid-123'
+  }
+)
+```
+
 ### Ручное прочтение
 ```typescript
 const { markAsRead } = useNotificationsStore()

@@ -94,6 +94,8 @@ export async function sendNotificationByFilters(
     workFormat?: string
     categoryId?: string
     isHourly?: boolean
+    cityId?: string
+    countryId?: string
   }
 ): Promise<CreateNotificationResponse> {
   return sendNotification({
@@ -161,6 +163,46 @@ export async function sendNotificationToRole(
   roleId: string
 ): Promise<CreateNotificationResponse> {
   return sendNotificationByFilters(entityType, payload, { roleId })
+}
+
+/**
+ * Отправляет уведомление всем пользователям из определенного города
+ */
+export async function sendNotificationToCity(
+  entityType: string,
+  payload: {
+    title: string
+    message: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    action?: {
+      type: string
+      url?: string
+      data?: Record<string, any>
+    }
+  },
+  cityId: string
+): Promise<CreateNotificationResponse> {
+  return sendNotificationByFilters(entityType, payload, { cityId })
+}
+
+/**
+ * Отправляет уведомление всем пользователям из определенной страны
+ */
+export async function sendNotificationToCountry(
+  entityType: string,
+  payload: {
+    title: string
+    message: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    action?: {
+      type: string
+      url?: string
+      data?: Record<string, any>
+    }
+  },
+  countryId: string
+): Promise<CreateNotificationResponse> {
+  return sendNotificationByFilters(entityType, payload, { countryId })
 }
 
 /**
@@ -444,6 +486,52 @@ export async function notifyAnnouncement(
       filters: {}, // Пустые фильтры = все пользователи
     })
   }
+}
+
+/**
+ * Пример: Уведомление пользователям из определенного города
+ */
+export async function notifyAnnouncementToCity(
+  title: string,
+  content: string,
+  cityId: string
+): Promise<CreateNotificationResponse> {
+  return sendNotificationToCity(
+    'city_announcement',
+    {
+      title,
+      message: content,
+      type: 'info',
+      action: {
+        type: 'navigate',
+        url: '/dashboard/announcements',
+      },
+    },
+    cityId
+  )
+}
+
+/**
+ * Пример: Уведомление пользователям из определенной страны
+ */
+export async function notifyAnnouncementToCountry(
+  title: string,
+  content: string,
+  countryId: string
+): Promise<CreateNotificationResponse> {
+  return sendNotificationToCountry(
+    'country_announcement',
+    {
+      title,
+      message: content,
+      type: 'info',
+      action: {
+        type: 'navigate',
+        url: '/dashboard/announcements',
+      },
+    },
+    countryId
+  )
 }
 
 // =============================================================================
