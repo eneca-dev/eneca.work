@@ -32,6 +32,7 @@ export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: Ann
   const { createAnnouncement, editAnnouncement } = useAnnouncements()
   const userStore = useUserStore()
   const currentUserId = userStore.id
+  const currentUserName = userStore.name || 'Неизвестный пользователь'
   const isAuthenticated = userStore.isAuthenticated
 
   const [header, setHeader] = useState("")
