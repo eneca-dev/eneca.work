@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -13,6 +13,7 @@ import { CreateStageModal } from './CreateStageModal'
 import { EditObjectModal } from './EditObjectModal'
 import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
+import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
 
 interface ProjectNode {
@@ -58,6 +59,7 @@ interface TreeNodeProps {
   onCreateStage: (project: ProjectNode, e: React.MouseEvent) => void
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
+  onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 const supabase = createClient()
@@ -75,7 +77,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenSection,
   onCreateStage,
   onCreateObject,
-  onCreateSection
+  onCreateSection,
+  onDeleteProject
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
@@ -320,6 +323,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 </button>
+                <button
+                  onClick={(e) => onDeleteProject(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all ml-1"
+                  title="Удалить проект"
+                >
+                  <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
+                </button>
               </div>
             )}
 
@@ -430,6 +440,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateStage={onCreateStage}
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
+              onDeleteProject={onDeleteProject}
             />
           ))}
         </div>
@@ -971,6 +982,7 @@ export function ProjectsTree({
                 onCreateStage={handleCreateStage}
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
+                onDeleteProject={handleDeleteProject}
               />
             ))
           )}
@@ -997,6 +1009,24 @@ export function ProjectsTree({
           projectId={selectedProject.id}
           onProjectUpdated={() => {
             loadTreeData() // Перезагружаем данные после обновления
+          }}
+        />
+      )}
+
+      {/* Модальное окно удаления проекта */}
+      {showDeleteModal && selectedProject && (
+        <DeleteProjectModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false)
+            setSelectedProject(null)
+          }}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
+          onSuccess={() => {
+            setShowDeleteModal(false)
+            setSelectedProject(null)
+            loadTreeData() // Перезагружаем данные после удаления проекта
           }}
         />
       )}
