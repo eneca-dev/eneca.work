@@ -62,9 +62,9 @@ export function DepartmentRow({
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
-    section: 320,  // Фиксированная ширина для раздела
-    project: 160,  // Фиксированная ширина для проекта
-    object: 120,   // Фиксированная ширина для объекта
+    section: 430,  // Ширина для раздела (уменьшена на 10px)
+    project: 170,  // Ширина для проекта (увеличена на 10px)
+    object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
 
@@ -147,7 +147,7 @@ export function DepartmentRow({
                 <div className="flex flex-col min-w-0">
                   <span
                     className={cn(
-                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                      "font-semibold truncate whitespace-nowrap overflow-hidden max-w-[300px]",
                       theme === "dark" ? "text-slate-200" : "text-slate-800",
                     )}
                   >
@@ -156,7 +156,7 @@ export function DepartmentRow({
                   {department.departmentHeadName && (
                     <span
                       className={cn(
-                        "text-xs truncate whitespace-nowrap overflow-hidden max-w-[160px]",
+                        "text-xs truncate whitespace-nowrap overflow-hidden max-w-[300px]",
                         theme === "dark" ? "text-slate-400" : "text-slate-500",
                       )}
                     >
@@ -255,24 +255,6 @@ export function DepartmentRow({
                         : "border-l border-l-slate-300"
                       : "",
                     isLastDayOfMonthDate ? "border-r-0" : "",
-                    // Добавляем фоновый цвет в зависимости от загрузки
-                    departmentLoadPercentage > 100
-                      ? theme === "dark"
-                        ? "bg-red-500/30"
-                        : "bg-red-200"
-                      : departmentLoadPercentage > 80
-                        ? theme === "dark"
-                          ? "bg-green-500/30"
-                          : "bg-green-200"
-                        : departmentLoadPercentage > 50
-                          ? theme === "dark"
-                            ? "bg-yellow-500/30"
-                            : "bg-yellow-200"
-                          : departmentLoadPercentage >= 1
-                            ? theme === "dark"
-                              ? "bg-blue-500/30"
-                              : "bg-blue-200"
-                            : "",
                   )}
                   style={{
                     height: `${rowHeight}px`,
@@ -290,23 +272,43 @@ export function DepartmentRow({
                   }}
                 >
                   {departmentLoadPercentage > 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span
+                    <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
+                      <div
                         className={cn(
-                          "text-[10px] font-medium transform -rotate-90",
-                          theme === "dark" 
-                            ? "text-white" 
-                            : departmentLoadPercentage > 100
-                              ? "text-red-800"
-                              : departmentLoadPercentage > 80
-                                ? "text-green-800"
-                                : departmentLoadPercentage > 50
-                                  ? "text-yellow-800"
-                                  : "text-blue-800"
+                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
+                          // Менее яркие границы для всех отделов
+                          theme === "dark" ? "border-slate-500" : "border-slate-400"
                         )}
+                        style={{
+                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы
+                          height: `${rowHeight - 10}px`, // Всегда полная высота (граница как 100%)
+                          opacity: 0.9
+                        }}
+                        title={`Загрузка отдела: ${departmentLoadPercentage}%`}
                       >
-                        {departmentLoadPercentage}%
-                      </span>
+                        {/* Внутренняя заливка, показывающая процент загрузки */}
+                        <div
+                          className={cn(
+                            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                            // Цветовая индикация загрузки отдела
+                            departmentLoadPercentage <= 50 
+                              ? theme === "dark" ? "bg-red-400" : "bg-red-500"        // Красный: низкая загрузка (0-50%)
+                              : departmentLoadPercentage <= 85 
+                                ? theme === "dark" ? "bg-amber-400" : "bg-amber-500"  // Желтый: средняя загрузка (50-85%)
+                                : theme === "dark" ? "bg-emerald-400" : "bg-emerald-500" // Зеленый: высокая загрузка (85-100%+)
+                          )}
+                          style={{
+                            height: `${Math.max(
+                              Math.min(
+                                (departmentLoadPercentage / 100) * (rowHeight - 14), // Высота заливки пропорционально проценту
+                                rowHeight - 14  // Максимальная высота заливки (учитываем border)
+                              ),
+                              2  // Минимальная высота для видимости
+                            )}px`,
+                            opacity: theme === "dark" ? 0.8 : 0.7
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -527,24 +529,23 @@ function EmployeeRow({
                     </div>
                   </div>
 
-                  {/* Команда сотрудника */}
-                  {employee.teamName && (
-                    <div className="ml-4">
-                      <span
-                        className={cn(
-                          "text-xs px-2 py-0.5 rounded",
-                          theme === "dark" ? "bg-slate-700 text-slate-300" : "bg-slate-100 text-slate-600",
-                        )}
-                      >
-                        {employee.teamCode ? `${employee.teamCode} - ` : ""}
-                        {employee.teamName}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Правая часть с кнопкой добавления и ставкой */}
+                {/* Правая часть с командой, кнопкой добавления и ставкой */}
                 <div className="flex items-center gap-2">
+                  {/* Команда сотрудника */}
+                  {employee.teamName && (
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded",
+                        theme === "dark" ? "bg-slate-700 text-slate-300" : "bg-slate-100 text-slate-600",
+                      )}
+                    >
+                      {employee.teamCode ? `${employee.teamCode} - ` : ""}
+                      {employee.teamName}
+                    </span>
+                  )}
+
                   {/* Кнопка добавления загрузки - появляется при наведении */}
                   <button
                     className={cn(
@@ -631,26 +632,46 @@ function EmployeeRow({
                   }}
                 >
                   {workloadRate > 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                       <div
                         className={cn(
-                          "flex items-center justify-center text-xs font-medium",
-                          // Оставляем только цвет текста
-                          workloadRate > 0
-                            ? (() => {
-                                const employmentRate = employee.employmentRate || 1
-                                const relativeLoad = workloadRate / employmentRate
-
-                                if (relativeLoad <= 0.5) return theme === "dark" ? "text-blue-400" : "text-blue-500"
-                                if (relativeLoad <= 1.0) return theme === "dark" ? "text-green-400" : "text-green-500"
-                                if (relativeLoad <= 1.5) return theme === "dark" ? "text-yellow-400" : "text-yellow-500"
-                                return theme === "dark" ? "text-red-400" : "text-red-500"
-                              })()
-                            : "",
+                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
+                          // Тонкие столбики с border'ом для сотрудников (более тонкие чем у отделов)
+                          (() => {
+                            const employmentRate = employee.employmentRate || 1
+                            const loadPercentage = (workloadRate / employmentRate) * 100
+                            if (loadPercentage > 100) {
+                              return theme === "dark" 
+                                ? "bg-red-400/30 border-red-400" 
+                                : "bg-red-500/30 border-red-500"
+                            }
+                            return theme === "dark" 
+                              ? "bg-blue-400/30 border-blue-400" 
+                              : "bg-blue-500/30 border-blue-500"
+                          })()
                         )}
-                      >
-                        {workloadRate === 1 ? "1" : workloadRate.toFixed(1)}
-                      </div>
+                        style={{
+                          width: `${Math.max(cellWidth - 10, 2)}px`, // Более тонкие столбики для сотрудников
+                          height: `${(() => {
+                            const employmentRate = employee.employmentRate || 1
+                            const loadPercentage = (workloadRate / employmentRate) * 100
+                            return Math.max(
+                              Math.min(
+                                (loadPercentage / 100) * (reducedRowHeight - 10), // Высота пропорционально проценту
+                                reducedRowHeight - 4  // Увеличиваем максимальную высоту для перегруза
+                              ),
+                              3  // Минимальная высота для видимости
+                            )
+                          })()}px`,
+                          opacity: 0.9 // Чуть более прозрачные
+                        }}
+                        title={`Загрузка сотрудника: ${(() => {
+                          const employmentRate = employee.employmentRate || 1
+                          const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
+                          const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
+                          return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
+                        })()}`}
+                      ></div>
                     </div>
                   )}
                 </div>
@@ -813,8 +834,13 @@ function EmployeeRow({
                       className={cn(
                         "border-r relative border-b", // Добавлена border-b
                         theme === "dark" ? "border-slate-700" : "border-slate-200",
+                        // Базовый фон для ячеек
                         isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
                         isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                        // Фон для ячеек с загрузкой
+                        loadingRate > 0 && !isWeekendDay && !isTodayDate 
+                          ? theme === "dark" ? "bg-blue-900/20" : "bg-blue-50/80"
+                          : "",
                         isFirstDayOfMonth(unit.date)
                           ? theme === "dark"
                             ? "border-l border-l-slate-600"
@@ -837,10 +863,13 @@ function EmployeeRow({
                       }}
                     >
                       {loadingRate > 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center">
+                        <div 
+                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                          title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки`}
+                        >
                           <div
                             className={cn(
-                              "flex items-center justify-center text-xs font-medium",
+                              "flex items-center justify-center text-xs font-medium pointer-events-auto",
                               // Оставляем только цвет текста
                               loadingRate > 0
                                 ? (() => {
@@ -856,6 +885,7 @@ function EmployeeRow({
                                   })()
                                 : "",
                             )}
+                            title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки на ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
                           >
                             {loadingRate === 1 ? "1" : loadingRate.toFixed(1)}
                           </div>

@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { getUserRoleAndPermissions } from "@/services/org-data-service"
+import { getUserRoleAndPermissions } from "@/utils/role-utils"
 import { toast } from "@/components/ui/use-toast"
 import { ChatInterface } from "@/modules/chat"
 
@@ -22,10 +22,12 @@ interface FetchPermissionsResult {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const name = useUserStore((state) => state.name)
   const email = useUserStore((state) => state.email)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
+  const permissions = useUserStore((state) => state.permissions)
   const router = useRouter()
   const supabase = createClient()
   
@@ -92,11 +94,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (roleId) {
         useUserStore.getState().setRoleAndPermissions(roleId, permissions)
         console.log("Роль и разрешения обновлены:", { roleId, permissions })
+      } else {
+        // Даже если нет roleId, устанавливаем пустые права
+        useUserStore.getState().setRoleAndPermissions(null, [])
+        console.log("Установлены пустые разрешения для пользователя")
       }
+      
+      // Устанавливаем флаг загрузки прав
+      setPermissionsLoaded(true)
       
       return { roleId, permissions }
     } catch (error) {
       console.error("Ошибка при получении разрешений:", error)
+      // Даже при ошибке устанавливаем флаг загрузки
+      setPermissionsLoaded(true)
       throw error
     }
   }, [supabase])
@@ -127,6 +138,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (!isMounted.current) return
         
         console.error("Не удалось получить разрешения после всех попыток:", error)
+        // Устанавливаем флаг загрузки даже при ошибке
+        setPermissionsLoaded(true)
         toast({
           title: "Ошибка получения разрешений",
           description: "Попробуйте обновить страницу",
@@ -186,6 +199,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [supabase, fetchWithRetry, fetchPermissions, router, handleAuthError])
 
+  // Отслеживаем загрузку прав из store (для случая когда они уже были загружены ранее)
+  useEffect(() => {
+    if (isAuthenticated && permissions !== null) {
+      setPermissionsLoaded(true)
+    }
+  }, [permissions, isAuthenticated])
+
+  // Fallback timeout для случаев когда права не загрузятся
+  useEffect(() => {
+    if (mounted && !permissionsLoaded) {
+      const fallbackTimer = setTimeout(() => {
+        console.warn("Timeout при загрузке прав, продолжаем без них")
+        setPermissionsLoaded(true)
+      }, 5000) // 5 секунд максимум
+
+      return () => clearTimeout(fallbackTimer)
+    }
+  }, [mounted, permissionsLoaded])
+
   useEffect(() => {
     if (!mounted) {
       fetchUser()
@@ -193,8 +225,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [mounted, fetchUser])
 
-  if (!mounted) {
-    return null
+  if (!mounted || !permissionsLoaded) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">
+            {!mounted ? "Инициализация..." : "Загрузка прав доступа..."}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   const sidebarWidth = sidebarCollapsed ? "w-20" : "w-64"

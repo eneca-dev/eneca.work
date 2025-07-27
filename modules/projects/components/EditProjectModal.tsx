@@ -1,11 +1,12 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { updateProject } from '@/lib/supabase-client'
 import { Modal, ModalButton } from '@/components/modals'
+import { DeleteProjectModal } from './DeleteProjectModal'
 
 interface EditProjectModalProps {
   isOpen: boolean
@@ -55,6 +56,7 @@ export function EditProjectModal({
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const { setNotification } = useUiStore()
 
   // Загрузка данных проекта
@@ -245,10 +247,10 @@ export function EditProjectModal({
                 </select>
               </div>
 
-              {/* Менеджер проекта */}
+              {/* Руководитель проекта */}
               <div>
                 <label className="block text-sm font-medium mb-2 dark:text-slate-300">
-                  Менеджер проекта
+                  Руководитель проекта
                 </label>
                 <div className="relative">
                   <input
@@ -265,7 +267,7 @@ export function EditProjectModal({
                     onBlur={() => {
                       setTimeout(() => setShowManagerDropdown(false), 200)
                     }}
-                    placeholder={getSelectedManagerName() || "Поиск менеджера..."}
+                    placeholder={getSelectedManagerName() || "Поиск руководителя проекта..."}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                   />
                   {showManagerDropdown && (
@@ -451,22 +453,51 @@ export function EditProjectModal({
         </Modal.Body>
 
       <Modal.Footer>
-        <ModalButton
-          variant="cancel"
-          onClick={onClose}
-        >
-          Отмена
-        </ModalButton>
-        <ModalButton
-          variant="success"
-          onClick={handleSave}
-          disabled={!projectData?.project_name.trim()}
-          loading={saving}
-          icon={<Save />}
-        >
-          {saving ? 'Сохранение...' : 'Сохранить'}
-        </ModalButton>
+        <div className="flex justify-between w-full">
+          {/* Кнопка удаления слева */}
+          <ModalButton
+            variant="danger"
+            onClick={() => setShowDeleteModal(true)}
+            icon={<Trash2 />}
+          >
+            Удалить проект
+          </ModalButton>
+          
+          {/* Основные кнопки справа */}
+          <div className="flex gap-3">
+            <ModalButton
+              variant="cancel"
+              onClick={onClose}
+            >
+              Отмена
+            </ModalButton>
+            <ModalButton
+              variant="success"
+              onClick={handleSave}
+              disabled={!projectData?.project_name.trim()}
+              loading={saving}
+              icon={<Save />}
+            >
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </ModalButton>
+          </div>
+        </div>
       </Modal.Footer>
+
+      {/* Модальное окно удаления проекта */}
+      {showDeleteModal && projectData && (
+        <DeleteProjectModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          projectId={projectData.project_id}
+          projectName={projectData.project_name}
+          onSuccess={() => {
+            setShowDeleteModal(false)
+            onClose() // Закрываем модальное окно редактирования
+            onProjectUpdated?.() // Обновляем список проектов
+          }}
+        />
+      )}
     </Modal>
   )
 } 

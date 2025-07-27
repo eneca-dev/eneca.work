@@ -135,8 +135,14 @@ export const useProjectsStore = create<ProjectsState>()(
         activeDetailsTab: state.activeDetailsTab,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && Array.isArray(state.expandedNodes)) {
-          state.expandedNodes = new Set(state.expandedNodes);
+        // Восстанавливаем Set из массива при загрузке из localStorage
+        if (state && state.expandedNodes) {
+          if (Array.isArray(state.expandedNodes)) {
+            state.expandedNodes = new Set(state.expandedNodes);
+          } else {
+            // Если по какой-то причине expandedNodes не массив, создаем пустой Set
+            state.expandedNodes = new Set();
+          }
         }
       },
     }

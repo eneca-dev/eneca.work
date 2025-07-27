@@ -22,6 +22,7 @@ interface PlanningState {
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
+  showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
 
   // Пагинация
@@ -91,6 +92,9 @@ interface PlanningState {
     rate: number
     projectName?: string
     sectionName?: string
+    responsibleName?: string
+    responsibleAvatarUrl?: string | null
+    responsibleTeamName?: string | null
   }) => Promise<{ success: boolean; error?: string; loadingId?: string }>
   archiveLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
   restoreLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
@@ -102,6 +106,7 @@ interface PlanningState {
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
   setCurrentPage: (page: number) => void
+  toggleShowSections: () => void
   toggleShowDepartments: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
@@ -144,6 +149,20 @@ const parseTimestampTz = (timestamptz: string | null): Date | null => {
   }
 }
 
+// Вспомогательная функция для объединения загрузок без дубликатов
+const mergeLoadingsWithoutDuplicates = (sectionLoadings: Loading[], mapLoadings: Loading[]): Loading[] => {
+  const allLoadings = [...(sectionLoadings || [])]
+  
+  // Добавляем загрузки из карты, которых нет в разделе
+  ;(mapLoadings || []).forEach(loading => {
+    if (!allLoadings.some(existing => existing.id === loading.id)) {
+      allLoadings.push(loading)
+    }
+  })
+  
+  return allLoadings
+}
+
 export const usePlanningStore = create<PlanningState>()(
   devtools(
     persist(
@@ -156,6 +175,7 @@ export const usePlanningStore = create<PlanningState>()(
         isLoadingDepartments: false,
         expandedSections: {},
         expandedDepartments: {},
+        showSections: true, // По умолчанию разделы показываются
         showDepartments: false,
         currentPage: 1,
         sectionsPerPage: 20,
@@ -674,9 +694,9 @@ export const usePlanningStore = create<PlanningState>()(
             const newLoading: Loading = {
               id: result.loadingId!,
               responsibleId: loadingData.responsibleId,
-              responsibleName: undefined, // Будет заполнено при перезагрузке
-              responsibleAvatarUrl: undefined,
-              responsibleTeamName: undefined,
+              responsibleName: loadingData.responsibleName || undefined,
+              responsibleAvatarUrl: loadingData.responsibleAvatarUrl || undefined,
+              responsibleTeamName: loadingData.responsibleTeamName || undefined,
               sectionId: loadingData.sectionId,
               sectionName: loadingData.sectionName,
               projectId: undefined,
@@ -696,15 +716,24 @@ export const usePlanningStore = create<PlanningState>()(
             if (!updatedLoadingsMap[loadingData.sectionId]) {
               updatedLoadingsMap[loadingData.sectionId] = []
             }
-            updatedLoadingsMap[loadingData.sectionId].push(newLoading)
+            
+            // Проверяем, есть ли уже такая загрузка в карте, чтобы избежать дубликатов
+            const existingInMap = updatedLoadingsMap[loadingData.sectionId].some(loading => loading.id === newLoading.id)
+            if (!existingInMap) {
+              updatedLoadingsMap[loadingData.sectionId].push(newLoading)
+            }
 
             // Обновляем в разделах
             const updatedSections = sections.map((section) => {
               if (section.id === loadingData.sectionId) {
+                // Проверяем, есть ли уже такая загрузка, чтобы избежать дубликатов
+                const existingLoadings = section.loadings || []
+                const hasExistingLoading = existingLoadings.some(loading => loading.id === newLoading.id)
+                
                 return {
                   ...section,
                   hasLoadings: true,
-                  loadings: section.loadings ? [...section.loadings, newLoading] : [newLoading],
+                  loadings: hasExistingLoading ? existingLoadings : [...existingLoadings, newLoading],
                 }
               }
               return section
@@ -712,10 +741,14 @@ export const usePlanningStore = create<PlanningState>()(
 
             const updatedAllSections = allSections.map((section) => {
               if (section.id === loadingData.sectionId) {
+                // Проверяем, есть ли уже такая загрузка, чтобы избежать дубликатов
+                const existingLoadings = section.loadings || []
+                const hasExistingLoading = existingLoadings.some(loading => loading.id === newLoading.id)
+                
                 return {
                   ...section,
                   hasLoadings: true,
-                  loadings: section.loadings ? [...section.loadings, newLoading] : [newLoading],
+                  loadings: hasExistingLoading ? existingLoadings : [...existingLoadings, newLoading],
                 }
               }
               return section
@@ -1067,8 +1100,10 @@ export const usePlanningStore = create<PlanningState>()(
                 return {
                   ...s,
                   isExpanded,
-                  // Добавляем загрузки только если раздел раскрывается и у него нет загрузок
-                  loadings: isExpanded && !s.loadings ? loadingsMap[sectionId] || [] : s.loadings,
+                  // Объединяем загрузки из раздела и карты загрузок, избегая дубликатов
+                  loadings: isExpanded 
+                    ? mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[sectionId] || [])
+                    : s.loadings,
                 }
               }
               return s
@@ -1111,8 +1146,8 @@ export const usePlanningStore = create<PlanningState>()(
                 return {
                   ...s,
                   isExpanded: true,
-                  // Добавляем загрузки из loadingsMap, если их еще нет
-                  loadings: s.loadings || loadingsMap[s.id] || [],
+                  // Объединяем загрузки из раздела и карты загрузок, избегая дубликатов
+                  loadings: mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[s.id] || []),
                 }
               }
               return s
@@ -1151,6 +1186,12 @@ export const usePlanningStore = create<PlanningState>()(
             expandedDepartments: {},
             departments: state.departments.map((d) => ({ ...d, isExpanded: false })),
           }))
+        },
+
+        // Добавляем функцию переключения показа разделов
+        toggleShowSections: () => {
+          const { showSections } = get()
+          set({ showSections: !showSections })
         },
 
         // Добавляем функцию переключения показа отделов

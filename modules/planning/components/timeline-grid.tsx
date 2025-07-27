@@ -13,10 +13,12 @@ import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
 
+
 // Обновляем интерфейс TimelineGridProps, добавляя отделы
 interface TimelineGridProps {
   sections: Section[]
   departments: Department[] // Добавляем отделы
+  showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
   startDate: Date
   daysToShow: number
@@ -28,11 +30,15 @@ interface TimelineGridProps {
   cellWidth?: number
   windowWidth?: number // Добавляем ширину окна для перерисовки
   hasActiveFilters?: boolean // Добавляем новый пропс
+  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  expandAllDepartments: () => void
+  collapseAllDepartments: () => void
 }
 
 export function TimelineGrid({
   sections,
   departments,
+  showSections,
   showDepartments,
   startDate,
   daysToShow,
@@ -44,6 +50,9 @@ export function TimelineGrid({
   cellWidth = 22,
   windowWidth = 0, // Значение по умолчанию
   hasActiveFilters = false, // Добавляем с значением по умолчанию
+  onOpenSectionPanel, // Добавляем обработчик открытия панели раздела
+  expandAllDepartments,
+  collapseAllDepartments,
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -65,6 +74,10 @@ export function TimelineGrid({
   // Получаем состояние раскрытия разделов и отделов
   const expandedSections = usePlanningStore((state) => state.expandedSections)
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
+  
+  // Получаем функции переключения видимости
+  const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
+  const toggleShowDepartments = usePlanningStore((state) => state.toggleShowDepartments)
 
   // Константы для размеров и отступов
   const ROW_HEIGHT = 60 // Увеличиваем высоту строки для размещения дополнительной информации
@@ -75,9 +88,9 @@ export function TimelineGrid({
 
   // Канонические ширины колонок - единый источник истины
   const COLUMN_WIDTHS = {
-    section: 320,  // Фиксированная ширина для раздела
-    project: 160,  // Фиксированная ширина для проекта
-    object: 120,   // Фиксированная ширина для объекта
+    section: 430,  // Ширина для раздела (уменьшена на 10px)
+    project: 170,  // Ширина для проекта (увеличена на 10px)
+    object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
 
@@ -261,10 +274,16 @@ export function TimelineGrid({
             leftOffset={LEFT_OFFSET}
             cellWidth={cellWidth}
             stickyColumnShadow={stickyColumnShadow}
+            showDepartments={showDepartments}
+            showSections={showSections}
+            toggleShowSections={toggleShowSections}
+            toggleShowDepartments={toggleShowDepartments}
+            expandAllDepartments={expandAllDepartments}
+            collapseAllDepartments={collapseAllDepartments}
           />
 
           {/* Строки с разделами */}
-          {sections.map((section, index) => (
+          {showSections && sections.map((section, index) => (
             <TimelineRow
               key={section.id}
               section={section}
@@ -280,11 +299,12 @@ export function TimelineGrid({
               stickyColumnShadow={stickyColumnShadow}
               totalExpandedSections={totalExpandedSections}
               totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+              onOpenSectionPanel={onOpenSectionPanel}
             />
           ))}
 
           {/* Если нет разделов или идет загрузка */}
-          {sections.length === 0 && !isLoading && (
+          {showSections && sections.length === 0 && !isLoading && (
             <div
               className={cn(
                 "flex justify-start items-center p-8 border-b",
@@ -297,8 +317,8 @@ export function TimelineGrid({
             </div>
           )}
 
-          {/* Разделитель между разделами и отделами, если показаны отделы */}
-          {showDepartments && sections.length > 0 && departments.length > 0 && (
+          {/* Разделитель между разделами и отделами, если показаны и разделы, и отделы */}
+          {showSections && showDepartments && sections.length > 0 && departments.length > 0 && (
             <div
               className={cn(
                 "relative border-b", // Убираем padding

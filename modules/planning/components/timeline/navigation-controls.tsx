@@ -57,11 +57,11 @@ export function NavigationControls({
   }
 
   return (
-    <div className="flex items-center gap-2 flex-wrap w-full justify-end">
+    <div className="flex items-center gap-2">
       {/* Информация о диапазоне дат с кнопкой "Сегодня" */}
       <div className="flex items-center gap-2">
         <div className="flex items-center">
-          <span className="text-xs font-medium">
+          <span className="text-xs font-medium whitespace-nowrap">
             {formatDate(startDate)} — {formatDate(endDate)} ({daysToShow} дней)
           </span>
         </div>
@@ -69,15 +69,15 @@ export function NavigationControls({
         {/* Кнопка "Сегодня" */}
         <button
           className={cn(
-            "p-2 rounded-lg border",
+            "p-1.5 rounded border",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
+              ? "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+              : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200",
           )}
           onClick={onTodayClick}
           title="Перейти к сегодняшнему дню"
         >
-          <Calendar size={18} />
+          <Calendar size={14} />
         </button>
       </div>
 
@@ -85,17 +85,17 @@ export function NavigationControls({
       <div className="flex">
         <button
           className={cn(
-            "p-2 rounded-l-lg border",
+            "p-1.5 rounded-l border",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
+              ? "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+              : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200",
           )}
           onClick={onScrollBackward}
           title="Прокрутить назад"
         >
           <svg
-            width="16"
-            height="16"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -108,17 +108,17 @@ export function NavigationControls({
         </button>
         <button
           className={cn(
-            "p-2 rounded-r-lg border-t border-r border-b",
+            "p-1.5 rounded-r border-t border-r border-b",
             theme === "dark"
-              ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
-              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50",
+              ? "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+              : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200",
           )}
           onClick={onScrollForward}
           title="Прокрутить вперед"
         >
           <svg
-            width="16"
-            height="16"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"

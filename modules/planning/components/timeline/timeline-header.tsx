@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from "react"
 import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { Search } from "lucide-react"
+import { Search, Eye, EyeOff, Expand, Minimize, Columns3, Users } from "lucide-react"
 
 interface TimelineHeaderProps {
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
@@ -19,6 +19,12 @@ interface TimelineHeaderProps {
   leftOffset: number
   cellWidth: number
   stickyColumnShadow: string
+  showDepartments: boolean
+  showSections: boolean
+  toggleShowSections: () => void
+  toggleShowDepartments: () => void
+  expandAllDepartments: () => void
+  collapseAllDepartments: () => void
 }
 
 export function TimelineHeader({
@@ -30,6 +36,12 @@ export function TimelineHeader({
   leftOffset,
   cellWidth,
   stickyColumnShadow,
+  showDepartments,
+  showSections,
+  toggleShowSections,
+  toggleShowDepartments,
+  expandAllDepartments,
+  collapseAllDepartments,
 }: TimelineHeaderProps) {
   // Состояние для поискового запроса
   const [searchQuery, setSearchQuery] = useState("")
@@ -64,7 +76,7 @@ export function TimelineHeader({
   }, [filterSectionsByName, filterSectionsByProject])
 
   // Получаем видимость столбцов из стора
-  const { columnVisibility } = usePlanningColumnsStore()
+  const { columnVisibility, toggleColumnVisibility } = usePlanningColumnsStore()
 
   // Заменяем сложные расчеты ширины на фиксированные значения
   // Заменяем эти строки:
@@ -73,9 +85,9 @@ export function TimelineHeader({
   // const objectWidth = columnWidth * columnWidths.object
 
   // На фиксированные значения:
-  const sectionWidth = 320 // Фиксированная ширина для раздела
-  const projectWidth = 160 // Фиксированная ширина для проекта
-  const objectWidth = 120 // Фиксированная ширина для объекта
+  const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
+  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
+  const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
   const totalFixedWidth =
@@ -122,8 +134,88 @@ export function TimelineHeader({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-              Раздел
+            <div className="flex items-center justify-between w-full">
+              <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                Раздел
+              </div>
+              {/* Кнопки управления */}
+              <div className="flex gap-1">
+                {/* Кнопки переключения видимости */}
+                <button
+                  onClick={toggleShowSections}
+                  title={showSections ? 'Скрыть разделы' : 'Показать разделы'}
+                  className={cn(
+                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
+                    showSections
+                      ? theme === "dark" 
+                        ? "text-teal-400 hover:text-teal-300" 
+                        : "text-teal-600 hover:text-teal-700"
+                      : theme === "dark" 
+                        ? "text-gray-400 hover:text-gray-300" 
+                        : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  {showSections ? <Eye size={12} /> : <EyeOff size={12} />}
+                  <span>Разделы</span>
+                </button>
+
+                <button
+                  onClick={toggleShowDepartments}
+                  title={showDepartments ? 'Скрыть отделы' : 'Показать отделы'}
+                  className={cn(
+                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
+                    showDepartments
+                      ? theme === "dark" 
+                        ? "text-teal-400 hover:text-teal-300" 
+                        : "text-teal-600 hover:text-teal-700"
+                      : theme === "dark" 
+                        ? "text-gray-400 hover:text-gray-300" 
+                        : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  {showDepartments ? <Eye size={12} /> : <EyeOff size={12} />}
+                  <span>Отделы</span>
+                </button>
+
+                <button
+                  onClick={() => toggleColumnVisibility('project')}
+                  title={columnVisibility.project ? 'Скрыть колонку "Проект"' : 'Показать колонку "Проект"'}
+                  className={cn(
+                    "p-1 rounded hover:bg-opacity-80 transition-colors",
+                    theme === "dark" 
+                      ? "hover:bg-slate-700 text-blue-400 hover:text-blue-300" 
+                      : "hover:bg-slate-100 text-blue-600 hover:text-blue-700"
+                  )}
+                >
+                  <Columns3 size={14} />
+                </button>
+
+                <button
+                  onClick={expandAllDepartments}
+                  title="Развернуть все отделы"
+                  className={cn(
+                    "p-1 rounded hover:bg-opacity-80 transition-colors",
+                    theme === "dark" 
+                      ? "hover:bg-slate-700 text-emerald-400 hover:text-emerald-300" 
+                      : "hover:bg-slate-100 text-emerald-600 hover:text-emerald-700"
+                  )}
+                >
+                  <Expand size={14} />
+                </button>
+
+                <button
+                  onClick={collapseAllDepartments}
+                  title="Свернуть все отделы"
+                  className={cn(
+                    "p-1 rounded hover:bg-opacity-80 transition-colors",
+                    theme === "dark" 
+                      ? "hover:bg-slate-700 text-orange-400 hover:text-orange-300" 
+                      : "hover:bg-slate-100 text-orange-600 hover:text-orange-700"
+                  )}
+                >
+                  <Minimize size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -143,8 +235,22 @@ export function TimelineHeader({
                 borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
               }}
             >
-              <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                Проект
+              <div className="flex items-center justify-between w-full">
+                <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                  Проект
+                </div>
+                <button
+                  onClick={() => toggleColumnVisibility('project')}
+                  title='Скрыть колонку "Проект"'
+                  className={cn(
+                    "p-1 rounded hover:bg-opacity-80 transition-colors",
+                    theme === "dark" 
+                      ? "hover:bg-slate-700 text-blue-400 hover:text-blue-300" 
+                      : "hover:bg-slate-100 text-blue-600 hover:text-blue-700"
+                  )}
+                >
+                  <Columns3 size={12} />
+                </button>
               </div>
             </div>
           )}
