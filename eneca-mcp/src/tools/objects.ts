@@ -37,11 +37,11 @@ export const createObjectTool = {
       },
       start_date: {
         type: "string",
-        description: "Дата начала работ (дд.мм.гггг)"
+        description: "Дата начала работ в формате дд.мм.гггг"
       },
       end_date: {
         type: "string",
-        description: "Дата окончания работ (дд.мм.гггг)"
+        description: "Дата окончания работ в формате дд.мм.гггг"
       }
     },
     required: ["object_name", "stage_name", "project_name"]
@@ -124,10 +124,45 @@ export async function handleCreateObject(args: any) {
       object_name: objectName,
       object_description: args.object_description ? String(args.object_description) : undefined,
       object_stage_id: stage.stage_id,
-      object_project_id: project.project_id,
-      object_start_date: args.start_date ? String(args.start_date) : undefined,
-      object_end_date: args.end_date ? String(args.end_date) : undefined
+      object_project_id: project.project_id
     };
+
+    // Обработка дат
+    if (args.start_date) {
+      const parsedDate = dbService.parseDate(String(args.start_date));
+      if (!parsedDate) {
+        return {
+          content: [{
+            type: "text",
+            text: `Неверный формат даты начала: "${args.start_date}". Используйте формат дд.мм.гггг`
+          }]
+        };
+      }
+      input.object_start_date = parsedDate;
+    }
+
+    if (args.end_date) {
+      const parsedDate = dbService.parseDate(String(args.end_date));
+      if (!parsedDate) {
+        return {
+          content: [{
+            type: "text",
+            text: `Неверный формат даты окончания: "${args.end_date}". Используйте формат дд.мм.гггг`
+          }]
+        };
+      }
+      input.object_end_date = parsedDate;
+    }
+
+    // Проверка корректности диапазона дат
+    if (!dbService.validateDateRange(input.object_start_date || null, input.object_end_date || null)) {
+      return {
+        content: [{
+          type: "text",
+          text: "Дата начала не может быть больше даты окончания"
+        }]
+      };
+    }
 
     // Поиск ответственного
     if (args.responsible_name) {
@@ -584,7 +619,7 @@ export async function handleUpdateObject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Неверный формат даты начала: "${args.start_date}"`
+            text: `Неверный формат даты начала: "${args.start_date}". Используйте формат дд.мм.гггг`
           }]
         };
       }
@@ -597,11 +632,24 @@ export async function handleUpdateObject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Неверный формат даты окончания: "${args.end_date}"`
+            text: `Неверный формат даты окончания: "${args.end_date}". Используйте формат дд.мм.гггг`
           }]
         };
       }
       updateData.object_end_date = parsedDate;
+    }
+
+    // Проверка корректности диапазона дат (учитываем и новые и существующие даты)
+    const finalStartDate = updateData.object_start_date || object.object_start_date;
+    const finalEndDate = updateData.object_end_date || object.object_end_date;
+    
+    if (!dbService.validateDateRange(finalStartDate || null, finalEndDate || null)) {
+      return {
+        content: [{
+          type: "text",
+          text: "Дата начала не может быть больше даты окончания"
+        }]
+      };
     }
 
     // Выполнение обновления

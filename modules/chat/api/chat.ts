@@ -3,9 +3,6 @@ import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import { getContextForRequest } from '../utils/chatCache'
 
-// Чат теперь работает через n8n webhook
-// n8n принимает запрос и пересылает его на backend сервер
-
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   try {
     // Получаем JWT токен из Supabase
@@ -16,33 +13,22 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       throw new Error('Не удалось получить токен аутентификации')
     }
 
-    // Получаем информацию о пользователе из JWT и store
+    // Получаем информацию о пользователе из store
     const userStore = useUserStore.getState()
     const userId = userStore.id
     
-    // Получаем контекст предыдущих сообщений только для авторизованного пользователя
     const conversationHistory = userId && typeof window !== 'undefined' 
       ? getContextForRequest(userId) 
       : []
     
-    // Отправляем запрос на n8n webhook
-    const response = await fetch('https://eneca.app.n8n.cloud/webhook-test/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
+    const response = await fetch('https://eneca.app.n8n.cloud/webhook/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         message: request.message,
-        userContext: {
-          jwt: session.access_token,
-          user: session.user,
-          store: {
-            name: userStore.name,
-            email: userStore.email,
-            permissionLabel: userStore.getActivePermission() ? userStore.getPermissionLabel(userStore.getActivePermission()!) : null,
-            profile: userStore.profile
-          }
-        },
         conversationHistory: conversationHistory
       })
     })
@@ -79,7 +65,6 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       throw error
     }
     
-    // Если ошибка не является Error объектом
     console.error('Неизвестный тип ошибки:', typeof error, error)
     throw new Error('Неизвестная ошибка при отправке сообщения')
   }

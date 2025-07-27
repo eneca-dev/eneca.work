@@ -2,10 +2,87 @@
  * Инструменты для работы с проектами
  */
 
+import { z } from 'zod';
 import { DatabaseService } from '../services/database.js';
 import type { CreateProjectInput, UpdateProjectInput } from '../types/eneca.js';
 
 const dbService = new DatabaseService();
+
+// Создание кастомной схемы для статуса с поддержкой русского языка
+const createStatusSchema = () => {
+  return z.string().refine(
+    (status) => dbService.validateProjectStatus(status),
+    {
+      message: "Статус должен быть одним из: активный, архивный, приостановленный, отмененный (или на английском: active, archive, paused, canceled)"
+    }
+  ).optional();
+};
+
+// ===== ZOD СХЕМЫ ВАЛИДАЦИИ =====
+
+const CreateProjectSchema = z.object({
+  project_name: z.string()
+    .min(1, "Название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов")
+    .regex(/^[а-яА-Яa-zA-Z0-9\s\-_\.№]+$/, "Недопустимые символы в названии проекта"),
+  project_description: z.string()
+    .max(500, "Описание не должно превышать 500 символов")
+    .optional(),
+  project_manager_name: z.string()
+    .max(100, "Имя менеджера не должно превышать 100 символов")
+    .optional(),
+  project_lead_engineer_name: z.string()
+    .max(100, "Имя главного инженера не должно превышать 100 символов")
+    .optional(),
+  client_name: z.string()
+    .max(100, "Название заказчика не должно превышать 100 символов")
+    .optional()
+});
+
+const SearchProjectsSchema = z.object({
+  project_name: z.string()
+    .max(100, "Название проекта не должно превышать 100 символов")
+    .optional(),
+  manager_name: z.string()
+    .max(100, "Имя менеджера не должно превышать 100 символов")
+    .optional(),
+  client_name: z.string()
+    .max(100, "Название заказчика не должно превышать 100 символов")
+    .optional(),
+  status: createStatusSchema(),
+  limit: z.number()
+    .min(1, "Лимит должен быть больше 0")
+    .max(100, "Лимит не должен превышать 100")
+    .optional()
+});
+
+const ProjectDetailsSchema = z.object({
+  project_name: z.string()
+    .min(1, "Название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов")
+});
+
+const UpdateProjectSchema = z.object({
+  current_name: z.string()
+    .min(1, "Текущее название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов"),
+  new_name: z.string()
+    .max(100, "Новое название проекта не должно превышать 100 символов")
+    .optional(),
+  description: z.string()
+    .max(500, "Описание не должно превышать 500 символов")
+    .optional(),
+  manager_name: z.string()
+    .max(100, "Имя менеджера не должно превышать 100 символов")
+    .optional(),
+  lead_engineer_name: z.string()
+    .max(100, "Имя главного инженера не должно превышать 100 символов")
+    .optional(),
+  status: createStatusSchema(),
+  client_name: z.string()
+    .max(100, "Название заказчика не должно превышать 100 символов")
+    .optional()
+});
 
 // ===== СОЗДАНИЕ ПРОЕКТА =====
 
@@ -42,41 +119,22 @@ export const createProjectTool = {
 
 export async function handleCreateProject(args: any) {
   try {
-    const projectName = String(args.project_name).trim();
-
-    // Проверяем уникальность названия проекта
-    const existingProjectCheck = await dbService.validateUniqueProjectByName(projectName);
-    if (existingProjectCheck !== 'not_found') {
-      if (existingProjectCheck === 'multiple_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `Найдено несколько проектов с названием "${projectName}". Выберите другое название.`
-          }]
-        };
-      } else {
-        return {
-          content: [{
-            type: "text",
-            text: `Проект с названием "${projectName}" уже существует. Выберите другое название.`
-          }]
-        };
-      }
-    }
+    // Zod валидация входных данных
+    const validatedArgs = CreateProjectSchema.parse(args);
 
     const input: CreateProjectInput = {
-      project_name: projectName,
-      project_description: args.project_description ? String(args.project_description).trim() : undefined
+      project_name: validatedArgs.project_name.trim(),
+      project_description: validatedArgs.project_description?.trim()
     };
 
     // Поиск менеджера проекта
-    if (args.project_manager_name) {
-      const users = await dbService.searchUsersByQuery(String(args.project_manager_name).trim());
+    if (validatedArgs.project_manager_name) {
+      const users = await dbService.searchUsersByQuery(validatedArgs.project_manager_name.trim());
       if (users.length === 0) {
         return {
           content: [{
             type: "text",
-            text: `Пользователь с именем "${args.project_manager_name}" не найден`
+            text: `Пользователь с именем "${validatedArgs.project_manager_name}" не найден`
           }]
         };
       }
@@ -85,7 +143,7 @@ export async function handleCreateProject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Найдено несколько пользователей с именем "${args.project_manager_name}":\n${usersList}\nУточните имя или используйте email.`
+            text: `Найдено несколько пользователей с именем "${validatedArgs.project_manager_name}":\n${usersList}\nУточните имя или используйте email.`
           }]
         };
       }
@@ -93,13 +151,13 @@ export async function handleCreateProject(args: any) {
     }
 
     // Поиск главного инженера
-    if (args.project_lead_engineer_name) {
-      const users = await dbService.searchUsersByQuery(String(args.project_lead_engineer_name).trim());
+    if (validatedArgs.project_lead_engineer_name) {
+      const users = await dbService.searchUsersByQuery(validatedArgs.project_lead_engineer_name.trim());
       if (users.length === 0) {
         return {
           content: [{
             type: "text",
-            text: `Пользователь с именем "${args.project_lead_engineer_name}" не найден`
+            text: `Пользователь с именем "${validatedArgs.project_lead_engineer_name}" не найден`
           }]
         };
       }
@@ -108,7 +166,7 @@ export async function handleCreateProject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Найдено несколько пользователей с именем "${args.project_lead_engineer_name}":\n${usersList}\nУточните имя или используйте email.`
+            text: `Найдено несколько пользователей с именем "${validatedArgs.project_lead_engineer_name}":\n${usersList}\nУточните имя или используйте email.`
           }]
         };
       }
@@ -116,13 +174,13 @@ export async function handleCreateProject(args: any) {
     }
 
     // Поиск заказчика
-    if (args.client_name) {
-      const client = await dbService.findClientByName(String(args.client_name).trim());
+    if (validatedArgs.client_name) {
+      const client = await dbService.findClientByName(validatedArgs.client_name.trim());
       if (!client) {
         return {
           content: [{
             type: "text",
-            text: `Заказчик с названием "${args.client_name}" не найден`
+            text: `Заказчик с названием "${validatedArgs.client_name}" не найден`
           }]
         };
       }
@@ -135,12 +193,20 @@ export async function handleCreateProject(args: any) {
       content: [{
         type: "text",
         text: result.success ? 
-          `${result.message}\nПроект "${projectName}" успешно создан` :
+          `${result.message}\nПроект "${validatedArgs.project_name}" успешно создан` :
           `${result.message}`
       }]
     };
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        content: [{
+          type: "text",
+          text: `Ошибка валидации: ${error.errors.map(e => e.message).join(', ')}`
+        }]
+      };
+    }
     return {
       content: [{
         type: "text",
@@ -172,8 +238,7 @@ export const searchProjectsTool = {
       },
       status: {
         type: "string",
-        enum: ["active", "archive", "paused", "canceled"],
-        description: "Статус проекта"
+        description: "Статус проекта (активный, архивный, приостановленный, отмененный или на английском: active, archive, paused, canceled)"
       },
       limit: {
         type: "number",
@@ -186,24 +251,36 @@ export const searchProjectsTool = {
 
 export async function handleSearchProjects(args: any) {
   try {
+    // Zod валидация входных данных
+    const validatedArgs = SearchProjectsSchema.parse(args);
+    
     const filters: any = {};
     
-    if (args.limit) {
-      filters.limit = Number(args.limit);
+    if (validatedArgs.limit) {
+      filters.limit = validatedArgs.limit;
     }
     
-    if (args.status) {
-      filters.status = String(args.status);
+    if (validatedArgs.status) {
+      const normalizedStatus = dbService.normalizeProjectStatus(validatedArgs.status);
+      if (!normalizedStatus) {
+        return {
+          content: [{
+            type: "text",
+            text: `Неверный статус проекта: "${validatedArgs.status}"`
+          }]
+        };
+      }
+      filters.status = normalizedStatus;
     }
 
     // Поиск по менеджеру
-    if (args.manager_name) {
-      const users = await dbService.searchUsersByQuery(String(args.manager_name).trim());
+    if (validatedArgs.manager_name) {
+      const users = await dbService.searchUsersByQuery(validatedArgs.manager_name.trim());
       if (users.length === 0) {
         return {
           content: [{
             type: "text",
-            text: `Менеджер с именем "${args.manager_name}" не найден`
+            text: `Менеджер с именем "${validatedArgs.manager_name}" не найден`
           }]
         };
       }
@@ -212,7 +289,7 @@ export async function handleSearchProjects(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Найдено несколько пользователей с именем "${args.manager_name}":\n${usersList}\nУточните имя.`
+            text: `Найдено несколько пользователей с именем "${validatedArgs.manager_name}":\n${usersList}\nУточните имя.`
           }]
         };
       }
@@ -220,13 +297,13 @@ export async function handleSearchProjects(args: any) {
     }
 
     // Поиск по заказчику
-    if (args.client_name) {
-      const client = await dbService.findClientByName(String(args.client_name).trim());
+    if (validatedArgs.client_name) {
+      const client = await dbService.findClientByName(validatedArgs.client_name.trim());
       if (!client) {
         return {
           content: [{
             type: "text",
-            text: `Заказчик с названием "${args.client_name}" не найден`
+            text: `Заказчик с названием "${validatedArgs.client_name}" не найден`
           }]
         };
       }
@@ -235,9 +312,9 @@ export async function handleSearchProjects(args: any) {
 
     let projects: any[] = [];
 
-    if (args.project_name) {
+    if (validatedArgs.project_name) {
       // Поиск по названию проекта
-      projects = await dbService.searchProjectsByName(String(args.project_name).trim());
+      projects = await dbService.searchProjectsByName(validatedArgs.project_name.trim());
       
       // Применяем дополнительные фильтры
       if (filters.manager) {
@@ -273,20 +350,28 @@ export async function handleSearchProjects(args: any) {
     }
 
     const projectsText = projects.map((project, index) => 
-      `${index + 1}. **${project.project_name}**\n` +
-      `   Статус: ${project.project_status}\n` +
-      `   Создан: ${project.project_created ? new Date(project.project_created).toLocaleDateString() : 'Неизвестно'}\n` +
-      `   ${project.project_description ? `Описание: ${project.project_description}\n` : ''}`
+      `${index + 1}. ${project.project_name}\n` +
+      `Статус: ${project.project_status}\n` +
+      `Создан: ${project.project_created ? new Date(project.project_created).toLocaleDateString() : 'Неизвестно'}\n` +
+      `${project.project_description ? `Описание: ${project.project_description}\n` : ''}---`
     ).join('\n');
 
     return {
       content: [{
         type: "text",
-        text: `Найдено проектов: ${projects.length}\n\n${projectsText}`
+        text: `🎯 Найдено проектов: ${projects.length}\n\n${projectsText}`
       }]
     };
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        content: [{
+          type: "text",
+          text: `Ошибка валидации: ${error.errors.map(e => e.message).join(', ')}`
+        }]
+      };
+    }
     return {
       content: [{
         type: "text",
@@ -300,13 +385,13 @@ export async function handleSearchProjects(args: any) {
 
 export const getProjectDetailsTool = {
   name: "get_project_details",
-  description: "Получить подробную информацию о проекте",
+  description: "Получить подробную информацию о проекте по названию (поддерживает частичное совпадение)",
   inputSchema: {
     type: "object",
     properties: {
       project_name: {
         type: "string",
-        description: "Название проекта"
+        description: "Название проекта или его часть для поиска"
       }
     },
     required: ["project_name"]
@@ -315,29 +400,38 @@ export const getProjectDetailsTool = {
 
 export async function handleGetProjectDetails(args: any) {
   try {
-    const projectName = String(args.project_name).trim();
+    // Zod валидация входных данных
+    const validatedArgs = ProjectDetailsSchema.parse(args);
+    const searchTerm = validatedArgs.project_name.trim();
 
-    const projectResult = await dbService.validateUniqueProjectByName(projectName);
+    // Поиск проектов по частичному совпадению названия
+    const projects = await dbService.searchProjectsByName(searchTerm);
     
-    if (projectResult === 'not_found') {
+    if (projects.length === 0) {
       return {
         content: [{
           type: "text",
-          text: `Проект с названием "${projectName}" не найден`
-        }]
-      };
-    }
-    
-    if (projectResult === 'multiple_found') {
-      return {
-        content: [{
-          type: "text",
-          text: `Найдено несколько проектов с названием "${projectName}". Используйте поиск проектов для выбора конкретного.`
+          text: `Проекты с названием содержащим "${searchTerm}" не найдены`
         }]
       };
     }
 
-    const project = projectResult;
+    // Если найдено несколько проектов, показываем список для выбора
+    if (projects.length > 1) {
+      const projectsList = projects.map((p, index) => 
+        `${index + 1}. **${p.project_name}** (статус: ${dbService.getDisplayStatus(p.project_status || 'active')})`
+      ).join('\n');
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Найдено несколько проектов с названием содержащим "${searchTerm}":\n\n${projectsList}\n\nУточните название проекта для получения детальной информации.`
+        }]
+      };
+    }
+
+    // Если найден один проект, показываем детали
+    const project = projects[0];
 
     // Получаем дополнительную информацию
     const stagesResult = await dbService.listStages({ project_id: project.project_id });
@@ -345,7 +439,7 @@ export async function handleGetProjectDetails(args: any) {
 
     let detailsText = `**ПРОЕКТ: ${project.project_name}**\n\n`;
     detailsText += `**Основная информация:**\n`;
-    detailsText += `• Статус: ${project.project_status}\n`;
+    detailsText += `• Статус: ${dbService.getDisplayStatus(project.project_status || 'active')}\n`;
     detailsText += `• Создан: ${project.project_created ? new Date(project.project_created).toLocaleDateString() : 'Неизвестно'}\n`;
     detailsText += `• Обновлен: ${project.project_updated ? new Date(project.project_updated).toLocaleDateString() : 'Неизвестно'}\n`;
     
@@ -374,6 +468,14 @@ export async function handleGetProjectDetails(args: any) {
     };
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        content: [{
+          type: "text",
+          text: `Ошибка валидации: ${error.errors.map(e => e.message).join(', ')}`
+        }]
+      };
+    }
     return {
       content: [{
         type: "text",
@@ -413,7 +515,7 @@ export const updateProjectTool = {
       },
       status: {
         type: "string",
-        description: "Новый статус проекта (active, archive, paused, canceled, опционально)"
+        description: "Новый статус проекта (активный, архивный, приостановленный, отмененный или на английском: active, archive, paused, canceled, опционально)"
       },
       client_name: {
         type: "string",
@@ -426,7 +528,10 @@ export const updateProjectTool = {
 
 export async function handleUpdateProject(args: any) {
   try {
-    const currentName = String(args.current_name).trim();
+    // Zod валидация входных данных
+    const validatedArgs = UpdateProjectSchema.parse(args);
+    
+    const currentName = validatedArgs.current_name.trim();
     
     // Поиск проекта
     const project = await dbService.findProjectByNameExact(currentName);
@@ -446,35 +551,26 @@ export async function handleUpdateProject(args: any) {
     };
 
     // Обработка нового названия
-    if (args.new_name) {
-      const newName = String(args.new_name).trim();
+    if (validatedArgs.new_name) {
+      const newName = validatedArgs.new_name.trim();
       if (newName !== currentName) {
-        const uniqueCheck = await dbService.validateUniqueProjectByNameForUpdate(newName, project.project_id);
-        if (uniqueCheck === 'duplicate') {
-          return {
-            content: [{
-              type: "text",
-              text: `Проект с названием "${newName}" уже существует`
-            }]
-          };
-        }
         updateData.project_name = newName;
       }
     }
 
     // Обработка описания
-    if (args.description !== undefined) {
-      updateData.project_description = String(args.description).trim() || undefined;
+    if (validatedArgs.description !== undefined) {
+      updateData.project_description = validatedArgs.description.trim() || undefined;
     }
 
     // Обработка менеджера
-    if (args.manager_name) {
-      const users = await dbService.searchUsersByQuery(String(args.manager_name).trim());
+    if (validatedArgs.manager_name) {
+      const users = await dbService.searchUsersByQuery(validatedArgs.manager_name.trim());
       if (users.length === 0) {
         return {
           content: [{
             type: "text",
-            text: `Пользователь с именем "${args.manager_name}" не найден`
+            text: `Пользователь с именем "${validatedArgs.manager_name}" не найден`
           }]
         };
       }
@@ -483,7 +579,7 @@ export async function handleUpdateProject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Найдено несколько пользователей с именем "${args.manager_name}":\n${usersList}\nУточните имя.`
+            text: `Найдено несколько пользователей с именем "${validatedArgs.manager_name}":\n${usersList}\nУточните имя.`
           }]
         };
       }
@@ -491,13 +587,13 @@ export async function handleUpdateProject(args: any) {
     }
 
     // Обработка главного инженера
-    if (args.lead_engineer_name) {
-      const users = await dbService.searchUsersByQuery(String(args.lead_engineer_name).trim());
+    if (validatedArgs.lead_engineer_name) {
+      const users = await dbService.searchUsersByQuery(validatedArgs.lead_engineer_name.trim());
       if (users.length === 0) {
         return {
           content: [{
             type: "text",
-            text: `Пользователь с именем "${args.lead_engineer_name}" не найден`
+            text: `Пользователь с именем "${validatedArgs.lead_engineer_name}" не найден`
           }]
         };
       }
@@ -506,7 +602,7 @@ export async function handleUpdateProject(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Найдено несколько пользователей с именем "${args.lead_engineer_name}":\n${usersList}\nУточните имя.`
+            text: `Найдено несколько пользователей с именем "${validatedArgs.lead_engineer_name}":\n${usersList}\nУточните имя.`
           }]
         };
       }
@@ -514,27 +610,27 @@ export async function handleUpdateProject(args: any) {
     }
 
     // Обработка статуса
-    if (args.status) {
-      const status = String(args.status).trim().toLowerCase();
-      if (!dbService.validateProjectStatus(status)) {
+    if (validatedArgs.status) {
+      const normalizedStatus = dbService.normalizeProjectStatus(validatedArgs.status);
+      if (!normalizedStatus) {
         return {
           content: [{
             type: "text",
-            text: `Неверный статус "${args.status}". Доступные: active, archive, paused, canceled`
+            text: `Неверный статус проекта: "${validatedArgs.status}"`
           }]
         };
       }
-      updateData.project_status = status;
+      updateData.project_status = normalizedStatus;
     }
 
     // Обработка клиента
-    if (args.client_name) {
-      const client = await dbService.findClientByName(String(args.client_name).trim());
+    if (validatedArgs.client_name) {
+      const client = await dbService.findClientByName(validatedArgs.client_name.trim());
       if (!client) {
         return {
           content: [{
             type: "text",
-            text: `Клиент с названием "${args.client_name}" не найден`
+            text: `Клиент с названием "${validatedArgs.client_name}" не найден`
           }]
         };
       }
@@ -570,6 +666,14 @@ export async function handleUpdateProject(args: any) {
     };
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        content: [{
+          type: "text",
+          text: `Ошибка валидации: ${error.errors.map(e => e.message).join(', ')}`
+        }]
+      };
+    }
     return {
       content: [{
         type: "text",

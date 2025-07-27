@@ -1,8 +1,3 @@
-/**
- * Типы для работы с системой планирования проектов Eneca
- * Основаны на реальной структуре БД Supabase
- */
-
 // ===== ОСНОВНЫЕ ТИПЫ ДАННЫХ =====
 
 export interface Profile {
@@ -219,6 +214,7 @@ export interface SectionFilters {
   object_id?: string;
   responsible?: string;
   section_type?: string;
+  section_name?: string;
   limit?: number;
   offset?: number;
 } 

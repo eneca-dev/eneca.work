@@ -2,10 +2,60 @@
  * Инструменты для работы со стадиями проектов
  */
 
+import { z } from 'zod';
 import { DatabaseService } from '../services/database.js';
 import type { CreateStageInput, UpdateStageInput } from '../types/eneca.js';
 
 const dbService = new DatabaseService();
+
+// ===== ZOD СХЕМЫ ВАЛИДАЦИИ =====
+
+const CreateStageSchema = z.object({
+  stage_name: z.string()
+    .min(1, "Название стадии обязательно")
+    .max(100, "Название стадии не должно превышать 100 символов")
+    .regex(/^[а-яА-Яa-zA-Z0-9\s\-_\.№]+$/, "Недопустимые символы в названии стадии"),
+  stage_description: z.string()
+    .max(500, "Описание не должно превышать 500 символов")
+    .optional(),
+  project_name: z.string()
+    .min(1, "Название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов")
+});
+
+const SearchStagesSchema = z.object({
+  stage_name: z.string()
+    .max(100, "Название стадии не должно превышать 100 символов")
+    .optional(),
+  project_name: z.string()
+    .max(100, "Название проекта не должно превышать 100 символов")
+    .optional(),
+  limit: z.number()
+    .min(1, "Лимит должен быть больше 0")
+    .max(100, "Лимит не должен превышать 100")
+    .optional()
+});
+
+const ProjectStructureSchema = z.object({
+  project_name: z.string()
+    .min(1, "Название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов")
+});
+
+const UpdateStageSchema = z.object({
+  current_name: z.string()
+    .min(1, "Текущее название стадии обязательно")
+    .max(100, "Название стадии не должно превышать 100 символов"),
+  project_name: z.string()
+    .min(1, "Название проекта обязательно")
+    .max(100, "Название проекта не должно превышать 100 символов"),
+  new_name: z.string()
+    .max(100, "Новое название стадии не должно превышать 100 символов")
+    .optional(),
+  description: z.string()
+    .max(500, "Описание не должно превышать 500 символов")
+    .optional()
+});
 
 // ===== СОЗДАНИЕ СТАДИИ =====
 
@@ -34,55 +84,24 @@ export const createStageTool = {
 
 export async function handleCreateStage(args: any) {
   try {
-    const stageName = String(args.stage_name).trim();
-    const projectName = String(args.project_name).trim();
+    // Zod валидация входных данных
+    const validatedArgs = CreateStageSchema.parse(args);
 
     // Поиск проекта по названию
-    const projectResult = await dbService.validateUniqueProjectByName(projectName);
+    const project = await dbService.findProjectByNameExact(validatedArgs.project_name.trim());
     
-    if (projectResult === 'not_found') {
+    if (!project) {
       return {
         content: [{
           type: "text",
-          text: `Проект с названием "${projectName}" не найден`
+          text: `Проект с названием "${validatedArgs.project_name}" не найден`
         }]
       };
-    }
-    
-    if (projectResult === 'multiple_found') {
-      return {
-        content: [{
-          type: "text",
-          text: `Найдено несколько проектов с названием "${projectName}". Уточните название или используйте поиск проектов для выбора конкретного.`
-        }]
-      };
-    }
-
-    const project = projectResult;
-
-    // Проверяем уникальность названия стадии в проекте
-    const existingStageCheck = await dbService.validateUniqueStageByName(stageName, project.project_id);
-    if (existingStageCheck !== 'not_found') {
-      if (existingStageCheck === 'multiple_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `В проекте "${project.project_name}" существует несколько стадий с названием "${stageName}". Выберите другое название.`
-          }]
-        };
-      } else {
-        return {
-          content: [{
-            type: "text",
-            text: `В проекте "${project.project_name}" уже существует стадия с названием "${stageName}". Выберите другое название.`
-          }]
-        };
-      }
     }
 
     const input: CreateStageInput = {
-      stage_name: stageName,
-      stage_description: args.stage_description ? String(args.stage_description).trim() : undefined,
+      stage_name: validatedArgs.stage_name.trim(),
+      stage_description: validatedArgs.stage_description?.trim(),
       stage_project_id: project.project_id
     };
 
@@ -92,12 +111,20 @@ export async function handleCreateStage(args: any) {
       content: [{
         type: "text",
         text: result.success ? 
-          `${result.message}\nСтадия "${stageName}" успешно создана в проекте "${project.project_name}"` :
+          `${result.message}\nСтадия "${validatedArgs.stage_name}" успешно создана в проекте "${project.project_name}"` :
           `${result.message}`
       }]
     };
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        content: [{
+          type: "text",
+          text: `Ошибка валидации: ${error.errors.map(e => e.message).join(', ')}`
+        }]
+      };
+    }
     return {
       content: [{
         type: "text",
@@ -197,16 +224,16 @@ export async function handleSearchStages(args: any) {
     }
 
     const stagesText = stages.map((stage, index) => 
-      `${index + 1}. **${stage.stage_name}**\n` +
-      `   Проект: ${stage.stage_project_id}\n` +
-      `   Создана: ${stage.stage_created ? new Date(stage.stage_created).toLocaleDateString() : 'Неизвестно'}\n` +
-      `   ${stage.stage_description ? `Описание: ${stage.stage_description}\n` : ''}`
+      `${index + 1}. ${stage.stage_name}\n` +
+      `Проект: ${stage.stage_project_id}\n` +
+      `Создана: ${stage.stage_created ? new Date(stage.stage_created).toLocaleDateString() : 'Неизвестно'}\n` +
+      `${stage.stage_description ? `Описание: ${stage.stage_description}\n` : ''}---`
     ).join('\n');
 
     return {
       content: [{
         type: "text",
-        text: `Найдено стадий: ${stages.length}\n\n${stagesText}`
+        text: `📋 Найдено стадий: ${stages.length}\n\n${stagesText}`
       }]
     };
 

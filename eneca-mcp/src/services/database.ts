@@ -478,8 +478,8 @@ export class DatabaseService {
   }
 
   async searchUsersByQuery(query: string): Promise<any[]> {
-    // Убираем пробелы
-    const cleanQuery = query.trim();
+    // Убираем пробелы и экранируем опасные символы
+    const cleanQuery = query.trim().replace(/[%_\\]/g, '\\$&');
     
     if (!cleanQuery) {
       // Если запрос пустой, возвращаем всех активных пользователей
@@ -487,14 +487,20 @@ export class DatabaseService {
         .from('view_users')
         .select('*')
         .eq('is_active', true)
-        .limit(50);
+        .limit(50); // Лимит 50 результатов
       return error ? [] : data || [];
     }
 
-    // Создаем различные варианты поиска
+    // Проверяем длину запроса для защиты от DoS
+    if (cleanQuery.length > 50) {
+      console.log('⚠️ Слишком длинный поисковый запрос, обрезаем до 50 символов');
+      return [];
+    }
+
+    // Создаем различные варианты поиска с экранированными символами
     const searchTerms = [];
     
-    // Оригинальный запрос
+    // Оригинальный запрос с экранированием
     searchTerms.push(`first_name.ilike.%${cleanQuery}%`);
     searchTerms.push(`last_name.ilike.%${cleanQuery}%`);
     searchTerms.push(`full_name.ilike.%${cleanQuery}%`);
@@ -505,9 +511,9 @@ export class DatabaseService {
       // Разбиваем на слова
       const words = cleanQuery.split(/\s+/);
       if (words.length >= 2) {
-        // Первое слово - имя, второе - фамилия
-        const firstName = words[0];
-        const lastName = words[1];
+        // Первое слово - имя, второе - фамилия (тоже экранируем)
+        const firstName = words[0].replace(/[%_\\]/g, '\\$&');
+        const lastName = words[1].replace(/[%_\\]/g, '\\$&');
         
         // Добавляем поиск по комбинации имя+фамилия
         searchTerms.push(`and(first_name.ilike.%${firstName}%,last_name.ilike.%${lastName}%)`);
@@ -521,7 +527,7 @@ export class DatabaseService {
       .select('*')
       .eq('is_active', true)
       .or(searchTerms.join(','))
-      .limit(10);
+      .limit(50); // Лимит 50 результатов
 
     return error ? [] : data || [];
   }
@@ -535,6 +541,57 @@ export class DatabaseService {
       .limit(20);
 
     return error ? [] : data || [];
+  }
+
+  // ===== МЕТОДЫ РАБОТЫ С ДАТАМИ =====
+
+  /**
+   * Парсит дату из формата дд.мм.гггг в гггг-мм-дд
+   */
+  parseDate(dateStr: string): string | null {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    
+    const trimmed = dateStr.trim();
+    const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
+    
+    if (!dateRegex.test(trimmed)) {
+      return null;
+    }
+    
+    const [day, month, year] = trimmed.split('.');
+    
+    // Проверяем валидность даты
+    const dayNum = parseInt(day, 10);
+    const monthNum = parseInt(month, 10);
+    const yearNum = parseInt(year, 10);
+    
+    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900 || yearNum > 2100) {
+      return null;
+    }
+    
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  /**
+   * Форматирует дату из гггг-мм-дд в дд.мм.гггг для отображения
+   */
+  formatDateForDisplay(dateStr: string): string {
+    if (!dateStr) return '';
+    
+    const [year, month, day] = dateStr.split('-');
+    return `${day}.${month}.${year}`;
+  }
+
+  /**
+   * Проверяет что дата начала не больше даты окончания
+   */
+  validateDateRange(startDate: string | null, endDate: string | null): boolean {
+    if (!startDate || !endDate) return true; // Если одна из дат не указана, то проверка проходит
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    return start <= end;
   }
 
   // ===== МЕТОДЫ ПОИСКА ДЛЯ ОБНОВЛЕНИЯ =====
@@ -649,56 +706,59 @@ export class DatabaseService {
 
   // ===== UTILITY МЕТОДЫ =====
 
+  // Маппинг русских статусов в английские для базы данных
+  private readonly statusMapping: Record<string, string> = {
+    'активный': 'active',
+    'архив': 'archive', 
+    'архивный': 'archive',
+    'приостановлен': 'paused',
+    'приостановленный': 'paused',
+    'отменен': 'canceled',
+    'отмененный': 'canceled',
+    'отменён': 'canceled',
+    'отменённый': 'canceled',
+    // Английские значения остаются как есть
+    'active': 'active',
+    'archive': 'archive',
+    'paused': 'paused',
+    'canceled': 'canceled'
+  };
+
+  // Обратный маппинг для отображения пользователю
+  private readonly statusDisplayMapping: Record<string, string> = {
+    'active': 'активный',
+    'archive': 'архивный',
+    'paused': 'приостановленный', 
+    'canceled': 'отмененный'
+  };
+
+  /**
+   * Нормализует статус проекта (конвертирует русский в английский)
+   */
+  normalizeProjectStatus(status: string): string | null {
+    const normalizedStatus = this.statusMapping[status.toLowerCase()];
+    return normalizedStatus || null;
+  }
+
+  /**
+   * Получает отображаемое название статуса на русском
+   */
+  getDisplayStatus(status: string): string {
+    return this.statusDisplayMapping[status.toLowerCase()] || status;
+  }
+
+  /**
+   * Получает все возможные варианты статусов (русские и английские)
+   */
+  getAllowedStatuses(): string[] {
+    return Object.keys(this.statusMapping);
+  }
+
   validateProjectStatus(status: string): boolean {
-    const validStatuses = ['active', 'archive', 'paused', 'canceled'];
-    return validStatuses.includes(status.toLowerCase());
+    return this.statusMapping.hasOwnProperty(status.toLowerCase());
   }
 
-  parseDate(dateString: string): string | null {
-    try {
-      const trimmed = dateString.trim();
-      
-      // Проверка на формат дд.мм.гггг
-      const ddmmyyyyPattern = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
-      const match = trimmed.match(ddmmyyyyPattern);
-      
-      if (match) {
-        const day = parseInt(match[1], 10);
-        const month = parseInt(match[2], 10);
-        const year = parseInt(match[3], 10);
-        
-        // Создаем дату в формате ISO (год-месяц-день)
-        const date = new Date(year, month - 1, day); // месяц в JS начинается с 0
-        
-        // Проверяем, что дата валидная
-        if (date.getFullYear() === year && 
-            date.getMonth() === month - 1 && 
-            date.getDate() === day) {
-          return date.toISOString().split('T')[0]; // возвращаем только дату без времени
-        }
-        return null;
-      }
-      
-      // Если не формат дд.мм.гггг, пробуем стандартный парсинг
-      const date = new Date(trimmed);
-      if (isNaN(date.getTime())) return null;
-      return date.toISOString().split('T')[0];
-    } catch {
-      return null;
-    }
-  }
 
-  formatDateForDisplay(dateString: string): string {
-    try {
-      const date = new Date(dateString);
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}.${month}.${year}`;
-    } catch {
-      return dateString;
-    }
-  }
 
   async searchProjectsByName(name: string): Promise<Project[]> {
     const { data, error } = await supabase
@@ -1050,6 +1110,9 @@ export class DatabaseService {
       }
       if (filters.section_type) {
         query = query.eq('section_type', filters.section_type);
+      }
+      if (filters.section_name) {
+        query = query.ilike('section_name', `%${filters.section_name}%`);
       }
       if (filters.limit) {
         query = query.limit(filters.limit);

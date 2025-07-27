@@ -37,11 +37,11 @@ export const createSectionTool = {
       },
       start_date: {
         type: "string",
-        description: "Дата начала работ (дд.мм.гггг)"
+        description: "Дата начала работ в формате дд.мм.гггг"
       },
       end_date: {
         type: "string",
-        description: "Дата окончания работ (дд.мм.гггг)"
+        description: "Дата окончания работ в формате дд.мм.гггг"
       }
     },
     required: ["section_name", "object_name"]
@@ -81,10 +81,45 @@ export async function handleCreateSection(args: any) {
       section_description: args.section_description ? String(args.section_description).trim() : undefined,
       section_object_id: objectEntity.object_id,
       section_project_id: objectEntity.object_project_id,
-      section_type: args.section_type ? String(args.section_type).trim() : undefined,
-      section_start_date: args.start_date ? String(args.start_date).trim() : undefined,
-      section_end_date: args.end_date ? String(args.end_date).trim() : undefined
+      section_type: args.section_type ? String(args.section_type).trim() : undefined
     };
+
+    // Обработка дат
+    if (args.start_date) {
+      const parsedDate = dbService.parseDate(String(args.start_date).trim());
+      if (!parsedDate) {
+        return {
+          content: [{
+            type: "text",
+            text: `Неверный формат даты начала: "${args.start_date}". Используйте формат дд.мм.гггг`
+          }]
+        };
+      }
+      input.section_start_date = parsedDate;
+    }
+
+    if (args.end_date) {
+      const parsedDate = dbService.parseDate(String(args.end_date).trim());
+      if (!parsedDate) {
+        return {
+          content: [{
+            type: "text",
+            text: `Неверный формат даты окончания: "${args.end_date}". Используйте формат дд.мм.гггг`
+          }]
+        };
+      }
+      input.section_end_date = parsedDate;
+    }
+
+    // Проверка корректности диапазона дат
+    if (!dbService.validateDateRange(input.section_start_date || null, input.section_end_date || null)) {
+      return {
+        content: [{
+          type: "text",
+          text: "Дата начала не может быть больше даты окончания"
+        }]
+      };
+    }
 
     // Поиск ответственного
     if (args.responsible_name) {
@@ -169,74 +204,33 @@ export const searchSectionsTool = {
 
 export async function handleSearchSections(args: any) {
   try {
-    let projectId: string | undefined = undefined;
-    let objectId: string | undefined = undefined;
-    let projectName: string | undefined = undefined;
-    let objectName: string | undefined = undefined;
-
-    // Поиск проекта если указан
-    if (args.project_name) {
-      const projectResult = await dbService.validateUniqueProjectByName(String(args.project_name).trim());
-      
-      if (projectResult === 'not_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `Проект с названием "${args.project_name}" не найден`
-          }]
-        };
-      }
-      
-      if (projectResult === 'multiple_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `Найдено несколько проектов с названием "${args.project_name}". Уточните название.`
-          }]
-        };
-      }
-
-      projectId = projectResult.project_id;
-      projectName = projectResult.project_name;
-    }
-
-    // Поиск объекта если указан
-    if (args.object_name) {
-      const objectResult = await dbService.validateUniqueObjectByName(String(args.object_name).trim());
-      
-      if (objectResult === 'not_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `Объект с названием "${args.object_name}" не найден`
-          }]
-        };
-      }
-      
-      if (objectResult === 'multiple_found') {
-        return {
-          content: [{
-            type: "text",
-            text: `Найдено несколько объектов с названием "${args.object_name}". Уточните название.`
-          }]
-        };
-      }
-
-      objectId = objectResult.object_id;
-      objectName = objectResult.object_name;
-    }
-
     // Построение фильтров
     const filters: any = {
       limit: args.limit || 10
     };
 
-    if (projectId) {
-      filters.project_id = projectId;
+    // Основной поиск по названию раздела (частичное совпадение)
+    if (args.section_name) {
+      filters.section_name = String(args.section_name).trim();
     }
-    if (objectId) {
-      filters.object_id = objectId;
+
+    // Дополнительные фильтры (используются как есть, без валидации)
+    if (args.project_name) {
+      // Ищем проект по названию и используем его ID как фильтр
+      const projects = await dbService.searchProjectsByName(String(args.project_name).trim());
+      if (projects.length > 0) {
+        filters.project_id = projects[0].project_id;
+      }
     }
+
+    if (args.object_name) {
+      // Ищем объект по названию и используем его ID как фильтр
+      const objects = await dbService.searchObjectsByName(String(args.object_name).trim());
+      if (objects.length > 0) {
+        filters.object_id = objects[0].object_id;
+      }
+    }
+
     if (args.section_type) {
       filters.section_type = String(args.section_type);
     }
@@ -275,15 +269,7 @@ export async function handleSearchSections(args: any) {
       };
     }
 
-    let sections = result.data || [];
-
-    // Фильтрация по названию раздела (если указано)
-    if (args.section_name) {
-      const searchTerm = String(args.section_name).trim().toLowerCase();
-      sections = sections.filter((section: any) => 
-        section.section_name && section.section_name.toLowerCase().includes(searchTerm)
-      );
-    }
+    const sections = result.data || [];
 
     if (sections.length === 0) {
       return {
@@ -634,7 +620,7 @@ export async function handleUpdateSection(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Неверный формат даты начала: "${args.start_date}"`
+            text: `Неверный формат даты начала: "${args.start_date}". Используйте формат дд.мм.гггг`
           }]
         };
       }
@@ -647,11 +633,24 @@ export async function handleUpdateSection(args: any) {
         return {
           content: [{
             type: "text",
-            text: `Неверный формат даты окончания: "${args.end_date}"`
+            text: `Неверный формат даты окончания: "${args.end_date}". Используйте формат дд.мм.гггг`
           }]
         };
       }
       updateData.section_end_date = parsedDate;
+    }
+
+    // Проверка корректности диапазона дат (учитываем и новые и существующие даты)  
+    const finalStartDate = updateData.section_start_date || section.section_start_date;
+    const finalEndDate = updateData.section_end_date || section.section_end_date;
+    
+    if (!dbService.validateDateRange(finalStartDate || null, finalEndDate || null)) {
+      return {
+        content: [{
+          type: "text",
+          text: "Дата начала не может быть больше даты окончания"
+        }]
+      };
     }
 
     // Выполнение обновления
