@@ -10,6 +10,9 @@ interface AnnouncementsActions {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+  // Новые функции для скролинга к объявлению
+  highlightAnnouncement: (id: string) => void;
+  clearHighlight: () => void;
 }
 
 type AnnouncementsStore = AnnouncementsState & AnnouncementsActions;
@@ -18,6 +21,7 @@ const initialState: AnnouncementsState = {
   announcements: [],
   isLoading: false,
   error: null,
+  highlightedAnnouncementId: null,
 };
 
 export const useAnnouncementsStore = create<AnnouncementsStore>()(
@@ -63,6 +67,12 @@ export const useAnnouncementsStore = create<AnnouncementsStore>()(
 
       reset: () => 
         set(initialState, false, 'reset'),
+
+      highlightAnnouncement: (id: string) => 
+        set({ highlightedAnnouncementId: id }, false, 'highlightAnnouncement'),
+
+      clearHighlight: () => 
+        set({ highlightedAnnouncementId: null }, false, 'clearHighlight'),
     }),
     {
       name: 'announcements-store',

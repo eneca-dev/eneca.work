@@ -19,3 +19,13 @@ coverage/
 
 # WS-to-Work Integration
 ws-to-work-integration/
+
+
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local

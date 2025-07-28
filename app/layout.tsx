@@ -17,24 +17,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  if (typeof window === 'undefined') {
-    const fs = require('fs');
-    const path = require('path');
-    const envFiles = ['.env.local', '.env.development', '.env.production', '.env'];
-    const existing = envFiles.filter(f => fs.existsSync(path.join(process.cwd(), f)));
-    let used = 'Неизвестно';
-    if (process.env.NODE_ENV === 'development' && existing.includes('.env.local')) used = '.env.local';
-    else if (process.env.NODE_ENV === 'production' && existing.includes('.env.production')) used = '.env.production';
-    else if (existing.length > 0) used = existing[0];
-    console.log(`\n=== eneca.work ===`);
-    console.log(`Режим: ${process.env.NODE_ENV}`);
-    console.log(`Используемый файл переменных окружения: ${used}`);
-    console.log('=================\n');
-  }
-
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <ClientProviders>
           {children}
         </ClientProviders>
@@ -42,6 +27,3 @@ export default function RootLayout({
     </html>
   )
 }
-
-
-import './globals.css'
