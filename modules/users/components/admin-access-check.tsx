@@ -36,8 +36,8 @@ export function AdminAccessCheck({
           }
         }
         
-        // Check for user_admin_panel_can_view permission with safe access
-        const canViewAdminPanel = permissions?.includes("user_admin_panel_can_view") ?? false
+        // Check for users.admin_panel permission with safe access
+        const canViewAdminPanel = permissions?.includes("users.admin_panel") ?? false
         
         setHasAccess(canViewAdminPanel)
         

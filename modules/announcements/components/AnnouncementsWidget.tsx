@@ -36,7 +36,7 @@ export function AnnouncementsWidget() {
 
   // Проверяем разрешение на создание и редактирование объявлений
   const canCreateAndEdit = useMemo(() => {
-    return userStore.hasPermission("announcements_can_create_and_edit")
+    return userStore.hasPermission("announcements.create")
   }, [userStore.id, userStore.permissions])
 
   // Фильтруем и сортируем объявления

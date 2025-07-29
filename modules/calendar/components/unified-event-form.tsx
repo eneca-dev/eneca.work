@@ -36,8 +36,8 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   
   // Проверяем права - ОПТИМИЗИРОВАННО  
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const hasGlobalEvents = userStore.hasPermission("calendar.create.global") || 
+                           userStore.hasPermission("calendar.edit.global")
     
     return { hasGlobalEvents }
   }, [userStore])

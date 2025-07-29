@@ -10,7 +10,7 @@ export function useUserPermissions(): UserPermissions {
   const permissions = useUserStore((state) => state.permissions)
 
   return {
-    canEditAllUsers: permissions?.includes("users_can_edit_all") ?? false,
+    canEditAllUsers: permissions?.includes("users.edit.all") ?? false,
     canDeleteUsers: permissions?.includes("user.delete") ?? false,
     canEditStructures: permissions?.includes("structure.edit") ?? false,
   }

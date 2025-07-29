@@ -51,7 +51,8 @@ export function EventsList(props: EventsListProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   const canManageGlobalEvents = useMemo(() => 
-    userStore.permissions.includes("calendar_can_create_and_edit_global_events")
+    userStore.permissions.includes("calendar.create.global") || 
+    userStore.permissions.includes("calendar.edit.global")
   , [userStore.permissions])
 
   const [searchTerm, setSearchTerm] = useState("")

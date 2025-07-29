@@ -38,8 +38,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   
   // Проверяем права - ОПТИМИЗИРОВАННО  
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const hasGlobalEvents = userStore.hasPermission("calendar.create.global") || 
+                           userStore.hasPermission("calendar.edit.global")
     const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
                            userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
     
