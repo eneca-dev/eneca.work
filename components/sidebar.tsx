@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List, Tags } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
@@ -159,11 +159,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       title: "Декомпозиция",
       href: "/dashboard/decomposition",
       icon: Network,
-    },
-    {
-      title: "Статусы и теги",
-      href: "/dashboard/statuses-tags",
-      icon: Tags,
     },
 
   ]

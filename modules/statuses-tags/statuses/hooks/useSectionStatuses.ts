@@ -47,6 +47,22 @@ export function useSectionStatuses() {
       
       // Обновляем список статусов
       await loadStatuses();
+      
+      // Уведомляем другие компоненты о создании статуса
+      console.log('✅ Отправляем событие statusCreated:', {
+        statusId: data.id,
+        statusName: data.name,
+        statusColor: data.color
+      });
+      window.dispatchEvent(new CustomEvent('statusCreated', {
+        detail: {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color,
+          statusDescription: data.description
+        }
+      }));
+      
       return data;
     } catch (err) {
       console.error('Ошибка создания статуса:', err);
@@ -77,6 +93,22 @@ export function useSectionStatuses() {
       
       // Обновляем список статусов
       await loadStatuses();
+      
+      // Уведомляем другие компоненты об изменении статуса
+      console.log('🔄 Отправляем событие statusUpdated:', {
+        statusId: data.id,
+        statusName: data.name,
+        statusColor: data.color
+      });
+      window.dispatchEvent(new CustomEvent('statusUpdated', {
+        detail: {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color,
+          statusDescription: data.description
+        }
+      }));
+      
       return data;
     } catch (err) {
       console.error('Ошибка обновления статуса:', err);
@@ -101,6 +133,14 @@ export function useSectionStatuses() {
       
       // Обновляем список статусов
       await loadStatuses();
+      
+      // Уведомляем другие компоненты об удалении статуса
+      window.dispatchEvent(new CustomEvent('statusDeleted', {
+        detail: {
+          statusId: id
+        }
+      }));
+      
       return true;
     } catch (err) {
       console.error('Ошибка удаления статуса:', err);

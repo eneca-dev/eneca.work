@@ -5,6 +5,7 @@ import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Che
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { useProjectsStore } from '@/modules/projects/store'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -67,6 +68,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   
   const { setNotification } = useUiStore()
   const { statuses } = useSectionStatuses()
+  const { updateSectionStatus: updateSectionStatusInStore } = useProjectsStore()
 
   useEffect(() => {
     if (isOpen && sectionId) {
@@ -304,7 +306,24 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
         status_color: updatedStatus?.color || null
       })
 
+      // Обновляем store для синхронизации с деревом проектов
+      updateSectionStatusInStore(sectionId, {
+        statusId: statusId,
+        statusName: updatedStatus?.name || null,
+        statusColor: updatedStatus?.color || null
+      })
+
       setNotification(statusId ? 'Статус обновлен' : 'Статус снят')
+      
+      // Создаем событие для уведомления других компонентов об изменении
+      window.dispatchEvent(new CustomEvent('sectionStatusUpdated', {
+        detail: {
+          sectionId,
+          statusId: statusId,
+          statusName: updatedStatus?.name || null,
+          statusColor: updatedStatus?.color || null
+        }
+      }))
     } catch (error) {
       console.error('Ошибка обновления статуса:', error)
       setNotification('Ошибка обновления статуса')

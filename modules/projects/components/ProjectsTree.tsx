@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -16,6 +16,8 @@ import { CreateSectionModal } from './CreateSectionModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
+import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 
 interface ProjectNode {
   id: string
@@ -65,6 +67,7 @@ interface TreeNodeProps {
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
@@ -85,6 +88,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateObject,
   onCreateSection,
   onDeleteProject,
+  onOpenStatusManagement,
   statuses
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
@@ -163,6 +167,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       node.statusId = statusId || undefined
       node.statusName = updatedStatus?.name || undefined
       node.statusColor = updatedStatus?.color || undefined
+
+      // Создаем событие для уведомления других компонентов об изменении
+      window.dispatchEvent(new CustomEvent('sectionStatusUpdated', {
+        detail: {
+          sectionId: node.id,
+          statusId: statusId,
+          statusName: updatedStatus?.name || null,
+          statusColor: updatedStatus?.color || null
+        }
+      }))
 
       console.log('Статус обновлен:', statusId ? 'установлен' : 'снят')
     } catch (error) {
@@ -317,7 +331,26 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
                 {/* Выпадающий список статусов */}
                 {showStatusDropdown && node.type === 'section' && (
-                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {/* Заголовок */}
+                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Выбор статуса
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowStatusDropdown(false)
+                          onOpenStatusManagement()
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        title="Управление статусами"
+                      >
+                        <Settings className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {/* Опция "Убрать статус" */}
                     <div
                       onClick={(e) => {
                         e.stopPropagation()
@@ -330,6 +363,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                         Убрать статус
                       </span>
                     </div>
+
+                    {/* Список статусов */}
                     {statuses.map((status) => (
                       <div
                         key={status.id}
@@ -575,6 +610,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
               onDeleteProject={onDeleteProject}
+              onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
             />
           ))}
@@ -616,11 +652,126 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
 
   // Загрузка данных
   useEffect(() => {
     loadTreeData()
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+
+  // Слушаем события обновления статуса секции
+  useEffect(() => {
+    const handleSectionStatusUpdate = (event: CustomEvent) => {
+      const { sectionId, statusId, statusName, statusColor } = event.detail
+
+      // Рекурсивно обновляем статус узла в дереве
+      const updateNodeStatus = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.id === sectionId) {
+            return {
+              ...node,
+              statusId: statusId || undefined,
+              statusName: statusName || undefined,
+              statusColor: statusColor || undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateNodeStatus(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => updateNodeStatus(currentTreeData))
+    }
+
+    // Обработчик изменения статуса (обновление названия, цвета, описания)
+    const handleStatusUpdate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusUpdated в ProjectsTree:', { statusId, statusName, statusColor });
+
+      // Рекурсивно обновляем все узлы с этим статусом
+      const updateStatusInNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusName: statusName,
+              statusColor: statusColor
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateStatusInNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => {
+        const updatedData = updateStatusInNodes(currentTreeData)
+        console.log('🔄 Обновили статус в дереве:', updatedData);
+        return updatedData
+      })
+      
+      // Дополнительно перезагружаем данные из базы для синхронизации
+      setTimeout(() => {
+        console.log('🔄 Перезагружаем данные дерева для синхронизации...');
+        loadTreeData();
+      }, 100);
+    }
+
+    // Обработчик удаления статуса
+    const handleStatusDelete = (event: CustomEvent) => {
+      const { statusId } = event.detail
+
+      // Рекурсивно убираем удаленный статус у всех узлов
+      const removeStatusFromNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusId: undefined,
+              statusName: undefined,
+              statusColor: undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: removeStatusFromNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => removeStatusFromNodes(currentTreeData))
+    }
+
+    // Обработчик принудительного обновления всех данных
+    const handleForceRefresh = () => {
+      console.log('🔄 Получили команду принудительного обновления данных');
+      loadTreeData();
+    }
+
+    window.addEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
+    window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
+    window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
+    window.addEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+    
+    return () => {
+      window.removeEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
+      window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
+      window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
+      window.removeEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+    }
+  }, [])
 
   const loadTreeData = async () => {
     console.log('🌳 Загружаю данные дерева проектов...')
@@ -1068,6 +1219,13 @@ export function ProjectsTree({
               
               <div className="flex gap-2">
                 <button
+                  onClick={() => setShowStatusManagementModal(true)}
+                  title="Управление статусами"
+                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30 transition-colors"
+                >
+                  <Settings size={14} />
+                </button>
+                <button
                   onClick={toggleOnlySections}
                   title={showOnlySections ? "Показать всю структуру" : "Только разделы"}
                   className={cn(
@@ -1123,6 +1281,7 @@ export function ProjectsTree({
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
                 onDeleteProject={handleDeleteProject}
+                onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
               />
             ))
@@ -1262,6 +1421,12 @@ export function ProjectsTree({
           }}
         />
       )}
+
+      {/* Модальное окно управления статусами */}
+      <StatusManagementModal
+        isOpen={showStatusManagementModal}
+        onClose={() => setShowStatusManagementModal(false)}
+      />
 
     </>
   )

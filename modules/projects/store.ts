@@ -37,6 +37,7 @@ interface ProjectsState {
   
   // Действия для обновления разделов
   updateSectionResponsible: (sectionId: string, updates: { responsibleName?: string; responsibleAvatarUrl?: string }) => void;
+  updateSectionStatus: (sectionId: string, updates: { statusId?: string | null; statusName?: string | null; statusColor?: string | null }) => void;
   
   // CRUD операции (заглушки пока)
   setProjects: (projects: Project[]) => void;
@@ -125,6 +126,12 @@ export const useProjectsStore = create<ProjectsState>()(
         // Пока что это заглушка, так как мы работаем с данными из view_section_hierarchy
         // В реальном приложении здесь можно было бы обновить локальное состояние
         console.log('Обновление ответственного за раздел:', sectionId, updates)
+      },
+
+      // Функция обновления статуса раздела
+      updateSectionStatus: (sectionId, updates) => {
+        console.log('Обновление статуса раздела:', sectionId, updates)
+        // Здесь мы ожидаем реактивного обновления интерфейса через общий механизм событий
       },
     }),
     {
