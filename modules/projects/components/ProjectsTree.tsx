@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -15,6 +15,7 @@ import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 
 interface ProjectNode {
   id: string
@@ -34,6 +35,10 @@ interface ProjectNode {
   projectName?: string
   stageName?: string
   departmentName?: string
+  // Поля для статуса секции
+  statusId?: string
+  statusName?: string
+  statusColor?: string
 }
 
 interface ProjectsTreeProps {
@@ -60,6 +65,7 @@ interface TreeNodeProps {
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 const supabase = createClient()
@@ -78,12 +84,32 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateStage,
   onCreateObject,
   onCreateSection,
-  onDeleteProject
+  onDeleteProject,
+  statuses
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const hasChildren = node.children && node.children.length > 0
+
+  // Закрытие выпадающего списка при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showStatusDropdown) {
+        setShowStatusDropdown(false)
+      }
+    }
+
+    if (showStatusDropdown) {
+      document.addEventListener('click', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showStatusDropdown])
   const isExpanded = expandedNodes.has(node.id)
 
   const getNodeIcon = (type: string, nodeName?: string) => {
@@ -117,6 +143,33 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       return `${day}.${month}`
     } catch (error) {
       return "-"
+    }
+  }
+
+  const updateSectionStatus = async (statusId: string | null) => {
+    if (node.type !== 'section') return
+    
+    setUpdatingStatus(true)
+    try {
+      const { error } = await supabase
+        .from('sections')
+        .update({ section_status_id: statusId })
+        .eq('section_id', node.id)
+
+      if (error) throw error
+
+      // Обновляем локальные данные узла
+      const updatedStatus = statuses.find(s => s.id === statusId)
+      node.statusId = statusId || undefined
+      node.statusName = updatedStatus?.name || undefined
+      node.statusColor = updatedStatus?.color || undefined
+
+      console.log('Статус обновлен:', statusId ? 'установлен' : 'снят')
+    } catch (error) {
+      console.error('Ошибка обновления статуса:', error)
+    } finally {
+      setUpdatingStatus(false)
+      setShowStatusDropdown(false)
     }
   }
 
@@ -225,6 +278,87 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
             {/* Информация справа с фиксированными ширинами */}
             <div className="flex items-center text-xs ml-auto mr-8">
+              {/* Статус секции - фиксированная ширина */}
+              <div className="flex items-center w-32 justify-end mr-4 relative">
+                {updatingStatus ? (
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                    <span className="text-xs text-gray-500">Обновление...</span>
+                  </div>
+                ) : node.statusName ? (
+                  <div 
+                    className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowStatusDropdown(!showStatusDropdown)
+                    }}
+                    title="Нажмите для изменения статуса"
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: node.statusColor || '#6B7280' }}
+                    />
+                    <span className="text-xs text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      {node.statusName}
+                    </span>
+                  </div>
+                ) : (
+                  <span 
+                    className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowStatusDropdown(!showStatusDropdown)
+                    }}
+                    title="Нажмите для назначения статуса"
+                  >
+                    Без статуса
+                  </span>
+                )}
+
+                {/* Выпадающий список статусов */}
+                {showStatusDropdown && node.type === 'section' && (
+                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateSectionStatus(null)
+                      }}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 dark:text-slate-400">
+                        Убрать статус
+                      </span>
+                    </div>
+                    {statuses.map((status) => (
+                      <div
+                        key={status.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateSectionStatus(status.id)
+                        }}
+                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: status.color }}
+                        />
+                        <div>
+                          <div className="text-sm font-medium dark:text-white">
+                            {status.name}
+                          </div>
+                          {status.description && (
+                            <div className="text-xs text-gray-500 dark:text-slate-400">
+                              {status.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
               {/* Даты - фиксированная ширина */}
               <div className="flex items-center gap-1 w-24 justify-end">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -441,6 +575,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
               onDeleteProject={onDeleteProject}
+              statuses={statuses}
             />
           ))}
         </div>
@@ -460,6 +595,7 @@ export function ProjectsTree({
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { expandedNodes, toggleNode: toggleNodeInStore } = useProjectsStore()
+  const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -628,7 +764,11 @@ export function ProjectsTree({
           responsibleAvatarUrl: row.section_responsible_avatar,
           projectName: row.project_name,
           stageName: row.stage_name,
-          departmentName: row.responsible_department_name
+          departmentName: row.responsible_department_name,
+          // Поля статуса секции
+          statusId: row.section_status_id,
+          statusName: row.section_status_name,
+          statusColor: row.section_status_color
         }
 
         // Добавляем раздел к объекту
@@ -983,6 +1123,7 @@ export function ProjectsTree({
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
                 onDeleteProject={handleDeleteProject}
+                statuses={statuses || []}
               />
             ))
           )}

@@ -40,6 +40,7 @@ export interface Section {
   section_type?: string;
   section_start_date?: string;
   section_end_date?: string;
+  section_status_id?: string;
 }
 
 export interface ProjectHierarchyNode {

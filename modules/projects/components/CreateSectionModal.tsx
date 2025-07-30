@@ -5,6 +5,7 @@ import { Save, Loader2, Calendar, User } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
+import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 
 interface CreateSectionModalProps {
   isOpen: boolean
@@ -30,6 +31,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [sectionResponsible, setSectionResponsible] = useState('')
   const [sectionStartDate, setSectionStartDate] = useState('')
   const [sectionEndDate, setSectionEndDate] = useState('')
+  const [sectionStatusId, setSectionStatusId] = useState('')
   const [loading, setLoading] = useState(false)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [searchResponsible, setSearchResponsible] = useState('')
@@ -128,6 +130,11 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       return
     }
 
+    if (!sectionStatusId.trim()) {
+      setNotification('Статус раздела обязателен')
+      return
+    }
+
     if (!objectId) {
       setNotification('Не указан объект для создания раздела')
       return
@@ -146,6 +153,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
         section_responsible: sectionResponsible || null,
         section_start_date: sectionStartDate || null,
         section_end_date: sectionEndDate || null,
+        section_status_id: sectionStatusId,
         section_object_id: objectId,
         section_project_id: actualProjectId
       }
@@ -197,6 +205,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     setSectionResponsible('')
     setSectionStartDate('')
     setSectionEndDate('')
+    setSectionStatusId('')
     setSearchResponsible('')
     setShowResponsibleDropdown(false)
     setActualProjectId(null)
@@ -238,6 +247,19 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите описание раздела (необязательно)"
               disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+              Статус раздела *
+            </label>
+            <StatusSelector
+              value={sectionStatusId}
+              onChange={setSectionStatusId}
+              disabled={loading}
+              required={true}
+              placeholder="Выберите статус раздела..."
             />
           </div>
 
@@ -344,7 +366,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
         <ModalButton 
           variant="success" 
           onClick={() => handleSubmit()}
-          disabled={loading || !sectionName.trim()}
+          disabled={loading || !sectionName.trim() || !sectionStatusId.trim()}
           icon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         >
           {loading ? 'Создание...' : 'Создать раздел'}
