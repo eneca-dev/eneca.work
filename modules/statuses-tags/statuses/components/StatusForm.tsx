@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, Loader2, Palette } from 'lucide-react';
-import { Modal, ModalButton } from '@/components/modals';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useUiStore } from '@/stores/useUiStore';
 import { SectionStatus, SectionStatusFormData } from '../types';
 import { useSectionStatuses } from '../hooks/useSectionStatuses';
@@ -98,71 +102,83 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="md">
-      <Modal.Header 
-        title={isEditing ? 'Редактировать статус' : 'Создать новый статус'}
-        subtitle="Статус секции проекта"
-      />
-      
-      <Modal.Body>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">
+            {isEditing ? 'Редактировать статус' : 'Создать новый статус'}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Статус секции проекта
+          </p>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          {/* Название статуса */}
+          <div className="space-y-2">
+            <Label htmlFor="statusName" className="text-sm font-medium">
               Название статуса *
-            </label>
-            <input
+            </Label>
+            <Input
+              id="statusName"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите название статуса"
               disabled={loading}
               autoFocus
+              className="w-full"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+          {/* Цвет статуса */}
+          <div className="space-y-2">
+            <Label htmlFor="statusColor" className="text-sm font-medium">
               Цвет *
-            </label>
+            </Label>
             <div className="relative">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white flex items-center"
                 disabled={loading}
+                className="w-full justify-start text-left h-10"
               >
                 <div 
-                  className="w-6 h-6 rounded mr-3 border border-gray-300 dark:border-slate-500" 
+                  className="w-5 h-5 rounded mr-3 border border-border shadow-sm" 
                   style={{ backgroundColor: formData.color }}
                 />
-                <span>{formData.color}</span>
-                <Palette className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              </button>
+                <span className="flex-1">{formData.color}</span>
+                <Palette className="h-4 w-4 text-muted-foreground" />
+              </Button>
               
               {showColorPicker && (
-                <div className="absolute z-10 mt-1 p-3 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg">
-                  <div className="grid grid-cols-6 gap-2">
+                <div className="absolute z-50 mt-2 p-4 bg-card border border-border rounded-lg shadow-lg w-full">
+                  <div className="grid grid-cols-6 gap-2 mb-4">
                     {DEFAULT_COLORS.map((color) => (
                       <button
                         key={color}
                         type="button"
                         onClick={() => handleColorSelect(color)}
-                        className={`w-8 h-8 rounded border-2 hover:scale-110 transition-transform ${
+                        className={`w-10 h-10 rounded-md border-2 hover:scale-105 transition-transform ${
                           formData.color === color 
-                            ? 'border-gray-800 dark:border-white' 
-                            : 'border-gray-300 dark:border-slate-500'
+                            ? 'border-primary shadow-md' 
+                            : 'border-border hover:border-primary/50'
                         }`}
                         style={{ backgroundColor: color }}
+                        title={color}
                       />
                     ))}
                   </div>
-                  <div className="mt-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Или выберите произвольный цвет:
+                    </Label>
                     <input
                       type="color"
                       value={formData.color}
                       onChange={(e) => handleColorSelect(e.target.value)}
-                      className="w-full h-8 rounded border border-gray-300 dark:border-slate-600"
+                      className="w-full h-10 rounded-md border border-border cursor-pointer"
                     />
                   </div>
                 </div>
@@ -170,35 +186,40 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+          {/* Описание */}
+          <div className="space-y-2">
+            <Label htmlFor="statusDescription" className="text-sm font-medium">
               Описание
-            </label>
-            <textarea
+            </Label>
+            <Textarea
+              id="statusDescription"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите описание статуса (необязательно)"
               disabled={loading}
+              className="min-h-[80px] resize-none"
             />
           </div>
         </form>
-      </Modal.Body>
 
-      <Modal.Footer>
-        <ModalButton variant="cancel" onClick={handleClose} disabled={loading}>
-          Отмена
-        </ModalButton>
-        <ModalButton 
-          variant="success" 
-          onClick={() => handleSubmit()}
-          disabled={loading || !formData.name.trim()}
-          icon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-        >
-          {loading ? 'Сохранение...' : (isEditing ? 'Обновить' : 'Создать')}
-        </ModalButton>
-      </Modal.Footer>
-    </Modal>
+        <DialogFooter className="flex justify-between">
+          <Button 
+            variant="outline" 
+            onClick={handleClose} 
+            disabled={loading}
+          >
+            Отмена
+          </Button>
+          <Button 
+            onClick={() => handleSubmit()}
+            disabled={loading || !formData.name.trim()}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {loading ? 'Сохранение...' : (isEditing ? 'Обновить' : 'Создать')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 } 

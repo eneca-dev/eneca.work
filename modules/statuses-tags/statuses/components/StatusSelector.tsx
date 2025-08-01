@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, Tag, Settings, Plus, Edit2, Trash2, X } from 'lucide-react';
 import { SectionStatus } from '../types';
 import { useSectionStatuses } from '../hooks/useSectionStatuses';
@@ -83,8 +83,37 @@ export function StatusSelector({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
   
-  const { statuses, loading, deleteStatus } = useSectionStatuses();
+  const { statuses, loading, deleteStatus, loadStatuses } = useSectionStatuses();
   const { setNotification } = useUiStore();
+
+  // Слушаем события изменения статусов для автоматического обновления
+  useEffect(() => {
+    const handleStatusChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('🔄 StatusSelector: Получено событие', event.type, customEvent.detail);
+      console.log('🔄 StatusSelector: Обновление статусов после изменения');
+      
+      // Принудительно перезагружаем статусы
+      loadStatuses();
+    };
+
+    console.log('🔧 StatusSelector: Подписка на события статусов');
+    
+    // Подписываемся на все события изменения статусов
+    window.addEventListener('statusCreated', handleStatusChange);
+    window.addEventListener('statusUpdated', handleStatusChange);
+    window.addEventListener('statusDeleted', handleStatusChange);
+    window.addEventListener('forceStatusRefresh', handleStatusChange);
+
+    return () => {
+      console.log('🔧 StatusSelector: Отписка от событий статусов');
+      // Отписываемся при размонтировании компонента
+      window.removeEventListener('statusCreated', handleStatusChange);
+      window.removeEventListener('statusUpdated', handleStatusChange);
+      window.removeEventListener('statusDeleted', handleStatusChange);
+      window.removeEventListener('forceStatusRefresh', handleStatusChange);
+    };
+  }, [loadStatuses]);
 
   const selectedStatus = statuses.find(status => status.id === value);
 

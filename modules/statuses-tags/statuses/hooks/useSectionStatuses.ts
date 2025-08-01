@@ -124,6 +124,22 @@ export function useSectionStatuses() {
     setError(null);
     try {
       const supabase = createClient();
+      
+      // Сначала обновляем все разделы, которые используют этот статус, 
+      // устанавливая им "Без статуса" (section_status_id = NULL)
+      const { error: updateError } = await supabase
+        .from('sections')
+        .update({ section_status_id: null })
+        .eq('section_status_id', id);
+
+      if (updateError) {
+        console.error('Ошибка обновления разделов:', updateError);
+        throw new Error('Не удалось обновить разделы, использующие статус');
+      }
+
+      console.log(`🔄 Обновлены разделы: статус ${id} заменен на "Без статуса"`);
+
+      // Затем удаляем сам статус
       const { error } = await supabase
         .from('section_statuses')
         .delete()

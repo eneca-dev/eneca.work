@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Settings, X } from 'lucide-react';
-import { Modal, ModalButton } from '@/components/modals';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useSectionStatuses } from '../hooks/useSectionStatuses';
 import { SectionStatus } from '../types';
 import { StatusForm } from './StatusForm';
@@ -26,44 +28,41 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   onConfirm,
   statusName
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-      <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold dark:text-white">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold">
             Подтвердите удаление
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Это действие нельзя отменить
+          </p>
+        </DialogHeader>
+        
+        <div className="py-4">
+          <p className="text-foreground mb-4">
+            Вы уверены, что хотите удалить статус <strong>"{statusName}"</strong>?
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Все разделы, использующие этот статус, автоматически получат статус "Без статуса".
+            Это действие нельзя отменить.
+          </p>
         </div>
         
-        <p className="text-gray-600 dark:text-gray-300 mb-6">
-          Вы уверены, что хотите удалить статус <strong>"{statusName}"</strong>?
-          Это действие нельзя отменить.
-        </p>
-        
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
-          >
+        <DialogFooter className="flex justify-between">
+          <Button variant="outline" onClick={onClose}>
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button 
+            variant="destructive"
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
           >
             Удалить
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -75,6 +74,18 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   
   const { statuses, loading, deleteStatus } = useSectionStatuses();
   const { setNotification } = useUiStore();
+
+  // Обработчик закрытия модального окна с принудительным обновлением статусов
+  const handleClose = () => {
+    console.log('🔄 StatusManagementModal: Закрытие с принудительным обновлением статусов');
+    
+    // Отправляем событие для обновления всех компонентов со статусами
+    window.dispatchEvent(new CustomEvent('forceStatusRefresh', {
+      detail: { source: 'StatusManagementModal' }
+    }));
+    
+    onClose();
+  };
 
   const handleCreateStatus = () => {
     setEditingStatus(null);
@@ -109,71 +120,93 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     setShowStatusForm(false);
     setEditingStatus(null);
     
-    // Принудительно обновляем все статусы во всех компонентах
-    setTimeout(() => {
-      console.log('🔄 Принудительное обновление статусов после успешной операции');
-      window.dispatchEvent(new CustomEvent('forceStatusRefresh'));
-    }, 100);
+    // События уже отправляются из хука useSectionStatuses при создании/обновлении
+    // Убираем дублирование событий
   };
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <Modal.Header 
-          title="Управление статусами"
-          subtitle="Создание, редактирование и удаление статусов секций"
-        />
-        
-        <Modal.Body>
-          <div className="space-y-4">
-            {/* Кнопка создания нового статуса */}
-            <div className="flex justify-between items-center">
-              <h4 className="text-lg font-medium dark:text-slate-200 text-slate-800">
-                Статусы секций ({statuses.length})
-              </h4>
-              <button
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-foreground">
+              Управление статусами
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Создание, редактирование и удаление статусов секций
+            </p>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {/* Заголовок с кнопкой создания */}
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <h4 className="text-lg font-medium text-foreground">
+                  Статусы секций
+                </h4>
+                {statuses.length > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="bg-primary/10 text-primary border-primary/20"
+                  >
+                    {statuses.length}
+                  </Badge>
+                )}
+              </div>
+              
+              <Button
                 onClick={handleCreateStatus}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 mr-2" />
                 Создать статус
-              </button>
+              </Button>
             </div>
 
             {/* Список статусов */}
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="space-y-3 max-h-96 overflow-y-auto">
               {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
-                  <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Загрузка статусов...</p>
+                <div className="flex justify-center items-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Загрузка статусов...</p>
+                  </div>
                 </div>
               ) : statuses.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    <Settings className="w-6 h-6 dark:text-slate-400 text-slate-500" />
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                    <Settings className="w-8 h-8 text-muted-foreground" />
                   </div>
-                  <p className="dark:text-slate-300 text-slate-700 font-medium">Нет созданных статусов</p>
-                  <p className="text-sm dark:text-slate-400 text-slate-500 mt-1">
+                  <h3 className="text-lg font-medium text-foreground mb-2">Нет созданных статусов</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
                     Создайте первый статус для работы с секциями
                   </p>
+                  <Button
+                    onClick={handleCreateStatus}
+                    variant="outline"
+                    className="border-primary text-primary hover:bg-primary/10"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Создать статус
+                  </Button>
                 </div>
               ) : (
                 statuses.map((status) => (
                   <div
                     key={status.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                    className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center flex-1">
                       <div 
-                        className="w-6 h-6 rounded-full mr-3 border border-gray-300 dark:border-slate-500" 
+                        className="w-6 h-6 rounded-full mr-3 border border-border shadow-sm" 
                         style={{ backgroundColor: status.color }}
                       />
                       <div className="flex-1">
-                        <div className="font-medium dark:text-white text-slate-900">
+                        <div className="font-medium text-foreground">
                           {status.name}
                         </div>
                         {status.description && (
-                          <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+                          <div className="text-sm text-muted-foreground mt-1">
                             {status.description}
                           </div>
                         )}
@@ -182,34 +215,36 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
 
                     {/* Кнопки управления */}
                     <div className="flex items-center gap-2 ml-4">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleEditStatus(status)}
-                        className="p-2 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors"
-                        title="Редактировать статус"
+                        className="text-primary hover:text-primary hover:bg-primary/10"
                       >
                         <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleDeleteStatus(status)}
-                        className="p-2 rounded-lg text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                        title="Удалить статус"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))
               )}
             </div>
           </div>
-        </Modal.Body>
 
-        <Modal.Footer>
-          <ModalButton variant="cancel" onClick={onClose}>
-            Закрыть
-          </ModalButton>
-        </Modal.Footer>
-      </Modal>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClose}>
+              Закрыть
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Форма создания/редактирования статуса */}
       <StatusForm
@@ -231,4 +266,4 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
       />
     </>
   );
-} 
+}

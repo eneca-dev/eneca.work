@@ -67,8 +67,31 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   const [updatingStatus, setUpdatingStatus] = useState(false)
   
   const { setNotification } = useUiStore()
-  const { statuses } = useSectionStatuses()
+  const { statuses, loadStatuses } = useSectionStatuses()
   const { updateSectionStatus: updateSectionStatusInStore } = useProjectsStore()
+
+  // Слушаем события изменения статусов для автоматического обновления
+  useEffect(() => {
+    const handleStatusChange = async () => {
+      console.log('🔄 SectionPanel: Обновление списка статусов');
+      // Только обновляем список статусов, данные секции обновятся через другие механизмы
+      await loadStatuses();
+    };
+
+    // Подписываемся на все события изменения статусов
+    window.addEventListener('statusCreated', handleStatusChange);
+    window.addEventListener('statusUpdated', handleStatusChange);
+    window.addEventListener('statusDeleted', handleStatusChange);
+    window.addEventListener('forceStatusRefresh', handleStatusChange);
+
+    return () => {
+      // Отписываемся при размонтировании компонента
+      window.removeEventListener('statusCreated', handleStatusChange);
+      window.removeEventListener('statusUpdated', handleStatusChange);
+      window.removeEventListener('statusDeleted', handleStatusChange);
+      window.removeEventListener('forceStatusRefresh', handleStatusChange);
+    };
+  }, [loadStatuses]);
 
   useEffect(() => {
     if (isOpen && sectionId) {
