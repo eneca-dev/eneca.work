@@ -29,7 +29,13 @@ export const PERMISSIONS = {
     DELETE: 'users.delete',
     ADMIN_PANEL: 'users.admin_panel',
     ASSIGN_ROLES: 'users.assign_roles',
-    ASSIGN_ADMIN_ROLE: 'users.assign_admin_role'
+    ASSIGN_ADMIN_ROLE: 'users.assign_admin_role',
+    // Управление структурой
+    MANAGE_ROLES: 'users.manage.roles',
+    MANAGE_DEPARTMENTS: 'users.manage.departments',
+    MANAGE_TEAMS: 'users.manage.teams',
+    MANAGE_POSITIONS: 'users.manage.positions',
+    MANAGE_CATEGORIES: 'users.manage.categories'
   },
   
   // Планирование

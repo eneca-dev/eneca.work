@@ -14,6 +14,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { useUiStore } from "@/stores/useUiStore"
 import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 export default function CalendarPage() {
   const userStore = useUserStore()
@@ -33,13 +34,13 @@ export default function CalendarPage() {
     }
   }, [userStore.id, userStore.isAuthenticated, fetchEvents, fetchWorkSchedules])
 
-  // Проверяем права на создание глобальных событий (календарь) - ОПТИМИЗИРОВАННО
+    // Проверяем права на создание глобальных событий (календарь) - ОПТИМИЗИРОВАННО
+  const { hasPermission } = usePermissions()
   const canCreateGlobalEvents = useMemo(() => {
-    const result = userStore.hasPermission("calendar.create.global") || 
-                   userStore.hasPermission("calendar.edit.global")
+    const result = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
     
     return result
-  }, [userStore.id, userStore.permissions])
+  }, [hasPermission])
 
   const currentUser = userStore
 

@@ -32,6 +32,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { formatDate, getEventColor } from "@/modules/calendar/utils"
 import { parseDateFromString } from "@/modules/calendar/utils"
 import { cn } from "@/lib/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface UnifiedEventsListProps {
   isOpen: boolean
@@ -51,15 +52,14 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права - ОПТИМИЗИРОВАННО  
+    // Проверяем права - ОПТИМИЗИРОВАННО  
+  const { hasPermission } = usePermissions()
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.create.global") || 
-                           userStore.hasPermission("calendar.edit.global")
-    const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
+    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
+    const hasWorkSchedule = hasPermission("calendar.admin") || hasPermission("calendar.edit.work_schedule")
     
     return { hasGlobalEvents, hasWorkSchedule }
-  }, [userStore])
+  }, [hasPermission])
 
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")

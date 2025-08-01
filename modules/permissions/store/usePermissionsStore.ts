@@ -11,6 +11,7 @@ interface PermissionsState {
   isLoading: boolean
   error: string | null
   lastUpdated: Date | null
+  userId: string | null // Для предотвращения race conditions
   
   // Методы
   setPermissions: (permissions: string[]) => void
@@ -38,7 +39,8 @@ const initialState = {
   roles: [],
   isLoading: false,
   error: null,
-  lastUpdated: null
+  lastUpdated: null,
+  userId: null
 }
 
 export const usePermissionsStore = create<PermissionsState>()(
@@ -108,27 +110,46 @@ export const usePermissionsStore = create<PermissionsState>()(
       
       // Загрузка разрешений
       loadPermissions: async (userId: string) => {
-        set({ isLoading: true, error: null })
+        const currentState = get()
+        
+        // Предотвращаем множественные запросы для одного пользователя
+        if (currentState.isLoading && currentState.userId === userId) {
+          console.log('⏸️ Разрешения уже загружаются для пользователя:', userId)
+          return
+        }
+        
+        set({ isLoading: true, error: null, userId })
         
         try {
-          // TODO: Реализовать через Supabase
-          // const { permissions, constraints, roles } = await fetchUserPermissions(userId)
+          // Загружаем разрешения из Supabase
+          const { getUserPermissions, getDataConstraints } = await import('../supabase/supabasePermissions')
           
-          // Пока используем заглушку
-          const permissions: string[] = []
-          const constraints: DataConstraint[] = []
-          const roles: string[] = []
+          console.log('🔄 Загружаем разрешения для пользователя:', userId)
+          
+          const [permissions, constraints] = await Promise.all([
+            getUserPermissions(userId),
+            getDataConstraints(userId)
+          ])
+          
+          // Проверяем что пользователь не изменился во время загрузки
+          const finalState = get()
+          if (finalState.userId !== userId) {
+            console.log('🔄 Пользователь изменился во время загрузки, игнорируем результат')
+            return
+          }
+          
+          console.log('✅ Разрешения загружены:', { permissions, constraints })
           
           set({
             permissions,
             constraints,
-            roles,
+            roles: [], // TODO: Добавить загрузку ролей пользователя если нужно
             isLoading: false,
             lastUpdated: new Date(),
             error: null
           })
         } catch (error) {
-          console.error('Ошибка загрузки разрешений:', error)
+          console.error('❌ Ошибка загрузки разрешений:', error)
           set({
             error: error instanceof Error ? error.message : 'Ошибка загрузки разрешений',
             isLoading: false
@@ -136,11 +157,15 @@ export const usePermissionsStore = create<PermissionsState>()(
         }
       },
       
-      refreshPermissions: async () => {
-        const userId = get().roles[0] // Временная заглушка
-        if (userId) {
-          await get().loadPermissions(userId)
+      refreshPermissions: async (userId?: string) => {
+        // Получаем userId из аргумента или из текущего состояния (потребуется интеграция с useUserStore)
+        if (!userId) {
+          console.warn('⚠️ userId не предоставлен для refreshPermissions')
+          return
         }
+        
+        console.log('🔄 Обновляем разрешения для пользователя:', userId)
+        await get().loadPermissions(userId)
       }
     }),
     {

@@ -8,7 +8,7 @@ import type { UsePermissionsReturn } from '../types'
  */
 export const usePermissions = (): UsePermissionsReturn => {
   const userId = useUserStore(state => state.id)
-  const userStorePermissions = useUserStore(state => state.permissions)
+  const isAuthenticated = useUserStore(state => state.isAuthenticated)
   
   const {
     permissions,
@@ -18,23 +18,11 @@ export const usePermissions = (): UsePermissionsReturn => {
     hasAnyPermission,
     hasAllPermissions,
     getPermissionLevel,
-    loadPermissions,
-    setPermissions
+    loadPermissions
   } = usePermissionsStore()
 
-  // Синхронизируем разрешения из основного store
-  useEffect(() => {
-    if (userStorePermissions && userStorePermissions.length > 0) {
-      setPermissions(userStorePermissions)
-    }
-  }, [userStorePermissions, setPermissions])
-
-  // Загружаем разрешения при изменении userId
-  useEffect(() => {
-    if (userId && permissions.length === 0 && !isLoading) {
-      loadPermissions(userId)
-    }
-  }, [userId, permissions.length, isLoading, loadPermissions])
+  // УБРАНО: Автозагрузка разрешений - теперь это делает UserPermissionsSyncProvider
+  // Избегаем дублирования запросов к Supabase
 
   return {
     permissions,

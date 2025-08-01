@@ -1,6 +1,6 @@
 import type { User, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
 import { createClient } from "@/utils/supabase/client"
-import { getUserRoleAndPermissions } from "@/utils/role-utils"
+// УДАЛЕНО: Legacy import getUserRoleAndPermissions - используем новую систему permissions
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -540,119 +540,5 @@ export async function checkPaymentAccess(): Promise<boolean> {
 
 
 
-/**
- * ОПТИМИЗИРОВАННАЯ функция получения разрешений
- * Использует Zustand если доступен, иначе обращается к БД
- * @param userId string - нужен только если нет данных в Zustand
- * @param forceFromDB boolean - принудительно получить из БД
- * @returns { roleId: string | null, permissions: string[] }
- */
-export async function getUserPermissionsOptimized(userId?: string, forceFromDB: boolean = false) {
-  try {
-    // Если не требуется принудительное обращение к БД, пытаемся использовать Zustand
-    if (!forceFromDB) {
-      // Используем относительный импорт для избежания проблем с webpack
-      const { useUserStore } = await import("../stores/useUserStore");
-      const userState = useUserStore.getState();
-      
-      // Если в Zustand есть актуальные данные о разрешениях
-      if (userState.isAuthenticated && userState.permissions && userState.profile?.roleId) {
-        console.log("Используем данные из Zustand:", {
-          roleId: userState.profile.roleId,
-          permissions: userState.permissions
-        });
-        
-        return {
-          roleId: userState.profile.roleId,
-          permissions: userState.permissions
-        };
-      }
-    }
-    
-    // Если нет данных в Zustand или требуется обращение к БД
-    if (userId) {
-      console.log("Получаем данные из БД для userId:", userId);
-      return await getUserRoleAndPermissions(userId);
-    }
-    
-    console.warn("Нет userId для обращения к БД и нет данных в Zustand");
-    return { roleId: null, permissions: [] };
-    
-  } catch (error) {
-    console.error("Ошибка в getUserPermissionsOptimized:", error);
-    return { roleId: null, permissions: [] };
-  }
-}
-
-// Функция для принудительной синхронизации текущего пользователя из Supabase в Zustand
-export async function syncCurrentUserState() {
-  try {
-    const supabase = createClient();
-    
-    // Получаем текущего пользователя из Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !authData.user) {
-      console.error("Ошибка при получении пользователя из Auth:", authError);
-      return false;
-    }
-    
-    const userId = authData.user.id;
-    
-    // Получаем профиль пользователя из БД
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-    
-    if (profileError) {
-      console.error("Ошибка при получении профиля:", profileError);
-      return false;
-    }
-    
-    // Получаем роль и разрешения
-    const { roleId, permissions } = await getUserRoleAndPermissions(userId);
-    
-    // Используем статический импорт для избежания проблем с webpack
-    const { useUserStore } = await import("../stores/useUserStore");
-    
-    // Обновляем состояние в Zustand
-    useUserStore.getState().setUser({
-      id: userId,
-      email: authData.user.email || "",
-      name: profileData 
-        ? [profileData.first_name || "", profileData.last_name || ""].filter(Boolean).join(" ") 
-        : authData.user.user_metadata?.name || "Пользователь",
-      profile: profileData 
-        ? {
-            firstName: profileData.first_name,
-            lastName: profileData.last_name,
-            departmentId: profileData.department_id,
-            teamId: profileData.team_id,
-            positionId: profileData.position_id,
-            categoryId: profileData.category_id,
-            workFormat: profileData.work_format,
-            salary: profileData.salary,
-            isHourly: profileData.is_hourly,
-            employmentRate: profileData.employment_rate,
-            address: profileData.address,
-            roleId: profileData.role_id,
-            avatar_url: profileData.avatar_url
-          } 
-        : null
-    });
-    
-    // Устанавливаем роль и разрешения
-    if (roleId) {
-      useUserStore.getState().setRoleAndPermissions(roleId, permissions);
-    }
-    
-    console.log("Состояние пользователя успешно синхронизировано из Supabase");
-    return true;
-    
-  } catch (error) {
-    console.error("Ошибка при синхронизации состояния пользователя:", error);
-    return false;
-  }
-}
+// УДАЛЕНО: Legacy функции getUserPermissionsOptimized и syncCurrentUserState
+// Теперь разрешения управляются через модуль permissions автоматически

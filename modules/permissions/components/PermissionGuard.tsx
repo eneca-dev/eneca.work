@@ -40,7 +40,7 @@ export function PermissionGuard({
   children,
   inverse = false
 }: PermissionGuardProps) {
-  const { hasPermission, hasAnyPermission } = usePermissions()
+  const { hasPermission, hasAnyPermission, permissions } = usePermissions()
   
   // Проверяем основное разрешение
   let hasAccess = hasPermission(permission)

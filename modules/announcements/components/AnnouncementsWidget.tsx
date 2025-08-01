@@ -20,13 +20,14 @@ import { useUserStore } from "@/stores/useUserStore"
 import { Announcement } from "@/modules/announcements/types"
 import { PlusIcon, PencilIcon, Loader2, UserIcon, SearchIcon, MegaphoneIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 export function AnnouncementsWidget() {
   const { announcements, fetchAnnouncements, removeAnnouncement } = useAnnouncements()
   const { highlightedAnnouncementId, clearHighlight } = useAnnouncementsStore()
   const userStore = useUserStore()
   const isAuthenticated = userStore.isAuthenticated
-  const permissions = userStore.permissions
+  // УДАЛЕНО: const permissions = userStore.permissions
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -35,9 +36,10 @@ export function AnnouncementsWidget() {
   const [searchQuery, setSearchQuery] = useState("")
 
   // Проверяем разрешение на создание и редактирование объявлений
+  const { hasPermission } = usePermissions()
   const canCreateAndEdit = useMemo(() => {
-    return userStore.hasPermission("announcements.create")
-  }, [userStore.id, userStore.permissions])
+    return hasPermission("announcements.create")
+  }, [hasPermission])
 
   // Фильтруем и сортируем объявления
   const filteredAndSortedAnnouncements = useMemo(() => {
@@ -89,12 +91,12 @@ export function AnnouncementsWidget() {
     }
   }, [highlightedAnnouncementId, announcements.length])
 
-  // Ждем загрузки разрешений
+  // УДАЛЕНО: Legacy ожидание загрузки permissions
   useEffect(() => {
-    if (isAuthenticated && permissions !== null) {
-      setIsPermissionsLoading(false)
+    if (isAuthenticated) {
+      setIsPermissionsLoading(false) // Всегда загружено для новой системы
     }
-  }, [isAuthenticated, permissions])
+  }, [isAuthenticated])
 
   // Загружаем объявления при монтировании компонента
   useEffect(() => {

@@ -2,8 +2,28 @@
 export type * from './types'
 
 // Экспорт констант
-export { PERMISSIONS, DATA_CONSTRAINTS, getPermissionParts, buildPermission, isSystemPermission } from './constants/permissions'
-export { ROLE_TEMPLATES, SYSTEM_ROLES, ROLE_ASSIGNERS, canAssignRoles, getRolePermissions as getRoleTemplate, getRoleConstraints } from './constants/roles'
+export { PERMISSIONS, getPermissionParts, buildPermission, isSystemPermission } from './constants/permissions'
+export { 
+  ROLE_NAMES,
+  ROLE_DESCRIPTIONS,
+  ROLE_COLORS,
+  ROLE_TEMPLATES, 
+  SYSTEM_ROLES, 
+  ROLE_ASSIGNERS, 
+  ROLE_HIERARCHY_LEVEL,
+  isSystemRole,
+  canUserAssignRoles,
+  getRolePermissions,
+  getRoleDescription,
+  getRoleColor,
+  getRoleHierarchyLevel,
+  sortRolesByImportance,
+  canAssignRole as canAssignRoleFromRoles,
+  validateRoleName,
+  validateRoleDescription,
+  checkRoleConflicts,
+  getRecommendedRoles
+} from './constants/roles'
 
 // Экспорт утилит
 export { 
@@ -22,16 +42,9 @@ export {
 } from './utils/permissionUtils'
 
 export { 
-  isSystemRole as isSystemRoleUtil,
-  canUserAssignRoles,
   getRolePermissionsById,
   getUserRoles,
-  validateRoleName,
-  validateRoleDescription,
-  getRoleDisplayName,
-  sortRolesByImportance,
-  checkRoleConflicts,
-  getRecommendedRoles
+  getRoleDisplayName
 } from './utils/roleUtils'
 
 // Экспорт хуков
@@ -85,4 +98,10 @@ export {
 } from './store/useDataScopeStore'
 
 // Экспорт Supabase интеграции
-export * from './supabase/supabasePermissions' 
+export * from './supabase/supabasePermissions'
+
+// Экспорт интеграционного слоя
+export {
+  useUserPermissionsSync,
+  UserPermissionsSyncProvider
+} from './integration/userStoreSync' 

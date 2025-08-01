@@ -35,17 +35,12 @@ interface UserState {
   name: string | null
   profile: UserProfile | null
   isAuthenticated: boolean
-  permissions: string[]
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
   clearState: () => void
-  setRoleAndPermissions: (roleId: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
-  hasPermission: (permission: string) => boolean
-  getActivePermission: () => string | null
-  getPermissionLabel: (permission: string) => string
 }
 
 export const useUserStore = create<UserState>()(
@@ -58,7 +53,6 @@ export const useUserStore = create<UserState>()(
         name: null,
         profile: null,
         isAuthenticated: false,
-        permissions: [],
         
         // Действия
         setUser: (user: UserData) => {
@@ -98,8 +92,7 @@ export const useUserStore = create<UserState>()(
             email: user.email,
             name: profileName || '',
             profile: processedProfile,
-            isAuthenticated: true,
-            permissions: shouldPreserveRoleData ? currentState.permissions : []
+            isAuthenticated: true
           });
         
         },
@@ -109,23 +102,12 @@ export const useUserStore = create<UserState>()(
           email: null,
           name: null,
           profile: null,
-          isAuthenticated: false,
-          permissions: []
+          isAuthenticated: false
         }),
         
         // Alias for clearUser for backward compatibility
         clearState: () => get().clearUser(),
-        
-        setRoleAndPermissions: (roleId, permissions) => {
-          const currentState = get();
-          set({
-            profile: currentState.profile ? {
-              ...currentState.profile,
-              roleId
-            } : { roleId },
-            permissions
-          });
-        },
+
         
         // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
@@ -150,59 +132,18 @@ export const useUserStore = create<UserState>()(
           });
         },
         
-        hasPermission: (permission: string) => {
-          const currentState = get();
-          return currentState.permissions.includes(permission);
-        },
-
-        // Method for getting the highest priority permission
-        getActivePermission: () => {
-          const currentState = get();
-          const permissions = currentState.permissions;
-          
-          // Иерархия разрешений (от высшего к низшему)
-          const permissionHierarchy = [
-            'is_top_manager',
-            'is_project_manager', 
-            'is_head_of_department',
-            'is_teamlead'
-          ];
-          
-          // Возвращаем первое найденное разрешение согласно иерархии
-          for (const permission of permissionHierarchy) {
-            if (permissions.includes(permission)) {
-              return permission;
-            }
-          }
-          
-          return null;
-        },
-
-        // Method for getting permission label
-        getPermissionLabel: (permission: string) => {
-          const labels: Record<string, string> = {
-            'is_top_manager': 'Топ-менеджер',
-            'is_project_manager': 'Руководитель проектов',
-            'is_head_of_department': 'Руководитель отдела',
-            'is_teamlead': 'Руководитель команды'
-          };
-          
-          return labels[permission] || permission;
-        }
+        // УДАЛЕНО: Все методы работы с разрешениями перенесены в permissions модуль
       }),
       {
         name: 'user-storage',
         partialize: (state) => {
-          const partializedState = {
+          return {
             id: state.id,
             email: state.email,
             name: state.name,
             profile: state.profile,
-            isAuthenticated: state.isAuthenticated,
-            // Don't save permissions in localStorage
-            permissions: []
+            isAuthenticated: state.isAuthenticated
           };
-          return partializedState;
         },
       }
     )

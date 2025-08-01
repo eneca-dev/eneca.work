@@ -21,6 +21,7 @@ import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useUserStore } from "@/stores/useUserStore"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface UnifiedEventFormProps {
   onClose: () => void
@@ -34,13 +35,13 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права - ОПТИМИЗИРОВАННО  
+    // Проверяем права - ОПТИМИЗИРОВАННО  
+  const { hasPermission } = usePermissions()
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.create.global") || 
-                           userStore.hasPermission("calendar.edit.global")
+    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
     
     return { hasGlobalEvents }
-  }, [userStore])
+  }, [hasPermission])
 
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,

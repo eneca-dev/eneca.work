@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
 import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import { syncCurrentUserState } from "@/services/org-data-service"
+// УДАЛЕНО: Legacy import syncCurrentUserState - теперь синхронизация автоматическая
 
 export default function DebugPage() {
   const [refreshCounter, setRefreshCounter] = useState(0)
@@ -38,20 +38,12 @@ export default function DebugPage() {
   const handleSync = async () => {
     setIsSyncing(true)
     try {
-      const success = await syncCurrentUserState()
-      if (success) {
-        toast({
-          title: "Синхронизация выполнена",
-          description: "Данные пользователя успешно синхронизированы с Supabase",
-        })
-        setRefreshCounter(prev => prev + 1)
-      } else {
-        toast({
-          title: "Ошибка синхронизации",
-          description: "Не удалось синхронизировать данные пользователя",
-          variant: "destructive",
-        })
-      }
+      // ОБНОВЛЕНО: Синхронизация теперь происходит автоматически через permissions модуль
+      toast({
+        title: "Автосинхронизация активна",
+        description: "Разрешения синхронизируются автоматически через новую систему permissions",
+      })
+      setRefreshCounter(prev => prev + 1)
     } catch (error) {
       console.error("Ошибка при синхронизации:", error)
       toast({
