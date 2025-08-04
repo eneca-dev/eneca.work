@@ -83,7 +83,8 @@ useEffect(() => {
    }
 }, []) // Run only on mount
 
-  const { permissions } = useUserStore()
+  // TODO: Заменить на новую систему permissions из @/modules/permissions
+  // const { permissions } = useUserStore() // Удалено - permissions больше нет в userStore
 
   // Используем тему из useSettingsStore
   const { theme: storeTheme } = useSettingsStore()

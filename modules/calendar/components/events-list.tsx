@@ -50,10 +50,8 @@ export function EventsList(props: EventsListProps) {
   const userStore = useUserStore()
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
-  const canManageGlobalEvents = useMemo(() => 
-    userStore.permissions.includes("calendar.create.global") || 
-    userStore.permissions.includes("calendar.edit.global")
-  , [userStore.permissions])
+  // TODO: Заменить на новую систему permissions из @/modules/permissions
+  const canManageGlobalEvents = useMemo(() => false, [])
 
   const [searchTerm, setSearchTerm] = useState("")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")

@@ -31,6 +31,7 @@ export const PERMISSIONS = {
     ASSIGN_ROLES: 'users.assign_roles',
     ASSIGN_ADMIN_ROLE: 'users.assign_admin_role',
     // Управление структурой
+    EDIT_STRUCTURE: 'users.edit.structure', // Редактирование организационной структуры
     MANAGE_ROLES: 'users.manage.roles',
     MANAGE_DEPARTMENTS: 'users.manage.departments',
     MANAGE_TEAMS: 'users.manage.teams',

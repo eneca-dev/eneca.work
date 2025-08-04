@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
-import { PERMISSIONS } from '@/modules/permissions'
+import { PERMISSIONS, usePermissionsStore } from '@/modules/permissions'
 import type { FilterStore, FilterOption, FilterConfigs } from './types'
 
 const supabase = createClient()
@@ -141,10 +141,12 @@ export const useFilterStore = create<FilterStore>()(
           set(updates)
         },
         
-        // Проверка блокировки фильтра на основе hierarchy permissions
+        // Проверка блокировки фильтра на основе hierarchy permissions (обновлено для новой системы)
         isFilterLocked: (type: string) => {
-          const userStore = useUserStore.getState()
-          const permissions = userStore.permissions || []
+          const permissionsState = usePermissionsStore.getState()
+          const { permissions } = permissionsState
+          
+          if (!permissions || permissions.length === 0) return false
           
           // Проверяем hierarchy permissions для автоблокировки фильтров
           if (permissions.includes(PERMISSIONS.HIERARCHY.IS_PROJECT_MANAGER)) {
