@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client"
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
+  // camelCase поля (для обратной совместимости)
   firstName?: string | null
   lastName?: string | null
   departmentId?: string | null
@@ -18,6 +19,22 @@ export interface UserProfile {
   address?: string | null
   roleId?: string | null
   avatar_url?: string | null
+  
+  // snake_case поля (из базы данных)
+  first_name?: string | null
+  last_name?: string | null
+  department_id?: string | null
+  team_id?: string | null
+  position_id?: string | null
+  category_id?: string | null
+  work_format?: string | null
+  is_hourly?: boolean | null
+  employment_rate?: number | null
+  role_id?: string | null
+  user_id?: string | null
+  email?: string | null
+  created_at?: string | null
+  city_id?: string | null
 }
 
 // Тип данных пользователя для передачи в setUser
@@ -70,27 +87,40 @@ export const useUserStore = create<UserState>()(
           if (user.profile) {
             // Create deep copy of profile for safety
             processedProfile = {
-              firstName: user.profile.firstName,
-              lastName: user.profile.lastName,
-              departmentId: user.profile.departmentId,
-              teamId: user.profile.teamId,
-              positionId: user.profile.positionId,
-              categoryId: user.profile.categoryId,
-              workFormat: user.profile.workFormat,
+              firstName: user.profile.firstName || user.profile.first_name,
+              lastName: user.profile.lastName || user.profile.last_name,
+              departmentId: user.profile.departmentId || user.profile.department_id,
+              teamId: user.profile.teamId || user.profile.team_id,
+              positionId: user.profile.positionId || user.profile.position_id,
+              categoryId: user.profile.categoryId || user.profile.category_id,
+              workFormat: user.profile.workFormat || user.profile.work_format,
               salary: user.profile.salary,
-              isHourly: user.profile.isHourly,
-              employmentRate: user.profile.employmentRate,
+              isHourly: user.profile.isHourly || user.profile.is_hourly,
+              employmentRate: user.profile.employmentRate || user.profile.employment_rate,
               address: user.profile.address,
-              roleId: user.profile.roleId,
+              roleId: user.profile.roleId || user.profile.role_id,
               avatar_url: user.profile.avatar_url
             };
-            profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
+            // Формируем имя из profile только если не передано готовое имя
+            const firstName = user.profile.firstName || user.profile.first_name;
+            const lastName = user.profile.lastName || user.profile.last_name;
+            profileName = [firstName, lastName].filter(Boolean).join(' ');
           }
+          
+          // Приоритетно используем переданное имя, fallback на profileName
+          const finalName = user.name || profileName || '';
+          
+          console.log("💾 useUserStore.setUser: Сохранение данных:", {
+            passedName: user.name,
+            profileName,
+            finalName,
+            hasProfile: !!user.profile
+          });
           
           set({
             id: user.id,
             email: user.email,
-            name: profileName || '',
+            name: finalName,
             profile: processedProfile,
             isAuthenticated: true
           });

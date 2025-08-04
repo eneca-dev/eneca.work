@@ -1,5 +1,5 @@
 import type { Role, Permission } from '../types'
-import { SYSTEM_ROLES, ROLE_ASSIGNERS, getRolePermissions, getRoleConstraints } from '../constants/roles'
+import { SYSTEM_ROLES, ROLE_ASSIGNERS, getRolePermissions } from '../constants/roles'
 
 /**
  * Проверяет является ли роль системной
@@ -12,7 +12,7 @@ export const isSystemRole = (roleName: string): boolean => {
  * Проверяет может ли пользователь назначать роли
  */
 export const canUserAssignRoles = (userRole: string): boolean => {
-  return ROLE_ASSIGNERS.includes(userRole as any)
+  return Object.keys(ROLE_ASSIGNERS).includes(userRole)
 }
 
 /**

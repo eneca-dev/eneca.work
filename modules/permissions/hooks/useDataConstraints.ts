@@ -93,6 +93,7 @@ export const useFilterConstraints = () => {
 
   const getAvailableUsers = async () => {
     // TODO: Реализовать загрузку пользователей с учетом ограничений
+    const userId = useUserStore.getState().id
     switch (dataScope.users) {
       case 'all':
         return [] // Все пользователи
@@ -100,8 +101,8 @@ export const useFilterConstraints = () => {
         return [] // Пользователи отдела
       case 'team':
         return [] // Пользователи команды
-             case 'self':
-         return userProfile ? [{ id: userId }] : []
+      case 'self':
+        return userProfile ? [{ id: userId }] : []
       default:
         return []
     }
