@@ -88,6 +88,9 @@ export function StatusSelector({
 
   // Слушаем события изменения статусов для автоматического обновления
   useEffect(() => {
+    // Проверяем, что мы в браузере
+    if (typeof window === 'undefined') return;
+    
     const handleStatusChange = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('🔄 StatusSelector: Получено событие', event.type, customEvent.detail);
@@ -108,10 +111,12 @@ export function StatusSelector({
     return () => {
       console.log('🔧 StatusSelector: Отписка от событий статусов');
       // Отписываемся при размонтировании компонента
-      window.removeEventListener('statusCreated', handleStatusChange);
-      window.removeEventListener('statusUpdated', handleStatusChange);
-      window.removeEventListener('statusDeleted', handleStatusChange);
-      window.removeEventListener('forceStatusRefresh', handleStatusChange);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('statusCreated', handleStatusChange);
+        window.removeEventListener('statusUpdated', handleStatusChange);
+        window.removeEventListener('statusDeleted', handleStatusChange);
+        window.removeEventListener('forceStatusRefresh', handleStatusChange);
+      }
     };
   }, [loadStatuses]);
 
@@ -155,7 +160,7 @@ export function StatusSelector({
         onChange('');
       }
     } catch (error) {
-      console.error('Ошибка удаления статуса:', error);
+      console.warn('Ошибка удаления статуса:', error);
       setNotification('Ошибка при удалении статуса');
     }
   };

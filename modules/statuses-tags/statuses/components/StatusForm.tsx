@@ -80,7 +80,7 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
         handleClose();
       }
     } catch (error) {
-      console.error('Ошибка сохранения статуса:', error);
+      console.warn('Ошибка сохранения статуса:', error);
     } finally {
       setLoading(false);
     }
@@ -148,13 +148,13 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
                   className="w-5 h-5 rounded mr-3 border border-border shadow-sm" 
                   style={{ backgroundColor: formData.color }}
                 />
-                <span className="flex-1">{formData.color}</span>
+                <span className="flex-1">Выберите цвет статуса</span>
                 <Palette className="h-4 w-4 text-muted-foreground" />
               </Button>
               
               {showColorPicker && (
                 <div className="absolute z-50 mt-2 p-4 bg-card border border-border rounded-lg shadow-lg w-full">
-                  <div className="grid grid-cols-6 gap-2 mb-4">
+                  <div className="grid grid-cols-6 gap-2">
                     {DEFAULT_COLORS.map((color) => (
                       <button
                         key={color}
@@ -166,20 +166,9 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
                             : 'border-border hover:border-primary/50'
                         }`}
                         style={{ backgroundColor: color }}
-                        title={color}
+                        title="Выбрать этот цвет"
                       />
                     ))}
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">
-                      Или выберите произвольный цвет:
-                    </Label>
-                    <input
-                      type="color"
-                      value={formData.color}
-                      onChange={(e) => handleColorSelect(e.target.value)}
-                      className="w-full h-10 rounded-md border border-border cursor-pointer"
-                    />
                   </div>
                 </div>
               )}

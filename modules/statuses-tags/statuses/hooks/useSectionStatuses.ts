@@ -17,10 +17,15 @@ export function useSectionStatuses() {
         .select('*')
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Ошибка загрузки статусов из Supabase:', error);
+        setError(error.message || 'Ошибка загрузки статусов');
+        return;
+      }
+      
       setStatuses(data || []);
     } catch (err) {
-      console.error('Ошибка загрузки статусов:', err);
+      console.warn('Ошибка загрузки статусов:', err);
       const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки статусов';
       setError(errorMessage);
     } finally {
@@ -45,27 +50,30 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Обновляем список статусов
+      // Сначала обновляем локальное состояние
       await loadStatuses();
       
-      // Уведомляем другие компоненты о создании статуса
+      // После обновления состояния уведомляем другие компоненты о создании статуса
       console.log('✅ Отправляем событие statusCreated:', {
         statusId: data.id,
         statusName: data.name,
         statusColor: data.color
       });
-      window.dispatchEvent(new CustomEvent('statusCreated', {
-        detail: {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color,
-          statusDescription: data.description
-        }
-      }));
+      
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('statusCreated', {
+          detail: {
+            statusId: data.id,
+            statusName: data.name,
+            statusColor: data.color,
+            statusDescription: data.description
+          }
+        }));
+      }
       
       return data;
     } catch (err) {
-      console.error('Ошибка создания статуса:', err);
+      console.warn('Ошибка создания статуса:', err);
       setError(err instanceof Error ? err.message : 'Ошибка создания статуса');
       return null;
     } finally {
@@ -91,27 +99,30 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Обновляем список статусов
+      // Сначала обновляем локальное состояние
       await loadStatuses();
       
-      // Уведомляем другие компоненты об изменении статуса
+      // После обновления состояния уведомляем другие компоненты об изменении статуса
       console.log('🔄 Отправляем событие statusUpdated:', {
         statusId: data.id,
         statusName: data.name,
         statusColor: data.color
       });
-      window.dispatchEvent(new CustomEvent('statusUpdated', {
-        detail: {
-          statusId: data.id,
-          statusName: data.name,
-          statusColor: data.color,
-          statusDescription: data.description
-        }
-      }));
+      
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('statusUpdated', {
+          detail: {
+            statusId: data.id,
+            statusName: data.name,
+            statusColor: data.color,
+            statusDescription: data.description
+          }
+        }));
+      }
       
       return data;
     } catch (err) {
-      console.error('Ошибка обновления статуса:', err);
+      console.warn('Ошибка обновления статуса:', err);
       setError(err instanceof Error ? err.message : 'Ошибка обновления статуса');
       return null;
     } finally {
@@ -133,7 +144,7 @@ export function useSectionStatuses() {
         .eq('section_status_id', id);
 
       if (updateError) {
-        console.error('Ошибка обновления разделов:', updateError);
+        console.warn('Ошибка обновления разделов:', updateError);
         throw new Error('Не удалось обновить разделы, использующие статус');
       }
 
@@ -147,19 +158,23 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Обновляем список статусов
+      // Сначала обновляем локальное состояние
       await loadStatuses();
       
-      // Уведомляем другие компоненты об удалении статуса
-      window.dispatchEvent(new CustomEvent('statusDeleted', {
-        detail: {
-          statusId: id
-        }
-      }));
+      // После обновления состояния уведомляем другие компоненты об удалении статуса
+      console.log('🗑️ Отправляем событие statusDeleted:', { statusId: id });
+      
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('statusDeleted', {
+          detail: {
+            statusId: id
+          }
+        }));
+      }
       
       return true;
     } catch (err) {
-      console.error('Ошибка удаления статуса:', err);
+      console.warn('Ошибка удаления статуса:', err);
       setError(err instanceof Error ? err.message : 'Ошибка удаления статуса');
       return false;
     } finally {
@@ -169,6 +184,45 @@ export function useSectionStatuses() {
 
   useEffect(() => {
     loadStatuses();
+  }, [loadStatuses]);
+
+  // Слушаем глобальные события изменения статусов для автоматического обновления
+  useEffect(() => {
+    const handleStatusCreated = () => {
+      console.log('📥 useSectionStatuses: получили событие statusCreated, обновляем список');
+      loadStatuses();
+    };
+
+    const handleStatusUpdated = () => {
+      console.log('📥 useSectionStatuses: получили событие statusUpdated, обновляем список');
+      loadStatuses();
+    };
+
+    const handleStatusDeleted = () => {
+      console.log('📥 useSectionStatuses: получили событие statusDeleted, обновляем список');
+      loadStatuses();
+    };
+
+    const handleForceRefresh = () => {
+      console.log('📥 useSectionStatuses: получили событие forceStatusRefresh, обновляем список');
+      loadStatuses();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('statusCreated', handleStatusCreated);
+      window.addEventListener('statusUpdated', handleStatusUpdated);
+      window.addEventListener('statusDeleted', handleStatusDeleted);
+      window.addEventListener('forceStatusRefresh', handleForceRefresh);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('statusCreated', handleStatusCreated);
+        window.removeEventListener('statusUpdated', handleStatusUpdated);
+        window.removeEventListener('statusDeleted', handleStatusDeleted);
+        window.removeEventListener('forceStatusRefresh', handleForceRefresh);
+      }
+    };
   }, [loadStatuses]);
 
   return {

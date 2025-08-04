@@ -169,18 +169,20 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       node.statusColor = updatedStatus?.color || undefined
 
       // Создаем событие для уведомления других компонентов об изменении
-      window.dispatchEvent(new CustomEvent('sectionStatusUpdated', {
-        detail: {
-          sectionId: node.id,
-          statusId: statusId,
-          statusName: updatedStatus?.name || null,
-          statusColor: updatedStatus?.color || null
-        }
-      }))
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sectionStatusUpdated', {
+          detail: {
+            sectionId: node.id,
+            statusId: statusId,
+            statusName: updatedStatus?.name || null,
+            statusColor: updatedStatus?.color || null
+          }
+        }))
+      }
 
       console.log('Статус обновлен:', statusId ? 'установлен' : 'снят')
     } catch (error) {
-      console.error('Ошибка обновления статуса:', error)
+      console.warn('Ошибка обновления статуса:', error)
     } finally {
       setUpdatingStatus(false)
       setShowStatusDropdown(false)
@@ -722,6 +724,16 @@ export function ProjectsTree({
       // Убираем полную перезагрузку - достаточно обновить статусы в памяти
     }
 
+    // Обработчик создания нового статуса
+    const handleStatusCreate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusCreated в ProjectsTree:', { statusId, statusName, statusColor });
+      
+      // При создании нового статуса просто обновляем статусы в useSectionStatuses
+      // Никаких изменений в существующих узлах не требуется
+      console.log('✅ Новый статус создан, список статусов обновится автоматически');
+    }
+
     // Обработчик удаления статуса
     const handleStatusDelete = (event: CustomEvent) => {
       const { statusId } = event.detail
@@ -756,16 +768,22 @@ export function ProjectsTree({
       loadTreeData();
     }
 
-    window.addEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
-    window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
-    window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
-    window.addEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
+      window.addEventListener('statusCreated', handleStatusCreate as EventListener)
+      window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
+      window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
+      window.addEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+    }
     
     return () => {
-      window.removeEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
-      window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
-      window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
-      window.removeEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
+        window.removeEventListener('statusCreated', handleStatusCreate as EventListener)
+        window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
+        window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
+        window.removeEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
+      }
     }
   }, [])
 
@@ -817,7 +835,7 @@ export function ProjectsTree({
       const { data, error } = await query
 
       if (error) {
-        console.error('❌ Error loading tree data:', error)
+        console.warn('❌ Error loading tree data:', error)
         return
       }
 
@@ -828,7 +846,7 @@ export function ProjectsTree({
       console.log('🌳 Построенное дерево:', tree)
       setTreeData(tree)
     } catch (error) {
-      console.error('❌ Error:', error)
+      console.warn('❌ Error:', error)
     } finally {
       setLoading(false)
     }

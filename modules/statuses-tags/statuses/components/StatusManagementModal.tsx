@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Settings, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -72,17 +72,53 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
   
-  const { statuses, loading, deleteStatus } = useSectionStatuses();
+  const { statuses, loading, deleteStatus, loadStatuses } = useSectionStatuses();
   const { setNotification } = useUiStore();
+
+  // Слушаем события изменения статусов для автоматического обновления
+  useEffect(() => {
+    // Проверяем, что мы в браузере
+    if (typeof window === 'undefined') return;
+    
+    const handleStatusChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('🔄 StatusManagementModal: Получено событие', event.type, customEvent.detail);
+      console.log('🔄 StatusManagementModal: Обновление списка статусов');
+      
+      // Принудительно перезагружаем статусы
+      loadStatuses();
+    };
+
+    console.log('🔧 StatusManagementModal: Подписка на события статусов');
+    
+    // Подписываемся на все события изменения статусов
+    window.addEventListener('statusCreated', handleStatusChange);
+    window.addEventListener('statusUpdated', handleStatusChange);
+    window.addEventListener('statusDeleted', handleStatusChange);
+    window.addEventListener('forceStatusRefresh', handleStatusChange);
+
+    return () => {
+      console.log('🔧 StatusManagementModal: Отписка от событий статусов');
+      // Отписываемся при размонтировании компонента
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('statusCreated', handleStatusChange);
+        window.removeEventListener('statusUpdated', handleStatusChange);
+        window.removeEventListener('statusDeleted', handleStatusChange);
+        window.removeEventListener('forceStatusRefresh', handleStatusChange);
+      }
+    };
+  }, [loadStatuses]);
 
   // Обработчик закрытия модального окна с принудительным обновлением статусов
   const handleClose = () => {
     console.log('🔄 StatusManagementModal: Закрытие с принудительным обновлением статусов');
     
     // Отправляем событие для обновления всех компонентов со статусами
-    window.dispatchEvent(new CustomEvent('forceStatusRefresh', {
-      detail: { source: 'StatusManagementModal' }
-    }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('forceStatusRefresh', {
+        detail: { source: 'StatusManagementModal' }
+      }));
+    }
     
     onClose();
   };
@@ -111,7 +147,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
       setShowDeleteModal(false);
       setDeletingStatus(null);
     } catch (error) {
-      console.error('Ошибка удаления статуса:', error);
+      console.warn('Ошибка удаления статуса:', error);
       setNotification('Ошибка при удалении статуса');
     }
   };
@@ -120,8 +156,9 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     setShowStatusForm(false);
     setEditingStatus(null);
     
-    // События уже отправляются из хука useSectionStatuses при создании/обновлении
-    // Убираем дублирование событий
+    // Принудительно обновляем список статусов в текущем модальном окне
+    console.log('🔄 StatusManagementModal: Принудительное обновление после успешного сохранения статуса');
+    loadStatuses();
   };
 
   return (
