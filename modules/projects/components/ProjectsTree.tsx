@@ -95,14 +95,33 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
 
   const hasChildren = node.children && node.children.length > 0
+
+  // Фильтрация статусов по поисковому запросу
+  const filteredStatuses = React.useMemo(() => {
+    if (!statusSearchQuery.trim()) {
+      return statuses;
+    }
+
+    const query = statusSearchQuery.toLowerCase();
+    return statuses.filter(status => 
+      status.name.toLowerCase().includes(query) ||
+      (status.description && status.description.toLowerCase().includes(query))
+    );
+  }, [statuses, statusSearchQuery]);
 
   // Закрытие выпадающего списка при клике вне его
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showStatusDropdown) {
-        setShowStatusDropdown(false)
+      if (showStatusDropdown && statusDropdownRef.current) {
+        // Проверяем, был ли клик вне выпадающего списка
+        if (!statusDropdownRef.current.contains(event.target as Node)) {
+          setShowStatusDropdown(false)
+          setStatusSearchQuery('') // Сбрасываем поиск при закрытии
+        }
       }
     }
 
@@ -186,6 +205,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     } finally {
       setUpdatingStatus(false)
       setShowStatusDropdown(false)
+      setStatusSearchQuery('') // Сбрасываем поиск после обновления статуса
     }
   }
 
@@ -333,24 +353,53 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
                 {/* Выпадающий список статусов */}
                 {showStatusDropdown && node.type === 'section' && (
-                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  <div ref={statusDropdownRef} className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                     {/* Заголовок */}
                     <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Выбор статуса
                       </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
                           setShowStatusDropdown(false)
+                          setStatusSearchQuery('')
                           onOpenStatusManagement()
                         }}
                         className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
                         title="Управление статусами"
                       >
-                        <Settings className="h-3 w-3" />
+                        <Settings className="h-4 w-4" />
                       </button>
                     </div>
+
+                    {/* Поле поиска */}
+                    {statuses.length > 0 && (
+                      <div className="p-2 border-b dark:border-slate-600">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Поиск..."
+                            value={statusSearchQuery}
+                            onChange={(e) => setStatusSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                          />
+                          {statusSearchQuery && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
+                            >
+                              <span className="text-xs">×</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Опция "Убрать статус" */}
                     <div
@@ -367,31 +416,48 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     </div>
 
                     {/* Список статусов */}
-                    {statuses.map((status) => (
-                      <div
-                        key={status.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          updateSectionStatus(status.id)
-                        }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
-                      >
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: status.color }}
-                        />
-                        <div>
-                          <div className="text-sm font-medium dark:text-white">
-                            {status.name}
-                          </div>
-                          {status.description && (
-                            <div className="text-xs text-gray-500 dark:text-slate-400">
-                              {status.description}
-                            </div>
-                          )}
+                    {filteredStatuses.length === 0 && statusSearchQuery ? (
+                      <div className="px-3 py-4 text-center">
+                        <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+                          Статусы не найдены
                         </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setStatusSearchQuery('')
+                          }}
+                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
+                        >
+                          Очистить поиск
+                        </button>
                       </div>
-                    ))}
+                    ) : (
+                      filteredStatuses.map((status) => (
+                        <div
+                          key={status.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            updateSectionStatus(status.id)
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
+                        >
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: status.color }}
+                          />
+                          <div>
+                            <div className="text-sm font-medium dark:text-white">
+                              {status.name}
+                            </div>
+                            {status.description && (
+                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                                {status.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -637,6 +703,10 @@ export function ProjectsTree({
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedStatusIds, setSelectedStatusIds] = useState<string[]>([])
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -655,6 +725,26 @@ export function ProjectsTree({
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
   const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+
+  // Закрытие выпадающего списка статусов при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showStatusDropdown && statusDropdownRef.current) {
+        if (!statusDropdownRef.current.contains(event.target as Node)) {
+          setShowStatusDropdown(false)
+          setStatusSearchQuery('')
+        }
+      }
+    }
+
+    if (showStatusDropdown) {
+      document.addEventListener('click', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showStatusDropdown])
 
   // Загрузка данных
   useEffect(() => {
@@ -1100,11 +1190,53 @@ export function ProjectsTree({
     return filterRecursive(nodes)
   }
 
+  // Фильтрация по статусам (снизу вверх)
+  const filterNodesByStatus = (nodes: ProjectNode[], statusIds: string[]): ProjectNode[] => {
+    if (!statusIds || statusIds.length === 0) {
+      return nodes // Если статусы не выбраны, возвращаем все узлы
+    }
+
+    const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+      const filtered: ProjectNode[] = []
+
+      for (const node of nodeList) {
+        let shouldInclude = false
+        let filteredChildren: ProjectNode[] = []
+
+        // Если это раздел, проверяем его статус
+        if (node.type === 'section') {
+          shouldInclude = node.statusId ? statusIds.includes(node.statusId) : false
+        } else {
+          // Для остальных типов узлов фильтруем детей
+          if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+        }
+
+        // Включаем узел если он подходит по критериям
+        if (shouldInclude) {
+          filtered.push({
+            ...node,
+            children: node.type === 'section' ? node.children : filteredChildren
+          })
+        }
+      }
+
+      return filtered
+    }
+
+    return filterRecursive(nodes)
+  }
+
   // Фильтрация данных для отображения только разделов и применение поиска
   const getFilteredTreeData = (): ProjectNode[] => {
     let data = treeData
 
-    // Сначала применяем фильтр "только разделы"
+    // Сначала применяем фильтр по статусам
+    data = filterNodesByStatus(data, selectedStatusIds)
+
+    // Затем применяем фильтр "только разделы"
     if (showOnlySections) {
       const sections: ProjectNode[] = []
       
@@ -1228,6 +1360,178 @@ export function ProjectsTree({
                   >
                     ×
                   </button>
+                )}
+              </div>
+
+              {/* Фильтр по статусам */}
+              <div className="relative" ref={statusDropdownRef}>
+                <button
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  className="flex items-center justify-between pl-3 pr-8 py-1.5 text-sm border rounded-md w-48 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
+                >
+                  <span className="flex items-center gap-1 flex-1 min-w-0">
+                    {selectedStatusIds.length === 0 ? (
+                      <span className="text-slate-500 dark:text-slate-400">Все статусы</span>
+                    ) : selectedStatusIds.length === 1 ? (
+                      (() => {
+                        const status = statuses?.find(s => s.id === selectedStatusIds[0])
+                        return status ? (
+                          <>
+                            <div 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ backgroundColor: status.color }}
+                            />
+                            <span className="truncate">{status.name}</span>
+                          </>
+                        ) : <span>Статус</span>
+                      })()
+                    ) : (
+                      <span className="text-slate-700 dark:text-slate-300">
+                        Выбрано: {selectedStatusIds.length}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown 
+                    size={14} 
+                    className={cn(
+                      "text-slate-400 dark:text-slate-500 transition-transform",
+                      showStatusDropdown && "rotate-180"
+                    )}
+                  />
+                </button>
+                
+                {selectedStatusIds.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedStatusIds([])
+                    }}
+                    className="absolute right-7 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xs z-10"
+                    title="Очистить все фильтры"
+                  >
+                    ×
+                  </button>
+                )}
+
+                {/* Выпадающий список статусов */}
+                {showStatusDropdown && (
+                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {/* Заголовок */}
+                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Фильтр по статусам
+                      </span>
+                    </div>
+
+                    {/* Поле поиска */}
+                    {statuses && statuses.length > 0 && (
+                      <div className="p-2 border-b dark:border-slate-600">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Поиск статусов..."
+                            value={statusSearchQuery}
+                            onChange={(e) => setStatusSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                          />
+                          {statusSearchQuery && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
+                            >
+                              <span className="text-xs">×</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Опция "Очистить все" */}
+                    {selectedStatusIds.length > 0 && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedStatusIds([])
+                        }}
+                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
+                      >
+                        <AlertTriangle className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-500 dark:text-slate-400">
+                          Очистить все фильтры
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Список статусов */}
+                    {(() => {
+                      const filteredStatuses = statuses?.filter(status => 
+                        !statusSearchQuery.trim() || 
+                        status.name.toLowerCase().includes(statusSearchQuery.toLowerCase()) ||
+                        (status.description && status.description.toLowerCase().includes(statusSearchQuery.toLowerCase()))
+                      ) || []
+
+                      if (filteredStatuses.length === 0 && statusSearchQuery) {
+                        return (
+                          <div className="px-3 py-4 text-center">
+                            <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+                              Статусы не найдены
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
+                            >
+                              Очистить поиск
+                            </button>
+                          </div>
+                        )
+                      }
+
+                      return filteredStatuses.map((status) => (
+                        <div
+                          key={status.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const isSelected = selectedStatusIds.includes(status.id)
+                            if (isSelected) {
+                              setSelectedStatusIds(selectedStatusIds.filter(id => id !== status.id))
+                            } else {
+                              setSelectedStatusIds([...selectedStatusIds, status.id])
+                            }
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-3"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStatusIds.includes(status.id)}
+                            onChange={() => {}} // Обработка в onClick
+                            className="rounded border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                          />
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: status.color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium dark:text-white truncate">
+                              {status.name}
+                            </div>
+                            {status.description && (
+                              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                                {status.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    })()}
+                  </div>
                 )}
               </div>
               

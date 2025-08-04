@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Settings, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Settings, X, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useSectionStatuses } from '../hooks/useSectionStatuses';
 import { SectionStatus } from '../types';
 import { StatusForm } from './StatusForm';
@@ -71,9 +72,23 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   const [editingStatus, setEditingStatus] = useState<SectionStatus | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const { statuses, loading, deleteStatus, loadStatuses } = useSectionStatuses();
   const { setNotification } = useUiStore();
+
+  // Фильтрация статусов по поисковому запросу
+  const filteredStatuses = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return statuses;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return statuses.filter(status => 
+      status.name.toLowerCase().includes(query) ||
+      (status.description && status.description.toLowerCase().includes(query))
+    );
+  }, [statuses, searchQuery]);
 
   // Слушаем события изменения статусов для автоматического обновления
   useEffect(() => {
@@ -200,6 +215,29 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
               </Button>
             </div>
 
+            {/* Поле поиска */}
+            {statuses.length > 0 && (
+              <div className="relative mb-6">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Поиск по названию или описанию..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Список статусов */}
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {loading ? (
@@ -227,8 +265,26 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                     Создать статус
                   </Button>
                 </div>
+              ) : filteredStatuses.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                    <Search className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-medium text-foreground mb-2">Статусы не найдены</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    По запросу "{searchQuery}" ничего не найдено
+                  </p>
+                  <Button
+                    onClick={() => setSearchQuery('')}
+                    variant="outline"
+                    className="border-primary text-primary hover:bg-primary/10"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Очистить поиск
+                  </Button>
+                </div>
               ) : (
-                statuses.map((status) => (
+                filteredStatuses.map((status) => (
                   <div
                     key={status.id}
                     className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors"
