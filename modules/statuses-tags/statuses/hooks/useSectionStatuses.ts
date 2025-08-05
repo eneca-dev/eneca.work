@@ -2,13 +2,29 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { SectionStatus, SectionStatusFormData } from '../types';
 
+// Helper функция для отправки событий с логированием
+const dispatchStatusEvent = (
+  eventType: 'statusCreated' | 'statusUpdated' | 'statusDeleted',
+  logData: any,
+  eventDetail: any,
+  logIcon: string = '📤'
+) => {
+  console.log(`${logIcon} Отправляем событие ${eventType}:`, logData);
+  
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(eventType, {
+      detail: eventDetail
+    }));
+  }
+};
+
 export function useSectionStatuses() {
   const [statuses, setStatuses] = useState<SectionStatus[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadStatuses = useCallback(async () => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     try {
       const supabase = createClient();
@@ -29,12 +45,28 @@ export function useSectionStatuses() {
       const errorMessage = err instanceof Error ? err.message : 'Ошибка загрузки статусов';
       setError(errorMessage);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
+  // Мемоизированные обработчики событий для предотвращения лишних перерегистраций
+  const handleStatusCreated = useCallback(() => {
+    console.log('📥 useSectionStatuses: получили событие statusCreated, обновляем список');
+    loadStatuses();
+  }, [loadStatuses]);
+
+  const handleStatusUpdated = useCallback(() => {
+    console.log('📥 useSectionStatuses: получили событие statusUpdated, обновляем список');
+    loadStatuses();
+  }, [loadStatuses]);
+
+  const handleStatusDeleted = useCallback(() => {
+    console.log('📥 useSectionStatuses: получили событие statusDeleted, обновляем список');
+    loadStatuses();
+  }, [loadStatuses]);
+
   const createStatus = useCallback(async (statusData: SectionStatusFormData): Promise<SectionStatus | null> => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     try {
       const supabase = createClient();
@@ -52,22 +84,21 @@ export function useSectionStatuses() {
       
       // Уведомляем другие компоненты о создании статуса
       // loadStatuses() будет вызван автоматически из event listener'а
-      console.log('✅ Отправляем событие statusCreated:', {
-        statusId: data.id,
-        statusName: data.name,
-        statusColor: data.color
-      });
-      
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('statusCreated', {
-          detail: {
-            statusId: data.id,
-            statusName: data.name,
-            statusColor: data.color,
-            statusDescription: data.description
-          }
-        }));
-      }
+      dispatchStatusEvent(
+        'statusCreated',
+        {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color
+        },
+        {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color,
+          statusDescription: data.description
+        },
+        '✅'
+      );
       
       return data;
     } catch (err) {
@@ -75,12 +106,12 @@ export function useSectionStatuses() {
       setError(err instanceof Error ? err.message : 'Ошибка создания статуса');
       return null;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   const updateStatus = useCallback(async (id: string, statusData: SectionStatusFormData): Promise<SectionStatus | null> => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     try {
       const supabase = createClient();
@@ -99,22 +130,21 @@ export function useSectionStatuses() {
       
       // Уведомляем другие компоненты об изменении статуса
       // loadStatuses() будет вызван автоматически из event listener'а
-      console.log('🔄 Отправляем событие statusUpdated:', {
-        statusId: data.id,
-        statusName: data.name,
-        statusColor: data.color
-      });
-      
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('statusUpdated', {
-          detail: {
-            statusId: data.id,
-            statusName: data.name,
-            statusColor: data.color,
-            statusDescription: data.description
-          }
-        }));
-      }
+      dispatchStatusEvent(
+        'statusUpdated',
+        {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color
+        },
+        {
+          statusId: data.id,
+          statusName: data.name,
+          statusColor: data.color,
+          statusDescription: data.description
+        },
+        '🔄'
+      );
       
       return data;
     } catch (err) {
@@ -122,12 +152,12 @@ export function useSectionStatuses() {
       setError(err instanceof Error ? err.message : 'Ошибка обновления статуса');
       return null;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   const deleteStatus = useCallback(async (id: string): Promise<boolean> => {
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
     try {
       const supabase = createClient();
@@ -156,15 +186,12 @@ export function useSectionStatuses() {
       
       // Уведомляем другие компоненты об удалении статуса
       // loadStatuses() будет вызван автоматически из event listener'а
-      console.log('🗑️ Отправляем событие statusDeleted:', { statusId: id });
-      
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('statusDeleted', {
-          detail: {
-            statusId: id
-          }
-        }));
-      }
+      dispatchStatusEvent(
+        'statusDeleted',
+        { statusId: id },
+        { statusId: id },
+        '🗑️'
+      );
       
       return true;
     } catch (err) {
@@ -172,7 +199,7 @@ export function useSectionStatuses() {
       setError(err instanceof Error ? err.message : 'Ошибка удаления статуса');
       return false;
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
@@ -182,21 +209,6 @@ export function useSectionStatuses() {
 
   // Слушаем глобальные события изменения статусов для автоматического обновления
   useEffect(() => {
-    const handleStatusCreated = () => {
-      console.log('📥 useSectionStatuses: получили событие statusCreated, обновляем список');
-      loadStatuses();
-    };
-
-    const handleStatusUpdated = () => {
-      console.log('📥 useSectionStatuses: получили событие statusUpdated, обновляем список');
-      loadStatuses();
-    };
-
-    const handleStatusDeleted = () => {
-      console.log('📥 useSectionStatuses: получили событие statusDeleted, обновляем список');
-      loadStatuses();
-    };
-
     if (typeof window !== 'undefined') {
       window.addEventListener('statusCreated', handleStatusCreated);
       window.addEventListener('statusUpdated', handleStatusUpdated);
@@ -210,11 +222,11 @@ export function useSectionStatuses() {
         window.removeEventListener('statusDeleted', handleStatusDeleted);
       }
     };
-  }, [loadStatuses]);
+  }, [handleStatusCreated, handleStatusUpdated, handleStatusDeleted]);
 
   return {
     statuses,
-    loading,
+    isLoading,
     error,
     loadStatuses,
     createStatus,

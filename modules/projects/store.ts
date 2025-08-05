@@ -130,8 +130,13 @@ export const useProjectsStore = create<ProjectsState>()(
 
       // Функция обновления статуса раздела
       updateSectionStatus: (sectionId, updates) => {
-        console.log('Обновление статуса раздела:', sectionId, updates)
-        // Здесь мы ожидаем реактивного обновления интерфейса через общий механизм событий
+        set((state) => ({
+          sections: state.sections.map(section =>
+            section.section_id === sectionId
+              ? { ...section, section_status_id: updates.statusId || section.section_status_id }
+              : section
+          )
+        }));
       },
     }),
     {

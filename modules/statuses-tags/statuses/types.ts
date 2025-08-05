@@ -15,7 +15,7 @@ export interface SectionStatusFormData {
 
 export interface SectionStatusesState {
   statuses: SectionStatus[];
-  loading: boolean;
-  error: string | null;
+  isLoading: boolean;
+  error: Error | null;
   selectedStatus: SectionStatus | null;
 } 

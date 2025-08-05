@@ -288,7 +288,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
     }
   }
 
-  const updateSectionStatus = async (statusId: string | null) => {
+  const updateSectionStatus = async (statusId: string | null): Promise<void> => {
     if (!sectionData) return
     
     setUpdatingStatus(true)
@@ -316,10 +316,9 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
         statusColor: updatedStatus?.color || null
       })
 
-      setNotification(statusId ? 'Статус обновлен' : 'Статус снят')
       
       // Создаем событие для уведомления других компонентов об изменении
-      window.dispatchEvent(new CustomEvent('sectionStatusUpdated', {
+      window.dispatchEvent(new CustomEvent('sectionPanel:statusUpdated', {
         detail: {
           sectionId,
           statusId: statusId,
@@ -732,8 +731,16 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                         onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                         disabled={updatingStatus}
                         className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                        onBlur={() => {
-                          setTimeout(() => setShowStatusDropdown(false), 200)
+                        onBlur={(e) => {
+                          // Проверяем, перемещается ли фокус внутри выпадающего списка
+                          const relatedTarget = e.relatedTarget as HTMLElement
+                          const currentTarget = e.currentTarget
+                          const dropdownContainer = currentTarget.parentElement
+                          
+                          // Закрываем dropdown только если фокус перемещается за пределы контейнера
+                          if (!relatedTarget || !dropdownContainer?.contains(relatedTarget)) {
+                            setShowStatusDropdown(false)
+                          }
                         }}
                       >
                         {updatingStatus ? (
@@ -761,20 +768,22 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
 
                       {showStatusDropdown && !updatingStatus && (
                         <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                          <div
+                          <button
+                            type="button"
                             onClick={() => updateSectionStatus(null)}
-                            className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
                           >
                             <AlertTriangle className="w-4 h-4 text-gray-400" />
                             <span className="text-sm text-gray-500 dark:text-slate-400">
                               Убрать статус
                             </span>
-                          </div>
+                          </button>
                           {statuses.map((status) => (
-                            <div
+                            <button
                               key={status.id}
+                              type="button"
                               onClick={() => updateSectionStatus(status.id)}
-                              className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
                             >
                               <div 
                                 className="w-3 h-3 rounded-full" 
@@ -790,7 +799,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                                   </div>
                                 )}
                               </div>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}

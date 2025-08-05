@@ -1,11 +1,20 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 
+// Типы уведомлений для определения цвета
+export type NotificationType = 'success' | 'error' | 'info' | 'warning'
+
+// Интерфейс для уведомления
+export interface Notification {
+  message: string
+  type: NotificationType
+}
+
 // Интерфейс для состояния UI - содержит все флаги и данные интерфейса
 interface UiState {
   // Существующие поля для общего состояния приложения
   loading: boolean // Флаг загрузки для показа спиннеров
-  notification: string | null // Текст уведомления или null если нет уведомления
+  notification: Notification | null // Объект уведомления или null если нет уведомления
   
   // Новые поля для управления видами календаря
   isPersonalView: boolean // Переключатель между личным и общим видом календаря
@@ -18,7 +27,7 @@ interface UiState {
 interface UiActions {
   // Существующие методы для управления загрузкой и уведомлениями
   setLoading: (loading: boolean) => void
-  setNotification: (notification: string | null) => void
+  setNotification: (message: string, type?: NotificationType) => void
   clearNotification: () => void
   
   // Новые методы для управления видами календаря
@@ -46,14 +55,13 @@ export const useUiStore = create<UiStore>()(
       
       // Существующие методы для управления общим состоянием
       setLoading: (loading: boolean) => set({ loading }),
-      setNotification: (notification: string | null) => {
+      setNotification: (message: string, type: NotificationType = 'info') => {
+        const notification = { message, type }
         set({ notification })
         // Автоматически скрываем уведомление через 5 секунд
-        if (notification) {
-          setTimeout(() => {
-            set({ notification: null })
-          }, 5000)
-        }
+        setTimeout(() => {
+          set({ notification: null })
+        }, 5000)
       },
       clearNotification: () => set({ notification: null }),
       

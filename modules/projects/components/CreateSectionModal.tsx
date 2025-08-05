@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 
 interface CreateSectionModalProps {
   isOpen: boolean
@@ -39,6 +40,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [actualProjectId, setActualProjectId] = useState<string | null>(null)
   
   const { setNotification } = useUiStore()
+  const { statuses } = useSectionStatuses()
 
   useEffect(() => {
     if (isOpen) {
@@ -46,6 +48,19 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       loadProjectId()
     }
   }, [isOpen])
+
+  // Устанавливаем статус "План" по умолчанию
+  useEffect(() => {
+    if (isOpen && statuses.length > 0 && !sectionStatusId) {
+      const planStatus = statuses.find(status => 
+        status.name.toLowerCase() === 'план' || 
+        status.name.toLowerCase() === 'plan'
+      )
+      if (planStatus) {
+        setSectionStatusId(planStatus.id)
+      }
+    }
+  }, [isOpen, statuses, sectionStatusId])
 
   const loadProjectId = async () => {
     if (projectId) {
@@ -205,7 +220,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     setSectionResponsible('')
     setSectionStartDate('')
     setSectionEndDate('')
-    setSectionStatusId('')
+    setSectionStatusId('') // Сбрасывается, чтобы при следующем открытии снова установился "План"
     setSearchResponsible('')
     setShowResponsibleDropdown(false)
     setActualProjectId(null)

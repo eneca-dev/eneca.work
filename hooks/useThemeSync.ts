@@ -33,7 +33,7 @@ export function useThemeSync() {
     }
     
     setInitialized(true)
-  }, [mounted, zustandTheme, theme, setTheme, initialized])
+  }, [mounted, zustandTheme, theme, setTheme])
 
   // Синхронизация: обновляем Zustand при изменении next-themes (но только после инициализации)
   useEffect(() => {

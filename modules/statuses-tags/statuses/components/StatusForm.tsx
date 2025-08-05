@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Save, Loader2, Palette } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -30,8 +30,9 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
     color: '#3B82F6',
     description: ''
   });
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
 
   const { setNotification } = useUiStore();
   const { createStatus, updateStatus } = useSectionStatuses();
@@ -56,15 +57,32 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
     }
   }, [isOpen, status]);
 
+  // Закрытие color picker при клике вне его области
+  useEffect(() => {
+    if (!showColorPicker) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
+        setShowColorPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showColorPicker]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!formData.name.trim()) {
-      setNotification('Название статуса обязательно');
+      setNotification('Название статуса обязательно', 'error');
       return;
     }
 
-    setLoading(true);
+    setIsLoading(true);
     try {
       let result: SectionStatus | null = null;
 
@@ -75,14 +93,35 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
       }
 
       if (result) {
-        setNotification(`Статус "${formData.name}" ${isEditing ? 'обновлен' : 'создан'}`);
+        setNotification(`Статус "${formData.name}" ${isEditing ? 'обновлен' : 'создан'}`, 'success');
         onSuccess?.();
         handleClose();
       }
     } catch (error) {
       console.warn('Ошибка сохранения статуса:', error);
+      
+      // Определяем тип ошибки и формируем соответствующее сообщение
+      let errorMessage = `Не удалось ${isEditing ? 'обновить' : 'создать'} статус`;
+      
+      if (error instanceof Error) {
+        // Проверяем специфические ошибки
+        if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+          errorMessage = 'Статус с таким названием уже существует';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Ошибка соединения. Проверьте подключение к интернету';
+        } else if (error.message.includes('permission') || error.message.includes('unauthorized')) {
+          errorMessage = 'Недостаточно прав для выполнения операции';
+        } else if (error.message.includes('validation')) {
+          errorMessage = 'Проверьте правильность заполнения полей';
+        } else if (error.message.trim()) {
+          // Если есть конкретное сообщение об ошибке, используем его
+          errorMessage = `${errorMessage}: ${error.message}`;
+        }
+      }
+      
+      setNotification(errorMessage, 'error');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -125,7 +164,7 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Введите название статуса"
-              disabled={loading}
+              disabled={isLoading}
               autoFocus
               className="w-full"
             />
@@ -141,7 +180,7 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
                 type="button"
                 variant="outline"
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                disabled={loading}
+                disabled={isLoading}
                 className="w-full justify-start text-left h-10"
               >
                 <div 
@@ -153,7 +192,10 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
               </Button>
               
               {showColorPicker && (
-                <div className="absolute z-50 mt-2 p-4 bg-card border border-border rounded-lg shadow-lg w-full">
+                <div 
+                  ref={colorPickerRef}
+                  className="absolute z-50 mt-2 p-4 bg-card border border-border rounded-lg shadow-lg w-full"
+                >
                   <div className="grid grid-cols-6 gap-2">
                     {DEFAULT_COLORS.map((color) => (
                       <button
@@ -185,7 +227,7 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Введите описание статуса (необязательно)"
-              disabled={loading}
+              disabled={isLoading}
               className="min-h-[80px] resize-none"
             />
           </div>
@@ -195,17 +237,17 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
           <Button 
             variant="outline" 
             onClick={handleClose} 
-            disabled={loading}
+            disabled={isLoading}
           >
             Отмена
           </Button>
           <Button 
             onClick={() => handleSubmit()}
-            disabled={loading || !formData.name.trim()}
+            disabled={isLoading || !formData.name.trim()}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            {loading ? 'Сохранение...' : (isEditing ? 'Обновить' : 'Создать')}
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {isLoading ? 'Сохранение...' : (isEditing ? 'Обновить' : 'Создать')}
           </Button>
         </DialogFooter>
       </DialogContent>

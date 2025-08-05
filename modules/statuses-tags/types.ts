@@ -9,6 +9,6 @@ export interface SectionStatus {
 
 export interface StatusesTagsState {
   sectionStatuses: SectionStatus[];
-  loading: boolean;
+  isLoading: boolean;
   error: string | null;
 } 

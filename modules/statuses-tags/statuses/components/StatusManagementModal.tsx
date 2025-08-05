@@ -31,7 +31,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] dark:bg-gray-800 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
             Подтвердите удаление
@@ -74,7 +74,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const { statuses, loading, deleteStatus, loadStatuses } = useSectionStatuses();
+  const { statuses, isLoading, deleteStatus, loadStatuses } = useSectionStatuses();
   const { setNotification } = useUiStore();
 
   // Фильтрация статусов по поисковому запросу
@@ -96,15 +96,9 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     if (typeof window === 'undefined') return;
     
     const handleStatusChange = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('🔄 StatusManagementModal: Получено событие', event.type, customEvent.detail);
-      console.log('🔄 StatusManagementModal: Обновление списка статусов');
-      
       // Принудительно перезагружаем статусы
       loadStatuses();
     };
-
-    console.log('🔧 StatusManagementModal: Подписка на события статусов');
     
     // Подписываемся на все события изменения статусов
     window.addEventListener('statusCreated', handleStatusChange);
@@ -112,7 +106,6 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     window.addEventListener('statusDeleted', handleStatusChange);
 
     return () => {
-      console.log('🔧 StatusManagementModal: Отписка от событий статусов');
       // Отписываемся при размонтировании компонента
       if (typeof window !== 'undefined') {
         window.removeEventListener('statusCreated', handleStatusChange);
@@ -124,8 +117,6 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
 
   // Обработчик закрытия модального окна
   const handleClose = () => {
-    console.log('🔄 StatusManagementModal: Закрытие модального окна, автоматическое обновление уже произошло через события');
-    
     // Все компоненты уже обновились автоматически через события statusCreated/statusUpdated/statusDeleted
     // Убираем принудительное событие forceStatusRefresh как ненужное
     
@@ -152,12 +143,12 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     
     try {
       await deleteStatus(deletingStatus.id);
-      setNotification(`Статус "${deletingStatus.name}" удален`);
+      setNotification(`Статус "${deletingStatus.name}" удален`, 'success');
       setShowDeleteModal(false);
       setDeletingStatus(null);
     } catch (error) {
       console.warn('Ошибка удаления статуса:', error);
-      setNotification('Ошибка при удалении статуса');
+      setNotification('Ошибка при удалении статуса', 'error');
     }
   };
 
@@ -167,13 +158,12 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     
     // Обновление списка статусов происходит автоматически через события
     // Убираем принудительный вызов loadStatuses() чтобы избежать двойного обновления
-    console.log('✅ StatusManagementModal: Статус успешно сохранен, обновление произойдет автоматически через события');
   };
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh]">
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] dark:bg-gray-800 dark:border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-foreground">
               Управление статусами
@@ -193,7 +183,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                 {statuses.length > 0 && (
                   <Badge 
                     variant="secondary" 
-                    className="bg-primary/10 text-primary border-primary/20"
+                    className="bg-primary/10 text-primary border-primary/20 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700/50"
                   >
                     {statuses.length}
                   </Badge>
@@ -217,14 +207,14 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                   placeholder="Поиск по названию или описанию..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                 />
                 {searchQuery && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200"
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -234,7 +224,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
 
             {/* Список статусов */}
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {loading ? (
+              {isLoading ? (
                 <div className="flex justify-center items-center py-12">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -253,7 +243,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                   <Button
                     onClick={handleCreateStatus}
                     variant="outline"
-                    className="border-primary text-primary hover:bg-primary/10"
+                    className="border-primary text-primary hover:bg-primary/10 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Создать статус
@@ -271,7 +261,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                   <Button
                     onClick={() => setSearchQuery('')}
                     variant="outline"
-                    className="border-primary text-primary hover:bg-primary/10"
+                    className="border-primary text-primary hover:bg-primary/10 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
                     <X className="h-4 w-4 mr-2" />
                     Очистить поиск
@@ -281,7 +271,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                 filteredStatuses.map((status) => (
                   <div
                     key={status.id}
-                    className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                   >
                     <div className="flex items-center flex-1">
                       <div 
@@ -306,7 +296,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEditStatus(status)}
-                        className="text-primary hover:text-primary hover:bg-primary/10"
+                        className="text-green-600 hover:text-green-500 hover:bg-green-50 dark:text-green-400 dark:hover:text-green-300 dark:hover:bg-green-900/20"
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>
@@ -314,7 +304,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteStatus(status)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="text-red-600 hover:text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -326,7 +316,11 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
+            <Button 
+              variant="outline" 
+              onClick={handleClose}
+              className="dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+            >
               Закрыть
             </Button>
           </DialogFooter>
