@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -1367,60 +1367,42 @@ export function ProjectsTree({
               <div className="relative" ref={statusDropdownRef}>
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between pl-3 pr-8 py-1.5 text-sm border rounded-md w-48 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
+                  title={selectedStatusIds.length === 0 ? "Фильтр по статусам" : `Фильтр активен (${selectedStatusIds.length})`}
+                  className={cn(
+                    "relative flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
+                    selectedStatusIds.length > 0
+                      ? "bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 dark:bg-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/40"
+                      : "bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 dark:bg-slate-500/20 dark:text-slate-400 dark:hover:bg-slate-500/30"
+                  )}
                 >
-                  <span className="flex items-center gap-1 flex-1 min-w-0">
-                    {selectedStatusIds.length === 0 ? (
-                      <span className="text-slate-500 dark:text-slate-400">Все статусы</span>
-                    ) : selectedStatusIds.length === 1 ? (
-                      (() => {
-                        const status = statuses?.find(s => s.id === selectedStatusIds[0])
-                        return status ? (
-                          <>
-                            <div 
-                              className="w-2 h-2 rounded-full" 
-                              style={{ backgroundColor: status.color }}
-                            />
-                            <span className="truncate">{status.name}</span>
-                          </>
-                        ) : <span>Статус</span>
-                      })()
-                    ) : (
-                      <span className="text-slate-700 dark:text-slate-300">
-                        Выбрано: {selectedStatusIds.length}
-                      </span>
-                    )}
-                  </span>
-                  <ChevronDown 
-                    size={14} 
-                    className={cn(
-                      "text-slate-400 dark:text-slate-500 transition-transform",
-                      showStatusDropdown && "rotate-180"
-                    )}
-                  />
+                  <Filter size={14} />
+                  {selectedStatusIds.length > 0 && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center leading-none">
+                      {selectedStatusIds.length}
+                    </div>
+                  )}
                 </button>
-                
-                {selectedStatusIds.length > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedStatusIds([])
-                    }}
-                    className="absolute right-7 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xs z-10"
-                    title="Очистить все фильтры"
-                  >
-                    ×
-                  </button>
-                )}
 
                 {/* Выпадающий список статусов */}
                 {showStatusDropdown && (
                   <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                     {/* Заголовок */}
-                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800">
+                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         Фильтр по статусам
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowStatusDropdown(false)
+                          setStatusSearchQuery('')
+                          setShowStatusManagementModal(true)
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        title="Управление статусами"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
                     </div>
 
                     {/* Поле поиска */}
@@ -1462,7 +1444,7 @@ export function ProjectsTree({
                       >
                         <AlertTriangle className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-500 dark:text-slate-400">
-                          Очистить все фильтры
+                          Очистить этот фильтр
                         </span>
                       </div>
                     )}
@@ -1536,13 +1518,6 @@ export function ProjectsTree({
               </div>
               
               <div className="flex gap-2">
-                <button
-                  onClick={() => setShowStatusManagementModal(true)}
-                  title="Управление статусами"
-                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30 transition-colors"
-                >
-                  <Settings size={14} />
-                </button>
                 <button
                   onClick={toggleOnlySections}
                   title={showOnlySections ? "Показать всю структуру" : "Только разделы"}
