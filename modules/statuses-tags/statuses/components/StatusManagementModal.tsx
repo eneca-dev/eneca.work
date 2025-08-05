@@ -110,7 +110,6 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     window.addEventListener('statusCreated', handleStatusChange);
     window.addEventListener('statusUpdated', handleStatusChange);
     window.addEventListener('statusDeleted', handleStatusChange);
-    window.addEventListener('forceStatusRefresh', handleStatusChange);
 
     return () => {
       console.log('🔧 StatusManagementModal: Отписка от событий статусов');
@@ -119,21 +118,16 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
         window.removeEventListener('statusCreated', handleStatusChange);
         window.removeEventListener('statusUpdated', handleStatusChange);
         window.removeEventListener('statusDeleted', handleStatusChange);
-        window.removeEventListener('forceStatusRefresh', handleStatusChange);
       }
     };
   }, [loadStatuses]);
 
-  // Обработчик закрытия модального окна с принудительным обновлением статусов
+  // Обработчик закрытия модального окна
   const handleClose = () => {
-    console.log('🔄 StatusManagementModal: Закрытие с принудительным обновлением статусов');
+    console.log('🔄 StatusManagementModal: Закрытие модального окна, автоматическое обновление уже произошло через события');
     
-    // Отправляем событие для обновления всех компонентов со статусами
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('forceStatusRefresh', {
-        detail: { source: 'StatusManagementModal' }
-      }));
-    }
+    // Все компоненты уже обновились автоматически через события statusCreated/statusUpdated/statusDeleted
+    // Убираем принудительное событие forceStatusRefresh как ненужное
     
     onClose();
   };
@@ -171,9 +165,9 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
     setShowStatusForm(false);
     setEditingStatus(null);
     
-    // Принудительно обновляем список статусов в текущем модальном окне
-    console.log('🔄 StatusManagementModal: Принудительное обновление после успешного сохранения статуса');
-    loadStatuses();
+    // Обновление списка статусов происходит автоматически через события
+    // Убираем принудительный вызов loadStatuses() чтобы избежать двойного обновления
+    console.log('✅ StatusManagementModal: Статус успешно сохранен, обновление произойдет автоматически через события');
   };
 
   return (

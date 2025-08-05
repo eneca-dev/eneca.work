@@ -83,42 +83,11 @@ export function StatusSelector({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
   
-  const { statuses, loading, deleteStatus, loadStatuses } = useSectionStatuses();
+  const { statuses, loading, deleteStatus } = useSectionStatuses();
   const { setNotification } = useUiStore();
 
-  // Слушаем события изменения статусов для автоматического обновления
-  useEffect(() => {
-    // Проверяем, что мы в браузере
-    if (typeof window === 'undefined') return;
-    
-    const handleStatusChange = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('🔄 StatusSelector: Получено событие', event.type, customEvent.detail);
-      console.log('🔄 StatusSelector: Обновление статусов после изменения');
-      
-      // Принудительно перезагружаем статусы
-      loadStatuses();
-    };
-
-    console.log('🔧 StatusSelector: Подписка на события статусов');
-    
-    // Подписываемся на все события изменения статусов
-    window.addEventListener('statusCreated', handleStatusChange);
-    window.addEventListener('statusUpdated', handleStatusChange);
-    window.addEventListener('statusDeleted', handleStatusChange);
-    window.addEventListener('forceStatusRefresh', handleStatusChange);
-
-    return () => {
-      console.log('🔧 StatusSelector: Отписка от событий статусов');
-      // Отписываемся при размонтировании компонента
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('statusCreated', handleStatusChange);
-        window.removeEventListener('statusUpdated', handleStatusChange);
-        window.removeEventListener('statusDeleted', handleStatusChange);
-        window.removeEventListener('forceStatusRefresh', handleStatusChange);
-      }
-    };
-  }, [loadStatuses]);
+  // useSectionStatuses хук уже автоматически подписан на все события статусов
+  // Убираем дублирующую подписку чтобы избежать лишних запросов к базе
 
   const selectedStatus = statuses.find(status => status.id === value);
 

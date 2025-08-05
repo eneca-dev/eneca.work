@@ -50,10 +50,8 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Сначала обновляем локальное состояние
-      await loadStatuses();
-      
-      // После обновления состояния уведомляем другие компоненты о создании статуса
+      // Уведомляем другие компоненты о создании статуса
+      // loadStatuses() будет вызван автоматически из event listener'а
       console.log('✅ Отправляем событие statusCreated:', {
         statusId: data.id,
         statusName: data.name,
@@ -79,7 +77,7 @@ export function useSectionStatuses() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatuses]);
+  }, []);
 
   const updateStatus = useCallback(async (id: string, statusData: SectionStatusFormData): Promise<SectionStatus | null> => {
     setLoading(true);
@@ -99,10 +97,8 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Сначала обновляем локальное состояние
-      await loadStatuses();
-      
-      // После обновления состояния уведомляем другие компоненты об изменении статуса
+      // Уведомляем другие компоненты об изменении статуса
+      // loadStatuses() будет вызван автоматически из event listener'а
       console.log('🔄 Отправляем событие statusUpdated:', {
         statusId: data.id,
         statusName: data.name,
@@ -128,7 +124,7 @@ export function useSectionStatuses() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatuses]);
+  }, []);
 
   const deleteStatus = useCallback(async (id: string): Promise<boolean> => {
     setLoading(true);
@@ -158,10 +154,8 @@ export function useSectionStatuses() {
 
       if (error) throw error;
       
-      // Сначала обновляем локальное состояние
-      await loadStatuses();
-      
-      // После обновления состояния уведомляем другие компоненты об удалении статуса
+      // Уведомляем другие компоненты об удалении статуса
+      // loadStatuses() будет вызван автоматически из event listener'а
       console.log('🗑️ Отправляем событие statusDeleted:', { statusId: id });
       
       if (typeof window !== 'undefined') {
@@ -180,7 +174,7 @@ export function useSectionStatuses() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatuses]);
+  }, []);
 
   useEffect(() => {
     loadStatuses();
@@ -203,16 +197,10 @@ export function useSectionStatuses() {
       loadStatuses();
     };
 
-    const handleForceRefresh = () => {
-      console.log('📥 useSectionStatuses: получили событие forceStatusRefresh, обновляем список');
-      loadStatuses();
-    };
-
     if (typeof window !== 'undefined') {
       window.addEventListener('statusCreated', handleStatusCreated);
       window.addEventListener('statusUpdated', handleStatusUpdated);
       window.addEventListener('statusDeleted', handleStatusDeleted);
-      window.addEventListener('forceStatusRefresh', handleForceRefresh);
     }
 
     return () => {
@@ -220,7 +208,6 @@ export function useSectionStatuses() {
         window.removeEventListener('statusCreated', handleStatusCreated);
         window.removeEventListener('statusUpdated', handleStatusUpdated);
         window.removeEventListener('statusDeleted', handleStatusDeleted);
-        window.removeEventListener('forceStatusRefresh', handleForceRefresh);
       }
     };
   }, [loadStatuses]);

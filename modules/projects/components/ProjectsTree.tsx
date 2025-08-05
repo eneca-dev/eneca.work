@@ -852,18 +852,11 @@ export function ProjectsTree({
       setTreeData(currentTreeData => removeStatusFromNodes(currentTreeData))
     }
 
-    // Обработчик принудительного обновления всех данных
-    const handleForceRefresh = () => {
-      console.log('🔄 Получили команду принудительного обновления данных');
-      loadTreeData();
-    }
-
     if (typeof window !== 'undefined') {
       window.addEventListener('sectionStatusUpdated', handleSectionStatusUpdate as EventListener)
       window.addEventListener('statusCreated', handleStatusCreate as EventListener)
       window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
       window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
-      window.addEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
     }
     
     return () => {
@@ -872,7 +865,6 @@ export function ProjectsTree({
         window.removeEventListener('statusCreated', handleStatusCreate as EventListener)
         window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
         window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
-        window.removeEventListener('forceStatusRefresh', handleForceRefresh as EventListener)
       }
     }
   }, [])
