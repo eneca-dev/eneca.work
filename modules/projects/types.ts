@@ -40,6 +40,7 @@ export interface Section {
   section_type?: string;
   section_start_date?: string;
   section_end_date?: string;
+  section_status_id?: string;
 }
 
 export interface ProjectHierarchyNode {
@@ -81,4 +82,36 @@ export interface ProjectFilters {
   departmentId: string | null;
   teamId: string | null;
   employeeId: string | null;
+}
+
+// Типы для комментариев к разделам
+export interface SectionComment {
+  comment_id: string;
+  section_id: string;
+  author_id: string;
+  content: string;
+  mentions: string[];
+  created_at: string;
+  author_name: string;
+  author_avatar_url?: string;
+}
+
+export interface CommentMention {
+  user_id: string;
+  user_name: string;
+  position: number;
+}
+
+// Расширяем SectionHierarchyNode для поддержки комментариев
+export interface SectionWithComments extends SectionHierarchyNode {
+  comments_count?: number;
+  has_unread_comments?: boolean;
+  latest_comment_at?: string;
+}
+
+// Типы для навигации к комментариям
+export interface CommentNavigationParams {
+  sectionId: string;
+  tab?: 'comments';
+  commentId?: string; // Для перехода к конкретному комментарию
 } 

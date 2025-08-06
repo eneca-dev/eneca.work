@@ -1,17 +1,17 @@
-import { useUserStore } from "@/stores/useUserStore"
+import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
 import { AdminPermissions } from "../types/admin"
 
 export function useAdminPermissions(): AdminPermissions {
-  const permissions = useUserStore((state) => state.permissions)
+  const { hasPermission } = usePermissions()
 
   return {
-    canViewAdminPanel: permissions?.includes("user_admin_panel_can_view") ?? false,
-    canManageRoles: permissions?.includes("role.manage") ?? false,
-    canManageDepartments: permissions?.includes("department.manage") ?? false,
-    canManageTeams: permissions?.includes("team.manage") ?? false,
-    canManagePositions: permissions?.includes("position.manage") ?? false,
-    canManageCategories: permissions?.includes("category.manage") ?? false,
-    canChangeRoles: permissions?.includes("roles_can_add") ?? false,
-    canAddAdminRole: permissions?.includes("admin_role_can_add") ?? false,
+    canViewAdminPanel: hasPermission(PERMISSIONS.USERS.ADMIN_PANEL),
+    canManageRoles: hasPermission(PERMISSIONS.USERS.MANAGE_ROLES),
+    canManageDepartments: hasPermission(PERMISSIONS.USERS.MANAGE_DEPARTMENTS),
+    canManageTeams: hasPermission(PERMISSIONS.USERS.MANAGE_TEAMS),
+    canManagePositions: hasPermission(PERMISSIONS.USERS.MANAGE_POSITIONS),
+    canManageCategories: hasPermission(PERMISSIONS.USERS.MANAGE_CATEGORIES),
+    canChangeRoles: hasPermission(PERMISSIONS.USERS.ASSIGN_ROLES),
+    canAddAdminRole: hasPermission(PERMISSIONS.USERS.ASSIGN_ADMIN_ROLE),
   }
 } 

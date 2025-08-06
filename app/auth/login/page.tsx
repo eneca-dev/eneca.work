@@ -8,7 +8,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
-import { syncCurrentUserState } from "@/services/org-data-service"
+// УДАЛЕНО: Legacy import syncCurrentUserState - теперь синхронизация автоматическая
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -35,16 +35,7 @@ export default function LoginPage() {
         return
       }
 
-      console.log("Успешный вход, запускаем синхронизацию состояния...");
-      const syncSuccess = await syncCurrentUserState();
-
-      if (!syncSuccess) {
-        setError("Не удалось синхронизировать данные пользователя после входа.");
-        setLoading(false);
-        return;
-      }
-
-      console.log("Синхронизация состояния после входа прошла успешно.");
+      console.log("Успешный вход, синхронизация теперь происходит автоматически...");
 
       router.refresh()
       router.push("/dashboard")

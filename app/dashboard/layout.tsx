@@ -5,19 +5,11 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { getUserRoleAndPermissions } from "@/utils/role-utils"
+// Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
+import { UserPermissionsSyncProvider } from "@/modules/permissions"
 
-// Константы для retry логики
-const MAX_RETRIES = 3
-const INITIAL_RETRY_DELAY = 1000
-const MAX_RETRY_DELAY = 5000
-
-// Типы для улучшения типизации
-interface FetchPermissionsResult {
-  roleId: string | null;
-  permissions: string[];
-}
+// УДАЛЕНО: Константы retry логики - упрощение
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
@@ -26,7 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const name = useUserStore((state) => state.name)
   const email = useUserStore((state) => state.email)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
-  const permissions = useUserStore((state) => state.permissions)
+  // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
   
@@ -35,45 +27,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   // Очистка при размонтировании
   useEffect(() => {
+    isMounted.current = true
     return () => {
       isMounted.current = false
     }
   }, [])
 
-  // Функция для повторных попыток с exponential backoff
-  const fetchWithRetry = useCallback(async <T,>(
-    operation: () => Promise<T>,
-    retries = MAX_RETRIES
-  ): Promise<T> => {
-    let lastError: Error | null = null
-    
-    for (let i = 0; i < retries && isMounted.current; i++) {
-      try {
-        return await operation()
-      } catch (error) {
-        lastError = error as Error
-        if (i === retries - 1) break
-        
-        // Проверяем, что компонент еще смонтирован перед задержкой
-        if (!isMounted.current) break
-        
-        // Exponential backoff с максимальной задержкой
-        const delay = Math.min(
-          INITIAL_RETRY_DELAY * Math.pow(2, i),
-          MAX_RETRY_DELAY
-        )
-        await new Promise(resolve => setTimeout(resolve, delay))
-      }
-    }
-    
-    throw lastError
-  }, [])
+  // УДАЛЕНО: fetchWithRetry - упрощение логики
 
   // Обработчик ошибок авторизации
   const handleAuthError = useCallback((error: Error) => {
-    if (!isMounted.current) return
-    
-    console.error("Ошибка авторизации:", error)
+    console.error("❌ DashboardLayout: Ошибка авторизации:", error)
     toast({
       title: "Ошибка авторизации",
       description: "Пожалуйста, войдите в систему заново",
@@ -83,78 +47,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/auth/login')
   }, [router])
 
-  // Функция получения разрешений с правильной обработкой race condition
-  const fetchPermissions = useCallback(async (userId: string): Promise<FetchPermissionsResult | null> => {
-    try {
-      const { roleId, permissions } = await getUserRoleAndPermissions(userId, supabase)
-      
-      if (!isMounted.current) return null
-      
-      if (roleId) {
-        useUserStore.getState().setRoleAndPermissions(roleId, permissions)
-        console.log("Роль и разрешения обновлены:", { roleId, permissions })
-      } else {
-        // Даже если нет roleId, устанавливаем пустые права
-        useUserStore.getState().setRoleAndPermissions(null, [])
-        console.log("Установлены пустые разрешения для пользователя")
-      }
-      
-      // Устанавливаем флаг загрузки прав
-      setPermissionsLoaded(true)
-      
-      return { roleId, permissions }
-    } catch (error) {
-      console.error("Ошибка при получении разрешений:", error)
-      // Даже при ошибке устанавливаем флаг загрузки
-      setPermissionsLoaded(true)
-      throw error
-    }
-  }, [supabase])
+  // УДАЛЕНО: Legacy функция получения разрешений
+  // Теперь разрешения загружаются через permissions модуль
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
-    if (!isMounted.current) return
-    
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
-        console.error("Ошибка при получении пользователя:", error)
+        console.error("DashboardLayout: Ошибка при получении пользователя:", error)
         router.push('/auth/login')
         return
       }
       
       if (!user) {
-        console.log("Пользователь не авторизован")
+        console.log("DashboardLayout: Пользователь не авторизован")
         router.push('/auth/login')
         return
       }
       
-      // Получаем разрешения с retry логикой
-      try {
-        await fetchWithRetry(() => fetchPermissions(user.id))
-      } catch (error) {
-        if (!isMounted.current) return
-        
-        console.error("Не удалось получить разрешения после всех попыток:", error)
-        // Устанавливаем флаг загрузки даже при ошибке
-        setPermissionsLoaded(true)
-        toast({
-          title: "Ошибка получения разрешений",
-          description: "Попробуйте обновить страницу",
-          variant: "destructive"
-        })
-      }
+      // УДАЛЕНО: Legacy загрузка разрешений
+      // Теперь разрешения автоматически загружаются через permissions модуль
+      setPermissionsLoaded(true) // Временно, пока не подключим новую систему
       
       // Проверяем, нужно ли обновлять остальные данные пользователя
-      if (!isMounted.current) return
-      
       const userState = useUserStore.getState()
-      const needsRefresh = !userState.id || userState.id !== user.id || !userState.profile
+      const needsRefresh = !userState.id || userState.id !== user.id || !userState.profile || !userState.name
       
       if (needsRefresh) {
-        console.log("Обновляем данные пользователя в хранилище")
-        
         const { data: userData, error: profileError } = await supabase
           .from("profiles")
           .select("*")
@@ -162,9 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           .single()
         
         if (profileError) {
-          if (!isMounted.current) return
-          
-          console.error("Ошибка при получении профиля:", profileError)
+          console.error("DashboardLayout: Ошибка при получении профиля:", profileError)
           toast({
             title: "Ошибка получения профиля",
             description: "Некоторые данные могут отображаться некорректно",
@@ -172,17 +91,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })
         }
         
-        if (!isMounted.current) return
-        
         try {
-          useUserStore.getState().setUser({
+          const userName = userData 
+            ? [userData.first_name ?? "", userData.last_name ?? ""].filter(Boolean).join(" ") 
+            : ""
+          const finalName = userName || user.email?.split("@")[0] || "Пользователь"
+          
+          const userDataToSet = {
             id: user.id,
             email: user.email ?? "",
-            name: userData ? [userData.first_name ?? "", userData.last_name ?? ""].filter(Boolean).join(" ") : "Пользователь",
+            name: finalName,
             profile: userData
-          })
+          }
+          
+          useUserStore.getState().setUser(userDataToSet)
         } catch (setUserError) {
-          console.error("Ошибка при установке данных пользователя:", setUserError)
+          console.error("DashboardLayout: Ошибка при установке данных пользователя:", setUserError)
           toast({
             title: "Ошибка обновления данных",
             description: "Не удалось обновить данные пользователя",
@@ -191,19 +115,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       }
     } catch (error) {
-      if (!isMounted.current) return
-      
-      console.error("Критическая ошибка при получении данных:", error)
+      console.error("DashboardLayout: Критическая ошибка при получении данных:", error)
       handleAuthError(error as Error)
     }
-  }, [supabase, fetchWithRetry, fetchPermissions, router, handleAuthError])
+  }, [supabase, router, handleAuthError])
 
-  // Отслеживаем загрузку прав из store (для случая когда они уже были загружены ранее)
-  useEffect(() => {
-    if (isAuthenticated && permissions !== null) {
-      setPermissionsLoaded(true)
-    }
-  }, [permissions, isAuthenticated])
+  // УДАЛЕНО: Legacy отслеживание permissions
+  // Теперь permissions загружаются через modules/permissions
 
   // Fallback timeout для случаев когда права не загрузятся
   useEffect(() => {
@@ -252,7 +170,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       {/* Контент с отступом слева */}
       <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
-        {children}
+        <UserPermissionsSyncProvider>
+          {children}
+        </UserPermissionsSyncProvider>
       </div>
     </div>
   )

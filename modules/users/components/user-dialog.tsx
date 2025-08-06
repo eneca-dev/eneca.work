@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { updateUser, getDepartments, getTeams, getPositions, getCategories, getAvailableRoles } from "@/services/org-data-service"
-import { getUserRoleAndPermissions } from "@/utils/role-utils"
+// УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
 import type { User, Department, Team, Position, Category } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
@@ -271,13 +271,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               },
             })
             
-            // Всегда обновляем разрешения при редактировании собственного профиля
-            // (не только при изменении роли, т.к. разрешения могли измениться в БД)
-            const { roleId, permissions } = await getUserRoleAndPermissions(user.id, freshSupabase)
-            if (roleId) {
-              useUserStore.getState().setRoleAndPermissions(roleId, permissions)
-              console.log("Разрешения обновлены для пользователя:", { roleId, permissions })
-            }
+            // УДАЛЕНО: Legacy обновление разрешений через getUserRoleAndPermissions
           }
         } else {
           console.log("Не обновляем Zustand, так как редактируем другого пользователя");

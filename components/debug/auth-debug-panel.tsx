@@ -111,16 +111,12 @@ export function AuthDebugPanel() {
               
               // Сохраняем roleId и разрешения, если они есть
               const roleId = userState.profile?.roleId;
-              const permissions = userState.permissions;
+              // УДАЛЕНО: const permissions = userState.permissions;
               
               // Обновляем профиль пользователя
               setUser(userDataToStore);
               
-              // Восстанавливаем roleId и разрешения, если они были
-              if (roleId && permissions && permissions.length > 0) {
-                console.log("Восстанавливаем roleId и разрешения:", { roleId, permissions });
-                useUserStore.getState().setRoleAndPermissions(roleId, permissions);
-              }
+              // УДАЛЕНО: Legacy восстановление permissions через setRoleAndPermissions
             } else {
               console.log("Пропускаем обновление хранилища, данные актуальны");
             }
@@ -246,26 +242,14 @@ export function AuthDebugPanel() {
                   </div>
                   
                   <div className="space-y-2">
-                    <h3 className="text-sm font-medium text-muted-foreground">Роль и разрешения</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground">Роль</h3>
                     <div className="rounded border p-3 text-sm space-y-2">
                       <div className="flex justify-between">
                         <span className="font-medium text-muted-foreground">RoleId:</span>
                         <Badge variant="outline">{userState.profile?.roleId || "Не назначена"}</Badge>
                       </div>
-                      <div>
-                        <div className="font-medium text-muted-foreground mb-1">Разрешения:</div>
-                        {userState.permissions && userState.permissions.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-1 text-xs">
-                            {userState.permissions.slice(0, 6).map((perm) => (
-                              <Badge key={perm} variant="secondary" className="justify-start font-mono">{perm}</Badge>
-                            ))}
-                            {userState.permissions.length > 6 && (
-                              <Badge variant="secondary">+{userState.permissions.length - 6} ещё</Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground italic">Нет разрешений</span>
-                        )}
+                      <div className="text-muted-foreground italic text-xs">
+                        Разрешения теперь управляются через permissions модуль
                       </div>
                     </div>
                   </div>

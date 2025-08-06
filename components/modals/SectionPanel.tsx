@@ -1,14 +1,18 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { useProjectsStore } from '@/modules/projects/store'
+import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
 interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
+  initialTab?: 'overview' | 'details' | 'comments'
 }
 
 interface SectionData {
@@ -21,12 +25,15 @@ interface SectionData {
   section_object_id: string
   section_created: string
   section_updated: string
+  section_status_id: string | null
   responsible_name?: string | null
   responsible_avatar?: string
   object_name?: string
   stage_name?: string
   project_name?: string
   manager_name?: string | null
+  status_name?: string | null
+  status_color?: string | null
   objects?: any
   responsible?: any
 }
@@ -40,11 +47,13 @@ interface Profile {
 
 const supabase = createClient()
 
-export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) {
+export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview' }: SectionPanelProps) {
+  // initialTab теперь приходит уже готовый: 'comments' при навигации из уведомлений, иначе 'overview'
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'details'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'comments'>(initialTab)
+  const initializedRef = useRef(false)
   
   // Состояние для inline редактирования отдельных полей
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -57,7 +66,16 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   
+  // Состояние для выбора статуса
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  
   const { setNotification } = useUiStore()
+  const { statuses } = useSectionStatuses()
+  const { updateSectionStatus: updateSectionStatusInStore } = useProjectsStore()
+
+  // useSectionStatuses хук уже автоматически обновляется при всех событиях статусов
+  // Убираем дублирующие обработчики событий
 
   useEffect(() => {
     if (isOpen && sectionId) {
@@ -65,6 +83,14 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       loadProfiles()
     }
   }, [isOpen, sectionId])
+
+  // Устанавливаем активную вкладку только при первой инициализации
+  useEffect(() => {
+    if (isOpen && !initializedRef.current) {
+      setActiveTab(initialTab)
+      initializedRef.current = true
+    }
+  }, [isOpen, initialTab])
 
   useEffect(() => {
     if (!isOpen) {
@@ -74,16 +100,27 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       setSavingField(null)
       setShowDeleteConfirm(false)
       setIsDeleting(false)
+      setShowStatusDropdown(false)
+      setUpdatingStatus(false)
+      initializedRef.current = false // Сбрасываем флаг инициализации
     }
   }, [isOpen])
 
   const loadSectionData = async () => {
     setLoading(true)
     try {
-      // Загружаем основные данные раздела
+      // Загружаем основные данные раздела с информацией о статусе
       const { data: sectionData, error: sectionError } = await supabase
         .from('sections')
-        .select('*')
+        .select(`
+          *,
+          section_statuses:section_status_id (
+            id,
+            name,
+            color,
+            description
+          )
+        `)
         .eq('section_id', sectionId)
         .single()
 
@@ -234,7 +271,9 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
         object_name: hierarchyData?.object_name || null,
         stage_name: hierarchyData?.stage_name || null,
         project_name: hierarchyData?.project_name || null,
-        manager_name: hierarchyData?.manager_name || null
+        manager_name: hierarchyData?.manager_name || null,
+        status_name: sectionData.section_statuses?.name || null,
+        status_color: sectionData.section_statuses?.color || null
       }
 
       console.log('Итоговые данные раздела:', formattedData)
@@ -259,6 +298,53 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       setProfiles(data || [])
     } catch (error) {
       console.error('Ошибка загрузки профилей:', error)
+    }
+  }
+
+  const updateSectionStatus = async (statusId: string | null): Promise<void> => {
+    if (!sectionData) return
+    
+    setUpdatingStatus(true)
+    try {
+      const { error } = await supabase
+        .from('sections')
+        .update({ section_status_id: statusId })
+        .eq('section_id', sectionId)
+
+      if (error) throw error
+
+      // Обновляем локальные данные
+      const updatedStatus = statuses.find(s => s.id === statusId)
+      setSectionData({
+        ...sectionData,
+        section_status_id: statusId,
+        status_name: updatedStatus?.name || null,
+        status_color: updatedStatus?.color || null
+      })
+
+      // Обновляем store для синхронизации с деревом проектов
+      updateSectionStatusInStore(sectionId, {
+        statusId: statusId,
+        statusName: updatedStatus?.name || null,
+        statusColor: updatedStatus?.color || null
+      })
+
+      
+      // Создаем событие для уведомления других компонентов об изменении
+      window.dispatchEvent(new CustomEvent('sectionPanel:statusUpdated', {
+        detail: {
+          sectionId,
+          statusId: statusId,
+          statusName: updatedStatus?.name || null,
+          statusColor: updatedStatus?.color || null
+        }
+      }))
+    } catch (error) {
+      console.error('Ошибка обновления статуса:', error)
+      setNotification('Ошибка обновления статуса')
+    } finally {
+      setUpdatingStatus(false)
+      setShowStatusDropdown(false)
     }
   }
 
@@ -586,7 +672,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       >
         {/* Заголовок прилегает к верху */}
         <div 
-          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900" 
+          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
           style={{ 
             paddingTop: '16px',
             margin: '0px'
@@ -633,6 +719,16 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
             >
               Детали
             </button>
+            <button
+              onClick={() => setActiveTab('comments')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'comments'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Комментарии
+            </button>
           </div>
         </div>
 
@@ -646,6 +742,93 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
               {activeTab === 'overview' && (
                 <>
                   {renderEditableField('section_name', 'Название раздела', sectionData.section_name, 'text')}
+                  
+                  {/* Компактный статус раздела */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+                      Статус раздела
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                        disabled={updatingStatus}
+                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        onBlur={(e) => {
+                          // Проверяем, перемещается ли фокус внутри выпадающего списка
+                          const relatedTarget = e.relatedTarget as HTMLElement
+                          const currentTarget = e.currentTarget
+                          const dropdownContainer = currentTarget.parentElement
+                          
+                          // Закрываем dropdown только если фокус перемещается за пределы контейнера
+                          if (!relatedTarget || !dropdownContainer?.contains(relatedTarget)) {
+                            setShowStatusDropdown(false)
+                          }
+                        }}
+                      >
+                        {updatingStatus ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                        ) : sectionData.status_name ? (
+                          <>
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
+                            />
+                            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                              {sectionData.status_name}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-500 dark:text-slate-400">
+                              Без статуса
+                            </span>
+                          </>
+                        )}
+                        <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
+                      </button>
+
+                      {showStatusDropdown && !updatingStatus && (
+                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => updateSectionStatus(null)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                          >
+                            <AlertTriangle className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-500 dark:text-slate-400">
+                              Убрать статус
+                            </span>
+                          </button>
+                          {statuses.map((status) => (
+                            <button
+                              key={status.id}
+                              type="button"
+                              onClick={() => updateSectionStatus(status.id)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                            >
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: status.color }}
+                              />
+                              <div>
+                                <div className="text-sm font-medium dark:text-white">
+                                  {status.name}
+                                </div>
+                                {status.description && (
+                                  <div className="text-xs text-gray-500 dark:text-slate-400">
+                                    {status.description}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   {renderEditableField('section_description', 'Описание', sectionData.section_description, 'textarea')}
                   
                   {/* Блок ответственного */}
@@ -811,6 +994,10 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                     </div>
                   </div>
                 </>
+              )}
+
+              {activeTab === 'comments' && (
+                <CommentsPanel sectionId={sectionId} />
               )}
             </div>
           ) : (

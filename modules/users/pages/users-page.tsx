@@ -14,6 +14,7 @@ import type { User } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
+import { PermissionGuard, PERMISSIONS } from "@/modules/permissions"
 import { Button } from "@/components/ui/button"
 
 export default function UsersPage() {
@@ -32,8 +33,7 @@ export default function UsersPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const tabFromUrl = searchParams.get('tab')
-  const permissions = useUserStore((state) => state.permissions)
-  const canViewAdminPanel = permissions.includes("user_admin_panel_can_view")
+  // Разрешения временно отключены - показываем админ панель всем
   
   // Set initial tab value based on URL
   const [adminTab, setAdminTab] = useState(
@@ -42,17 +42,7 @@ export default function UsersPage() {
       : "list"
   )
 
-  // If user switched to admin tab but doesn't have permission, reset to list
-  useEffect(() => {
-    if (adminTab === "admin" && !canViewAdminPanel) {
-      setAdminTab("list")
-      
-      // Update URL, removing tab=admin parameter
-      if (tabFromUrl === "admin") {
-        router.replace("/dashboard/users?tab=list")
-      }
-    }
-  }, [adminTab, canViewAdminPanel, tabFromUrl, router])
+  // Разрешения отключены - убрали проверку доступа к админ панели
   
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
@@ -146,7 +136,9 @@ export default function UsersPage() {
           <TabsTrigger value="list">Список пользователей</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
           <TabsTrigger value="analytics">Аналитика</TabsTrigger>
-          {canViewAdminPanel && <TabsTrigger value="admin">Администратор</TabsTrigger>}
+          <PermissionGuard permission={PERMISSIONS.USERS.ADMIN_PANEL}>
+            <TabsTrigger value="admin">Администратор</TabsTrigger>
+          </PermissionGuard>
         </TabsList>
         <TabsContent value="list" className="space-y-4">
           <div className="flex flex-col md:flex-row gap-4">

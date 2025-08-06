@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client"
 
 // Интерфейс данных профиля пользователя
 export interface UserProfile {
+  // camelCase поля (для обратной совместимости)
   firstName?: string | null
   lastName?: string | null
   departmentId?: string | null
@@ -18,6 +19,22 @@ export interface UserProfile {
   address?: string | null
   roleId?: string | null
   avatar_url?: string | null
+  
+  // snake_case поля (из базы данных)
+  first_name?: string | null
+  last_name?: string | null
+  department_id?: string | null
+  team_id?: string | null
+  position_id?: string | null
+  category_id?: string | null
+  work_format?: string | null
+  is_hourly?: boolean | null
+  employment_rate?: number | null
+  role_id?: string | null
+  user_id?: string | null
+  email?: string | null
+  created_at?: string | null
+  city_id?: string | null
 }
 
 // Тип данных пользователя для передачи в setUser
@@ -35,17 +52,12 @@ interface UserState {
   name: string | null
   profile: UserProfile | null
   isAuthenticated: boolean
-  permissions: string[]
   
   // Действия
   setUser: (user: UserData) => void
   clearUser: () => void
   clearState: () => void
-  setRoleAndPermissions: (roleId: string | null, permissions: string[]) => void
   updateAvatar: (avatarUrl: string) => void
-  hasPermission: (permission: string) => boolean
-  getActivePermission: () => string | null
-  getPermissionLabel: (permission: string) => string
 }
 
 export const useUserStore = create<UserState>()(
@@ -58,7 +70,6 @@ export const useUserStore = create<UserState>()(
         name: null,
         profile: null,
         isAuthenticated: false,
-        permissions: [],
         
         // Действия
         setUser: (user: UserData) => {
@@ -76,30 +87,42 @@ export const useUserStore = create<UserState>()(
           if (user.profile) {
             // Create deep copy of profile for safety
             processedProfile = {
-              firstName: user.profile.firstName,
-              lastName: user.profile.lastName,
-              departmentId: user.profile.departmentId,
-              teamId: user.profile.teamId,
-              positionId: user.profile.positionId,
-              categoryId: user.profile.categoryId,
-              workFormat: user.profile.workFormat,
+              firstName: user.profile.firstName || user.profile.first_name,
+              lastName: user.profile.lastName || user.profile.last_name,
+              departmentId: user.profile.departmentId || user.profile.department_id,
+              teamId: user.profile.teamId || user.profile.team_id,
+              positionId: user.profile.positionId || user.profile.position_id,
+              categoryId: user.profile.categoryId || user.profile.category_id,
+              workFormat: user.profile.workFormat || user.profile.work_format,
               salary: user.profile.salary,
-              isHourly: user.profile.isHourly,
-              employmentRate: user.profile.employmentRate,
+              isHourly: user.profile.isHourly || user.profile.is_hourly,
+              employmentRate: user.profile.employmentRate || user.profile.employment_rate,
               address: user.profile.address,
-              roleId: user.profile.roleId,
+              roleId: user.profile.roleId || user.profile.role_id,
               avatar_url: user.profile.avatar_url
             };
-            profileName = [user.profile.firstName, user.profile.lastName].filter(Boolean).join(' ');
+            // Формируем имя из profile только если не передано готовое имя
+            const firstName = user.profile.firstName || user.profile.first_name;
+            const lastName = user.profile.lastName || user.profile.last_name;
+            profileName = [firstName, lastName].filter(Boolean).join(' ');
           }
+          
+          // Приоритетно используем переданное имя, fallback на profileName
+          const finalName = user.name || profileName || '';
+          
+          console.log("💾 useUserStore.setUser: Сохранение данных:", {
+            passedName: user.name,
+            profileName,
+            finalName,
+            hasProfile: !!user.profile
+          });
           
           set({
             id: user.id,
             email: user.email,
-            name: profileName || '',
+            name: finalName,
             profile: processedProfile,
-            isAuthenticated: true,
-            permissions: shouldPreserveRoleData ? currentState.permissions : []
+            isAuthenticated: true
           });
         
         },
@@ -109,23 +132,12 @@ export const useUserStore = create<UserState>()(
           email: null,
           name: null,
           profile: null,
-          isAuthenticated: false,
-          permissions: []
+          isAuthenticated: false
         }),
         
         // Alias for clearUser for backward compatibility
         clearState: () => get().clearUser(),
-        
-        setRoleAndPermissions: (roleId, permissions) => {
-          const currentState = get();
-          set({
-            profile: currentState.profile ? {
-              ...currentState.profile,
-              roleId
-            } : { roleId },
-            permissions
-          });
-        },
+
         
         // Method for updating avatar
         updateAvatar: (avatarUrl: string) => {
@@ -150,59 +162,18 @@ export const useUserStore = create<UserState>()(
           });
         },
         
-        hasPermission: (permission: string) => {
-          const currentState = get();
-          return currentState.permissions.includes(permission);
-        },
-
-        // Method for getting the highest priority permission
-        getActivePermission: () => {
-          const currentState = get();
-          const permissions = currentState.permissions;
-          
-          // Иерархия разрешений (от высшего к низшему)
-          const permissionHierarchy = [
-            'is_top_manager',
-            'is_project_manager', 
-            'is_head_of_department',
-            'is_teamlead'
-          ];
-          
-          // Возвращаем первое найденное разрешение согласно иерархии
-          for (const permission of permissionHierarchy) {
-            if (permissions.includes(permission)) {
-              return permission;
-            }
-          }
-          
-          return null;
-        },
-
-        // Method for getting permission label
-        getPermissionLabel: (permission: string) => {
-          const labels: Record<string, string> = {
-            'is_top_manager': 'Топ-менеджер',
-            'is_project_manager': 'Руководитель проектов',
-            'is_head_of_department': 'Руководитель отдела',
-            'is_teamlead': 'Руководитель команды'
-          };
-          
-          return labels[permission] || permission;
-        }
+        // УДАЛЕНО: Все методы работы с разрешениями перенесены в permissions модуль
       }),
       {
         name: 'user-storage',
         partialize: (state) => {
-          const partializedState = {
+          return {
             id: state.id,
             email: state.email,
             name: state.name,
             profile: state.profile,
-            isAuthenticated: state.isAuthenticated,
-            // Don't save permissions in localStorage
-            permissions: []
+            isAuthenticated: state.isAuthenticated
           };
-          return partializedState;
         },
       }
     )

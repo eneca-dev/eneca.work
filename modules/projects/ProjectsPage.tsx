@@ -1,13 +1,16 @@
 "use client"
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
 import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
 import { useUiStore } from '@/stores/useUiStore';
+
 import { X } from 'lucide-react';
 
 export default function ProjectsPage() {
+  const searchParams = useSearchParams();
   const { 
     filters, 
     clearFilters,
@@ -15,9 +18,11 @@ export default function ProjectsPage() {
     isDetailsPanelOpen 
   } = useProjectsStore();
 
-  // Получаем уведомления из UI стора
-  const { notification, clearNotification } = useUiStore();
+  // GlobalNotification компонент сам управляет уведомлениями
 
+  // Читаем параметры из URL для навигации к комментариям (как fallback)
+  const urlSectionId = searchParams.get('section');
+  const urlTab = searchParams.get('tab') as 'overview' | 'details' | 'comments' | null;
 
 
   // Состояние фильтров для передачи в дерево
@@ -72,38 +77,7 @@ export default function ProjectsPage() {
   return (
     <div className="p-6 space-y-6">
       
-      {/* Уведомления */}
-      {notification && (
-        <div className="fixed top-4 right-4 z-50 max-w-md">
-          <div className={`border rounded-lg p-4 shadow-lg ${
-            notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
-              ? 'bg-green-50 border-green-200' 
-              : 'bg-red-50 border-red-200'
-          }`}>
-            <div className="flex items-start">
-              <div className="flex-1">
-                <p className={`text-sm font-medium ${
-                  notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
-                    ? 'text-green-800' 
-                    : 'text-red-800'
-                }`}>
-                  {notification}
-                </p>
-              </div>
-              <button
-                onClick={clearNotification}
-                className={`ml-3 flex-shrink-0 ${
-                  notification.includes('успешно') || notification.includes('создана') || notification.includes('обновлен') || notification.includes('удален')
-                    ? 'text-green-400 hover:text-green-600' 
-                    : 'text-red-400 hover:text-red-600'
-                }`}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Глобальные уведомления добавлены в ClientProviders */}
       
       {/* Фильтры - точная копия из планирования */}
       <ProjectsFilters
@@ -126,6 +100,8 @@ export default function ProjectsPage() {
         selectedDepartmentId={selectedDepartmentId}
         selectedTeamId={selectedTeamId}
         selectedEmployeeId={selectedEmployeeId}
+        urlSectionId={urlSectionId}
+        urlTab={urlTab || 'overview'}
       />
     </div>
   );

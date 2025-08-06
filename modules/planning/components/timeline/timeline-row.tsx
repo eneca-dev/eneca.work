@@ -291,7 +291,7 @@ export function TimelineRow({
                   
                   <span
                     className={cn(
-                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[185px] cursor-pointer hover:underline",
+                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline",
                       theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
                     )}
                     onClick={(e) => {

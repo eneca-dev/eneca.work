@@ -2,6 +2,7 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeSync } from "@/components/theme-sync";
 import { Toaster } from "@/components/ui/toaster";
+import { GlobalNotification } from "@/components/ui/notification";
 import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider";
 import { NoSSR } from "@/components/NoSSR";
 
@@ -14,6 +15,7 @@ export default function ClientProviders({ children }: { children: React.ReactNod
           {children}
         </NotificationsProvider>
         <Toaster />
+        <GlobalNotification />
       </NoSSR>
     </ThemeProvider>
   );

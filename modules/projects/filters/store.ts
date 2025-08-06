@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
+import { PERMISSIONS, usePermissionsStore } from '@/modules/permissions'
 import type { FilterStore, FilterOption, FilterConfigs } from './types'
 
 const supabase = createClient()
@@ -140,23 +141,35 @@ export const useFilterStore = create<FilterStore>()(
           set(updates)
         },
         
-        // Проверка блокировки фильтра
+        // Проверка блокировки фильтра на основе hierarchy permissions (обновлено для новой системы)
         isFilterLocked: (type: string) => {
-          const userStore = useUserStore.getState()
-          const activePermission = userStore.getActivePermission()
+          const permissionsState = usePermissionsStore.getState()
+          const { permissions } = permissionsState
           
-          if (!activePermission) return false
+          if (!permissions || permissions.length === 0) return false
           
-          switch (activePermission) {
-            case 'is_project_manager':
-              return type === 'manager'
-            case 'is_head_of_department':
-              return type === 'department'
-            case 'is_teamlead':
-              return type === 'department' || type === 'team'
-            default:
-              return false
+          // Проверяем hierarchy permissions для автоблокировки фильтров
+          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_PROJECT_MANAGER)) {
+            // Руководитель проекта - блокируем выбор менеджера (только свои проекты)
+            return type === 'manager'
           }
+          
+          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_DEPARTMENT_HEAD)) {
+            // Руководитель отдела - блокируем выбор отдела (только свой отдел)
+            return type === 'department'
+          }
+          
+          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_TEAM_LEAD)) {
+            // Руководитель команды - блокируем отдел и команду (только своя команда)
+            return type === 'department' || type === 'team'
+          }
+          
+          // Админ не имеет ограничений
+          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_ADMIN)) {
+            return false
+          }
+          
+          return false
         },
         
         // Фильтрованные данные

@@ -1,17 +1,29 @@
-import { useUserStore } from "@/stores/useUserStore"
+import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
 
 export interface UserPermissions {
   canEditAllUsers: boolean
   canDeleteUsers: boolean
   canEditStructures: boolean
+  // Hierarchy статусы
+  isAdmin: boolean
+  isDepartmentHead: boolean
+  isProjectManager: boolean
+  isTeamLead: boolean
+  isUser: boolean
 }
 
 export function useUserPermissions(): UserPermissions {
-  const permissions = useUserStore((state) => state.permissions)
+  const { hasPermission } = usePermissions()
 
   return {
-    canEditAllUsers: permissions?.includes("users_can_edit_all") ?? false,
-    canDeleteUsers: permissions?.includes("user.delete") ?? false,
-    canEditStructures: permissions?.includes("structure.edit") ?? false,
+    canEditAllUsers: hasPermission(PERMISSIONS.USERS.EDIT_ALL),
+    canDeleteUsers: hasPermission(PERMISSIONS.USERS.DELETE),
+    canEditStructures: hasPermission(PERMISSIONS.USERS.EDIT_STRUCTURE),
+    // Hierarchy статусы
+    isAdmin: hasPermission(PERMISSIONS.HIERARCHY.IS_ADMIN),
+    isDepartmentHead: hasPermission(PERMISSIONS.HIERARCHY.IS_DEPARTMENT_HEAD),
+    isProjectManager: hasPermission(PERMISSIONS.HIERARCHY.IS_PROJECT_MANAGER),
+    isTeamLead: hasPermission(PERMISSIONS.HIERARCHY.IS_TEAM_LEAD),
+    isUser: hasPermission(PERMISSIONS.HIERARCHY.IS_USER),
   }
 } 

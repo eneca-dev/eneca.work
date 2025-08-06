@@ -12,6 +12,9 @@ interface ProjectsState {
   activeDetailsTab: 'overview' | 'team' | 'files';
   expandedNodes: Set<string>;
   
+  // Подсвеченный раздел для навигации к комментариям
+  highlightedSectionId: string | null;
+  
   // Уведомления
   notification: string | null;
   
@@ -31,12 +34,17 @@ interface ProjectsState {
   setActiveDetailsTab: (tab: ProjectsState['activeDetailsTab']) => void;
   toggleNode: (nodeId: string) => void;
   
+  // Действия для навигации к разделам (всегда открывает комментарии)
+  highlightSection: (sectionId: string) => void;
+  clearHighlight: () => void;
+  
   // Действия для уведомлений
   setNotification: (message: string) => void;
   clearNotification: () => void;
   
   // Действия для обновления разделов
   updateSectionResponsible: (sectionId: string, updates: { responsibleName?: string; responsibleAvatarUrl?: string }) => void;
+  updateSectionStatus: (sectionId: string, updates: { statusId?: string | null; statusName?: string | null; statusColor?: string | null }) => void;
   
   // CRUD операции (заглушки пока)
   setProjects: (projects: Project[]) => void;
@@ -61,6 +69,7 @@ export const useProjectsStore = create<ProjectsState>()(
       isDetailsPanelOpen: false,
       activeDetailsTab: 'overview',
       expandedNodes: new Set(),
+      highlightedSectionId: null,
       notification: null,
       projects: [],
       stages: [],
@@ -111,6 +120,16 @@ export const useProjectsStore = create<ProjectsState>()(
           return { expandedNodes: newExpandedNodes };
         }),
         
+      highlightSection: (sectionId) =>
+        set({ 
+          highlightedSectionId: sectionId
+        }),
+        
+      clearHighlight: () =>
+        set({ 
+          highlightedSectionId: null
+        }),
+        
       setProjects: (projects) => set(() => ({ projects })),
       setStages: (stages) => set(() => ({ stages })),
       setObjects: (objects) => set(() => ({ objects })),
@@ -125,6 +144,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // Пока что это заглушка, так как мы работаем с данными из view_section_hierarchy
         // В реальном приложении здесь можно было бы обновить локальное состояние
         console.log('Обновление ответственного за раздел:', sectionId, updates)
+      },
+
+      // Функция обновления статуса раздела
+      updateSectionStatus: (sectionId, updates) => {
+        set((state) => ({
+          sections: state.sections.map(section =>
+            section.section_id === sectionId
+              ? { ...section, section_status_id: updates.statusId || section.section_status_id }
+              : section
+          )
+        }));
       },
     }),
     {

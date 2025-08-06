@@ -138,23 +138,27 @@ export const useFilterStore = create<FilterStore>()(
           set(updates)
         },
         
-        // Проверка блокировки фильтра
+        // Проверка блокировки фильтра (обновлено для новой системы permissions)
         isFilterLocked: (type: string) => {
-          const userStore = useUserStore.getState()
-          const activePermission = userStore.getActivePermission()
+          // Импортируем новую систему permissions динамически
+          const { usePermissionsStore } = require('@/modules/permissions')
+          const permissionsState = usePermissionsStore.getState()
+          const { permissions } = permissionsState
           
-          if (!activePermission) return false
+          if (!permissions || permissions.length === 0) return false
           
-          switch (activePermission) {
-            case 'is_project_manager':
-              return type === 'manager'
-            case 'is_head_of_department':
-              return type === 'department'
-            case 'is_teamlead':
-              return type === 'department' || type === 'team'
-            default:
-              return false
+          // Проверяем hierarchy permissions для блокировки фильтров
+          if (permissions.includes('hierarchy.is_project_manager')) {
+            return type === 'manager' // Блокируем фильтр менеджера для project manager
           }
+          if (permissions.includes('hierarchy.is_department_head')) {
+            return type === 'department' // Блокируем фильтр отдела для department head
+          }
+          if (permissions.includes('hierarchy.is_team_lead')) {
+            return type === 'department' || type === 'team' // Блокируем отдел и команду для team lead
+          }
+          
+          return false
         },
         
         // Фильтрованные данные

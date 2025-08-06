@@ -23,6 +23,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { isWeekend } from "@/modules/calendar/utils"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface UnifiedWorkScheduleFormProps {
   onClose: () => void
@@ -37,14 +38,13 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const isAuthenticated = userStore.isAuthenticated
   
   // Проверяем права - ОПТИМИЗИРОВАННО  
+  const { hasPermission } = usePermissions()
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
-    const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
+    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
+    const hasWorkSchedule = hasPermission("calendar.admin") || hasPermission("calendar.edit.work_schedule")
     
     return { hasGlobalEvents, hasWorkSchedule }
-  }, [userStore])
+  }, [hasPermission])
 
   const [activeTab, setActiveTab] = useState("dayoff")
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({

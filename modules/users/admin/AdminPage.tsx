@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import AdminPanel from "@/modules/users/admin/AdminPanel"
 import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
+import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
 import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { Loader2, ShieldX } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,16 +13,27 @@ import { Button } from "@/components/ui/button"
 export default function AdminPage() {
   const [isChecking, setIsChecking] = useState(true)
   const [isAuthorized, setIsAuthorized] = useState(false)
-  const permissions = useUserStore((state) => state.permissions)
-  const { canViewAdminPanel } = useAdminPermissions()
+  const { hasPermission, isLoading: permissionsLoading, error: permissionsError } = usePermissions()
   const router = useRouter()
 
   useEffect(() => {
-    if (permissions !== null) {
-      setIsAuthorized(canViewAdminPanel)
-      setIsChecking(false)
+    if (permissionsLoading) {
+      // Ждем загрузки разрешений
+      return
     }
-  }, [permissions, canViewAdminPanel])
+    
+    // Если есть ошибка загрузки разрешений - блокируем доступ
+    if (permissionsError) {
+      console.error('❌ Ошибка загрузки разрешений в AdminPage:', permissionsError)
+      setIsAuthorized(false)
+      setIsChecking(false)
+      return
+    }
+    
+    const canViewAdminPanel = hasPermission(PERMISSIONS.USERS.ADMIN_PANEL)
+    setIsAuthorized(canViewAdminPanel)
+    setIsChecking(false)
+  }, [permissionsLoading, permissionsError, hasPermission])
 
   useEffect(() => {
     if (!isChecking && !isAuthorized) {
