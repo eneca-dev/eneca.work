@@ -10,6 +10,7 @@ import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
+import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 
 interface NotificationItemProps {
@@ -49,6 +50,10 @@ const notificationTags = {
     text: "Передача заданий",
     color: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200",
   },
+  section_comment: {
+    text: "Комментарий",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200",
+  },
 }
 
 // Функция для получения тега уведомления
@@ -73,8 +78,14 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
     ? notification.payload?.from_section
     : null
 
+  // Получаем имя автора комментария из payload для комментариев
+  const commentAuthor = (notification.entityType === 'section_comment') 
+    ? notification.payload?.section_comment?.author_name 
+    : null
+
   const { markAsRead, markAsReadInDB } = useNotificationsStore()
   const { highlightAnnouncement } = useAnnouncementsStore()
+  const { highlightSection } = useProjectsStore()
 
   // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
@@ -94,7 +105,20 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
         router.push('/dashboard')
       }
     }
-  }, [notification, highlightAnnouncement, router])
+    
+    // Если это уведомление о комментарии, подсвечиваем раздел
+    if (notification.entityType === 'section_comment') {
+      const sectionId = notification.payload?.section_comment?.section_id
+      
+      if (sectionId) {
+        // Подсвечиваем раздел (всегда открывает комментарии)
+        highlightSection(sectionId)
+        
+        // Переходим на страницу проектов (чистый URL!)
+        router.push('/dashboard/projects')
+      }
+    }
+  }, [notification, highlightAnnouncement, router, highlightSection])
 
   return (
     <div
@@ -147,6 +171,11 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
             {fromSection && (
               <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
                 из {fromSection}
+              </p>
+            )}
+            {commentAuthor && (
+              <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+                 {commentAuthor}
               </p>
             )}
           </div>

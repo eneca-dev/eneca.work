@@ -146,6 +146,16 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
       title = payload.title || 'Новое объявление'
       message = payload.message || payload.body || 'Нет описания'
     }
+  } else if (entityType === 'section_comment') {
+    // Обработка уведомлений о комментариях к разделам
+    const commentData = payload.section_comment || {
+      section_name: payload.section_name || 'Раздел',
+      author_name: payload.author_name || 'Пользователь',
+      comment_preview: payload.comment_preview || 'комментарий'
+    }
+    
+    title = `Комментарий к разделу "${commentData.section_name}"`
+    message = `${commentData.author_name}: "${commentData.comment_preview}"`
   } else {
     // Для других типов используем payload или fallback
     title = payload.title || notification?.rendered_text || 'Новое уведомление'

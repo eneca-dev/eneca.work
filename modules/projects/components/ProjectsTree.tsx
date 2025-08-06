@@ -44,6 +44,8 @@ interface ProjectsTreeProps {
   selectedDepartmentId?: string | null
   selectedTeamId?: string | null
   selectedEmployeeId?: string | null
+  urlSectionId?: string | null
+  urlTab?: 'overview' | 'details' | 'comments'
 }
 
 interface TreeNodeProps {
@@ -456,10 +458,17 @@ export function ProjectsTree({
   selectedObjectId,
   selectedDepartmentId,
   selectedTeamId,
-  selectedEmployeeId
+  selectedEmployeeId,
+  urlSectionId,
+  urlTab
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
-  const { expandedNodes, toggleNode: toggleNodeInStore } = useProjectsStore()
+  const { 
+    expandedNodes, 
+    toggleNode: toggleNodeInStore,
+    highlightedSectionId,
+    clearHighlight
+  } = useProjectsStore()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -485,6 +494,60 @@ export function ProjectsTree({
   useEffect(() => {
     loadTreeData()
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+
+  // Функция поиска раздела по ID в дереве
+  const findSectionById = (sectionId: string): ProjectNode | null => {
+    const findInNodes = (nodes: ProjectNode[]): ProjectNode | null => {
+      for (const node of nodes) {
+        if (node.type === 'section' && node.id === sectionId) {
+          return node
+        }
+        if (node.children && node.children.length > 0) {
+          const found = findInNodes(node.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    return findInNodes(treeData)
+  }
+
+  // Обработка подсвеченного раздела для навигации к комментариям
+  useEffect(() => {
+    if (!loading && highlightedSectionId && treeData.length > 0) {
+      console.log('🎯 Открываем раздел с комментариями:', highlightedSectionId)
+      
+      const section = findSectionById(highlightedSectionId)
+      if (section) {
+        console.log('✅ Найден раздел:', section)
+        setSelectedSectionForPanel(section)
+        setShowSectionPanel(true)
+        
+        // Очищаем подсветку через 3 секунды
+        setTimeout(() => {
+          clearHighlight()
+        }, 3000)
+      } else {
+        console.warn('⚠️ Раздел не найден:', highlightedSectionId)
+      }
+    }
+  }, [loading, highlightedSectionId, treeData, clearHighlight])
+
+  // Обработка URL параметров для прямой навигации к разделу (fallback)
+  useEffect(() => {
+    if (!loading && urlSectionId && urlTab && treeData.length > 0 && !highlightedSectionId) {
+      console.log('🎯 Обрабатываем URL навигацию (fallback):', { urlSectionId, urlTab })
+      
+      const section = findSectionById(urlSectionId)
+      if (section) {
+        console.log('✅ Найден раздел по URL:', section)
+        setSelectedSectionForPanel(section)
+        setShowSectionPanel(true)
+      } else {
+        console.warn('⚠️ Раздел не найден по URL:', urlSectionId)
+      }
+    }
+  }, [loading, urlSectionId, urlTab, treeData, highlightedSectionId])
 
   const loadTreeData = async () => {
     console.log('🌳 Загружаю данные дерева проектов...')
@@ -1070,6 +1133,7 @@ export function ProjectsTree({
             setSelectedSectionForPanel(null)
           }}
           sectionId={selectedSectionForPanel.id}
+          initialTab={highlightedSectionId ? 'comments' : (urlTab || 'overview')}
         />
       )}
 

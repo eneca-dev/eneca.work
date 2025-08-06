@@ -12,6 +12,9 @@ interface ProjectsState {
   activeDetailsTab: 'overview' | 'team' | 'files';
   expandedNodes: Set<string>;
   
+  // Подсвеченный раздел для навигации к комментариям
+  highlightedSectionId: string | null;
+  
   // Уведомления
   notification: string | null;
   
@@ -30,6 +33,10 @@ interface ProjectsState {
   toggleDetailsPanel: () => void;
   setActiveDetailsTab: (tab: ProjectsState['activeDetailsTab']) => void;
   toggleNode: (nodeId: string) => void;
+  
+  // Действия для навигации к разделам (всегда открывает комментарии)
+  highlightSection: (sectionId: string) => void;
+  clearHighlight: () => void;
   
   // Действия для уведомлений
   setNotification: (message: string) => void;
@@ -61,6 +68,7 @@ export const useProjectsStore = create<ProjectsState>()(
       isDetailsPanelOpen: false,
       activeDetailsTab: 'overview',
       expandedNodes: new Set(),
+      highlightedSectionId: null,
       notification: null,
       projects: [],
       stages: [],
@@ -109,6 +117,16 @@ export const useProjectsStore = create<ProjectsState>()(
             newExpandedNodes.add(nodeId);
           }
           return { expandedNodes: newExpandedNodes };
+        }),
+        
+      highlightSection: (sectionId) =>
+        set({ 
+          highlightedSectionId: sectionId
+        }),
+        
+      clearHighlight: () =>
+        set({ 
+          highlightedSectionId: null
         }),
         
       setProjects: (projects) => set(() => ({ projects })),

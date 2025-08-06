@@ -1,13 +1,16 @@
 "use client"
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
 import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
 import { useUiStore } from '@/stores/useUiStore';
+
 import { X } from 'lucide-react';
 
 export default function ProjectsPage() {
+  const searchParams = useSearchParams();
   const { 
     filters, 
     clearFilters,
@@ -18,6 +21,9 @@ export default function ProjectsPage() {
   // Получаем уведомления из UI стора
   const { notification, clearNotification } = useUiStore();
 
+  // Читаем параметры из URL для навигации к комментариям (как fallback)
+  const urlSectionId = searchParams.get('section');
+  const urlTab = searchParams.get('tab') as 'overview' | 'details' | 'comments' | null;
 
 
   // Состояние фильтров для передачи в дерево
@@ -126,6 +132,8 @@ export default function ProjectsPage() {
         selectedDepartmentId={selectedDepartmentId}
         selectedTeamId={selectedTeamId}
         selectedEmployeeId={selectedEmployeeId}
+        urlSectionId={urlSectionId}
+        urlTab={urlTab || 'overview'}
       />
     </div>
   );
