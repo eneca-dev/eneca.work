@@ -150,6 +150,7 @@ function CommentItemComponent({ comment }: CommentItemProps) {
         <ReadOnlyTipTapEditor 
           content={displayContent}
           commentId={comment.comment_id}
+          authorId={comment.author_id} // Передаем ID автора для проверки прав
           onUpdate={handleContentUpdate}
         />
         

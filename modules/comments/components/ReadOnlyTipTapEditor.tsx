@@ -9,14 +9,18 @@ import Underline from '@tiptap/extension-underline'
 import TextStyle from '@tiptap/extension-text-style'
 import Highlight from '@tiptap/extension-highlight'
 import Link from '@tiptap/extension-link'
+import { useUserStore } from '@/stores/useUserStore'
 
 interface ReadOnlyTipTapEditorProps {
   content: string
   commentId: string
+  authorId: string // ID автора комментария для проверки прав
   onUpdate?: (newContent: string) => void
 }
 
-export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyTipTapEditorProps) {
+export function ReadOnlyTipTapEditor({ content, commentId, authorId, onUpdate }: ReadOnlyTipTapEditorProps) {
+  const currentUserId = useUserStore(state => state.id) //  Получаем ID текущего пользователя
+  const isAuthor = currentUserId === authorId // Проверяем является ли пользователь автором
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -99,7 +103,7 @@ export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyT
 
 
 
-  // Разрешаем клики только на чекбоксы в списках задач
+  //  Разрешаем клики только автору комментария
   useEffect(() => {
     if (!editor) return
     
@@ -113,6 +117,13 @@ export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyT
         const taskItem = target.closest('li')
         
         if (taskItem && taskList) {
+          //  Только автор может изменять чекбоксы
+          if (!isAuthor) {
+            event.preventDefault()
+            event.stopPropagation()
+            return false
+          }
+
           // Временно включаем редактирование для обработки клика
           editor.setEditable(true)
           
@@ -132,7 +143,7 @@ export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyT
     return () => {
       editorDOM.removeEventListener('click', handleClick, true)
     }
-  }, [editor, onUpdate])
+  }, [editor, onUpdate, isAuthor]) //  isAuthor в зависимости
 
   // Обновляем контент когда props изменяется
   useEffect(() => {
@@ -274,6 +285,14 @@ export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyT
             margin: 0 !important;
             accent-color: #1e7260 !important;
           }
+          /*  Стили для недоступных чекбоксов */
+          .readonly-comment.non-author ul[data-type="taskList"] li input[type="checkbox"] {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+          }
+          .readonly-comment.non-author ul[data-type="taskList"] li label {
+            cursor: not-allowed !important;
+          }
           .readonly-comment ul[data-type="taskList"] li > div {
             flex: 1 !important;
             display: flex !important;
@@ -291,7 +310,7 @@ export function ReadOnlyTipTapEditor({ content, commentId, onUpdate }: ReadOnlyT
         `
       }} />
       <div 
-        className="readonly-comment text-sm text-slate-700 dark:text-slate-300"
+        className={`readonly-comment text-sm text-slate-700 dark:text-slate-300 ${!isAuthor ? 'non-author' : ''}`}
       >
         <EditorContent editor={editor} />
       </div>

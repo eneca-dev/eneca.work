@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { searchUsersForMentions } from '../api/comments'
 import type { MentionUser } from '../types'
+import type { Editor } from '@tiptap/core'
 
 export function useMentions() {
   /**
@@ -21,28 +22,54 @@ export function useMentions() {
   const extractMentions = useCallback((htmlContent: string): string[] => {
     if (!htmlContent) return []
     
-    // Попробуем разные варианты регулярных выражений для TipTap
+    //  Ограничиваем размер входных данных
+    if (htmlContent.length > 50000) {
+      console.warn('HTML контент слишком большой для безопасного парсинга mentions')
+      return []
+    }
+    
+    //  Безопасные regex паттерны с лимитами квантификаторов
     const patterns = [
-      /<span[^>]*data-id=["']([^"']+)["'][^>]*>/g,                    // data-id первый
-      /<span[^>]*data-mention-id=["']([^"']+)["'][^>]*>/g,           // data-mention-id
-      /<mention[^>]*data-id=["']([^"']+)["'][^>]*>/g,                // mention tag
-      /<span[^>]*class="[^"]*mention[^"]*"[^>]*data-id=["']([^"']+)["'][^>]*>/g, // class mention
-      // Дополнительные гибкие паттерны
-      /data-id=["']([^"']+)["']/g,                                   // просто data-id где угодно
-      /<[^>]*data-id=["']([^"']+)["'][^>]*>/g,                       // любой тег с data-id
+      /<span[^>]{0,200}?data-id=["']([^"']{1,50})["']/g,                    // data-id первый (безопасный)
+      /<span[^>]{0,200}?data-mention-id=["']([^"']{1,50})["']/g,           // data-mention-id (безопасный)  
+      /<mention[^>]{0,200}?data-id=["']([^"']{1,50})["']/g,                // mention tag (безопасный)
+      /<span[^>]{0,200}?class="[^"]{0,100}?mention[^"]{0,100}?"[^>]{0,100}?data-id=["']([^"']{1,50})["']/g, // class mention (безопасный)
+      // Дополнительные безопасные паттерны
+      /data-id=["']([^"']{1,50})["']/g,                                   // просто data-id где угодно (безопасный)
     ]
     
     const mentions: string[] = []
+    //  Правильная UUID валидация
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     
+    //  matchAll() вместо exec() циклов
     patterns.forEach((pattern) => {
-      pattern.lastIndex = 0 // Сбрасываем regex
-      let match
-      let patternMatches = 0
-      while ((match = pattern.exec(htmlContent)) !== null) {
-        mentions.push(match[1])
-        patternMatches++
-        // Защита от бесконечных циклов
-        if (patternMatches > 100) break
+      try {
+        const matches = htmlContent.matchAll(pattern)
+        let patternMatches = 0
+        
+        for (const match of matches) {
+          // Валидируем ID перед добавлением
+          if (match[1] && (UUID_REGEX.test(match[1]) || match[1].length >= 20)) {
+            mentions.push(match[1])
+          }
+          patternMatches++
+          // Защита от слишком большого количества совпадений
+          if (patternMatches > 1000) break
+        }
+      } catch (error) {
+        // Fallback на exec() если matchAll() не поддерживается (старые браузеры)
+        console.warn('matchAll() не поддерживается, используем exec() fallback')
+        pattern.lastIndex = 0
+        let match
+        let patternMatches = 0
+        while ((match = pattern.exec(htmlContent)) !== null) {
+          if (match[1] && (UUID_REGEX.test(match[1]) || match[1].length >= 20)) {
+            mentions.push(match[1])
+          }
+          patternMatches++
+          if (patternMatches > 1000) break
+        }
       }
     })
 
@@ -50,20 +77,30 @@ export function useMentions() {
     
     // Если ничего не нашли через HTML, пробуем fallback
     if (uniqueMentions.length === 0) {
-      // Ищем все возможные форматы упоминаний
+      //  Ограниченные паттерны с лимитами
       const fallbackPatterns = [
-        /@\[([^\]]+)\]\(([^)]+)\)/g,           // @[Name](id) формат
-        /data-id=["']([^"']+)["']/g,           // любые data-id в тексте
-        /<[^>]*data-id=["']([^"']+)["'][^>]*>/g // любые теги с data-id
+        /@\[([^\]]{1,100})\]\(([^)]{1,50})\)/g,           // @[Name](id) формат (безопасный)
       ]
       
       fallbackPatterns.forEach((pattern) => {
-        pattern.lastIndex = 0
-        let match
-        while ((match = pattern.exec(htmlContent)) !== null) {
-          const mentionId = match[2] || match[1] // берем второй захват или первый
-          if (mentionId && mentionId.length > 10) { // проверяем что это похоже на UUID
-            uniqueMentions.push(mentionId)
+        try {
+          //  matchAll() вместо exec()
+          const matches = htmlContent.matchAll(pattern)
+          for (const match of matches) {
+            const mentionId = match[2] || match[1]
+            if (mentionId && (UUID_REGEX.test(mentionId) || mentionId.length >= 20)) {
+              uniqueMentions.push(mentionId)
+            }
+          }
+        } catch (error) {
+          // Fallback для старых браузеров
+          pattern.lastIndex = 0
+          let match
+          while ((match = pattern.exec(htmlContent)) !== null) {
+            const mentionId = match[2] || match[1]
+            if (mentionId && (UUID_REGEX.test(mentionId) || mentionId.length >= 20)) {
+              uniqueMentions.push(mentionId)
+            }
           }
         }
       })
@@ -75,12 +112,13 @@ export function useMentions() {
   /**
    * Заменяет набранный текст на mention node
    */
-  const replaceMentionText = useCallback((editor: any, mentionData: { id: string, label: string }) => {
+  const replaceMentionText = useCallback((editor: Editor, mentionData: { id: string, label: string }) => {
     const { state } = editor.view
     const { selection } = state
     const { from, to } = selection
     
-    const textBeforeCursor = state.doc.textBetween(Math.max(0, from - 50), from, '\n', '\0')
+    //  Увеличен лимит поиска с 50 до 100 символов для длинных имен
+    const textBeforeCursor = state.doc.textBetween(Math.max(0, from - 100), from, '\n', '\0')
     const lastAtIndex = textBeforeCursor.lastIndexOf('@')
     
     if (lastAtIndex !== -1) {
@@ -112,23 +150,44 @@ export function useMentions() {
       let popup: any
       let currentEditor: any  // Сохраняем ссылку на editor
 
-      // Общая функция для рендеринга предложений
+      //  Безопасное создание DOM элементов вместо innerHTML
       const renderSuggestions = () => {
         if (!popup || !component) return
         
-        popup.innerHTML = component.suggestions.map((suggestion: MentionUser, index: number) => 
-          `<div class="mention-suggestion-item px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 border-l-2 border-transparent hover:border-blue-500 ${
+        // Очищаем существующий контент
+        popup.innerHTML = ''
+        
+        component.suggestions.forEach((suggestion: MentionUser, index: number) => {
+          const itemDiv = document.createElement('div')
+          itemDiv.className = `mention-suggestion-item px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 border-l-2 border-transparent hover:border-blue-500 ${
             index === component.selectedIndex ? 'bg-blue-100 dark:bg-blue-900 border-l-2 border-blue-500' : ''
-          }" data-index="${index}">
-            <div class="flex items-center space-x-2">
-              ${suggestion.avatar_url ? 
-                `<img src="${suggestion.avatar_url}" alt="${suggestion.name}" class="w-6 h-6 rounded-full border border-gray-200 dark:border-gray-600">` :
-                `<div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xs font-bold text-white">${suggestion.name.charAt(0).toUpperCase()}</div>`
-              }
-              <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${suggestion.name}</span>
-            </div>
-          </div>`
-        ).join('')
+          }`
+          itemDiv.dataset.index = index.toString()
+          
+          const innerDiv = document.createElement('div')
+          innerDiv.className = 'flex items-center space-x-2'
+          
+          if (suggestion.avatar_url) {
+            const img = document.createElement('img')
+            img.src = suggestion.avatar_url
+            img.alt = suggestion.name
+            img.className = 'w-6 h-6 rounded-full border border-gray-200 dark:border-gray-600'
+            innerDiv.appendChild(img)
+          } else {
+            const avatarDiv = document.createElement('div')
+            avatarDiv.className = 'w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xs font-bold text-white'
+            avatarDiv.textContent = suggestion.name.charAt(0).toUpperCase()
+            innerDiv.appendChild(avatarDiv)
+          }
+          
+          const nameSpan = document.createElement('span')
+          nameSpan.className = 'text-sm font-medium text-gray-900 dark:text-gray-100'
+          nameSpan.textContent = suggestion.name //  Безопасное textContent вместо интерполяции
+          innerDiv.appendChild(nameSpan)
+          
+          itemDiv.appendChild(innerDiv)
+          popup.appendChild(itemDiv)
+        })
         
         // Добавляем обработчики кликов
         popup.querySelectorAll('.mention-suggestion-item').forEach((item: any) => {

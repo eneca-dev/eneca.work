@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -48,6 +48,39 @@ export function CommentEditor({
 }: CommentEditorProps) {
   const [content, setContent] = useState('')
   const { extractMentions, searchUsers, renderMentionSuggestion } = useMentions()
+
+  //  Правильная инжекция CSS через useEffect с cleanup и reference counting
+  useEffect(() => {
+    const styleId = 'comment-editor-styles'
+    let existingStyle = document.getElementById(styleId) as HTMLStyleElement | null
+    
+    if (!existingStyle) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = commentEditorStyles
+      style.dataset.instances = '1'
+      document.head.appendChild(style)
+    } else {
+      // Увеличиваем счетчик экземпляров
+      const currentCount = parseInt(existingStyle.dataset.instances || '0')
+      existingStyle.dataset.instances = (currentCount + 1).toString()
+    }
+    
+    // Cleanup функция
+    return () => {
+      const style = document.getElementById(styleId) as HTMLStyleElement | null
+      if (style) {
+        const currentCount = parseInt(style.dataset.instances || '1')
+        if (currentCount <= 1) {
+          // Последний экземпляр - удаляем стили
+          style.remove()
+        } else {
+          // Уменьшаем счетчик экземпляров
+          style.dataset.instances = (currentCount - 1).toString()
+        }
+      }
+    }
+  }, [])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -159,26 +192,13 @@ export function CommentEditor({
           event.preventDefault()
           event.stopPropagation()
           
-          // Вызываем отправку напрямую здесь
-          if (!content.trim()) return true
-
-          const mentions = extractMentions(content)
-          const plainContent = view.state.doc.textBetween(0, view.state.doc.content.size, '\n', '\0')
-
-          if (plainContent.length > 3000) {
-            return true // Валидация уже показана в UI
-          }
-
-          // Асинхронная отправка
-          onSubmit(content, mentions)
-            .then(() => {
-              // Очищаем редактор после успешной отправки
-              view.dispatch(view.state.tr.delete(0, view.state.doc.content.size).insertText(''))
-              setContent('')
-            })
-            .catch((error) => {
-              console.error('Ошибка отправки комментария:', error)
-            })
+          //  Получаем актуальный контент из редактора, а не из потенциально устаревшего состояния
+          const currentHtmlContent = editor?.getHTML() || ''
+          
+          if (!currentHtmlContent.trim()) return true
+          
+          // Переиспользуем handleSubmit вместо дублирования логики
+          handleSubmit()
           
           return true // Останавливаем дальнейшую обработку TipTap
         }
@@ -655,13 +675,4 @@ const commentEditorStyles = `
 }
 `
 
-// Инжектируем стили в head
-if (typeof document !== 'undefined') {
-  const existingStyle = document.getElementById('comment-editor-styles')
-  if (!existingStyle) {
-    const style = document.createElement('style')
-    style.id = 'comment-editor-styles'
-    style.textContent = commentEditorStyles
-    document.head.appendChild(style)
-  }
-} 
+// Модульный CSS injection удален - теперь стили инжектируются через useEffect в компоненте 

@@ -137,12 +137,13 @@ export async function searchUsersForMentions(
   }
 }
 
-
-
 /**
- * Обновляет контент комментария (для сохранения состояния чекбоксов)
+ * Обновляет контент комментария (для состояния чекбоксов)
  */
-export async function updateCommentContent(commentId: string, newContent: string): Promise<void> {
+export async function updateCommentContent(
+  commentId: string, 
+  newContent: string
+): Promise<void> {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -150,15 +151,23 @@ export async function updateCommentContent(commentId: string, newContent: string
     throw new Error('Пользователь не авторизован')
   }
 
-  // Обновляем только контент комментария
+  if (!commentId?.trim()) {
+    throw new Error('ID комментария обязателен')
+  }
+  if (!newContent?.trim()) {
+    throw new Error('Контент обязателен')
+  }
+
   const { error } = await supabase
     .from('section_comments')
     .update({ content: newContent })
     .eq('comment_id', commentId)
-    // Убрали ограничение author_id - любой пользователь может изменять состояние чекбоксов
+    .eq('author_id', user.id) // Только автор может изменять свои комментарии
 
   if (error) {
     console.error('Ошибка обновления комментария:', error)
     throw error
   }
-} 
+}
+
+ 
