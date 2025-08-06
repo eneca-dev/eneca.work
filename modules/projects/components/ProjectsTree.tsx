@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -15,6 +15,9 @@ import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
+import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 
 interface ProjectNode {
   id: string
@@ -34,6 +37,10 @@ interface ProjectNode {
   projectName?: string
   stageName?: string
   departmentName?: string
+  // Поля для статуса секции
+  statusId?: string
+  statusName?: string
+  statusColor?: string
 }
 
 interface ProjectsTreeProps {
@@ -60,6 +67,8 @@ interface TreeNodeProps {
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenStatusManagement: () => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 const supabase = createClient()
@@ -78,12 +87,52 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateStage,
   onCreateObject,
   onCreateSection,
-  onDeleteProject
+  onDeleteProject,
+  onOpenStatusManagement,
+  statuses
 }) => {
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
 
   const hasChildren = node.children && node.children.length > 0
+
+  // Фильтрация статусов по поисковому запросу
+  const filteredStatuses = React.useMemo(() => {
+    if (!statusSearchQuery.trim()) {
+      return statuses;
+    }
+
+    const query = statusSearchQuery.toLowerCase();
+    return statuses.filter(status => 
+      status.name.toLowerCase().includes(query) ||
+      (status.description && status.description.toLowerCase().includes(query))
+    );
+  }, [statuses, statusSearchQuery]);
+
+  // Закрытие выпадающего списка при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showStatusDropdown && statusDropdownRef.current) {
+        // Проверяем, был ли клик вне выпадающего списка
+        if (!statusDropdownRef.current.contains(event.target as Node)) {
+          setShowStatusDropdown(false)
+          setStatusSearchQuery('') // Сбрасываем поиск при закрытии
+        }
+      }
+    }
+
+    if (showStatusDropdown) {
+      document.addEventListener('click', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showStatusDropdown])
   const isExpanded = expandedNodes.has(node.id)
 
   const getNodeIcon = (type: string, nodeName?: string) => {
@@ -117,6 +166,46 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       return `${day}.${month}`
     } catch (error) {
       return "-"
+    }
+  }
+
+  const updateSectionStatus = async (statusId: string | null) => {
+    if (node.type !== 'section') return
+    
+    setUpdatingStatus(true)
+    try {
+      const { error } = await supabase
+        .from('sections')
+        .update({ section_status_id: statusId })
+        .eq('section_id', node.id)
+
+      if (error) throw error
+
+      // Обновляем локальные данные узла
+      const updatedStatus = statuses.find(s => s.id === statusId)
+      node.statusId = statusId || undefined
+      node.statusName = updatedStatus?.name || undefined
+      node.statusColor = updatedStatus?.color || undefined
+
+      // Создаем событие для уведомления других компонентов об изменении
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sectionPanel:statusUpdated', {
+          detail: {
+            sectionId: node.id,
+            statusId: statusId,
+            statusName: updatedStatus?.name || null,
+            statusColor: updatedStatus?.color || null
+          }
+        }))
+      }
+
+      console.log('Статус обновлен:', statusId ? 'установлен' : 'снят')
+    } catch (error) {
+      console.error('Ошибка обновления статуса:', error)
+    } finally {
+      setUpdatingStatus(false)
+      setShowStatusDropdown(false)
+      setStatusSearchQuery('') // Сбрасываем поиск после обновления статуса
     }
   }
 
@@ -225,6 +314,154 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
             {/* Информация справа с фиксированными ширинами */}
             <div className="flex items-center text-xs ml-auto mr-8">
+              {/* Статус секции - фиксированная ширина */}
+              <div className="flex items-center w-32 justify-end mr-4 relative">
+                {updatingStatus ? (
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                    <span className="text-xs text-gray-500">Обновление...</span>
+                  </div>
+                ) : node.statusName ? (
+                  <div 
+                    className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowStatusDropdown(!showStatusDropdown)
+                    }}
+                    title="Нажмите для изменения статуса"
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: node.statusColor || '#6B7280' }}
+                    />
+                    <span className="text-xs text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      {node.statusName}
+                    </span>
+                  </div>
+                ) : (
+                  <span 
+                    className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowStatusDropdown(!showStatusDropdown)
+                    }}
+                    title="Нажмите для назначения статуса"
+                  >
+                    Без статуса
+                  </span>
+                )}
+
+                {/* Выпадающий список статусов */}
+                {showStatusDropdown && node.type === 'section' && (
+                  <div ref={statusDropdownRef} className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {/* Заголовок */}
+                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Выбор статуса
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowStatusDropdown(false)
+                          setStatusSearchQuery('')
+                          onOpenStatusManagement()
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        title="Управление статусами"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Поле поиска */}
+                    {statuses.length > 0 && (
+                      <div className="p-2 border-b dark:border-slate-600">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Поиск..."
+                            value={statusSearchQuery}
+                            onChange={(e) => setStatusSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                          />
+                          {statusSearchQuery && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
+                            >
+                              <span className="text-xs">×</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Опция "Убрать статус" */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateSectionStatus(null)
+                      }}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 dark:text-slate-400">
+                        Убрать статус
+                      </span>
+                    </div>
+
+                    {/* Список статусов */}
+                    {filteredStatuses.length === 0 && statusSearchQuery ? (
+                      <div className="px-3 py-4 text-center">
+                        <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+                          Статусы не найдены
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setStatusSearchQuery('')
+                          }}
+                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
+                        >
+                          Очистить поиск
+                        </button>
+                      </div>
+                    ) : (
+                      filteredStatuses.map((status) => (
+                        <div
+                          key={status.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            updateSectionStatus(status.id)
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
+                        >
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: status.color }}
+                          />
+                          <div>
+                            <div className="text-sm font-medium dark:text-white">
+                              {status.name}
+                            </div>
+                            {status.description && (
+                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                                {status.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              
               {/* Даты - фиксированная ширина */}
               <div className="flex items-center gap-1 w-24 justify-end">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -441,6 +678,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
               onDeleteProject={onDeleteProject}
+              onOpenStatusManagement={onOpenStatusManagement}
+              statuses={statuses}
             />
           ))}
         </div>
@@ -460,9 +699,14 @@ export function ProjectsTree({
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { expandedNodes, toggleNode: toggleNodeInStore } = useProjectsStore()
+  const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedStatusIds, setSelectedStatusIds] = useState<string[]>([])
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -480,11 +724,150 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+
+  // Закрытие выпадающего списка статусов при клике вне его
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showStatusDropdown && statusDropdownRef.current) {
+        if (!statusDropdownRef.current.contains(event.target as Node)) {
+          setShowStatusDropdown(false)
+          setStatusSearchQuery('')
+        }
+      }
+    }
+
+    if (showStatusDropdown) {
+      document.addEventListener('click', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showStatusDropdown])
 
   // Загрузка данных
   useEffect(() => {
     loadTreeData()
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+
+  // Слушаем события обновления статуса секции
+  useEffect(() => {
+    const handleSectionStatusUpdate = (event: CustomEvent) => {
+      const { sectionId, statusId, statusName, statusColor } = event.detail
+
+      // Рекурсивно обновляем статус узла в дереве
+      const updateNodeStatus = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.id === sectionId) {
+            return {
+              ...node,
+              statusId: statusId || undefined,
+              statusName: statusName || undefined,
+              statusColor: statusColor || undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateNodeStatus(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => updateNodeStatus(currentTreeData))
+    }
+
+    // Обработчик изменения статуса (обновление названия, цвета, описания)
+    const handleStatusUpdate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusUpdated в ProjectsTree:', { statusId, statusName, statusColor });
+
+      // Рекурсивно обновляем все узлы с этим статусом
+      const updateStatusInNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusName: statusName,
+              statusColor: statusColor
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateStatusInNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => {
+        const updatedData = updateStatusInNodes(currentTreeData)
+        console.log('🔄 Обновили статус в дереве:', updatedData);
+        return updatedData
+      })
+      
+      // Убираем полную перезагрузку - достаточно обновить статусы в памяти
+    }
+
+    // Обработчик создания нового статуса
+    const handleStatusCreate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusCreated в ProjectsTree:', { statusId, statusName, statusColor });
+      
+      // При создании нового статуса просто обновляем статусы в useSectionStatuses
+      // Никаких изменений в существующих узлах не требуется
+      console.log('✅ Новый статус создан, список статусов обновится автоматически');
+    }
+
+    // Обработчик удаления статуса
+    const handleStatusDelete = (event: CustomEvent) => {
+      const { statusId } = event.detail
+
+      // Рекурсивно убираем удаленный статус у всех узлов
+      const removeStatusFromNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusId: undefined,
+              statusName: undefined,
+              statusColor: undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: removeStatusFromNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => removeStatusFromNodes(currentTreeData))
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sectionPanel:statusUpdated', handleSectionStatusUpdate as EventListener)
+      window.addEventListener('statusCreated', handleStatusCreate as EventListener)
+      window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
+      window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('sectionPanel:statusUpdated', handleSectionStatusUpdate as EventListener)
+        window.removeEventListener('statusCreated', handleStatusCreate as EventListener)
+        window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
+        window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
+      }
+    }
+  }, [])
 
   const loadTreeData = async () => {
     console.log('🌳 Загружаю данные дерева проектов...')
@@ -628,7 +1011,11 @@ export function ProjectsTree({
           responsibleAvatarUrl: row.section_responsible_avatar,
           projectName: row.project_name,
           stageName: row.stage_name,
-          departmentName: row.responsible_department_name
+          departmentName: row.responsible_department_name,
+          // Поля статуса секции
+          statusId: row.section_status_id,
+          statusName: row.section_status_name,
+          statusColor: row.section_status_color
         }
 
         // Добавляем раздел к объекту
@@ -795,11 +1182,53 @@ export function ProjectsTree({
     return filterRecursive(nodes)
   }
 
+  // Фильтрация по статусам (снизу вверх)
+  const filterNodesByStatus = (nodes: ProjectNode[], statusIds: string[]): ProjectNode[] => {
+    if (!statusIds || statusIds.length === 0) {
+      return nodes // Если статусы не выбраны, возвращаем все узлы
+    }
+
+    const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+      const filtered: ProjectNode[] = []
+
+      for (const node of nodeList) {
+        let shouldInclude = false
+        let filteredChildren: ProjectNode[] = []
+
+        // Если это раздел, проверяем его статус
+        if (node.type === 'section') {
+          shouldInclude = node.statusId ? statusIds.includes(node.statusId) : false
+        } else {
+          // Для остальных типов узлов фильтруем детей
+          if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+        }
+
+        // Включаем узел если он подходит по критериям
+        if (shouldInclude) {
+          filtered.push({
+            ...node,
+            children: node.type === 'section' ? node.children : filteredChildren
+          })
+        }
+      }
+
+      return filtered
+    }
+
+    return filterRecursive(nodes)
+  }
+
   // Фильтрация данных для отображения только разделов и применение поиска
   const getFilteredTreeData = (): ProjectNode[] => {
     let data = treeData
 
-    // Сначала применяем фильтр "только разделы"
+    // Сначала применяем фильтр по статусам
+    data = filterNodesByStatus(data, selectedStatusIds)
+
+    // Затем применяем фильтр "только разделы"
     if (showOnlySections) {
       const sections: ProjectNode[] = []
       
@@ -925,6 +1354,160 @@ export function ProjectsTree({
                   </button>
                 )}
               </div>
+
+              {/* Фильтр по статусам */}
+              <div className="relative" ref={statusDropdownRef}>
+                <button
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  title={selectedStatusIds.length === 0 ? "Фильтр по статусам" : `Фильтр активен (${selectedStatusIds.length})`}
+                  className={cn(
+                    "relative flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
+                    selectedStatusIds.length > 0
+                      ? "bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 dark:bg-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/40"
+                      : "bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 dark:bg-slate-500/20 dark:text-slate-400 dark:hover:bg-slate-500/30"
+                  )}
+                >
+                  <Filter size={14} />
+                  {selectedStatusIds.length > 0 && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center leading-none">
+                      {selectedStatusIds.length}
+                    </div>
+                  )}
+                </button>
+
+                {/* Выпадающий список статусов */}
+                {showStatusDropdown && (
+                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {/* Заголовок */}
+                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Фильтр по статусам
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowStatusDropdown(false)
+                          setStatusSearchQuery('')
+                          setShowStatusManagementModal(true)
+                        }}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                        title="Управление статусами"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Поле поиска */}
+                    {statuses && statuses.length > 0 && (
+                      <div className="p-2 border-b dark:border-slate-600">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Поиск статусов..."
+                            value={statusSearchQuery}
+                            onChange={(e) => setStatusSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                          />
+                          {statusSearchQuery && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
+                            >
+                              <span className="text-xs">×</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Опция "Очистить все" */}
+                    {selectedStatusIds.length > 0 && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedStatusIds([])
+                        }}
+                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
+                      >
+                        <AlertTriangle className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-500 dark:text-slate-400">
+                          Очистить этот фильтр
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Список статусов */}
+                    {(() => {
+                      const filteredStatuses = statuses?.filter(status => 
+                        !statusSearchQuery.trim() || 
+                        status.name.toLowerCase().includes(statusSearchQuery.toLowerCase()) ||
+                        (status.description && status.description.toLowerCase().includes(statusSearchQuery.toLowerCase()))
+                      ) || []
+
+                      if (filteredStatuses.length === 0 && statusSearchQuery) {
+                        return (
+                          <div className="px-3 py-4 text-center">
+                            <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
+                              Статусы не найдены
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setStatusSearchQuery('')
+                              }}
+                              className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
+                            >
+                              Очистить поиск
+                            </button>
+                          </div>
+                        )
+                      }
+
+                      return filteredStatuses.map((status) => (
+                        <div
+                          key={status.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const isSelected = selectedStatusIds.includes(status.id)
+                            if (isSelected) {
+                              setSelectedStatusIds(selectedStatusIds.filter(id => id !== status.id))
+                            } else {
+                              setSelectedStatusIds([...selectedStatusIds, status.id])
+                            }
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-3"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStatusIds.includes(status.id)}
+                            onChange={() => {}} // Обработка в onClick
+                            className="rounded border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                          />
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: status.color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium dark:text-white truncate">
+                              {status.name}
+                            </div>
+                            {status.description && (
+                              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                                {status.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                )}
+              </div>
               
               <div className="flex gap-2">
                 <button
@@ -983,6 +1566,8 @@ export function ProjectsTree({
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
                 onDeleteProject={handleDeleteProject}
+                onOpenStatusManagement={() => setShowStatusManagementModal(true)}
+                statuses={statuses || []}
               />
             ))
           )}
@@ -1121,6 +1706,12 @@ export function ProjectsTree({
           }}
         />
       )}
+
+      {/* Модальное окно управления статусами */}
+      <StatusManagementModal
+        isOpen={showStatusManagementModal}
+        onClose={() => setShowStatusManagementModal(false)}
+      />
 
     </>
   )
