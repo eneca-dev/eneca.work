@@ -1,16 +1,18 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useProjectsStore } from '@/modules/projects/store'
+import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
 interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
+  initialTab?: 'overview' | 'details' | 'comments'
 }
 
 interface SectionData {
@@ -45,11 +47,13 @@ interface Profile {
 
 const supabase = createClient()
 
-export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) {
+export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview' }: SectionPanelProps) {
+  // initialTab теперь приходит уже готовый: 'comments' при навигации из уведомлений, иначе 'overview'
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'details'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'comments'>(initialTab)
+  const initializedRef = useRef(false)
   
   // Состояние для inline редактирования отдельных полей
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -80,6 +84,14 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
     }
   }, [isOpen, sectionId])
 
+  // Устанавливаем активную вкладку только при первой инициализации
+  useEffect(() => {
+    if (isOpen && !initializedRef.current) {
+      setActiveTab(initialTab)
+      initializedRef.current = true
+    }
+  }, [isOpen, initialTab])
+
   useEffect(() => {
     if (!isOpen) {
       setEditingField(null)
@@ -90,6 +102,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       setIsDeleting(false)
       setShowStatusDropdown(false)
       setUpdatingStatus(false)
+      initializedRef.current = false // Сбрасываем флаг инициализации
     }
   }, [isOpen])
 
@@ -659,7 +672,7 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
       >
         {/* Заголовок прилегает к верху */}
         <div 
-          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900" 
+          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
           style={{ 
             paddingTop: '16px',
             margin: '0px'
@@ -705,6 +718,16 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
               }`}
             >
               Детали
+            </button>
+            <button
+              onClick={() => setActiveTab('comments')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'comments'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Комментарии
             </button>
           </div>
         </div>
@@ -971,6 +994,10 @@ export function SectionPanel({ isOpen, onClose, sectionId }: SectionPanelProps) 
                     </div>
                   </div>
                 </>
+              )}
+
+              {activeTab === 'comments' && (
+                <CommentsPanel sectionId={sectionId} />
               )}
             </div>
           ) : (
