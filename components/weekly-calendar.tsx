@@ -154,7 +154,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
       const isInRange = event.calendar_event_date_end 
         ? isDateInRange(date, eventDate, eventEndDate)
         : isSameDateOnly(date, eventDate)
-      const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск"].includes(event.calendar_event_type)
+                  const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
       const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
       
       return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser
@@ -202,7 +202,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
     
     // Проверяем есть ли личные события (отпуск, больничный, отгул)
     const personalNonWorkingEvents = dayEvents.filter(event => 
-      ["Отгул", "Больничный", "Отпуск"].includes(event.calendar_event_type) &&
+                    ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type) &&
       event.calendar_event_created_by === currentUserId
     )
     

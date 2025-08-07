@@ -105,7 +105,7 @@ export function CalendarGrid() {
         const isInRange = event.calendar_event_date_end 
           ? isDateInRange(date, eventDate, eventEndDate)
           : isSameDateOnly(date, eventDate)
-        const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск"].includes(event.calendar_event_type)
+                    const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
         const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
         
         return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser

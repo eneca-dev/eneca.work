@@ -83,14 +83,14 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const submitPersonalEvent = async () => {
     if (!dateRange.from || !currentUserId) return
 
-    let eventType: "Отгул" | "Отпуск" | "Больничный"
+    let eventType: "Отгул" | "Отпуск запрошен" | "Больничный"
 
     switch (activeTab) {
       case "dayoff":
         eventType = "Отгул"
         break
       case "vacation":
-        eventType = "Отпуск"
+        eventType = "Отпуск запрошен"
         break
       case "sick":
         eventType = "Больничный"

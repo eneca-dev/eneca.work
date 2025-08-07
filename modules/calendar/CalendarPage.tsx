@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/cale
 import { UnifiedEventForm } from "@/modules/calendar/components/unified-event-form"
 import { UnifiedWorkScheduleForm } from "@/modules/calendar/components/unified-work-schedule-form"
 import { UnifiedEventsList } from "@/modules/calendar/components/unified-events-list"
+import { VacationManagementModal } from "@/modules/vacation-management"
 import { useUserStore } from "@/stores/useUserStore"
 import { useUiStore } from "@/stores/useUiStore"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
-import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 export default function CalendarPage() {
   const userStore = useUserStore()
@@ -24,6 +25,7 @@ export default function CalendarPage() {
 
   const [activeDialog, setActiveDialog] = useState<string | null>(null)
   const [showEventsList, setShowEventsList] = useState(false)
+  const [showVacationManagement, setShowVacationManagement] = useState(false)
 
   // Загружаем события когда пользователь определен
   useEffect(() => {
@@ -84,6 +86,12 @@ export default function CalendarPage() {
           <div className="flex flex-wrap gap-4">
             <Button onClick={() => setActiveDialog("event")}>Добавить событие</Button>
             <Button onClick={() => setActiveDialog("work-schedule")}>Изменить рабочий график</Button>
+            <Button 
+              onClick={() => setShowVacationManagement(true)}
+              variant="outline"
+            >
+              Управление отпусками
+            </Button>
           </div>
         </div>
 
@@ -125,6 +133,12 @@ export default function CalendarPage() {
 
       {/* Unified Events List */}
       <UnifiedEventsList isOpen={showEventsList} onClose={() => setShowEventsList(false)} />
+
+      {/* Модальное окно управления отпусками */}
+      <VacationManagementModal
+        isOpen={showVacationManagement}
+        onClose={() => setShowVacationManagement(false)}
+      />
     </div>
   )
 } 

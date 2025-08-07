@@ -44,14 +44,14 @@ export function WorkScheduleForm(props: WorkScheduleFormProps) {
     setIsSubmitting(true)
 
     try {
-      let eventType: "Отгул" | "Отпуск" | "Больничный"
+      let eventType: "Отгул" | "Отпуск запрошен" | "Больничный"
 
       switch (activeTab) {
         case "dayoff":
           eventType = "Отгул"
           break
         case "vacation":
-          eventType = "Отпуск"
+          eventType = "Отпуск запрошен"
           break
         case "sick":
           eventType = "Больничный"
