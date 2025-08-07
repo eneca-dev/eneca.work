@@ -112,7 +112,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
 
     // Добавим фильтрацию по ролям
     if (filters.roles.length > 0) {
-      result = result.filter((user) => filters.roles.includes(user.role))
+      result = result.filter((user) => user.role && filters.roles.includes(user.role))
     }
 
     setFilteredUsers(result)

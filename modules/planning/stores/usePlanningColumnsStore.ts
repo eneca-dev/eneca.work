@@ -9,6 +9,7 @@ export interface ColumnVisibility {
   startDate: boolean
   endDate: boolean
   sectionResponsible: boolean
+  specialist: boolean
 }
 
 interface PlanningColumnsState {
@@ -29,6 +30,7 @@ const initialColumnVisibility: ColumnVisibility = {
   startDate: true,
   endDate: true,
   sectionResponsible: true,
+  specialist: false
 }
 
 export const usePlanningColumnsStore = create<PlanningColumnsState>()(

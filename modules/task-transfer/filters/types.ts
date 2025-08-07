@@ -31,6 +31,7 @@ export interface FilterOptions {
 
 export interface FilterConfigs {
   [key: string]: {
+    id?: string
     apiEndpoint?: string
     dependencies?: string[]
     transform?: (data: any) => FilterOption[]

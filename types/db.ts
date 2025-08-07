@@ -40,6 +40,13 @@ export type Category = {
   name: string
 }
 
+export type UsersFilter = {
+  roles: string[]
+  departments: string[]
+  teams: string[]
+  search: string
+}
+
 export type Json =
   | string
   | number
