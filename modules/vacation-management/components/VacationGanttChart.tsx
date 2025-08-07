@@ -1,14 +1,15 @@
 "use client"
 
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay } from 'date-fns'
+import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, addMonths, subMonths, getYear, getMonth, setMonth, setYear } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { MoreVertical, Plus, Edit, Trash2, Check, X } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MoreVertical, Plus, Edit, Trash2, Check, X, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { Employee, VacationEvent } from '../types'
 
@@ -56,11 +57,35 @@ export function VacationGanttChart({
     employee: Employee
   } | null>(null)
 
-  // Генерируем диапазон дат для отображения (текущий месяц ± 2 месяца)
+  // Состояния для селектора месяца/года
+  const [selectedMonth, setSelectedMonth] = useState<number>(getMonth(new Date()))
+  const [selectedYear, setSelectedYear] = useState<number>(getYear(new Date()))
+
+  // Генерируем диапазон дат для отображения (текущий месяц + 2 следующих)
   const dateRange = useMemo(() => {
-    const start = startOfMonth(addDays(currentDate, -60))
-    const end = endOfMonth(addDays(currentDate, 60))
+    const start = startOfMonth(currentDate)
+    const end = endOfMonth(addMonths(currentDate, 2))
     return eachDayOfInterval({ start, end })
+  }, [currentDate])
+
+  // Получаем информацию о годах для отображения
+  const yearInfo = useMemo(() => {
+    const startYear = getYear(startOfMonth(currentDate))
+    const endYear = getYear(endOfMonth(addMonths(currentDate, 2)))
+    
+    if (startYear === endYear) {
+      return startYear.toString()
+    } else {
+      return `${startYear}/${endYear}`
+    }
+  }, [currentDate])
+
+  // Получаем названия месяцев для отображения
+  const monthsInfo = useMemo(() => {
+    return [0, 1, 2].map(offset => {
+      const monthDate = addMonths(currentDate, offset)
+      return format(monthDate, 'LLLL', { locale: ru })
+    })
   }, [currentDate])
 
   // Группируем отпуска по сотрудникам
@@ -112,6 +137,41 @@ export function VacationGanttChart({
     const employeeVacations = vacationsByEmployee[employeeId] || []
     return employeeVacations.find(vacation => isVacationOnDate(vacation, date))
   }
+
+  // Навигация по месяцам
+  const goToPreviousMonth = () => {
+    setCurrentDate(prev => subMonths(prev, 1))
+  }
+
+  const goToNextMonth = () => {
+    setCurrentDate(prev => addMonths(prev, 1))
+  }
+
+  const goToCurrentMonth = () => {
+    setCurrentDate(new Date())
+  }
+
+  // Переход к выбранному месяцу/году
+  const goToSelectedMonth = () => {
+    const newDate = setYear(setMonth(new Date(), selectedMonth), selectedYear)
+    setCurrentDate(newDate)
+  }
+
+  // Генерируем годы для селектора (текущий год ± 5 лет)
+  const availableYears = useMemo(() => {
+    const currentYear = getYear(new Date())
+    const years = []
+    for (let i = currentYear - 5; i <= currentYear + 10; i++) {
+      years.push(i)
+    }
+    return years
+  }, [])
+
+  // Названия месяцев для селектора
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ]
 
   // Синхронизация вертикального скролла между левой и правой частями
   const handleVerticalScroll = (source: 'left' | 'right') => (e: React.UIEvent<HTMLDivElement>) => {
@@ -330,6 +390,96 @@ export function VacationGanttChart({
   return (
     <div className="w-full overflow-hidden relative" onClick={closeContextMenu}>
       <TooltipProvider>
+        {/* Панель навигации */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center justify-between">
+            {/* Левая часть: навигация по месяцам */}
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousMonth}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              <div className="text-center min-w-[200px]">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {yearInfo}
+                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  {monthsInfo.join(' • ')}
+                </div>
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextMonth}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Центральная часть: быстрый переход к месяцу */}
+            <div className="flex items-center space-x-2">
+              <Select
+                value={selectedMonth.toString()}
+                onValueChange={(value) => setSelectedMonth(parseInt(value))}
+              >
+                <SelectTrigger className="w-32 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthNames.map((monthName, index) => (
+                    <SelectItem key={index} value={index.toString()}>
+                      {monthName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger className="w-20 h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToSelectedMonth}
+                className="h-8 px-3 text-xs"
+              >
+                Перейти
+              </Button>
+            </div>
+
+            {/* Правая часть: кнопка возврата к текущему месяцу */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToCurrentMonth}
+              className="h-8 px-3 flex items-center space-x-1"
+            >
+              <Calendar className="h-3 w-3" />
+              <span className="text-xs">Сегодня</span>
+            </Button>
+          </div>
+        </div>
+
         <div className="flex">
           {/* Фиксированная левая колонка с сотрудниками */}
           <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600" onClick={closeContextMenu}>
