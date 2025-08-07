@@ -117,6 +117,9 @@ export function VacationGanttChart({
   const handleVerticalScroll = (source: 'left' | 'right') => (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop
     
+    // Мгновенно закрываем контекстное меню при прокрутке
+    setContextMenu(null)
+    
     if (source === 'left' && rightScrollRef.current) {
       rightScrollRef.current.scrollTop = scrollTop
     } else if (source === 'right' && leftScrollRef.current) {
@@ -382,7 +385,11 @@ export function VacationGanttChart({
 
           {/* Прокручиваемая область с датами и отпусками */}
           <div className="flex-1 overflow-hidden" onClick={closeContextMenu}>
-            <div ref={scrollContainerRef} className="overflow-x-auto">
+            <div 
+              ref={scrollContainerRef} 
+              className="overflow-x-auto"
+              onScroll={() => setContextMenu(null)}
+            >
               <div className="min-w-max">
                 {/* Заголовки дат */}
                 <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
