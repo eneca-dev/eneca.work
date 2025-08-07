@@ -474,7 +474,7 @@ export function VacationGanttChart({
                                     {vacation.calendar_event_comment && (
                                       <div className="mt-1 text-gray-400">{vacation.calendar_event_comment}</div>
                                     )}
-                                    <div className="mt-1 text-blue-400 font-medium">Кликните на ячейку для действий</div>
+                                    <div className="mt-1 text-blue-400 font-medium">Кликните на ячейки для действий</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>

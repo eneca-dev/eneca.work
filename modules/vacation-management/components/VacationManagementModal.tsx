@@ -6,9 +6,10 @@ import { ModalButton } from '@/components/modals/base/ModalButton'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, HelpCircle, X } from 'lucide-react'
 import { VacationGanttChart } from './VacationGanttChart'
 import { VacationFormModal } from './VacationFormModal'
+import { VacationInstructionsModal } from './VacationInstructionsModal'
 import { useVacationManagementStore } from '../store'
 import { toast } from 'sonner'
 import type { VacationEvent, Employee, VacationFormData } from '../types'
@@ -43,6 +44,7 @@ export function VacationManagementModal({
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [selectedVacation, setSelectedVacation] = useState<VacationEvent | null>(null)
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
+  const [instructionsModalOpen, setInstructionsModalOpen] = useState(false)
 
   // Загружаем отделы при открытии модального окна
   useEffect(() => {
@@ -58,6 +60,7 @@ export function VacationManagementModal({
       setSelectedEmployee(null)
       setSelectedVacation(null)
       setFormModalOpen(false)
+      setInstructionsModalOpen(false)
       setError(null)
     }
   }, [isOpen, setSelectedDepartment, setError])
@@ -141,11 +144,48 @@ export function VacationManagementModal({
   return (
     <>
       <Modal isOpen={isOpen} onClose={onClose} size="full">
-        <Modal.Header 
-          title="Управление отпусками" 
-          subtitle="Просмотр и управление отпусками сотрудников по отделам"
-          onClose={onClose}
-        />
+        {/* Кастомный заголовок с кнопкой инструкции */}
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white leading-tight">
+                Управление отпусками
+              </h2>
+              <div className="mt-2 text-sm text-gray-600 dark:text-slate-400 leading-relaxed">
+                Просмотр и управление отпусками сотрудников по отделам
+              </div>
+            </div>
+            
+            <div className="ml-4 flex items-center space-x-2">
+              {/* Кнопка инструкции */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInstructionsModalOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <HelpCircle className="h-4 w-4" />
+                Инструкция
+              </Button>
+              
+              {/* Кнопка закрытия */}
+              <button
+                onClick={onClose}
+                className="
+                  p-2 
+                  text-gray-400 hover:text-gray-600 
+                  dark:text-slate-500 dark:hover:text-slate-300
+                  hover:bg-gray-100 dark:hover:bg-slate-700
+                  rounded-lg transition-colors duration-200
+                  flex-shrink-0
+                "
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
 
         <Modal.Body className="space-y-6">
           {/* Выбор отдела */}
@@ -231,6 +271,12 @@ export function VacationManagementModal({
         employee={selectedEmployee || undefined}
         vacation={selectedVacation || undefined}
         mode={formMode}
+      />
+
+      {/* Модальное окно с инструкцией */}
+      <VacationInstructionsModal
+        isOpen={instructionsModalOpen}
+        onClose={() => setInstructionsModalOpen(false)}
       />
     </>
   )
