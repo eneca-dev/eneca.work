@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns'
+import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -81,12 +81,14 @@ export function VacationGanttChart({
 
   // Проверить, попадает ли отпуск на определенную дату
   const isVacationOnDate = (vacation: VacationEvent, date: Date) => {
-    const startDate = parseISO(vacation.calendar_event_date_start)
+    const startDate = startOfDay(parseISO(vacation.calendar_event_date_start))
     const endDate = vacation.calendar_event_date_end 
-      ? parseISO(vacation.calendar_event_date_end)
+      ? startOfDay(parseISO(vacation.calendar_event_date_end))
       : startDate
+    
+    const normalizedDate = startOfDay(date)
 
-    return date >= startDate && date <= endDate
+    return normalizedDate >= startDate && normalizedDate <= endDate
   }
 
   // Найти отпуск на определенную дату для сотрудника
@@ -111,12 +113,29 @@ export function VacationGanttChart({
     event.preventDefault()
     event.stopPropagation()
     
-    const rect = event.currentTarget.getBoundingClientRect()
-    setContextMenu({
-      vacation,
-      x: rect.left + rect.width / 2, // Позиционируем по центру ячейки
-      y: rect.bottom + 4 // Позиционируем прямо под ячейкой
-    })
+    // Находим цветной элемент отпуска внутри клика
+    const colorElement = event.currentTarget.querySelector('[data-vacation-color]') as HTMLElement
+    if (colorElement) {
+      const rect = colorElement.getBoundingClientRect()
+      // Получаем координаты относительно главного контейнера
+      const containerRect = scrollContainerRef.current?.getBoundingClientRect()
+      
+      setContextMenu({
+        vacation,
+        x: rect.left + rect.width, // Позиционируем по центру цветной полоски
+        y: rect.top - (containerRect?.top || 0) + rect.height + 4 // Относительно контейнера + 1px
+      })
+    } else {
+      // Fallback на старый способ
+      const rect = event.currentTarget.getBoundingClientRect()
+      const containerRect = scrollContainerRef.current?.getBoundingClientRect()
+      
+      setContextMenu({
+        vacation,
+        x: rect.left + rect.width / 2,
+        y: rect.top - (containerRect?.top || 0) + rect.height + 1
+      })
+    }
   }
 
   // Закрытие контекстного меню
@@ -178,7 +197,7 @@ export function VacationGanttChart({
   }, [contextMenu])
 
   return (
-    <div className="w-full overflow-hidden" onClick={closeContextMenu}>
+    <div className="w-full overflow-hidden relative" onClick={closeContextMenu}>
       <TooltipProvider>
         <div className="flex">
           {/* Фиксированная левая колонка с сотрудниками */}
@@ -285,10 +304,13 @@ export function VacationGanttChart({
                                       handleVacationClick(vacation, e)
                                     }}
                                   >
-                                    <div className={`
-                                      w-full h-full ${getVacationTypeColor(vacation.calendar_event_type)}
-                                      opacity-80 hover:opacity-100 transition-all
-                                    `}>
+                                    <div 
+                                      data-vacation-color
+                                      className={`
+                                        w-full h-full ${getVacationTypeColor(vacation.calendar_event_type)}
+                                        opacity-80 hover:opacity-100 transition-all
+                                      `}
+                                    >
                                       {/* Индикатор для запрошенных отпусков */}
                                       {vacation.calendar_event_type === 'Отпуск запрошен' && (
                                         <div className="absolute inset-0 flex items-center justify-center">
@@ -310,7 +332,7 @@ export function VacationGanttChart({
                                     {vacation.calendar_event_comment && (
                                       <div className="mt-1 text-gray-400">{vacation.calendar_event_comment}</div>
                                     )}
-                                    <div className="mt-1 text-blue-400 font-medium">Кликните для действий</div>
+                                    <div className="mt-1 text-blue-400 font-medium">Кликните на ячейку для действий</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
@@ -348,7 +370,7 @@ export function VacationGanttChart({
         {contextMenu && (
           <div 
             data-context-menu
-            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] transform -translate-x-1/2"
+            className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] transform -translate-x-1/2"
             style={{
               left: contextMenu.x,
               top: contextMenu.y

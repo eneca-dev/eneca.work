@@ -228,10 +228,14 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
             )
             }
             
-            const time = d.getTime()
-            const isFrom = from && time === from.getTime()
-            const isTo = to && time === to.getTime()
-            const isBetween = from && to && time > from.getTime() && time < to.getTime()
+            // Нормализуем даты для корректного сравнения (убираем время)
+            const currentDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+            const fromDate = from ? new Date(from.getFullYear(), from.getMonth(), from.getDate()) : null
+            const toDate = to ? new Date(to.getFullYear(), to.getMonth(), to.getDate()) : null
+            
+            const isFrom = fromDate && currentDate.getTime() === fromDate.getTime()
+            const isTo = toDate && currentDate.getTime() === toDate.getTime()
+            const isBetween = fromDate && toDate && currentDate.getTime() > fromDate.getTime() && currentDate.getTime() < toDate.getTime()
 
             return (
               <div 
@@ -342,7 +346,11 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
       if (!from || (from && to)) {
         onChange({ from: d, to: null })
       } else if (from && !to) {
-        if (d.getTime() < from.getTime()) {
+        // Нормализуем даты для корректного сравнения
+        const selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+        const fromDate = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+        
+        if (selectedDate.getTime() < fromDate.getTime()) {
           onChange({ from: d, to: from })
         } else {
           onChange({ from, to: d })
