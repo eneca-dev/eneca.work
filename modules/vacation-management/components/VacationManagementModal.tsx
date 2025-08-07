@@ -83,13 +83,11 @@ export function VacationManagementModal({
   }
 
   const handleDeleteVacation = async (vacationId: string) => {
-    if (confirm('Вы уверены, что хотите удалить этот отпуск?')) {
-      try {
-        await deleteVacation(vacationId)
-        toast.success('Отпуск успешно удален')
-      } catch (error) {
-        toast.error('Не удалось удалить отпуск')
-      }
+    try {
+      await deleteVacation(vacationId)
+      toast.success('Отпуск успешно удален')
+    } catch (error) {
+      toast.error('Не удалось удалить отпуск')
     }
   }
 

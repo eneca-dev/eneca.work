@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { MoreVertical, Plus, Edit, Trash2, Check, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { Employee, VacationEvent } from '../types'
@@ -38,6 +39,21 @@ export function VacationGanttChart({
     vacation: VacationEvent
     x: number
     y: number
+  } | null>(null)
+  // Добавляем состояние для отслеживания hover отпуска
+  const [hoveredVacationId, setHoveredVacationId] = useState<string | null>(null)
+  
+  // Состояние для сохранения позиции скролла
+  const [scrollPosition, setScrollPosition] = useState({ horizontal: 0, vertical: 0 })
+  const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
+  
+  // Ref для отслеживания последней сохраненной позиции
+  const lastSavedPositionRef = useRef({ horizontal: 0, vertical: 0 })
+  
+  // Состояние для диалога подтверждения удаления
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    vacation: VacationEvent
+    employee: Employee
   } | null>(null)
 
   // Генерируем диапазон дат для отображения (текущий месяц ± 2 месяца)
@@ -146,6 +162,7 @@ export function VacationGanttChart({
   // Обработчики действий из контекстного меню
   const handleApproveFromMenu = () => {
     if (contextMenu) {
+      saveScrollPosition()
       onApproveVacation(contextMenu.vacation.calendar_event_id)
       closeContextMenu()
     }
@@ -153,6 +170,7 @@ export function VacationGanttChart({
 
   const handleRejectFromMenu = () => {
     if (contextMenu) {
+      saveScrollPosition()
       onRejectVacation(contextMenu.vacation.calendar_event_id)
       closeContextMenu()
     }
@@ -160,9 +178,36 @@ export function VacationGanttChart({
 
   const handleEditFromMenu = () => {
     if (contextMenu) {
+      saveScrollPosition()
       onEditVacation(contextMenu.vacation)
       closeContextMenu()
     }
+  }
+
+  const handleDeleteFromMenu = () => {
+    if (contextMenu) {
+      // Находим сотрудника для отпуска
+      const employee = employees.find(emp => emp.user_id === contextMenu.vacation.calendar_event_created_by)
+      if (employee) {
+        setDeleteConfirmation({
+          vacation: contextMenu.vacation,
+          employee
+        })
+      }
+      closeContextMenu()
+    }
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirmation) {
+      saveScrollPosition()
+      onDeleteVacation(deleteConfirmation.vacation.calendar_event_id)
+      setDeleteConfirmation(null)
+    }
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirmation(null)
   }
 
   // Автоматическая прокрутка к текущему месяцу при загрузке
@@ -196,12 +241,95 @@ export function VacationGanttChart({
     }
   }, [contextMenu])
 
+  // Восстановление позиции скролла при изменении данных отпусков
+  useEffect(() => {
+    if (shouldRestoreScroll) {
+      // Используем requestAnimationFrame для более надежного восстановления позиции
+      const frameId = requestAnimationFrame(() => {
+        restoreScrollPosition()
+      })
+      
+      return () => cancelAnimationFrame(frameId)
+    }
+  }, [vacations, shouldRestoreScroll])
+
+  // Дополнительный эффект для восстановления позиции при любых изменениях в данных
+  useEffect(() => {
+    if (shouldRestoreScroll) {
+      // Дополнительная проверка через небольшую задержку
+      const timeoutId = setTimeout(() => {
+        if (shouldRestoreScroll) {
+          restoreScrollPosition()
+        }
+      }, 50)
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [vacationsByEmployee, shouldRestoreScroll])
+
+  // Обработчики hover для отпусков
+  const handleVacationMouseEnter = (vacationId: string) => {
+    setHoveredVacationId(vacationId)
+  }
+
+  const handleVacationMouseLeave = () => {
+    setHoveredVacationId(null)
+  }
+
+  // Функции для сохранения и восстановления позиции скролла
+  const saveScrollPosition = () => {
+    if (scrollContainerRef.current && leftScrollRef.current) {
+      const newPosition = {
+        horizontal: scrollContainerRef.current.scrollLeft,
+        vertical: leftScrollRef.current.scrollTop
+      }
+      
+      // Сохраняем в state и ref
+      setScrollPosition(newPosition)
+      lastSavedPositionRef.current = newPosition
+      setShouldRestoreScroll(true)
+    }
+  }
+
+  const restoreScrollPosition = () => {
+    if (shouldRestoreScroll && scrollContainerRef.current && leftScrollRef.current && rightScrollRef.current) {
+      const targetPosition = lastSavedPositionRef.current
+      
+      // Восстанавливаем горизонтальную позицию
+      scrollContainerRef.current.scrollLeft = targetPosition.horizontal
+      
+      // Восстанавливаем вертикальную позицию для обеих панелей
+      leftScrollRef.current.scrollTop = targetPosition.vertical
+      rightScrollRef.current.scrollTop = targetPosition.vertical
+      
+      // Дополнительная проверка и повторное восстановление при необходимости
+      const verifyAndRestore = () => {
+        if (scrollContainerRef.current && leftScrollRef.current && rightScrollRef.current) {
+          if (Math.abs(scrollContainerRef.current.scrollLeft - targetPosition.horizontal) > 1) {
+            scrollContainerRef.current.scrollLeft = targetPosition.horizontal
+          }
+          if (Math.abs(leftScrollRef.current.scrollTop - targetPosition.vertical) > 1) {
+            leftScrollRef.current.scrollTop = targetPosition.vertical
+            rightScrollRef.current.scrollTop = targetPosition.vertical
+          }
+        }
+      }
+      
+      // Проверяем несколько раз для надежности
+      setTimeout(verifyAndRestore, 10)
+      setTimeout(verifyAndRestore, 50)
+      setTimeout(verifyAndRestore, 100)
+      
+      setShouldRestoreScroll(false)
+    }
+  }
+
   return (
     <div className="w-full overflow-hidden relative" onClick={closeContextMenu}>
       <TooltipProvider>
         <div className="flex">
           {/* Фиксированная левая колонка с сотрудниками */}
-          <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600">
+          <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600" onClick={closeContextMenu}>
             {/* Заголовок сотрудников */}
             <div className="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
               <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-300">
@@ -238,7 +366,11 @@ export function VacationGanttChart({
                       size="sm"
                       variant="ghost"
                       className="h-6 w-6 p-0 flex-shrink-0"
-                      onClick={() => onCreateVacation(employee.user_id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        saveScrollPosition()
+                        onCreateVacation(employee.user_id)
+                      }}
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
@@ -249,7 +381,7 @@ export function VacationGanttChart({
           </div>
 
           {/* Прокручиваемая область с датами и отпусками */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden" onClick={closeContextMenu}>
             <div ref={scrollContainerRef} className="overflow-x-auto">
               <div className="min-w-max">
                 {/* Заголовки дат */}
@@ -295,20 +427,23 @@ export function VacationGanttChart({
                                 <TooltipTrigger asChild>
                                   <div 
                                     data-vacation-cell
-                                    className={`
-                                      w-full h-full relative cursor-pointer
-                                      hover:ring-2 hover:ring-blue-400
-                                    `}
+                                    className="w-full h-full relative cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleVacationClick(vacation, e)
                                     }}
+                                    onMouseEnter={() => handleVacationMouseEnter(vacation.calendar_event_id)}
+                                    onMouseLeave={handleVacationMouseLeave}
                                   >
                                     <div 
                                       data-vacation-color
                                       className={`
                                         w-full h-full ${getVacationTypeColor(vacation.calendar_event_type)}
-                                        opacity-80 hover:opacity-100 transition-all
+                                        transition-all duration-150
+                                        ${hoveredVacationId === vacation.calendar_event_id 
+                                          ? 'ring-2 ring-blue-400 ring-inset scale-105 opacity-100 shadow-sm' 
+                                          : 'opacity-80'
+                                        }
                                       `}
                                     >
                                       {/* Индикатор для запрошенных отпусков */}
@@ -349,7 +484,7 @@ export function VacationGanttChart({
         </div>
 
         {/* Легенда */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t">
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t" onClick={closeContextMenu}>
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center space-x-2">
               <div className="w-4 h-4 bg-yellow-500 rounded"></div>
@@ -384,6 +519,15 @@ export function VacationGanttChart({
             >
               <Edit className="h-4 w-4" />
               <span>Редактировать</span>
+            </button>
+
+            {/* Кнопка удаления - всегда доступна */}
+            <button
+              className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 text-red-600 dark:text-red-400"
+              onClick={handleDeleteFromMenu}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Удалить</span>
             </button>
 
             {/* Разделитель */}
@@ -435,6 +579,57 @@ export function VacationGanttChart({
             )}
           </div>
         )}
+
+        {/* Диалог подтверждения удаления */}
+        <Dialog open={!!deleteConfirmation} onOpenChange={(open) => {
+          if (!open) {
+            cancelDelete()
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Подтверждение удаления</DialogTitle>
+              <DialogDescription>
+                {deleteConfirmation && (
+                  <>
+                  <br />
+                    Удалить отпуск с{' '}
+                    <strong>
+                      {format(parseISO(deleteConfirmation.vacation.calendar_event_date_start), 'dd.MM.yyyy')}
+                    </strong>
+                    {deleteConfirmation.vacation.calendar_event_date_end && (
+                      <>
+                        {' '}по{' '}
+                        <strong>
+                          {format(parseISO(deleteConfirmation.vacation.calendar_event_date_end), 'dd.MM.yyyy')}
+                        </strong>
+                      </>
+                    )}
+                    {' '}у{' '}
+                    <strong>
+                      {deleteConfirmation.employee.first_name} {deleteConfirmation.employee.last_name}
+                    </strong>
+                    ?
+                    <br />
+                    <br />
+                    <span className="text-red-600 dark:text-red-400 font-medium">
+                      Это действие нельзя отменить.
+                    </span>
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={cancelDelete}>Отмена</Button>
+              <Button 
+                onClick={confirmDelete}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                Удалить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TooltipProvider>
     </div>
   )
