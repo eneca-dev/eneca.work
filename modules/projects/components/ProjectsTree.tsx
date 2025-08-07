@@ -293,7 +293,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center" style={{ maxWidth: 'calc(100% - 360px)' }}>
+            <div className="flex items-center flex-1 min-w-0 mr-4">
               <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
                 {hasChildren ? (
                   isExpanded ? (
@@ -306,7 +306,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
               <span 
-                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors break-words"
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors break-words flex-1 min-w-0"
                 onClick={(e) => onOpenSection(node, e)}
                 style={{ wordBreak: 'break-word', hyphens: 'auto' }}
               >
@@ -317,7 +317,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             {/* Информация справа с фиксированными ширинами */}
             <div className="flex items-center text-xs ml-auto mr-8">
               {/* Статус секции - фиксированная ширина */}
-              <div className="flex items-center w-32 justify-end mr-4 relative">
+              <div className="flex items-center w-32 justify-end mr-4 relative hidden 2xl:flex">
                 {updatingStatus ? (
                   <div className="flex items-center gap-1 px-2 py-1">
                     <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
@@ -465,7 +465,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
               
               {/* Даты - фиксированная ширина */}
-              <div className="flex items-center gap-1 w-24 justify-end">
+              <div className="flex items-center gap-1 w-24 justify-end hidden xl:flex">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 <span className="text-blue-700 dark:text-blue-300">
                   {(node.dates?.start || node.dates?.end) ? (
@@ -481,7 +481,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
 
               {/* Отдел - фиксированная ширина */}
-              <div className="w-20 flex justify-end ml-4">
+              <div className="w-20 flex justify-end ml-4 hidden lg:flex">
                 {node.departmentName && (
                   <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1">
                     <div className="flex items-center gap-1">
@@ -495,7 +495,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
 
               {/* Проект, стадия и ответственный - фиксированная ширина */}
-              <div className="w-36 flex flex-col gap-1 text-right ml-4">
+              <div className="w-36 flex flex-col gap-1 text-right ml-4 hidden md:flex">
                 {node.projectName && (
                   <span className="dark:text-slate-500 text-slate-400 truncate">
                     {node.projectName}

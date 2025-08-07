@@ -20,7 +20,7 @@ export function SyncButton({
   onSyncComplete,
   theme = 'light'
 }: SyncButtonProps) {
-  const { isSyncing, syncStatus, syncWithWorksection } = useWorksectionSync()
+  const { isSyncing, syncStatus, syncWithWorksection, currentOffset, resetPagination } = useWorksectionSync()
 
   const handleSync = async () => {
     await syncWithWorksection()
@@ -105,7 +105,8 @@ export function SyncButton({
         )} 
       />
               {showText && (
-          isSyncing ? 'Синхронизация... (90 сек)' : 'Синхронизировать с Worksection'
+          isSyncing ? `Синхронизация... (проекты ${currentOffset + 1}-${currentOffset + 3})` :
+          'Синхронизировать с Worksection'
         )}
     </button>
   )

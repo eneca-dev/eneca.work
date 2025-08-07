@@ -119,50 +119,120 @@ interface UseSyncReturn {
   syncStatus: 'idle' | 'success' | 'error'
   syncWithWorksection: () => Promise<void>
   resetStatus: () => void
+  currentOffset: number
+  resetPagination: () => void
 }
 
 export function useWorksectionSync(): UseSyncReturn {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [currentOffset, setCurrentOffset] = useState(0)
 
   const syncWithWorksection = async (): Promise<void> => {
     if (isSyncing) return
     
     setIsSyncing(true)
     setSyncStatus('idle')
+    setCurrentOffset(0) // Сбрасываем offset в начале полной синхронизации
     
     const integrationUrl = process.env.NEXT_PUBLIC_WS_INTEGRATION_URL || 'https://ws-to-work-integration-eneca-7cab192e5438.herokuapp.com'
     
-    // Fire-and-forget: просто запускаем синхронизацию, не ждем ответа
-    fetch(`${integrationUrl}/api/sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    // Функция для одного запроса синхронизации
+    const syncBatch = async (offset: number): Promise<{ success: boolean; hasMore: boolean }> => {
+      try {
+        const response = await fetch(`${integrationUrl}/api/sync?offset=${offset}&limit=3`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(30000) // 30 секунд таймаут для каждого запроса
+        })
+        
+        if (response.ok) {
+          try {
+            const data = await response.json()
+            return { 
+              success: true, 
+              hasMore: data.pagination?.hasMore ?? true // По умолчанию продолжаем если нет информации
+            }
+          } catch (error) {
+            // Если не можем распарсить JSON, продолжаем
+            return { success: true, hasMore: true }
+          }
+        }
+        
+        return { success: false, hasMore: false }
+      } catch (error) {
+        console.log(`Sync batch at offset ${offset} completed/failed, continuing...`)
+        return { success: true, hasMore: true } // Продолжаем даже при ошибках
       }
-    }).catch(() => {
-      // Подавляем все ошибки
-    })
+    }
     
-    // Блокируем кнопку на 90 секунд
-    setTimeout(() => {
-      setIsSyncing(false)
-      setSyncStatus('success') // Всегда показываем как успешную
+    // Автоматический цикл синхронизации
+    const runFullSync = async () => {
+      let offset = 0
+      let batchNumber = 1
       
-      // Сбрасываем статус через 3 секунды
+      while (true) {
+        console.log(`🔄 Запуск батча ${batchNumber} (проекты ${offset + 1}-${offset + 3})`)
+        setCurrentOffset(offset)
+        
+        // Запускаем батч
+        const result = await syncBatch(offset)
+        
+        // Если серьер сообщил что проектов больше нет, останавливаемся
+        if (!result.hasMore) {
+          console.log('🏁 Сервер сообщил что проектов больше нет, завершаем синхронизацию')
+          break
+        }
+        
+        // Увеличиваем offset для следующего батча
+        offset += 3
+        batchNumber++
+        
+        // Защита от бесконечного цикла - максимум 20 батчей (60 проектов)
+        if (batchNumber > 20) {
+          console.log('🛑 Достигнут максимум батчей (20), завершаем синхронизацию')
+          break
+        }
+        
+        // Ждем 35 секунд перед следующим батчем
+        console.log(`⏳ Ожидание 35 секунд перед следующим батчем...`)
+        await new Promise(resolve => setTimeout(resolve, 35000))
+      }
+      
+      // Завершаем синхронизацию
+      setIsSyncing(false)
+      setSyncStatus('success')
+      
+      // Сбрасываем статус через 5 секунд
       setTimeout(() => {
         setSyncStatus('idle')
-      }, 3000)
-    }, 90000) // 90 секунд
+      }, 5000)
+    }
+    
+    // Запускаем полную синхронизацию
+    runFullSync().catch((error) => {
+      console.error('Full sync error:', error)
+      setIsSyncing(false)
+      setSyncStatus('error')
+    })
   }
 
   const resetStatus = () => {
     setSyncStatus('idle')
   }
 
+  const resetPagination = () => {
+    setCurrentOffset(0)
+  }
+
   return {
     isSyncing,
     syncStatus,
     syncWithWorksection,
-    resetStatus
+    resetStatus,
+    currentOffset,
+    resetPagination
   }
 } 

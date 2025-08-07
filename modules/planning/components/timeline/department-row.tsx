@@ -50,15 +50,14 @@ export function DepartmentRow({
   // Получаем видимость столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
 
-  // Получаем функцию для переключения состояния раскрытия
+  // Получаем функции для переключения состояния раскрытия
   const toggleDepartmentExpanded = usePlanningStore((state) => state.toggleDepartmentExpanded)
+  const toggleEmployeeExpanded = usePlanningStore((state) => state.toggleEmployeeExpanded)
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
+  const expandedEmployees = usePlanningStore((state) => state.expandedEmployees)
 
   // Проверяем, раскрыт ли отдел
   const isDepartmentExpanded = expandedDepartments[department.id] || false
-
-  // Состояния для модальных окон и раскрытых сотрудников
-  const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
@@ -82,14 +81,9 @@ export function DepartmentRow({
     toggleDepartmentExpanded(department.id)
   }
 
-  // Добавим функцию для переключения состояния раскрытия сотрудника
-  // Добавьте следующую функцию после handleToggleExpand:
-
-  const toggleEmployeeExpanded = (employeeId: string) => {
-    setExpandedEmployees((prev) => ({
-      ...prev,
-      [employeeId]: !prev[employeeId],
-    }))
+  // Функция для переключения состояния раскрытия сотрудника использует store
+  const handleToggleEmployeeExpanded = (employeeId: string) => {
+    toggleEmployeeExpanded(employeeId)
   }
 
   // Получаем всех сотрудников отдела из всех команд
@@ -337,7 +331,7 @@ export function DepartmentRow({
                 stickyColumnShadow={stickyColumnShadow}
                 totalFixedWidth={totalFixedWidth}
                 isExpanded={expandedEmployees[employee.id] || false}
-                onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
+                onToggleExpand={() => handleToggleEmployeeExpanded(employee.id)}
               />
             )),
           )}

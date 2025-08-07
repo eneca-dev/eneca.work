@@ -22,6 +22,7 @@ interface PlanningState {
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
+  expandedEmployees: Record<string, boolean> // Отслеживание раскрытых сотрудников
   showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
 
@@ -101,10 +102,13 @@ interface PlanningState {
   fetchArchivedLoadings: (sectionId?: string, employeeId?: string) => Promise<Loading[]>
   toggleSectionExpanded: (sectionId: string) => void
   toggleDepartmentExpanded: (departmentId: string) => void
+  toggleEmployeeExpanded: (employeeId: string) => void
   expandAllSections: () => Promise<void>
   collapseAllSections: () => void
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
+  expandAllEmployees: () => void
+  collapseAllEmployees: () => void
   setCurrentPage: (page: number) => void
   toggleShowSections: () => void
   toggleShowDepartments: () => void
@@ -175,6 +179,7 @@ export const usePlanningStore = create<PlanningState>()(
         isLoadingDepartments: false,
         expandedSections: {},
         expandedDepartments: {},
+        expandedEmployees: {},
         showSections: true, // По умолчанию разделы показываются
         showDepartments: false,
         currentPage: 1,
@@ -1127,6 +1132,16 @@ export const usePlanningStore = create<PlanningState>()(
           }))
         },
 
+        // Добавляем функцию переключения состояния раскрытия сотрудника
+        toggleEmployeeExpanded: (employeeId: string) => {
+          set((state) => ({
+            expandedEmployees: {
+              ...state.expandedEmployees,
+              [employeeId]: !state.expandedEmployees[employeeId],
+            },
+          }))
+        },
+
         // Развернуть все разделы
         expandAllSections: async () => {
           const { sections, loadingsMap } = get()
@@ -1185,6 +1200,35 @@ export const usePlanningStore = create<PlanningState>()(
           set((state) => ({
             expandedDepartments: {},
             departments: state.departments.map((d) => ({ ...d, isExpanded: false })),
+          }))
+        },
+
+        // Добавляем функцию раскрытия всех сотрудников
+        expandAllEmployees: () => {
+          const { departments } = get()
+          const newExpandedEmployees: Record<string, boolean> = {}
+
+          // Получаем всех сотрудников из всех отделов и команд
+          departments.forEach((department) => {
+            department.teams.forEach((team) => {
+              team.employees.forEach((employee) => {
+                // Раскрываем только сотрудников с загрузками
+                if (employee.loadings && employee.loadings.length > 0) {
+                  newExpandedEmployees[employee.id] = true
+                }
+              })
+            })
+          })
+
+          set((state) => ({
+            expandedEmployees: newExpandedEmployees,
+          }))
+        },
+
+        // Добавляем функцию сворачивания всех сотрудников
+        collapseAllEmployees: () => {
+          set((state) => ({
+            expandedEmployees: {},
           }))
         },
 
@@ -1845,6 +1889,8 @@ export const usePlanningStore = create<PlanningState>()(
         partialize: (state) => ({
           expandedSections: state.expandedSections,
           expandedDepartments: state.expandedDepartments,
+          expandedEmployees: state.expandedEmployees,
+          showSections: state.showSections,
           showDepartments: state.showDepartments,
           currentPage: state.currentPage,
         }),

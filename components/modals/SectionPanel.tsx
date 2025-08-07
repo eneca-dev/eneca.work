@@ -661,7 +661,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       />
       
       <div 
-        className="fixed right-0 h-screen w-[600px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
+        className="fixed right-0 h-screen w-[700px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
         style={{ 
           position: 'fixed',
           top: '0px',
@@ -672,25 +672,79 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       >
         {/* Заголовок прилегает к верху */}
         <div 
-          className="flex items-center justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
+          className="flex items-start justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
           style={{ 
             paddingTop: '16px',
             margin: '0px'
           }}
         >
-          <div>
+          <div className="flex-1 min-w-0">
             <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800" style={{ margin: '0px' }}>
-              Информация о разделе
+              {sectionData?.section_name || 'Информация о разделе'}
             </h2>
+            
             {sectionData && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {sectionData.section_name}
-              </p>
+              <>
+                {/* Иерархия проекта */}
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {sectionData.manager_name && (
+                      <>
+                        <User className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                        <span>{sectionData.manager_name}</span>
+                        <span className="text-slate-400 dark:text-slate-500">/</span>
+                      </>
+                    )}
+                    {sectionData.project_name && (
+                      <>
+                        <Package className="h-3 w-3 text-green-600 dark:text-green-400" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">{sectionData.project_name}</span>
+                        <span className="text-slate-400 dark:text-slate-500">/</span>
+                      </>
+                    )}
+                    {sectionData.stage_name && (
+                      <>
+                        <Building className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                        <span>{sectionData.stage_name}</span>
+                        <span className="text-slate-400 dark:text-slate-500">/</span>
+                      </>
+                    )}
+                    {sectionData.object_name && (
+                      <>
+                        <Package className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                        <span>{sectionData.object_name}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Ответственный */}
+                {sectionData.responsible_name && (
+                  <div className="mt-2 flex items-center gap-2 text-sm">
+                    <User className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-slate-600 dark:text-slate-400">Ответственный:</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.responsible_name}</span>
+                  </div>
+                )}
+
+                {/* Статус секции */}
+                {sectionData.status_name && (
+                  <div className="mt-2 flex items-center gap-2 text-sm">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
+                    />
+                    <span className="text-slate-600 dark:text-slate-400">Статус:</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.status_name}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
+          
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0 ml-4"
           >
             <X className="h-4 w-4 text-slate-600 dark:text-slate-400" />
           </button>
