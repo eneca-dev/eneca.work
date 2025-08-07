@@ -108,17 +108,15 @@ export function VacationGanttChart({
 
   // Обработка клика на отпуск
   const handleVacationClick = (vacation: VacationEvent, event: React.MouseEvent) => {
-    if (vacation.calendar_event_type === 'Отпуск запрошен') {
-      event.preventDefault()
-      event.stopPropagation()
-      
-      const rect = event.currentTarget.getBoundingClientRect()
-      setContextMenu({
-        vacation,
-        x: rect.right + 8, // Позиционируем справа от ячейки
-        y: rect.top
-      })
-    }
+    event.preventDefault()
+    event.stopPropagation()
+    
+    const rect = event.currentTarget.getBoundingClientRect()
+    setContextMenu({
+      vacation,
+      x: rect.left + rect.width / 2, // Позиционируем по центру ячейки
+      y: rect.bottom + 4 // Позиционируем прямо под ячейкой
+    })
   }
 
   // Закрытие контекстного меню
@@ -165,26 +163,28 @@ export function VacationGanttChart({
     }
   }, [dateRange, employees.length]) // Добавляем employees.length чтобы прокрутка сработала после загрузки данных
 
-  // Закрытие контекстного меню при клике вне его
+  // Закрытие контекстного меню при нажатии Escape
   useEffect(() => {
-    const handleClickOutside = () => {
-      closeContextMenu()
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeContextMenu()
+      }
     }
 
     if (contextMenu) {
-      document.addEventListener('click', handleClickOutside)
-      return () => document.removeEventListener('click', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
     }
   }, [contextMenu])
 
   return (
-    <div className="w-full overflow-hidden">
+    <div className="w-full overflow-hidden" onClick={closeContextMenu}>
       <TooltipProvider>
         <div className="flex">
           {/* Фиксированная левая колонка с сотрудниками */}
           <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600">
             {/* Заголовок сотрудников */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-600">
+            <div className="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
               <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-300">
                 Сотрудники ({employees.length})
               </h3>
@@ -234,11 +234,11 @@ export function VacationGanttChart({
             <div ref={scrollContainerRef} className="overflow-x-auto">
               <div className="min-w-max">
                 {/* Заголовки дат */}
-                <div className="flex border-b border-gray-200 dark:border-gray-600">
+                <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
                   {dateRange.map((date, index) => (
                     <div 
                       key={index}
-                      className="w-8 flex-shrink-0 p-1 text-center border-r border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800"
+                      className="w-8 flex-shrink-0 p-1 text-center border-r border-gray-200 dark:border-gray-600"
                     >
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {format(date, 'dd', { locale: ru })}
@@ -275,11 +275,15 @@ export function VacationGanttChart({
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <div 
+                                    data-vacation-cell
                                     className={`
                                       w-full h-full relative cursor-pointer
-                                      ${vacation.calendar_event_type === 'Отпуск запрошен' ? 'hover:ring-2 hover:ring-blue-400' : ''}
+                                      hover:ring-2 hover:ring-blue-400
                                     `}
-                                    onClick={(e) => handleVacationClick(vacation, e)}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleVacationClick(vacation, e)
+                                    }}
                                   >
                                     <div className={`
                                       w-full h-full ${getVacationTypeColor(vacation.calendar_event_type)}
@@ -306,9 +310,7 @@ export function VacationGanttChart({
                                     {vacation.calendar_event_comment && (
                                       <div className="mt-1 text-gray-400">{vacation.calendar_event_comment}</div>
                                     )}
-                                    {vacation.calendar_event_type === 'Отпуск запрошен' && (
-                                      <div className="mt-1 text-blue-400 font-medium">Кликните для действий</div>
-                                    )}
+                                    <div className="mt-1 text-blue-400 font-medium">Кликните для действий</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
@@ -345,14 +347,15 @@ export function VacationGanttChart({
         {/* Контекстное меню для отпусков */}
         {contextMenu && (
           <div 
-            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px]"
+            data-context-menu
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] transform -translate-x-1/2"
             style={{
               left: contextMenu.x,
               top: contextMenu.y
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Кнопка редактирования */}
+            {/* Кнопка редактирования - всегда доступна */}
             <button
               className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 text-gray-700 dark:text-gray-300"
               onClick={handleEditFromMenu}
@@ -364,23 +367,50 @@ export function VacationGanttChart({
             {/* Разделитель */}
             <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
 
-            {/* Кнопка одобрения */}
-            <button
-              className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center space-x-2 text-green-600 dark:text-green-400"
-              onClick={handleApproveFromMenu}
-            >
-              <Check className="h-4 w-4" />
-              <span>Одобрить отпуск</span>
-            </button>
+            {/* Кнопки одобрения/отклонения в зависимости от статуса */}
+            {contextMenu.vacation.calendar_event_type === 'Отпуск запрошен' && (
+              <>
+                {/* Кнопка одобрения для запрошенного отпуска */}
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center space-x-2 text-green-600 dark:text-green-400"
+                  onClick={handleApproveFromMenu}
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Одобрить отпуск</span>
+                </button>
 
-            {/* Кнопка отклонения */}
-            <button
-              className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 text-red-600 dark:text-red-400"
-              onClick={handleRejectFromMenu}
-            >
-              <X className="h-4 w-4" />
-              <span>Отклонить отпуск</span>
-            </button>
+                {/* Кнопка отклонения для запрошенного отпуска */}
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 text-red-600 dark:text-red-400"
+                  onClick={handleRejectFromMenu}
+                >
+                  <X className="h-4 w-4" />
+                  <span>Отклонить отпуск</span>
+                </button>
+              </>
+            )}
+
+            {contextMenu.vacation.calendar_event_type === 'Отпуск одобрен' && (
+              /* Кнопка отклонения для одобренного отпуска */
+              <button
+                className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 text-red-600 dark:text-red-400"
+                onClick={handleRejectFromMenu}
+              >
+                <X className="h-4 w-4" />
+                <span>Отклонить отпуск</span>
+              </button>
+            )}
+
+            {contextMenu.vacation.calendar_event_type === 'Отпуск отклонен' && (
+              /* Кнопка одобрения для отклоненного отпуска */
+              <button
+                className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/20 flex items-center space-x-2 text-green-600 dark:text-green-400"
+                onClick={handleApproveFromMenu}
+              >
+                <Check className="h-4 w-4" />
+                <span>Одобрить отпуск</span>
+              </button>
+            )}
           </div>
         )}
       </TooltipProvider>

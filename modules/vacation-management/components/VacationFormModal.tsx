@@ -13,26 +13,31 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon } from 'lucide-react'
+import { DatePicker } from '@/modules/calendar/components/mini-calendar'
 import { cn } from '@/lib/utils'
 import type { VacationEvent, VacationFormData, Employee } from '../types'
 
 // Схема валидации
 const vacationFormSchema = z.object({
-  startDate: z.string().min(1, 'Выберите дату начала отпуска'),
-  endDate: z.string().min(1, 'Выберите дату окончания отпуска'),
+  dateRange: z.object({
+    from: z.date().nullable(),
+    to: z.date().nullable()
+  }).refine(data => {
+    return data.from !== null
+  }, {
+    message: 'Выберите дату начала отпуска',
+    path: ['from']
+  }).refine(data => {
+    if (data.from && data.to) {
+      return data.from <= data.to
+    }
+    return true
+  }, {
+    message: 'Дата окончания должна быть больше или равна дате начала',
+    path: ['to']
+  }),
   type: z.enum(['Отпуск запрошен', 'Отпуск одобрен', 'Отпуск отклонен']),
   comment: z.string().optional()
-}).refine(data => {
-  if (data.startDate && data.endDate) {
-    return new Date(data.startDate) <= new Date(data.endDate)
-  }
-  return true
-}, {
-  message: 'Дата окончания должна быть больше или равна дате начала',
-  path: ['endDate']
 })
 
 type FormData = z.infer<typeof vacationFormSchema>
@@ -59,8 +64,7 @@ export function VacationFormModal({
   const form = useForm<FormData>({
     resolver: zodResolver(vacationFormSchema),
     defaultValues: {
-      startDate: '',
-      endDate: '',
+      dateRange: { from: null, to: null },
       type: 'Отпуск запрошен',
       comment: ''
     }
@@ -69,16 +73,19 @@ export function VacationFormModal({
   // Заполняем форму при редактировании
   useEffect(() => {
     if (mode === 'edit' && vacation) {
+      const startDate = new Date(vacation.calendar_event_date_start)
+      const endDate = vacation.calendar_event_date_end 
+        ? new Date(vacation.calendar_event_date_end) 
+        : startDate
+      
       form.reset({
-        startDate: vacation.calendar_event_date_start.split('T')[0],
-        endDate: vacation.calendar_event_date_end?.split('T')[0] || vacation.calendar_event_date_start.split('T')[0],
+        dateRange: { from: startDate, to: endDate },
         type: vacation.calendar_event_type,
         comment: vacation.calendar_event_comment || ''
       })
     } else if (mode === 'create') {
       form.reset({
-        startDate: '',
-        endDate: '',
+        dateRange: { from: null, to: null },
         type: 'Отпуск запрошен',
         comment: ''
       })
@@ -88,9 +95,18 @@ export function VacationFormModal({
   const handleSubmit = async (data: FormData) => {
     setLoading(true)
     try {
+      if (!data.dateRange.from) {
+        throw new Error('Выберите дату начала отпуска')
+      }
+      
+      const startDate = format(data.dateRange.from, 'yyyy-MM-dd')
+      const endDate = data.dateRange.to 
+        ? format(data.dateRange.to, 'yyyy-MM-dd')
+        : startDate
+
       await onSubmit({
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate,
+        endDate,
         type: data.type,
         comment: data.comment
       })
@@ -108,7 +124,7 @@ export function VacationFormModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} size="xl">
       <Modal.Header 
         title={mode === 'create' ? 'Создать отпуск' : 'Редактировать отпуск'}
         subtitle={employee ? `${employee.first_name} ${employee.last_name}` : undefined}
@@ -117,7 +133,7 @@ export function VacationFormModal({
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)}>
-          <Modal.Body className="space-y-4">
+          <Modal.Body className="space-y-4 min-h-[500px]">
             {/* Тип отпуска */}
             <FormField
               control={form.control}
@@ -142,102 +158,26 @@ export function VacationFormModal({
               )}
             />
 
-            {/* Даты */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Дата начала</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(new Date(field.value), "dd.MM.yyyy", { locale: ru })
-                            ) : (
-                              <span>Выберите дату</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              field.onChange(format(date, 'yyyy-MM-dd'))
-                            }
-                          }}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Дата окончания</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(new Date(field.value), "dd.MM.yyyy", { locale: ru })
-                            ) : (
-                              <span>Выберите дату</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value ? new Date(field.value) : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              field.onChange(format(date, 'yyyy-MM-dd'))
-                            }
-                          }}
-                          disabled={(date) => {
-                            const startDate = form.getValues('startDate')
-                            if (startDate) {
-                              return date < new Date(startDate)
-                            }
-                            return date < new Date(new Date().setHours(0, 0, 0, 0))
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* Выбор диапазона дат */}
+            <FormField
+              control={form.control}
+              name="dateRange"
+              render={({ field }) => (
+                <FormItem className="flex flex-col mb-8">
+                  <FormLabel>Период отпуска</FormLabel>
+                  <FormControl>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      mode="range"
+                      placeholder="Выберите даты отпуска..."
+                      calendarWidth="450px"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Комментарий */}
             <FormField

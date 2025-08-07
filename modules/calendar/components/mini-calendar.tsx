@@ -16,7 +16,7 @@ import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
 
 interface MiniCalendarProps {
   /** Диапазон выбранных дат */
-  selectedRange: { from: Date | null; to: Date | null }
+  selectedRange: { from: Date | null; to: Date | null } | null
   /** Колбэк при клике по дате */
   onSelectDate: (date: Date) => void
   /** Режим выбора (single или range) */
@@ -201,31 +201,31 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
       weeks.push(week)
     }
 
-    const from = selectedRange.from
-    const to = selectedRange.to
+    const from = selectedRange?.from || null
+    const to = selectedRange?.to || null
 
     return (
       <div className="flex-1" key={`${year}-${month}`}>
-        <div className="text-center font-bold mb-1.5 text-foreground">
+        <div className="text-center font-bold mb-1 text-foreground text-sm">
           {date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}
         </div>
         <div className="grid grid-cols-7 text-center">
           {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
             <div 
               key={d}
-              className="w-8 h-8 flex items-center justify-center rounded font-bold text-sm text-muted-foreground m-0.5"
+              className="w-6 h-6 flex items-center justify-center rounded font-bold text-xs text-muted-foreground m-0.5"
             >
               {d}
             </div>
           ))}
           {weeks.flat().map((d, idx) => {
             if (!d) {
-              return (
-                <div 
-                  key={idx} 
-                  className="w-8 h-8 flex items-center justify-center rounded cursor-default m-0.5"
-                />
-              )
+                          return (
+              <div 
+                key={idx} 
+                className="w-6 h-6 flex items-center justify-center rounded cursor-default m-0.5"
+              />
+            )
             }
             
             const time = d.getTime()
@@ -237,7 +237,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
               <div 
                 key={idx} 
                 className={cn(
-                  "w-8 h-8 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-sm m-0.5 transition-colors hover:bg-accent/50",
+                  "w-6 h-6 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-xs m-0.5 transition-colors hover:bg-accent/50",
                   getDayColor(d),
                   (isFrom || isTo) && "bg-primary text-primary-foreground border-primary shadow-sm",
                   isBetween && "bg-primary/10 text-primary border-primary/20",
@@ -258,21 +258,21 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
       className="font-sans bg-background border border-border rounded-lg p-2"
       style={{ width }}
     >
-      <div className="flex justify-between mb-3">
+      <div className="flex justify-between mb-2">
         <button 
-          className="cursor-pointer border-none bg-transparent text-lg text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
           onClick={handlePrev}
         >
-          &lt;
+          ←
         </button>
         <button 
-          className="cursor-pointer border-none bg-transparent text-lg text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
           onClick={handleNext}
         >
-          &gt;
+          →
         </button>
       </div>
-      <div className="flex gap-6">
+      <div className="flex gap-4">
         {renderMonth(currentMonth)}
         {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
       </div>
@@ -283,7 +283,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
 // Обёртка: выбор диапазона дат
 interface DatePickerProps {
   /** Выбранный диапазон дат */
-  value: { from: Date | null; to: Date | null }
+  value: { from: Date | null; to: Date | null } | null
   /** Колбэк при изменении выбранных дат */
   onChange: (range: { from: Date | null; to: Date | null }) => void
   /** Режим выбора (single или range) */
@@ -305,6 +305,7 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
   const inputWidth = props.inputWidth || "100%"
 
   const [open, setOpen] = useState(false)
+  const [openUpward, setOpenUpward] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -317,13 +318,26 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  const handleInputClick = () => {
+    if (!open && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      const calendarHeight = 280 // уменьшенная высота компактного календаря
+      
+      // Открываем вверх, если снизу недостаточно места, а сверху достаточно
+      setOpenUpward(spaceBelow < calendarHeight && spaceAbove > calendarHeight)
+    }
+    setOpen(!open)
+  }
+
   const handleDateSelect = (d: Date) => {
     if (mode === "single") {
       onChange({ from: d, to: null })
       setOpen(false)
     } else {
-      const from = value.from
-      const to = value.to
+      const from = value?.from || null
+      const to = value?.to || null
 
       if (!from || (from && to)) {
         onChange({ from: d, to: null })
@@ -340,9 +354,9 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
 
   // Формат для инпута
   let inputValue = ""
-  if (value.from && value.to) {
+  if (value && value.from && value.to) {
     inputValue = `${value.from.toLocaleDateString("ru-RU")} - ${value.to.toLocaleDateString("ru-RU")}`
-  } else if (value.from) {
+  } else if (value && value.from) {
     inputValue = value.from.toLocaleDateString("ru-RU")
   }
 
@@ -352,13 +366,22 @@ export const DatePicker: React.FC<DatePickerProps> = (props) => {
         readOnly
         value={inputValue}
         placeholder={placeholder}
-        onClick={() => setOpen(!open)}
+        onClick={handleInputClick}
         className="w-full p-2 border border-border rounded bg-gray-50 dark:bg-gray-700 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm"
       />
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 shadow-lg rounded-lg bg-background border border-border">
+        <div 
+          className="absolute left-0 z-50 shadow-lg rounded-lg bg-background border border-border"
+          style={openUpward ? {
+            bottom: '100%',
+            marginBottom: '4px',
+          } : {
+            top: '100%',
+            marginTop: '4px',
+          }}
+        >
           <MiniCalendar
-            selectedRange={value}
+            selectedRange={value || { from: null, to: null }}
             onSelectDate={handleDateSelect}
             mode={mode}
             width={calendarWidth}
