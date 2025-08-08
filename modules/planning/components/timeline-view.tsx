@@ -19,6 +19,7 @@ import { ColumnVisibilityMenu } from "./timeline/column-visibility-menu"
 import { PermissionBadge } from "./permission-badge"
 import { Button } from "@/components/ui/button"
 import { SectionPanel } from "@/components/modals"
+import { useTimelineAutoRefresh } from "../hooks/useTimelineAutoRefresh"
 
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
@@ -106,6 +107,12 @@ useEffect(() => {
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
 
+  // Счетчик для принудительных обновлений
+  const [refreshCounter, setRefreshCounter] = useState(0)
+
+  // Хук для автоматического обновления timeline
+  const { forceRefresh } = useTimelineAutoRefresh()
+
   // Количество активных фильтров
   const activeFiltersCount = [
     selectedProjectId, 
@@ -182,6 +189,35 @@ useEffect(() => {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
+  // Подписываемся на изменения в стор для автоматического обновления
+  useEffect(() => {
+    const unsubscribe = usePlanningStore.subscribe(
+      (state) => ({ 
+        sectionsLength: state.sections.length,
+        loadingsMapSize: Object.keys(state.loadingsMap).length,
+        // Считаем общее количество загрузок
+        totalLoadings: Object.values(state.loadingsMap).reduce((sum, loadings) => sum + loadings.length, 0)
+      }),
+      (current, previous) => {
+        // Обновляем только при реальных изменениях данных
+        if (
+          current.sectionsLength !== previous?.sectionsLength ||
+          current.loadingsMapSize !== previous?.loadingsMapSize ||
+          current.totalLoadings !== previous?.totalLoadings
+        ) {
+          console.log("📊 Данные изменились, обновляем Timeline:", {
+            sections: current.sectionsLength,
+            loadingsMap: current.loadingsMapSize,
+            totalLoadings: current.totalLoadings
+          })
+          setRefreshCounter(prev => prev + 1)
+        }
+      }
+    )
+
+    return unsubscribe
+  }, [])
+
   // Обработчики для фильтров
   const handleProjectChange = (projectId: string | null) => {
     console.log("Изменение проекта:", projectId)
@@ -237,6 +273,14 @@ useEffect(() => {
   const handleCloseSectionPanel = () => {
     setShowSectionPanel(false)
     setSelectedSectionId(null)
+  }
+
+  // Обработчик для показа руководства  
+  const handleShowGuide = () => {
+    // Эта функция будет передана из родительского компонента
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('showPlanningGuide'))
+    }
   }
 
 
@@ -302,6 +346,7 @@ useEffect(() => {
           startDate={startDate}
           daysToShow={daysToShow}
           onTodayClick={handleTodayPeriod}
+          onShowGuide={handleShowGuide}
         />
       </div>
 
@@ -340,6 +385,7 @@ useEffect(() => {
               onOpenSectionPanel={handleOpenSectionPanel}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
+              refreshCounter={refreshCounter}
             />
           </div>
         )}

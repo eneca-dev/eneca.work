@@ -96,6 +96,7 @@ interface PlanningState {
     responsibleAvatarUrl?: string | null
     responsibleTeamName?: string | null
   }) => Promise<{ success: boolean; error?: string; loadingId?: string }>
+  refreshSectionLoadings: (sectionId: string) => Promise<{ success: boolean; error?: string }>
   archiveLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
   restoreLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
   fetchArchivedLoadings: (sectionId?: string, employeeId?: string) => Promise<Loading[]>
@@ -622,19 +623,31 @@ export const usePlanningStore = create<PlanningState>()(
           try {
             const loadingsData = await fetchLoadings(sectionId)
 
+            // Проверяем, что данные получены успешно
+            if (!Array.isArray(loadingsData)) {
+              // Если получили объект ошибки
+              if (loadingsData && 'success' in loadingsData && !loadingsData.success) {
+                console.error("Ошибка при загрузке загрузок раздела:", loadingsData.error, loadingsData.details)
+                return []
+              }
+              // Если получили что-то неожиданное
+              console.warn("Неожиданный формат данных от fetchLoadings:", loadingsData)
+              return []
+            }
+
             // Преобразуем данные в формат Loading
-            const loadings: Loading[] = Array.isArray(loadingsData) ? loadingsData.map((item: any) => ({
+            const loadings: Loading[] = loadingsData.map((item: any) => ({
               id: item.loading_id,
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
               responsibleAvatarUrl: item.responsible_avatar || undefined,
-              sectionId: item.loading_section,
+              sectionId: item.section_id, // Исправлено: используем section_id из view_sections_with_loadings
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
               createdAt: parseTimestampTz(item.loading_created) || new Date(),
               updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
-            })) : []
+            }))
 
             // Обновляем раздел с загрузками в обоих массивах: sections и allSections
             const { sections, allSections } = get()
@@ -709,7 +722,7 @@ export const usePlanningStore = create<PlanningState>()(
             }
 
             // Обновляем локальное состояние
-            const { sections, allSections, loadingsMap, departments } = get()
+            const { sections, allSections, loadingsMap, departments, expandedSections } = get()
 
             // Обновляем в карте загрузок
             const updatedLoadingsMap = { ...loadingsMap }
@@ -754,16 +767,130 @@ export const usePlanningStore = create<PlanningState>()(
               return section
             })
 
+            // Обновляем загрузки сотрудников в отделах
+            const updatedDepartments = departments.map(department => ({
+              ...department,
+              teams: department.teams.map(team => ({
+                ...team,
+                employees: team.employees.map(employee => {
+                  if (employee.id === loadingData.responsibleId) {
+                    const existingLoadings = employee.loadings || []
+                    const hasExistingLoading = existingLoadings.some(loading => loading.id === newLoading.id)
+                    
+                    // Пересчитываем dailyWorkloads
+                    const updatedLoadings = hasExistingLoading ? existingLoadings : [...existingLoadings, newLoading]
+                    const dailyWorkloads: Record<string, number> = {}
+                    
+                    updatedLoadings.forEach((loading: Loading) => {
+                      const startDate = new Date(loading.startDate)
+                      const endDate = new Date(loading.endDate)
+                      const currentDate = new Date(startDate)
+
+                      while (currentDate <= endDate) {
+                        const dateKey = currentDate.toISOString().split("T")[0]
+                        if (!dailyWorkloads[dateKey]) {
+                          dailyWorkloads[dateKey] = 0
+                        }
+                        dailyWorkloads[dateKey] += loading.rate || 1
+                        currentDate.setDate(currentDate.getDate() + 1)
+                      }
+                    })
+
+                    return {
+                      ...employee,
+                      loadings: updatedLoadings,
+                      dailyWorkloads,
+                      hasLoadings: updatedLoadings.length > 0,
+                      loadingsCount: updatedLoadings.length,
+                    }
+                  }
+                  return employee
+                })
+              }))
+            }))
+
+            // Автоматически раскрываем раздел для показа новой загрузки
+            if (!expandedSections[loadingData.sectionId]) {
+              get().toggleSectionExpanded(loadingData.sectionId)
+            }
+
+            // Обновляем состояние с отделами
             set({
               sections: updatedSections,
               allSections: updatedAllSections,
               loadingsMap: updatedLoadingsMap,
+              departments: updatedDepartments,
+            })
+
+            console.log("✅ Загрузка успешно создана и добавлена в локальное состояние:", {
+              loadingId: result.loadingId,
+              sectionId: loadingData.sectionId,
+              responsibleId: loadingData.responsibleId,
+              loadingsCount: updatedLoadingsMap[loadingData.sectionId]?.length || 0
             })
 
             return { success: true, loadingId: result.loadingId }
           } catch (error) {
             console.error("Ошибка при создании загрузки:", error)
             return { success: false, error: "Произошла неожиданная ошибка" }
+          }
+        },
+
+        // Функция для обновления конкретного раздела с загрузками
+        refreshSectionLoadings: async (sectionId: string) => {
+          try {
+            console.log("🔄 Обновление загрузок для раздела:", sectionId)
+            
+            // Загружаем свежие данные для конкретного раздела
+            const freshLoadings = await get().fetchSectionLoadings(sectionId)
+            
+            const { sections, allSections, loadingsMap } = get()
+
+            // Обновляем карту загрузок
+            const updatedLoadingsMap = {
+              ...loadingsMap,
+              [sectionId]: freshLoadings
+            }
+
+            // Обновляем раздел в sections
+            const updatedSections = sections.map(section => {
+              if (section.id === sectionId) {
+                return {
+                  ...section,
+                  loadings: freshLoadings,
+                  hasLoadings: freshLoadings.length > 0
+                }
+              }
+              return section
+            })
+
+            // Обновляем раздел в allSections
+            const updatedAllSections = allSections.map(section => {
+              if (section.id === sectionId) {
+                return {
+                  ...section,
+                  loadings: freshLoadings,
+                  hasLoadings: freshLoadings.length > 0
+                }
+              }
+              return section
+            })
+
+            set({
+              sections: updatedSections,
+              allSections: updatedAllSections,
+              loadingsMap: updatedLoadingsMap,
+            })
+
+            console.log("✅ Раздел успешно обновлен:", {
+              sectionId,
+              loadingsCount: freshLoadings.length
+            })
+
+            return { success: true }
+          } catch (error) {
+            console.error("Ошибка при обновлении раздела:", error)
+            return { success: false, error: "Не удалось обновить раздел" }
           }
         },
 
@@ -876,17 +1003,41 @@ export const usePlanningStore = create<PlanningState>()(
               }
             }
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.map((loading) =>
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.map((loading) =>
                     loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
-                  ),
-                })),
+                  ) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -897,9 +1048,11 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            console.log("✅ Загрузка успешно обновлена в сторе с актуальными данными:", {
+            console.log("✅ Загрузка успешно обновлена и UI обновлен:", {
               loadingId,
-              finalUpdates
+              finalUpdates,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
             })
 
             return { success: true }
@@ -944,15 +1097,39 @@ export const usePlanningStore = create<PlanningState>()(
               )
             })
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.filter((loading) => loading.id !== loadingId),
-                })),
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.filter((loading) => loading.id !== loadingId) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -961,6 +1138,12 @@ export const usePlanningStore = create<PlanningState>()(
               allSections: updatedAllSections,
               loadingsMap: updatedLoadingsMap,
               departments: updatedDepartments,
+            })
+
+            console.log("✅ Загрузка успешно удалена и UI обновлен:", {
+              loadingId,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
             })
 
             return { success: true }
@@ -1002,15 +1185,39 @@ export const usePlanningStore = create<PlanningState>()(
               )
             })
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.filter((loading) => loading.id !== loadingId),
-                })),
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.filter((loading) => loading.id !== loadingId) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -1019,6 +1226,12 @@ export const usePlanningStore = create<PlanningState>()(
               allSections: updatedAllSections,
               loadingsMap: updatedLoadingsMap,
               departments: updatedDepartments,
+            })
+
+            console.log("✅ Загрузка успешно заархивирована и UI обновлен:", {
+              loadingId,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
             })
 
             return { success: true }
@@ -1043,6 +1256,10 @@ export const usePlanningStore = create<PlanningState>()(
             if (get().showDepartments) {
               await get().fetchDepartments()
             }
+
+            console.log("✅ Загрузка успешно восстановлена и UI обновлен:", {
+              loadingId
+            })
 
             return { success: true }
           } catch (error) {

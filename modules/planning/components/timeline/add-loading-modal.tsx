@@ -148,6 +148,49 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     fetchProjects()
   }, [])
 
+  // Если модалка открыта из конкретного раздела (employee может содержать sectionId в расширенных данных)
+  // или ранее выбранный sectionId присутствует, автоматически подтягиваем проект по разделу
+  useEffect(() => {
+    const resolveProjectBySection = async () => {
+      const sectionId = formData.sectionId || (employee as any)?.sectionId
+      if (!sectionId || formData.projectId) return
+
+      try {
+        const { data, error } = await supabase
+          .from("view_section_hierarchy")
+          .select("project_id, project_name, section_id, section_name")
+          .eq("section_id", sectionId)
+          .limit(1)
+          .maybeSingle()
+
+        if (error) {
+          console.error("Ошибка при получении проекта по разделу:", error)
+          return
+        }
+
+        if (data?.project_id) {
+          setFormData((prev) => ({
+            ...prev,
+            projectId: data.project_id,
+            sectionId: data.section_id,
+          }))
+
+          setProjects((prev) => {
+            const exists = prev.some((p) => p.project_id === data.project_id)
+            return exists ? prev : [{ project_id: data.project_id, project_name: data.project_name }, ...prev]
+          })
+
+          setProjectSearchTerm(data.project_name ?? "")
+          fetchSections(data.project_id)
+        }
+      } catch (e) {
+        console.error("Не удалось восстановить проект по разделу:", e)
+      }
+    }
+
+    resolveProjectBySection()
+  }, [formData.sectionId])
+
   // Простая фильтрация проектов прямо в рендере
   const filteredProjects =
     projectSearchTerm.trim() === ""

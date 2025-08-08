@@ -33,6 +33,7 @@ interface TimelineGridProps {
   onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
+  refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния
 }
 
 export function TimelineGrid({
@@ -53,6 +54,7 @@ export function TimelineGrid({
   onOpenSectionPanel, // Добавляем обработчик открытия панели раздела
   expandAllDepartments,
   collapseAllDepartments,
+  refreshCounter = 0, // Добавляем с значением по умолчанию
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -119,6 +121,13 @@ export function TimelineGrid({
       })
     }
   }, [windowWidth, columnVisibility]) // Добавляем columnVisibility в зависимости для перерисовки при изменении видимости столбцов
+
+  // Эффект для отслеживания обновлений данных без сброса состояния
+  useEffect(() => {
+    if (refreshCounter > 0) {
+      console.log("🔄 Timeline Grid обновлен (без сброса состояния):", refreshCounter)
+    }
+  }, [refreshCounter])
 
   // Рассчитываем общую ширину фиксированных столбцов
   const totalFixedWidth = useMemo(() => {

@@ -1,14 +1,25 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { TimelineView } from "./components/timeline-view"
-import { useUserStore } from "@/stores/useUserStore"
+import { PlanningGuide } from "./components/PlanningGuide"
 
 export default function PlanningPage() {
-  // Initialize permissions for testing
-  // УДАЛЕНО: Legacy permissions и setRoleAndPermissions
+  const [showGuide, setShowGuide] = useState(false)
 
-  // УДАЛЕНО: Legacy инициализация permissions
+  // Слушаем событие для показа руководства
+  useEffect(() => {
+    const handleShowGuide = () => {
+      setShowGuide(true)
+    }
+
+    window.addEventListener('showPlanningGuide', handleShowGuide)
+    return () => window.removeEventListener('showPlanningGuide', handleShowGuide)
+  }, [])
+
+  if (showGuide) {
+    return <PlanningGuide onClose={() => setShowGuide(false)} />
+  }
 
   return <TimelineView />
 }
