@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MoreVertical, Plus, Edit, Trash2, Check, X, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { MoreVertical, Plus, Edit, Trash2, Check, X, ChevronLeft, ChevronRight, Calendar, Search } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Employee, VacationEvent } from '../types'
 
 interface VacationGanttChartProps {
@@ -60,6 +61,7 @@ export function VacationGanttChart({
   // Состояния для селектора месяца/года
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonth(new Date()))
   const [selectedYear, setSelectedYear] = useState<number>(getYear(new Date()))
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
   // Генерируем диапазон дат для отображения (текущий месяц + 2 следующих)
   const dateRange = useMemo(() => {
@@ -140,21 +142,38 @@ export function VacationGanttChart({
 
   // Навигация по месяцам
   const goToPreviousMonth = () => {
-    setCurrentDate(prev => subMonths(prev, 1))
+    setCurrentDate(prev => {
+      const newDate = subMonths(prev, 1)
+      // Синхронизируем селекторы
+      setSelectedMonth(getMonth(newDate))
+      setSelectedYear(getYear(newDate))
+      return newDate
+    })
   }
 
   const goToNextMonth = () => {
-    setCurrentDate(prev => addMonths(prev, 1))
+    setCurrentDate(prev => {
+      const newDate = addMonths(prev, 1)
+      // Синхронизируем селекторы
+      setSelectedMonth(getMonth(newDate))
+      setSelectedYear(getYear(newDate))
+      return newDate
+    })
   }
 
   const goToCurrentMonth = () => {
-    setCurrentDate(new Date())
+    const now = new Date()
+    setCurrentDate(now)
+    // Синхронизируем селекторы с текущей датой
+    setSelectedMonth(getMonth(now))
+    setSelectedYear(getYear(now))
   }
 
   // Переход к выбранному месяцу/году
   const goToSelectedMonth = () => {
     const newDate = setYear(setMonth(new Date(), selectedMonth), selectedYear)
     setCurrentDate(newDate)
+    setIsPopoverOpen(false) // Закрываем попап после перехода
   }
 
   // Генерируем годы для селектора (текущий год ± 5 лет)
@@ -393,8 +412,91 @@ export function VacationGanttChart({
         {/* Панель навигации */}
         <div className="p-4 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-600">
           <div className="flex items-center justify-between">
-            {/* Левая часть: навигация по месяцам */}
-            <div className="flex items-center space-x-4">
+            {/* Левая часть: кнопка "Сегодня" и быстрый переход */}
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToCurrentMonth}
+                className="h-8 px-3 flex items-center space-x-2"
+              >
+                <Calendar className="h-3 w-3" />
+                <span className="text-xs">Сегодня</span>
+              </Button>
+
+              {/* Кнопка быстрого перехода к месяцу */}
+              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3 flex items-center space-x-2"
+                  >
+                    <Search className="h-3 w-3" />
+                    <span className="text-xs">Перейти к месяцу</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-4" align="start">
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Быстрый переход
+                    </h4>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+                          Месяц
+                        </label>
+                        <Select
+                          value={selectedMonth.toString()}
+                          onValueChange={(value) => setSelectedMonth(parseInt(value))}
+                        >
+                          <SelectTrigger className="w-full h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {monthNames.map((monthName, index) => (
+                              <SelectItem key={index} value={index.toString()}>
+                                {monthName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+                          Год
+                        </label>
+                        <Select
+                          value={selectedYear.toString()}
+                          onValueChange={(value) => setSelectedYear(parseInt(value))}
+                        >
+                          <SelectTrigger className="w-full h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableYears.map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        onClick={goToSelectedMonth}
+                        className="w-full h-8 text-xs"
+                        size="sm"
+                      >
+                        Перейти
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Правая часть: навигация по месяцам */}
+            <div className="flex items-center space-x-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -422,61 +524,6 @@ export function VacationGanttChart({
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-
-            {/* Центральная часть: быстрый переход к месяцу */}
-            <div className="flex items-center space-x-2">
-              <Select
-                value={selectedMonth.toString()}
-                onValueChange={(value) => setSelectedMonth(parseInt(value))}
-              >
-                <SelectTrigger className="w-32 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthNames.map((monthName, index) => (
-                    <SelectItem key={index} value={index.toString()}>
-                      {monthName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={selectedYear.toString()}
-                onValueChange={(value) => setSelectedYear(parseInt(value))}
-              >
-                <SelectTrigger className="w-20 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableYears.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToSelectedMonth}
-                className="h-8 px-3 text-xs"
-              >
-                Перейти
-              </Button>
-            </div>
-
-            {/* Правая часть: кнопка возврата к текущему месяцу */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToCurrentMonth}
-              className="h-8 px-3 flex items-center space-x-1"
-            >
-              <Calendar className="h-3 w-3" />
-              <span className="text-xs">Сегодня</span>
-            </Button>
           </div>
         </div>
 

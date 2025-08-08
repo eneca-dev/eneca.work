@@ -162,7 +162,7 @@ export function VacationManagementModal({
                 variant="outline"
                 size="sm"
                 onClick={() => setInstructionsModalOpen(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-500 dark:hover:border-slate-400"
               >
                 <HelpCircle className="h-4 w-4" />
                 Инструкция
