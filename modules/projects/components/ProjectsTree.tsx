@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -18,15 +18,17 @@ import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 
 interface ProjectNode {
   id: string
   name: string
-  type: 'manager' | 'project' | 'stage' | 'object' | 'section'
+  type: 'manager' | 'project' | 'stage' | 'object' | 'section' | 'client'
   managerId?: string
   projectId?: string
   stageId?: string
   objectId?: string
+  clientId?: string
   children?: ProjectNode[]
   dates?: {
     start?: string
@@ -37,6 +39,7 @@ interface ProjectNode {
   projectName?: string
   stageName?: string
   departmentName?: string
+  clientName?: string
   // Поля для статуса секции
   statusId?: string
   statusName?: string
@@ -143,13 +146,20 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       return <User className="h-4 w-4 text-gray-500" />
     }
     
+    // Специальная иконка для категории "Без заказчика"
+    if (type === 'client' && nodeName === 'Без заказчика') {
+      return <Building className="h-4 w-4 text-gray-500" />
+    }
+    
     switch (type) {
+      case 'client':
+        return <Building className="h-4 w-4 text-indigo-600" />
       case 'manager':
         return <User className="h-4 w-4 text-blue-600" />
       case 'project':
         return <FolderOpen className="h-4 w-4 text-green-600" />
       case 'stage':
-        return <Building className="h-4 w-4 text-purple-600" />
+        return <SquareStack className="h-4 w-4 text-purple-600" />
       case 'object':
         return <Package className="h-4 w-4 text-orange-600" />
       case 'section':
@@ -293,7 +303,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center" style={{ maxWidth: 'calc(100% - 360px)' }}>
+            <div className="flex items-center min-w-0 flex-1">
               <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
                 {hasChildren ? (
                   isExpanded ? (
@@ -306,18 +316,18 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
               <span 
-                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors break-words"
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors truncate max-w-xs"
                 onClick={(e) => onOpenSection(node, e)}
-                style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+                title={node.name}
               >
                 {node.name}
               </span>
             </div>
 
-            {/* Информация справа с фиксированными ширинами */}
+            {/* Информация справа с адаптивными ширинами */}
             <div className="flex items-center text-xs ml-auto mr-8">
-              {/* Статус секции - фиксированная ширина */}
-              <div className="flex items-center w-32 justify-end mr-4 relative">
+              {/* Статус секции - скрывается последним (>= 600px) */}
+              <div className="hidden min-[600px]:flex items-center w-32 justify-end mr-4 relative">
                 {updatingStatus ? (
                   <div className="flex items-center gap-1 px-2 py-1">
                     <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
@@ -464,8 +474,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
               
-              {/* Даты - фиксированная ширина */}
-              <div className="flex items-center gap-1 w-24 justify-end">
+              {/* Даты - скрывается третьими (>= 800px) */}
+              <div className="hidden min-[800px]:flex items-center gap-1 w-24 justify-end">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 <span className="text-blue-700 dark:text-blue-300">
                   {(node.dates?.start || node.dates?.end) ? (
@@ -480,8 +490,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 </span>
               </div>
 
-              {/* Отдел - фиксированная ширина */}
-              <div className="w-20 flex justify-end ml-4">
+              {/* Отдел - скрывается вторым (>= 1000px) */}
+              <div className="hidden min-[1000px]:flex w-20 justify-end ml-4">
                 {node.departmentName && (
                   <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1">
                     <div className="flex items-center gap-1">
@@ -494,8 +504,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
 
-              {/* Проект, стадия и ответственный - фиксированная ширина */}
-              <div className="w-36 flex flex-col gap-1 text-right ml-4">
+              {/* Проект, стадия и ответственный - скрывается первым (>= 1200px) */}
+              <div className="hidden min-[1200px]:flex w-36 flex-col gap-1 text-right ml-4">
                 {node.projectName && (
                   <span className="dark:text-slate-500 text-slate-400 truncate">
                     {node.projectName}
@@ -706,7 +716,11 @@ export function ProjectsTree({
     expandedNodes, 
     toggleNode: toggleNodeInStore,
     highlightedSectionId,
-    clearHighlight
+    clearHighlight,
+    showManagers,
+    toggleShowManagers,
+    groupByClient,
+    toggleGroupByClient
   } = useProjectsStore()
   const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
@@ -758,7 +772,7 @@ export function ProjectsTree({
   // Загрузка данных
   useEffect(() => {
     loadTreeData()
-  }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+  }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, showManagers, groupByClient])
 
   // Функция поиска раздела по ID в дереве
   const findSectionById = (sectionId: string): ProjectNode | null => {
@@ -987,7 +1001,7 @@ export function ProjectsTree({
       console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
       // Преобразуем данные в иерархическую структуру
-      const tree = buildTreeStructureFromProjectTree(data || [])
+      const tree = buildTreeStructureFromProjectTree(data || [], showManagers, groupByClient)
       console.log('🌳 Построенное дерево:', tree)
       setTreeData(tree)
     } catch (error) {
@@ -997,7 +1011,8 @@ export function ProjectsTree({
     }
   }
 
-  const buildTreeStructureFromProjectTree = (data: any[]): ProjectNode[] => {
+  const buildTreeStructureFromProjectTree = (data: any[], showManagers: boolean, groupByClient: boolean): ProjectNode[] => {
+    const clients = new Map<string, ProjectNode>()
     const managers = new Map<string, ProjectNode>()
     const projects = new Map<string, ProjectNode>()
     const stages = new Map<string, ProjectNode>()
@@ -1012,9 +1027,31 @@ export function ProjectsTree({
       children: []
     }
 
+    // Создаем специальную категорию для проектов без заказчика
+    const NO_CLIENT_ID = 'no-client'
+    const noClientCategory: ProjectNode = {
+      id: NO_CLIENT_ID,
+      name: 'Без заказчика',
+      type: 'client',
+      children: []
+    }
+
     // Обрабатываем все записи из view_project_tree
     data.forEach(row => {
-      // 1. Менеджеры
+      // 1. Заказчики (если включена группировка по заказчикам)
+      const clientId = row.client_id || NO_CLIENT_ID
+      if (groupByClient) {
+        if (row.client_id && !clients.has(row.client_id)) {
+          clients.set(row.client_id, {
+            id: row.client_id,
+            name: row.client_name || 'Неизвестный заказчик',
+            type: 'client',
+            children: []
+          })
+        }
+      }
+
+      // 2. Менеджеры
       const managerId = row.manager_id || NO_MANAGER_ID
       if (row.manager_id && !managers.has(row.manager_id)) {
         managers.set(row.manager_id, {
@@ -1025,18 +1062,19 @@ export function ProjectsTree({
         })
       }
 
-      // 2. Проекты
+      // 3. Проекты
       if (!projects.has(row.project_id)) {
         projects.set(row.project_id, {
           id: row.project_id,
           name: row.project_name,
           type: 'project',
           managerId: managerId,
+          clientId: clientId,
           children: []
         })
       }
 
-      // 3. Стадии
+      // 4. Стадии
       if (row.stage_id && !stages.has(row.stage_id)) {
         stages.set(row.stage_id, {
           id: row.stage_id,
@@ -1047,7 +1085,7 @@ export function ProjectsTree({
         })
       }
 
-      // 4. Объекты
+      // 5. Объекты
       if (row.object_id && !objects.has(row.object_id)) {
         objects.set(row.object_id, {
           id: row.object_id,
@@ -1059,7 +1097,7 @@ export function ProjectsTree({
         })
       }
 
-      // 5. Разделы
+      // 6. Разделы
       if (row.section_id) {
         const section: ProjectNode = {
           id: row.section_id,
@@ -1103,18 +1141,6 @@ export function ProjectsTree({
       }
     })
 
-    // Добавляем проекты к менеджерам
-    let hasProjectsWithoutManager = false
-
-    projects.forEach(project => {
-      if (project.managerId === NO_MANAGER_ID) {
-        noManagerCategory.children!.push(project)
-        hasProjectsWithoutManager = true
-      } else if (project.managerId && managers.has(project.managerId)) {
-        managers.get(project.managerId)!.children!.push(project)
-      }
-    })
-
     // Функция умной сортировки для названий с числами
     const smartSort = (a: ProjectNode, b: ProjectNode): number => {
       // Извлекаем числа из названий
@@ -1148,16 +1174,60 @@ export function ProjectsTree({
         }))
     }
 
-    // Собираем результат
-    const result = Array.from(managers.values())
-    
-    // Добавляем категорию "Руководитель проекта не назначен" в начало списка, если есть такие проекты
-    if (hasProjectsWithoutManager) {
-      result.unshift(noManagerCategory)
-    }
+    // Строим иерархию в зависимости от настроек группировки
+    if (groupByClient) {
+      // Группировка по заказчикам
+      let hasProjectsWithoutClient = false
 
-    // Применяем сортировку ко всему дереву
-    return sortTreeRecursively(result)
+      // Добавляем проекты к заказчикам
+      projects.forEach(project => {
+        if (project.clientId === NO_CLIENT_ID) {
+          noClientCategory.children!.push(project)
+          hasProjectsWithoutClient = true
+        } else if (project.clientId && clients.has(project.clientId)) {
+          clients.get(project.clientId)!.children!.push(project)
+        }
+      })
+
+      const result = Array.from(clients.values())
+      
+      // Добавляем категорию "Без заказчика" в конец списка, если есть такие проекты
+      if (hasProjectsWithoutClient) {
+        result.push(noClientCategory)
+      }
+
+      return sortTreeRecursively(result)
+    } else {
+      // Обычная группировка по менеджерам или без группировки
+      let hasProjectsWithoutManager = false
+
+      // Добавляем проекты к менеджерам
+      projects.forEach(project => {
+        if (project.managerId === NO_MANAGER_ID) {
+          noManagerCategory.children!.push(project)
+          hasProjectsWithoutManager = true
+        } else if (project.managerId && managers.has(project.managerId)) {
+          managers.get(project.managerId)!.children!.push(project)
+        }
+      })
+
+      // Собираем результат в зависимости от showManagers
+      if (!showManagers) {
+        // Если не показываем менеджеров, возвращаем проекты напрямую
+        const allProjects = Array.from(projects.values())
+        return sortTreeRecursively(allProjects)
+      }
+
+      // Если показываем менеджеров, строим полную иерархию
+      const result = Array.from(managers.values())
+      
+      // Добавляем категорию "Руководитель проекта не назначен" в начало списка, если есть такие проекты
+      if (hasProjectsWithoutManager) {
+        result.unshift(noManagerCategory)
+      }
+
+      return sortTreeRecursively(result)
+    }
   }
 
   const toggleNode = (nodeId: string) => {
@@ -1387,7 +1457,7 @@ export function ProjectsTree({
   const filteredData = getFilteredTreeData();
 
   return (
-    <>
+    <TooltipProvider>
       <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
         <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
           <div className="flex items-center justify-between">
@@ -1573,32 +1643,88 @@ export function ProjectsTree({
               </div>
               
               <div className="flex gap-2">
-                <button
-                  onClick={toggleOnlySections}
-                  title={showOnlySections ? "Показать всю структуру" : "Только разделы"}
-                  className={cn(
-                    "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                    showOnlySections
-                      ? "bg-purple-500/20 text-purple-600 hover:bg-purple-500/30 dark:bg-purple-500/30 dark:text-purple-400 dark:hover:bg-purple-500/40"
-                      : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
-                  )}
-                >
-                  <List size={14} />
-                </button>
-                <button
-                  onClick={expandAllNodes}
-                  title="Развернуть все"
-                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 transition-colors"
-                >
-                  <Expand size={14} />
-                </button>
-                <button
-                  onClick={collapseAllNodes}
-                  title="Свернуть все"
-                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30 transition-colors"
-                >
-                  <Minimize size={14} />
-                </button>
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={toggleGroupByClient}
+                      className={cn(
+                        "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
+                        groupByClient
+                          ? "bg-indigo-500/20 text-indigo-600 hover:bg-indigo-500/30 dark:bg-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/40"
+                          : "bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30"
+                      )}
+                    >
+                      <Building size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{groupByClient ? "Отключить группировку по заказчикам" : "Группировать по заказчикам"}</p>
+                  </TooltipContent>
+                </UiTooltip>
+                {!groupByClient && (
+                  <UiTooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={toggleShowManagers}
+                        className={cn(
+                          "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
+                          showManagers
+                            ? "bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 dark:bg-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/40"
+                            : "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
+                        )}
+                      >
+                        <User size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{showManagers ? "Скрыть руководителей проектов" : "Показать руководителей проектов"}</p>
+                    </TooltipContent>
+                  </UiTooltip>
+                )}
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={toggleOnlySections}
+                      className={cn(
+                        "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
+                        showOnlySections
+                          ? "bg-purple-500/20 text-purple-600 hover:bg-purple-500/30 dark:bg-purple-500/30 dark:text-purple-400 dark:hover:bg-purple-500/40"
+                          : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
+                      )}
+                    >
+                      <List size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{showOnlySections ? "Показать всю структуру" : "Только разделы"}</p>
+                  </TooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={expandAllNodes}
+                      className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 transition-colors"
+                    >
+                      <Expand size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Развернуть все</p>
+                  </TooltipContent>
+                </UiTooltip>
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={collapseAllNodes}
+                      className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30 transition-colors"
+                    >
+                      <Minimize size={14} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Свернуть все</p>
+                  </TooltipContent>
+                </UiTooltip>
               </div>
             </div>
           </div>
@@ -1777,6 +1903,6 @@ export function ProjectsTree({
         onClose={() => setShowStatusManagementModal(false)}
       />
 
-    </>
+    </TooltipProvider>
   )
 } 

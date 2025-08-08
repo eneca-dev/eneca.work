@@ -64,8 +64,8 @@ export async function fetchSectionLoadings(sectionId: string): Promise<Loading[]
     }
 
     // Преобразуем данные для добавления имени ответственного
-    return (data || []).map((item) => {
-      const profile = item.profiles as { first_name: string; last_name: string } | null
+    return (data || []).map((item): Loading => {
+      const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles as { first_name: string; last_name: string } | null
       return {
         id: item.loading_id,
         responsibleId: item.loading_responsible,
@@ -74,8 +74,8 @@ export async function fetchSectionLoadings(sectionId: string): Promise<Loading[]
         startDate: new Date(item.loading_start),
         endDate: new Date(item.loading_finish),
         rate: item.loading_rate || 1,
-        createdAt: item.loading_created ? new Date(item.loading_created) : undefined,
-        updatedAt: item.loading_updated ? new Date(item.loading_updated) : undefined,
+        createdAt: item.loading_created ? new Date(item.loading_created) : new Date(),
+        updatedAt: item.loading_updated ? new Date(item.loading_updated) : new Date(),
       }
     })
   } catch (error) {

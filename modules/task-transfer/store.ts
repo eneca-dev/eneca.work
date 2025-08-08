@@ -140,7 +140,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
             }
             
             // Стадии
-            if (!stagesMap.has(item.stage_id)) {
+            if (item.stage_id && !stagesMap.has(item.stage_id)) {
               stagesMap.set(item.stage_id, {
                 id: item.stage_id,
                 projectId: item.project_id,
@@ -149,7 +149,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
             }
             
             // Объекты
-            if (!objectsMap.has(item.object_id)) {
+            if (item.object_id && !objectsMap.has(item.object_id)) {
               objectsMap.set(item.object_id, {
                 id: item.object_id,
                 stageId: item.stage_id,
@@ -232,7 +232,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           
         } catch (error) {
           console.error('❌ Ошибка загрузки начальных данных:', error)
-          console.error('❌ Stack trace:', error.stack)
+          console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'Unknown error')
           set({ isLoading: false })
         }
       },
@@ -251,7 +251,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           console.log('✅ Задания загружены в store:', assignments.length)
         } catch (error) {
           console.error('❌ Ошибка загрузки заданий в store:', error)
-          console.error('❌ Stack trace:', error.stack)
+          console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'Unknown error')
           set({ isLoadingAssignments: false })
           throw error // Пробрасываем ошибку дальше
         }
@@ -412,7 +412,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           console.log('✅ История изменений задания загружена:', history.length)
         } catch (error) {
           console.error('❌ Ошибка загрузки истории изменений задания:', error)
-          console.error('❌ Stack trace:', error.stack)
+          console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'Unknown error')
           set({ isLoadingHistory: false })
           throw error // Пробрасываем ошибку дальше
         }

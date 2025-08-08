@@ -20,7 +20,7 @@ export const useFilteredData = (filters: TaskFilters, currentUserSectionId?: str
 
   // Фильтрованные задания
   const filteredAssignments = useMemo(() => {
-    return getFilteredAssignments(filters, currentUserSectionId)
+    return getFilteredAssignments(filters)
   }, [filters, assignments, currentUserSectionId])
 
   // Статистика

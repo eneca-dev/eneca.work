@@ -11,6 +11,8 @@ interface ProjectsState {
   isDetailsPanelOpen: boolean;
   activeDetailsTab: 'overview' | 'team' | 'files';
   expandedNodes: Set<string>;
+  showManagers: boolean; // Флаг для показа/скрытия уровня руководителей проектов
+  groupByClient: boolean; // Флаг для группировки проектов по заказчикам
   
   // Подсвеченный раздел для навигации к комментариям
   highlightedSectionId: string | null;
@@ -33,6 +35,8 @@ interface ProjectsState {
   toggleDetailsPanel: () => void;
   setActiveDetailsTab: (tab: ProjectsState['activeDetailsTab']) => void;
   toggleNode: (nodeId: string) => void;
+  toggleShowManagers: () => void;
+  toggleGroupByClient: () => void;
   
   // Действия для навигации к разделам (всегда открывает комментарии)
   highlightSection: (sectionId: string) => void;
@@ -69,6 +73,8 @@ export const useProjectsStore = create<ProjectsState>()(
       isDetailsPanelOpen: false,
       activeDetailsTab: 'overview',
       expandedNodes: new Set(),
+      showManagers: true, // По умолчанию показываем руководителей проектов
+      groupByClient: false, // По умолчанию не группируем по заказчикам
       highlightedSectionId: null,
       notification: null,
       projects: [],
@@ -119,6 +125,20 @@ export const useProjectsStore = create<ProjectsState>()(
           }
           return { expandedNodes: newExpandedNodes };
         }),
+
+      toggleShowManagers: () =>
+        set((state) => ({
+          showManagers: !state.showManagers,
+          // При включении показа руководителей отключаем группировку по заказчикам
+          groupByClient: state.showManagers ? state.groupByClient : false
+        })),
+
+      toggleGroupByClient: () =>
+        set((state) => ({
+          groupByClient: !state.groupByClient,
+          // При включении группировки по заказчикам отключаем показ руководителей
+          showManagers: state.groupByClient ? state.showManagers : false
+        })),
         
       highlightSection: (sectionId) =>
         set({ 
@@ -163,6 +183,8 @@ export const useProjectsStore = create<ProjectsState>()(
         filters: state.filters,
         expandedNodes: Array.from(state.expandedNodes),
         activeDetailsTab: state.activeDetailsTab,
+        showManagers: state.showManagers,
+        groupByClient: state.groupByClient,
       }),
       onRehydrateStorage: () => (state) => {
         // Восстанавливаем Set из массива при загрузке из localStorage
