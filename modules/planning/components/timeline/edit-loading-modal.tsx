@@ -144,6 +144,49 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     }
   }, [loading.projectId])
 
+  // Если у загрузки нет projectId, но есть sectionId — восстанавливаем проект по разделу
+  useEffect(() => {
+    const resolveProjectBySection = async () => {
+      if (loading.projectId || !loading.sectionId) return
+
+      try {
+        const { data, error } = await supabase
+          .from("view_section_hierarchy")
+          .select("project_id, project_name")
+          .eq("section_id", loading.sectionId)
+          .limit(1)
+          .maybeSingle()
+
+        if (error) {
+          console.error("Ошибка при получении проекта по разделу:", error)
+          return
+        }
+
+        if (data?.project_id) {
+          // Устанавливаем проект в форму
+          setFormData((prev) => ({
+            ...prev,
+            projectId: data.project_id,
+          }))
+
+          // Обновляем список проектов локально, чтобы корректно показать имя
+          setProjects((prev) => {
+            const exists = prev.some((p) => p.project_id === data.project_id)
+            return exists ? prev : [{ project_id: data.project_id, project_name: data.project_name }, ...prev]
+          })
+
+          // Подставляем название в поле поиска и подгружаем разделы
+          setProjectSearchTerm(data.project_name ?? "")
+          fetchSections(data.project_id)
+        }
+      } catch (e) {
+        console.error("Не удалось восстановить проект по разделу:", e)
+      }
+    }
+
+    resolveProjectBySection()
+  }, [loading.projectId, loading.sectionId])
+
   // Устанавливаем название проекта в поле поиска после загрузки проектов
   useEffect(() => {
     if (loading.projectId && projects.length > 0) {

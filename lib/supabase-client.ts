@@ -172,28 +172,27 @@ export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | Stru
   }
 }
 
-// Обновляем функцию fetchLoadings для использования представления active_loadings
+// Обновляем функцию fetchLoadings для использования представления view_sections_with_loadings
 export async function fetchLoadings(sectionId: string, checkOnly = false): Promise<LoadingData[] | StructuredError> {
   try {
     let query = supabase
-      .from("active_loadings")
+      .from("view_sections_with_loadings")
       .select(`
         loading_id,
         loading_responsible,
-        profiles:loading_responsible (
-          first_name,
-          last_name,
-          avatar_url
-        ),
-        loading_section,
+        section_id,
         loading_start,
         loading_finish,
         loading_rate,
-        loading_status,
         loading_created,
-        loading_updated
+        loading_updated,
+        loading_status,
+        responsible_first_name,
+        responsible_last_name,
+        responsible_avatar
       `)
-      .eq("loading_section", sectionId)
+      .eq("section_id", sectionId)
+      .not("loading_id", "is", null) // Только записи с загрузками
 
     // Если нужна только проверка наличия, ограничиваем выборку одной записью
     if (checkOnly) {
@@ -211,19 +210,13 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
       }
     }
 
-    // Преобразуем данные для добавления имени и аватара ответственного
-    return (data || []).map((item) => {
-      // Исправляем типизацию профиля - это может быть объект или null
-      const profile = Array.isArray(item.profiles) 
-        ? item.profiles[0] as { first_name: string; last_name: string; avatar_url: string | null } | undefined
-        : item.profiles as { first_name: string; last_name: string; avatar_url: string | null } | null
-      return {
-        ...item,
-        responsible_name: profile ? `${profile.first_name} ${profile.last_name}` : null,
-        responsible_avatar: profile?.avatar_url || null,
-        profiles: undefined, // Удаляем вложенный объект profiles
-      }
-    })
+    // Преобразуем данные с добавлением полного имени ответственного
+    return (data || []).map((item) => ({
+      ...item,
+      responsible_name: (item.responsible_first_name && item.responsible_last_name) 
+        ? `${item.responsible_first_name} ${item.responsible_last_name}` 
+        : null,
+    }))
   } catch (error) {
     console.error("Ошибка при загрузке активных загрузок:", error)
     return {

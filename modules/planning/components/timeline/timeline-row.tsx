@@ -331,6 +331,7 @@ export function TimelineRow({
                         <span>{formatDate(section.endDate)}</span>
                       </div>
                     )}
+
                   </div>
 
                   {/* Вторая строка - стадия и отдел */}

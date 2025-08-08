@@ -316,7 +316,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
               <span 
-                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors truncate max-w-xs"
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teал-400 transition-colors truncate max-w-[900px] xl:max-w-[1100px]"
                 onClick={(e) => onOpenSection(node, e)}
                 title={node.name}
               >
@@ -475,7 +475,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
               
               {/* Даты - скрывается третьими (>= 800px) */}
-              <div className="hidden min-[800px]:flex items-center gap-1 w-24 justify-end">
+              <div className="hidden min-[800px]:flex items-center gap-1 w-28 justify-end flex-shrink-0">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 <span className="text-blue-700 dark:text-blue-300">
                   {(node.dates?.start || node.dates?.end) ? (
@@ -491,12 +491,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
 
               {/* Отдел - скрывается вторым (>= 1000px) */}
-              <div className="hidden min-[1000px]:flex w-20 justify-end ml-4">
+              <div className="hidden min-[1000px]:flex w-32 justify-end flex-shrink-0 min-w-0">
                 {node.departmentName && (
-                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1">
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1 max-w-full">
                     <div className="flex items-center gap-1">
                       <User className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate">
+                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate max-w-[84px]">
                         {node.departmentName}
                       </span>
                     </div>

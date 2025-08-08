@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { X, ChevronDown, ChevronRight, Filter, RotateCcw } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, Filter, RotateCcw, HelpCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useFilterStore } from './store'
 import { FilterSelect } from './FilterSelect'
@@ -28,6 +28,7 @@ interface TimelineFiltersProps {
   startDate?: Date | string
   daysToShow?: number
   onTodayClick?: () => void
+  onShowGuide?: () => void // Добавляем обработчик для показа руководства
 }
 
 export function TimelineFilters({
@@ -46,7 +47,8 @@ export function TimelineFilters({
   onScrollForward,
   startDate,
   daysToShow,
-  onTodayClick
+  onTodayClick,
+  onShowGuide
 }: TimelineFiltersProps) {
   const { theme: systemTheme } = useTheme()
   const { theme: settingsTheme } = useSettingsStore()
@@ -208,6 +210,23 @@ export function TimelineFilters({
               onPageChange={onPageChange} 
               theme={theme} 
             />
+          )}
+
+          {/* Кнопка руководства */}
+          {onShowGuide && (
+            <button
+              onClick={onShowGuide}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors",
+                theme === 'dark' 
+                  ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-slate-200" 
+                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+              )}
+              title="Открыть руководство по планированию"
+            >
+              <HelpCircle className="h-4 w-4" />
+              Руководство
+            </button>
           )}
 
           {/* Элементы управления навигацией */}
