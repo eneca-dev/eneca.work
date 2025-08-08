@@ -597,7 +597,17 @@ function EmployeeRow({
 
               // Получаем суммарную загрузку сотрудника на эту дату
               const dateKey = unit.date.toISOString().split("T")[0]
+              const isVacationDay = !!(employee as any).vacationsDaily?.[dateKey]
               const workloadRate = employee.dailyWorkloads?.[dateKey] || 0
+              
+              // Логирование для отладки (только для первых 3 ячеек первого сотрудника)
+              if (employee.id === "1433d4ff-fb38-4f48-88bd-cb2a0213d6b8" && i < 3) {
+                console.log(`🔍 ${employee.fullName} ${dateKey}:`, {
+                  isVacationDay,
+                  workloadRate,
+                  vacationsDaily: (employee as any).vacationsDaily,
+                })
+              }
 
               const isMonthBoundary = i === 0 || i === timeUnits.length - 1
 
@@ -631,47 +641,124 @@ function EmployeeRow({
                       : "transparent",
                   }}
                 >
-                  {workloadRate > 0 && (
+                  {/* Отображение загрузки и отпуска */}
+                  {(workloadRate > 0 || isVacationDay) && (
                     <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
-                      <div
-                        className={cn(
-                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
-                          // Тонкие столбики с border'ом для сотрудников (более тонкие чем у отделов)
-                          (() => {
-                            const employmentRate = employee.employmentRate || 1
-                            const loadPercentage = (workloadRate / employmentRate) * 100
-                            if (loadPercentage > 100) {
+                      {/* Если есть и загрузка, и отпуск - показываем разделённый столбик */}
+                      {isVacationDay && workloadRate > 0 ? (
+                        <div className="flex w-full h-full items-end justify-center gap-0.5">
+                          {/* Левая половина - загрузка */}
+                          <div
+                            className={cn(
+                              "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
+                              (() => {
+                                const employmentRate = employee.employmentRate || 1
+                                const loadPercentage = (workloadRate / employmentRate) * 100
+                                if (loadPercentage > 100) {
+                                  return theme === "dark" 
+                                    ? "bg-red-400/30 border-red-400" 
+                                    : "bg-red-500/30 border-red-500"
+                                }
+                                return theme === "dark" 
+                                  ? "bg-blue-400/30 border-blue-400" 
+                                  : "bg-blue-500/30 border-blue-500"
+                              })()
+                            )}
+                            style={{
+                              width: `${Math.max((cellWidth - 12) / 2, 1)}px`, // Половина ширины минус gap
+                              height: `${(() => {
+                                const employmentRate = employee.employmentRate || 1
+                                const loadPercentage = (workloadRate / employmentRate) * 100
+                                return Math.max(
+                                  Math.min(
+                                    (loadPercentage / 100) * (reducedRowHeight - 10),
+                                    reducedRowHeight - 4
+                                  ),
+                                  3
+                                )
+                              })()}px`,
+                              opacity: 0.9
+                            }}
+                            title={`Загрузка: ${(() => {
+                              const employmentRate = employee.employmentRate || 1
+                              const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
+                              const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
+                              return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
+                            })()}`}
+                          />
+                          {/* Правая половина - отпуск */}
+                          <div
+                            className={cn(
+                              "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
+                              theme === "dark" 
+                                ? "bg-slate-500/30 border-slate-500" 
+                                : "bg-slate-400/30 border-slate-400"
+                            )}
+                            style={{
+                              width: `${Math.max((cellWidth - 12) / 2, 1)}px`, // Половина ширины минус gap
+                              height: `${reducedRowHeight - 10}px`, // Полная высота для отпуска
+                              opacity: 0.9
+                            }}
+                            title={`Отпуск (1 ставка) — ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
+                          />
+                        </div>
+                      ) : isVacationDay ? (
+                        /* Только отпуск */
+                        <div
+                          className={cn(
+                            "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
+                            theme === "dark" 
+                              ? "bg-slate-500/30 border-slate-500" 
+                              : "bg-slate-400/30 border-slate-400"
+                          )}
+                          style={{
+                            width: `${Math.max(cellWidth - 10, 2)}px`,
+                            height: `${reducedRowHeight - 10}px`,
+                            opacity: 0.9
+                          }}
+                          title={`Отпуск (1 ставка) — ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
+                        />
+                      ) : (
+                        /* Только загрузка */
+                        <div
+                          className={cn(
+                            "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
+                            (() => {
+                              const employmentRate = employee.employmentRate || 1
+                              const loadPercentage = (workloadRate / employmentRate) * 100
+                              if (loadPercentage > 100) {
+                                return theme === "dark" 
+                                  ? "bg-red-400/30 border-red-400" 
+                                  : "bg-red-500/30 border-red-500"
+                              }
                               return theme === "dark" 
-                                ? "bg-red-400/30 border-red-400" 
-                                : "bg-red-500/30 border-red-500"
-                            }
-                            return theme === "dark" 
-                              ? "bg-blue-400/30 border-blue-400" 
-                              : "bg-blue-500/30 border-blue-500"
-                          })()
-                        )}
-                        style={{
-                          width: `${Math.max(cellWidth - 10, 2)}px`, // Более тонкие столбики для сотрудников
-                          height: `${(() => {
+                                ? "bg-blue-400/30 border-blue-400" 
+                                : "bg-blue-500/30 border-blue-500"
+                            })()
+                          )}
+                          style={{
+                            width: `${Math.max(cellWidth - 10, 2)}px`,
+                            height: `${(() => {
+                              const employmentRate = employee.employmentRate || 1
+                              const loadPercentage = (workloadRate / employmentRate) * 100
+                              return Math.max(
+                                Math.min(
+                                  (loadPercentage / 100) * (reducedRowHeight - 10),
+                                  reducedRowHeight - 4
+                                ),
+                                3
+                              )
+                            })()}px`,
+                            opacity: 0.9
+                          }}
+                          title={`Загрузка сотрудника: ${(() => {
                             const employmentRate = employee.employmentRate || 1
-                            const loadPercentage = (workloadRate / employmentRate) * 100
-                            return Math.max(
-                              Math.min(
-                                (loadPercentage / 100) * (reducedRowHeight - 10), // Высота пропорционально проценту
-                                reducedRowHeight - 4  // Увеличиваем максимальную высоту для перегруза
-                              ),
-                              3  // Минимальная высота для видимости
-                            )
-                          })()}px`,
-                          opacity: 0.9 // Чуть более прозрачные
-                        }}
-                        title={`Загрузка сотрудника: ${(() => {
-                          const employmentRate = employee.employmentRate || 1
-                          const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
-                          const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
-                          return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
-                        })()}`}
-                      ></div>
+                            const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
+                            const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
+                            return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
+                          })()}`}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -680,6 +767,8 @@ function EmployeeRow({
           </div>
         </div>
       </div>
+
+
 
       {/* Отображаем детали загрузок, если сотрудник раскрыт */}
       {isExpanded && employee.loadings && employee.loadings.length > 0 && (
