@@ -49,6 +49,7 @@ interface VacationFormModalProps {
   employee?: Employee
   vacation?: VacationEvent
   mode: 'create' | 'edit'
+  isSubmitting?: boolean
 }
 
 export function VacationFormModal({
@@ -57,9 +58,9 @@ export function VacationFormModal({
   onSubmit,
   employee,
   vacation,
-  mode
+  mode,
+  isSubmitting = false
 }: VacationFormModalProps) {
-  const [loading, setLoading] = useState(false)
 
   const form = useForm<FormData>({
     resolver: zodResolver(vacationFormSchema),
@@ -93,7 +94,6 @@ export function VacationFormModal({
   }, [mode, vacation, form])
 
   const handleSubmit = async (data: FormData) => {
-    setLoading(true)
     try {
       if (!data.dateRange.from) {
         throw new Error('Выберите дату начала отпуска')
@@ -110,11 +110,8 @@ export function VacationFormModal({
         type: data.type,
         comment: data.comment
       })
-      onClose()
     } catch (error) {
       console.error('Ошибка при сохранении отпуска:', error)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -141,7 +138,7 @@ export function VacationFormModal({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Тип отпуска</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Выберите тип отпуска" />
@@ -206,7 +203,7 @@ export function VacationFormModal({
             <ModalButton
               type="submit"
               variant="success"
-              loading={loading}
+              loading={isSubmitting}
             >
               {mode === 'create' ? 'Создать' : 'Сохранить'}
             </ModalButton>

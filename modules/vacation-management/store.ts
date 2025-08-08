@@ -8,6 +8,9 @@ import type { VacationManagementState, Employee, VacationEvent, Department } fro
 const supabase = createClient()
 
 interface VacationManagementStore extends VacationManagementState {
+  // Токен для отслеживания актуальности запросов
+  currentRequestToken: string | null
+  
   // Действия
   setSelectedDepartment: (departmentId: string | null) => void
   loadDepartments: () => Promise<void>
@@ -32,10 +35,18 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
       departments: [],
       isLoading: false,
       error: null,
+      currentRequestToken: null,
 
       // Установка выбранного отдела
       setSelectedDepartment: (departmentId) => {
-        set({ selectedDepartmentId: departmentId })
+        // Генерируем новый токен для этого запроса
+        const requestToken = `dept_${Date.now()}_${Math.random()}`
+        
+        set({ 
+          selectedDepartmentId: departmentId,
+          currentRequestToken: requestToken
+        })
+        
         if (departmentId) {
           get().loadEmployees(departmentId)
         } else {
@@ -66,6 +77,9 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
 
       // Загрузка сотрудников отдела
       loadEmployees: async (departmentId) => {
+        // Сохраняем токен запроса на момент начала загрузки
+        const { currentRequestToken: requestToken } = get()
+        
         set({ isLoading: true, error: null })
         
         try {
@@ -86,6 +100,13 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
 
           if (error) throw error
 
+          // Проверяем, что запрос все еще актуален
+          const { currentRequestToken: currentToken } = get()
+          if (requestToken !== currentToken) {
+            console.log('Отменяем устаревший запрос сотрудников для отдела:', departmentId)
+            return
+          }
+
           const employees: Employee[] = data?.map((profile: any) => ({
             user_id: profile.user_id,
             first_name: profile.first_name,
@@ -97,6 +118,13 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
             avatar_url: profile.avatar_url
           })) || []
 
+          // Еще раз проверяем актуальность перед обновлением состояния
+          const { currentRequestToken: finalToken } = get()
+          if (requestToken !== finalToken) {
+            console.log('Отменяем обновление состояния для устаревшего запроса сотрудников')
+            return
+          }
+
           set({ employees })
           
           // Загружаем отпуска для всех сотрудников отдела
@@ -105,15 +133,26 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
             await get().loadVacations(employeeIds)
           }
         } catch (error) {
-          console.error('Ошибка загрузки сотрудников:', error)
-          set({ error: 'Не удалось загрузить список сотрудников' })
+          // Проверяем актуальность запроса перед установкой ошибки
+          const { currentRequestToken: errorToken } = get()
+          if (requestToken === errorToken) {
+            console.error('Ошибка загрузки сотрудников:', error)
+            set({ error: 'Не удалось загрузить список сотрудников' })
+          }
         } finally {
-          set({ isLoading: false })
+          // Сбрасываем состояние загрузки только для актуального запроса
+          const { currentRequestToken: finalToken } = get()
+          if (requestToken === finalToken) {
+            set({ isLoading: false })
+          }
         }
       },
 
       // Загрузка отпусков сотрудников
       loadVacations: async (employeeIds) => {
+        // Сохраняем токен запроса на момент начала загрузки
+        const { currentRequestToken: requestToken } = get()
+        
         set({ isLoading: true, error: null })
         
         try {
@@ -140,6 +179,13 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
 
           if (error) throw error
 
+          // Проверяем, что запрос все еще актуален
+          const { currentRequestToken: currentToken } = get()
+          if (requestToken !== currentToken) {
+            console.log('Отменяем устаревший запрос отпусков для сотрудников:', employeeIds.length)
+            return
+          }
+
           const vacations: VacationEvent[] = data?.map((event: any) => ({
             calendar_event_id: event.calendar_event_id,
             calendar_event_date_start: event.calendar_event_date_start,
@@ -153,12 +199,27 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
             user_email: event.profiles.email
           })) || []
 
+          // Еще раз проверяем актуальность перед обновлением состояния
+          const { currentRequestToken: finalToken } = get()
+          if (requestToken !== finalToken) {
+            console.log('Отменяем обновление отпусков для устаревшего запроса')
+            return
+          }
+
           set({ vacations })
         } catch (error) {
-          console.error('Ошибка загрузки отпусков:', error)
-          set({ error: 'Не удалось загрузить данные об отпусках' })
+          // Проверяем актуальность запроса перед установкой ошибки
+          const { currentRequestToken: errorToken } = get()
+          if (requestToken === errorToken) {
+            console.error('Ошибка загрузки отпусков:', error)
+            set({ error: 'Не удалось загрузить данные об отпусках' })
+          }
         } finally {
-          set({ isLoading: false })
+          // Сбрасываем состояние загрузки только для актуального запроса
+          const { currentRequestToken: finalToken } = get()
+          if (requestToken === finalToken) {
+            set({ isLoading: false })
+          }
         }
       },
 

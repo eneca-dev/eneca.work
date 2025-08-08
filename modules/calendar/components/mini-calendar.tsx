@@ -14,6 +14,17 @@ import {
 } from "@/modules/calendar/utils"
 import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
 
+// Константа для типов личных нерабочих событий
+const PERSONAL_NON_WORKING_EVENT_TYPES = [
+  "Отгул", 
+  "Больничный", 
+  "Отпуск запрошен", 
+  "Отпуск одобрен", 
+  "Отпуск отклонен"
+] as const
+
+type PersonalNonWorkingEventType = typeof PERSONAL_NON_WORKING_EVENT_TYPES[number]
+
 interface MiniCalendarProps {
   /** Диапазон выбранных дат */
   selectedRange: { from: Date | null; to: Date | null } | null
@@ -112,7 +123,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
       const isInRange = event.calendar_event_date_end 
         ? isDateInRange(date, eventDate, eventEndDate)
         : isSameDateOnly(date, eventDate)
-                  const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
+      const isPersonalNonWorkingEvent = PERSONAL_NON_WORKING_EVENT_TYPES.includes(event.calendar_event_type as PersonalNonWorkingEventType)
       const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
       
       return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser
@@ -155,7 +166,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
     
     // Проверяем есть ли личные события (отпуск, больничный, отгул)
     const personalNonWorkingEvents = dayEvents.filter(event => 
-                    ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type) &&
+      PERSONAL_NON_WORKING_EVENT_TYPES.includes(event.calendar_event_type as PersonalNonWorkingEventType) &&
       event.calendar_event_created_by === currentUserId
     )
     

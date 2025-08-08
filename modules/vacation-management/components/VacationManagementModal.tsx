@@ -4,14 +4,16 @@ import { useState, useEffect } from 'react'
 import { Modal } from '@/components/modals'
 import { ModalButton } from '@/components/modals/base/ModalButton'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, AlertCircle, HelpCircle, X } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Loader2, AlertCircle, HelpCircle, X, Check, ChevronsUpDown } from 'lucide-react'
 import { VacationGanttChart } from './VacationGanttChart'
 import { VacationFormModal } from './VacationFormModal'
 import { VacationInstructionsModal } from './VacationInstructionsModal'
 import { useVacationManagementStore } from '../store'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import type { VacationEvent, Employee, VacationFormData } from '../types'
 
 interface VacationManagementModalProps {
@@ -45,6 +47,8 @@ export function VacationManagementModal({
   const [selectedVacation, setSelectedVacation] = useState<VacationEvent | null>(null)
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
   const [instructionsModalOpen, setInstructionsModalOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [departmentSelectOpen, setDepartmentSelectOpen] = useState(false)
 
   // Загружаем отделы при открытии модального окна
   useEffect(() => {
@@ -62,8 +66,16 @@ export function VacationManagementModal({
       setFormModalOpen(false)
       setInstructionsModalOpen(false)
       setError(null)
+      setDepartmentSelectOpen(false)
     }
   }, [isOpen, setSelectedDepartment, setError])
+
+  // Получение названия выбранного отдела
+  const getSelectedDepartmentName = () => {
+    if (!selectedDepartmentId) return ''
+    const department = departments.find(d => d.department_id === selectedDepartmentId)
+    return department?.department_name || ''
+  }
 
   const handleCreateVacation = (employeeId: string) => {
     const employee = employees.find(emp => emp.user_id === employeeId)
@@ -72,6 +84,12 @@ export function VacationManagementModal({
       setSelectedVacation(null)
       setFormMode('create')
       setFormModalOpen(true)
+    } else {
+      console.error('Сотрудник не найден для создания отпуска:', {
+        employeeId,
+        availableEmployees: employees.map(emp => emp.user_id)
+      })
+      toast.error('Не удалось найти сотрудника для создания отпуска')
     }
   }
 
@@ -82,6 +100,13 @@ export function VacationManagementModal({
       setSelectedVacation(vacation)
       setFormMode('edit')
       setFormModalOpen(true)
+    } else {
+      console.error('Сотрудник не найден для отпуска:', {
+        vacationId: vacation.calendar_event_id,
+        createdBy: vacation.calendar_event_created_by,
+        availableEmployees: employees.map(emp => emp.user_id)
+      })
+      toast.error('Не удалось найти сотрудника для редактирования отпуска')
     }
   }
 
@@ -113,10 +138,20 @@ export function VacationManagementModal({
   }
 
   const handleFormSubmit = async (data: VacationFormData) => {
-    if (!selectedEmployee) return
+    // Предотвращаем множественные отправки
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
 
     try {
       if (formMode === 'create') {
+        // Для создания требуется выбранный сотрудник
+        if (!selectedEmployee) {
+          toast.error('Не выбран сотрудник')
+          setIsSubmitting(false)
+          return
+        }
+        
         await createVacation(
           selectedEmployee.user_id,
           data.startDate,
@@ -138,6 +173,8 @@ export function VacationManagementModal({
       setFormModalOpen(false)
     } catch (error) {
       toast.error(formMode === 'create' ? 'Не удалось создать отпуск' : 'Не удалось обновить отпуск')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -188,26 +225,56 @@ export function VacationManagementModal({
         </div>
 
         <Modal.Body className="space-y-6">
-          {/* Выбор отдела */}
+          {/* Выбор отдела с поиском */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Выберите отдел
-            </label>
-            <Select 
-              value={selectedDepartmentId || undefined}
-              onValueChange={setSelectedDepartment}
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Выберите отдел..." />
-              </SelectTrigger>
-              <SelectContent>
-                {departments.map((department) => (
-                  <SelectItem key={department.department_id} value={department.department_id}>
-                    {department.department_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+            <Popover open={departmentSelectOpen} onOpenChange={setDepartmentSelectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={departmentSelectOpen}
+                  className="w-64 justify-between dark:bg-slate-700 dark:border-slate-500 dark:hover:bg-slate-600"
+                >
+                  {selectedDepartmentId
+                    ? getSelectedDepartmentName()
+                    : "Выберите отдел"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0 dark:bg-slate-700 dark:border-slate-500">
+                <Command className="dark:bg-slate-700">
+                  <CommandInput 
+                    placeholder="Поиск отдела..." 
+                    className="dark:bg-slate-700 dark:text-slate-200"
+                  />
+                  <CommandList>
+                    <CommandEmpty>Отделы не найдены.</CommandEmpty>
+                    <CommandGroup>
+                      {departments.map((department) => (
+                        <CommandItem
+                          key={department.department_id}
+                          value={department.department_name}
+                          onSelect={() => {
+                            setSelectedDepartment(department.department_id)
+                            setDepartmentSelectOpen(false)
+                          }}
+                          className="dark:hover:bg-slate-600 dark:text-slate-200"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedDepartmentId === department.department_id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {department.department_name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Отображение ошибок */}
@@ -271,6 +338,7 @@ export function VacationManagementModal({
         employee={selectedEmployee || undefined}
         vacation={selectedVacation || undefined}
         mode={formMode}
+        isSubmitting={isSubmitting}
       />
 
       {/* Модальное окно с инструкцией */}

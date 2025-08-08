@@ -14,6 +14,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Employee, VacationEvent } from '../types'
 
+// Интерфейс для отпуска с предварительно обработанными датами
+interface ProcessedVacationEvent extends VacationEvent {
+  parsedStartDate: Date
+  parsedEndDate: Date
+}
+
 interface VacationGanttChartProps {
   employees: Employee[]
   vacations: VacationEvent[]
@@ -63,12 +69,17 @@ export function VacationGanttChart({
   const [selectedYear, setSelectedYear] = useState<number>(getYear(new Date()))
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
-  // Генерируем диапазон дат для отображения (текущий месяц + 2 следующих)
+  // Генерируем диапазон дат для отображения (текущий месяц + 2 следующих) с предварительной нормализацией
   const dateRange = useMemo(() => {
     const start = startOfMonth(currentDate)
     const end = endOfMonth(addMonths(currentDate, 2))
     return eachDayOfInterval({ start, end })
   }, [currentDate])
+
+  // Предварительно нормализуем все даты в диапазоне для оптимизации
+  const normalizedDateRange = useMemo(() => {
+    return dateRange.map(date => startOfDay(date))
+  }, [dateRange])
 
   // Получаем информацию о годах для отображения
   const yearInfo = useMemo(() => {
@@ -90,14 +101,27 @@ export function VacationGanttChart({
     })
   }, [currentDate])
 
-  // Группируем отпуска по сотрудникам
+  // Группируем отпуска по сотрудникам с предварительной обработкой дат
   const vacationsByEmployee = useMemo(() => {
-    const grouped: Record<string, VacationEvent[]> = {}
+    const grouped: Record<string, ProcessedVacationEvent[]> = {}
     vacations.forEach(vacation => {
       if (!grouped[vacation.calendar_event_created_by]) {
         grouped[vacation.calendar_event_created_by] = []
       }
-      grouped[vacation.calendar_event_created_by].push(vacation)
+      
+      // Предварительно парсим и кешируем даты
+      const parsedStartDate = startOfDay(parseISO(vacation.calendar_event_date_start))
+      const parsedEndDate = vacation.calendar_event_date_end 
+        ? startOfDay(parseISO(vacation.calendar_event_date_end))
+        : parsedStartDate
+      
+      const processedVacation: ProcessedVacationEvent = {
+        ...vacation,
+        parsedStartDate,
+        parsedEndDate
+      }
+      
+      grouped[vacation.calendar_event_created_by].push(processedVacation)
     })
     return grouped
   }, [vacations])
@@ -122,22 +146,15 @@ export function VacationGanttChart({
     }
   }
 
-  // Проверить, попадает ли отпуск на определенную дату
-  const isVacationOnDate = (vacation: VacationEvent, date: Date) => {
-    const startDate = startOfDay(parseISO(vacation.calendar_event_date_start))
-    const endDate = vacation.calendar_event_date_end 
-      ? startOfDay(parseISO(vacation.calendar_event_date_end))
-      : startDate
-    
-    const normalizedDate = startOfDay(date)
-
-    return normalizedDate >= startDate && normalizedDate <= endDate
+  // Проверить, попадает ли отпуск на определенную дату (оптимизированная версия)
+  const isVacationOnDate = (vacation: ProcessedVacationEvent, normalizedDate: Date) => {
+    return normalizedDate >= vacation.parsedStartDate && normalizedDate <= vacation.parsedEndDate
   }
 
-  // Найти отпуск на определенную дату для сотрудника
-  const getVacationForDate = (employeeId: string, date: Date) => {
+  // Найти отпуск на определенную дату для сотрудника (оптимизированная версия)
+  const getVacationForDate = (employeeId: string, normalizedDate: Date) => {
     const employeeVacations = vacationsByEmployee[employeeId] || []
-    return employeeVacations.find(vacation => isVacationOnDate(vacation, date))
+    return employeeVacations.find(vacation => isVacationOnDate(vacation, normalizedDate))
   }
 
   // Навигация по месяцам
@@ -529,10 +546,10 @@ export function VacationGanttChart({
 
         <div className="flex">
           {/* Фиксированная левая колонка с сотрудниками */}
-          <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600" onClick={closeContextMenu}>
+          <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600" onClick={closeContextMenu}>
             {/* Заголовок сотрудников */}
-            <div className="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
-              <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-300">
+            <div className="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
+              <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-200">
                 Сотрудники ({employees.length})
               </h3>
             </div>
@@ -544,7 +561,7 @@ export function VacationGanttChart({
               onScroll={handleVerticalScroll('left')}
             >
               {employees.map((employee) => (
-                <div key={employee.user_id} className="h-12 flex items-center p-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50">
+                <div key={employee.user_id} className="h-12 flex items-center p-3 border-b border-gray-100 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600">
                   <div className="flex items-center space-x-3 w-full">
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarImage src={employee.avatar_url} />
@@ -557,7 +574,7 @@ export function VacationGanttChart({
                         {employee.first_name} {employee.last_name}
                       </div>
                       {employee.position_name && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <div className="text-xs text-gray-500 dark:text-gray-300 truncate">
                           {employee.position_name}
                         </div>
                       )}
@@ -589,7 +606,7 @@ export function VacationGanttChart({
             >
               <div className="min-w-max">
                 {/* Заголовки дат */}
-                <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
+                <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
                   {dateRange.map((date, index) => (
                     <div 
                       key={index}
@@ -612,10 +629,11 @@ export function VacationGanttChart({
                   onScroll={handleVerticalScroll('right')}
                 >
                   {employees.map((employee) => (
-                    <div key={employee.user_id} className="h-12 flex border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div key={employee.user_id} className="h-12 flex border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600/30">
                       {/* Диаграмма отпусков */}
                       {dateRange.map((date, dateIndex) => {
-                        const vacation = getVacationForDate(employee.user_id, date)
+                        const normalizedDate = normalizedDateRange[dateIndex]
+                        const vacation = getVacationForDate(employee.user_id, normalizedDate)
                         const isToday = isSameDay(date, new Date())
                         
                         return (

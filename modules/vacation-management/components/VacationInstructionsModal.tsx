@@ -25,8 +25,14 @@ interface VacationInstructionsModalProps {
 }
 
 export function VacationInstructionsModal({ isOpen, onClose }: VacationInstructionsModalProps) {
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onClose()
+    }
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -102,7 +108,6 @@ export function VacationInstructionsModal({ isOpen, onClose }: VacationInstructi
 
               <div className="bg-green-50 dark:bg-slate-700 p-4 rounded-lg">
                 <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                  <ChevronLeft className="h-4 w-4" />
                   2. Навигация по времени
                 </h4>
                 <div className="space-y-2">

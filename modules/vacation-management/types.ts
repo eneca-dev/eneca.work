@@ -36,6 +36,7 @@ export interface VacationManagementState {
   departments: Department[]
   isLoading: boolean
   error: string | null
+  currentRequestToken: string | null
 }
 
 export interface GanttDateRange {
