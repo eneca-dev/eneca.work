@@ -843,12 +843,22 @@ function EmployeeRow({
                       <div className="ml-2">
                         {/* Название проекта */}
                         <div
-                          className={cn("text-xs font-medium", theme === "dark" ? "text-slate-300" : "text-slate-800")}
+                          className={cn(
+                            "text-xs font-medium truncate whitespace-nowrap overflow-hidden max-w-[220px]",
+                            theme === "dark" ? "text-slate-300" : "text-slate-800",
+                          )}
+                          title={loading.projectName || "Проект не указан"}
                         >
                           {loading.projectName || "Проект не указан"}
                         </div>
                         {/* Название раздела */}
-                        <div className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                        <div
+                          className={cn(
+                            "text-[10px] truncate whitespace-nowrap overflow-hidden max-w-[220px]",
+                            theme === "dark" ? "text-slate-400" : "text-slate-500",
+                          )}
+                          title={loading.sectionName || "Раздел не указан"}
+                        >
                           {loading.sectionName || "Раздел не указан"}
                         </div>
                       </div>
