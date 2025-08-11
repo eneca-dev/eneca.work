@@ -19,8 +19,7 @@ const PERSONAL_NON_WORKING_EVENT_TYPES = [
   "Отгул", 
   "Больничный", 
   "Отпуск запрошен", 
-  "Отпуск одобрен", 
-  "Отпуск отклонен"
+  "Отпуск одобрен"
 ] as const
 
 type PersonalNonWorkingEventType = typeof PERSONAL_NON_WORKING_EVENT_TYPES[number]
@@ -164,7 +163,7 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
     const isWorking = isWorkingDay(date)
     const dayEvents = getDayEvents(date)
     
-    // Проверяем есть ли личные события (отпуск, больничный, отгул)
+    // Проверяем есть ли личные события (отгул, больничный, отпуск запрошен, отпуск одобрен)
     const personalNonWorkingEvents = dayEvents.filter(event => 
       PERSONAL_NON_WORKING_EVENT_TYPES.includes(event.calendar_event_type as PersonalNonWorkingEventType) &&
       event.calendar_event_created_by === currentUserId
