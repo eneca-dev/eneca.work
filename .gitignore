@@ -29,3 +29,5 @@ ws-to-work-integration/
 .env.keys
 .env.local
 .env.*.local
+
+tsconfig.tsbuildinfo
