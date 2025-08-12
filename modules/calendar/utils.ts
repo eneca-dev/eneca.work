@@ -110,6 +110,13 @@ export function getEventColor(eventType: string): string {
       return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700";
     case "Отпуск":
       return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700";
+    // Статусы отпусков с новыми цветами
+    case "Отпуск запрошен":
+      return "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-200 dark:border-orange-700";
+    case "Отпуск одобрен":
+      return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700";
+    case "Отпуск отклонен":
+      return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700";
     case "Праздник":
       return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700";
     case "Перенос":
@@ -130,6 +137,27 @@ export function getEventColor(eventType: string): string {
     default:
       return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600";
   }
+}
+
+// Фоновые цвета для дат с событиями отпусков
+export function getDateBackgroundColor(events: any[]): string {
+  // Ищем события отпусков с приоритетом
+  const vacationEvent = events.find(event => 
+    ["Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
+  );
+  
+  if (vacationEvent) {
+    switch (vacationEvent.calendar_event_type) {
+      case "Отпуск запрошен":
+        return "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50";
+      case "Отпуск одобрен":
+        return "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50";
+      case "Отпуск отклонен":
+        return "bg-card dark:bg-gray-800 border-gray-300 dark:border-border/60"; // Нейтральный фон в зависимости от темы
+    }
+  }
+  
+  return "";
 }
 
 export function getEventTypeLabel(eventType: string): string {

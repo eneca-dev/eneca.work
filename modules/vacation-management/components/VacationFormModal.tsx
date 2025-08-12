@@ -36,7 +36,10 @@ const vacationFormSchema = z.object({
     message: 'Дата окончания должна быть больше или равна дате начала',
     path: ['to']
   }),
-  type: z.enum(['Отпуск запрошен', 'Отпуск одобрен', 'Отпуск отклонен']),
+  type: z.string().refine(
+    (value) => ['Отпуск запрошен', 'Отпуск одобрен', 'Отпуск отклонен'].includes(value),
+    { message: 'Неверный тип отпуска' }
+  ),
   comment: z.string().optional()
 })
 
@@ -79,9 +82,15 @@ export function VacationFormModal({
         ? new Date(vacation.calendar_event_date_end) 
         : startDate
       
+      // Проверяем, что тип отпуска корректный, иначе используем значение по умолчанию
+      const validTypes = ['Отпуск запрошен', 'Отпуск одобрен', 'Отпуск отклонен']
+      const vacationType = validTypes.includes(vacation.calendar_event_type) 
+        ? vacation.calendar_event_type 
+        : 'Отпуск запрошен'
+      
       form.reset({
         dateRange: { from: startDate, to: endDate },
-        type: vacation.calendar_event_type,
+        type: vacationType,
         comment: vacation.calendar_event_comment || ''
       })
     } else if (mode === 'create') {
@@ -107,7 +116,7 @@ export function VacationFormModal({
       await onSubmit({
         startDate,
         endDate,
-        type: data.type,
+        type: data.type as 'Отпуск запрошен' | 'Отпуск одобрен' | 'Отпуск отклонен',
         comment: data.comment
       })
     } catch (error) {
@@ -137,11 +146,11 @@ export function VacationFormModal({
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Тип отпуска</FormLabel>
+                  <FormLabel>Статус отпуска</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Выберите тип отпуска" />
+                        <SelectValue placeholder="Выберите статус отпуска" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -169,6 +178,7 @@ export function VacationFormModal({
                       mode="range"
                       placeholder="Выберите даты отпуска..."
                       calendarWidth="450px"
+                      userId={employee?.user_id}
                     />
                   </FormControl>
                   <FormMessage />

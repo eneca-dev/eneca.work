@@ -154,7 +154,7 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
       const isInRange = event.calendar_event_date_end 
         ? isDateInRange(date, eventDate, eventEndDate)
         : isSameDateOnly(date, eventDate)
-                  const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
+                  const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен"].includes(event.calendar_event_type)
       const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
       
       return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser
@@ -195,14 +195,9 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
     const isWorking = isWorkingDay(date)
     const dayEvents = getDayEvents(date)
     
-    // Если сегодня
-    if (isToday) {
-      return "text-gray-900 dark:text-gray-100 font-semibold bg-gray-50 dark:bg-gray-800/100"
-    }
-    
-    // Проверяем есть ли личные события (отпуск, больничный, отгул)
+    // Проверяем есть ли личные события (отгул, больничный, отпуск запрошен, отпуск одобрен)
     const personalNonWorkingEvents = dayEvents.filter(event => 
-                    ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type) &&
+                    ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен"].includes(event.calendar_event_type) &&
       event.calendar_event_created_by === currentUserId
     )
     
@@ -210,8 +205,18 @@ export function WeeklyCalendar({ collapsed }: WeeklyCalendarProps) {
     const holidayEvents = dayEvents.filter(event => event.calendar_event_type === "Праздник")
     
     // Если есть личные события, праздники или это выходной - делаем бледно-красным
+    // НЕ включаем "Отпуск отклонен" - он должен быть рабочим днем
     if (personalNonWorkingEvents.length > 0 || holidayEvents.length > 0 || !isWorking) {
+      // Если это еще и сегодня, добавляем выделение поверх красного цвета
+      if (isToday) {
+        return "text-red-400 dark:text-red-300 font-semibold bg-red-50 dark:bg-red-900/30"
+      }
       return "text-red-300 dark:text-red-400"
+    }
+    
+    // Если сегодня (но рабочий день)
+    if (isToday) {
+      return "text-gray-900 dark:text-gray-100 font-semibold bg-gray-50 dark:bg-gray-800/100"
     }
     
     // Обычный рабочий день

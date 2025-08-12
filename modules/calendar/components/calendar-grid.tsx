@@ -5,7 +5,7 @@ import { useCalendarStore } from "@/modules/calendar/store"
 import { type CalendarEvent } from "@/modules/calendar/types"
 import { useUserStore } from "@/stores/useUserStore"
 import { useUiStore } from "@/stores/useUiStore"
-import { getMonthDays, isWeekend, isSameDay, isSameMonth, getEventColor } from "@/modules/calendar/utils"
+import { getMonthDays, isWeekend, isSameDay, isSameMonth, getEventColor, getDateBackgroundColor } from "@/modules/calendar/utils"
 import { cn } from "@/lib/utils"
 import { formatDateToString, parseDateFromString, isSameDateOnly, isDateInRange } from "@/modules/calendar/utils"
 import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
@@ -105,7 +105,7 @@ export function CalendarGrid() {
         const isInRange = event.calendar_event_date_end 
           ? isDateInRange(date, eventDate, eventEndDate)
           : isSameDateOnly(date, eventDate)
-                    const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен", "Отпуск отклонен"].includes(event.calendar_event_type)
+                    const isPersonalNonWorkingEvent = ["Отгул", "Больничный", "Отпуск запрошен", "Отпуск одобрен"].includes(event.calendar_event_type)
         const isCreatedByCurrentUser = event.calendar_event_created_by === currentUserId
         
         return isInRange && isPersonalNonWorkingEvent && isCreatedByCurrentUser
@@ -154,6 +154,7 @@ export function CalendarGrid() {
         const isCurrentMonth = isSameMonth(day, new Date())
         const isWorkDay = isWorkingDay(day)
         const dayEvents = getDateEvents(day)
+        const vacationBackground = getDateBackgroundColor(dayEvents)
 
         return (
           <div
@@ -167,6 +168,8 @@ export function CalendarGrid() {
               // Нерабочие дни
               !isWorkDay && isCurrentMonth && "bg-red-50 dark:bg-red-900/40 border-red-400 dark:border-red-700/70",
               !isWorkDay && !isCurrentMonth && "bg-red-50/50 dark:bg-red-900/20 border-red-300 dark:border-red-700/50",
+              // Фон для дат с отпусками (перекрывает базовые цвета)
+              vacationBackground && vacationBackground,
               // Выделение выбранного дня - более яркое
               isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/70",
               // Выделение сегодняшнего дня - более яркое
