@@ -54,6 +54,8 @@ export interface Employee {
   hasLoadings?: boolean
   loadingsCount?: number
   dailyWorkloads?: Record<string, number>
+  // Календарные дни отпуска сотрудника: ключ — ISO-дата (YYYY-MM-DD), значение — 1 (полная ставка)
+  vacationsDaily?: Record<string, number>
   loadings?: Loading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date

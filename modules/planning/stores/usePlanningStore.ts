@@ -422,6 +422,33 @@ export const usePlanningStore = create<PlanningState>()(
 
             console.log("👥 Данные о сотрудниках:", employeeData?.length, "записей")
 
+            // Получаем видимый период таймлайна, чтобы подтянуть только нужные дни отпусков
+            const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
+            const { startDate, daysToShow } = usePlanningViewStore.getState()
+            const vacationsPeriodStart = new Date(startDate)
+            const vacationsPeriodEnd = new Date(startDate)
+            vacationsPeriodEnd.setDate(vacationsPeriodEnd.getDate() + daysToShow - 1)
+
+            // Формируем фильтры по отделу/команде для отпусков
+            // Выбираем через функцию (RLS-friendly)
+            const { data: vacationsDaily, error: vacationsError } = await supabase
+              .rpc("get_employee_vacations_daily", {
+                p_start: vacationsPeriodStart.toISOString().split("T")[0],
+                p_end: vacationsPeriodEnd.toISOString().split("T")[0],
+                p_department: selectedDepartmentId || null,
+                p_team: selectedTeamId || null,
+              })
+
+            if (vacationsError) {
+              console.error("Ошибка при загрузке отпусков:", vacationsError)
+              throw vacationsError
+            }
+
+            console.log("🏝️ Отпуска (дни):", vacationsDaily?.length, "период:", vacationsPeriodStart.toISOString().split("T")[0], "—", vacationsPeriodEnd.toISOString().split("T")[0])
+            if (vacationsDaily && vacationsDaily.length > 0) {
+              console.log("🏝️ Первые 3 отпуска:", vacationsDaily.slice(0, 3))
+            }
+
             // Группируем данные по отделам и командам
             const departmentsMap = new Map<string, Department>()
             const teamsMap = new Map<string, Team>()
@@ -445,6 +472,7 @@ export const usePlanningStore = create<PlanningState>()(
                   departmentName: item.final_department_name,
                   loadings: [],
                   dailyWorkloads: {},
+                  vacationsDaily: {},
                   hasLoadings: item.has_loadings,
                   loadingsCount: item.loadings_count,
                   employmentRate: item.employment_rate || 1,
@@ -493,6 +521,24 @@ export const usePlanningStore = create<PlanningState>()(
                 })
               }
             })
+
+            // Вносим отпуска: считаем каждый день как 1.0 ставки и отмечаем для отрисовки
+            let vacationsProcessed = 0
+            vacationsDaily?.forEach((v) => {
+              const userId = v.user_id as string
+              const dateKey = new Date(v.vacation_date).toISOString().split("T")[0]
+              const employee = employeesMap.get(userId)
+              if (!employee) {
+                console.log("🚨 Сотрудник не найден для отпуска:", userId, dateKey)
+                return
+              }
+              if (!employee.vacationsDaily) employee.vacationsDaily = {}
+              employee.vacationsDaily[dateKey] = 1
+              // Отпуск не влияет на расчёт workloadRate - оставляем оригинальную загрузку для правильного отображения
+              // employee.dailyWorkloads[dateKey] остается как есть
+              vacationsProcessed++
+            })
+            console.log("🏝️ Обработано отпусков:", vacationsProcessed)
 
             // Теперь обрабатываем организационную структуру
             orgData?.forEach((item) => {
