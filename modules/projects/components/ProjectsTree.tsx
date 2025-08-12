@@ -19,6 +19,7 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import SectionDecompositionTab from './SectionDecompositionTab'
 
 interface ProjectNode {
   id: string
@@ -102,6 +103,46 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [statusSearchQuery, setStatusSearchQuery] = useState('')
   const statusDropdownRef = React.useRef<HTMLDivElement>(null)
+
+  // Разворачиваемое содержимое для раздела
+  const [innerTab, setInnerTab] = useState<'decomposition' | 'description' | 'tasks'>('decomposition')
+  const [miniDecomp, setMiniDecomp] = useState<Array<{ id: string; desc: string; catId: string; hours: number; due: string | null }>>([])
+  const [miniDecompLoading, setMiniDecompLoading] = useState(false)
+  const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
+
+  const loadMiniDecomposition = async () => {
+    try {
+      setMiniDecompLoading(true)
+      const [itemsRes, catsRes] = await Promise.all([
+        supabase
+          .from('decomposition_items')
+          .select('decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date')
+          .eq('decomposition_item_section_id', node.id)
+          .order('decomposition_item_order', { ascending: true }),
+        supabase
+          .from('work_categories')
+          .select('work_category_id, work_category_name')
+      ])
+      if (!itemsRes.error && itemsRes.data) {
+        setMiniDecomp(
+          itemsRes.data.map((r: any) => ({
+            id: r.decomposition_item_id,
+            desc: r.decomposition_item_description,
+            catId: r.decomposition_item_work_category_id,
+            hours: Number(r.decomposition_item_planned_hours || 0),
+            due: r.decomposition_item_planned_due_date,
+          }))
+        )
+      }
+      if (!catsRes.error && catsRes.data) {
+        const m = new Map<string, string>()
+        for (const c of catsRes.data as any[]) m.set(c.work_category_id, c.work_category_name)
+        setCatMap(m)
+      }
+    } finally {
+      setMiniDecompLoading(false)
+    }
+  }
 
   const hasChildren = node.children && node.children.length > 0
 
@@ -304,17 +345,25 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
             {/* Иконка раскрытия и название */}
             <div className="flex items-center min-w-0 flex-1">
-              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
-                {hasChildren ? (
+              <button
+                className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  onToggleNode(node.id)
+                  if (node.type === 'section' && !expandedNodes.has(node.id)) {
+                    await loadMiniDecomposition()
+                  }
+                }}
+                aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
+              >
+                {(node.type === 'section' || hasChildren) ? (
                   isExpanded ? (
                     <ChevronDown className="h-3 w-3 text-teal-500" />
                   ) : (
                     <ChevronRight className="h-3 w-3 text-teal-500" />
                   )
-                ) : (
-                  <div className="h-3 w-3 rounded bg-teal-500" />
-                )}
-              </div>
+                ) : null}
+              </button>
               <span 
                 className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teал-400 transition-colors truncate max-w-[900px] xl:max-w-[1100px]"
                 onClick={(e) => onOpenSection(node, e)}
@@ -672,7 +721,40 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         )}
       </div>
 
-      {hasChildren && isExpanded && (
+      {(node.type === 'section' && isExpanded) && (
+        <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
+          {/* Вкладки */}
+          <div className="mb-3 inline-flex h-8 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
+            {[
+              { key: 'decomposition', label: 'Декомпозиция' },
+              { key: 'description', label: 'Описание' },
+              { key: 'tasks', label: 'Задания' },
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => setInnerTab(t.key as any)}
+                className={cn('px-3 py-1.5 text-xs rounded-sm', innerTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Контент вкладок */}
+          {innerTab === 'decomposition' && (
+            <SectionDecompositionTab sectionId={node.id} compact />
+          )}
+
+          {innerTab === 'description' && (
+            <div className="text-sm text-slate-500">Описание раздела — скоро здесь будет содержимое.</div>
+          )}
+          {innerTab === 'tasks' && (
+            <div className="text-sm text-slate-500">Задания — раздел в разработке.</div>
+          )}
+        </div>
+      )}
+
+      {hasChildren && isExpanded && node.type !== 'section' && (
         <div>
           {node.children!.map((child, index) => (
             <TreeNode
