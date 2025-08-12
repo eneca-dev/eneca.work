@@ -369,7 +369,10 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             Отмена
           </Button>
           <Button type="submit" disabled={isSubmitting || !isFormValid()}>
-            {isSubmitting ? "Добавление..." : "Добавить"}
+            {isSubmitting 
+              ? (activeTab === "vacation" ? "Запрашиваем..." : "Добавление...")
+              : (activeTab === "vacation" ? "Запросить отпуск" : "Добавить")
+            }
           </Button>
         </div>
       </form>
