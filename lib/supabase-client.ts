@@ -355,6 +355,9 @@ export async function fetchSectionsWithLoadings(
           clientId: sectionItem.client_id || undefined,
           responsibleName: sectionItem.section_responsible_name || undefined,
           responsibleAvatarUrl: sectionItem.section_responsible_avatar || undefined,
+          // Прокидываем ID ответственного, чтобы сортировать загрузки и ставить метку
+          // @ts-ignore - расширяем Section в рантайме
+          responsibleId: sectionItem.section_responsible_id || undefined,
           departmentName: sectionItem.responsible_department_name || undefined,
           startDate: sectionItem.section_start_date ? new Date(sectionItem.section_start_date) : new Date(),
           endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : new Date(),

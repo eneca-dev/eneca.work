@@ -76,6 +76,8 @@ export interface Section {
   startDate: Date // Приходит как ISO строка, преобразуется в Date
   endDate: Date   // Приходит как ISO строка, преобразуется в Date
   status?: string
+  // ID ответственного за раздел (для сортировки и меток)
+  responsibleId?: string
   responsibleName?: string
   responsibleAvatarUrl?: string
   hasLoadings?: boolean
