@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, KeyboardEvent } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { Loader2, MoreHorizontal, Pencil, Trash2, Check, X, PlusCircle } from "lucide-react"
+import { Loader2, MoreHorizontal, Pencil, Trash2, Check, X, PlusCircle, Clock } from "lucide-react"
 import { useUiStore } from "@/stores/useUiStore"
 import {
   DropdownMenu,
@@ -41,6 +41,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [categories, setCategories] = useState<WorkCategory[]>([])
   const [items, setItems] = useState<DecompositionItemRow[]>([])
+  const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({})
   const [sectionTotals, setSectionTotals] = useState<{ planned_hours: number; actual_hours: number; actual_amount: number } | null>(null)
 
   const [newDescription, setNewDescription] = useState("")
@@ -101,6 +102,34 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
     init()
   }, [sectionId, setNotification])
+
+  // Загрузка фактических часов из view для видимых итемов
+  useEffect(() => {
+    const loadActuals = async () => {
+      if (!items || items.length === 0) {
+        setActualByItemId({})
+        return
+      }
+      const ids = items.map(i => i.decomposition_item_id)
+      const { data, error } = await supabase
+        .from('view_decomposition_item_actuals')
+        .select('decomposition_item_id, actual_hours')
+        .in('decomposition_item_id', ids)
+
+      if (error) {
+        console.error('Ошибка загрузки факта из view:', error)
+        return
+      }
+      const agg: Record<string, number> = {}
+      for (const row of (data as any[]) || []) {
+        const key = row.decomposition_item_id as string
+        const hours = Number(row.actual_hours || 0)
+        agg[key] = hours
+      }
+      setActualByItemId(agg)
+    }
+    loadActuals()
+  }, [items])
 
   const categoryById = useMemo(() => {
     const map = new Map<string, string>()
@@ -290,17 +319,23 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       <div className="overflow-x-auto border rounded-lg dark:border-slate-700">
         <table className={compact ? "min-w-full text-xs table-fixed border-collapse" : "min-w-full text-sm table-fixed border-collapse"}>
           <colgroup>
-            <col className="w-[64%]" />
-            <col className="w-[18%]" />
-            <col className="w-[7%]" />
-            <col className="w-[9%]" />
-            <col className="w-[2%]" />
+            {[
+              'w-[60%]', // Описание
+              'w-[16%]', // Категория
+              'w-[7%]',  // План
+              'w-[7%]',  // Факт
+              'w-[8%]',  // Срок
+              'w-[2%]',  // Действия
+            ].map((cls, idx) => (
+              <col key={idx} className={cls} />
+            ))}
           </colgroup>
           <thead className={compact ? "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200" : "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 sticky top-0 z-[1]"}>
             <tr>
               <th className="px-3 py-2 text-left border-b border-slate-200 dark:border-slate-700">Описание работ</th>
               <th className="px-3 py-2 text-left border-b border-slate-200 dark:border-slate-700">Категория</th>
               <th className="px-3 py-2 text-center border-b border-slate-200 dark:border-slate-700">План, ч</th>
+              <th className="px-3 py-2 text-center border-b border-slate-200 dark:border-slate-700">Факт, ч</th>
               <th className="px-3 py-2 text-center border-b border-slate-200 dark:border-slate-700">Срок</th>
               <th className="px-3 py-2 text-right border-b border-slate-200 dark:border-slate-700"><span className="sr-only">Действия</span></th>
             </tr>
@@ -372,6 +407,23 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     Number(item.decomposition_item_planned_hours).toFixed(2)
                   )}
                 </td>
+                {/* Фактические часы + индикатор порогов: ≥90% (жёлтый), >100% (красный) */}
+                <td className="px-3 py-2 dark:text-slate-200 text-center tabular-nums border-t border-slate-200 dark:border-slate-700">
+                  {(() => {
+                    const actual = Number(actualByItemId[item.decomposition_item_id] || 0)
+                    const planned = Number(item.decomposition_item_planned_hours || 0)
+                    const ratio = planned > 0 ? actual / planned : 0
+                    const nearLimit = ratio >= 0.9 && ratio < 1
+                    const exceed = ratio >= 1
+                    return (
+                      <div className="inline-flex items-center justify-center gap-1">
+                        <span>{actual.toFixed(2)}</span>
+                        {nearLimit && <span title="Достигнуто 90% плана" className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />}
+                        {exceed && <span title="Превышение плана" className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />}
+                      </div>
+                    )
+                  })()}
+                </td>
                 {/* Плановый срок */}
                 <td className="px-3 py-2 dark:text-slate-200 text-center border-t border-slate-200 dark:border-slate-700" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
@@ -413,7 +465,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                         title="Добавить отчёт"
                         onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}
                       >
-                        <PlusCircle className="h-4 w-4 text-emerald-600" />
+                        <Clock className="h-4 w-4 text-emerald-600" />
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -487,6 +539,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   onKeyDown={handleEditKey}
                 />
               </td>
+              {/* Факт для новой строки (—) */}
+              <td className="px-3 py-1.5 text-center border-t border-slate-200 dark:border-slate-700 text-slate-400">—</td>
               <td className="px-3 py-1.5 text-center border-t border-slate-200 dark:border-slate-700">
                 <input
                   type="date"
@@ -529,6 +583,19 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             .order("decomposition_item_order", { ascending: true })
             .order("decomposition_item_created_at", { ascending: true })
           if (!error) setItems((data as any) || [])
+          // Обновим сводные по секции
+          const totals = await supabase
+            .from('view_section_decomposition_totals')
+            .select('planned_hours, actual_hours, actual_amount')
+            .eq('section_id', sectionId)
+            .single()
+          if (!totals.error) {
+            setSectionTotals({
+              planned_hours: Number(totals.data?.planned_hours || 0),
+              actual_hours: Number(totals.data?.actual_hours || 0),
+              actual_amount: Number(totals.data?.actual_amount || 0),
+            })
+          }
         }}
       />
     </div>

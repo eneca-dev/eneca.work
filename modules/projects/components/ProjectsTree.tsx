@@ -20,6 +20,8 @@ import { StatusSelector } from '@/modules/statuses-tags/statuses/components/Stat
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import SectionDecompositionTab from './SectionDecompositionTab'
+import SectionDescriptionCompact from './SectionDescriptionCompact'
+import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
 interface ProjectNode {
   id: string
@@ -105,10 +107,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const statusDropdownRef = React.useRef<HTMLDivElement>(null)
 
   // Разворачиваемое содержимое для раздела
-  const [innerTab, setInnerTab] = useState<'decomposition' | 'description' | 'tasks'>('decomposition')
+  const [innerTab, setInnerTab] = useState<'decomposition' | 'tasks'>('decomposition')
   const [miniDecomp, setMiniDecomp] = useState<Array<{ id: string; desc: string; catId: string; hours: number; due: string | null }>>([])
   const [miniDecompLoading, setMiniDecompLoading] = useState(false)
   const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
+  // Мобильный режим: переключатель между контентом и комментариями
+  const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
 
   const loadMiniDecomposition = async () => {
     try {
@@ -723,34 +727,98 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
       {(node.type === 'section' && isExpanded) && (
         <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
-          {/* Вкладки */}
-          <div className="mb-3 inline-flex h-8 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
-            {[
-              { key: 'decomposition', label: 'Декомпозиция' },
-              { key: 'description', label: 'Описание' },
-              { key: 'tasks', label: 'Задания' },
-            ].map(t => (
-              <button
-                key={t.key}
-                onClick={() => setInnerTab(t.key as any)}
-                className={cn('px-3 py-1.5 text-xs rounded-sm', innerTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
-              >
-                {t.label}
-              </button>
-            ))}
+          {/* Компактный режим: вкладки Контент / Комментарии (до 2xl) */}
+          <div className="2xl:hidden mb-3">
+            <div className="inline-flex h-9 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
+              {[
+                { key: 'content', label: 'Контент' },
+                { key: 'comments', label: 'Комментарии' },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setMobileTab(t.key as 'content' | 'comments')}
+                  className={cn('px-3 py-1.5 text-xs rounded-sm', mobileTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Контент вкладок */}
-          {innerTab === 'decomposition' && (
-            <SectionDecompositionTab sectionId={node.id} compact />
+          {/* Компактный режим: показываем выбранную вкладку */}
+          {mobileTab === 'content' && (
+            <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
+              {/* Описание сверху, естественная высота */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                <SectionDescriptionCompact sectionId={node.id} />
+              </div>
+              {/* Остаток высоты: два равных блока */}
+              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    <SectionDecompositionTab sectionId={node.id} compact />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
+                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">Задания — раздел в разработке.</div>
+                </div>
+              </div>
+            </div>
+          )}
+          {mobileTab === 'comments' && (
+            <div className="2xl:hidden h-[80vh] max-h-[80vh] overflow-hidden">
+              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
           )}
 
-          {innerTab === 'description' && (
-            <div className="text-sm text-slate-500">Описание раздела — скоро здесь будет содержимое.</div>
-          )}
-          {innerTab === 'tasks' && (
-            <div className="text-sm text-slate-500">Задания — раздел в разработке.</div>
-          )}
+          {/* Полная версия (>=2xl): две колонки, справа комментарии */}
+          <div className="hidden 2xl:flex gap-4 items-stretch">
+            {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
+            <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
+              {/* Описание сверху */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                <SectionDescriptionCompact sectionId={node.id} />
+              </div>
+
+              {/* Остаток высоты: два равных блока */}
+              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+                {/* Декомпозиция (верхняя половина) */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    <SectionDecompositionTab sectionId={node.id} compact />
+                  </div>
+                </div>
+
+                {/* Задания (нижняя половина) */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
+                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">
+                    Задания — раздел в разработке.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Правая колонка: Комментарии на всю высоту блока */}
+            <div className="w-[680px] self-stretch hidden 2xl:block">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col h-[80vh] max-h-[80vh] overflow-hidden">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
