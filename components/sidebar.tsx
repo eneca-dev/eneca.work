@@ -160,6 +160,11 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       href: "/dashboard/decomposition",
       icon: Network,
     },
+    {
+      title: "Отчёты",
+      href: "/dashboard/reports",
+      icon: BarChart,
+    },
 
   ]
 
