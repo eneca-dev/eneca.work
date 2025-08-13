@@ -170,7 +170,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева */}
-      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') ? 'px-0' : 'px-0 md:px-6'} py-6 transition-all duration-300 ${marginLeft}`}>
+      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') ? 'py-0' : 'py-6'} transition-all duration-300 ${marginLeft}`}>
         <UserPermissionsSyncProvider>
           {children}
         </UserPermissionsSyncProvider>
