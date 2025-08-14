@@ -62,7 +62,7 @@ export default function DepartmentHeadModal({
           department_name,
           position_name
         `)
-        .eq("is_active", true)
+
         .order("first_name")
       
       if (error) {

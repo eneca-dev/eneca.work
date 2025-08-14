@@ -37,7 +37,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     category: "",
     role: "",
     roleId: "",
-    isActive: true,
     workLocation: "office",
     address: "",
   })
@@ -146,7 +145,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         category: user.category,
         role: roleValue,
         roleId,
-        isActive: user.isActive,
         workLocation: user.workLocation,
         address: user.address,
       })
@@ -161,7 +159,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         category: "",
         role: "",
         roleId: "",
-        isActive: true,
         workLocation: "office",
         address: "",
       })
@@ -232,9 +229,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           if (formData.category) updateData.category = formData.category
           // Добавляем roleId если пользователь может редактировать роли И роль выбрана
           if (canEditRoles && formData.roleId) updateData.roleId = formData.roleId
-          // ВРЕМЕННО ОТКЛЮЧЕНО: колонка is_active отсутствует в таблице profiles
-          // TODO: Раскомментировать после добавления колонки is_active
-          // if (formData.isActive !== undefined) updateData.isActive = formData.isActive
         }
         
         console.log("Итоговые данные для updateUser:", updateData);
@@ -560,21 +554,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               />
             </div>
 
-            {!isSelfEdit && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="isActive" className="text-right">
-                  Активен
-                </Label>
-                <div className="flex items-center space-x-2 col-span-3">
-                  <Switch
-                    id="isActive"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => handleChange("isActive", checked)}
-                  />
-                  <Label htmlFor="isActive">{formData.isActive ? "Да" : "Нет"}</Label>
-                </div>
-              </div>
-            )}
+
 
           </div>
         </Modal.Body>
