@@ -2,114 +2,118 @@
 import { create } from 'zustand'
 import { fetchSectionComments, createSectionComment, updateCommentContent } from './api/comments'
 import { sendCommentNotifications } from './utils/notificationHelpers'
-import type { SectionComment, CommentsState } from './types'
+import type { SectionComment } from './types'
 
-interface CommentsStore extends CommentsState {
+interface CommentsStore {
+  // Состояние хранится по sectionId, чтобы несколько панелей были независимы
+  commentsBySectionId: Record<string, SectionComment[]>
+  loadingBySectionId: Record<string, boolean>
+  errorBySectionId: Record<string, string | null>
+  newCommentContent: string
+  isSubmitting: boolean
+
   // Действия для загрузки данных
   fetchComments: (sectionId: string) => Promise<void>
-  
+
   // Действия для создания комментариев
   addComment: (sectionId: string, content: string, mentions: string[]) => Promise<void>
-  
+
   // Действия для обновления комментариев
   updateComment: (commentId: string, newContent: string) => Promise<void>
-  
+
   // Действия для UI состояния
   setNewCommentContent: (content: string) => void
-  clearComments: () => void
-  clearError: () => void
+  clearCommentsFor: (sectionId: string) => void
+  clearAll: () => void
+  clearErrorFor: (sectionId: string) => void
 }
 
 export const useCommentsStore = create<CommentsStore>((set, get) => ({
   // Начальное состояние
-  comments: [],
-  loading: false,
-  error: null,
+  commentsBySectionId: {},
+  loadingBySectionId: {},
+  errorBySectionId: {},
   newCommentContent: '',
   isSubmitting: false,
 
-  // Загрузка комментариев раздела
+  // Загрузка комментариев раздела (изолированно по sectionId)
   fetchComments: async (sectionId: string) => {
-    set({ loading: true, error: null })
+    set(state => ({
+      loadingBySectionId: { ...state.loadingBySectionId, [sectionId]: true },
+      errorBySectionId: { ...state.errorBySectionId, [sectionId]: null },
+    }))
     
     try {
       const comments = await fetchSectionComments(sectionId)
-      set({ comments, loading: false })
+      set(state => ({
+        commentsBySectionId: { ...state.commentsBySectionId, [sectionId]: comments },
+        loadingBySectionId: { ...state.loadingBySectionId, [sectionId]: false },
+      }))
     } catch (error) {
       console.error('Ошибка загрузки комментариев:', error)
-      set({ 
-        error: 'Ошибка загрузки комментариев', 
-        loading: false,
-        comments: [] 
-      })
+      set(state => ({
+        errorBySectionId: { ...state.errorBySectionId, [sectionId]: 'Ошибка загрузки комментариев' },
+        loadingBySectionId: { ...state.loadingBySectionId, [sectionId]: false },
+        commentsBySectionId: { ...state.commentsBySectionId, [sectionId]: [] },
+      }))
     }
   },
 
   // Добавление нового комментария
   addComment: async (sectionId: string, content: string, mentions: string[]) => {
-    set({ isSubmitting: true, error: null })
-    
+    set({ isSubmitting: true })
     try {
-      // 1. Создаем комментарий в БД
       await createSectionComment(sectionId, content, mentions)
-      
-      // 2. Отправляем уведомления (не блокирующе)
       sendCommentNotifications(sectionId, mentions, content)
         .catch((error: any) => console.error('Ошибка уведомлений:', error))
-      
-      // 3. Перезагружаем список комментариев
+
       await get().fetchComments(sectionId)
-      
-      // 4. Сбрасываем состояние формы
       set({ newCommentContent: '', isSubmitting: false })
-      console.log('Комментарий успешно добавлен')
-      
     } catch (error) {
       console.error('Ошибка добавления комментария:', error)
-      set({ 
-        error: error instanceof Error ? error.message : 'Ошибка при добавлении комментария', 
-        isSubmitting: false 
-      })
+      set(state => ({
+        errorBySectionId: { ...state.errorBySectionId, [sectionId]: error instanceof Error ? error.message : 'Ошибка при добавлении комментария' },
+        isSubmitting: false,
+      }))
     }
   },
 
   // Обновление содержимого комментария (например, состояние чекбоксов)
   updateComment: async (commentId: string, newContent: string) => {
     try {
-      // Обновляем в базе данных
       await updateCommentContent(commentId, newContent)
-      
-      // Обновляем в локальном состоянии
-      const currentComments = get().comments
-      const updatedComments = currentComments.map(comment => 
-        comment.comment_id === commentId 
-          ? { ...comment, content: newContent }
-          : comment
-      )
-      
-      set({ comments: updatedComments })
-      console.log('Комментарий успешно обновлен')
-      
+      // Обновляем во всех разделах, где присутствует комментарий
+      const { commentsBySectionId } = get()
+      const updated: Record<string, SectionComment[]> = {}
+      for (const [secId, list] of Object.entries(commentsBySectionId)) {
+        updated[secId] = list.map(c => c.comment_id === commentId ? { ...c, content: newContent } : c)
+      }
+      set({ commentsBySectionId: updated })
     } catch (error) {
       console.error('Ошибка обновления комментария:', error)
-      set({ 
-        error: error instanceof Error ? error.message : 'Ошибка при обновлении комментария'
-      })
     }
   },
 
   // Действия для UI состояния
   setNewCommentContent: (content: string) => set({ newCommentContent: content }),
-  
-  clearComments: () => set({ 
-    comments: [], 
-    error: null,
+
+  clearCommentsFor: (sectionId: string) => set(state => ({
+    commentsBySectionId: { ...state.commentsBySectionId, [sectionId]: [] },
+    errorBySectionId: { ...state.errorBySectionId, [sectionId]: null },
+    loadingBySectionId: { ...state.loadingBySectionId, [sectionId]: false },
+  })),
+
+  clearAll: () => set({
+    commentsBySectionId: {},
+    errorBySectionId: {},
+    loadingBySectionId: {},
     newCommentContent: '',
-    loading: false,
-    isSubmitting: false
+    isSubmitting: false,
   }),
-  
-  clearError: () => set({ error: null })
+
+  clearErrorFor: (sectionId: string) => set(state => ({
+    errorBySectionId: { ...state.errorBySectionId, [sectionId]: null }
+  })),
 }))
 
  

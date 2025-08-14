@@ -72,9 +72,11 @@ export function CommentsList({ comments, loading }: CommentsListProps) {
     return <EmptyState />
   }
 
+  // Рендерим от старых к новым, но скроллим контейнер к низу отдельно
+  const ordered = [...comments].sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
   return (
     <div className="space-y-1">
-      {comments.map((comment) => (
+      {ordered.map((comment) => (
         <CommentItem key={comment.comment_id} comment={comment} />
       ))}
     </div>

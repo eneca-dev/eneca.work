@@ -7,12 +7,13 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
 
 interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
-  initialTab?: 'overview' | 'details' | 'comments'
+  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition'
 }
 
 interface SectionData {
@@ -52,7 +53,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'comments'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'comments' | 'decomposition'>(initialTab)
   const initializedRef = useRef(false)
   
   // Состояние для inline редактирования отдельных полей
@@ -661,7 +662,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       />
       
       <div 
-        className="fixed right-0 h-screen w-[700px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
+        className="fixed right-0 h-screen w-[900px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
         style={{ 
           position: 'fixed',
           top: '0px',
@@ -772,6 +773,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               }`}
             >
               Детали
+            </button>
+            <button
+              onClick={() => setActiveTab('decomposition')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'decomposition'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Декомпозиция
             </button>
             <button
               onClick={() => setActiveTab('comments')}
@@ -1052,6 +1063,9 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
               {activeTab === 'comments' && (
                 <CommentsPanel sectionId={sectionId} />
+              )}
+              {activeTab === 'decomposition' && (
+                <SectionDecompositionTab sectionId={sectionId} />
               )}
             </div>
           ) : (

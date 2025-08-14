@@ -4,21 +4,30 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useCommentsStore } from '../store'
 import { CommentsList } from './CommentsList'
 import { CommentEditor } from './CommentEditor'
+import type { SectionComment } from '../types'
 
 interface CommentsPanelProps {
   sectionId: string
+  // Управляет автопрокруткой вниз при монтировании/перезагрузке списка
+  autoScrollOnMount?: boolean
+  // Управляет автопрокруткой после успешной отправки нового комментария
+  autoScrollOnNewComment?: boolean
 }
 
-export function CommentsPanel({ sectionId }: CommentsPanelProps) {
-  //  Используем стабильные селекторы вместо деструктуризации
-  const comments = useCommentsStore(state => state.comments)
-  const loading = useCommentsStore(state => state.loading)
-  const error = useCommentsStore(state => state.error)
+export function CommentsPanel({ sectionId, autoScrollOnMount = true, autoScrollOnNewComment = true }: CommentsPanelProps) {
+  // Статичные значения по умолчанию (во избежание новых ссылок в selector)
+  const EMPTY_COMMENTS: SectionComment[] = ([] as unknown[]) as SectionComment[]
+
+  //  Используем селекторы с ключом sectionId
+  const commentsFromStore = useCommentsStore(state => state.commentsBySectionId[sectionId])
+  const comments = commentsFromStore ?? EMPTY_COMMENTS
+  const loading = useCommentsStore(state => !!state.loadingBySectionId[sectionId])
+  const error = useCommentsStore(state => state.errorBySectionId[sectionId] ?? null)
   const isSubmitting = useCommentsStore(state => state.isSubmitting)
   const fetchCommentsStable = useCommentsStore(state => state.fetchComments)
   const addCommentStable = useCommentsStore(state => state.addComment)
-  const clearCommentsStable = useCommentsStore(state => state.clearComments)
-  const clearErrorStable = useCommentsStore(state => state.clearError)
+  const clearCommentsFor = useCommentsStore(state => state.clearCommentsFor)
+  const clearErrorFor = useCommentsStore(state => state.clearErrorFor)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   // Ref для элемента-маркера в конце списка
@@ -26,25 +35,10 @@ export function CommentsPanel({ sectionId }: CommentsPanelProps) {
 
   //  Надежная функция автоскролла до самого конца
   const scrollToBottom = () => {
-    if (scrollContainerRef.current && scrollAnchorRef.current) {
-      // Комбинированный подход: scrollIntoView + fallback с scrollTop
-      scrollAnchorRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'start',
-        inline: 'nearest'
-      })
-      
-      // Дополнительно: убеждаемся что дошли до самого конца
-      setTimeout(() => {
-        if (scrollContainerRef.current) {
-          const container = scrollContainerRef.current
-          const maxScroll = container.scrollHeight - container.clientHeight
-          if (container.scrollTop < maxScroll - 10) { // Если не дошли до конца
-            container.scrollTop = maxScroll // Принудительно скроллим до конца
-          }
-        }
-      }, 300) // После завершения smooth анимации
-    }
+    const container = scrollContainerRef.current
+    if (!container) return
+    // Скроллим только внутренний контейнер, не страницу
+    container.scrollTop = container.scrollHeight
   }
 
   useEffect(() => {
@@ -53,27 +47,28 @@ export function CommentsPanel({ sectionId }: CommentsPanelProps) {
     }
 
     return () => {
-      clearCommentsStable()
+      clearCommentsFor(sectionId)
     }
   }, [sectionId]) // Только стабильная зависимость sectionId
 
   // Используем useLayoutEffect для синхронного скролла после рендера
   useLayoutEffect(() => {
+    if (!autoScrollOnMount) return
     if (!loading && comments.length > 0) {
-      // Скроллим к последнему комментарию сразу после рендера DOM
-      requestAnimationFrame(() => {
-        scrollToBottom()
-      })
+      // Без плавной прокрутки: сразу проставляем scrollTop контейнера
+      scrollToBottom()
     }
-  }, [loading, comments.length, comments[comments.length - 1]?.comment_id]) // Отслеживаем последний комментарий
+  }, [autoScrollOnMount, loading, comments.length, comments[comments.length - 1]?.comment_id])
 
   const handleAddComment = async (content: string, mentions: string[]) => {
     try {
       await addCommentStable(sectionId, content, mentions)
-      // Используем requestAnimationFrame вместо setTimeout
-      requestAnimationFrame(() => {
-        scrollToBottom()
-      })
+      if (autoScrollOnNewComment) {
+        // Используем requestAnimationFrame вместо setTimeout
+        requestAnimationFrame(() => {
+          scrollToBottom()
+        })
+      }
     } catch (error) {
       console.error('Ошибка добавления комментария:', error)
     }
@@ -93,7 +88,7 @@ export function CommentsPanel({ sectionId }: CommentsPanelProps) {
               <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
             </div>
             <button
-              onClick={clearErrorStable}
+              onClick={() => clearErrorFor(sectionId)}
               className="text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -107,7 +102,7 @@ export function CommentsPanel({ sectionId }: CommentsPanelProps) {
       {/* Список комментариев */}
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto min-h-0 pb-4 max-w-full overflow-x-hidden flex flex-col"
+        className="flex-1 overflow-y-auto overscroll-contain min-h-0 pb-4 max-w-full overflow-x-hidden flex flex-col"
       >
         <CommentsList comments={comments} loading={loading} />
         {/* Увеличенный элемент-маркер для точного скролла */}

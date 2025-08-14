@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, Network, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
@@ -151,14 +151,19 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       icon: CalendarDays,
     },
     {
+      title: "Заметки",
+      href: "/dashboard/notions",
+      icon: List,
+    },
+    {
       title: "Задания",
       href: "/dashboard/task-transfer",
       icon: ClipboardList,
     },
     {
-      title: "Декомпозиция",
-      href: "/dashboard/decomposition",
-      icon: Network,
+      title: "Отчёты",
+      href: "/dashboard/reports",
+      icon: BarChart,
     },
 
   ]
@@ -183,7 +188,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
     >
       <div className="flex flex-col h-full">
         {/* Logo */}
-        <div className={cn("p-4 border-b border-gray-200 dark:border-gray-700", collapsed ? "flex flex-col items-center space-y-3" : "flex items-center")}>
+        <div className={cn("p-4", collapsed ? "flex flex-col items-center space-y-3" : "flex items-center")}>
           <div className={cn("flex items-center", collapsed ? "justify-center" : "")}>
             <Image
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image__10_-removebg-preview-DH3poORK5SwnmDnICGNszX6XADuVhH.png"

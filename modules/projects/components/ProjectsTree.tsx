@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -19,6 +21,10 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import SectionDecompositionTab from './SectionDecompositionTab'
+import SectionTasksPreview from './SectionTasksPreview'
+import SectionDescriptionCompact from './SectionDescriptionCompact'
+import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
 
 interface ProjectNode {
@@ -100,12 +106,89 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenStatusManagement,
   statuses
 }) => {
+  const { assignments } = useTaskTransferStore()
+  const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
+  const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [statusSearchQuery, setStatusSearchQuery] = useState('')
   const statusDropdownRef = React.useRef<HTMLDivElement>(null)
+
+  // Разворачиваемое содержимое для раздела
+  const [innerTab, setInnerTab] = useState<'decomposition' | 'tasks'>('decomposition')
+  const [miniDecomp, setMiniDecomp] = useState<Array<{ id: string; desc: string; catId: string; hours: number; due: string | null }>>([])
+  const [miniDecompLoading, setMiniDecompLoading] = useState(false)
+  const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
+  // Мобильный режим: переключатель между контентом и комментариями
+  const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
+  const [sectionTotals, setSectionTotals] = useState<{ planned: number; actual: number } | null>(null)
+  const [sectionDue, setSectionDue] = useState<string | null>(null)
+
+  const loadMiniDecomposition = async () => {
+    try {
+      setMiniDecompLoading(true)
+      const [itemsRes, catsRes] = await Promise.all([
+        supabase
+          .from('decomposition_items')
+          .select('decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date')
+          .eq('decomposition_item_section_id', node.id)
+          .order('decomposition_item_order', { ascending: true }),
+        supabase
+          .from('work_categories')
+          .select('work_category_id, work_category_name')
+      ])
+      let plannedSum = 0
+      if (!itemsRes.error && itemsRes.data) {
+        const mapped = itemsRes.data.map((r: any) => ({
+          id: r.decomposition_item_id,
+          desc: r.decomposition_item_description,
+          catId: r.decomposition_item_work_category_id,
+          hours: Number(r.decomposition_item_planned_hours || 0),
+          due: r.decomposition_item_planned_due_date,
+        }))
+        plannedSum = mapped.reduce((acc, i) => acc + (i.hours || 0), 0)
+        setMiniDecomp(mapped)
+      }
+      if (!catsRes.error && catsRes.data) {
+        const m = new Map<string, string>()
+        for (const c of catsRes.data as any[]) m.set(c.work_category_id, c.work_category_name)
+        setCatMap(m)
+      }
+      // Дополнительно тянем агрегаты план/факт и крайний срок секции
+      try {
+        const [totals, dates] = await Promise.all([
+          supabase
+            .from('view_section_decomposition_totals')
+            .select('planned_hours, actual_hours')
+            .eq('section_id', node.id)
+            .single(),
+          supabase
+            .from('sections')
+            .select('section_end_date')
+            .eq('section_id', node.id)
+            .single(),
+        ])
+        if (!totals.error && totals.data) {
+          setSectionTotals({
+            planned: plannedSum, // план считаем как сумму из декомпозиции
+            actual: Number(totals.data.actual_hours || 0),
+          })
+        } else {
+          // даже если totals не пришел, сохраним план по декомпозиции
+          setSectionTotals({ planned: plannedSum, actual: 0 })
+        }
+        if (!dates.error && dates.data) {
+          setSectionDue(dates.data.section_end_date || null)
+        }
+      } catch (e) {
+        // не критично
+      }
+    } finally {
+      setMiniDecompLoading(false)
+    }
+  }
 
   const hasChildren = node.children && node.children.length > 0
 
@@ -307,18 +390,26 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center min-w-0 flex-1">
-              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
-                {hasChildren ? (
+            <div className="flex items-center min-w-0 flex-1 gap-2">
+              <button
+                className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  onToggleNode(node.id)
+                  if (node.type === 'section' && !expandedNodes.has(node.id)) {
+                    await loadMiniDecomposition()
+                  }
+                }}
+                aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
+              >
+                {(node.type === 'section' || hasChildren) ? (
                   isExpanded ? (
                     <ChevronDown className="h-3 w-3 text-teal-500" />
                   ) : (
                     <ChevronRight className="h-3 w-3 text-teal-500" />
                   )
-                ) : (
-                  <div className="h-3 w-3 rounded bg-teal-500" />
-                )}
-              </div>
+                ) : null}
+              </button>
               <span 
                 className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teал-400 transition-colors truncate max-w-[900px] xl:max-w-[1100px]"
                 onClick={(e) => onOpenSection(node, e)}
@@ -326,6 +417,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               >
                 {node.name}
               </span>
+              {node.type === 'section' && (incomingCount > 0 || outgoingCount > 0) && (
+                <div
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 cursor-default"
+                  title={`Исходящие: ${outgoingCount} • Входящие: ${incomingCount}`}
+                >
+                  <span className="text-primary font-semibold">{outgoingCount}</span>
+                  <span className="opacity-60">/</span>
+                  <span className="text-secondary-foreground font-semibold">{incomingCount}</span>
+                </div>
+              )}
             </div>
 
             {/* Информация справа с адаптивными ширинами */}
@@ -688,7 +789,140 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         )}
       </div>
 
-      {hasChildren && isExpanded && (
+      {(node.type === 'section' && isExpanded) && (
+        <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
+          {/* Компактный режим: вкладки Контент / Комментарии (до 2xl) */}
+          <div className="2xl:hidden mb-3">
+            <div className="inline-flex h-9 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
+              {[
+                { key: 'content', label: 'Контент' },
+                { key: 'comments', label: 'Комментарии' },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setMobileTab(t.key as 'content' | 'comments')}
+                  className={cn('px-3 py-1.5 text-xs rounded-sm', mobileTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Компактный режим: показываем выбранную вкладку */}
+          {mobileTab === 'content' && (
+            <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
+              {/* Описание сверху, естественная высота + аналитика */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                    <SectionDescriptionCompact sectionId={node.id} />
+                  </div>
+                  {/* Аналитические показатели */}
+                  <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                    {sectionDue && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">Дней до завершения:</span>
+                        <span className="font-semibold tabular-nums">
+                          {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                        </span>
+                      </div>
+                    )}
+                    {sectionTotals && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">План/Факт, ч:</span>
+                        <span className="font-semibold tabular-nums">
+                          {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
+                </div>
+              </div>
+            </div>
+          )}
+          {mobileTab === 'comments' && (
+            <div className="2xl:hidden h-[80vh] max-h-[80vh] overflow-hidden">
+              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Полная версия (>=2xl): две колонки, справа комментарии */}
+          <div className="hidden 2xl:flex gap-4 items-stretch">
+            {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
+            <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
+            {/* Описание сверху + аналитика */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                  <SectionDescriptionCompact sectionId={node.id} />
+                </div>
+                {/* Аналитические показатели */}
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                  {sectionDue && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">Дней до завершения:</span>
+                      <span className="font-semibold tabular-nums">
+                        {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                      </span>
+                    </div>
+                  )}
+                  {sectionTotals && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">План/Факт, ч:</span>
+                      <span className="font-semibold tabular-nums">
+                        {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                {/* Декомпозиция (верхняя половина) */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+
+                {/* Задания (нижняя половина) */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
+                </div>
+              </div>
+            </div>
+
+            {/* Правая колонка: Комментарии на всю высоту блока */}
+            <div className="w-[680px] self-stretch hidden 2xl:block">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col h-[80vh] max-h-[80vh] overflow-hidden">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasChildren && isExpanded && node.type !== 'section' && (
         <div>
           {node.children!.map((child, index) => (
             <TreeNode

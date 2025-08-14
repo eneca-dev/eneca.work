@@ -8,15 +8,18 @@ export async function fetchSectionComments(sectionId: string): Promise<SectionCo
   const supabase = createClient()
   
   const { data, error } = await supabase
-    .from('section_comments')
+    .from('view_section_comments_enriched')
     .select(`
-      *,
-      author:profiles!section_comments_author_id_fkey(
-        user_id,
-        first_name,
-        last_name,
-        avatar_url
-      )
+      comment_id,
+      section_id,
+      author_id,
+      content,
+      mentions,
+      created_at,
+      first_name,
+      last_name,
+      avatar_url,
+      author_name
     `)
     .eq('section_id', sectionId)
     .order('created_at', { ascending: true })
@@ -26,12 +29,22 @@ export async function fetchSectionComments(sectionId: string): Promise<SectionCo
     throw error
   }
 
-  // Трансформируем данные в нужный формат
-  return data?.map((comment: any) => ({
-    ...comment,
-    author_name: `${comment.author.first_name} ${comment.author.last_name}`.trim(),
-    author_avatar_url: comment.author.avatar_url
-  })) || []
+  return (data || []).map((row: any) => ({
+    comment_id: row.comment_id,
+    section_id: row.section_id,
+    author_id: row.author_id,
+    content: row.content,
+    mentions: row.mentions,
+    created_at: row.created_at,
+    author: {
+      user_id: row.author_id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      avatar_url: row.avatar_url,
+    },
+    author_name: row.author_name,
+    author_avatar_url: row.avatar_url,
+  }))
 }
 
 /**
