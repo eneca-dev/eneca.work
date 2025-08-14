@@ -313,7 +313,7 @@ useEffect(() => {
   return (
     <div
       className={cn(
-        "font-sans overflow-x-hidden",
+        "font-sans overflow-x-hidden px-4 md:px-0",
       )}
       ref={containerRef}
     >

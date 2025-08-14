@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -16,6 +15,7 @@ import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } 
 import { cn } from '@/lib/utils'
 import { parseNotionContent } from '@/modules/notions/utils'
 import type { Notion } from '@/modules/notions/types'
+import { useMediaQuery } from 'usehooks-ts'
 
 export function NotesBlock() {
   const {
@@ -42,10 +42,12 @@ export function NotesBlock() {
   const [isCreatingNewNote, setIsCreatingNewNote] = useState(false)
 
   const editorRef = useRef<EditorRef>(null)
+  const isSwitchingRef = useRef(false)
   
   const router = useRouter()
   const pathname = usePathname()
   const previousPathnameRef = useRef(pathname)
+  const isLargeScreen = useMediaQuery('(min-width: 1024px)')
 
   // Загружаем заметки при монтировании компонента
   useEffect(() => {
@@ -105,8 +107,21 @@ export function NotesBlock() {
     }
   }
 
-  const handleOpenFullView = (notion: Notion) => {
+  const handleOpenFullView = async (notion: Notion) => {
+    // Сохраняем текущую открытую заметку перед переключением
+    if (fullViewNotion && editorRef.current) {
+      try {
+        isSwitchingRef.current = true
+        await editorRef.current.save()
+      } catch (error) {
+        console.warn('Failed to save previous note before switching:', error)
+      }
+    }
+
+    setIsCreatingNewNote(false)
     setFullViewNotion(notion)
+    // Небольшая задержка, чтобы завершились async операции сохранения
+    setTimeout(() => { isSwitchingRef.current = false }, 50)
   }
 
   const handleCloseFullView = () => {
@@ -151,11 +166,15 @@ export function NotesBlock() {
 
   // Обновляем fullViewNotion когда изменяется список заметок
   useEffect(() => {
-    if (fullViewNotion) {
-      const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
-      if (updatedNotion) {
-        setFullViewNotion(updatedNotion)
-      }
+    if (isSwitchingRef.current || !fullViewNotion) return
+    const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
+    if (!updatedNotion) return
+    // Обновляем только если данные реально изменились (по updated_at или контенту)
+    if (
+      updatedNotion.notion_updated_at !== fullViewNotion.notion_updated_at ||
+      updatedNotion.notion_content !== fullViewNotion.notion_content
+    ) {
+      setFullViewNotion(updatedNotion)
     }
   }, [notions, fullViewNotion])
 
@@ -339,12 +358,12 @@ export function NotesBlock() {
   const completedCount = notions.filter(notion => notion.notion_done).length
   const totalCount = notions.length
 
-  // Если открыта полная версия заметки
-  if (fullViewNotion) {
+  // Если открыта полная версия заметки и маленький экран — показываем полноэкранный режим
+  if (fullViewNotion && !isLargeScreen) {
     const parsed = parseNotionContent(fullViewNotion)
     
           return (
-        <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+        <div className="px-3 md:px-6 py-4 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
         {/* Заголовок */}
         <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -385,22 +404,24 @@ export function NotesBlock() {
         {/* Содержимое заметки */}
         <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">
           <TipTapEditor
+            key={fullViewNotion.notion_id}
             ref={editorRef}
             initialTitle={parsed.title}
             initialValue={parsed.content}
             onSave={handleSaveFullView}
             onCancel={handleCloseFullView}
             showTitle={true}
+            notionId={fullViewNotion.notion_id !== 'new' ? fullViewNotion.notion_id : undefined}
           />
         </div>
-      </Card>
+      </div>
     )
   }
 
   return (
-    <Card className="p-6 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)] bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+    <div className="px-3 md:px-6 py-4 h-[calc(100vh-58px)] flex flex-col max-h-[calc(100vh-58px)]">
       {/* Заголовок блока */}
-      <div className="flex items-center justify-between mb-6 flex-shrink-0">
+      <div className="flex items-center justify-between mb-4 md:mb-6 flex-shrink-0">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Заметки</h2>
           {totalCount > 0 && (
@@ -428,97 +449,146 @@ export function NotesBlock() {
         </div>
       </div>
 
-      {/* Панель управления */}
-      <div className="flex items-center gap-3 mb-4 flex-shrink-0">
-        {/* Поиск */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
-          <Input
-            placeholder="Поиск по заметкам..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-          />
-        </div>
-
-        {/* Кнопки управления выбранными заметками */}
-        {selectedNotions.length > 0 && (
-          <>
-            {/* Выбрать все / Снять выделение */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSelectAll}
-              className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              {selectedNotions.length === notions.length ? <Square className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
-              {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
-            </Button>
-
-            {/* Отметить выполненным/невыполненным */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={shouldShowMarkAsUndone ? handleMarkAsUndone : handleMarkAsDone}
-              className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <Check className="h-4 w-4" />
-              {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
-            </Button>
-
-            {/* Удалить выделенное */}
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowBulkDeleteModal(true)}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Удалить ({selectedNotions.length})
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Список заметок с скроллом */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="space-y-3 pr-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
-              <span className="ml-2 text-gray-500 dark:text-gray-400">Загрузка заметок...</span>
+      <div className="flex-1 min-h-0 flex gap-4">
+        {/* Левая колонка: поиск, действия, список */}
+        <div className={cn(
+          "flex w-full flex-col min-w-[280px] transition-all duration-300",
+          fullViewNotion ? "lg:w-[30%]" : "lg:w-full"
+        )}>
+          {/* Панель управления */}
+          <div className="flex items-center gap-3 mb-3 md:mb-4 flex-shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <Input
+                placeholder="Поиск по заметкам..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              />
             </div>
-          ) : notions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              {searchQuery ? (
-                <div>
-                  <p>Заметки не найдены</p>
-                  <p className="text-sm mt-1">Попробуйте изменить поисковый запрос</p>
+            {selectedNotions.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  {selectedNotions.length === notions.length ? <Square className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+                  {selectedNotions.length === notions.length ? 'Снять выделение' : 'Выбрать все'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={shouldShowMarkAsUndone ? handleMarkAsUndone : handleMarkAsDone}
+                  className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  <Check className="h-4 w-4" />
+                  {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  className="gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Удалить ({selectedNotions.length})
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Список заметок */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="space-y-3 pr-2">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
+                  <span className="ml-2 text-gray-500 dark:text-gray-400">Загрузка заметок...</span>
+                </div>
+              ) : notions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  {searchQuery ? (
+                    <div>
+                      <p>Заметки не найдены</p>
+                      <p className="text-sm mt-1">Попробуйте изменить поисковый запрос</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p>У вас пока нет заметок</p>
+                      <p className="text-sm mt-1">Нажмите "Добавить", чтобы создать первую заметку</p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div>
-                  <p>У вас пока нет заметок</p>
-                  <p className="text-sm mt-1">Нажмите "Добавить", чтобы создать первую заметку</p>
-                </div>
+            notions.map((notion) => (
+                  <NoteCard
+                    key={notion.notion_id}
+                    notion={notion}
+                    isSelected={selectedNotions.includes(notion.notion_id)}
+                isActive={!!fullViewNotion && fullViewNotion.notion_id === notion.notion_id}
+                    onToggleSelect={handleToggleSelect}
+                    onUpdate={handleUpdateNote}
+                    onToggleDone={toggleNotionDone}
+                    onDelete={deleteNotion}
+                    onOpenFullView={handleOpenFullView}
+
+                    showSelection={true}
+                  />
+                ))
               )}
             </div>
-          ) : (
-            notions.map((notion) => (
-              <NoteCard
-                key={notion.notion_id}
-                notion={notion}
-                isSelected={selectedNotions.includes(notion.notion_id)}
-                onToggleSelect={handleToggleSelect}
-                onUpdate={handleUpdateNote}
-                onToggleDone={toggleNotionDone}
-                onDelete={deleteNotion}
-                onOpenFullView={handleOpenFullView}
-
-                showSelection={true}
-              />
-            ))
-          )}
+          </div>
         </div>
+
+        {/* Правая колонка: редактор (только на больших экранах). Скрыт по умолчанию, появляется при выборе заметки */}
+        {fullViewNotion && (
+          <div className="hidden lg:flex lg:w-[70%] min-w-0 flex-col overflow-hidden transition-all duration-300">
+            {(() => {
+              const parsed = parseNotionContent(fullViewNotion)
+              return (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Редактор</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          await toggleNotionDone(fullViewNotion.notion_id)
+                          setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
+                        }}
+                        className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <Check className={cn(
+                          'h-4 w-4',
+                          fullViewNotion.notion_done ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                        )} />
+                        {fullViewNotion.notion_done ? 'Выполнено' : 'Отметить выполненным'}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">
+                    <TipTapEditor
+                      key={fullViewNotion.notion_id}
+                      ref={editorRef}
+                      initialTitle={parsed.title}
+                      initialValue={parsed.content}
+                      onSave={handleSaveFullView}
+                      onCancel={handleCloseFullView}
+                      showTitle={true}
+                      notionId={fullViewNotion.notion_id !== 'new' ? fullViewNotion.notion_id : undefined}
+                    />
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Модальные окна */}
@@ -528,6 +598,6 @@ export function NotesBlock() {
         selectedNotions={selectedNotionsData}
         onConfirm={handleBulkDelete}
       />
-    </Card>
+    </div>
   )
 } 

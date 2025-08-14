@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -20,8 +22,10 @@ import { StatusSelector } from '@/modules/statuses-tags/statuses/components/Stat
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import SectionDecompositionTab from './SectionDecompositionTab'
+import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+
 
 interface ProjectNode {
   id: string
@@ -59,6 +63,7 @@ interface ProjectsTreeProps {
   selectedEmployeeId?: string | null
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 interface TreeNodeProps {
@@ -75,6 +80,7 @@ interface TreeNodeProps {
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
@@ -96,9 +102,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateObject,
   onCreateSection,
   onDeleteProject,
+  onOpenProjectDashboard,
   onOpenStatusManagement,
   statuses
 }) => {
+  const { assignments } = useTaskTransferStore()
+  const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
+  const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -113,6 +123,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
   // Мобильный режим: переключатель между контентом и комментариями
   const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
+  const [sectionTotals, setSectionTotals] = useState<{ planned: number; actual: number } | null>(null)
+  const [sectionDue, setSectionDue] = useState<string | null>(null)
 
   const loadMiniDecomposition = async () => {
     try {
@@ -127,21 +139,51 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           .from('work_categories')
           .select('work_category_id, work_category_name')
       ])
+      let plannedSum = 0
       if (!itemsRes.error && itemsRes.data) {
-        setMiniDecomp(
-          itemsRes.data.map((r: any) => ({
-            id: r.decomposition_item_id,
-            desc: r.decomposition_item_description,
-            catId: r.decomposition_item_work_category_id,
-            hours: Number(r.decomposition_item_planned_hours || 0),
-            due: r.decomposition_item_planned_due_date,
-          }))
-        )
+        const mapped = itemsRes.data.map((r: any) => ({
+          id: r.decomposition_item_id,
+          desc: r.decomposition_item_description,
+          catId: r.decomposition_item_work_category_id,
+          hours: Number(r.decomposition_item_planned_hours || 0),
+          due: r.decomposition_item_planned_due_date,
+        }))
+        plannedSum = mapped.reduce((acc, i) => acc + (i.hours || 0), 0)
+        setMiniDecomp(mapped)
       }
       if (!catsRes.error && catsRes.data) {
         const m = new Map<string, string>()
         for (const c of catsRes.data as any[]) m.set(c.work_category_id, c.work_category_name)
         setCatMap(m)
+      }
+      // Дополнительно тянем агрегаты план/факт и крайний срок секции
+      try {
+        const [totals, dates] = await Promise.all([
+          supabase
+            .from('view_section_decomposition_totals')
+            .select('planned_hours, actual_hours')
+            .eq('section_id', node.id)
+            .single(),
+          supabase
+            .from('sections')
+            .select('section_end_date')
+            .eq('section_id', node.id)
+            .single(),
+        ])
+        if (!totals.error && totals.data) {
+          setSectionTotals({
+            planned: plannedSum, // план считаем как сумму из декомпозиции
+            actual: Number(totals.data.actual_hours || 0),
+          })
+        } else {
+          // даже если totals не пришел, сохраним план по декомпозиции
+          setSectionTotals({ planned: plannedSum, actual: 0 })
+        }
+        if (!dates.error && dates.data) {
+          setSectionDue(dates.data.section_end_date || null)
+        }
+      } catch (e) {
+        // не критично
       }
     } finally {
       setMiniDecompLoading(false)
@@ -348,7 +390,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center min-w-0 flex-1">
+            <div className="flex items-center min-w-0 flex-1 gap-2">
               <button
                 className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2"
                 onClick={async (e) => {
@@ -375,6 +417,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               >
                 {node.name}
               </span>
+              {node.type === 'section' && (incomingCount > 0 || outgoingCount > 0) && (
+                <div
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 cursor-default"
+                  title={`Исходящие: ${outgoingCount} • Входящие: ${incomingCount}`}
+                >
+                  <span className="text-primary font-semibold">{outgoingCount}</span>
+                  <span className="opacity-60">/</span>
+                  <span className="text-secondary-foreground font-semibold">{incomingCount}</span>
+                </div>
+              )}
             </div>
 
             {/* Информация справа с адаптивными ширинами */}
@@ -599,12 +651,24 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
             
             {/* Название */}
-            <span className={cn(
-              "font-medium text-sm dark:text-slate-200 text-slate-800",
-              node.type === 'manager' && "font-semibold"
-            )}>
-              {node.name}
-            </span>
+            {node.type === 'project' && onOpenProjectDashboard ? (
+              <span 
+                className={cn(
+                  "font-medium text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                )}
+                onClick={(e) => onOpenProjectDashboard(node, e)}
+                title="Открыть дашборд проекта"
+              >
+                {node.name}
+              </span>
+            ) : (
+              <span className={cn(
+                "font-medium text-sm dark:text-slate-200 text-slate-800",
+                node.type === 'manager' && "font-semibold"
+              )}>
+                {node.name}
+              </span>
+            )}
 
 
 
@@ -748,22 +812,41 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           {/* Компактный режим: показываем выбранную вкладку */}
           {mobileTab === 'content' && (
             <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
-              {/* Описание сверху, естественная высота */}
+              {/* Описание сверху, естественная высота + аналитика */}
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                <SectionDescriptionCompact sectionId={node.id} />
-              </div>
-              {/* Остаток высоты: два равных блока */}
-              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
-                  <div className="flex-1 min-h-0 overflow-auto">
-                    <SectionDecompositionTab sectionId={node.id} compact />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                    <SectionDescriptionCompact sectionId={node.id} />
+                  </div>
+                  {/* Аналитические показатели */}
+                  <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                    {sectionDue && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">Дней до завершения:</span>
+                        <span className="font-semibold tabular-nums">
+                          {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                        </span>
+                      </div>
+                    )}
+                    {sectionTotals && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">План/Факт, ч:</span>
+                        <span className="font-semibold tabular-nums">
+                          {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
-                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">Задания — раздел в разработке.</div>
+              </div>
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
                 </div>
               </div>
             </div>
@@ -783,28 +866,45 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           <div className="hidden 2xl:flex gap-4 items-stretch">
             {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
             <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
-              {/* Описание сверху */}
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                <SectionDescriptionCompact sectionId={node.id} />
+            {/* Описание сверху + аналитика */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                  <SectionDescriptionCompact sectionId={node.id} />
+                </div>
+                {/* Аналитические показатели */}
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                  {sectionDue && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">Дней до завершения:</span>
+                      <span className="font-semibold tabular-nums">
+                        {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                      </span>
+                    </div>
+                  )}
+                  {sectionTotals && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">План/Факт, ч:</span>
+                      <span className="font-semibold tabular-nums">
+                        {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
 
-              {/* Остаток высоты: два равных блока */}
-              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
                 {/* Декомпозиция (верхняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
-                  <div className="flex-1 min-h-0 overflow-auto">
-                    <SectionDecompositionTab sectionId={node.id} compact />
-                  </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
                 </div>
 
                 {/* Задания (нижняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
-                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">
-                    Задания — раздел в разработке.
-                  </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
                 </div>
               </div>
             </div>
@@ -840,6 +940,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
               onDeleteProject={onDeleteProject}
+              onOpenProjectDashboard={onOpenProjectDashboard}
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
             />
@@ -859,7 +960,8 @@ export function ProjectsTree({
   selectedTeamId,
   selectedEmployeeId,
   urlSectionId,
-  urlTab
+  urlTab,
+  onOpenProjectDashboard
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { 
@@ -898,6 +1000,7 @@ export function ProjectsTree({
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
   const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+
 
   // Закрытие выпадающего списка статусов при клике вне его
   useEffect(() => {
@@ -1588,6 +1691,8 @@ export function ProjectsTree({
     setShowCreateSectionModal(true)
   }
 
+
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
@@ -1905,6 +2010,7 @@ export function ProjectsTree({
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
                 onDeleteProject={handleDeleteProject}
+                onOpenProjectDashboard={onOpenProjectDashboard}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
               />
@@ -2052,6 +2158,8 @@ export function ProjectsTree({
         isOpen={showStatusManagementModal}
         onClose={() => setShowStatusManagementModal(false)}
       />
+
+
 
     </TooltipProvider>
   )

@@ -281,6 +281,16 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     autofocus: autoFocus && !showTitle
   })
 
+  // Обновляем содержимое редактора при смене initialValue/initialTitle (переключение заметки)
+  useEffect(() => {
+    if (!editor) return
+    const nextTitle = initialTitle || parsedTitle
+    setTitle(nextTitle)
+    const nextContent = parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>'
+    editor.commands.setContent(nextContent, false)
+    setHasChanges(false)
+  }, [initialValue, initialTitle])
+
   useImperativeHandle(ref, () => ({
     save: async () => {
       // Принудительное автосохранение

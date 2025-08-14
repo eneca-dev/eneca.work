@@ -3,24 +3,26 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { UserPermissionsSyncProvider } from "@/modules/permissions"
+import { useSidebarState } from "@/hooks/useSidebarState"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarState()
   const name = useUserStore((state) => state.name)
   const email = useUserStore((state) => state.email)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
+  const pathname = usePathname()
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)
@@ -165,11 +167,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar
           user={{ name: name || "Пользователь", email: email || "" }}
           collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((c) => !c)}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
       {/* Контент с отступом слева */}
-      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
+      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') ? 'py-0' : 'py-6'} transition-all duration-300 ${marginLeft}`}>
         <UserPermissionsSyncProvider>
           {children}
         </UserPermissionsSyncProvider>
