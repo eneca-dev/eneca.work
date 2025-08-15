@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye } from "lucide-react"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts"
 import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
+import FilterBar from "@/components/filter-bar/FilterBar"
 import { createClient } from "@/utils/supabase/client"
 import { useReportsOrgFiltersStore } from "./filters/store"
 import { useReportsProjectFiltersStore } from "./filters/projectStore"
@@ -373,11 +374,7 @@ export default function ReportsPage() {
 
   return (
     <div className="px-0 pt-0 pb-0 h-screen overflow-y-auto overscroll-y-none">
-      <div className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-700 px-3 md:px-6 h-[69px]">
-        <div className="flex items-center h-full gap-2 overflow-x-auto no-scrollbar">
-          <h1 className="text-[13px] md:text-lg font-semibold whitespace-nowrap mr-1 md:mr-3">Отчёты</h1>
-
-          <div className="flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-1 py-1 h-12 mx-auto">
+      <FilterBar title="Отчёты">
           {/* Кнопка: Автор */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -777,11 +774,8 @@ export default function ReportsPage() {
               title=""
             >
             </button>
-          </div>
-          {/* Активные фильтры справа больше не показываем */}
-        </div>
-      </div>
-      <div className="relative overflow-x-auto overflow-y-auto border-b border-x-0 rounded-none dark:border-slate-700" style={{ maxHeight: 'calc(100vh - 69px)' }}>
+      </FilterBar>
+      <div className="relative overflow-x-auto overflow-y-auto border-b border-x-0 rounded-none dark:border-slate-700 flex flex-col" style={{ height: 'calc(100vh - 69px)' }}>
         <table className="min-w-[1160px] lg:min-w-full w-full table-fixed border-separate border-spacing-0 text-[9px] sm:text-[10px] md:text-[11px] lg:text-xs leading-tight">
           <colgroup>
             {[
@@ -933,7 +927,7 @@ export default function ReportsPage() {
               </button>
             </div>
           ) : (
-            <div className="px-3 md:px-6 py-3 w-full">
+            <div className="px-3 md:px-6 py-3 w-full mt-auto">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 {(() => {
                   const hours = rows.reduce((acc, r) => acc + (r.work_log_hours || 0), 0)

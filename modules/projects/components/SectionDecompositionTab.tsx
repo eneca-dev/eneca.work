@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, KeyboardEvent, useRef } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { Loader2, MoreHorizontal, Pencil, Trash2, Check, X, PlusCircle, Clock, Calendar as CalendarIcon } from "lucide-react"
+import { Loader2, MoreHorizontal, Pencil, Trash2, Check, X, PlusCircle, Clock, Calendar as CalendarIcon, LayoutTemplate } from "lucide-react"
 import { useUiStore } from "@/stores/useUiStore"
 import {
   DropdownMenu,
@@ -11,6 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import AddWorkLogModal from "./AddWorkLogModal"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { TemplatesPanel } from "@/modules/decomposition-templates"
 
 interface SectionDecompositionTabProps {
   sectionId: string
@@ -55,6 +58,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [savingId, setSavingId] = useState<string | null>(null)
   const [isLogModalOpen, setIsLogModalOpen] = useState(false)
   const [selectedForLog, setSelectedForLog] = useState<string | null>(null)
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
+  const [departmentId, setDepartmentId] = useState<string | null>(null)
+  const [sectionStartDate, setSectionStartDate] = useState<string | null>(null)
 
   useEffect(() => {
     if (!sectionId) return
@@ -102,6 +108,22 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
     init()
   }, [sectionId, setNotification])
+
+  useEffect(() => {
+    const loadSectionMeta = async () => {
+      if (!sectionId) return
+      const { data, error } = await supabase
+        .from('view_section_hierarchy')
+        .select('section_id, section_start_date, responsible_department_id')
+        .eq('section_id', sectionId)
+        .single()
+      if (!error && data) {
+        setDepartmentId((data as any).responsible_department_id || null)
+        setSectionStartDate((data as any).section_start_date || null)
+      }
+    }
+    loadSectionMeta()
+  }, [sectionId])
 
   // Загрузка фактических часов из view для видимых итемов
   useEffect(() => {
@@ -263,6 +285,12 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
   }
 
+  // Фиксированная сетка колонок для стабильной вёрстки (Notion-стиль)
+  // Единая сетка колонок для идеального выравнивания
+  // [шаблон/лог/плюс, описание (растяжение), категория, план, факт, срок]
+  // Первая колонка max-content: вмещает кнопку "Шаблон" в шапке и иконку лога в строках
+  const rowGridClass = "grid grid-cols-[max-content_1fr_240px_96px_96px_160px]"
+
   if (loading) {
     return (
       <div className={compact ? "flex items-center justify-center h-16" : "flex items-center justify-center h-24"}>
@@ -278,19 +306,19 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-lg border dark:border-slate-700 p-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">Строк</div>
-          <div className="text-lg font-semibold dark:text-slate-100">{items.length}</div>
+          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{items.length}</div>
         </div>
         <div className="rounded-lg border dark:border-slate-700 p-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">План (ч)</div>
-          <div className="text-lg font-semibold dark:text-slate-100">{items.reduce((s, i) => s + Number(i.decomposition_item_planned_hours || 0), 0).toFixed(2)}</div>
+          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{items.reduce((s, i) => s + Number(i.decomposition_item_planned_hours || 0), 0).toFixed(2)}</div>
         </div>
         <div className="rounded-lg border dark:border-slate-700 p-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">Факт (ч)</div>
-          <div className="text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_hours ?? 0).toFixed(2)}</div>
+          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_hours ?? 0).toFixed(2)}</div>
         </div>
         <div className="rounded-lg border dark:border-slate-700 p-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">Затраты (₽)</div>
-          <div className="text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_amount ?? 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 })}</div>
+          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_amount ?? 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 })}</div>
         </div>
       </div>
       )}
@@ -311,110 +339,65 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       )}
       {!compact && (
         <div>
-          <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">Декомпозиция раздела</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Создавайте и управляйте строками декомпозиции. Все записи автоматически привязываются к текущему разделу.</p>
+          <h3 className="text-base xl:text-lg font-semibold dark:text-slate-200 text-slate-800">Декомпозиция раздела</h3>
+          <p className="text-xs xl:text-sm text-slate-500 dark:text-slate-400">Создавайте и управляйте строками декомпозиции. Все записи автоматически привязываются к текущему разделу.</p>
         </div>
       )}
 
       <div className="overflow-x-auto">
-        <table className={(compact ? "min-w-full text-xs table-fixed border-collapse " : "min-w-full text-sm table-fixed border-collapse ") + "w-full min-w-[900px] border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden p-3"}>
-          <colgroup>
-            <col className="w-[40px] min-w-[40px]" />
-            <col className="w-[58%] min-w-[320px]" />
-            <col className="w-[18%] min-w-[220px]" />
-            <col className="w-[7%] min-w-[80px]" />
-            <col className="w-[7%] min-w-[80px]" />
-            <col className="w-[8%] min-w-[180px]" />
-          </colgroup>
-          <thead className={compact ? "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[13px]" : "bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[13px] sticky top-0 z-[1]"}>
-            <tr>
-              <th className="px-2 py-2 text-left border-b border-slate-200 dark:border-slate-700" />
-              <th className="px-3 py-2 text-left border-b border-slate-200 dark:border-slate-700">Описание работ</th>
-              <th className="px-3 py-2 text-left border-b border-slate-200 dark:border-slate-700">Категория</th>
-              <th className="px-3 py-2 text-center border-b border-slate-200 dark:border-slate-700">План, ч</th>
-              <th className="px-3 py-2 text-center border-b border-slate-200 dark:border-slate-700">Факт, ч</th>
-              <th className="px-3 py-2 text-left border-b border-slate-200 dark:border-slate-700">Срок</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div className={(compact ? "text-xs " : "text-sm ") + "w-full min-w-[960px] border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden"}>
+          {/* Шапка */}
+          <div className={(compact ? "text-[12px] " : "text-[12px] xl:text-[13px] ") + `sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 ${rowGridClass} items-center px-3 py-2 border-b border-slate-200 dark:border-slate-700`}>
+            <div className="flex items-center">
+              <button onClick={() => setIsTemplatesOpen(true)} className="inline-flex items-center gap-2 h-7 px-2 rounded-md bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100 text-[12px]" title="Открыть шаблоны">
+                <LayoutTemplate className="h-4 w-4" />
+                Шаблон
+              </button>
+            </div>
+            <div className="px-2 flex items-center font-medium">Описание работ</div>
+            <div className="px-2 flex items-center font-medium">Категория</div>
+            <div className="px-2 text-center flex items-center justify-center font-medium">План</div>
+            <div className="px-2 text-center flex items-center justify-center font-medium">Факт</div>
+            <div className="px-2 flex items-center font-medium">Срок</div>
+          </div>
+
+          {/* Строки */}
+          <div className="divide-y divide-slate-200 dark:divide-slate-700">
             {items.map(item => (
-              <tr key={item.decomposition_item_id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                {/* Колонка часиков */}
-                <td className="px-2 py-2 border-b border-slate-200 dark:border-slate-700 text-center align-middle">
-                  <button
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-                    title="Добавить отчёт"
-                    onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}
-                  >
+              <div key={item.decomposition_item_id} className={`${rowGridClass} items-center px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors`}>
+                <div className="flex items-center justify-center">
+                  <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчёт" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
                     <Clock className="h-4 w-4 text-emerald-600" />
                   </button>
-                </td>
-                {/* Описание */}
-                <td className="px-3 py-2 align-middle dark:text-slate-200 text-[14px] border-b border-slate-200 dark:border-slate-700" onClick={() => startEdit(item)}>
+                </div>
+                <div className="px-2 dark:text-slate-200 text-[12px] xl:text-[14px]" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
-                    <textarea
-                      autoFocus
-                      value={editDraft?.decomposition_item_description || ""}
-                      onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_description: e.target.value } as DecompositionItemRow : prev)}
-                      onKeyDown={handleEditKey}
-                      maxLength={MAX_DESC_CHARS}
-                      rows={3}
-                      className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white resize-y min-h-[2.5rem] max-h-40"
-                    />
+                    <textarea autoFocus value={editDraft?.decomposition_item_description || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_description: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} maxLength={MAX_DESC_CHARS} rows={3} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white resize-y min-h-[2.5rem] max-h-40" />
                   ) : (
-                    <div
-                      title={item.decomposition_item_description}
-                      className="whitespace-pre-wrap"
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: "vertical" as const,
-                        overflow: "hidden",
-                        overflowWrap: "anywhere",
-                        wordBreak: "break-word",
-                      }}
-                    >
+                    <div title={item.decomposition_item_description} className="whitespace-pre-wrap" style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                       {item.decomposition_item_description}
                     </div>
                   )}
-                </td>
-                {/* Категория */}
-                <td className="px-3 py-2 align-middle dark:text-slate-200 text-[13px] border-b border-slate-200 dark:border-slate-700" onClick={() => startEdit(item)}>
+                </div>
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px]" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
-                    <select
-                      value={editDraft?.decomposition_item_work_category_id || ""}
-                      onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: e.target.value } as DecompositionItemRow : prev)}
-                      onKeyDown={handleEditKey}
-                      className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
-                    >
+                    <select value={editDraft?.decomposition_item_work_category_id || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white">
                       {categories.map(c => (
                         <option key={c.work_category_id} value={c.work_category_id}>{c.work_category_name}</option>
                       ))}
                     </select>
                   ) : (
-                    <span className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
-                      {categoryById.get(item.decomposition_item_work_category_id) || "—"}
-                    </span>
+                    <span className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">{categoryById.get(item.decomposition_item_work_category_id) || "—"}</span>
                   )}
-                </td>
-                {/* Плановые часы */}
-                <td className="px-3 py-2 align-middle dark:text-slate-200 text-center tabular-nums text-[13px] border-b border-slate-200 dark:border-slate-700" onClick={() => startEdit(item)}>
+                </div>
+                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px]" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
-                    <input
-                      type="number"
-                      step="0.25"
-                      min={0}
-                      value={editDraft?.decomposition_item_planned_hours ?? 0}
-                      onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)}
-                      onKeyDown={handleEditKey}
-                      className="w-16 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
-                    />
+                    <input type="number" step="0.25" min={0} value={editDraft?.decomposition_item_planned_hours ?? 0} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-16 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white" />
                   ) : (
                     Number(item.decomposition_item_planned_hours).toFixed(2)
                   )}
-                </td>
-                {/* Фактические часы + индикатор порогов: ≥90% (жёлтый), >100% (красный) */}
-                <td className="px-3 py-2 align-middle dark:text-slate-200 text-center tabular-nums text-[13px] border-b border-slate-200 dark:border-slate-700">
+                </div>
+                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px]">
                   {(() => {
                     const actual = Number(actualByItemId[item.decomposition_item_id] || 0)
                     const planned = Number(item.decomposition_item_planned_hours || 0)
@@ -429,48 +412,19 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                       </div>
                     )
                   })()}
-                </td>
-                {/* Плановый срок + действия (внутри одной ячейки) */}
-                <td className="px-3 py-2 align-middle dark:text-slate-200 text-[13px] text-left border-b border-slate-200 dark:border-slate-700 whitespace-nowrap" onClick={() => startEdit(item)}>
+                </div>
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] whitespace-nowrap" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          const input = (e.currentTarget.nextSibling as HTMLInputElement | null)
-                          input?.showPicker?.()
-                          input?.focus()
-                        }}
-                        title="Выбрать дату"
-                        className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                      >
+                      <button type="button" onClick={(e) => { const input = (e.currentTarget.nextSibling as HTMLInputElement | null); input?.showPicker?.(); input?.focus() }} title="Выбрать дату" className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
                         <CalendarIcon className="h-4 w-4" />
                       </button>
-                      <input
-                        type="date"
-                        value={editDraft?.decomposition_item_planned_due_date || ""}
-                        onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: e.target.value } as DecompositionItemRow : prev)}
-                        onKeyDown={handleEditKey}
-                        className="sr-only"
-                      />
+                      <input type="date" value={editDraft?.decomposition_item_planned_due_date || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="sr-only" />
                       <div className="ml-auto flex items-center gap-1">
-                        <button
-                          title="Сохранить"
-                          className="p-1 rounded text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
-                          onClick={saveEdit}
-                          disabled={savingId === item.decomposition_item_id}
-                        >
-                          {savingId === item.decomposition_item_id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Check className="h-4 w-4" />
-                          )}
+                        <button title="Сохранить" className="p-1 rounded text-emerald-600 hover:bg-emerald-50 disabled:opacity-50" onClick={saveEdit} disabled={savingId === item.decomposition_item_id}>
+                          {savingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Check className="h-4 w-4" />)}
                         </button>
-                        <button
-                          title="Отмена"
-                          className="p-1 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-                          onClick={cancelEdit}
-                        >
+                        <button title="Отмена" className="p-1 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" onClick={cancelEdit}>
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -479,64 +433,71 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
                       <span className="truncate">{item.decomposition_item_planned_due_date ? new Date(item.decomposition_item_planned_due_date).toLocaleDateString("ru-RU") : "—"}</span>
                       <div className="ml-auto">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[8rem]">
-                          <DropdownMenuItem onClick={() => startEdit(item)}>
-                            <Pencil className="h-4 w-4" /> Редактировать
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
-                            {deletingId === item.decomposition_item_id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                            Удалить
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[8rem]">
+                            <DropdownMenuItem onClick={() => startEdit(item)}>
+                              <Pencil className="h-4 w-4" /> Редактировать
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
+                              {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
+                              Удалить
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   )}
-                </td>
-              </tr>
+                </div>
+              </div>
             ))}
 
-            {/* Row for adding new item */}
-            <tr className="bg-slate-50/70 dark:bg-slate-800/40">
-                {/* Пустая колонка под иконку часов для выравнивания */}
-                <td className="px-2 py-1.5 border-t border-slate-200 dark:border-slate-700"></td>
-                <td className="px-3 py-1.5 border-t border-slate-200 dark:border-slate-700">
+            {/* Новая строка */}
+            <div className={`${rowGridClass} items-center px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60`}>
+              {/* Кнопка добавления слева, как в Notion */}
+              <div className="flex items-center justify-center">
+                <button
+                  type="button"
+                  disabled={!canAdd}
+                  onClick={handleAdd}
+                  title={canAdd ? "Добавить строку" : "Введите описание и план"}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-40"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Описание — плоское поле без рамок */}
+              <div className="px-2">
                 <input
                   type="text"
                   value={newDescription}
                   onChange={e => setNewDescription(e.target.value)}
-                  placeholder="Описание работ"
-                    maxLength={MAX_DESC_CHARS}
-                  className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                  placeholder="Новая строка — введите описание"
+                  maxLength={MAX_DESC_CHARS}
+                  className="w-full bg-transparent px-1 py-1.5 border border-transparent focus:border-slate-300 focus:ring-0 rounded-md dark:text-white"
                   onKeyDown={handleEditKey}
                 />
-              </td>
-                <td className="px-3 py-1.5 border-t border-slate-200 dark:border-slate-700">
+              </div>
+              {/* Категория — лаконичный select */}
+              <div className="px-2">
                 <select
                   value={newCategoryId}
                   onChange={e => setNewCategoryId(e.target.value)}
-                  className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
+                  className="w-full bg-transparent pl-2 pr-6 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
                   onKeyDown={handleEditKey}
                 >
                   <option value="">Категория</option>
                   {categories.map(c => (
-                    <option key={c.work_category_id} value={c.work_category_id}>
-                      {c.work_category_name}
-                    </option>
+                    <option key={c.work_category_id} value={c.work_category_id}>{c.work_category_name}</option>
                   ))}
                 </select>
-              </td>
-                <td className="px-3 py-1.5 text-left border-t border-slate-200 dark:border-slate-700">
+              </div>
+              {/* План, ч — компактный инпут */}
+              <div className="px-2">
                 <input
                   type="number"
                   step="0.25"
@@ -544,47 +505,25 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   value={newPlannedHours}
                   onChange={e => setNewPlannedHours(e.target.value)}
                   placeholder="0"
-                    className="w-[80px] px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                  className="w-[72px] text-center tabular-nums bg-transparent px-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md dark:text-white"
                   onKeyDown={handleEditKey}
                 />
-              </td>
-              {/* Факт для новой строки (—) */}
-              <td className="px-3 py-1.5 text-center border-t border-slate-200 dark:border-slate-700 text-slate-400">—</td>
-              <td className="px-3 py-1.5 text-center border-t border-slate-200 dark:border-slate-700">
-                <div className="inline-flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const input = (e.currentTarget.nextSibling as HTMLInputElement | null)
-                      input?.showPicker?.()
-                      input?.focus()
-                    }}
-                    title="Выбрать дату"
-                    className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    <CalendarIcon className="h-4 w-4" />
-                  </button>
-                  <input
-                    type="date"
-                    value={newPlannedDueDate}
-                    onChange={e => setNewPlannedDueDate(e.target.value)}
-                    className="sr-only"
-                    onKeyDown={handleEditKey}
-                  />
-                  <button
-                    type="button"
-                    disabled={!canAdd}
-                    onClick={handleAdd}
-                    title={canAdd ? "Добавить строку" : "Заполните обязательные поля"}
-                    className="inline-flex items-center justify-center h-9 w-9 rounded-md text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                  >
-                    <PlusCircle className="h-5 w-5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+              {/* Факт для новой строки */}
+              <div className="px-2 text-center text-slate-400">—</div>
+              {/* Дата — плоский date input */}
+              <div className="px-2">
+                <input
+                  type="date"
+                  value={newPlannedDueDate}
+                  onChange={e => setNewPlannedDueDate(e.target.value)}
+                  className="bg-transparent px-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
+                  onKeyDown={handleEditKey}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       {!compact && (
         <div className="flex items-center justify-between">
@@ -629,6 +568,45 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           }
         }}
       />
+
+      <Dialog open={isTemplatesOpen} onOpenChange={setIsTemplatesOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Шаблоны декомпозиции</DialogTitle>
+          </DialogHeader>
+          <TemplatesPanel
+            departmentId={departmentId}
+            sectionId={sectionId}
+            onApplied={async ({ inserted }) => {
+              // Перезагрузка списка после применения шаблона
+              const { data, error } = await supabase
+                .from("decomposition_items")
+                .select(
+                  "decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date, decomposition_item_order"
+                )
+                .eq("decomposition_item_section_id", sectionId)
+                .order("decomposition_item_order", { ascending: true })
+                .order("decomposition_item_created_at", { ascending: true })
+              if (!error) setItems((data as any) || [])
+              // Обновим сводные по секции
+              const totals = await supabase
+                .from('view_section_decomposition_totals')
+                .select('planned_hours, actual_hours, actual_amount')
+                .eq('section_id', sectionId)
+                .single()
+              if (!totals.error) {
+                setSectionTotals({
+                  planned_hours: Number(totals.data?.planned_hours || 0),
+                  actual_hours: Number(totals.data?.actual_hours || 0),
+                  actual_amount: Number(totals.data?.actual_amount || 0),
+                })
+              }
+              setIsTemplatesOpen(false)
+              setNotification(`Шаблон применён. Добавлено строк: ${inserted}`)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

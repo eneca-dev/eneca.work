@@ -88,7 +88,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   const { saveStatus, triggerSave, forceSave } = useAutoSave({
     notionId,
     enabled: enableAutoSave && !!notionId,
-    delay: 300 // Ещё быстрее для мгновенной реакции
+    delay: 600 // Чуть дольше, чтобы избежать лишних перерисовок во время набора
   })
 
   // Функция для показа подсказки о невозможности создания таблицы
@@ -118,6 +118,9 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   // Отслеживание изменений состояния подсказки
   useEffect(() => {
   }, [tooltipState])
+
+  // Флаг набора через IME/композицию
+  const [isComposing, setIsComposing] = useState(false)
 
   // Комбинирование заголовка и содержимого
   const combineContent = (titleValue: string, editorContent: string) => {
@@ -247,16 +250,26 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4 border rounded-md prose-headings:font-bold prose-h1:text-2xl prose-h1:mb-2 prose-h1:mt-4 prose-h2:text-xl prose-h2:mb-2 prose-h2:mt-4 prose-h3:text-lg prose-h3:mb-2 prose-h3:mt-4 prose-strong:font-bold prose-em:italic prose-ul:list-disc prose-ul:ml-6 prose-ol:list-decimal prose-ol:ml-6 prose-li:my-1',
       },
-
+      handleDOMEvents: {
+        compositionstart: () => {
+          setIsComposing(true)
+          return false
+        },
+        compositionend: () => {
+          setIsComposing(false)
+          return false
+        }
+      }
     },
     onUpdate: ({ editor }) => {
+      if (isComposing) return
       setHasChanges(true)
       
       // Автосохранение при изменении контента
       if (enableAutoSave && notionId) {
         try {
           const editorHTML = editor.getHTML()
-          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: false })
           const combinedContent = combineContent(title, editorMarkdown)
           triggerSave(combinedContent)
         } catch (error) {
@@ -269,7 +282,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       if (enableAutoSave && notionId && hasChanges) {
         try {
           const editorHTML = editor.getHTML()
-          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
           const combinedContent = combineContent(title, editorMarkdown)
           // Используем forceSave для немедленного сохранения без debounce
           forceSave(combinedContent)
@@ -281,7 +294,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     autofocus: autoFocus && !showTitle
   })
 
-  // Обновляем содержимое редактора при смене initialValue/initialTitle (переключение заметки)
+  // Обновляем содержимое редактора только при смене заметки (notionId)
   useEffect(() => {
     if (!editor) return
     const nextTitle = initialTitle || parsedTitle
@@ -289,7 +302,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     const nextContent = parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>'
     editor.commands.setContent(nextContent, false)
     setHasChanges(false)
-  }, [initialValue, initialTitle])
+  }, [notionId])
 
   useImperativeHandle(ref, () => ({
     save: async () => {
@@ -297,7 +310,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       if (enableAutoSave && notionId && editor) {
         try {
           const editorHTML = editor.getHTML()
-          const editorMarkdown = htmlToMarkdown(editorHTML)
+          const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
           const combinedContent = combineContent(title, editorMarkdown)
           await forceSave(combinedContent)
         } catch (error) {
@@ -330,7 +343,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       try {
         // Получаем HTML-контент и конвертируем в markdown
         const editorHTML = editor.getHTML()
-        const editorMarkdown = htmlToMarkdown(editorHTML)
+        const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: false })
         return combineContent(title, editorMarkdown)
       } catch (error) {
         console.error('Ошибка при получении контента:', error)
@@ -347,7 +360,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     
     try {
       const editorHTML = editor.getHTML()
-      const editorMarkdown = htmlToMarkdown(editorHTML)
+      const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
       const combinedContent = combineContent(title, editorMarkdown)
       await forceSave(combinedContent)
     } catch (error) {
@@ -363,7 +376,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     if (enableAutoSave && notionId && editor) {
       try {
         const editorHTML = editor.getHTML()
-        const editorMarkdown = htmlToMarkdown(editorHTML)
+        const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
         const combinedContent = combineContent(value, editorMarkdown)
         triggerSave(combinedContent)
       } catch (error) {
@@ -520,7 +533,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
   }
 
   return (
-    <div className={cn('w-full max-w-4xl mx-auto h-full flex flex-col relative', className)}>
+    <div className={cn('w-full h-full flex flex-col relative', className)}>
       {/* Подсказка о таблицах */}
       {tooltipState.show && (
         <div 
