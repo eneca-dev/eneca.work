@@ -90,6 +90,9 @@ export default function ForgotPasswordPage() {
       }
 
       setSuccess(true)
+      try {
+        sessionStorage.setItem('resetEmail', email.trim())
+      } catch {}
       router.push("/auth/password-reset-sent")
     } catch (err) {
       console.error("Password reset error:", err)

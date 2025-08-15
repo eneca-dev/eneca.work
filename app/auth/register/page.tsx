@@ -7,7 +7,6 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter } from "next/navigation"
 // import { createClient } from "@/utils/supabase/client"
-import { useToast } from "@/hooks/use-toast"
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -18,7 +17,6 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const router = useRouter()
   // const supabase = createClient()
-  const { toast } = useToast()
 
   // Функция для получения понятного сообщения об ошибке
   const getErrorMessage = (error: any): string => {
@@ -120,21 +118,10 @@ export default function RegisterPage() {
     }
 
     try {
-      const creatingToast = toast({
-        title: "Создание аккаунта",
-        description: "Создаём ваш аккаунт...",
-      })
-
       // Сначала проверяем существование email
       const emailExists = await checkEmailExists(email)
       if (emailExists) {
         setError("Пользователь с таким email уже зарегистрирован.")
-        creatingToast.update({
-          id: creatingToast.id,
-          title: "Регистрация отклонена",
-          description: "Такой email уже используется",
-          variant: "destructive",
-        } as any)
         setLoading(false)
         return
       }
@@ -160,12 +147,6 @@ export default function RegisterPage() {
 
       if (!response.ok) {
         setError(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
-        creatingToast.update({
-          id: creatingToast.id,
-          title: 'Ошибка регистрации',
-          description: result?.error || 'Не удалось создать аккаунт',
-          variant: 'destructive',
-        } as any)
         setLoading(false)
         return
       }
@@ -175,21 +156,6 @@ export default function RegisterPage() {
       try {
         sessionStorage.setItem('pendingEmail', email.trim())
       } catch {}
-
-      // Отображаем пользовательские сообщения
-      if (result?.emailSent) {
-        creatingToast.update({
-          id: creatingToast.id,
-          title: 'Подтвердите email',
-          description: `Ссылка отправлена на ${email.trim()}`,
-        } as any)
-      } else if (result?.message) {
-        creatingToast.update({
-          id: creatingToast.id,
-          title: 'Аккаунт создан',
-          description: result.message,
-        } as any)
-      }
 
       if (result?.emailSent) {
         router.push('/auth/pending-verification')

@@ -4,12 +4,10 @@ import Link from "next/link"
 import { AuthButton } from "@/components/auth-button"
 import { Mail, RefreshCw } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useToast } from "@/hooks/use-toast"
 
 export default function PendingVerificationPage() {
   const [resending, setResending] = useState(false)
   const [email, setEmail] = useState<string | null>(null)
-  const { toast } = useToast()
 
   useEffect(() => {
     try {
@@ -28,18 +26,7 @@ export default function PendingVerificationPage() {
         body: JSON.stringify({ email }),
       })
       const result = await response.json().catch(() => null)
-      if (!response.ok || !result?.emailSent) {
-        toast({
-          title: 'Не удалось отправить письмо',
-          description: 'Попробуйте позже или обратитесь к администратору',
-          variant: 'destructive',
-        })
-      } else {
-        toast({
-          title: 'Письмо отправлено',
-          description: 'Проверьте вашу почту и следуйте инструкции в письме',
-        })
-      }
+      // Убраны всплывающие сообщения
     } finally {
       setResending(false)
     }
@@ -53,7 +40,9 @@ export default function PendingVerificationPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-center dark:text-gray-100">Подтвердите ваш email</h1>
         <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Мы отправили ссылку для подтверждения на ваш email. Пожалуйста, проверьте вашу почту и подтвердите аккаунт.
+          Мы отправили ссылку для подтверждения на ваш email {email && (
+            <span className="text-primary font-medium break-all">{email}</span>
+          )}. Пожалуйста, проверьте вашу почту и подтвердите аккаунт.
         </p>
       </div>
 

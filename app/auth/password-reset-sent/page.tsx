@@ -3,8 +3,18 @@
 import Link from "next/link"
 import { AuthButton } from "@/components/auth-button"
 import { CheckCircle, Mail } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export default function PasswordResetSentPage() {
+  const [email, setEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('resetEmail')
+      if (stored) setEmail(stored)
+    } catch {}
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center justify-center space-y-3">
@@ -13,7 +23,9 @@ export default function PasswordResetSentPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-center dark:text-gray-100">Проверьте вашу почту</h1>
         <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Мы отправили ссылку для сброса пароля на ваш email. Пожалуйста, проверьте вашу почту.
+          Мы отправили ссылку для сброса пароля на ваш email {email && (
+            <span className="text-primary font-medium break-all">{email}</span>
+          )}. Пожалуйста, проверьте вашу почту.
         </p>
       </div>
 
