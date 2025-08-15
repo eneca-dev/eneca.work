@@ -13,16 +13,123 @@ interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string
   error?: string
   showPasswordToggle?: boolean
+  validateOnChange?: boolean
+  validationRules?: {
+    required?: boolean
+    minLength?: number
+    maxLength?: number
+    pattern?: RegExp
+    email?: boolean
+    custom?: (value: string) => string | null
+  }
+  onValidationChange?: (isValid: boolean, error?: string) => void
 }
 
-export function AuthInput({ label, error, className, id, type, showPasswordToggle = false, ...props }: AuthInputProps) {
+export function AuthInput({ 
+  label, 
+  error, 
+  className, 
+  id, 
+  type, 
+  showPasswordToggle = false, 
+  validateOnChange = false,
+  validationRules,
+  onValidationChange,
+  value,
+  onChange,
+  ...props 
+}: AuthInputProps) {
   const [showPassword, setShowPassword] = useState(false)
+  const [internalError, setInternalError] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword)
   }
 
+  const validateValue = (inputValue: string): string | null => {
+    if (!validationRules) return null
+
+    // Проверка обязательности
+    if (validationRules.required && !inputValue.trim()) {
+      return "Это поле обязательно для заполнения"
+    }
+
+    // Если поле пустое и не обязательное, не валидируем дальше
+    if (!inputValue.trim() && !validationRules.required) {
+      return null
+    }
+
+    // Проверка минимальной длины
+    if (validationRules.minLength && inputValue.length < validationRules.minLength) {
+      return `Минимальная длина: ${validationRules.minLength} символов`
+    }
+
+    // Проверка максимальной длины
+    if (validationRules.maxLength && inputValue.length > validationRules.maxLength) {
+      return `Максимальная длина: ${validationRules.maxLength} символов`
+    }
+
+    // Проверка email
+    if (validationRules.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(inputValue)) {
+        return "Введите корректный email адрес"
+      }
+    }
+
+    // Проверка регулярного выражения
+    if (validationRules.pattern && !validationRules.pattern.test(inputValue)) {
+      return "Неверный формат данных"
+    }
+
+    // Кастомная валидация
+    if (validationRules.custom) {
+      const customError = validationRules.custom(inputValue)
+      if (customError) {
+        return customError
+      }
+    }
+
+    return null
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    
+    if (onChange) {
+      onChange(e)
+    }
+
+    if (validateOnChange && touched) {
+      const validationError = validateValue(newValue)
+      setInternalError(validationError)
+      
+      if (onValidationChange) {
+        onValidationChange(!validationError, validationError || undefined)
+      }
+    }
+  }
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    setTouched(true)
+    
+    if (validateOnChange) {
+      const validationError = validateValue(e.target.value)
+      setInternalError(validationError)
+      
+      if (onValidationChange) {
+        onValidationChange(!validationError, validationError || undefined)
+      }
+    }
+
+    if (props.onBlur) {
+      props.onBlur(e)
+    }
+  }
+
   const inputType = showPasswordToggle && showPassword ? "text" : type
+  const displayError = error || (touched ? internalError : null)
 
   return (
     <div className="space-y-2">
@@ -33,10 +140,14 @@ export function AuthInput({ label, error, className, id, type, showPasswordToggl
         <Input
           id={id}
           type={inputType}
+          value={value}
+          onChange={handleChange}
+          onBlur={handleBlur}
           className={cn(
             "transition-all duration-200 dark:bg-gray-800/50 dark:border-gray-700",
             showPasswordToggle && "pr-10",
-            error && "border-red-500 focus-visible:ring-red-500",
+            displayError && "border-red-500 focus-visible:ring-red-500",
+            !displayError && touched && validationRules && "border-green-500 focus-visible:ring-green-500",
             className,
           )}
           {...props}
@@ -55,7 +166,7 @@ export function AuthInput({ label, error, className, id, type, showPasswordToggl
           </Button>
         )}
       </div>
-      {error && <p className="text-xs text-red-500 animate-fade-in">{error}</p>}
+      {displayError && <p className="text-xs text-red-500 animate-fade-in">{displayError}</p>}
     </div>
   )
 }

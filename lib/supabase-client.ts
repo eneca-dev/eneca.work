@@ -212,10 +212,19 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
 
     // Преобразуем данные с добавлением полного имени ответственного
     return (data || []).map((item) => ({
-      ...item,
+      loading_id: item.loading_id,
+      loading_responsible: item.loading_responsible,
+      loading_section: item.section_id, // Маппим section_id в loading_section
+      loading_start: item.loading_start,
+      loading_finish: item.loading_finish,
+      loading_rate: item.loading_rate,
+      loading_status: item.loading_status,
+      loading_created: item.loading_created,
+      loading_updated: item.loading_updated,
       responsible_name: (item.responsible_first_name && item.responsible_last_name) 
         ? `${item.responsible_first_name} ${item.responsible_last_name}` 
         : null,
+      responsible_avatar: item.responsible_avatar,
     }))
   } catch (error) {
     console.error("Ошибка при загрузке активных загрузок:", error)

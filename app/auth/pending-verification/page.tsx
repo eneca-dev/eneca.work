@@ -3,15 +3,46 @@
 import Link from "next/link"
 import { AuthButton } from "@/components/auth-button"
 import { Mail, RefreshCw } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function PendingVerificationPage() {
   const [resending, setResending] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
+  const { toast } = useToast()
 
-  const handleResend = () => {
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('pendingEmail')
+      if (stored) setEmail(stored)
+    } catch {}
+  }, [])
+
+  const handleResend = async () => {
+    if (!email) return
     setResending(true)
-    // Simulate loading
-    setTimeout(() => setResending(false), 1500)
+    try {
+      const response = await fetch('/api/auth/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.emailSent) {
+        toast({
+          title: 'Не удалось отправить письмо',
+          description: 'Попробуйте позже или обратитесь к администратору',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Письмо отправлено',
+          description: 'Проверьте вашу почту и следуйте инструкции в письме',
+        })
+      }
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
@@ -35,7 +66,7 @@ export default function PendingVerificationPage() {
       </div>
 
       <div className="space-y-6">
-        <AuthButton variant="outline" onClick={handleResend} loading={resending}>
+        <AuthButton variant="outline" onClick={handleResend} loading={resending} disabled={!email}>
           Отправить снова
         </AuthButton>
 

@@ -56,20 +56,77 @@ function ResetPasswordForm() {
   // Run once per query-param change
   }, [searchParams])
 
+  // Функция для получения понятного сообщения об ошибке
+  const getErrorMessage = (error: any): string => {
+    if (!error?.message) return "Произошла неизвестная ошибка"
+    
+    const message = error.message.toLowerCase()
+    
+    // Проверка различных типов ошибок
+    if (message.includes('weak password')) {
+      return "Пароль слишком простой. Используйте комбинацию букв, цифр и специальных символов."
+    }
+    
+    if (message.includes('password should be at least')) {
+      return "Пароль должен содержать минимум 6 символов."
+    }
+    
+    if (message.includes('same password')) {
+      return "Новый пароль должен отличаться от текущего."
+    }
+    
+    if (message.includes('session not found') || message.includes('invalid session')) {
+      return "Сессия истекла. Запросите новую ссылку для сброса пароля."
+    }
+    
+    if (message.includes('user not found')) {
+      return "Пользователь не найден. Запросите новую ссылку для сброса пароля."
+    }
+    
+    if (message.includes('token expired') || message.includes('invalid token')) {
+      return "Ссылка истекла или недействительна. Запросите новую ссылку для сброса пароля."
+    }
+    
+    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
+    return error.message
+  }
+
+  const validateForm = (): string | null => {
+    // Проверка пароля
+    if (!password) {
+      return "Введите новый пароль"
+    }
+    
+    if (password.length < 6) {
+      return "Пароль должен содержать минимум 6 символов"
+    }
+    
+    // Проверка подтверждения пароля
+    if (!confirmPassword) {
+      return "Подтвердите новый пароль"
+    }
+    
+    if (password !== confirmPassword) {
+      return "Пароли не совпадают"
+    }
+    
+    // Проверка сложности пароля
+    if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(password) && password.length < 8) {
+      return "Рекомендуется использовать пароль длиной от 8 символов с буквами и цифрами"
+    }
+    
+    return null
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError("Пароли не совпадают")
-      setLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Пароль должен содержать минимум 6 символов")
+    // Валидация формы
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       setLoading(false)
       return
     }
@@ -80,7 +137,7 @@ function ResetPasswordForm() {
       })
 
       if (error) {
-        setError(error.message)
+        setError(getErrorMessage(error))
         setLoading(false)
         return
       }
@@ -89,7 +146,7 @@ function ResetPasswordForm() {
       router.push("/auth/login?message=Пароль успешно изменен")
     } catch (err) {
       console.error("Password reset error:", err)
-      setError("Произошла ошибка при сбросе пароля. Пожалуйста, попробуйте снова.")
+      setError("Произошла непредвиденная ошибка при сбросе пароля. Проверьте подключение к интернету и попробуйте снова.")
       setLoading(false)
     }
   }
@@ -155,6 +212,17 @@ function ResetPasswordForm() {
           showPasswordToggle={true}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          validateOnChange={true}
+          // validationRules={{
+          //   required: true,
+          //   minLength: 6,
+          //   custom: (value: string) => {
+          //     if (value.length >= 8 && !/(?=.*[a-zA-Z])(?=.*\d)/.test(value)) {
+          //       return "Рекомендуется использовать буквы и цифры для большей безопасности"
+          //     }
+          //     return null
+          //   }
+          // }}
         />
 
         <AuthInput
@@ -166,6 +234,16 @@ function ResetPasswordForm() {
           showPasswordToggle={true}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            custom: (value: string) => {
+              if (password && value !== password) {
+                return "Пароли не совпадают"
+              }
+              return null
+            }
+          }}
         />
 
         <AuthButton type="submit" loading={loading}>
