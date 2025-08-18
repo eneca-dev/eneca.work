@@ -3,15 +3,33 @@
 import Link from "next/link"
 import { AuthButton } from "@/components/auth-button"
 import { Mail, RefreshCw } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 export default function PendingVerificationPage() {
   const [resending, setResending] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
 
-  const handleResend = () => {
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('pendingEmail')
+      if (stored) setEmail(stored)
+    } catch {}
+  }, [])
+
+  const handleResend = async () => {
+    if (!email) return
     setResending(true)
-    // Simulate loading
-    setTimeout(() => setResending(false), 1500)
+    try {
+      const response = await fetch('/api/auth/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const result = await response.json().catch(() => null)
+      // Убраны всплывающие сообщения
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
@@ -22,7 +40,9 @@ export default function PendingVerificationPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-center dark:text-gray-100">Подтвердите ваш email</h1>
         <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Мы отправили ссылку для подтверждения на ваш email. Пожалуйста, проверьте вашу почту и подтвердите аккаунт.
+          Мы отправили ссылку для подтверждения на ваш email {email && (
+            <span className="text-primary font-medium break-all">{email}</span>
+          )}. Пожалуйста, проверьте вашу почту и подтвердите аккаунт.
         </p>
       </div>
 
@@ -35,7 +55,7 @@ export default function PendingVerificationPage() {
       </div>
 
       <div className="space-y-6">
-        <AuthButton variant="outline" onClick={handleResend} loading={resending}>
+        <AuthButton variant="outline" onClick={handleResend} loading={resending} disabled={!email}>
           Отправить снова
         </AuthButton>
 

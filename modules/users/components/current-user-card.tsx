@@ -69,7 +69,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
             team: userData.team_name === "Без команды" ? "" : userData.team_name || "",
             category: userData.category_name === "Не применяется" ? "" : userData.category_name || "",
             role: userData.role_name || "",
-            isActive: userData.is_active ?? true,
+
             dateJoined: userData.created_at || "",
             workLocation: 
               userData.work_format === "Гибридный" ? "hybrid" : 
@@ -111,7 +111,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
         team: "",
         category: "",
         role: "",
-        isActive: true,
+
         dateJoined: "",
         workLocation: 
           userState.profile?.workFormat === "Гибридный" ? "hybrid" : 

@@ -10,7 +10,6 @@ export type User = {
   team: string
   category: string
   role?: string
-  isActive: boolean
   dateJoined: string
   workLocation: "office" | "remote" | "hybrid"
   address: string

@@ -64,7 +64,7 @@ export default function TeamHeadModal({
           department_name,
           position_name
         `)
-        .eq("is_active", true)
+
         .order("first_name")
       
       if (error) {
@@ -125,7 +125,7 @@ export default function TeamHeadModal({
         .from("team_leads")
         .delete()
         .eq("team_id", team.team_id)
-        .eq("is_active", true)
+
       
       // Назначаем нового руководителя
       const { error } = await supabase

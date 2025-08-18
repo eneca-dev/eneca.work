@@ -57,7 +57,7 @@ export async function getUsers(): Promise<User[]> {
     team: user.team_name || "",
     category: user.category_name || "",
     role: user.role_name || "",
-    isActive: user.is_active || true,
+
     dateJoined: user.created_at,
     workLocation: mapWorkFormat(user.work_format),
     address: user.address || "",
@@ -309,13 +309,7 @@ export async function updateUser(
     console.log("Добавлено: is_hourly =", userData.isHourly);
   }
 
-  // Добавляем обработку поля isActive
-  // ВРЕМЕННО ОТКЛЮЧЕНО: колонка is_active отсутствует в таблице profiles
-  // TODO: Добавить колонку is_active в таблицу profiles через миграцию
-  // if (userData.isActive !== undefined) {
-  //   updates.is_active = userData.isActive
-  //   console.log("Добавлено: is_active =", userData.isActive);
-  // }
+
 
   // Обновляем роль пользователя прямо в profiles, если она была передана
   if (userData.roleId !== undefined) {
@@ -445,7 +439,7 @@ export async function getActiveUsersCount() {
 
 // Получение количества неактивных пользователей (пока всегда 0)
 export async function getInactiveUsersCount() {
-  return 0 // В будущем можно реализовать логику с флагом is_active
+  return 0
 }
 
 // Получение статистики по присоединению пользователей по месяцам

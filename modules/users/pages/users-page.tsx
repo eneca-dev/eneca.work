@@ -114,7 +114,7 @@ export default function UsersPage() {
     department: "Разработка",
     team: "Frontend",
     category: "Штатный сотрудник",
-    isActive: true,
+
     dateJoined: new Date().toISOString(),
     workLocation: "hybrid" as const,
     address: "ул. Ленина, 10, Москва / Домашний офис",

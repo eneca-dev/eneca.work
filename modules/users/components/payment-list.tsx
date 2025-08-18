@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Edit, MoreHorizontal, Search, Clock, DollarSign, Users } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { User } from "../lib/types"
+import type { User } from "@/types/db"
 import { useRouter } from "next/navigation"
 import { PaymentDialog } from "./payment-dialog"
 
@@ -86,7 +86,7 @@ export default function PaymentList({ users: initialUsers, filters: initialFilte
     }
 
     if (filters.roles.length > 0) {
-      result = result.filter((user) => filters.roles.includes(user.role))
+      result = result.filter((user) => user.role && filters.roles.includes(user.role))
     }
 
     setFilteredUsers(result)
