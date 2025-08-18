@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useTaskTransferStore } from '@/modules/task-transfer/store'
@@ -1054,7 +1055,7 @@ export function ProjectsTree({
         op: "projects.load_tree_data",
         name: "Load Projects Tree Data",
       },
-      async (span) => {
+      async (span: any) => {
         console.log('🌳 Загружаю данные дерева проектов...')
         console.log('🔍 Фильтры:', { 
           selectedManagerId, 
@@ -1148,6 +1149,8 @@ export function ProjectsTree({
     } finally {
       setLoading(false)
     }
+    }
+    );
   }
 
   const buildTreeStructureFromProjectTree = (data: any[], showManagers: boolean, groupByClient: boolean): ProjectNode[] => {

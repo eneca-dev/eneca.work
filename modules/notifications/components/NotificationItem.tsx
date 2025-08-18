@@ -94,7 +94,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
-    return Sentry.startSpan(
+    Sentry.startSpan(
       {
         op: "ui.click",
         name: "Notification Item Click",
@@ -161,7 +161,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
           console.error('Ошибка при клике на уведомление:', error)
         }
       }
-    }
+    );
     
     // Если это уведомление о комментарии, подсвечиваем раздел
     if (notification.entityType === 'section_comment') {

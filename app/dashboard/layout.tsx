@@ -159,14 +159,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [mounted, fetchUser])
 
-  if (!mounted || !permissionsLoaded) {
+  if (!mounted) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">
-            {!mounted ? "Инициализация..." : "Загрузка прав доступа..."}
-          </p>
+          <p className="text-muted-foreground">Инициализация...</p>
         </div>
       </div>
     )
@@ -188,7 +186,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Контент с отступом слева */}
       <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300 ${marginLeft}`}>
         <UserPermissionsSyncProvider>
-          {children}
+          {!permissionsLoaded ? (
+            <div className="min-h-[60vh] flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Загрузка прав доступа...</p>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </UserPermissionsSyncProvider>
       </div>
     </div>
