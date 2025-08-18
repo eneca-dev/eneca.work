@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Calendar, User } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -43,17 +44,62 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
   }, [isOpen])
 
   const loadProfiles = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, first_name, last_name, email')
-        .order('first_name')
+    return Sentry.startSpan(
+      {
+        op: "projects.load_profiles",
+        name: "Load Profiles for Object Creation",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("stage.id", stageId)
+          span.setAttribute("stage.name", stageName)
+          
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('user_id, first_name, last_name, email')
+            .order('first_name')
 
-      if (error) throw error
-      setProfiles(data || [])
-    } catch (error) {
-      console.error('Ошибка загрузки профилей:', error)
-    }
+          if (error) {
+            span.setAttribute("load.success", false)
+            span.setAttribute("load.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'load_profiles',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'CreateObjectModal',
+                stage_id: stageId,
+                stage_name: stageName,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
+          
+          span.setAttribute("load.success", true)
+          span.setAttribute("profiles.count", data?.length || 0)
+          setProfiles(data || [])
+        } catch (error) {
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'load_profiles',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'CreateObjectModal',
+              stage_id: stageId,
+              stage_name: stageName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка загрузки профилей:', error)
+        }
+      }
+    )
   }
 
   const getProfileName = (profile: Profile) => {
@@ -82,30 +128,93 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
       return
     }
 
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('objects')
-        .insert({
-          object_name: objectName.trim(),
-          object_description: objectDescription.trim() || null,
-          object_responsible: objectResponsible || null,
-          object_start_date: objectStartDate || null,
-          object_end_date: objectEndDate || null,
-          object_stage_id: stageId
-        })
+    return Sentry.startSpan(
+      {
+        op: "projects.create_object",
+        name: "Create Object",
+      },
+      async (span) => {
+        setLoading(true)
+        try {
+          span.setAttribute("object.name", objectName.trim())
+          span.setAttribute("stage.id", stageId)
+          span.setAttribute("stage.name", stageName)
+          span.setAttribute("object.has_responsible", !!objectResponsible)
+          span.setAttribute("object.has_dates", !!(objectStartDate && objectEndDate))
 
-      if (error) throw error
+          const { error } = await supabase
+            .from('objects')
+            .insert({
+              object_name: objectName.trim(),
+              object_description: objectDescription.trim() || null,
+              object_responsible: objectResponsible || null,
+              object_start_date: objectStartDate || null,
+              object_end_date: objectEndDate || null,
+              object_stage_id: stageId
+            })
 
-      setNotification(`Объект "${objectName}" успешно создан`)
-      onSuccess()
-      handleClose()
-    } catch (error) {
-      console.error('Ошибка создания объекта:', error)
-      setNotification(error instanceof Error ? error.message : 'Ошибка создания объекта')
-    } finally {
-      setLoading(false)
-    }
+          if (error) {
+            span.setAttribute("create.success", false)
+            span.setAttribute("create.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'create_object',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'CreateObjectModal',
+                object_name: objectName.trim(),
+                stage_id: stageId,
+                stage_name: stageName,
+                responsible_id: objectResponsible,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
+
+          span.setAttribute("create.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Object created successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              object_name: objectName.trim(),
+              stage_id: stageId,
+              stage_name: stageName,
+              has_responsible: !!objectResponsible
+            }
+          })
+
+          setNotification(`Объект "${objectName}" успешно создан`)
+          onSuccess()
+          handleClose()
+        } catch (error) {
+          span.setAttribute("create.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'create_object',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'CreateObjectModal',
+              object_name: objectName.trim(),
+              stage_id: stageId,
+              stage_name: stageName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка создания объекта:', error)
+          setNotification(error instanceof Error ? error.message : 'Ошибка создания объекта')
+        } finally {
+          setLoading(false)
+        }
+      }
+    )
   }
 
   const handleClose = () => {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { useCalendarStore } from "@/modules/calendar/store"
 import { type CalendarEvent } from "@/modules/calendar/types"
 import { useUserStore } from "@/stores/useUserStore"
@@ -29,37 +30,72 @@ export function CalendarGrid() {
 
   // Filter events based on UI settings and user permissions
   useEffect(() => {
-    if (!isAuthenticated || !currentUserId) return
+    try {
+      if (!isAuthenticated || !currentUserId) return
 
-    let filtered = [...events]
+      let filtered = [...events]
 
-    // Filter by global flag and creator
-    filtered = filtered.filter((event) => {
-      // Always show global events (праздники, переносы и т.д.)
-      if (event.calendar_event_is_global) {
-        return true
+      // Filter by global flag and creator
+      filtered = filtered.filter((event) => {
+        // Always show global events (праздники, переносы и т.д.)
+        if (event.calendar_event_is_global) {
+          return true
+        }
+
+        // Show personal events only to their creator and only if the toggle is on
+        // Это включает отпуска, отгулы, больничные и личные события
+        return event.calendar_event_created_by === currentUserId && showPersonalEvents
+      })
+
+      // Filter birthdays if toggle is off - только для событий типа "Событие" с комментарием "день рождения"
+      if (!showBirthdays) {
+        filtered = filtered.filter(
+          (event) => {
+            // Если это не событие типа "Событие", то показываем его
+            if (event.calendar_event_type !== "Событие") {
+              return true
+            }
+            // Если это событие типа "Событие", то показываем только если это НЕ день рождения
+            return !event.calendar_event_comment?.toLowerCase().includes("день рождения")
+          }
+        )
       }
 
-      // Show personal events only to their creator and only if the toggle is on
-      // Это включает отпуска, отгулы, больничные и личные события
-      return event.calendar_event_created_by === currentUserId && showPersonalEvents
-    })
+      setVisibleEvents(filtered)
 
-    // Filter birthdays if toggle is off - только для событий типа "Событие" с комментарием "день рождения"
-    if (!showBirthdays) {
-      filtered = filtered.filter(
-        (event) => {
-          // Если это не событие типа "Событие", то показываем его
-          if (event.calendar_event_type !== "Событие") {
-            return true
-          }
-          // Если это событие типа "Событие", то показываем только если это НЕ день рождения
-          return !event.calendar_event_comment?.toLowerCase().includes("день рождения")
+      Sentry.addBreadcrumb({
+        message: 'Calendar events filtered',
+        category: 'calendar',
+        level: 'info',
+        data: {
+          component: 'CalendarGrid',
+          user_id: currentUserId,
+          total_events: events.length,
+          filtered_events: filtered.length,
+          show_birthdays: showBirthdays,
+          show_personal_events: showPersonalEvents
         }
-      )
+      })
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: 'calendar',
+          component: 'CalendarGrid',
+          action: 'filter_events',
+          error_type: 'unexpected_error'
+        },
+        extra: {
+          user_id: currentUserId,
+          events_count: events.length,
+          show_birthdays: showBirthdays,
+          show_personal_events: showPersonalEvents,
+          timestamp: new Date().toISOString()
+        }
+      })
+      console.error('Ошибка при фильтрации событий календаря:', error)
+      // В случае ошибки показываем пустой массив
+      setVisibleEvents([])
     }
-
-    setVisibleEvents(filtered)
   }, [events, showBirthdays, showPersonalEvents, currentUserId, isAuthenticated])
 
   // Check if a date has events
@@ -175,7 +211,39 @@ export function CalendarGrid() {
               // Выделение сегодняшнего дня - более яркое
               isToday && !isSelected && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background border-primary/50",
             )}
-            onClick={() => setSelectedDate(day)}
+            onClick={() => {
+              try {
+                setSelectedDate(day)
+                
+                Sentry.addBreadcrumb({
+                  message: 'Calendar date selected',
+                  category: 'calendar',
+                  level: 'info',
+                  data: {
+                    component: 'CalendarGrid',
+                    selected_date: day.toISOString().split('T')[0],
+                    events_on_date: dayEvents.length,
+                    is_working_day: isWorkDay
+                  }
+                })
+              } catch (error) {
+                Sentry.captureException(error, {
+                  tags: {
+                    module: 'calendar',
+                    component: 'CalendarGrid',
+                    action: 'select_date',
+                    error_type: 'unexpected_error'
+                  },
+                  extra: {
+                    selected_date: day.toISOString(),
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                console.error('Ошибка при выборе даты в календаре:', error)
+                // Все равно устанавливаем дату
+                setSelectedDate(day)
+              }
+            }}
           >
             <div className="flex justify-between items-start">
               <span

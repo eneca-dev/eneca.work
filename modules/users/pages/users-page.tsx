@@ -9,6 +9,7 @@ import { PaymentAccessCheck } from "../components/payment-access-check"
 import { CurrentUserCard } from "../components/current-user-card"
 import { AdminPanel } from "@/modules/users/admin"
 import { AdminAccessCheck } from "../components/admin-access-check"
+import { AddUserForm } from "../components/add-user-form"
 import { getUsers } from "@/services/org-data-service"
 import type { User } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -37,7 +38,7 @@ export default function UsersPage() {
   
   // Set initial tab value based on URL
   const [adminTab, setAdminTab] = useState(
-    tabFromUrl && ["list", "payment", "analytics", "admin"].includes(tabFromUrl)
+    tabFromUrl && ["list", "add-user", "payment", "analytics", "admin"].includes(tabFromUrl)
       ? tabFromUrl
       : "list"
   )
@@ -134,6 +135,7 @@ export default function UsersPage() {
       <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
         <TabsList>
           <TabsTrigger value="list">Список пользователей</TabsTrigger>
+          <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
           <TabsTrigger value="payment">Оплата</TabsTrigger>
           <TabsTrigger value="analytics">Аналитика</TabsTrigger>
           <PermissionGuard permission={PERMISSIONS.USERS.ADMIN_PANEL}>
@@ -149,6 +151,9 @@ export default function UsersPage() {
               <UsersList users={users} filters={filters} onUserUpdated={handleUserUpdated} />
             </div>
           </div>
+        </TabsContent>
+        <TabsContent value="add-user" className="space-y-4">
+          <AddUserForm onUserAdded={handleUserUpdated} />
         </TabsContent>
         <TabsContent value="payment" className="space-y-4">
           <PaymentAccessCheck>

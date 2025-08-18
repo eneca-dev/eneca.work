@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { NotificationItem } from "./NotificationItem"
@@ -34,20 +35,80 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
 
   // Функция для пометки уведомления как прочитанного в реальном времени
   const markNotificationAsReadRealtime = useCallback(async (notificationId: string) => {
-    const notification = notifications.find(n => n.id === notificationId)
-    if (notification && !notification.isRead) {
-      console.log('📖 Помечаем уведомление как прочитанное в реальном времени:', notificationId)
-      
-      // Сначала обновляем локальное состояние (счетчик уменьшится автоматически)
-      markAsRead(notificationId)
-      
-      // Затем обновляем в базе данных
-      try {
-        await markAsReadInDB(notificationId)
-      } catch (error) {
-        console.error(`❌ Ошибка при пометке уведомления ${notificationId} как прочитанного в БД:`, error)
+    return Sentry.startSpan(
+      {
+        op: "notifications.mark_as_read_realtime",
+        name: "Mark Notification As Read Realtime",
+      },
+      async (span) => {
+        try {
+          const notification = notifications.find(n => n.id === notificationId)
+          
+          span.setAttribute("notification.id", notificationId)
+          span.setAttribute("notification.found", !!notification)
+          span.setAttribute("notification.is_read", notification?.isRead || false)
+          
+          if (notification && !notification.isRead) {
+            console.log('📖 Помечаем уведомление как прочитанное в реальном времени:', notificationId)
+            
+            // Сначала обновляем локальное состояние (счетчик уменьшится автоматически)
+            markAsRead(notificationId)
+            
+            // Затем обновляем в базе данных
+            try {
+              await markAsReadInDB(notificationId)
+              span.setAttribute("mark.success", true)
+              
+              Sentry.addBreadcrumb({
+                message: 'Notification marked as read in realtime',
+                category: 'notifications',
+                level: 'info',
+                data: {
+                  notification_id: notificationId,
+                  entity_type: notification.entityType
+                }
+              })
+            } catch (error) {
+              span.setAttribute("mark.success", false)
+              span.recordException(error as Error)
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'notifications',
+                  component: 'NotificationsPanel',
+                  action: 'mark_as_read_realtime',
+                  error_type: 'db_error'
+                },
+                extra: {
+                  notification_id: notificationId,
+                  notification_entity_type: notification.entityType,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              console.error(`❌ Ошибка при пометке уведомления ${notificationId} как прочитанного в БД:`, error)
+            }
+          } else {
+            span.setAttribute("mark.skipped", true)
+            span.setAttribute("mark.skip_reason", notification ? "already_read" : "not_found")
+          }
+        } catch (error) {
+          span.setAttribute("mark.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              component: 'NotificationsPanel',
+              action: 'mark_as_read_realtime',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              notification_id: notificationId,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка в markNotificationAsReadRealtime:', error)
+        }
       }
-    }
+    )
   }, [notifications, markAsRead, markAsReadInDB])
 
   // Обновляем ref при изменении функции
@@ -65,45 +126,115 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
 
   // Intersection Observer для отслеживания видимых уведомлений
   useEffect(() => {
-    if (!scrollRef.current) return
+    try {
+      if (!scrollRef.current) return
 
-    console.log('👀 Инициализируем Intersection Observer для', notifications.length, 'уведомлений')
+      console.log('👀 Инициализируем Intersection Observer для', notifications.length, 'уведомлений')
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const notificationId = entry.target.getAttribute('data-notification-id')
-          if (notificationId && entry.isIntersecting) {
-            console.log(`👁️ Уведомление ${notificationId} стало видимым`)
-            
-            // Добавляем в видимые
-            setVisibleNotifications(prev => new Set(prev).add(notificationId))
-            
-            // Помечаем как прочитанное, если еще не обработано
-            if (!processedNotifications.has(notificationId)) {
-              const notification = notifications.find(n => n.id === notificationId)
-              if (notification && !notification.isRead) {
-                if (markAsReadRealtimeRef.current) {
-                  markAsReadRealtimeRef.current(notificationId)
+      Sentry.addBreadcrumb({
+        message: 'Initializing Intersection Observer',
+        category: 'notifications',
+        level: 'info',
+        data: {
+          notifications_count: notifications.length,
+          processed_count: processedNotifications.size
+        }
+      })
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          try {
+            entries.forEach((entry) => {
+              const notificationId = entry.target.getAttribute('data-notification-id')
+              if (notificationId && entry.isIntersecting) {
+                console.log(`👁️ Уведомление ${notificationId} стало видимым`)
+                
+                // Добавляем в видимые
+                setVisibleNotifications(prev => new Set(prev).add(notificationId))
+                
+                // Помечаем как прочитанное, если еще не обработано
+                if (!processedNotifications.has(notificationId)) {
+                  const notification = notifications.find(n => n.id === notificationId)
+                  if (notification && !notification.isRead) {
+                    if (markAsReadRealtimeRef.current) {
+                      markAsReadRealtimeRef.current(notificationId)
+                    }
+                    setProcessedNotifications(prev => new Set(prev).add(notificationId))
+                  }
                 }
-                setProcessedNotifications(prev => new Set(prev).add(notificationId))
               }
-            }
+            })
+          } catch (error) {
+            Sentry.captureException(error, {
+              tags: {
+                module: 'notifications',
+                component: 'NotificationsPanel',
+                action: 'intersection_observer_callback',
+                error_type: 'unexpected_error'
+              },
+              extra: {
+                entries_count: entries.length,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка в Intersection Observer callback:', error)
           }
-        })
-      },
-      {
-        root: scrollRef.current,
-        threshold: 0.5 // Считаем видимым, когда 50% элемента видно
+        },
+        {
+          root: scrollRef.current,
+          threshold: 0.5 // Считаем видимым, когда 50% элемента видно
+        }
+      )
+
+      // Наблюдаем за всеми элементами уведомлений
+      const notificationElements = scrollRef.current.querySelectorAll('[data-notification-id]')
+      console.log('🔍 Найдено элементов уведомлений для отслеживания:', notificationElements.length)
+      
+      Sentry.addBreadcrumb({
+        message: 'Starting observation of notification elements',
+        category: 'notifications',
+        level: 'info',
+        data: {
+          elements_count: notificationElements.length
+        }
+      })
+      
+      notificationElements.forEach(element => observer.observe(element))
+
+      return () => {
+        try {
+          observer.disconnect()
+        } catch (error) {
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              component: 'NotificationsPanel',
+              action: 'intersection_observer_cleanup',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка при отключении Intersection Observer:', error)
+        }
       }
-    )
-
-    // Наблюдаем за всеми элементами уведомлений
-    const notificationElements = scrollRef.current.querySelectorAll('[data-notification-id]')
-    console.log('🔍 Найдено элементов уведомлений для отслеживания:', notificationElements.length)
-    notificationElements.forEach(element => observer.observe(element))
-
-    return () => observer.disconnect()
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: 'notifications',
+          component: 'NotificationsPanel',
+          action: 'intersection_observer_init',
+          error_type: 'unexpected_error'
+        },
+        extra: {
+          notifications_count: notifications.length,
+          processed_count: processedNotifications.size,
+          timestamp: new Date().toISOString()
+        }
+      })
+      console.error('Ошибка при инициализации Intersection Observer:', error)
+    }
   }, [notifications, processedNotifications])
 
   // Закрытие панели при клике вне её
@@ -143,7 +274,49 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
 
   // Обновление уведомлений
   const handleRefresh = async () => {
-    await fetchNotifications()
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Refresh Notifications",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("refresh.trigger", "manual")
+          span.setAttribute("notifications.current_count", notifications.length)
+          
+          await fetchNotifications()
+          
+          span.setAttribute("refresh.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Notifications refreshed manually',
+            category: 'notifications',
+            level: 'info',
+            data: {
+              trigger: 'manual',
+              previous_count: notifications.length
+            }
+          })
+        } catch (error) {
+          span.setAttribute("refresh.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              component: 'NotificationsPanel',
+              action: 'refresh',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              trigger: 'manual',
+              current_count: notifications.length,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка при обновлении уведомлений:', error)
+        }
+      }
+    )
   }
 
   return (

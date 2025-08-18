@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import * as Sentry from "@sentry/nextjs"
 
 import { cn } from "@/lib/utils"
 import { useState, useRef, useEffect } from "react"
@@ -76,7 +77,24 @@ export function Avatar({ name, avatarUrl, size = "sm", theme = "light", classNam
           className="w-full h-full object-cover"
           onLoad={() => setIsLoading(false)}
           onError={() => {
-            console.error(`Ошибка загрузки аватара: ${avatarUrl}`)
+            const error = new Error(`Ошибка загрузки аватара: ${avatarUrl}`)
+            
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'avatar_load_error',
+                component: 'Avatar'
+              },
+              extra: {
+                avatar_url: avatarUrl,
+                user_name: name,
+                size: size,
+                theme: theme,
+                timestamp: new Date().toISOString()
+              },
+              level: 'warning' // Это не критическая ошибка, только предупреждение
+            })
+            
             setImageError(true)
             setIsLoading(false)
           }}

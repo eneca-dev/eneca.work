@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useUserStore } from "@/stores/useUserStore"
@@ -75,27 +76,83 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
     let isMounted = true
 
     const loadData = async () => {
-      try {
-        await Promise.allSettled([
-          fetchEvents(targetUserId),
-          fetchWorkSchedules(targetUserId)
-        ]).then((results) => {
-          if (!isMounted || abortController.signal.aborted) {
-            return
-          }
+      return Sentry.startSpan(
+        {
+          op: "calendar.load_mini_data",
+          name: "Load Mini Calendar Data",
+        },
+        async (span) => {
+          try {
+            span.setAttribute("user.id", currentUserId)
+            span.setAttribute("user.authenticated", isAuthenticated)
+            
+            await Promise.allSettled([
+              fetchEvents(currentUserId),
+              fetchWorkSchedules(currentUserId)
+            ]).then((results) => {
+              if (!isMounted || abortController.signal.aborted) {
+                return
+              }
 
-          results.forEach((result, index) => {
-            if (result.status === 'rejected') {
-              const operationName = index === 0 ? 'events' : 'work schedules'
-              console.error(`Failed to fetch ${operationName}:`, result.reason)
+              let failedOperations = 0
+              results.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                  failedOperations++
+                  const operationName = index === 0 ? 'events' : 'work schedules'
+                  console.error(`Failed to fetch ${operationName}:`, result.reason)
+                  
+                  Sentry.captureException(result.reason, {
+                    tags: {
+                      module: 'calendar',
+                      component: 'MiniCalendar',
+                      action: `load_${operationName.replace(' ', '_')}`,
+                      error_type: 'fetch_error'
+                    },
+                    extra: {
+                      user_id: currentUserId,
+                      operation: operationName,
+                      timestamp: new Date().toISOString()
+                    }
+                  })
+                }
+              })
+              
+              span.setAttribute("load.success", failedOperations === 0)
+              span.setAttribute("load.failed_operations", failedOperations)
+              
+              if (failedOperations === 0) {
+                Sentry.addBreadcrumb({
+                  message: 'Mini calendar data loaded successfully',
+                  category: 'calendar',
+                  level: 'info',
+                  data: {
+                    component: 'MiniCalendar',
+                    user_id: currentUserId
+                  }
+                })
+              }
+            })
+          } catch (error) {
+            span.setAttribute("load.success", false)
+            span.recordException(error as Error)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'calendar',
+                component: 'MiniCalendar',
+                action: 'load_data',
+                error_type: 'unexpected_error'
+              },
+              extra: {
+                user_id: currentUserId,
+                timestamp: new Date().toISOString()
+              }
+            })
+            if (isMounted && !abortController.signal.aborted) {
+              console.error('Failed to load calendar data:', error)
             }
-          })
-        })
-      } catch (error) {
-        if (isMounted && !abortController.signal.aborted) {
-          console.error('Failed to load calendar data:', error)
+          }
         }
-      }
+      )
     }
 
     loadData()
@@ -273,7 +330,41 @@ export const MiniCalendar: React.FC<MiniCalendarProps> = (props) => {
                   (isFrom || isTo) && "bg-primary text-primary-foreground border-primary shadow-sm",
                   isBetween && "bg-primary/10 text-primary border-primary/20",
                 )}
-                onClick={() => onSelectDate(d)}
+                onClick={() => {
+                  try {
+                    onSelectDate(d)
+                    
+                    Sentry.addBreadcrumb({
+                      message: 'Date selected in mini calendar',
+                      category: 'calendar',
+                      level: 'info',
+                      data: {
+                        component: 'MiniCalendar',
+                        selected_date: d.toISOString().split('T')[0],
+                        user_id: currentUserId,
+                        mode: mode
+                      }
+                    })
+                  } catch (error) {
+                    Sentry.captureException(error, {
+                      tags: {
+                        module: 'calendar',
+                        component: 'MiniCalendar',
+                        action: 'select_date',
+                        error_type: 'unexpected_error'
+                      },
+                      extra: {
+                        selected_date: d.toISOString(),
+                        user_id: currentUserId,
+                        mode: mode,
+                        timestamp: new Date().toISOString()
+                      }
+                    })
+                    console.error('Ошибка при выборе даты в мини-календаре:', error)
+                    // Все равно вызываем обработчик
+                    onSelectDate(d)
+                  }
+                }}
               >
                 {d.getDate()}
               </div>

@@ -9,6 +9,7 @@ import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
 // УДАЛЕНО: Legacy import syncCurrentUserState - теперь синхронизация автоматическая
+import * as Sentry from "@sentry/nextjs"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -107,7 +108,6 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     // Валидация формы
     const validationError = validateForm()
     if (validationError) {
@@ -116,36 +116,82 @@ export default function LoginPage() {
       return
     }
 
-    try {
-      // Сначала проверяем существование email
-      const emailExists = await checkEmailExists(email)
-      if (!emailExists) {
-        setError("Пользователь с таким email не найден. Пожалуйста, зарегистрируйтесь или проверьте правильность email адреса.")
-        setLoading(false)
-        return
+    return Sentry.startSpan(
+      {
+        op: "auth.login",
+        name: "User Login",
+      },
+      async (span: any) => {
+        try {
+          const trimmedEmail = email.trim()
+          span.setAttribute("auth.email", trimmedEmail)
+          span.setAttribute("auth.method", "password")
+          // Сначала проверяем существование email
+          const emailExists = await checkEmailExists(trimmedEmail)
+          span.setAttribute("auth.email_exists_checked", true)
+          if (!emailExists) {
+            setError("Пользователь с таким email не найден. Пожалуйста, зарегистрируйтесь или проверьте правильность email адреса.")
+            setLoading(false)
+            return
+          }
+
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+          })
+
+          if (signInError) {
+            span.setAttribute("auth.error", signInError.message)
+            span.setAttribute("auth.success", false)
+            
+            // Отправляем ошибку авторизации в Sentry
+            Sentry.captureException(signInError, {
+              tags: { 
+                module: 'auth', 
+                action: 'login',
+                error_type: 'auth_failed'
+              },
+              user: { email: trimmedEmail },
+              extra: { 
+                error_code: signInError.message,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(getErrorMessage(signInError))
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+
+          router.refresh()
+          router.push("/dashboard")
+
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'login',
+              error_type: 'unexpected_error'
+            },
+            user: { email },
+            extra: { 
+              component: 'LoginPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Login error:", err)
+          setError("Произошла непредвиденная ошибка при входе. Пожалуйста, попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      })
-
-      if (signInError) {
-        setError(getErrorMessage(signInError))
-        setLoading(false)
-        return
-      }
-
-      console.log("Успешный вход, синхронизация теперь происходит автоматически...");
-
-      router.refresh()
-      router.push("/dashboard")
-
-    } catch (err) {
-      console.error("Login error:", err)
-      setError("Произошла непредвиденная ошибка при входе. Проверьте подключение к интернету и попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (

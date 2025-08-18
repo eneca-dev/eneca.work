@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { CalendarHeader } from "@/modules/calendar/components/calendar-header"
 import { CalendarGrid } from "@/modules/calendar/components/calendar-grid"
 import { Button } from "@/modules/calendar/components/ui/button"
@@ -31,8 +32,52 @@ export default function CalendarPage() {
   useEffect(() => {
     const currentUserId = userStore.id
     if (currentUserId && userStore.isAuthenticated) {
-      fetchEvents(currentUserId)
-      fetchWorkSchedules(currentUserId)
+      Sentry.startSpan(
+        {
+          op: "calendar.load_data",
+          name: "Load Calendar Data",
+        },
+        async (span) => {
+          try {
+            span.setAttribute("user.id", currentUserId)
+            span.setAttribute("user.authenticated", userStore.isAuthenticated)
+            
+            await Promise.all([
+              fetchEvents(currentUserId),
+              fetchWorkSchedules(currentUserId)
+            ])
+            
+            span.setAttribute("load.success", true)
+            
+            Sentry.addBreadcrumb({
+              message: 'Calendar data loaded successfully',
+              category: 'calendar',
+              level: 'info',
+              data: {
+                user_id: currentUserId,
+                component: 'CalendarPage'
+              }
+            })
+          } catch (error) {
+            span.setAttribute("load.success", false)
+            span.recordException(error as Error)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'calendar',
+                component: 'CalendarPage',
+                action: 'load_data',
+                error_type: 'unexpected_error'
+              },
+              extra: {
+                user_id: currentUserId,
+                authenticated: userStore.isAuthenticated,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка при загрузке данных календаря:', error)
+          }
+        }
+      )
     }
   }, [userStore.id, userStore.isAuthenticated, fetchEvents, fetchWorkSchedules])
 
@@ -47,7 +92,35 @@ export default function CalendarPage() {
   const currentUser = userStore
 
   const handleCloseDialog = () => {
-    setActiveDialog(null)
+    try {
+      setActiveDialog(null)
+      
+      Sentry.addBreadcrumb({
+        message: 'Calendar dialog closed',
+        category: 'calendar',
+        level: 'info',
+        data: {
+          component: 'CalendarPage',
+          previous_dialog: activeDialog
+        }
+      })
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: 'calendar',
+          component: 'CalendarPage',
+          action: 'close_dialog',
+          error_type: 'unexpected_error'
+        },
+        extra: {
+          active_dialog: activeDialog,
+          timestamp: new Date().toISOString()
+        }
+      })
+      console.error('Ошибка при закрытии диалога календаря:', error)
+      // Все равно закрываем диалог
+      setActiveDialog(null)
+    }
   }
 
   if (!userStore.isAuthenticated || !userStore.id) {

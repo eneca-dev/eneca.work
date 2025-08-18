@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
-import { UserPermissionsSyncProvider } from "@/modules/permissions"
+import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
@@ -38,7 +39,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Обработчик ошибок авторизации
   const handleAuthError = useCallback((error: Error) => {
-    console.error("❌ DashboardLayout: Ошибка авторизации:", error)
+    if (!isMounted.current) return
+    
+    console.error("Ошибка авторизации:", error)
     toast({
       title: "Ошибка авторизации",
       description: "Пожалуйста, войдите в систему заново",
@@ -46,31 +49,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })
     useUserStore.getState().clearState()
     router.push('/auth/login')
-  }, [router])
+  }, [router, email, name, isAuthenticated])
 
-  // УДАЛЕНО: Legacy функция получения разрешений
-  // Теперь разрешения загружаются через permissions модуль
+  // Загрузка прав доступа теперь происходит автоматически через UserPermissionsSyncProvider
+  // Отслеживаем состояние загрузки прав через permissions store
+  const permissionsLoading = usePermissionsLoading()
+
+  // Синхронизируем локальный флаг с состоянием permissions store
+  useEffect(() => {
+    if (!mounted) return
+    setPermissionsLoaded(!permissionsLoading)
+  }, [mounted, permissionsLoading])
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
+    if (!isMounted.current) return
+    
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
-        console.error("DashboardLayout: Ошибка при получении пользователя:", error)
+        console.error("Ошибка при получении пользователя:", error)
         router.push('/auth/login')
         return
       }
       
       if (!user) {
-        console.log("DashboardLayout: Пользователь не авторизован")
+        console.log("Пользователь не авторизован")
         router.push('/auth/login')
         return
       }
       
-      // УДАЛЕНО: Legacy загрузка разрешений
-      // Теперь разрешения автоматически загружаются через permissions модуль
-      setPermissionsLoaded(true) // Временно, пока не подключим новую систему
+      // Права загружаются через UserPermissionsSyncProvider и usePermissionsStore
       
       // Проверяем, нужно ли обновлять остальные данные пользователя
       const userState = useUserStore.getState()
@@ -84,7 +94,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           .single()
         
         if (profileError) {
-          console.error("DashboardLayout: Ошибка при получении профиля:", profileError)
+          if (!isMounted.current) return
+          
+          console.error("Ошибка при получении профиля:", profileError)
           toast({
             title: "Ошибка получения профиля",
             description: "Некоторые данные могут отображаться некорректно",
@@ -107,7 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           
           useUserStore.getState().setUser(userDataToSet)
         } catch (setUserError) {
-          console.error("DashboardLayout: Ошибка при установке данных пользователя:", setUserError)
+          console.error("Ошибка при установке данных пользователя:", setUserError)
           toast({
             title: "Ошибка обновления данных",
             description: "Не удалось обновить данные пользователя",
@@ -116,7 +128,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       }
     } catch (error) {
-      console.error("DashboardLayout: Критическая ошибка при получении данных:", error)
+      if (!isMounted.current) return
+      
+      console.error("Критическая ошибка при получении данных:", error)
       handleAuthError(error as Error)
     }
   }, [supabase, router, handleAuthError])
@@ -128,7 +142,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (mounted && !permissionsLoaded) {
       const fallbackTimer = setTimeout(() => {
-        console.warn("Timeout при загрузке прав, продолжаем без них")
+        try {
+          Sentry.captureMessage?.("Timeout при загрузке прав, продолжаем без них")
+        } catch {}
         setPermissionsLoaded(true)
       }, 5000) // 5 секунд максимум
 

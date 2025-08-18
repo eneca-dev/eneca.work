@@ -7,6 +7,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
@@ -69,7 +70,6 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     // Валидация формы
     const validationError = validateForm()
     if (validationError) {
@@ -78,27 +78,84 @@ export default function ForgotPasswordPage() {
       return
     }
 
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      })
+    return Sentry.startSpan(
+      {
+        op: "auth.forgot_password",
+        name: "Forgot Password Request",
+      },
+      async (span: any) => {
+        try {
+          const trimmedEmail = email.trim()
+          span.setAttribute("auth.email", trimmedEmail)
+          span.setAttribute("auth.method", "email_reset")
 
-      if (error) {
-        setError(getErrorMessage(error))
-        setLoading(false)
-        return
+          const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+            redirectTo: `${window.location.origin}/auth/reset-password`,
+          })
+
+          if (error) {
+            span.setAttribute("auth.success", false)
+            span.setAttribute("auth.error", error.message)
+            
+            // Отправляем ошибку запроса сброса пароля в Sentry
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'auth', 
+                action: 'forgot_password',
+                error_type: 'reset_email_failed'
+              },
+              user: { email: trimmedEmail },
+              extra: { 
+                error_code: error.message,
+                redirect_url: `${window.location.origin}/auth/reset-password`,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(getErrorMessage(error))
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+          
+          // Логируем успешный запрос сброса пароля
+          Sentry.addBreadcrumb({
+            message: 'Password reset email sent',
+            category: 'auth',
+            level: 'info',
+            data: { email: trimmedEmail }
+          })
+
+          setSuccess(true)
+          try {
+            sessionStorage.setItem('resetEmail', trimmedEmail)
+          } catch {}
+          router.push("/auth/password-reset-sent")
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'forgot_password',
+              error_type: 'unexpected_error'
+            },
+            user: { email },
+            extra: { 
+              component: 'ForgotPasswordPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Password reset error:", err)
+          setError("Произошла непредвиденная ошибка при отправке ссылки. Проверьте подключение к интернету и попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      setSuccess(true)
-      try {
-        sessionStorage.setItem('resetEmail', email.trim())
-      } catch {}
-      router.push("/auth/password-reset-sent")
-    } catch (err) {
-      console.error("Password reset error:", err)
-      setError("Произошла непредвиденная ошибка при отправке ссылки. Проверьте подключение к интернету и попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (
