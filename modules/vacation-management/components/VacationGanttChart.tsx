@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useState, useEffect, useRef } from 'react'
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, addMonths, subMonths, getYear, getMonth, setMonth, setYear } from 'date-fns'
+import { useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfDay, addMonths, subMonths, getYear, getMonth, setMonth, setYear, isWeekend } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,9 @@ import { MoreVertical, Plus, Edit, Trash2, Check, X, ChevronLeft, ChevronRight, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Employee, VacationEvent } from '../types'
+
+// Константа для ширины ячейки дня (соответствует классу w-8 = 32px)
+export const DAY_CELL_WIDTH = 32
 
 // Интерфейс для отпуска с предварительно обработанными датами
 interface ProcessedVacationEvent extends VacationEvent {
@@ -50,6 +53,9 @@ export function VacationGanttChart({
   } | null>(null)
   // Добавляем состояние для отслеживания hover отпуска
   const [hoveredVacationId, setHoveredVacationId] = useState<string | null>(null)
+  
+  // Ref для контекстного меню
+  const contextMenuRef = useRef<HTMLDivElement>(null)
   
   // Состояние для сохранения позиции скролла
   const [scrollPosition, setScrollPosition] = useState({ horizontal: 0, vertical: 0 })
@@ -126,6 +132,84 @@ export function VacationGanttChart({
     return grouped
   }, [vacations])
 
+  // Оптимизированная структура для быстрого поиска отпусков по датам
+  const vacationsByEmployeeAndDate = useMemo(() => {
+    const result: Record<string, Map<string, ProcessedVacationEvent>> = {}
+    
+    Object.entries(vacationsByEmployee).forEach(([employeeId, employeeVacations]) => {
+      const dateMap = new Map<string, ProcessedVacationEvent>()
+      
+      employeeVacations.forEach(vacation => {
+        // Заполняем Map для всех дат в диапазоне отпуска
+        let currentDate = new Date(vacation.parsedStartDate)
+        while (currentDate <= vacation.parsedEndDate) {
+          const dateKey = currentDate.toISOString().split('T')[0]
+          dateMap.set(dateKey, vacation)
+          currentDate = addDays(currentDate, 1)
+        }
+      })
+      
+      result[employeeId] = dateMap
+    })
+    
+    return result
+  }, [vacationsByEmployee])
+
+  // Интерфейс для объединенного блока отпуска
+  interface VacationBlock {
+    vacation: ProcessedVacationEvent
+    startIndex: number
+    width: number
+    isHovered: boolean
+  }
+
+  // Функция для создания объединенных блоков отпусков для сотрудника
+  const getVacationBlocksForEmployee = useMemo(() => {
+    return (employeeId: string): VacationBlock[] => {
+      const employeeDateMap = vacationsByEmployeeAndDate[employeeId]
+      if (!employeeDateMap) return []
+
+      const blocks: VacationBlock[] = []
+      let currentBlock: VacationBlock | null = null
+
+      normalizedDateRange.forEach((date, index) => {
+        const dateKey = date.toISOString().split('T')[0]
+        const vacation = employeeDateMap.get(dateKey)
+
+        if (vacation) {
+          if (currentBlock && currentBlock.vacation.calendar_event_id === vacation.calendar_event_id) {
+            // Расширяем текущий блок
+            currentBlock.width++
+          } else {
+            // Завершаем предыдущий блок и начинаем новый
+            if (currentBlock) {
+              blocks.push(currentBlock)
+            }
+            currentBlock = {
+              vacation,
+              startIndex: index,
+              width: 1,
+              isHovered: hoveredVacationId === vacation.calendar_event_id
+            }
+          }
+        } else {
+          // Завершаем текущий блок если он есть
+          if (currentBlock) {
+            blocks.push(currentBlock)
+            currentBlock = null
+          }
+        }
+      })
+
+      // Добавляем последний блок если он есть
+      if (currentBlock) {
+        blocks.push(currentBlock)
+      }
+
+      return blocks
+    }
+  }, [vacationsByEmployeeAndDate, normalizedDateRange, hoveredVacationId])
+
   // Получить цвет для типа отпуска
   const getVacationTypeColor = (type: string) => {
     switch (type) {
@@ -146,16 +230,7 @@ export function VacationGanttChart({
     }
   }
 
-  // Проверить, попадает ли отпуск на определенную дату (оптимизированная версия)
-  const isVacationOnDate = (vacation: ProcessedVacationEvent, normalizedDate: Date) => {
-    return normalizedDate >= vacation.parsedStartDate && normalizedDate <= vacation.parsedEndDate
-  }
 
-  // Найти отпуск на определенную дату для сотрудника (оптимизированная версия)
-  const getVacationForDate = (employeeId: string, normalizedDate: Date) => {
-    const employeeVacations = vacationsByEmployee[employeeId] || []
-    return employeeVacations.find(vacation => isVacationOnDate(vacation, normalizedDate))
-  }
 
   // Навигация по месяцам
   const goToPreviousMonth = () => {
@@ -230,28 +305,64 @@ export function VacationGanttChart({
     
     // Находим цветной элемент отпуска внутри клика
     const colorElement = event.currentTarget.querySelector('[data-vacation-color]') as HTMLElement
+    const containerRect = scrollContainerRef.current?.getBoundingClientRect()
+    
+    if (!containerRect) return
+    
+    let x: number, y: number
+    
     if (colorElement) {
       const rect = colorElement.getBoundingClientRect()
-      // Получаем координаты относительно главного контейнера
-      const containerRect = scrollContainerRef.current?.getBoundingClientRect()
-      
-      setContextMenu({
-        vacation,
-        x: rect.left + rect.width, // Позиционируем по центру цветной полоски
-        y: rect.top - (containerRect?.top || 0) + rect.height + 4 // Относительно контейнера + 1px
-      })
+      x = rect.left + rect.width // Позиционируем по центру цветной полоски
+      y = rect.top - containerRect.top + rect.height + 4 // Относительно контейнера + 4px
     } else {
       // Fallback на старый способ
       const rect = event.currentTarget.getBoundingClientRect()
-      const containerRect = scrollContainerRef.current?.getBoundingClientRect()
-      
-      setContextMenu({
-        vacation,
-        x: rect.left + rect.width / 2,
-        y: rect.top - (containerRect?.top || 0) + rect.height + 1
-      })
+      x = rect.left + rect.width / 2
+      y = rect.top - containerRect.top + rect.height + 1
     }
+    
+    // Устанавливаем начальную позицию контекстного меню
+    setContextMenu({
+      vacation,
+      x,
+      y
+    })
   }
+
+  // Динамическая корректировка позиции контекстного меню после рендера
+  useLayoutEffect(() => {
+    if (contextMenu && contextMenuRef.current && scrollContainerRef.current) {
+      const menuRect = contextMenuRef.current.getBoundingClientRect()
+      const containerRect = scrollContainerRef.current.getBoundingClientRect()
+      
+      const menuHeight = menuRect.height || (contextMenu.vacation.calendar_event_type === 'Отпуск запрошен' ? 140 : 100) // Fallback
+      const containerHeight = containerRect.height
+      
+      // Проверяем, помещается ли контекстное меню в контейнер
+      let adjustedY = contextMenu.y
+      
+      // Если меню не помещается снизу, позиционируем его сверху
+      if (contextMenu.y + menuHeight > containerHeight) {
+        // Вычисляем новую позицию сверху от элемента
+        const colorElement = document.querySelector('[data-vacation-cell]:hover [data-vacation-color]') as HTMLElement
+        if (colorElement) {
+          const rect = colorElement.getBoundingClientRect()
+          adjustedY = rect.top - containerRect.top - menuHeight - 4
+        } else {
+          adjustedY = contextMenu.y - menuHeight - 8
+        }
+        
+        // Убеждаемся, что меню не выходит за верхнюю границу
+        adjustedY = Math.max(4, adjustedY)
+      }
+      
+      // Обновляем позицию только если она изменилась
+      if (adjustedY !== contextMenu.y) {
+        setContextMenu(prev => prev ? { ...prev, y: adjustedY } : null)
+      }
+    }
+  }, [contextMenu?.vacation.calendar_event_id, contextMenu?.x, contextMenu?.y]) // Зависимости для корректного обновления
 
   // Закрытие контекстного меню
   const closeContextMenu = () => {
@@ -317,9 +428,8 @@ export function VacationGanttChart({
       
       if (todayIndex !== -1) {
         // Прокручиваем так, чтобы текущий день был примерно в центре видимой области
-        const cellWidth = 32 // w-8 = 32px
         const containerWidth = scrollContainerRef.current.clientWidth
-        const scrollPosition = Math.max(0, (todayIndex * cellWidth) - (containerWidth / 2))
+        const scrollPosition = Math.max(0, (todayIndex * DAY_CELL_WIDTH) - (containerWidth / 2))
         
         scrollContainerRef.current.scrollLeft = scrollPosition
       }
@@ -606,20 +716,48 @@ export function VacationGanttChart({
             >
               <div className="min-w-max">
                 {/* Заголовки дат */}
-                <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
-                  {dateRange.map((date, index) => (
-                    <div 
-                      key={index}
-                      className="w-8 flex-shrink-0 p-1 text-center border-r border-gray-200 dark:border-gray-600"
-                    >
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {format(date, 'dd', { locale: ru })}
+                <div className="h-16 flex items-center border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 relative">
+                  {/* Фон для выходных дней под сеткой */}
+                  {dateRange.map((date, index) => {
+                    const isWeekendDay = isWeekend(date)
+                    return isWeekendDay ? (
+                      <div 
+                        key={`weekend-bg-${index}`}
+                        className="absolute top-0 bottom-0 bg-red-50 dark:bg-red-800/30 pointer-events-none"
+                        style={{ 
+                          transform: `translateX(${index * DAY_CELL_WIDTH}px)`,
+                          width: `${DAY_CELL_WIDTH}px`,
+                          willChange: 'transform'
+                        }}
+                      />
+                    ) : null
+                  })}
+                  
+                  {/* Ячейки с текстом поверх фона */}
+                  {dateRange.map((date, index) => {
+                    const isWeekendDay = isWeekend(date)
+                    return (
+                      <div 
+                        key={index}
+                        className="w-8 flex-shrink-0 p-1 text-center border-r border-gray-200 dark:border-gray-600 relative z-10"
+                      >
+                        <div className={`text-xs ${
+                          isWeekendDay 
+                            ? 'text-red-600 dark:text-red-400 font-medium' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          {format(date, 'dd', { locale: ru })}
+                        </div>
+                        <div className={`text-xs ${
+                          isWeekendDay 
+                            ? 'text-red-500 dark:text-red-400' 
+                            : 'text-gray-400 dark:text-gray-500'
+                        }`}>
+                          {format(date, 'MMM', { locale: ru })}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">
-                        {format(date, 'MMM', { locale: ru })}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 {/* Строки отпусков сотрудников */}
@@ -628,77 +766,117 @@ export function VacationGanttChart({
                   className="max-h-96 overflow-y-auto"
                   onScroll={handleVerticalScroll('right')}
                 >
-                  {employees.map((employee) => (
-                    <div key={employee.user_id} className="h-12 flex border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600/30">
-                      {/* Диаграмма отпусков */}
-                      {dateRange.map((date, dateIndex) => {
-                        const normalizedDate = normalizedDateRange[dateIndex]
-                        const vacation = getVacationForDate(employee.user_id, normalizedDate)
-                        const isToday = isSameDay(date, new Date())
+                  {employees.map((employee) => {
+                    const vacationBlocks = getVacationBlocksForEmployee(employee.user_id)
+                    
+                    return (
+                      <div key={employee.user_id} className="h-12 flex border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600/30 relative">
+                        {/* Фон для выходных дней под сеткой */}
+                        {dateRange.map((date, dateIndex) => {
+                          const isWeekendDay = isWeekend(date)
+                          const isToday = isSameDay(date, new Date())
+                          return isWeekendDay && !isToday ? (
+                            <div 
+                              key={`weekend-bg-${dateIndex}`}
+                              className="absolute top-0 bottom-0 bg-red-50 dark:bg-red-800/20 pointer-events-none"
+                              style={{ 
+                                transform: `translateX(${dateIndex * DAY_CELL_WIDTH}px)`,
+                                width: `${DAY_CELL_WIDTH}px`,
+                                willChange: 'transform'
+                              }}
+                            />
+                          ) : null
+                        })}
                         
-                        return (
+                        {/* Фон для текущего дня */}
+                        {dateRange.map((date, dateIndex) => {
+                          const isToday = isSameDay(date, new Date())
+                          return isToday ? (
+                            <div 
+                              key={`today-bg-${dateIndex}`}
+                              className="absolute top-0 bottom-0 bg-blue-50 dark:bg-blue-800/30 pointer-events-none"
+                              style={{ 
+                                transform: `translateX(${dateIndex * DAY_CELL_WIDTH}px)`,
+                                width: `${DAY_CELL_WIDTH}px`,
+                                willChange: 'transform'
+                              }}
+                            />
+                          ) : null
+                        })}
+                        
+                        {/* Базовая сетка дат поверх фона */}
+                        {dateRange.map((date, dateIndex) => {
+                          return (
+                            <div
+                              key={dateIndex}
+                              className="w-8 h-12 flex-shrink-0 border-r border-gray-200 dark:border-gray-600 relative z-10"
+                            />
+                          )
+                        })}
+                        
+                        {/* Блоки отпусков поверх сетки */}
+                        {vacationBlocks.map((block, blockIndex) => (
                           <div
-                            key={dateIndex}
-                            className={`
-                              w-8 h-12 flex-shrink-0 border-r border-gray-200 dark:border-gray-600 relative
-                              ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-                            `}
+                            key={blockIndex}
+                            className="absolute top-0 h-12 flex items-center z-20"
+                            style={{
+                              left: `${block.startIndex * DAY_CELL_WIDTH}px`,
+                              width: `${block.width * DAY_CELL_WIDTH}px`
+                            }}
                           >
-                            {vacation && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div 
+                                  data-vacation-cell
+                                  className="w-full h-full relative cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleVacationClick(block.vacation, e)
+                                  }}
+                                  onMouseEnter={() => handleVacationMouseEnter(block.vacation.calendar_event_id)}
+                                  onMouseLeave={handleVacationMouseLeave}
+                                >
                                   <div 
-                                    data-vacation-cell
-                                    className="w-full h-full relative cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleVacationClick(vacation, e)
-                                    }}
-                                    onMouseEnter={() => handleVacationMouseEnter(vacation.calendar_event_id)}
-                                    onMouseLeave={handleVacationMouseLeave}
-                                  >
-                                    <div 
-                                      data-vacation-color
-                                      className={`
-                                        w-full h-full ${getVacationTypeColor(vacation.calendar_event_type)}
-                                        transition-all duration-150
-                                        ${hoveredVacationId === vacation.calendar_event_id 
-                                          ? 'ring-2 ring-blue-400 ring-inset scale-105 opacity-100 shadow-sm' 
-                                          : 'opacity-80'
-                                        }
-                                      `}
-                                    >
-                                      {/* Индикатор для запрошенных отпусков */}
-                                      {vacation.calendar_event_type === 'Отпуск запрошен' && (
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                          <div className="w-1 h-1 bg-white rounded-full opacity-60"></div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <div className="text-xs">
-                                    <div className="font-medium">{getVacationTypeText(vacation.calendar_event_type)}</div>
-                                    <div>
-                                      {format(parseISO(vacation.calendar_event_date_start), 'dd.MM.yyyy')}
-                                      {vacation.calendar_event_date_end && 
-                                        ` - ${format(parseISO(vacation.calendar_event_date_end), 'dd.MM.yyyy')}`
+                                    data-vacation-color
+                                    className={`
+                                      w-full h-full ${getVacationTypeColor(block.vacation.calendar_event_type)}
+                                      transition-all duration-150 rounded-sm mx-0.5
+                                      ${hoveredVacationId === block.vacation.calendar_event_id 
+                                        ? 'ring-2 ring-blue-400 ring-inset scale-105 opacity-100 shadow-sm' 
+                                        : 'opacity-80'
                                       }
-                                    </div>
-                                    {vacation.calendar_event_comment && (
-                                      <div className="mt-1 text-gray-400">{vacation.calendar_event_comment}</div>
+                                    `}
+                                  >
+                                    {/* Индикатор для запрошенных отпусков */}
+                                    {block.vacation.calendar_event_type === 'Отпуск запрошен' && (
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-1 h-1 bg-white rounded-full opacity-60"></div>
+                                      </div>
                                     )}
-                                    <div className="mt-1 text-blue-400 font-medium">Кликните на ячейки для действий</div>
                                   </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="text-xs">
+                                  <div className="font-medium">{getVacationTypeText(block.vacation.calendar_event_type)}</div>
+                                  <div>
+                                    {format(parseISO(block.vacation.calendar_event_date_start), 'dd.MM.yyyy')}
+                                    {block.vacation.calendar_event_date_end && 
+                                      ` - ${format(parseISO(block.vacation.calendar_event_date_end), 'dd.MM.yyyy')}`
+                                    }
+                                  </div>
+                                  {block.vacation.calendar_event_comment && (
+                                    <div className="mt-1 text-gray-400">{block.vacation.calendar_event_comment}</div>
+                                  )}
+                                  <div className="mt-1 text-blue-400 font-medium">Кликните на отпуск для действий</div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                        ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -726,6 +904,7 @@ export function VacationGanttChart({
         {/* Контекстное меню для отпусков */}
         {contextMenu && (
           <div 
+            ref={contextMenuRef}
             data-context-menu
             className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-2 min-w-[160px] transform -translate-x-1/2"
             style={{
