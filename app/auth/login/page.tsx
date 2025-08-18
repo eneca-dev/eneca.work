@@ -9,6 +9,7 @@ import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
 import { syncCurrentUserState } from "@/services/org-data-service"
+import * as Sentry from "@sentry/nextjs"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -23,37 +24,101 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+    return Sentry.startSpan(
+      {
+        op: "auth.login",
+        name: "User Login",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("auth.email", email)
+          span.setAttribute("auth.method", "password")
 
-      if (signInError) {
-        setError(signInError.message)
-        setLoading(false)
-        return
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          })
+
+          if (signInError) {
+            span.setAttribute("auth.error", signInError.message)
+            span.setAttribute("auth.success", false)
+            
+            // Отправляем ошибку авторизации в Sentry
+            Sentry.captureException(signInError, {
+              tags: { 
+                module: 'auth', 
+                action: 'login',
+                error_type: 'auth_failed'
+              },
+              user: { email },
+              extra: { 
+                error_code: signInError.message,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(signInError.message)
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+          console.log("Успешный вход, запускаем синхронизацию состояния...");
+          
+          const syncSuccess = await syncCurrentUserState();
+
+          if (!syncSuccess) {
+            const syncError = new Error("Не удалось синхронизировать данные пользователя после входа.")
+            
+            span.setAttribute("sync.success", false)
+            Sentry.captureException(syncError, {
+              tags: { 
+                module: 'auth', 
+                action: 'post_login_sync',
+                error_type: 'sync_failed'
+              },
+              user: { email },
+              extra: { 
+                step: 'post_login_sync',
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError("Не удалось синхронизировать данные пользователя после входа.");
+            setLoading(false);
+            return;
+          }
+
+          span.setAttribute("sync.success", true)
+          console.log("Синхронизация состояния после входа прошла успешно.");
+
+          router.refresh()
+          router.push("/dashboard")
+
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'login',
+              error_type: 'unexpected_error'
+            },
+            user: { email },
+            extra: { 
+              component: 'LoginPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Login error:", err)
+          setError("Произошла непредвиденная ошибка при входе. Пожалуйста, попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      console.log("Успешный вход, запускаем синхронизацию состояния...");
-      const syncSuccess = await syncCurrentUserState();
-
-      if (!syncSuccess) {
-        setError("Не удалось синхронизировать данные пользователя после входа.");
-        setLoading(false);
-        return;
-      }
-
-      console.log("Синхронизация состояния после входа прошла успешно.");
-
-      router.refresh()
-      router.push("/dashboard")
-
-    } catch (err) {
-      console.error("Login error:", err)
-      setError("Произошла непредвиденная ошибка при входе. Пожалуйста, попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (

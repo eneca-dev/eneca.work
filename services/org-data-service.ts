@@ -1,6 +1,8 @@
 import type { User, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
 import { createClient } from "@/utils/supabase/client"
+import { createAdminClient } from "@/utils/supabase/admin"
 import { getUserRoleAndPermissions } from "@/utils/role-utils"
+import * as Sentry from "@sentry/nextjs"
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -30,109 +32,322 @@ export function mapWorkFormatToDb(format: "office" | "remote" | "hybrid"): WorkF
 
 // Получение всех пользователей с объединением данных из связанных таблиц
 export async function getUsers(): Promise<User[]> {
-  console.log("=== getUsers function ===");
-  const supabase = createClient();
-  
-  // Используем новое представление view_users для получения всех данных одним запросом
-  const { data: users, error } = await supabase
-    .from("view_users")
-    .select("*")
-    .order("last_name", { ascending: true })
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех пользователей организации",
+    },
+    async (span) => {
+      try {
+        console.log("=== getUsers function ===");
+        const supabase = createClient();
+        
+        span.setAttribute("table", "view_users")
+        span.setAttribute("operation", "select_all_users")
+        
+        // Используем новое представление view_users для получения всех данных одним запросом
+        const { data: users, error } = await supabase
+          .from("view_users")
+          .select("*")
+          .order("last_name", { ascending: true })
 
-  if (error) {
-    console.error("Error fetching users from view:", error)
-    return []
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          span.setAttribute("db.error", error.message)
+          
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_users',
+              table: 'view_users'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              error_hint: error.hint,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return []
+        }
 
-  console.log("Получено пользователей из представления:", users?.length || 0);
+        span.setAttribute("db.success", true)
+        span.setAttribute("users.count", users?.length || 0)
 
-  // Преобразуем данные из представления в формат User
-  const formattedUsers = users?.map((user) => ({
-    id: user.user_id,
-    name: user.full_name || `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-    email: user.email || "",
-    avatar_url: user.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`,
-    position: user.position_name || "",
-    department: user.department_name || "",
-    team: user.team_name || "",
-    category: user.category_name || "",
-    role: user.role_name || "",
-    isActive: user.is_active || true,
-    dateJoined: user.created_at,
-    workLocation: mapWorkFormat(user.work_format),
-    address: user.address || "",
-    employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
-    salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
-    isHourly: user.is_hourly !== null ? user.is_hourly : true,
-  })) || []
+        console.log("Получено пользователей из представления:", users?.length || 0);
 
-  console.log("Обработано пользователей:", formattedUsers.length);
-  return formattedUsers
+        // Преобразуем данные из представления в формат User
+        const formattedUsers = users?.map((user) => ({
+          id: user.user_id,
+          name: user.full_name || `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+          email: user.email || "",
+          avatar_url: user.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`,
+          position: user.position_name || "",
+          department: user.department_name || "",
+          team: user.team_name || "",
+          category: user.category_name || "",
+          role: user.role_name || "",
+          isActive: user.is_active || true,
+          dateJoined: user.created_at,
+          workLocation: mapWorkFormat(user.work_format),
+          address: user.address || "",
+          employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
+          salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
+          isHourly: user.is_hourly !== null ? user.is_hourly : true,
+        })) || []
+
+        span.setAttribute("users.processed", formattedUsers.length)
+        console.log("Обработано пользователей:", formattedUsers.length);
+        return formattedUsers
+
+      } catch (error) {
+        span.setAttribute("error", true)
+        span.setAttribute("error.message", (error as Error).message)
+        
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_users',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return []
+      }
+    }
+  )
 }
 
 // Получение всех отделов
 export async function getDepartments(): Promise<Department[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from("departments").select("department_id, department_name")
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех отделов",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient();
+        span.setAttribute("table", "departments")
+        
+        const { data, error } = await supabase.from("departments").select("department_id, department_name")
 
-  if (error) {
-    console.error("Error fetching departments:", error)
-    return []
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_departments',
+              table: 'departments'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return []
+        }
 
-  return data.map((dept) => ({
-    id: dept.department_id,
-    name: dept.department_name || "",
-  }))
+        span.setAttribute("db.success", true)
+        span.setAttribute("departments.count", data?.length || 0)
+        
+        return data.map((dept) => ({
+          id: dept.department_id,
+          name: dept.department_name || "",
+        }))
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_departments',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return []
+      }
+    }
+  )
 }
 
 // Получение всех команд
 export async function getTeams(): Promise<Team[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from("teams").select("team_id, team_name, department_id")
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех команд",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient();
+        span.setAttribute("table", "teams")
+        
+        const { data, error } = await supabase.from("teams").select("team_id, team_name, department_id")
 
-  if (error) {
-    console.error("Error fetching teams:", error)
-    return []
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_teams',
+              table: 'teams'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return []
+        }
 
-  return data.map((team) => ({
-    id: team.team_id,
-    name: team.team_name || "",
-    departmentId: team.department_id || "",
-  }))
+        span.setAttribute("db.success", true)
+        span.setAttribute("teams.count", data?.length || 0)
+        
+        return data.map((team) => ({
+          id: team.team_id,
+          name: team.team_name || "",
+          departmentId: team.department_id || "",
+        }))
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_teams',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return []
+      }
+    }
+  )
 }
 
 // Получение всех должностей
 export async function getPositions(): Promise<Position[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from("positions").select("position_id, position_name")
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех должностей",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient();
+        span.setAttribute("table", "positions")
+        
+        const { data, error } = await supabase.from("positions").select("position_id, position_name")
 
-  if (error) {
-    console.error("Error fetching positions:", error)
-    return []
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_positions',
+              table: 'positions'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return []
+        }
 
-  return data.map((pos) => ({
-    id: pos.position_id,
-    name: pos.position_name || "",
-  }))
+        span.setAttribute("db.success", true)
+        span.setAttribute("positions.count", data?.length || 0)
+        
+        return data.map((pos) => ({
+          id: pos.position_id,
+          name: pos.position_name || "",
+        }))
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_positions',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return []
+      }
+    }
+  )
 }
 
 // Получение всех категорий
 export async function getCategories(): Promise<Category[]> {
-  const supabase = createClient()
-  const { data, error } = await supabase.from("categories").select("category_id, category_name")
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех категорий",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+        span.setAttribute("table", "categories")
+        
+        const { data, error } = await supabase.from("categories").select("category_id, category_name")
 
-  if (error) {
-    console.error("Error fetching categories:", error)
-    throw error
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_categories',
+              table: 'categories'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
 
-  return data?.map((cat) => ({
-    id: cat.category_id,
-    name: cat.category_name || "",
-  })) || []
+        span.setAttribute("db.success", true)
+        span.setAttribute("categories.count", data?.length || 0)
+        
+        return data?.map((cat) => ({
+          id: cat.category_id,
+          name: cat.category_name || "",
+        })) || []
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_categories',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 /**
@@ -140,18 +355,59 @@ export async function getCategories(): Promise<Category[]> {
  * @returns Promise<Role[]>
  */
 export async function getRoles(): Promise<{ id: string; name: string; description?: string }[]> {
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from("roles")
-    .select("id, name, description")
-    .order("name")
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех ролей",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+        span.setAttribute("table", "roles")
+        
+        const { data, error } = await supabase
+          .from("roles")
+          .select("id, name, description")
+          .order("name")
 
-  if (error) {
-    console.error("Error fetching roles:", error)
-    throw error
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_roles',
+              table: 'roles'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
 
-  return data || []
+        span.setAttribute("db.success", true)
+        span.setAttribute("roles.count", data?.length || 0)
+        
+        return data || []
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_roles',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 /**
@@ -175,11 +431,22 @@ export async function updateUser(
   userId: string,
   userData: Partial<Omit<User, "id" | "avatar_url" | "dateJoined">> & { firstName?: string; lastName?: string; roleId?: string },
 ) {
-  console.log("=== updateUser function ===");
-  console.log("updateUser вызван с данными:", { userId, userData });
-  
-  const supabase = createClient();
-  const updates: any = {}
+  return Sentry.startSpan(
+    {
+      op: "db.update",
+      name: "Обновление данных пользователя",
+    },
+    async (span) => {
+      try {
+        console.log("=== updateUser function ===");
+        console.log("updateUser вызван с данными:", { userId, userData });
+        
+        span.setAttribute("user.id", userId)
+        span.setAttribute("table", "profiles")
+        span.setAttribute("operation", "update_user")
+        
+        const supabase = createClient();
+        const updates: any = {}
 
   if (userData.firstName !== undefined) {
     updates.first_name = userData.firstName
@@ -206,7 +473,19 @@ export async function updateUser(
         .single()
 
       if (deptError) {
-        console.error("Ошибка поиска отдела:", deptError);
+        Sentry.captureException(deptError, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user_find_department',
+            user_id: userId
+          },
+          extra: {
+            department_name: userData.department,
+            error_code: deptError.code,
+            error_details: deptError.details,
+            timestamp: new Date().toISOString()
+          }
+        })
       } else if (department) {
         updates.department_id = department.department_id
         console.log("Найден отдел, ID =", department.department_id);
@@ -214,7 +493,18 @@ export async function updateUser(
         console.warn("Отдел не найден:", userData.department);
       }
     } catch (error) {
-      console.error("Ошибка при обработке отдела:", error);
+      Sentry.captureException(error, {
+        tags: {
+          module: 'org_data_service',
+          action: 'update_user_process_department',
+          user_id: userId
+        },
+        extra: {
+          department_name: userData.department,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
     }
   }
 
@@ -228,7 +518,19 @@ export async function updateUser(
         .single()
 
       if (teamError) {
-        console.error("Ошибка поиска команды:", teamError);
+        Sentry.captureException(teamError, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user_find_team',
+            user_id: userId
+          },
+          extra: {
+            team_name: userData.team,
+            error_code: teamError.code,
+            error_details: teamError.details,
+            timestamp: new Date().toISOString()
+          }
+        })
       } else if (team) {
         updates.team_id = team.team_id
         console.log("Найдена команда, ID =", team.team_id);
@@ -236,7 +538,18 @@ export async function updateUser(
         console.warn("Команда не найдена:", userData.team);
       }
     } catch (error) {
-      console.error("Ошибка при обработке команды:", error);
+      Sentry.captureException(error, {
+        tags: {
+          module: 'org_data_service',
+          action: 'update_user_process_team',
+          user_id: userId
+        },
+        extra: {
+          team_name: userData.team,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
     }
   }
 
@@ -250,7 +563,19 @@ export async function updateUser(
         .single()
 
       if (posError) {
-        console.error("Ошибка поиска должности:", posError);
+        Sentry.captureException(posError, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user_find_position',
+            user_id: userId
+          },
+          extra: {
+            position_name: userData.position,
+            error_code: posError.code,
+            error_details: posError.details,
+            timestamp: new Date().toISOString()
+          }
+        })
       } else if (position) {
         updates.position_id = position.position_id
         console.log("Найдена должность, ID =", position.position_id);
@@ -258,7 +583,18 @@ export async function updateUser(
         console.warn("Должность не найдена:", userData.position);
       }
     } catch (error) {
-      console.error("Ошибка при обработке должности:", error);
+      Sentry.captureException(error, {
+        tags: {
+          module: 'org_data_service',
+          action: 'update_user_process_position',
+          user_id: userId
+        },
+        extra: {
+          position_name: userData.position,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
     }
   }
 
@@ -272,7 +608,19 @@ export async function updateUser(
         .single()
 
       if (catError) {
-        console.error("Ошибка поиска категории:", catError);
+        Sentry.captureException(catError, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user_find_category',
+            user_id: userId
+          },
+          extra: {
+            category_name: userData.category,
+            error_code: catError.code,
+            error_details: catError.details,
+            timestamp: new Date().toISOString()
+          }
+        })
       } else if (category) {
         updates.category_id = category.category_id
         console.log("Найдена категория, ID =", category.category_id);
@@ -280,7 +628,18 @@ export async function updateUser(
         console.warn("Категория не найдена:", userData.category);
       }
     } catch (error) {
-      console.error("Ошибка при обработке категории:", error);
+      Sentry.captureException(error, {
+        tags: {
+          module: 'org_data_service',
+          action: 'update_user_process_category',
+          user_id: userId
+        },
+        extra: {
+          category_name: userData.category,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
     }
   }
 
@@ -331,30 +690,411 @@ export async function updateUser(
     return true;
   }
 
-  // Обновляем профиль пользователя
-  console.log("Выполняем обновление в БД для пользователя:", userId);
-  const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
+        // Обновляем профиль пользователя
+        console.log("Выполняем обновление в БД для пользователя:", userId);
+        span.setAttribute("updates.count", Object.keys(updates).length)
+        
+        const { error } = await supabase.from("profiles").update(updates).eq("user_id", userId)
 
-  if (error) {
-    console.error("Error updating user:", error)
-    throw new Error(`Ошибка обновления профиля: ${error.message || JSON.stringify(error)}`)
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          span.setAttribute("db.error", error.message)
+          
+          const updateError = new Error(`Ошибка обновления профиля: ${error.message || JSON.stringify(error)}`)
+          Sentry.captureException(updateError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'update_user_db',
+              user_id: userId,
+              critical: true
+            },
+            extra: {
+              updates: JSON.stringify(updates),
+              error_code: error.code,
+              error_details: error.details,
+              error_hint: error.hint,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw updateError
+        }
 
-  console.log("Пользователь успешно обновлен в БД");
-  return true
+        span.setAttribute("db.success", true)
+        console.log("Пользователь успешно обновлен в БД");
+        return true
+        
+      } catch (error) {
+        span.setAttribute("error", true)
+        span.setAttribute("error.message", (error as Error).message)
+        
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user',
+            user_id: userId,
+            error_type: 'critical_update_error'
+          },
+          extra: {
+            user_data: JSON.stringify(userData),
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+
+// Создание нового пользователя
+export async function createUser(userData: {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  department?: string
+  team?: string
+  position?: string
+  category?: string
+  roleId?: string
+  workLocation?: "office" | "remote" | "hybrid"
+  address?: string
+}) {
+  return Sentry.startSpan(
+    {
+      op: "db.create",
+      name: "Создание нового пользователя",
+    },
+    async (span) => {
+      try {
+        console.log("=== createUser function ===")
+        console.log("createUser вызван с данными:", userData)
+        
+        span.setAttribute("user.email", userData.email)
+        span.setAttribute("operation", "create_user")
+        
+        const supabase = createClient()
+        const adminClient = createAdminClient()
+        
+        // 1. Создаем пользователя в auth.users через Admin API
+        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+          email: userData.email,
+          password: userData.password,
+          email_confirm: true // Автоматически подтверждаем email
+        })
+
+        if (authError || !authData.user) {
+          console.error("Ошибка создания пользователя в auth:", authError)
+          span.setAttribute("auth.success", false)
+          span.setAttribute("auth.error", authError?.message || "Unknown auth error")
+          
+          Sentry.captureException(authError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'create_user',
+              step: 'auth_creation'
+            },
+            extra: {
+              email: userData.email,
+              error_code: authError?.code,
+              error_message: authError?.message,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw new Error(`Не удалось создать пользователя: ${authError?.message || 'Неизвестная ошибка'}`)
+        }
+
+        span.setAttribute("auth.success", true)
+        span.setAttribute("user.id", authData.user.id)
+        console.log("Пользователь создан в auth.users:", authData.user.id)
+
+        // 2. Подготавливаем данные для профиля
+        const profileData: any = {
+          user_id: authData.user.id,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+          email: userData.email,
+          work_format: mapWorkFormatToDb(userData.workLocation || "office"),
+          address: userData.address || null,
+          employment_rate: 1,
+          salary: 0,
+          is_hourly: true,
+        }
+
+        // 3. Найдем ID для связанных сущностей
+        if (userData.department) {
+          const department = await supabase
+            .from("departments")
+            .select("department_id")
+            .eq("department_name", userData.department)
+            .single()
+          
+          if (department.data) {
+            profileData.department_id = department.data.department_id
+          } else {
+            console.warn("Отдел не найден:", userData.department)
+          }
+        }
+
+        if (userData.team) {
+          // userData.team содержит ID команды, а не название
+          profileData.team_id = userData.team
+        }
+
+        if (userData.position) {
+          const position = await supabase
+            .from("positions")
+            .select("position_id")
+            .eq("position_name", userData.position)
+            .single()
+          
+          if (position.data) {
+            profileData.position_id = position.data.position_id
+          } else {
+            console.warn("Должность не найдена:", userData.position)
+          }
+        }
+
+        if (userData.category) {
+          const category = await supabase
+            .from("categories")
+            .select("category_id")
+            .eq("category_name", userData.category)
+            .single()
+          
+          if (category.data) {
+            profileData.category_id = category.data.category_id
+          } else {
+            console.warn("Категория не найдена:", userData.category)
+          }
+        }
+
+        if (userData.roleId) {
+          profileData.role_id = userData.roleId
+        } else {
+          // Назначаем роль "user" по умолчанию
+          const defaultRole = await supabase
+            .from("roles")
+            .select("id")
+            .eq("name", "user")
+            .single()
+          
+          if (defaultRole.data) {
+            profileData.role_id = defaultRole.data.id
+          }
+        }
+
+        // Если какие-то обязательные поля не заполнены, используем значения по умолчанию
+        if (!profileData.department_id) {
+          // Ищем отдел "Без отдела" или создаем его
+          let defaultDept = await supabase
+            .from("departments")
+            .select("department_id")
+            .eq("department_name", "Без отдела")
+            .single()
+          
+          if (!defaultDept.data) {
+            const { data: newDept } = await supabase
+              .from("departments")
+              .insert({ department_id: crypto.randomUUID(), department_name: "Без отдела" })
+              .select("department_id")
+              .single()
+            
+            profileData.department_id = newDept?.department_id
+          } else {
+            profileData.department_id = defaultDept.data.department_id
+          }
+        }
+
+        if (!profileData.team_id) {
+          // Ищем команду "Без команды" или создаем её
+          let defaultTeam = await supabase
+            .from("teams")
+            .select("team_id")
+            .eq("team_name", "Без команды")
+            .single()
+          
+          if (!defaultTeam.data) {
+            const { data: newTeam } = await supabase
+              .from("teams")
+              .insert({ 
+                team_id: crypto.randomUUID(), 
+                team_name: "Без команды", 
+                department_id: profileData.department_id 
+              })
+              .select("team_id")
+              .single()
+            
+            profileData.team_id = newTeam?.team_id
+          } else {
+            profileData.team_id = defaultTeam.data.team_id
+          }
+        }
+
+        if (!profileData.position_id) {
+          // Ищем должность "Без должности" или создаем её
+          let defaultPosition = await supabase
+            .from("positions")
+            .select("position_id")
+            .eq("position_name", "Без должности")
+            .single()
+          
+          if (!defaultPosition.data) {
+            const { data: newPosition } = await supabase
+              .from("positions")
+              .insert({ position_id: crypto.randomUUID(), position_name: "Без должности" })
+              .select("position_id")
+              .single()
+            
+            profileData.position_id = newPosition?.position_id
+          } else {
+            profileData.position_id = defaultPosition.data.position_id
+          }
+        }
+
+        if (!profileData.category_id) {
+          // Ищем категорию "Не применяется" или создаем её
+          let defaultCategory = await supabase
+            .from("categories")
+            .select("category_id")
+            .eq("category_name", "Не применяется")
+            .single()
+          
+          if (!defaultCategory.data) {
+            const { data: newCategory } = await supabase
+              .from("categories")
+              .insert({ category_id: crypto.randomUUID(), category_name: "Не применяется" })
+              .select("category_id")
+              .single()
+            
+            profileData.category_id = newCategory?.category_id
+          } else {
+            profileData.category_id = defaultCategory.data.category_id
+          }
+        }
+
+        console.log("Данные профиля для создания:", profileData)
+
+        // 4. Создаем профиль пользователя
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert(profileData)
+
+        if (profileError) {
+          console.error("Ошибка создания профиля:", profileError)
+          span.setAttribute("profile.success", false)
+          span.setAttribute("profile.error", profileError.message)
+          
+          // Пытаемся удалить созданного пользователя из auth, если профиль не создался
+          try {
+            await adminClient.auth.admin.deleteUser(authData.user.id)
+            console.log("Пользователь удален из auth после ошибки создания профиля")
+          } catch (deleteError) {
+            console.error("Не удалось удалить пользователя из auth после ошибки:", deleteError)
+          }
+          
+          Sentry.captureException(profileError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'create_user',
+              step: 'profile_creation'
+            },
+            extra: {
+              user_id: authData.user.id,
+              email: userData.email,
+              error_code: profileError.code,
+              error_message: profileError.message,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw new Error(`Не удалось создать профиль пользователя: ${profileError.message}`)
+        }
+
+        span.setAttribute("profile.success", true)
+        span.setAttribute("db.success", true)
+        console.log("Пользователь и профиль успешно созданы")
+
+        return {
+          userId: authData.user.id,
+          email: authData.user.email,
+        }
+
+      } catch (error) {
+        span.setAttribute("error", true)
+        span.setAttribute("error.message", (error as Error).message)
+        
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'create_user',
+            error_type: 'general_error'
+          },
+          extra: {
+            email: userData.email,
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 // Удаление пользователя
 export async function deleteUser(userId: string) {
-  const supabase = createClient();
-  const { error } = await supabase.from("profiles").delete().eq("user_id", userId)
+  return Sentry.startSpan(
+    {
+      op: "db.delete",
+      name: "Удаление пользователя",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient();
+        span.setAttribute("user.id", userId)
+        span.setAttribute("table", "profiles")
+        
+        const { error } = await supabase.from("profiles").delete().eq("user_id", userId)
 
-  if (error) {
-    console.error("Error deleting user:", error)
-    throw error
-  }
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'delete_user',
+              user_id: userId,
+              table: 'profiles',
+              critical: true
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
 
-  return true
+        span.setAttribute("db.success", true)
+        return true
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'delete_user',
+            user_id: userId,
+            error_type: 'delete_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 // Получение пользователей по отделам для аналитики
@@ -373,7 +1113,18 @@ export async function getUsersByDepartment() {
     .order("department_name")
 
   if (error) {
-    console.error("Error fetching users by department:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_users_by_department',
+        table: 'departments'
+      },
+      extra: {
+        error_code: error.code,
+        error_details: error.details,
+        timestamp: new Date().toISOString()
+      }
+    })
     return []
   }
 
@@ -399,7 +1150,18 @@ export async function getUsersByTeam() {
     .order("team_name")
 
   if (error) {
-    console.error("Error fetching users by team:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_users_by_team',
+        table: 'teams'
+      },
+      extra: {
+        error_code: error.code,
+        error_details: error.details,
+        timestamp: new Date().toISOString()
+      }
+    })
     return []
   }
 
@@ -425,7 +1187,18 @@ export async function getUsersByCategory() {
     .order("category_name")
 
   if (error) {
-    console.error("Error fetching users by category:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_users_by_category',
+        table: 'categories'
+      },
+      extra: {
+        error_code: error.code,
+        error_details: error.details,
+        timestamp: new Date().toISOString()
+      }
+    })
     return []
   }
 
@@ -454,7 +1227,18 @@ export async function getUsersJoinedByMonth() {
   const { data, error } = await supabase.from("profiles").select("created_at").order("created_at")
 
   if (error) {
-    console.error("Error fetching users join dates:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_users_joined_by_month',
+        table: 'profiles'
+      },
+      extra: {
+        error_code: error.code,
+        error_details: error.details,
+        timestamp: new Date().toISOString()
+      }
+    })
     return []
   }
 
@@ -492,7 +1276,18 @@ export async function getUsersByLocation() {
   const { data, error } = await supabase.from("profiles").select("work_format")
 
   if (error) {
-    console.error("Error fetching users by location:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_users_by_location',
+        table: 'profiles'
+      },
+      extra: {
+        error_code: error.code,
+        error_details: error.details,
+        timestamp: new Date().toISOString()
+      }
+    })
     return []
   }
 
@@ -527,13 +1322,34 @@ export async function checkPaymentAccess(): Promise<boolean> {
     const { data, error } = await supabase.from("payment_settings").select("is_enabled").single()
 
     if (error || !data) {
-      console.error("Ошибка при проверке доступа к платежам:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'org_data_service',
+          action: 'check_payment_access',
+          table: 'payment_settings'
+        },
+        extra: {
+          error_code: error?.code,
+          error_details: error?.details,
+          timestamp: new Date().toISOString()
+        }
+      })
       return false
     }
 
     return data.is_enabled || false
   } catch (error) {
-    console.error("Непредвиденная ошибка при проверке доступа к платежам:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'check_payment_access',
+        error_type: 'unexpected_error'
+      },
+      extra: {
+        error_message: (error as Error).message,
+        timestamp: new Date().toISOString()
+      }
+    })
     return false
   }
 }
@@ -579,7 +1395,19 @@ export async function getUserPermissionsOptimized(userId?: string, forceFromDB: 
     return { roleId: null, permissions: [] };
     
   } catch (error) {
-    console.error("Ошибка в getUserPermissionsOptimized:", error);
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'get_user_permissions_optimized',
+        error_type: 'permissions_error'
+      },
+      extra: {
+        user_id: userId,
+        force_from_db: forceFromDB,
+        error_message: (error as Error).message,
+        timestamp: new Date().toISOString()
+      }
+    })
     return { roleId: null, permissions: [] };
   }
 }
@@ -593,7 +1421,18 @@ export async function syncCurrentUserState() {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     
     if (authError || !authData.user) {
-      console.error("Ошибка при получении пользователя из Auth:", authError);
+      Sentry.captureException(authError, {
+        tags: {
+          module: 'org_data_service',
+          action: 'sync_current_user_state',
+          error_type: 'auth_error'
+        },
+        extra: {
+          error_code: authError?.code,
+          error_message: authError?.message,
+          timestamp: new Date().toISOString()
+        }
+      })
       return false;
     }
     
@@ -607,7 +1446,19 @@ export async function syncCurrentUserState() {
       .single();
     
     if (profileError) {
-      console.error("Ошибка при получении профиля:", profileError);
+      Sentry.captureException(profileError, {
+        tags: {
+          module: 'org_data_service',
+          action: 'sync_current_user_state',
+          error_type: 'profile_error'
+        },
+        extra: {
+          user_id: userId,
+          error_code: profileError.code,
+          error_details: profileError.details,
+          timestamp: new Date().toISOString()
+        }
+      })
       return false;
     }
     
@@ -652,7 +1503,17 @@ export async function syncCurrentUserState() {
     return true;
     
   } catch (error) {
-    console.error("Ошибка при синхронизации состояния пользователя:", error);
+    Sentry.captureException(error, {
+      tags: {
+        module: 'org_data_service',
+        action: 'sync_current_user_state',
+        error_type: 'sync_error'
+      },
+      extra: {
+        error_message: (error as Error).message,
+        timestamp: new Date().toISOString()
+      }
+    })
     return false;
   }
 }

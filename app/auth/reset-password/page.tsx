@@ -7,6 +7,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 function ResetPasswordForm() {
   const [loading, setLoading] = useState(false)
@@ -45,6 +46,20 @@ function ResetPasswordForm() {
           setIsValidSession(true)
         }
       } catch (err) {
+        // Отправляем ошибку проверки токена в Sentry
+        Sentry.captureException(err, {
+          tags: { 
+            module: 'auth', 
+            action: 'reset_password_verification',
+            error_type: 'token_verification_failed'
+          },
+          extra: { 
+            token_present: !!searchParams.get('token'),
+            type: searchParams.get('type'),
+            timestamp: new Date().toISOString()
+          }
+        })
+
         console.error('Password reset session error:', err)
         setError("Произошла ошибка при проверке ссылки")
       } finally {
@@ -74,24 +89,77 @@ function ResetPasswordForm() {
       return
     }
 
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password,
-      })
+    return Sentry.startSpan(
+      {
+        op: "auth.reset_password",
+        name: "Password Reset Submit",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("auth.method", "password_reset")
+          span.setAttribute("auth.password_length", password.length)
 
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
+          const { error } = await supabase.auth.updateUser({
+            password,
+          })
+
+          if (error) {
+            span.setAttribute("auth.success", false)
+            span.setAttribute("auth.error", error.message)
+            
+            // Отправляем ошибку сброса пароля в Sentry
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'auth', 
+                action: 'reset_password',
+                error_type: 'password_update_failed'
+              },
+              extra: { 
+                error_code: error.message,
+                password_length: password.length,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(error.message)
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+          
+          // Логируем успешный сброс пароля
+          Sentry.addBreadcrumb({
+            message: 'Password reset successful',
+            category: 'auth',
+            level: 'info'
+          })
+
+          // Success - redirect to login page
+          router.push("/auth/login?message=Пароль успешно изменен")
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'reset_password',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'ResetPasswordForm',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Password reset error:", err)
+          setError("Произошла ошибка при сбросе пароля. Пожалуйста, попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      // Success - redirect to login page
-      router.push("/auth/login?message=Пароль успешно изменен")
-    } catch (err) {
-      console.error("Password reset error:", err)
-      setError("Произошла ошибка при сбросе пароля. Пожалуйста, попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   if (sessionLoading) {

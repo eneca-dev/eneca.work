@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -33,27 +34,88 @@ export function CreateStageModal({ isOpen, onClose, projectId, projectName, onSu
       return
     }
 
-    setLoading(true)
-    try {
-      const { error } = await supabase
-        .from('stages')
-        .insert({
-          stage_name: stageName.trim(),
-          stage_description: stageDescription.trim() || null,
-          stage_project_id: projectId
-        })
+    return Sentry.startSpan(
+      {
+        op: "projects.create_stage",
+        name: "Create Stage",
+      },
+      async (span) => {
+        setLoading(true)
+        try {
+          span.setAttribute("stage.name", stageName.trim())
+          span.setAttribute("project.id", projectId)
+          span.setAttribute("project.name", projectName)
+          span.setAttribute("stage.has_description", !!stageDescription.trim())
 
-      if (error) throw error
+          const { error } = await supabase
+            .from('stages')
+            .insert({
+              stage_name: stageName.trim(),
+              stage_description: stageDescription.trim() || null,
+              stage_project_id: projectId
+            })
 
-      setNotification(`Стадия "${stageName}" успешно создана`)
-      onSuccess()
-      handleClose()
-    } catch (error) {
-      console.error('Ошибка создания стадии:', error)
-      setNotification(error instanceof Error ? error.message : 'Ошибка создания стадии')
-    } finally {
-      setLoading(false)
-    }
+          if (error) {
+            span.setAttribute("create.success", false)
+            span.setAttribute("create.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'create_stage',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'CreateStageModal',
+                stage_name: stageName.trim(),
+                project_id: projectId,
+                project_name: projectName,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
+
+          span.setAttribute("create.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Stage created successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              stage_name: stageName.trim(),
+              project_id: projectId,
+              project_name: projectName,
+              has_description: !!stageDescription.trim()
+            }
+          })
+
+          setNotification(`Стадия "${stageName}" успешно создана`)
+          onSuccess()
+          handleClose()
+        } catch (error) {
+          span.setAttribute("create.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'create_stage',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'CreateStageModal',
+              stage_name: stageName.trim(),
+              project_id: projectId,
+              project_name: projectName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка создания стадии:', error)
+          setNotification(error instanceof Error ? error.message : 'Ошибка создания стадии')
+        } finally {
+          setLoading(false)
+        }
+      }
+    )
   }
 
   const handleClose = () => {

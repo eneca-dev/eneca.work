@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
+import * as Sentry from "@sentry/nextjs"
 import type { 
   Department, 
   Team, 
@@ -113,8 +114,17 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
       
       // Загрузка начальных данных
       loadInitialData: async () => {
-        console.log('🚀 Загружаю начальные данные для task-transfer...')
-        set({ isLoading: true })
+        return Sentry.startSpan(
+          {
+            op: "db.query",
+            name: "Загрузка начальных данных task-transfer",
+          },
+          async (span) => {
+            console.log('🚀 Загружаю начальные данные для task-transfer...')
+            set({ isLoading: true })
+            
+            span.setAttribute("module", "task-transfer")
+            span.setAttribute("action", "load_initial_data")
         
         try {
           // Параллельная загрузка данных
@@ -139,21 +149,21 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
               })
             }
             
-            // Стадии
-            if (!stagesMap.has(item.stage_id)) {
+                                  // Стадии
+            if (item.stage_id && !stagesMap.has(item.stage_id)) {
               stagesMap.set(item.stage_id, {
                 id: item.stage_id,
                 projectId: item.project_id,
-                name: item.stage_name
+                name: item.stage_name || ""
               })
             }
             
-            // Объекты
-            if (!objectsMap.has(item.object_id)) {
+                                  // Объекты
+            if (item.object_id && !objectsMap.has(item.object_id)) {
               objectsMap.set(item.object_id, {
                 id: item.object_id,
-                stageId: item.stage_id,
-                name: item.object_name
+                stageId: item.stage_id || "",
+                name: item.object_name || ""
               })
             }
           })
@@ -226,21 +236,54 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           try {
             await get().loadAssignments()
           } catch (assignmentError) {
-            console.error('❌ Ошибка загрузки заданий (не критично):', assignmentError)
+            Sentry.captureException(assignmentError, {
+              tags: {
+                module: "task-transfer",
+                action: "load_assignments_initial",
+                severity: "warning"
+              },
+              extra: {
+                context: "Не критичная ошибка при загрузке заданий после инициализации",
+                error_message: assignmentError instanceof Error ? assignmentError.message : String(assignmentError)
+              }
+            })
             // Не останавливаем выполнение, если задания не загружаются
           }
           
         } catch (error) {
-          console.error('❌ Ошибка загрузки начальных данных:', error)
-          console.error('❌ Stack trace:', error.stack)
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: "task-transfer",
+              action: "load_initial_data",
+              severity: "high"
+            },
+            extra: {
+              context: "Критическая ошибка загрузки начальных данных",
+              error_message: error instanceof Error ? error.message : String(error),
+              stack_trace: error instanceof Error ? error.stack : undefined
+            }
+          })
           set({ isLoading: false })
         }
+      }
+    );
       },
       
       // Загрузка заданий с фильтрацией
       loadAssignments: async (filters = {}) => {
-        console.log('🔍 Загружаю задания с фильтрами:', filters)
-        set({ isLoadingAssignments: true })
+        return Sentry.startSpan(
+          {
+            op: "db.query",
+            name: "Загрузка заданий task-transfer",
+          },
+          async (span) => {
+            console.log('🔍 Загружаю задания с фильтрами:', filters)
+            set({ isLoadingAssignments: true })
+            
+            span.setAttribute("module", "task-transfer")
+            span.setAttribute("action", "load_assignments")
+            span.setAttribute("filters_count", Object.keys(filters).length)
         
         try {
           console.log('📞 Вызываю fetchAssignments...')
@@ -249,48 +292,119 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           
           set({ assignments, isLoadingAssignments: false })
           console.log('✅ Задания загружены в store:', assignments.length)
+          span.setAttribute("assignments_loaded", assignments.length)
         } catch (error) {
-          console.error('❌ Ошибка загрузки заданий в store:', error)
-          console.error('❌ Stack trace:', error.stack)
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: "task-transfer",
+              action: "load_assignments",
+              severity: "high"
+            },
+            extra: {
+              filters,
+              context: "Ошибка загрузки заданий в store",
+              error_message: error instanceof Error ? error.message : String(error),
+              stack_trace: error instanceof Error ? error.stack : undefined
+            }
+          })
           set({ isLoadingAssignments: false })
           throw error // Пробрасываем ошибку дальше
         }
+      }
+    );
       },
       
       // Обновление всех данных
       refreshData: async () => {
-        console.log('🔄 Обновляю все данные...')
-        await get().loadInitialData()
+        return Sentry.startSpan(
+          {
+            op: "db.query",
+            name: "Обновление всех данных task-transfer",
+          },
+          async (span) => {
+            console.log('🔄 Обновляю все данные...')
+            span.setAttribute("module", "task-transfer")
+            span.setAttribute("action", "refresh_data")
+            await get().loadInitialData()
+          }
+        );
       },
 
       // Создание нового задания
       createNewAssignment: async (assignmentData: CreateAssignmentData) => {
-        try {
-          console.log('🚀 Создаю новое задание...', assignmentData)
-          const result = await createAssignment(assignmentData)
+        return Sentry.startSpan(
+          {
+            op: "db.insert",
+            name: "Создание нового задания task-transfer",
+          },
+          async (span) => {
+            try {
+              console.log('🚀 Создаю новое задание...', assignmentData)
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "create_assignment")
+              span.setAttribute("assignment_title", assignmentData.title || "Без названия")
+              
+              const result = await createAssignment(assignmentData)
           
-          if (result.success) {
-            console.log('✅ Задание успешно создано, обновляю список...')
-            // Перезагружаем задания после создания
-            await get().loadAssignments()
-            return { success: true }
-          } else {
-            console.error('❌ Ошибка создания задания:', result.error)
-            return { success: false, error: result.error }
+              if (result.success) {
+                console.log('✅ Задание успешно создано, обновляю список...')
+                // Перезагружаем задания после создания
+                await get().loadAssignments()
+                return { success: true }
+              } else {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(new Error(String(result.error) || "Неизвестная ошибка создания задания"), {
+                  tags: {
+                    module: "task-transfer",
+                    action: "create_assignment",
+                    severity: "medium"
+                  },
+                  extra: {
+                    assignment_data: assignmentData,
+                    result_error: result.error,
+                    context: "Ошибка API при создании задания"
+                  }
+                })
+                return { success: false, error: result.error }
+              }
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "create_assignment",
+                  severity: "high"
+                },
+                extra: {
+                  assignment_data: assignmentData,
+                  error_message: error instanceof Error ? error.message : String(error),
+                  context: "Неожиданная ошибка при создании задания"
+                }
+              })
+              return { success: false, error }
+            }
           }
-        } catch (error) {
-          console.error('❌ Неожиданная ошибка при создании задания:', error)
-          return { success: false, error }
-        }
+        );
       },
 
       // Обновление задания
       updateAssignment: async (assignmentId: string, updateData: UpdateAssignmentData) => {
-        try {
-          console.log('🚀 Обновляю задание...', assignmentId, updateData)
-          
-          // Обновляем задание (записи аудита создаются внутри функции updateAssignment)
-          const result = await updateAssignment(assignmentId, updateData)
+        return Sentry.startSpan(
+          {
+            op: "db.update",
+            name: "Обновление задания task-transfer",
+          },
+          async (span) => {
+            try {
+              console.log('🚀 Обновляю задание...', assignmentId, updateData)
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "update_assignment")
+              span.setAttribute("assignment_id", assignmentId)
+              span.setAttribute("update_fields", Object.keys(updateData).join(", "))
+              
+              // Обновляем задание (записи аудита создаются внутри функции updateAssignment)
+              const result = await updateAssignment(assignmentId, updateData)
           
           if (result.success) {
             console.log('✅ Задание успешно обновлено, обновляю локально...')
@@ -308,114 +422,298 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
               )
             }))
             
-            // Автоматически обновляем историю изменений
-            try {
-              console.log('🔄 Автоматически обновляю историю изменений...')
-              await get().loadAssignmentHistory(assignmentId)
-              console.log('✅ История изменений обновлена')
-            } catch (historyError) {
-              console.error('❌ Ошибка обновления истории изменений:', historyError)
-              // Не останавливаем выполнение, если история не загрузилась
+              // Автоматически обновляем историю изменений
+              try {
+                console.log('🔄 Автоматически обновляю историю изменений...')
+                await get().loadAssignmentHistory(assignmentId)
+                console.log('✅ История изменений обновлена')
+              } catch (historyError) {
+                Sentry.captureException(historyError, {
+                  tags: {
+                    module: "task-transfer",
+                    action: "load_history_after_update",
+                    severity: "low"
+                  },
+                  extra: {
+                    assignment_id: assignmentId,
+                    context: "Ошибка обновления истории изменений после обновления задания",
+                    error_message: historyError instanceof Error ? historyError.message : String(historyError)
+                  }
+                })
+                // Не останавливаем выполнение, если история не загрузилась
+              }
+              
+              return { success: true }
+            } else {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(new Error(result.error || "Неизвестная ошибка обновления задания"), {
+                tags: {
+                  module: "task-transfer",
+                  action: "update_assignment",
+                  severity: "medium"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  update_data: updateData,
+                  result_error: result.error,
+                  context: "Ошибка API при обновлении задания"
+                }
+              })
+              return { success: false, error: result.error }
             }
-            
-            return { success: true }
-          } else {
-            console.error('❌ Ошибка обновления задания:', result.error)
-            return { success: false, error: result.error }
+          } catch (error) {
+            span.setAttribute("db.success", false)
+            Sentry.captureException(error, {
+              tags: {
+                module: "task-transfer",
+                action: "update_assignment",
+                severity: "high"
+              },
+              extra: {
+                assignment_id: assignmentId,
+                update_data: updateData,
+                error_message: error instanceof Error ? error.message : String(error),
+                context: "Неожиданная ошибка при обновлении задания"
+              }
+            })
+            return { success: false, error }
           }
-        } catch (error) {
-          console.error('❌ Неожиданная ошибка при обновлении задания:', error)
-          return { success: false, error }
         }
+      );
       },
 
       // Обновление статуса задания
       advanceStatus: async (assignmentId: string, currentStatus: any) => {
-        try {
-          console.log('🚀 Обновляю статус задания:', assignmentId, 'текущий статус:', currentStatus)
-          const result = await advanceAssignmentStatus(assignmentId, currentStatus)
-          
-          if (result.success) {
-            console.log('✅ Статус задания успешно обновлен')
-            // Перезагружаем задания после обновления статуса
-            await get().loadAssignments()
-            return { success: true }
-          } else {
-            console.error('❌ Ошибка обновления статуса задания:', result.error)
-            return { success: false, error: result.error }
+        return Sentry.startSpan(
+          {
+            op: "db.update",
+            name: "Обновление статуса задания task-transfer",
+          },
+          async (span) => {
+            try {
+              console.log('🚀 Обновляю статус задания:', assignmentId, 'текущий статус:', currentStatus)
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "advance_status")
+              span.setAttribute("assignment_id", assignmentId)
+              span.setAttribute("current_status", String(currentStatus))
+              
+              const result = await advanceAssignmentStatus(assignmentId, currentStatus)
+              
+              if (result.success) {
+                console.log('✅ Статус задания успешно обновлен')
+                // Перезагружаем задания после обновления статуса
+                await get().loadAssignments()
+                return { success: true }
+              } else {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(new Error(String(result.error) || "Неизвестная ошибка обновления статуса"), {
+                  tags: {
+                    module: "task-transfer",
+                    action: "advance_status",
+                    severity: "medium"
+                  },
+                  extra: {
+                    assignment_id: assignmentId,
+                    current_status: currentStatus,
+                    result_error: result.error,
+                    context: "Ошибка API при обновлении статуса задания"
+                  }
+                })
+                return { success: false, error: result.error }
+              }
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "advance_status",
+                  severity: "high"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  current_status: currentStatus,
+                  error_message: error instanceof Error ? error.message : String(error),
+                  context: "Неожиданная ошибка при обновлении статуса задания"
+                }
+              })
+              return { success: false, error }
+            }
           }
-        } catch (error) {
-          console.error('❌ Неожиданная ошибка при обновлении статуса задания:', error)
-          return { success: false, error }
-        }
+        );
       },
 
       // Отмена статуса задания
       revertStatus: async (assignmentId: string, currentStatus: any) => {
-        try {
-          console.log('🚀 Отменяю статус задания:', assignmentId, 'текущий статус:', currentStatus)
-          const result = await revertAssignmentStatus(assignmentId, currentStatus)
-          
-          if (result.success) {
-            console.log('✅ Статус задания успешно отменен')
-            // Перезагружаем задания после отмены статуса
-            await get().loadAssignments()
-            return { success: true }
-          } else {
-            console.error('❌ Ошибка отмены статуса задания:', result.error)
-            return { success: false, error: result.error }
+        return Sentry.startSpan(
+          {
+            op: "db.update",
+            name: "Отмена статуса задания task-transfer",
+          },
+          async (span) => {
+            try {
+              console.log('🚀 Отменяю статус задания:', assignmentId, 'текущий статус:', currentStatus)
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "revert_status")
+              span.setAttribute("assignment_id", assignmentId)
+              span.setAttribute("current_status", String(currentStatus))
+              
+              const result = await revertAssignmentStatus(assignmentId, currentStatus)
+              
+              if (result.success) {
+                console.log('✅ Статус задания успешно отменен')
+                // Перезагружаем задания после отмены статуса
+                await get().loadAssignments()
+                return { success: true }
+              } else {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(new Error(String(result.error) || "Неизвестная ошибка отмены статуса"), {
+                  tags: {
+                    module: "task-transfer",
+                    action: "revert_status",
+                    severity: "medium"
+                  },
+                  extra: {
+                    assignment_id: assignmentId,
+                    current_status: currentStatus,
+                    result_error: result.error,
+                    context: "Ошибка API при отмене статуса задания"
+                  }
+                })
+                return { success: false, error: result.error }
+              }
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "revert_status",
+                  severity: "high"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  current_status: currentStatus,
+                  error_message: error instanceof Error ? error.message : String(error),
+                  context: "Неожиданная ошибка при отмене статуса задания"
+                }
+              })
+              return { success: false, error }
+            }
           }
-        } catch (error) {
-          console.error('❌ Неожиданная ошибка при отмене статуса задания:', error)
-          return { success: false, error }
-        }
+        );
       },
 
       // Обновление статуса задания с продолжительностью
       advanceStatusWithDuration: async (assignmentId: string, currentStatus: any, duration?: number) => {
-        try {
-          console.log('🚀 Обновляю статус задания:', assignmentId, 'текущий статус:', currentStatus, 'продолжительность:', duration)
-          const result = await advanceAssignmentStatusWithDuration(assignmentId, currentStatus, duration)
-          
-          if (result.success) {
-            console.log('✅ Статус задания успешно обновлен')
-            // Перезагружаем задания после обновления статуса
-            await get().loadAssignments()
-            return { success: true }
-          } else {
-            console.error('❌ Ошибка обновления статуса задания:', result.error)
-            return { success: false, error: result.error }
+        return Sentry.startSpan(
+          {
+            op: "db.update",
+            name: "Обновление статуса с продолжительностью task-transfer",
+          },
+          async (span) => {
+            try {
+              console.log('🚀 Обновляю статус задания:', assignmentId, 'текущий статус:', currentStatus, 'продолжительность:', duration)
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "advance_status_with_duration")
+              span.setAttribute("assignment_id", assignmentId)
+              span.setAttribute("current_status", String(currentStatus))
+              span.setAttribute("duration", duration ? String(duration) : "not_set")
+              
+              const result = await advanceAssignmentStatusWithDuration(assignmentId, currentStatus, duration)
+              
+              if (result.success) {
+                console.log('✅ Статус задания успешно обновлен')
+                // Перезагружаем задания после обновления статуса
+                await get().loadAssignments()
+                return { success: true }
+              } else {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(new Error(String(result.error) || "Неизвестная ошибка обновления статуса с продолжительностью"), {
+                  tags: {
+                    module: "task-transfer",
+                    action: "advance_status_with_duration",
+                    severity: "medium"
+                  },
+                  extra: {
+                    assignment_id: assignmentId,
+                    current_status: currentStatus,
+                    duration: duration,
+                    result_error: result.error,
+                    context: "Ошибка API при обновлении статуса с продолжительностью"
+                  }
+                })
+                return { success: false, error: result.error }
+              }
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "advance_status_with_duration",
+                  severity: "high"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  current_status: currentStatus,
+                  duration: duration,
+                  error_message: error instanceof Error ? error.message : String(error),
+                  context: "Неожиданная ошибка при обновлении статуса с продолжительностью"
+                }
+              })
+              return { success: false, error }
+            }
           }
-        } catch (error) {
-          console.error('❌ Неожиданная ошибка при обновлении статуса задания:', error)
-          return { success: false, error }
-        }
+        );
       },
 
       // Загрузка истории изменений задания
       loadAssignmentHistory: async (assignmentId: string) => {
-        console.log('🔍 Загружаю историю изменений задания:', assignmentId)
-        set({ isLoadingHistory: true })
-        
-        try {
-          console.log('📞 Вызываю fetchAssignmentHistory...')
-          const history = await fetchAssignmentHistory(assignmentId)
-          console.log('📦 Получена история изменений:', history)
-          
-          set((state) => ({
-            assignmentHistory: {
-              ...state.assignmentHistory,
-              [assignmentId]: history
-            },
-            isLoadingHistory: false
-          }))
-          console.log('✅ История изменений задания загружена:', history.length)
-        } catch (error) {
-          console.error('❌ Ошибка загрузки истории изменений задания:', error)
-          console.error('❌ Stack trace:', error.stack)
-          set({ isLoadingHistory: false })
-          throw error // Пробрасываем ошибку дальше
-        }
+        return Sentry.startSpan(
+          {
+            op: "db.query",
+            name: "Загрузка истории изменений task-transfer",
+          },
+          async (span) => {
+            console.log('🔍 Загружаю историю изменений задания:', assignmentId)
+            set({ isLoadingHistory: true })
+            
+            span.setAttribute("module", "task-transfer")
+            span.setAttribute("action", "load_assignment_history")
+            span.setAttribute("assignment_id", assignmentId)
+            
+            try {
+              console.log('📞 Вызываю fetchAssignmentHistory...')
+              const history = await fetchAssignmentHistory(assignmentId)
+              console.log('📦 Получена история изменений:', history)
+              
+              set((state) => ({
+                assignmentHistory: {
+                  ...state.assignmentHistory,
+                  [assignmentId]: history
+                },
+                isLoadingHistory: false
+              }))
+              console.log('✅ История изменений задания загружена:', history.length)
+              span.setAttribute("history_records_loaded", history.length)
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "load_assignment_history",
+                  severity: "medium"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  error_message: error instanceof Error ? error.message : String(error),
+                  stack_trace: error instanceof Error ? error.stack : undefined,
+                  context: "Ошибка загрузки истории изменений задания"
+                }
+              })
+              set({ isLoadingHistory: false })
+              throw error // Пробрасываем ошибку дальше
+            }
+          }
+        );
       },
 
       // Новые методы для истории изменений

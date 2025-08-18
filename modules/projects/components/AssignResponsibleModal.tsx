@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { Avatar } from "./Avatar"
 import { updateSectionResponsible } from "@/lib/supabase-client"
@@ -56,50 +57,103 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
   // Загружаем список сотрудников при открытии модального окна
   useEffect(() => {
     const loadEmployees = async () => {
-      setIsLoadingEmployees(true)
-      try {
-        const { createClient } = await import("@/utils/supabase/client")
-        const supabase = createClient()
+      return Sentry.startSpan(
+        {
+          op: "projects.load_employees",
+          name: "Load Employees for Assignment",
+        },
+        async (span) => {
+          setIsLoadingEmployees(true)
+          try {
+            span.setAttribute("section.id", section.id)
+            span.setAttribute("section.name", section.name)
+            
+            const { createClient } = await import("@/utils/supabase/client")
+            const supabase = createClient()
 
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(`
-            user_id,
-            first_name,
-            last_name,
-            email,
-            avatar_url,
-            departments!inner(department_name),
-            teams!inner(team_name),
-            positions!inner(position_name)
-          `)
-          .not('first_name', 'is', null)
-          .neq('first_name', '')
-          .order("first_name")
+            const { data, error } = await supabase
+              .from("profiles")
+              .select(`
+                user_id,
+                first_name,
+                last_name,
+                email,
+                avatar_url,
+                departments!inner(department_name),
+                teams!inner(team_name),
+                positions!inner(position_name)
+              `)
+              .not('first_name', 'is', null)
+              .neq('first_name', '')
+              .order("first_name")
 
-        if (error) {
-          console.error("Ошибка загрузки сотрудников:", error)
-          setNotification(`Ошибка загрузки сотрудников: ${error.message}`)
-          return
+            if (error) {
+              span.setAttribute("load.success", false)
+              span.setAttribute("load.error", error.message)
+              Sentry.captureException(error, {
+                tags: { 
+                  module: 'projects', 
+                  action: 'load_employees',
+                  error_type: 'db_error'
+                },
+                extra: { 
+                  component: 'AssignResponsibleModal',
+                  section_id: section.id,
+                  section_name: section.name,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              console.error("Ошибка загрузки сотрудников:", error)
+              setNotification(`Ошибка загрузки сотрудников: ${error.message}`)
+              return
+            }
+
+            const employeesList = data?.map((emp: any) => ({
+              user_id: emp.user_id,
+              full_name: `${emp.first_name} ${emp.last_name}`.trim(),
+              email: emp.email,
+              avatar_url: emp.avatar_url,
+              position_name: emp.positions?.position_name || null,
+              team_name: emp.teams?.team_name || null,
+              department_name: emp.departments?.department_name || null,
+            })) || []
+
+            span.setAttribute("load.success", true)
+            span.setAttribute("employees.count", employeesList.length)
+            setEmployees(employeesList)
+            
+            Sentry.addBreadcrumb({
+              message: 'Employees loaded for assignment',
+              category: 'projects',
+              level: 'info',
+              data: { 
+                section_id: section.id,
+                employees_count: employeesList.length 
+              }
+            })
+          } catch (error) {
+            span.setAttribute("load.success", false)
+            span.recordException(error as Error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'load_employees',
+                error_type: 'unexpected_error'
+              },
+              extra: { 
+                component: 'AssignResponsibleModal',
+                section_id: section.id,
+                section_name: section.name,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error("Ошибка при загрузке сотрудников:", error)
+            setNotification(`Ошибка при загрузке сотрудников: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+          } finally {
+            setIsLoadingEmployees(false)
+          }
         }
-
-        const employeesList = data?.map((emp: any) => ({
-          user_id: emp.user_id,
-          full_name: `${emp.first_name} ${emp.last_name}`.trim(),
-          email: emp.email,
-          avatar_url: emp.avatar_url,
-          position_name: emp.positions?.position_name || null,
-          team_name: emp.teams?.team_name || null,
-          department_name: emp.departments?.department_name || null,
-        })) || []
-
-        setEmployees(employeesList)
-      } catch (error) {
-        console.error("Ошибка при загрузке сотрудников:", error)
-        setNotification(`Ошибка при загрузке сотрудников: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
-      } finally {
-        setIsLoadingEmployees(false)
-      }
+      )
     }
 
     loadEmployees()
@@ -130,74 +184,120 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
       return
     }
 
-    // Устанавливаем состояние загрузки
-    setIsSaving(true)
+    return Sentry.startSpan(
+      {
+        op: "projects.assign_responsible",
+        name: "Assign Section Responsible",
+      },
+      async (span) => {
+        // Устанавливаем состояние загрузки
+        setIsSaving(true)
 
-    try {
-      // Используем правильный ID раздела согласно схеме БД
-      const sectionId = section.id
+        try {
+          // Используем правильный ID раздела согласно схеме БД
+          const sectionId = section.id
 
-      if (!sectionId) {
-        console.error("Структура объекта section:", section)
-        console.error("Доступные ключи:", Object.keys(section))
-        throw new Error(`Отсутствует id в объекте раздела. Доступные поля: ${Object.keys(section).join(", ")}`)
+          if (!sectionId) {
+            console.error("Структура объекта section:", section)
+            console.error("Доступные ключи:", Object.keys(section))
+            throw new Error(`Отсутствует id в объекте раздела. Доступные поля: ${Object.keys(section).join(", ")}`)
+          }
+
+          span.setAttribute("section.id", sectionId)
+          span.setAttribute("section.name", section.name)
+          span.setAttribute("employee.id", selectedEmployee!.user_id)
+          span.setAttribute("employee.name", selectedEmployee!.full_name)
+
+          console.log("Используемый sectionId:", sectionId)
+          console.log("Попытка обновления ответственного:", {
+            sectionId: sectionId,
+            responsibleId: selectedEmployee!.user_id,
+            responsibleName: selectedEmployee!.full_name,
+          })
+
+          // ЭТО ОСНОВНОЙ КОД СОХРАНЕНИЯ В БД:
+          const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
+
+          if (!result.success) {
+            span.setAttribute("assign.success", false)
+            span.setAttribute("assign.error", result.error || "Неизвестная ошибка")
+            throw new Error(result.error || "Неизвестная ошибка при обновлении")
+          }
+
+          console.log("Обновление прошло успешно:", result.data)
+
+          // Обновляем раздел в сторе (локальное состояние)
+          updateSectionInStore(sectionId, {
+            responsibleName: selectedEmployee!.full_name,
+            responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
+          })
+
+          span.setAttribute("assign.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Section responsible assigned successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              section_id: sectionId,
+              section_name: section.name,
+              employee_id: selectedEmployee!.user_id,
+              employee_name: selectedEmployee!.full_name
+            }
+          })
+
+          // Показываем уведомление об успехе
+          setNotification(`Ответственный для раздела "${section.name}" успешно назначен: ${selectedEmployee!.full_name}`)
+
+          // Автоматически скрываем уведомление через 3 секунды
+          setTimeout(() => {
+            clearNotification()
+          }, 3000)
+
+          // Закрываем модальное окно
+          setShowAssignModal(false)
+
+          console.log("Ответственный успешно назначен:", {
+            sectionId: sectionId,
+            sectionName: section.name,
+            responsibleId: selectedEmployee!.user_id,
+            responsibleName: selectedEmployee!.full_name,
+          })
+        } catch (error) {
+          span.setAttribute("assign.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'assign_responsible',
+              error_type: 'assignment_failed'
+            },
+            extra: { 
+              component: 'AssignResponsibleModal',
+              section_id: section.id,
+              section_name: section.name,
+              employee_id: selectedEmployee?.user_id,
+              employee_name: selectedEmployee?.full_name,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error("Ошибка при назначении ответственного:", error)
+
+          // Показываем уведомление об ошибке
+          setNotification(
+            `Ошибка при назначении ответственного: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
+          )
+
+          // Автоматически скрываем уведомление через 5 секунд
+          setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          // Сбрасываем состояние загрузки
+          setIsSaving(false)
+        }
       }
-
-      console.log("Используемый sectionId:", sectionId)
-      console.log("Попытка обновления ответственного:", {
-        sectionId: sectionId,
-        responsibleId: selectedEmployee!.user_id,
-        responsibleName: selectedEmployee!.full_name,
-      })
-
-      // ЭТО ОСНОВНОЙ КОД СОХРАНЕНИЯ В БД:
-      const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
-
-      if (!result.success) {
-        throw new Error(result.error || "Неизвестная ошибка при обновлении")
-      }
-
-      console.log("Обновление прошло успешно:", result.data)
-
-      // Обновляем раздел в сторе (локальное состояние)
-      updateSectionInStore(sectionId, {
-        responsibleName: selectedEmployee!.full_name,
-        responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
-      })
-
-      // Показываем уведомление об успехе
-      setNotification(`Ответственный для раздела "${section.name}" успешно назначен: ${selectedEmployee!.full_name}`)
-
-      // Автоматически скрываем уведомление через 3 секунды
-      setTimeout(() => {
-        clearNotification()
-      }, 3000)
-
-      // Закрываем модальное окно
-      setShowAssignModal(false)
-
-      console.log("Ответственный успешно назначен:", {
-        sectionId: sectionId,
-        sectionName: section.name,
-        responsibleId: selectedEmployee!.user_id,
-        responsibleName: selectedEmployee!.full_name,
-      })
-    } catch (error) {
-      console.error("Ошибка при назначении ответственного:", error)
-
-      // Показываем уведомление об ошибке
-      setNotification(
-        `Ошибка при назначении ответственного: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
-      )
-
-      // Автоматически скрываем уведомление через 5 секунд
-      setTimeout(() => {
-        clearNotification()
-      }, 5000)
-    } finally {
-      // Сбрасываем состояние загрузки
-      setIsSaving(false)
-    }
+    )
   }
 
   const handleEmployeeSelect = (employee: Employee) => {

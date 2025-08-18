@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
+import * as Sentry from "@sentry/nextjs"
 import type { Section, Loading, Department, Team } from "../types"
 // Обновляем импорты, добавляя новые функции
 import {
@@ -144,7 +145,18 @@ const parseTimestampTz = (timestamptz: string | null): Date | null => {
     // Преобразуем строку в объект Date
     return new Date(dateString)
   } catch (error) {
-    console.error("Ошибка при преобразовании даты:", error, timestamptz)
+    Sentry.captureException(error, {
+      tags: { 
+        module: 'planning', 
+        action: 'parse_timestamp',
+        function: 'parseTimestampTz'
+      },
+      extra: {
+        timestamptz: timestamptz,
+        timestamp: new Date().toISOString()
+      },
+      level: 'warning'
+    })
     return null
   }
 }
@@ -362,7 +374,16 @@ export const usePlanningStore = create<PlanningState>()(
               expandedSections: {},
             })
           } catch (error) {
-            console.error("Ошибка при загрузке разделов:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_sections',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                timestamp: new Date().toISOString()
+              }
+            })
             set({ isLoadingSections: false })
           }
         },
@@ -601,7 +622,16 @@ export const usePlanningStore = create<PlanningState>()(
 
             console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
           } catch (error) {
-            console.error("❌ Ошибка при загрузке организационной структуры:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_departments',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                timestamp: new Date().toISOString()
+              }
+            })
             set({ isLoadingDepartments: false })
           }
         },
@@ -612,7 +642,17 @@ export const usePlanningStore = create<PlanningState>()(
             const loadings = await fetchLoadings(sectionId, true)
             return Array.isArray(loadings) && loadings.length > 0
           } catch (error) {
-            console.error("Ошибка при проверке загрузок раздела:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'check_section_has_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return false
           }
         },
@@ -666,15 +706,36 @@ export const usePlanningStore = create<PlanningState>()(
 
             return loadings
           } catch (error) {
-            console.error("Ошибка при загрузке загрузок раздела:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_section_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return []
           }
         },
 
         // Создание новой загрузки
         createLoading: async (loadingData) => {
-          try {
-            // Подготавливаем данные для API
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Создание загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("responsible_id", loadingData.responsibleId)
+                span.setAttribute("section_id", loadingData.sectionId)
+                span.setAttribute("project_name", loadingData.projectName || "")
+                span.setAttribute("rate", loadingData.rate)
+
+                // Подготавливаем данные для API
             const apiData = {
               responsibleId: loadingData.responsibleId,
               sectionId: loadingData.sectionId,
@@ -760,16 +821,42 @@ export const usePlanningStore = create<PlanningState>()(
               loadingsMap: updatedLoadingsMap,
             })
 
-            return { success: true, loadingId: result.loadingId }
-          } catch (error) {
-            console.error("Ошибка при создании загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true, loadingId: result.loadingId }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'create_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    responsible_id: loadingData.responsibleId,
+                    section_id: loadingData.sectionId,
+                    project_name: loadingData.projectName,
+                    section_name: loadingData.sectionName,
+                    rate: loadingData.rate,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Обновление загрузки
         updateLoading: async (loadingId: string, updates: Partial<Loading>) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Обновление загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
+                if (updates.sectionId) span.setAttribute("section_id", updates.sectionId)
+                if (updates.rate !== undefined) span.setAttribute("rate", updates.rate)
             // Подготавливаем данные для API
             const apiUpdates: any = {}
             if (updates.startDate) {
@@ -902,16 +989,37 @@ export const usePlanningStore = create<PlanningState>()(
               finalUpdates
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при обновлении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'update_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    updates: JSON.stringify(updates),
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Удаление загрузки
         deleteLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Удаление загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Импортируем функцию удаления
             const { deleteLoading: deleteLoadingAPI } = await import("@/lib/supabase-client")
 
@@ -963,16 +1071,36 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при удалении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'delete_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Архивирование загрузки
         archiveLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Архивирование загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Вызываем API
             const result = await archiveLoadingAPI(loadingId)
 
@@ -1021,16 +1149,36 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при архивировании загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'archive_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Восстановление загрузки из архива
         restoreLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action", 
+              name: "Восстановление загрузки из архива",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Вызываем API
             const result = await restoreLoadingAPI(loadingId)
 
@@ -1044,11 +1192,24 @@ export const usePlanningStore = create<PlanningState>()(
               await get().fetchDepartments()
             }
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при восстановлении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'restore_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Получение архивных загрузок
@@ -1072,7 +1233,18 @@ export const usePlanningStore = create<PlanningState>()(
 
             return loadings
           } catch (error) {
-            console.error("Ошибка при загрузке архивных загрузок:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_archived_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                employee_id: employeeId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return []
           }
         },

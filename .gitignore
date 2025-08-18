@@ -29,3 +29,7 @@ ws-to-work-integration/
 .env.keys
 .env.local
 .env.*.local
+
+# Sentry Config File
+.env.sentry-build-plugin
+

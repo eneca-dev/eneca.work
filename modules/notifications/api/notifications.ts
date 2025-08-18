@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { 
   CreateNotificationRequest,
   CreateNotificationResponse,
@@ -25,26 +26,92 @@ const NOTIFICATIONS_ENDPOINT = '/api/notifications'
 export async function sendNotification(
   request: CreateNotificationRequest
 ): Promise<CreateNotificationResponse> {
-  try {
-    const response = await fetch(NOTIFICATIONS_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
+  return Sentry.startSpan(
+    {
+      op: "notifications.send_notification",
+      name: "Send Notification",
+    },
+    async (span) => {
+      try {
+        span.setAttribute("notification.entity_type", request.entityType)
+        span.setAttribute("notification.user_count", request.userIds?.length || 0)
+        span.setAttribute("notification.has_filters", !!request.filters)
+        span.setAttribute("notification.has_payload", !!request.payload)
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
+        const response = await fetch(NOTIFICATIONS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(request),
+        })
+
+        span.setAttribute("http.status_code", response.status)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          span.setAttribute("send.success", false)
+          span.setAttribute("send.error", errorText)
+          
+          const error = new Error(`HTTP ${response.status}: ${errorText}`)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'send_notification',
+              error_type: 'http_error'
+            },
+            extra: {
+              component: 'sendNotification',
+              status: response.status,
+              response_text: errorText,
+              entity_type: request.entityType,
+              user_count: request.userIds?.length,
+              has_filters: !!request.filters,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
+
+        const result = await response.json()
+        span.setAttribute("send.success", true)
+        span.setAttribute("notification.sent_count", result.sentCount || 0)
+
+        Sentry.addBreadcrumb({
+          message: 'Notification sent successfully',
+          category: 'notifications',
+          level: 'info',
+          data: {
+            entity_type: request.entityType,
+            user_count: request.userIds?.length,
+            sent_count: result.sentCount,
+            status: response.status
+          }
+        })
+
+        return result
+      } catch (error) {
+        span.setAttribute("send.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'send_notification',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'sendNotification',
+            entity_type: request.entityType,
+            user_count: request.userIds?.length,
+            has_filters: !!request.filters,
+            timestamp: new Date().toISOString()
+          }
+        })
+        console.error('Ошибка при отправке уведомления:', error)
+        throw error
+      }
     }
-
-    const result = await response.json()
-    return result
-  } catch (error) {
-    console.error('Ошибка при отправке уведомления:', error)
-    throw error
-  }
+  )
 }
 
 /**
@@ -551,49 +618,120 @@ export async function getUserNotifications(
   totalCount: number
   hasMore: boolean
 }> {
-  const supabase = createClient()
-  const offset = (page - 1) * limit
+  return Sentry.startSpan(
+    {
+      op: "notifications.get_user_notifications",
+      name: "Get User Notifications",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+        const offset = (page - 1) * limit
 
-  console.log('🔍 getUserNotifications: запрос для пользователя:', userId)
-  console.log('🔍 getUserNotifications: параметры:', { page, limit, onlyUnread, offset })
+        span.setAttribute("user.id", userId)
+        span.setAttribute("pagination.page", page)
+        span.setAttribute("pagination.limit", limit)
+        span.setAttribute("pagination.offset", offset)
+        span.setAttribute("filter.only_unread", onlyUnread)
 
-  let query = supabase
-    .from('user_notifications')
-    .select(`
-      *,
-      notifications:notification_id (
-        *,
-        entity_types:entity_type_id (*)
-      )
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+        console.log('🔍 getUserNotifications: запрос для пользователя:', userId)
+        console.log('🔍 getUserNotifications: параметры:', { page, limit, onlyUnread, offset })
 
-  if (onlyUnread) {
-    query = query.eq('is_read', false)
-  }
+        let query = supabase
+          .from('user_notifications')
+          .select(`
+            *,
+            notifications:notification_id (
+              *,
+              entity_types:entity_type_id (*)
+            )
+          `)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
 
-  const { data, error, count } = await query
-    .range(offset, offset + limit - 1)
-    .limit(limit)
+        if (onlyUnread) {
+          query = query.eq('is_read', false)
+        }
 
-  console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
-  console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)
-  
-  if (data && data.length > 0) {
-    console.log('🔍 getUserNotifications: первая запись:', data[0])
-  }
+        const { data, error, count } = await query
+          .range(offset, offset + limit - 1)
+          .limit(limit)
 
-  if (error) {
-    console.error('Ошибка при получении уведомлений:', error)
-    throw error
-  }
+        console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
+        console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)
+        
+        if (data && data.length > 0) {
+          console.log('🔍 getUserNotifications: первая запись:', data[0])
+        }
 
-  return {
-    notifications: data || [],
-    totalCount: count || 0,
-    hasMore: (count || 0) > offset + limit
-  }
+        if (error) {
+          span.setAttribute("fetch.success", false)
+          span.setAttribute("fetch.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'get_user_notifications',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'getUserNotifications',
+              user_id: userId,
+              page,
+              limit,
+              only_unread: onlyUnread,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка при получении уведомлений:', error)
+          throw error
+        }
+
+        span.setAttribute("fetch.success", true)
+        span.setAttribute("notifications.count", data?.length || 0)
+        span.setAttribute("notifications.total_count", count || 0)
+        span.setAttribute("notifications.has_more", (count || 0) > offset + limit)
+
+        Sentry.addBreadcrumb({
+          message: 'User notifications fetched successfully',
+          category: 'notifications',
+          level: 'info',
+          data: {
+            user_id: userId,
+            count: data?.length || 0,
+            total_count: count || 0,
+            page,
+            limit,
+            only_unread: onlyUnread
+          }
+        })
+
+        return {
+          notifications: data || [],
+          totalCount: count || 0,
+          hasMore: (count || 0) > offset + limit
+        }
+      } catch (error) {
+        span.setAttribute("fetch.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'get_user_notifications',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'getUserNotifications',
+            user_id: userId,
+            page,
+            limit,
+            only_unread: onlyUnread,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 /**
@@ -623,29 +761,88 @@ export async function markNotificationAsRead(
   userId: string,
   userNotificationId: string
 ): Promise<void> {
-  const supabase = createClient()
+  return Sentry.startSpan(
+    {
+      op: "notifications.mark_as_read",
+      name: "Mark Notification As Read",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
 
-  console.log('📝 Помечаем уведомление как прочитанное:', {
-    userId,
-    userNotificationId
-  })
+        span.setAttribute("user.id", userId)
+        span.setAttribute("user_notification.id", userNotificationId)
 
-  const { error, data } = await supabase
-    .from('user_notifications')
-    .update({ 
-      is_read: true,
-      updated_at: new Date().toISOString()
-    })
-    .eq('user_id', userId)
-    .eq('id', userNotificationId)
-    .select()
+        console.log('📝 Помечаем уведомление как прочитанное:', {
+          userId,
+          userNotificationId
+        })
 
-  if (error) {
-    console.error('❌ Ошибка при отметке уведомления как прочитанного:', error)
-    throw error
-  }
+        const { error, data } = await supabase
+          .from('user_notifications')
+          .update({ 
+            is_read: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('id', userNotificationId)
+          .select()
 
-  console.log('✅ Уведомление успешно помечено как прочитанное:', data)
+        if (error) {
+          span.setAttribute("mark.success", false)
+          span.setAttribute("mark.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'mark_as_read',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'markNotificationAsRead',
+              user_id: userId,
+              user_notification_id: userNotificationId,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('❌ Ошибка при отметке уведомления как прочитанного:', error)
+          throw error
+        }
+
+        span.setAttribute("mark.success", true)
+        span.setAttribute("updated.count", data?.length || 0)
+
+        Sentry.addBreadcrumb({
+          message: 'Notification marked as read successfully',
+          category: 'notifications',
+          level: 'info',
+          data: {
+            user_id: userId,
+            user_notification_id: userNotificationId,
+            updated_count: data?.length || 0
+          }
+        })
+
+        console.log('✅ Уведомление успешно помечено как прочитанное:', data)
+      } catch (error) {
+        span.setAttribute("mark.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'mark_as_read',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'markNotificationAsRead',
+            user_id: userId,
+            user_notification_id: userNotificationId,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
 }
 
 /**

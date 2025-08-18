@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Calendar, User } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -138,57 +139,127 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       return
     }
 
-    setLoading(true)
-    try {
-      const sectionData = {
-        section_name: sectionName.trim(),
-        section_description: sectionDescription.trim() || null,
-        section_responsible: sectionResponsible || null,
-        section_start_date: sectionStartDate || null,
-        section_end_date: sectionEndDate || null,
-        section_object_id: objectId,
-        section_project_id: actualProjectId
-      }
+    return Sentry.startSpan(
+      {
+        op: "projects.create_section",
+        name: "Create Section",
+      },
+      async (span) => {
+        setLoading(true)
+        try {
+          span.setAttribute("section.name", sectionName.trim())
+          span.setAttribute("object.id", objectId)
+          span.setAttribute("object.name", objectName)
+          span.setAttribute("project.id", actualProjectId)
+          span.setAttribute("section.has_responsible", !!sectionResponsible)
+          span.setAttribute("section.has_dates", !!(sectionStartDate && sectionEndDate))
 
-      console.log('Отправляем данные раздела:', sectionData)
+          const sectionData = {
+            section_name: sectionName.trim(),
+            section_description: sectionDescription.trim() || null,
+            section_responsible: sectionResponsible || null,
+            section_start_date: sectionStartDate || null,
+            section_end_date: sectionEndDate || null,
+            section_object_id: objectId,
+            section_project_id: actualProjectId
+          }
 
-      const { data, error } = await supabase
-        .from('sections')
-        .insert(sectionData)
-        .select()
+          console.log('Отправляем данные раздела:', sectionData)
 
-      console.log('Результат создания раздела:', { data, error })
+          const { data, error } = await supabase
+            .from('sections')
+            .insert(sectionData)
+            .select()
 
-      if (error) throw error
+          console.log('Результат создания раздела:', { data, error })
 
-      setNotification(`Раздел "${sectionName}" успешно создан`)
-      onSuccess()
-      handleClose()
-    } catch (error) {
-      console.error('=== ОШИБКА СОЗДАНИЯ РАЗДЕЛА ===')
-      console.error('Полная ошибка:', error)
-      console.error('Тип ошибки:', typeof error)
-      console.error('JSON ошибки:', JSON.stringify(error, null, 2))
-      
-      let errorMessage = 'Неизвестная ошибка создания раздела'
-      
-      if (error && typeof error === 'object') {
-        if ('message' in error && error.message) {
-          errorMessage = error.message as string
-        } else if ('error' in error && error.error) {
-          errorMessage = error.error as string
-        } else if ('details' in error && error.details) {
-          errorMessage = error.details as string
+          if (error) {
+            span.setAttribute("create.success", false)
+            span.setAttribute("create.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'create_section',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'CreateSectionModal',
+                section_name: sectionName.trim(),
+                object_id: objectId,
+                object_name: objectName,
+                project_id: actualProjectId,
+                responsible_id: sectionResponsible,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
+
+          span.setAttribute("create.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Section created successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              section_name: sectionName.trim(),
+              object_id: objectId,
+              object_name: objectName,
+              project_id: actualProjectId,
+              has_responsible: !!sectionResponsible
+            }
+          })
+
+          setNotification(`Раздел "${sectionName}" успешно создан`)
+          onSuccess()
+          handleClose()
+        } catch (error) {
+          span.setAttribute("create.success", false)
+          span.recordException(error as Error)
+          
+          console.error('=== ОШИБКА СОЗДАНИЯ РАЗДЕЛА ===')
+          console.error('Полная ошибка:', error)
+          console.error('Тип ошибки:', typeof error)
+          console.error('JSON ошибки:', JSON.stringify(error, null, 2))
+          
+          let errorMessage = 'Неизвестная ошибка создания раздела'
+          
+          if (error && typeof error === 'object') {
+            if ('message' in error && error.message) {
+              errorMessage = error.message as string
+            } else if ('error' in error && error.error) {
+              errorMessage = error.error as string
+            } else if ('details' in error && error.details) {
+              errorMessage = error.details as string
+            }
+          } else if (typeof error === 'string') {
+            errorMessage = error
+          }
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'create_section',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'CreateSectionModal',
+              section_name: sectionName.trim(),
+              object_id: objectId,
+              object_name: objectName,
+              project_id: actualProjectId,
+              error_message: errorMessage,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          console.error('Итоговое сообщение об ошибке:', errorMessage)
+          setNotification(errorMessage)
+        } finally {
+          setLoading(false)
         }
-      } else if (typeof error === 'string') {
-        errorMessage = error
       }
-      
-      console.error('Итоговое сообщение об ошибке:', errorMessage)
-      setNotification(errorMessage)
-    } finally {
-      setLoading(false)
-    }
+    )
   }
 
   const handleClose = () => {

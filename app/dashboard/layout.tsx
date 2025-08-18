@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
@@ -73,7 +74,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleAuthError = useCallback((error: Error) => {
     if (!isMounted.current) return
     
-    console.error("Ошибка авторизации:", error)
+    Sentry.captureException(error, {
+      tags: {
+        module: 'dashboard_layout',
+        action: 'handle_auth_error',
+        component: 'DashboardLayout',
+        critical: true
+      },
+      extra: {
+        error_message: error.message,
+        error_stack: error.stack,
+        user_email: email,
+        user_name: name,
+        is_authenticated: isAuthenticated,
+        timestamp: new Date().toISOString()
+      },
+      level: 'error'
+    })
+    
     toast({
       title: "Ошибка авторизации",
       description: "Пожалуйста, войдите в систему заново",
@@ -81,70 +99,145 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })
     useUserStore.getState().clearState()
     router.push('/auth/login')
-  }, [router])
+  }, [router, email, name, isAuthenticated])
 
   // Функция получения разрешений с правильной обработкой race condition
   const fetchPermissions = useCallback(async (userId: string): Promise<FetchPermissionsResult | null> => {
-    try {
-      const { roleId, permissions } = await getUserRoleAndPermissions(userId, supabase)
-      
-      if (!isMounted.current) return null
-      
-      if (roleId) {
-        useUserStore.getState().setRoleAndPermissions(roleId, permissions)
-        console.log("Роль и разрешения обновлены:", { roleId, permissions })
-      } else {
-        // Даже если нет roleId, устанавливаем пустые права
-        useUserStore.getState().setRoleAndPermissions(null, [])
-        console.log("Установлены пустые разрешения для пользователя")
+    return Sentry.startSpan(
+      {
+        op: "auth.permissions",
+        name: "Получение разрешений пользователя",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user.id", userId)
+          
+          const { roleId, permissions } = await getUserRoleAndPermissions(userId, supabase)
+          
+          if (!isMounted.current) {
+            span.setAttribute("component.unmounted", true)
+            return null
+          }
+          
+          span.setAttribute("role.id", roleId || "none")
+          span.setAttribute("permissions.count", permissions.length)
+          span.setAttribute("permissions.list", permissions.join(','))
+          
+          if (roleId) {
+            useUserStore.getState().setRoleAndPermissions(roleId, permissions)
+            console.log("Роль и разрешения обновлены:", { roleId, permissions })
+          } else {
+            // Даже если нет roleId, устанавливаем пустые права
+            useUserStore.getState().setRoleAndPermissions(null, [])
+            console.log("Установлены пустые разрешения для пользователя")
+          }
+          
+          // Устанавливаем флаг загрузки прав
+          setPermissionsLoaded(true)
+          span.setAttribute("permissions.loaded", true)
+          
+          return { roleId, permissions }
+        } catch (error) {
+          span.setAttribute("error", true)
+          span.setAttribute("error.message", (error as Error).message)
+          
+          Sentry.captureException(error, {
+            tags: {
+              module: 'dashboard_layout',
+              action: 'fetch_permissions',
+              component: 'DashboardLayout'
+            },
+            extra: {
+              user_id: userId,
+              error_message: (error as Error).message,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          // Даже при ошибке устанавливаем флаг загрузки
+          setPermissionsLoaded(true)
+          throw error
+        }
       }
-      
-      // Устанавливаем флаг загрузки прав
-      setPermissionsLoaded(true)
-      
-      return { roleId, permissions }
-    } catch (error) {
-      console.error("Ошибка при получении разрешений:", error)
-      // Даже при ошибке устанавливаем флаг загрузки
-      setPermissionsLoaded(true)
-      throw error
-    }
+    )
   }, [supabase])
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
     if (!isMounted.current) return
     
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser()
+    return Sentry.startSpan(
+      {
+        op: "auth.user",
+        name: "Получение и инициализация пользователя",
+      },
+      async (span) => {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser()
+          
+          if (error) {
+            span.setAttribute("auth.error", true)
+            span.setAttribute("auth.error_message", error.message)
+            
+            Sentry.captureException(error, {
+              tags: {
+                module: 'dashboard_layout',
+                action: 'get_user',
+                component: 'DashboardLayout',
+                error_type: 'auth_user_error'
+              },
+              extra: {
+                error_message: error.message,
+                timestamp: new Date().toISOString()
+              }
+            })
+            router.push('/auth/login')
+            return
+          }
+          
+          if (!user) {
+            span.setAttribute("user.exists", false)
+            console.log("Пользователь не авторизован")
+            router.push('/auth/login')
+            return
+          }
+          
+          span.setAttribute("user.exists", true)
+          span.setAttribute("user.id", user.id)
+          span.setAttribute("user.email", user.email || '')
       
-      if (error) {
-        console.error("Ошибка при получении пользователя:", error)
-        router.push('/auth/login')
-        return
-      }
-      
-      if (!user) {
-        console.log("Пользователь не авторизован")
-        router.push('/auth/login')
-        return
-      }
-      
-      // Получаем разрешения с retry логикой
-      try {
-        await fetchWithRetry(() => fetchPermissions(user.id))
-      } catch (error) {
-        if (!isMounted.current) return
-        
-        console.error("Не удалось получить разрешения после всех попыток:", error)
-        // Устанавливаем флаг загрузки даже при ошибке
-        setPermissionsLoaded(true)
-        toast({
-          title: "Ошибка получения разрешений",
-          description: "Попробуйте обновить страницу",
-          variant: "destructive"
-        })
-      }
+          // Получаем разрешения с retry логикой
+          try {
+            await fetchWithRetry(() => fetchPermissions(user.id))
+            span.setAttribute("permissions.fetch_success", true)
+          } catch (error) {
+            if (!isMounted.current) return
+            
+            span.setAttribute("permissions.fetch_error", true)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'dashboard_layout',
+                action: 'fetch_permissions_retry',
+                component: 'DashboardLayout',
+                error_type: 'permissions_retry_failed'
+              },
+              extra: {
+                user_id: user.id,
+                user_email: user.email,
+                max_retries: MAX_RETRIES,
+                error_message: (error as Error).message,
+                timestamp: new Date().toISOString()
+              }
+            })
+            
+            // Устанавливаем флаг загрузки даже при ошибке
+            setPermissionsLoaded(true)
+            toast({
+              title: "Ошибка получения разрешений",
+              description: "Попробуйте обновить страницу",
+              variant: "destructive"
+            })
+          }
       
       // Проверяем, нужно ли обновлять остальные данные пользователя
       if (!isMounted.current) return
@@ -164,7 +257,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (profileError) {
           if (!isMounted.current) return
           
-          console.error("Ошибка при получении профиля:", profileError)
+          span.setAttribute("profile.fetch_error", true)
+          Sentry.captureException(profileError, {
+            tags: {
+              module: 'dashboard_layout',
+              action: 'fetch_profile',
+              component: 'DashboardLayout',
+              error_type: 'profile_fetch_error'
+            },
+            extra: {
+              user_id: user.id,
+              user_email: user.email,
+              error_message: profileError.message,
+              error_code: profileError.code,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
           toast({
             title: "Ошибка получения профиля",
             description: "Некоторые данные могут отображаться некорректно",
@@ -182,7 +291,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             profile: userData
           })
         } catch (setUserError) {
-          console.error("Ошибка при установке данных пользователя:", setUserError)
+          span.setAttribute("user.set_error", true)
+          Sentry.captureException(setUserError, {
+            tags: {
+              module: 'dashboard_layout',
+              action: 'set_user_data',
+              component: 'DashboardLayout',
+              error_type: 'user_data_update_error'
+            },
+            extra: {
+              user_id: user.id,
+              user_email: user.email,
+              profile_exists: !!userData,
+              error_message: (setUserError as Error).message,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
           toast({
             title: "Ошибка обновления данных",
             description: "Не удалось обновить данные пользователя",
@@ -190,12 +315,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })
         }
       }
-    } catch (error) {
-      if (!isMounted.current) return
-      
-      console.error("Критическая ошибка при получении данных:", error)
-      handleAuthError(error as Error)
-    }
+        } catch (error) {
+          if (!isMounted.current) return
+          
+          span.setAttribute("critical_error", true)
+          span.setAttribute("critical_error_message", (error as Error).message)
+          
+          Sentry.captureException(error, {
+            tags: {
+              module: 'dashboard_layout',
+              action: 'fetch_user_critical',
+              component: 'DashboardLayout',
+              error_type: 'critical_user_fetch_error',
+              critical: true
+            },
+            extra: {
+              error_message: (error as Error).message,
+              error_stack: (error as Error).stack,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          handleAuthError(error as Error)
+        }
+      }
+    )
   }, [supabase, fetchWithRetry, fetchPermissions, router, handleAuthError])
 
   // Отслеживаем загрузку прав из store (для случая когда они уже были загружены ранее)
@@ -209,7 +353,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (mounted && !permissionsLoaded) {
       const fallbackTimer = setTimeout(() => {
-        console.warn("Timeout при загрузке прав, продолжаем без них")
+        Sentry.captureMessage("Timeout при загрузке прав, продолжаем без них", {
+          level: 'warning',
+          tags: {
+            module: 'dashboard_layout',
+            action: 'permissions_timeout',
+            component: 'DashboardLayout'
+          },
+          extra: {
+            timeout_duration: 5000,
+            user_email: email,
+            user_name: name,
+            is_authenticated: isAuthenticated,
+            timestamp: new Date().toISOString()
+          }
+        })
         setPermissionsLoaded(true)
       }, 5000) // 5 секунд максимум
 

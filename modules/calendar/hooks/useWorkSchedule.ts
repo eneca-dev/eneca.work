@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from '@/utils/supabase/client';
 import { useCalendarStore } from '@/modules/calendar/store';
 import { WorkSchedule, WorkScheduleFormData } from '@/modules/calendar/types';
@@ -19,26 +20,79 @@ export function useWorkSchedule() {
 
   // Загрузка рабочих расписаний
   const fetchWorkSchedules = useCallback(async (userId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
+    return Sentry.startSpan(
+      {
+        op: "calendar.fetch_work_schedules",
+        name: "Fetch Work Schedules",
+      },
+      async (span) => {
+        try {
+          setLoading(true);
+          setError(null);
 
-      const { data, error } = await supabase
-        .from('work_schedules')
-        .select('*')
-        .eq('user_id', userId)
-        .order('day_of_week', { ascending: true });
+          span.setAttribute("user.id", userId)
 
-      if (error) throw error;
+          const { data, error } = await supabase
+            .from('work_schedules')
+            .select('*')
+            .eq('user_id', userId)
+            .order('day_of_week', { ascending: true });
 
-      setWorkSchedules(data || []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ошибка загрузки расписания';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
+          if (error) {
+            span.setAttribute("fetch.success", false)
+            span.setAttribute("fetch.error", error.message)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'calendar',
+                action: 'fetch_work_schedules',
+                error_type: 'db_error'
+              },
+              extra: {
+                component: 'useWorkSchedule',
+                user_id: userId,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error;
+          }
+
+          span.setAttribute("fetch.success", true)
+          span.setAttribute("schedules.count", data?.length || 0)
+
+          Sentry.addBreadcrumb({
+            message: 'Work schedules fetched successfully',
+            category: 'calendar',
+            level: 'info',
+            data: {
+              user_id: userId,
+              schedules_count: data?.length || 0
+            }
+          })
+
+          setWorkSchedules(data || []);
+        } catch (error) {
+          span.setAttribute("fetch.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'calendar',
+              action: 'fetch_work_schedules',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              component: 'useWorkSchedule',
+              user_id: userId,
+              timestamp: new Date().toISOString()
+            }
+          })
+          const message = error instanceof Error ? error.message : 'Ошибка загрузки расписания';
+          setError(message);
+          toast.error(message);
+        } finally {
+          setLoading(false);
+        }
+      }
+    )
   }, [supabase, setWorkSchedules, setLoading, setError]);
 
   // Создание рабочего расписания

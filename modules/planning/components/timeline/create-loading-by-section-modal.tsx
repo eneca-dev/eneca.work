@@ -2,6 +2,7 @@
 
 import type React from "react"
 import type { JSX } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef } from "react"
 import type { Section } from "../../types"
@@ -85,7 +86,20 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
 
         if (error) {
           if (!abortController.signal.aborted) {
-            console.error("Ошибка при загрузке сотрудников:", error.message || error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_employees_for_section_loading',
+                modal: 'create_loading_by_section_modal'
+              },
+              extra: {
+                section_id: section.id,
+                section_name: section.name,
+                error_code: error.code,
+                error_details: error.details,
+                timestamp: new Date().toISOString()
+              }
+            })
           }
           return
         }
@@ -93,7 +107,19 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
         setEmployees(data || [])
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError' && !abortController.signal.aborted) {
-          console.error("Ошибка при загрузке сотрудников:", error.message || error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'planning', 
+              action: 'fetch_employees_for_section_loading',
+              error_type: 'unexpected_error',
+              modal: 'create_loading_by_section_modal'
+            },
+            extra: {
+              section_id: section.id,
+              section_name: section.name,
+              timestamp: new Date().toISOString()
+            }
+          })
         }
       } finally {
         if (!abortController.signal.aborted) {
@@ -162,46 +188,88 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
   const handleSave = async () => {
     if (!validateForm()) return
 
-    setIsSaving(true)
+    await Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Создание загрузки по разделу",
+      },
+      async (span) => {
+        setIsSaving(true)
 
-    try {
-      const result = await createLoadingInStore({
-        responsibleId: selectedEmployee!.user_id,
-        sectionId: section.id,
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
-        rate: formData.rate,
-        projectName: section.projectName,
-        sectionName: section.name,
-        responsibleName: selectedEmployee!.full_name,
-        responsibleAvatarUrl: selectedEmployee!.avatar_url,
-        responsibleTeamName: selectedEmployee!.team_name,
-      })
+        try {
+          // Устанавливаем атрибуты span
+          span.setAttribute("section.id", section.id)
+          span.setAttribute("section.name", section.name)
+          span.setAttribute("employee.id", selectedEmployee!.user_id)
+          span.setAttribute("employee.name", selectedEmployee!.full_name)
+          span.setAttribute("loading.start_date", formData.startDate)
+          span.setAttribute("loading.end_date", formData.endDate)
+          span.setAttribute("loading.rate", formData.rate)
 
-      if (!result.success) {
-        throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
+          const result = await createLoadingInStore({
+            responsibleId: selectedEmployee!.user_id,
+            sectionId: section.id,
+            startDate: new Date(formData.startDate),
+            endDate: new Date(formData.endDate),
+            rate: formData.rate,
+            projectName: section.projectName,
+            sectionName: section.name,
+            responsibleName: selectedEmployee!.full_name,
+            responsibleAvatarUrl: selectedEmployee!.avatar_url,
+            responsibleTeamName: selectedEmployee!.team_name,
+          })
+
+          if (!result.success) {
+            span.setAttribute("operation.success", false)
+            span.setAttribute("operation.error", result.error || "Неизвестная ошибка")
+            throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
+          }
+
+          span.setAttribute("operation.success", true)
+          span.setAttribute("loading.id", result.loadingId || "unknown")
+
+          setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
+
+          // Автоматически раскрываем раздел, чтобы показать новую загрузку
+          toggleSectionExpanded(section.id)
+
+          successTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 3000)
+
+          setShowModal(false)
+        } catch (error) {
+          span.setAttribute("operation.success", false)
+          span.setAttribute("operation.error", error instanceof Error ? error.message : "Неизвестная ошибка")
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'planning', 
+              action: 'create_section_loading',
+              modal: 'create_loading_by_section_modal'
+            },
+            extra: {
+              section_id: section.id,
+              section_name: section.name,
+              employee_id: selectedEmployee?.user_id,
+              employee_name: selectedEmployee?.full_name,
+              start_date: formData.startDate,
+              end_date: formData.endDate,
+              rate: formData.rate,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          setNotification(`Ошибка при создании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          setIsSaving(false)
+        }
       }
-
-      setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
-
-      // Автоматически раскрываем раздел, чтобы показать новую загрузку
-      toggleSectionExpanded(section.id)
-
-      successTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 3000)
-
-      setShowModal(false)
-    } catch (error) {
-      console.error("Ошибка при создании загрузки:", error)
-      setNotification(`Ошибка при создании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-
-      errorTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 5000)
-    } finally {
-      setIsSaving(false)
-    }
+    )
   }
 
   const handleEmployeeSelect = (employee: Employee) => {

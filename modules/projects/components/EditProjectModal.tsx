@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -118,30 +119,92 @@ export function EditProjectModal({
   const handleSave = async () => {
     if (!projectData) return
 
-    setSaving(true)
-    try {
-      const result = await updateProject(projectId, {
-        project_name: projectData.project_name,
-        project_description: projectData.project_description,
-        project_manager: projectData.project_manager,
-        project_lead_engineer: projectData.project_lead_engineer,
-        project_status: projectData.project_status,
-        client_id: projectData.client_id
-      })
+    return Sentry.startSpan(
+      {
+        op: "projects.update_project",
+        name: "Update Project",
+      },
+      async (span) => {
+        setSaving(true)
+        try {
+          span.setAttribute("project.id", projectId)
+          span.setAttribute("project.name", projectData.project_name)
+          span.setAttribute("project.status", projectData.project_status)
+          span.setAttribute("project.has_manager", !!projectData.project_manager)
+          span.setAttribute("project.has_engineer", !!projectData.project_lead_engineer)
+          span.setAttribute("project.has_client", !!projectData.client_id)
 
-      if (!result.success) {
-        throw new Error(result.error || 'Неизвестная ошибка')
+          const result = await updateProject(projectId, {
+            project_name: projectData.project_name,
+            project_description: projectData.project_description,
+            project_manager: projectData.project_manager,
+            project_lead_engineer: projectData.project_lead_engineer,
+            project_status: projectData.project_status,
+            client_id: projectData.client_id
+          })
+
+          if (!result.success) {
+            span.setAttribute("update.success", false)
+            span.setAttribute("update.error", result.error || 'Неизвестная ошибка')
+            Sentry.captureException(new Error(result.error || 'Неизвестная ошибка'), {
+              tags: { 
+                module: 'projects', 
+                action: 'update_project',
+                error_type: 'update_failed'
+              },
+              extra: { 
+                component: 'EditProjectModal',
+                project_id: projectId,
+                project_name: projectData.project_name,
+                project_status: projectData.project_status,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw new Error(result.error || 'Неизвестная ошибка')
+          }
+
+          span.setAttribute("update.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Project updated successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              project_id: projectId,
+              project_name: projectData.project_name,
+              project_status: projectData.project_status,
+              has_manager: !!projectData.project_manager,
+              has_engineer: !!projectData.project_lead_engineer,
+              has_client: !!projectData.client_id
+            }
+          })
+
+          setNotification('Проект успешно обновлен')
+          onProjectUpdated?.()
+          onClose()
+        } catch (error) {
+          span.setAttribute("update.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'update_project',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'EditProjectModal',
+              project_id: projectId,
+              project_name: projectData?.project_name,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка сохранения проекта:', error)
+          setNotification(error instanceof Error ? error.message : 'Ошибка сохранения проекта')
+        } finally {
+          setSaving(false)
+        }
       }
-
-      setNotification('Проект успешно обновлен')
-      onProjectUpdated?.()
-      onClose()
-    } catch (error) {
-      console.error('Ошибка сохранения проекта:', error)
-      setNotification(error instanceof Error ? error.message : 'Ошибка сохранения проекта')
-    } finally {
-      setSaving(false)
-    }
+    )
   }
 
   const getProfileName = (profile: Profile) => {

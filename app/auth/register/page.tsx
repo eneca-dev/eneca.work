@@ -7,6 +7,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -30,31 +31,87 @@ export default function RegisterPage() {
       return
     }
 
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+    return Sentry.startSpan(
+      {
+        op: "auth.register",
+        name: "User Registration",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("auth.email", email)
+          span.setAttribute("auth.name", name)
+          span.setAttribute("auth.method", "email_password")
 
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
+          const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                name,
+              },
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
+          })
+
+          if (error) {
+            span.setAttribute("auth.success", false)
+            span.setAttribute("auth.error", error.message)
+            
+            // Отправляем ошибку регистрации в Sentry
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'auth', 
+                action: 'register',
+                error_type: 'registration_failed'
+              },
+              user: { email, name },
+              extra: { 
+                error_code: error.message,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(error.message)
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+          
+          // Логируем успешную регистрацию
+          Sentry.addBreadcrumb({
+            message: 'User registration successful',
+            category: 'auth',
+            level: 'info',
+            data: { email, name }
+          })
+
+          // Redirect to pending verification page
+          router.push("/auth/pending-verification")
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'register',
+              error_type: 'unexpected_error'
+            },
+            user: { email, name },
+            extra: { 
+              component: 'RegisterPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Registration error:", err)
+          setError("Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      // Redirect to pending verification page
-      router.push("/auth/pending-verification")
-    } catch (err) {
-      console.error("Registration error:", err)
-      setError("Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
@@ -487,68 +488,143 @@ export function ProjectsTree({
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
 
   const loadTreeData = async () => {
-    console.log('🌳 Загружаю данные дерева проектов...')
-    console.log('🔍 Фильтры:', { 
-      selectedManagerId, 
-      selectedProjectId, 
-      selectedStageId, 
-      selectedObjectId,
-      selectedDepartmentId,
-      selectedTeamId,
-      selectedEmployeeId
-    })
-    setLoading(true)
-    try {
-      // Используем новое представление view_project_tree
-      let query = supabase
-        .from('view_project_tree')
-        .select('*')
+    return Sentry.startSpan(
+      {
+        op: "projects.load_tree_data",
+        name: "Load Projects Tree Data",
+      },
+      async (span) => {
+        console.log('🌳 Загружаю данные дерева проектов...')
+        console.log('🔍 Фильтры:', { 
+          selectedManagerId, 
+          selectedProjectId, 
+          selectedStageId, 
+          selectedObjectId,
+          selectedDepartmentId,
+          selectedTeamId,
+          selectedEmployeeId
+        })
+        
+        span.setAttribute("filters.manager_id", selectedManagerId || "none")
+        span.setAttribute("filters.project_id", selectedProjectId || "none")
+        span.setAttribute("filters.stage_id", selectedStageId || "none")
+        span.setAttribute("filters.object_id", selectedObjectId || "none")
+        span.setAttribute("filters.department_id", selectedDepartmentId || "none")
+        span.setAttribute("filters.team_id", selectedTeamId || "none")
+        span.setAttribute("filters.employee_id", selectedEmployeeId || "none")
+        
+        setLoading(true)
+        try {
+          // Используем новое представление view_project_tree
+          let query = supabase
+            .from('view_project_tree')
+            .select('*')
 
-      // Применяем фильтры по проектной иерархии
-      if (selectedManagerId && selectedManagerId !== 'no-manager') {
-        query = query.eq('manager_id', selectedManagerId)
-      } else if (selectedManagerId === 'no-manager') {
-        query = query.is('manager_id', null)
-      }
-      if (selectedProjectId) {
-        query = query.eq('project_id', selectedProjectId)
-      }
-      if (selectedStageId) {
-        query = query.eq('stage_id', selectedStageId)
-      }
-      if (selectedObjectId) {
-        query = query.eq('object_id', selectedObjectId)
-      }
+          // Применяем фильтры по проектной иерархии
+          if (selectedManagerId && selectedManagerId !== 'no-manager') {
+            query = query.eq('manager_id', selectedManagerId)
+          } else if (selectedManagerId === 'no-manager') {
+            query = query.is('manager_id', null)
+          }
+          if (selectedProjectId) {
+            query = query.eq('project_id', selectedProjectId)
+          }
+          if (selectedStageId) {
+            query = query.eq('stage_id', selectedStageId)
+          }
+          if (selectedObjectId) {
+            query = query.eq('object_id', selectedObjectId)
+          }
 
-      // Применяем фильтры по ответственным (отделы, команды, сотрудники)
-      if (selectedDepartmentId) {
-        query = query.eq('responsible_department_id', selectedDepartmentId)
-      }
-      if (selectedTeamId) {
-        query = query.eq('responsible_team_id', selectedTeamId)
-      }
-      if (selectedEmployeeId) {
-        query = query.eq('section_responsible_id', selectedEmployeeId)
-      }
+          // Применяем фильтры по ответственным (отделы, команды, сотрудники)
+          if (selectedDepartmentId) {
+            query = query.eq('responsible_department_id', selectedDepartmentId)
+          }
+          if (selectedTeamId) {
+            query = query.eq('responsible_team_id', selectedTeamId)
+          }
+          if (selectedEmployeeId) {
+            query = query.eq('section_responsible_id', selectedEmployeeId)
+          }
 
-      const { data, error } = await query
+          const { data, error } = await query
 
-      if (error) {
-        console.error('❌ Error loading tree data:', error)
-        return
+          if (error) {
+            span.setAttribute("load.success", false)
+            span.setAttribute("load.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'load_tree_data',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'ProjectsTree',
+                filters: {
+                  manager_id: selectedManagerId,
+                  project_id: selectedProjectId,
+                  stage_id: selectedStageId,
+                  object_id: selectedObjectId,
+                  department_id: selectedDepartmentId,
+                  team_id: selectedTeamId,
+                  employee_id: selectedEmployeeId
+                },
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('❌ Error loading tree data:', error)
+            return
+          }
+
+          console.log('📊 Данные из view_project_tree с фильтрацией:', data)
+
+          // Преобразуем данные в иерархическую структуру
+          const tree = buildTreeStructureFromProjectTree(data || [])
+          console.log('🌳 Построенное дерево:', tree)
+          
+          span.setAttribute("load.success", true)
+          span.setAttribute("tree.nodes_count", tree.length)
+          
+          Sentry.addBreadcrumb({
+            message: 'Projects tree data loaded',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              nodes_count: tree.length,
+              filters_applied: !!(selectedManagerId || selectedProjectId || selectedStageId || selectedObjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId)
+            }
+          })
+          
+          setTreeData(tree)
+        } catch (error) {
+          span.setAttribute("load.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'load_tree_data',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'ProjectsTree',
+              filters: {
+                manager_id: selectedManagerId,
+                project_id: selectedProjectId,
+                stage_id: selectedStageId,
+                object_id: selectedObjectId,
+                department_id: selectedDepartmentId,
+                team_id: selectedTeamId,
+                employee_id: selectedEmployeeId
+              },
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('❌ Error:', error)
+        } finally {
+          setLoading(false)
+        }
       }
-
-      console.log('📊 Данные из view_project_tree с фильтрацией:', data)
-
-      // Преобразуем данные в иерархическую структуру
-      const tree = buildTreeStructureFromProjectTree(data || [])
-      console.log('🌳 Построенное дерево:', tree)
-      setTreeData(tree)
-    } catch (error) {
-      console.error('❌ Error:', error)
-    } finally {
-      setLoading(false)
-    }
+    )
   }
 
   const buildTreeStructureFromProjectTree = (data: any[]): ProjectNode[] => {
