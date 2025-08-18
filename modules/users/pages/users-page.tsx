@@ -124,7 +124,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 md:px-0">
       <div className="flex items-center justify-between">
         <h1 className="page-title">Управление пользователями</h1>
       </div>

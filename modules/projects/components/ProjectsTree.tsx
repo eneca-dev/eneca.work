@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -20,6 +22,7 @@ import { StatusSelector } from '@/modules/statuses-tags/statuses/components/Stat
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import SectionDecompositionTab from './SectionDecompositionTab'
+import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
@@ -57,8 +60,10 @@ interface ProjectsTreeProps {
   selectedDepartmentId?: string | null
   selectedTeamId?: string | null
   selectedEmployeeId?: string | null
+  selectedStatusIds?: string[]
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
+  externalSearchQuery?: string
 }
 
 interface TreeNodeProps {
@@ -99,9 +104,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenStatusManagement,
   statuses
 }) => {
+  const { assignments } = useTaskTransferStore()
+  const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
+  const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [statusSearchQuery, setStatusSearchQuery] = useState('')
   const statusDropdownRef = React.useRef<HTMLDivElement>(null)
@@ -113,6 +120,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
   // Мобильный режим: переключатель между контентом и комментариями
   const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
+  const [sectionTotals, setSectionTotals] = useState<{ planned: number; actual: number } | null>(null)
+  const [sectionDue, setSectionDue] = useState<string | null>(null)
 
   const loadMiniDecomposition = async () => {
     try {
@@ -127,21 +136,51 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           .from('work_categories')
           .select('work_category_id, work_category_name')
       ])
+      let plannedSum = 0
       if (!itemsRes.error && itemsRes.data) {
-        setMiniDecomp(
-          itemsRes.data.map((r: any) => ({
-            id: r.decomposition_item_id,
-            desc: r.decomposition_item_description,
-            catId: r.decomposition_item_work_category_id,
-            hours: Number(r.decomposition_item_planned_hours || 0),
-            due: r.decomposition_item_planned_due_date,
-          }))
-        )
+        const mapped = itemsRes.data.map((r: any) => ({
+          id: r.decomposition_item_id,
+          desc: r.decomposition_item_description,
+          catId: r.decomposition_item_work_category_id,
+          hours: Number(r.decomposition_item_planned_hours || 0),
+          due: r.decomposition_item_planned_due_date,
+        }))
+        plannedSum = mapped.reduce((acc, i) => acc + (i.hours || 0), 0)
+        setMiniDecomp(mapped)
       }
       if (!catsRes.error && catsRes.data) {
         const m = new Map<string, string>()
         for (const c of catsRes.data as any[]) m.set(c.work_category_id, c.work_category_name)
         setCatMap(m)
+      }
+      // Дополнительно тянем агрегаты план/факт и крайний срок секции
+      try {
+        const [totals, dates] = await Promise.all([
+          supabase
+            .from('view_section_decomposition_totals')
+            .select('planned_hours, actual_hours')
+            .eq('section_id', node.id)
+            .single(),
+          supabase
+            .from('sections')
+            .select('section_end_date')
+            .eq('section_id', node.id)
+            .single(),
+        ])
+        if (!totals.error && totals.data) {
+          setSectionTotals({
+            planned: plannedSum, // план считаем как сумму из декомпозиции
+            actual: Number(totals.data.actual_hours || 0),
+          })
+        } else {
+          // даже если totals не пришел, сохраним план по декомпозиции
+          setSectionTotals({ planned: plannedSum, actual: 0 })
+        }
+        if (!dates.error && dates.data) {
+          setSectionDue(dates.data.section_end_date || null)
+        }
+      } catch (e) {
+        // не критично
       }
     } finally {
       setMiniDecompLoading(false)
@@ -150,39 +189,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
   const hasChildren = node.children && node.children.length > 0
 
-  // Фильтрация статусов по поисковому запросу
-  const filteredStatuses = React.useMemo(() => {
-    if (!statusSearchQuery.trim()) {
-      return statuses;
-    }
-
-    const query = statusSearchQuery.toLowerCase();
-    return statuses.filter(status => 
-      status.name.toLowerCase().includes(query) ||
-      (status.description && status.description.toLowerCase().includes(query))
-    );
-  }, [statuses, statusSearchQuery]);
-
-  // Закрытие выпадающего списка при клике вне его
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showStatusDropdown && statusDropdownRef.current) {
-        // Проверяем, был ли клик вне выпадающего списка
-        if (!statusDropdownRef.current.contains(event.target as Node)) {
-          setShowStatusDropdown(false)
-          setStatusSearchQuery('') // Сбрасываем поиск при закрытии
-        }
-      }
-    }
-
-    if (showStatusDropdown) {
-      document.addEventListener('click', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside)
-    }
-  }, [showStatusDropdown])
   const isExpanded = expandedNodes.has(node.id)
 
   const getNodeIcon = (type: string, nodeName?: string) => {
@@ -261,8 +267,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       console.error('Ошибка обновления статуса:', error)
     } finally {
       setUpdatingStatus(false)
-      setShowStatusDropdown(false)
-      setStatusSearchQuery('') // Сбрасываем поиск после обновления статуса
     }
   }
 
@@ -348,7 +352,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center min-w-0 flex-1">
+            <div className="flex items-center min-w-0 flex-1 gap-2">
               <button
                 className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2"
                 onClick={async (e) => {
@@ -375,6 +379,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               >
                 {node.name}
               </span>
+              {node.type === 'section' && (incomingCount > 0 || outgoingCount > 0) && (
+                <div
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 cursor-default"
+                  title={`Исходящие: ${outgoingCount} • Входящие: ${incomingCount}`}
+                >
+                  <span className="text-primary font-semibold">{outgoingCount}</span>
+                  <span className="opacity-60">/</span>
+                  <span className="text-secondary-foreground font-semibold">{incomingCount}</span>
+                </div>
+              )}
             </div>
 
             {/* Информация справа с адаптивными ширинами */}
@@ -391,7 +405,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setShowStatusDropdown(!showStatusDropdown)
+                      // управление статусами теперь в верхнем меню
                     }}
                     title="Нажмите для изменения статуса"
                   >
@@ -406,125 +420,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 ) : (
                   <span 
                     className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowStatusDropdown(!showStatusDropdown)
-                    }}
+                    onClick={(e) => { e.stopPropagation() }}
                     title="Нажмите для назначения статуса"
                   >
                     Без статуса
                   </span>
                 )}
 
-                {/* Выпадающий список статусов */}
-                {showStatusDropdown && node.type === 'section' && (
-                  <div ref={statusDropdownRef} className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                    {/* Заголовок */}
-                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Выбор статуса
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowStatusDropdown(false)
-                          setStatusSearchQuery('')
-                          onOpenStatusManagement()
-                        }}
-                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-                        title="Управление статусами"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* Поле поиска */}
-                    {statuses.length > 0 && (
-                      <div className="p-2 border-b dark:border-slate-600">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
-                          <input
-                            type="text"
-                            placeholder="Поиск..."
-                            value={statusSearchQuery}
-                            onChange={(e) => setStatusSearchQuery(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                          />
-                          {statusSearchQuery && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setStatusSearchQuery('')
-                              }}
-                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
-                            >
-                              <span className="text-xs">×</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Опция "Убрать статус" */}
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateSectionStatus(null)
-                      }}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-500 dark:text-slate-400">
-                        Убрать статус
-                      </span>
-                    </div>
-
-                    {/* Список статусов */}
-                    {filteredStatuses.length === 0 && statusSearchQuery ? (
-                      <div className="px-3 py-4 text-center">
-                        <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
-                          Статусы не найдены
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setStatusSearchQuery('')
-                          }}
-                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
-                        >
-                          Очистить поиск
-                        </button>
-                      </div>
-                    ) : (
-                      filteredStatuses.map((status) => (
-                        <div
-                          key={status.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            updateSectionStatus(status.id)
-                          }}
-                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2"
-                        >
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: status.color }}
-                          />
-                          <div>
-                            <div className="text-sm font-medium dark:text-white">
-                              {status.name}
-                            </div>
-                            {status.description && (
-                              <div className="text-xs text-gray-500 dark:text-slate-400">
-                                {status.description}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                {/* Выпадающий список статусов удален */}
               </div>
               
               {/* Даты - скрывается третьими (>= 800px) */}
@@ -748,22 +651,41 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           {/* Компактный режим: показываем выбранную вкладку */}
           {mobileTab === 'content' && (
             <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
-              {/* Описание сверху, естественная высота */}
+              {/* Описание сверху, естественная высота + аналитика */}
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                <SectionDescriptionCompact sectionId={node.id} />
-              </div>
-              {/* Остаток высоты: два равных блока */}
-              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
-                  <div className="flex-1 min-h-0 overflow-auto">
-                    <SectionDecompositionTab sectionId={node.id} compact />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                    <SectionDescriptionCompact sectionId={node.id} />
+                  </div>
+                  {/* Аналитические показатели */}
+                  <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                    {sectionDue && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">Дней до завершения:</span>
+                        <span className="font-semibold tabular-nums">
+                          {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                        </span>
+                      </div>
+                    )}
+                    {sectionTotals && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">План/Факт, ч:</span>
+                        <span className="font-semibold tabular-nums">
+                          {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
-                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">Задания — раздел в разработке.</div>
+              </div>
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
                 </div>
               </div>
             </div>
@@ -783,28 +705,45 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           <div className="hidden 2xl:flex gap-4 items-stretch">
             {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
             <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
-              {/* Описание сверху */}
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                <SectionDescriptionCompact sectionId={node.id} />
+            {/* Описание сверху + аналитика */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                  <SectionDescriptionCompact sectionId={node.id} />
+                </div>
+                {/* Аналитические показатели */}
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                  {sectionDue && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">Дней до завершения:</span>
+                      <span className="font-semibold tabular-nums">
+                        {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                      </span>
+                    </div>
+                  )}
+                  {sectionTotals && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">План/Факт, ч:</span>
+                      <span className="font-semibold tabular-nums">
+                        {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
 
-              {/* Остаток высоты: два равных блока */}
-              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
                 {/* Декомпозиция (верхняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Декомпозиция</div>
-                  <div className="flex-1 min-h-0 overflow-auto">
-                    <SectionDecompositionTab sectionId={node.id} compact />
-                  </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
                 </div>
 
                 {/* Задания (нижняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Задания</div>
-                  <div className="flex-1 min-h-0 overflow-auto text-sm text-slate-500 dark:text-slate-400">
-                    Задания — раздел в разработке.
-                  </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
                 </div>
               </div>
             </div>
@@ -858,8 +797,10 @@ export function ProjectsTree({
   selectedDepartmentId,
   selectedTeamId,
   selectedEmployeeId,
+  selectedStatusIds = [],
   urlSectionId,
-  urlTab
+  urlTab,
+  externalSearchQuery
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { 
@@ -876,10 +817,8 @@ export function ProjectsTree({
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedStatusIds, setSelectedStatusIds] = useState<string[]>([])
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
-  const [statusSearchQuery, setStatusSearchQuery] = useState('')
-  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
+  // Удалены локальные refs и dropdown для статусов; управление сверху
+  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -897,32 +836,45 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
-  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+  
 
-  // Закрытие выпадающего списка статусов при клике вне его
+  // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
+
+  // Глобальные события от верхней панели
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showStatusDropdown && statusDropdownRef.current) {
-        if (!statusDropdownRef.current.contains(event.target as Node)) {
-          setShowStatusDropdown(false)
-          setStatusSearchQuery('')
-        }
-      }
-    }
+    const toggleGroup = () => toggleGroupByClient()
+    const toggleManagers = () => toggleShowManagers()
+    const expandAll = () => expandAllNodes()
+    const collapseAll = () => collapseAllNodes()
+    const onlySections = () => setShowOnlySections((v) => !v)
+    const openStatusManagement = () => setShowStatusManagementModal(true)
 
-    if (showStatusDropdown) {
-      document.addEventListener('click', handleClickOutside)
-    }
+    window.addEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
+    window.addEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
+    window.addEventListener('projectsTree:expandAll', expandAll as EventListener)
+    window.addEventListener('projectsTree:collapseAll', collapseAll as EventListener)
+    window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+    window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
 
     return () => {
-      document.removeEventListener('click', handleClickOutside)
+      window.removeEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
+      window.removeEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
+      window.removeEventListener('projectsTree:expandAll', expandAll as EventListener)
+      window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
+      window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+      window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
     }
-  }, [showStatusDropdown])
+  }, [toggleGroupByClient, toggleShowManagers])
 
   // Загрузка данных
   useEffect(() => {
     loadTreeData()
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, showManagers, groupByClient])
+
+  // Если приходит внешний поиск из верхней панели — используем его как источник правды
+  useEffect(() => {
+    setSearchQuery(externalSearchQuery ?? '')
+  }, [externalSearchQuery])
 
   // Функция поиска раздела по ID в дереве
   const findSectionById = (sectionId: string): ProjectNode | null => {
@@ -1590,15 +1542,10 @@ export function ProjectsTree({
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
-        <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
-          <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">
-            Структура проектов
-          </h3>
-        </div>
+      <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
         <div className="p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
-          <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Загрузка структуры проектов...</p>
+          <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Загрузка...</p>
         </div>
       </div>
     )
@@ -1608,277 +1555,7 @@ export function ProjectsTree({
 
   return (
     <TooltipProvider>
-      <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
-        <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">
-              Структура проектов
-            </h3>
-            <div className="flex items-center gap-3">
-              {/* Поиск по структуре */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Поиск по структуре..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-sm border rounded-md w-64 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                />
-                <Search 
-                  size={16} 
-                  className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-
-              {/* Фильтр по статусам */}
-              <div className="relative" ref={statusDropdownRef}>
-                <button
-                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  title={selectedStatusIds.length === 0 ? "Фильтр по статусам" : `Фильтр активен (${selectedStatusIds.length})`}
-                  className={cn(
-                    "relative flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                    selectedStatusIds.length > 0
-                      ? "bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 dark:bg-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/40"
-                      : "bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 dark:bg-slate-500/20 dark:text-slate-400 dark:hover:bg-slate-500/30"
-                  )}
-                >
-                  <Filter size={14} />
-                  {selectedStatusIds.length > 0 && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center leading-none">
-                      {selectedStatusIds.length}
-                    </div>
-                  )}
-                </button>
-
-                {/* Выпадающий список статусов */}
-                {showStatusDropdown && (
-                  <div className="absolute z-20 top-full right-0 mt-1 w-64 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                    {/* Заголовок */}
-                    <div className="px-3 py-2 border-b dark:border-slate-600 bg-gray-50 dark:bg-slate-800 flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Фильтр по статусам
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowStatusDropdown(false)
-                          setStatusSearchQuery('')
-                          setShowStatusManagementModal(true)
-                        }}
-                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-                        title="Управление статусами"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    {/* Поле поиска */}
-                    {statuses && statuses.length > 0 && (
-                      <div className="p-2 border-b dark:border-slate-600">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 dark:text-slate-500" />
-                          <input
-                            type="text"
-                            placeholder="Поиск статусов..."
-                            value={statusSearchQuery}
-                            onChange={(e) => setStatusSearchQuery(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="w-full pl-7 pr-6 py-1.5 text-xs bg-gray-50 dark:bg-slate-600 border border-gray-200 dark:border-slate-500 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                          />
-                          {statusSearchQuery && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setStatusSearchQuery('')
-                              }}
-                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
-                            >
-                              <span className="text-xs">×</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Опция "Очистить все" */}
-                    {selectedStatusIds.length > 0 && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedStatusIds([])
-                        }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2"
-                      >
-                        <AlertTriangle className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-500 dark:text-slate-400">
-                          Очистить этот фильтр
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Список статусов */}
-                    {(() => {
-                      const filteredStatuses = statuses?.filter(status => 
-                        !statusSearchQuery.trim() || 
-                        status.name.toLowerCase().includes(statusSearchQuery.toLowerCase()) ||
-                        (status.description && status.description.toLowerCase().includes(statusSearchQuery.toLowerCase()))
-                      ) || []
-
-                      if (filteredStatuses.length === 0 && statusSearchQuery) {
-                        return (
-                          <div className="px-3 py-4 text-center">
-                            <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">
-                              Статусы не найдены
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setStatusSearchQuery('')
-                              }}
-                              className="text-xs text-teal-600 dark:text-teal-400 hover:underline"
-                            >
-                              Очистить поиск
-                            </button>
-                          </div>
-                        )
-                      }
-
-                      return filteredStatuses.map((status) => (
-                        <div
-                          key={status.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const isSelected = selectedStatusIds.includes(status.id)
-                            if (isSelected) {
-                              setSelectedStatusIds(selectedStatusIds.filter(id => id !== status.id))
-                            } else {
-                              setSelectedStatusIds([...selectedStatusIds, status.id])
-                            }
-                          }}
-                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-3"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedStatusIds.includes(status.id)}
-                            onChange={() => {}} // Обработка в onClick
-                            className="rounded border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
-                          />
-                          <div 
-                            className="w-3 h-3 rounded-full flex-shrink-0" 
-                            style={{ backgroundColor: status.color }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium dark:text-white truncate">
-                              {status.name}
-                            </div>
-                            {status.description && (
-                              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
-                                {status.description}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    })()}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex gap-2">
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={toggleGroupByClient}
-                      className={cn(
-                        "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                        groupByClient
-                          ? "bg-indigo-500/20 text-indigo-600 hover:bg-indigo-500/30 dark:bg-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/40"
-                          : "bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30"
-                      )}
-                    >
-                      <Building size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{groupByClient ? "Отключить группировку по заказчикам" : "Группировать по заказчикам"}</p>
-                  </TooltipContent>
-                </UiTooltip>
-                {!groupByClient && (
-                  <UiTooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={toggleShowManagers}
-                        className={cn(
-                          "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                          showManagers
-                            ? "bg-blue-500/20 text-blue-600 hover:bg-blue-500/30 dark:bg-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/40"
-                            : "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
-                        )}
-                      >
-                        <User size={14} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{showManagers ? "Скрыть руководителей проектов" : "Показать руководителей проектов"}</p>
-                    </TooltipContent>
-                  </UiTooltip>
-                )}
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={toggleOnlySections}
-                      className={cn(
-                        "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                        showOnlySections
-                          ? "bg-purple-500/20 text-purple-600 hover:bg-purple-500/30 dark:bg-purple-500/30 dark:text-purple-400 dark:hover:bg-purple-500/40"
-                          : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
-                      )}
-                    >
-                      <List size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{showOnlySections ? "Показать всю структуру" : "Только разделы"}</p>
-                  </TooltipContent>
-                </UiTooltip>
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={expandAllNodes}
-                      className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 transition-colors"
-                    >
-                      <Expand size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Развернуть все</p>
-                  </TooltipContent>
-                </UiTooltip>
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={collapseAllNodes}
-                      className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30 transition-colors"
-                    >
-                      <Minimize size={14} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Свернуть все</p>
-                  </TooltipContent>
-                </UiTooltip>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
         <div>
           {filteredData.length === 0 ? (
             <div className="p-8 text-center">
