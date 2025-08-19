@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
 import { Save, Trash2 } from 'lucide-react'
 import { Input } from "@/components/ui/input"
@@ -27,7 +28,7 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string }>>({
+  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string; country?: string; city?: string }>>({
     firstName: "",
     lastName: "",
     email: "",
@@ -39,6 +40,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     roleId: "",
     workLocation: "office",
     address: "",
+    country: "",
+    city: "",
   })
 
   const [departments, setDepartments] = useState<Department[]>([])
@@ -48,6 +51,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [categories, setCategories] = useState<Category[]>([])
   const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
+  const [cities, setCities] = useState<{ name: string }[]>([])
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
 
   // Состояния для удаления профиля
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
@@ -114,6 +120,31 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
   }, [open, canEditRoles, canAddAdminRole])
 
+  // Загрузка стран/городов
+  useEffect(() => {
+    if (!open) return
+    const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
+    setCountries(all)
+  }, [open])
+
+  useEffect(() => {
+    if (!selectedCountryCode) {
+      setCities([])
+      return
+    }
+    const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
+    // Дедупликация по названию города (в некоторых странах повторяются)
+    const seen = new Set<string>()
+    const unique: { name: string }[] = []
+    for (const c of loaded) {
+      if (!seen.has(c.name)) {
+        seen.add(c.name)
+        unique.push({ name: c.name })
+      }
+    }
+    setCities(unique)
+  }, [selectedCountryCode])
+
   // Изменим установку данных пользователя при открытии диалога
   useEffect(() => {
     if (user) {
@@ -147,7 +178,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         roleId,
         workLocation: user.workLocation,
         address: user.address,
+        country: (user as any).country || "",
+        city: (user as any).city || "",
       })
+      // Инициализируем выбранную страну
+      const matchCountry = Country.getAllCountries().find(c => c.name === ((user as any).country || ""))
+      setSelectedCountryCode(matchCountry?.isoCode || "")
     } else {
       setFormData({
         firstName: "",
@@ -161,7 +197,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         roleId: "",
         workLocation: "office",
         address: "",
+        country: "",
+        city: "",
       })
+      setSelectedCountryCode("")
     }
   }, [user, open, roles])
 
@@ -214,6 +253,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           address: formData.address,
           workLocation: formData.workLocation,
         }
+
+        if (formData.country) updateData.country = String(formData.country)
+        if (formData.city) updateData.city = String(formData.city)
         
         // Добавляем организационные поля только если пользователь может их редактировать
         if (canEditOrganizationalFields) {
@@ -537,6 +579,47 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   <SelectItem value="office">В офисе</SelectItem>
                   <SelectItem value="remote">Удаленно</SelectItem>
                   <SelectItem value="hybrid">Гибридный формат</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="country" className="text-right">
+                Страна
+              </Label>
+              <Select
+                value={selectedCountryCode}
+                onValueChange={(code) => {
+                  setSelectedCountryCode(code)
+                  const found = countries.find(c => c.code === code)
+                  setFormData(prev => ({ ...prev, country: found?.name || "", city: "" }))
+                }}
+              >
+                <SelectTrigger id="country" className="col-span-3">
+                  <SelectValue placeholder="Выберите страну" />
+                </SelectTrigger>
+                <SelectContent>
+                  {countries.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city" className="text-right">
+                Город
+              </Label>
+              <Select
+                value={formData.city || ""}
+                onValueChange={(value) => handleChange("city", value)}
+                disabled={!selectedCountryCode}
+              >
+                <SelectTrigger id="city" className="col-span-3">
+                  <SelectValue placeholder={selectedCountryCode ? "Выберите город" : "Сначала выберите страну"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {cities.map((c) => (
+                    <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

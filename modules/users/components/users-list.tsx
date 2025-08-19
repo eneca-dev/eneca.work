@@ -29,14 +29,14 @@ import {
 import { UserDialog } from "./user-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { deleteUser } from "@/services/org-data-service"
+// import { deleteUser } from "@/services/org-data-service" // Больше не используем прямой клиент при удалении
 import type { User, UsersFilter } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/ui/empty-state"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DeleteUserConfirm } from "./DeleteUserConfirm"
 
 interface UsersListProps {
   users: User[]
@@ -63,6 +63,8 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
   const [groupBy, setGroupBy] = useState<GroupBy>("none")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const router = useRouter()
 
   // Получаем разрешения пользователя
@@ -194,26 +196,34 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
     setIsDialogOpen(true)
   }
 
-  const handleDeleteUser = async (userId: string) => {
-    if (confirm("Вы уверены, что хотите удалить этого пользователя?")) {
-      setIsDeleting(userId)
-      try {
-        await deleteUser(userId)
-        onUserUpdated?.()
-        toast({
-          title: "Успешно",
-          description: "Пользователь успешно удален",
-        })
-      } catch (error) {
-        console.error("Ошибка при удалении пользователя:", error)
-        toast({
-          title: "Ошибка",
-          description: "Не удалось удалить пользователя",
-          variant: "destructive",
-        })
-      } finally {
-        setIsDeleting(null)
+  const openDeleteDialog = (user: User) => {
+    setUserToDelete(user)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const performDeleteUser = async () => {
+    if (!userToDelete) return
+    setIsDeleting(userToDelete.id)
+    try {
+      const response = await fetch(`/api/admin/delete-user?userId=${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(result?.error || 'Ошибка удаления пользователя')
       }
+      onUserUpdated?.()
+      toast({ title: 'Успешно', description: 'Пользователь успешно удален' })
+    } catch (error) {
+      console.error('Ошибка при удалении пользователя:', error)
+      toast({ title: 'Ошибка', description: error instanceof Error ? error.message : 'Не удалось удалить пользователя', variant: 'destructive' })
+    } finally {
+      setIsDeleting(null)
+      setIsDeleteDialogOpen(false)
+      setUserToDelete(null)
     }
   }
 
@@ -421,7 +431,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           className="text-red-600 dark:text-red-400"
-                                          onClick={() => handleDeleteUser(user.id)}
+                                          onClick={() => openDeleteDialog(user)}
                                           disabled={isDeleting === user.id}
                                         >
                                           <Trash className="mr-2 h-4 w-4" />
@@ -554,7 +564,7 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
                                                   className="text-red-600 dark:text-red-400"
-                                                  onClick={() => handleDeleteUser(user.id)}
+                                                  onClick={() => openDeleteDialog(user)}
                                                   disabled={isDeleting === user.id}
                                                 >
                                                   <Trash className="mr-2 h-4 w-4" />
@@ -591,6 +601,13 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
         onOpenChange={setIsDialogOpen}
         user={selectedUser}
         onUserUpdated={handleUserUpdated}
+      />
+
+      <DeleteUserConfirm
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        user={userToDelete}
+        onConfirm={performDeleteUser}
       />
     </TooltipProvider>
   )

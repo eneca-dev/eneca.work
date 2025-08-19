@@ -39,28 +39,34 @@ export async function DELETE(request: NextRequest) {
 
     // Если пользователь не удаляет свой профиль, проверяем права доступа
     if (!isDeletingOwnProfile) {
+      // Сначала достаем роль текущего пользователя
       const { data: profile } = await supabase
         .from('profiles')
-        .select(`
-          role_id,
-          roles!inner(
-            name,
-            role_permissions!inner(
-              permissions!inner(name)
-            )
-          )
-        `)
+        .select('role_id, roles(name)')
         .eq('user_id', currentUser.id)
         .single()
 
-      const permissions = (profile?.roles as any)?.role_permissions?.map(
-        (rp: any) => rp.permissions.name
-      ) || []
+      const roleId = (profile as any)?.role_id as string | undefined
+      const roleName = (profile as any)?.roles?.name as string | undefined
+
+      let permissions: string[] = []
+      if (roleId) {
+        const { data: rolePerms } = await supabase
+          .from('role_permissions')
+          .select('permissions(name)')
+          .eq('role_id', roleId)
+
+        permissions = (rolePerms || [])
+          .map((rp: any) => rp?.permissions?.name)
+          .filter(Boolean)
+      }
 
       // Проверяем, есть ли разрешение на удаление других пользователей
-      const canDeleteUsers = permissions.includes('user.delete') || 
+      // Поддерживаем оба варианта названия пермишена на случай расхождений в данных
+      const canDeleteUsers = permissions.includes('users.delete') ||
+                            permissions.includes('user.delete') ||
                             permissions.includes('users_can_edit_all') ||
-                            (profile?.roles as any)?.name === 'admin'
+                            roleName === 'admin'
 
       if (!canDeleteUsers) {
         return NextResponse.json(

@@ -77,6 +77,8 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
               userData.work_format === "Удаленно" ? "remote" : 
               "office",
             address: userData.address || "",
+            city: userData.city_name || undefined,
+            country: userData.country_name || undefined,
             employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) * 100 : 100,
             salary: userData.salary || 0,
             isHourly: userData.is_hourly || false
@@ -119,6 +121,8 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
           userState.profile?.workFormat === "Удаленно" ? "remote" : 
           "office",
         address: userState.profile?.address || "",
+        city: undefined,
+        country: undefined,
         employmentRate: userState.profile?.employmentRate || 100,
         salary: userState.profile?.salary || 0,
         isHourly: userState.profile?.isHourly || false

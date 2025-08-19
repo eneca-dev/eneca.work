@@ -61,6 +61,8 @@ export async function getUsers(): Promise<User[]> {
     dateJoined: user.created_at,
     workLocation: mapWorkFormat(user.work_format),
     address: user.address || "",
+    city: user.city_name || undefined,
+    country: user.country_name || undefined,
     employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
     salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
     isHourly: user.is_hourly !== null ? user.is_hourly : true,
@@ -292,6 +294,38 @@ export async function updateUser(
   if (userData.address !== undefined) {
     updates.address = userData.address
     console.log("Добавлено: address =", userData.address);
+  }
+
+  // Обработка страны/города -> profiles.city_id
+  if (userData.country !== undefined || userData.city !== undefined) {
+    const countryName = typeof userData.country === 'string' ? userData.country.trim() : ''
+    const cityName = typeof userData.city === 'string' ? userData.city.trim() : ''
+
+    if (!countryName && !cityName) {
+      // Сброс города
+      updates.city_id = null
+      console.log("Добавлено: city_id = null (очистка)");
+    } else if (countryName && cityName) {
+      try {
+        // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+        const resp = await fetch('/api/geo/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ countryName, cityName })
+        })
+        if (resp.ok) {
+          const { cityId } = await resp.json()
+          updates.city_id = cityId
+          console.log("Добавлено: city_id =", cityId)
+        } else {
+          console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+        }
+      } catch (error) {
+        console.error('Ошибка вызова /api/geo/upsert:', error)
+      }
+    } else {
+      console.warn("Для установки города требуются и страна, и город. Передано:", { countryName, cityName })
+    }
   }
 
   if (userData.employmentRate !== undefined) {
