@@ -1033,55 +1033,62 @@ export async function createUser(userData: {
   )
 }
 
-// Удаление пользователя
+// Удаление пользователя (через серверный API, с полной очисткой Auth + профиль)
 export async function deleteUser(userId: string) {
   return Sentry.startSpan(
     {
-      op: "db.delete",
-      name: "Удаление пользователя",
+      op: "api.call",
+      name: "Удаление пользователя через API",
     },
     async (span) => {
       try {
-        const supabase = createClient();
         span.setAttribute("user.id", userId)
-        span.setAttribute("table", "profiles")
-        
-        const { error } = await supabase.from("profiles").delete().eq("user_id", userId)
+        span.setAttribute("api.endpoint", "/api/admin/delete-user")
 
-        if (error) {
-          span.setAttribute("db.success", false)
-          Sentry.captureException(error, {
+        const response = await fetch(`/api/admin/delete-user?userId=${encodeURIComponent(userId)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        const result = await response.json().catch(() => ({}))
+
+        if (!response.ok) {
+          span.setAttribute("api.success", false)
+          span.setAttribute("api.status", response.status)
+          const message = result?.error || `Ошибка удаления пользователя (status ${response.status})`
+          const err = new Error(message)
+          Sentry.captureException(err, {
             tags: {
               module: 'org_data_service',
-              action: 'delete_user',
+              action: 'delete_user_via_api',
               user_id: userId,
-              table: 'profiles',
-              critical: true
+              status_code: response.status,
+              critical: true,
             },
             extra: {
-              error_code: error.code,
-              error_details: error.details,
-              timestamp: new Date().toISOString()
-            }
+              response_body: JSON.stringify(result),
+              timestamp: new Date().toISOString(),
+            },
           })
-          throw error
+          throw err
         }
 
-        span.setAttribute("db.success", true)
+        span.setAttribute("api.success", true)
         return true
       } catch (error) {
         span.setAttribute("error", true)
+        span.setAttribute("error.message", (error as Error).message)
         Sentry.captureException(error, {
           tags: {
             module: 'org_data_service',
-            action: 'delete_user',
+            action: 'delete_user_via_api',
             user_id: userId,
-            error_type: 'delete_error'
+            error_type: 'network_or_api_error',
           },
           extra: {
             error_message: (error as Error).message,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         })
         throw error
       }
