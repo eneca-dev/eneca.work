@@ -8,7 +8,14 @@ import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { NotificationItem } from "./NotificationItem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { X, Search, Loader2, RefreshCw } from "lucide-react"
+import { X, Search, Loader2, RefreshCw, Filter, ChevronDown, SlidersHorizontal, Check } from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 
 interface NotificationsPanelProps {
   // Переименовано для соответствия правилу сериализуемых пропсов в Next.js
@@ -16,13 +23,22 @@ interface NotificationsPanelProps {
   collapsed?: boolean
 }
 
+// Доступные типы уведомлений
+const NOTIFICATION_TYPES = [
+  { value: 'announcement', label: 'Объявления', color: 'bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-200' },
+  { value: 'assignments', label: 'Передача заданий', color: 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200' },
+  { value: 'section_comment', label: 'Комментарии', color: 'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200' },
+  { value: 'task', label: 'Задачи', color: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-200' },
+]
+
 export function NotificationsPanel({ onCloseAction, collapsed = false }: NotificationsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [visibleNotifications, setVisibleNotifications] = useState<Set<string>>(new Set())
-  const [processedNotifications, setProcessedNotifications] = useState<Set<string>>(new Set())
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
+  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'archived'>('all')
+  const [isTypeFilterOpen, setIsTypeFilterOpen] = useState(false)
+  const [isReadFilterOpen, setIsReadFilterOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const markAsReadRealtimeRef = useRef<((notificationId: string) => Promise<void>) | undefined>(undefined)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
 
   const { 
@@ -35,209 +51,37 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     clearAll 
   } = useNotificationsStore()
 
-  // Функция для пометки уведомления как прочитанного в реальном времени
-  const markNotificationAsReadRealtime = useCallback(async (notificationId: string) => {
-    return Sentry.startSpan(
-      {
-        op: "notifications.mark_as_read_realtime",
-        name: "Mark Notification As Read Realtime",
-      },
-      async (span) => {
-        try {
-          const notification = notifications.find(n => n.id === notificationId)
-          
-          span.setAttribute("notification.id", notificationId)
-          span.setAttribute("notification.found", !!notification)
-          span.setAttribute("notification.is_read", notification?.isRead || false)
-          
-          if (notification && !notification.isRead) {
-            console.log('📖 Помечаем уведомление как прочитанное в реальном времени:', notificationId)
-            
-            // Сначала обновляем локальное состояние (счетчик уменьшится автоматически)
-            markAsRead(notificationId)
-            
-            // Затем обновляем в базе данных
-            try {
-              await markAsReadInDB(notificationId)
-              span.setAttribute("mark.success", true)
-              
-              Sentry.addBreadcrumb({
-                message: 'Notification marked as read in realtime',
-                category: 'notifications',
-                level: 'info',
-                data: {
-                  notification_id: notificationId,
-                  entity_type: notification.entityType
-                }
-              })
-            } catch (error) {
-              span.setAttribute("mark.success", false)
-              span.recordException(error as Error)
-              Sentry.captureException(error, {
-                tags: {
-                  module: 'notifications',
-                  component: 'NotificationsPanel',
-                  action: 'mark_as_read_realtime',
-                  error_type: 'db_error'
-                },
-                extra: {
-                  notification_id: notificationId,
-                  notification_entity_type: notification.entityType,
-                  timestamp: new Date().toISOString()
-                }
-              })
-              console.error(`❌ Ошибка при пометке уведомления ${notificationId} как прочитанного в БД:`, error)
-            }
-          } else {
-            span.setAttribute("mark.skipped", true)
-            span.setAttribute("mark.skip_reason", notification ? "already_read" : "not_found")
-          }
-        } catch (error) {
-          span.setAttribute("mark.success", false)
-          span.recordException(error as Error)
-          Sentry.captureException(error, {
-            tags: {
-              module: 'notifications',
-              component: 'NotificationsPanel',
-              action: 'mark_as_read_realtime',
-              error_type: 'unexpected_error'
-            },
-            extra: {
-              notification_id: notificationId,
-              timestamp: new Date().toISOString()
-            }
-          })
-          console.error('Ошибка в markNotificationAsReadRealtime:', error)
-        }
-      }
-    )
-  }, [notifications, markAsRead, markAsReadInDB])
-
-  // Обновляем ref при изменении функции
-  markAsReadRealtimeRef.current = markNotificationAsReadRealtime
-
   // Функция для закрытия панели
   const handleClose = useCallback(() => {
     console.log('🔒 Закрываем панель уведомлений')
     
-    // Очищаем состояние
-    setVisibleNotifications(new Set())
-    setProcessedNotifications(new Set())
+    // Очищаем состояние фильтров
+    setSelectedTypes(new Set())
+    setReadFilter('all')
     onCloseAction()
   }, [onCloseAction])
 
-  // Intersection Observer для отслеживания видимых уведомлений
-  useEffect(() => {
-    try {
-      if (!scrollRef.current) return
-
-      console.log('👀 Инициализируем Intersection Observer для', notifications.length, 'уведомлений')
-
-      Sentry.addBreadcrumb({
-        message: 'Initializing Intersection Observer',
-        category: 'notifications',
-        level: 'info',
-        data: {
-          notifications_count: notifications.length,
-          processed_count: processedNotifications.size
-        }
-      })
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          try {
-            entries.forEach((entry) => {
-              const notificationId = entry.target.getAttribute('data-notification-id')
-              if (notificationId && entry.isIntersecting) {
-                console.log(`👁️ Уведомление ${notificationId} стало видимым`)
-                
-                // Добавляем в видимые
-                setVisibleNotifications(prev => new Set(prev).add(notificationId))
-                
-                // Помечаем как прочитанное, если еще не обработано
-                if (!processedNotifications.has(notificationId)) {
-                  const notification = notifications.find(n => n.id === notificationId)
-                  if (notification && !notification.isRead) {
-                    if (markAsReadRealtimeRef.current) {
-                      markAsReadRealtimeRef.current(notificationId)
-                    }
-                    setProcessedNotifications(prev => new Set(prev).add(notificationId))
-                  }
-                }
-              }
-            })
-          } catch (error) {
-            Sentry.captureException(error, {
-              tags: {
-                module: 'notifications',
-                component: 'NotificationsPanel',
-                action: 'intersection_observer_callback',
-                error_type: 'unexpected_error'
-              },
-              extra: {
-                entries_count: entries.length,
-                timestamp: new Date().toISOString()
-              }
-            })
-            console.error('Ошибка в Intersection Observer callback:', error)
-          }
-        },
-        {
-          root: scrollRef.current,
-          threshold: 0.5 // Считаем видимым, когда 50% элемента видно
-        }
-      )
-
-      // Наблюдаем за всеми элементами уведомлений
-      const notificationElements = scrollRef.current.querySelectorAll('[data-notification-id]')
-      console.log('🔍 Найдено элементов уведомлений для отслеживания:', notificationElements.length)
-      
-      Sentry.addBreadcrumb({
-        message: 'Starting observation of notification elements',
-        category: 'notifications',
-        level: 'info',
-        data: {
-          elements_count: notificationElements.length
-        }
-      })
-      
-      notificationElements.forEach(element => observer.observe(element))
-
-      return () => {
-        try {
-          observer.disconnect()
-        } catch (error) {
-          Sentry.captureException(error, {
-            tags: {
-              module: 'notifications',
-              component: 'NotificationsPanel',
-              action: 'intersection_observer_cleanup',
-              error_type: 'unexpected_error'
-            },
-            extra: {
-              timestamp: new Date().toISOString()
-            }
-          })
-          console.error('Ошибка при отключении Intersection Observer:', error)
-        }
+  // Обработка изменения фильтра по типам
+  const handleTypeFilterChange = useCallback((type: string, checked: boolean) => {
+    setSelectedTypes(prev => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(type)
+      } else {
+        newSet.delete(type)
       }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: 'notifications',
-          component: 'NotificationsPanel',
-          action: 'intersection_observer_init',
-          error_type: 'unexpected_error'
-        },
-        extra: {
-          notifications_count: notifications.length,
-          processed_count: processedNotifications.size,
-          timestamp: new Date().toISOString()
-        }
-      })
-      console.error('Ошибка при инициализации Intersection Observer:', error)
-    }
-  }, [notifications, processedNotifications])
+      return newSet
+    })
+  }, [])
+
+  // Сброс всех фильтров
+  const handleClearFilters = useCallback(() => {
+    setSearchQuery("")
+    setSelectedTypes(new Set())
+    setReadFilter('all')
+  }, [])
+
+  // Авто-прочтение отключено: больше не помечаем как прочитанные при появлении в зоне видимости
 
   // Закрытие панели при клике вне её
   useEffect(() => {
@@ -245,6 +89,10 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       const target = event.target as HTMLElement | null
       // Игнорируем клики по колокольчику, чтобы не было двойного toggle
       if (target && target.closest('[data-notifications-bell]')) {
+        return
+      }
+      // Игнорируем клики по элементам фильтра (Popover)
+      if (target && target.closest('[data-radix-popper-content-wrapper]')) {
         return
       }
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
@@ -270,13 +118,32 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     return () => document.removeEventListener("keydown", handleEscape)
   }, [handleClose])
 
-  // Фильтрация уведомлений по поисковому запросу
+  // Фильтрация уведомлений по поисковому запросу и типам
   const filteredNotifications = notifications
-    .filter(
-      (notification) =>
+    .filter((notification) => {
+      // Фильтр по поисковому запросу
+      const matchesSearch = 
         notification.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        notification.message.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+        notification.message.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      // Фильтр по типам (если выбраны типы)
+      const matchesType = selectedTypes.size === 0 || 
+        (notification.entityType && selectedTypes.has(notification.entityType))
+      
+      // Фильтр по статусу прочтения/архиву
+      let matchesRead = true
+      if (readFilter === 'unread') {
+        // Показываем только непрочитанные и незаархивированные
+        matchesRead = !notification.isRead && !Boolean((notification as any).isArchived)
+      } else if (readFilter === 'archived') {
+        matchesRead = Boolean((notification as any).isArchived)
+      } else {
+        // В "Все" скрываем заархивированные
+        matchesRead = !Boolean((notification as any).isArchived)
+      }
+      
+      return matchesSearch && matchesType && matchesRead
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   // Обновление уведомлений
@@ -326,6 +193,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     )
   }
 
+  // Проверяем, есть ли активные фильтры
+  const hasActiveFilters = searchQuery || selectedTypes.size > 0 || readFilter !== 'all'
+
   return (
     <div
       ref={panelRef}
@@ -358,16 +228,134 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           </div>
         </div>
 
-        {/* Поиск */}
+        {/* Поиск и фильтры */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Поиск уведомлений..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex items-center gap-3">
+            {/* Поиск */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Поиск уведомлений..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            {/* Фильтр по статусу (иконка-меню) */}
+            <Popover open={isReadFilterOpen} onOpenChange={setIsReadFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "relative h-10 w-10",
+                    readFilter !== 'all' && "text-blue-600 border-blue-300 dark:text-blue-400"
+                  )}
+                  aria-label="Фильтр уведомлений"
+                  title="Фильтр уведомлений"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-1" align="end">
+                <div className="flex flex-col">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'all' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('all'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'all' && <Check className="h-4 w-4" />} Все
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'unread' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('unread'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'unread' && <Check className="h-4 w-4" />} Непрочитанное
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'archived' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('archived'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'archived' && <Check className="h-4 w-4" />} Архив
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Фильтр по типам */}
+            <Popover open={isTypeFilterOpen} onOpenChange={setIsTypeFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative h-10 w-10"
+                >
+                  <Filter className="h-4 w-4" />
+                  {/* Счетчик выбранных типов */}
+                  {selectedTypes.size > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs flex items-center justify-center bg-blue-600 text-white"
+                    >
+                      {selectedTypes.size}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="end">
+                <div className="p-3">
+                  {/* Заголовок с кнопкой сброса */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Типы уведомлений
+                    </span>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Сбросить
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Список типов */}
+                  <div className="space-y-2">
+                    {NOTIFICATION_TYPES.map((type) => (
+                      <div key={type.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={type.value}
+                          checked={selectedTypes.has(type.value)}
+                          onCheckedChange={(checked) => 
+                            handleTypeFilterChange(type.value, checked as boolean)
+                          }
+                        />
+                        <label
+                          htmlFor={type.value}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                        >
+                          {type.label}
+                        </label>
+                        <Badge 
+                          variant="secondary" 
+                          className={cn("text-xs", type.color)}
+                        >
+                          {notifications.filter(n => n.entityType === type.value).length}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
@@ -377,6 +365,11 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Всего: {filteredNotifications.length}
+                {hasActiveFilters && (
+                  <span className="ml-2 text-blue-600 dark:text-blue-400">
+                    (из {notifications.length})
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -404,15 +397,28 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
             </div>
           ) : filteredNotifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              {searchQuery ? "Уведомления не найдены" : "Нет уведомлений"}
+              <p className="mb-4">
+                {hasActiveFilters ? "Уведомления по заданным фильтрам не найдены" : "Нет уведомлений"}
+              </p>
+              {hasActiveFilters && (
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="px-4"
+                  >
+                    Сбросить фильтры
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-2 space-y-2">
               {filteredNotifications.map((notification) => (
                 <NotificationItem 
                   key={notification.id} 
-                  notification={notification} 
-                  isVisible={visibleNotifications.has(notification.id)}
+                  notification={notification}
                 />
               ))}
             </div>

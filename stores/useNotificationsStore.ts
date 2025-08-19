@@ -12,6 +12,10 @@ import {
   UserNotificationWithNotification 
 } from "@/modules/notifications/api/notifications"
 import { 
+  markNotificationAsUnread,
+  setUserNotificationArchived
+} from "@/modules/notifications/api/notifications"
+import { 
   generateAssignmentNotificationText,
   generateAnnouncementNotificationText 
 } from "@/types/notifications"
@@ -47,6 +51,7 @@ export interface Notification {
   message: string
   createdAt: Date
   isRead: boolean
+  isArchived?: boolean
   type?: "info" | "warning" | "error" | "success"
   payload?: Record<string, any>
   entityType?: string
@@ -70,7 +75,11 @@ interface NotificationsState {
   setNotifications: (notifications: Notification[]) => void
   addNotification: (notification: Notification) => void
   markAsRead: (userNotificationId: string) => void
+  markAsUnread: (userNotificationId: string) => void
   markAsReadInDB: (userNotificationId: string) => Promise<void>
+  markAsUnreadInDB: (userNotificationId: string) => Promise<void>
+  setArchivedInDB: (userNotificationId: string, isArchived: boolean) => Promise<void>
+  setNotificationArchived: (userNotificationId: string, isArchived: boolean) => void
   markAllAsRead: () => void
   markAllAsReadInDB: () => Promise<void>
   removeNotification: (id: string) => void
@@ -178,6 +187,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
     message,
     createdAt: new Date(un.created_at),
     isRead: un.is_read,
+    isArchived: Boolean(payload.is_archived || payload.archived || payload.isArchived || false),
     type: payload.type || 'info',
     payload: notification?.payload,
     entityType,
@@ -228,6 +238,22 @@ export const useNotificationsStore = create<NotificationsState>()(
         })
       },
 
+      markAsUnread: (userNotificationId) => {
+        set((state) => {
+          const notification = state.notifications.find((n) => n.id === userNotificationId)
+          if (!notification || !notification.isRead) return state
+
+          const updatedNotifications = state.notifications.map((n) => 
+            n.id === userNotificationId ? { ...n, isRead: false } : n
+          )
+
+          return {
+            notifications: updatedNotifications,
+            unreadCount: state.unreadCount + 1,
+          }
+        })
+      },
+
       markAsReadInDB: async (userNotificationId) => {
         try {
           const state = get()
@@ -256,6 +282,28 @@ export const useNotificationsStore = create<NotificationsState>()(
         }))
       },
 
+      markAsUnreadInDB: async (userNotificationId) => {
+        try {
+          const state = get()
+          if (!state.currentUserId) return
+          await markNotificationAsUnread(state.currentUserId, userNotificationId)
+        } catch (error) {
+          console.error('❌ Ошибка при отметке уведомления как непрочитанного:', error)
+          get().setError('Ошибка при обновлении статуса уведомления')
+        }
+      },
+
+      setArchivedInDB: async (userNotificationId, isArchived) => {
+        try {
+          const state = get()
+          if (!state.currentUserId) return
+          await setUserNotificationArchived(state.currentUserId, userNotificationId, isArchived)
+        } catch (error) {
+          console.error('❌ Ошибка при обновлении архива уведомления:', error)
+          get().setError('Ошибка при обновлении архива уведомления')
+        }
+      },
+
       markAllAsReadInDB: async () => {
         try {
           const state = get()
@@ -278,6 +326,15 @@ export const useNotificationsStore = create<NotificationsState>()(
             notifications: state.notifications.filter((n) => n.id !== id),
             unreadCount: wasUnread ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
           }
+        })
+      },
+
+      setNotificationArchived: (userNotificationId, isArchived) => {
+        set((state) => {
+          const updatedNotifications = state.notifications.map((n) => 
+            n.id === userNotificationId ? { ...n, isArchived } : n
+          )
+          return { notifications: updatedNotifications }
         })
       },
 

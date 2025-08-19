@@ -846,6 +846,154 @@ export async function markNotificationAsRead(
 }
 
 /**
+ * Отметить уведомление как непрочитанное
+ */
+export async function markNotificationAsUnread(
+  userId: string,
+  userNotificationId: string
+): Promise<void> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.mark_as_unread",
+      name: "Mark Notification As Unread",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+
+        span.setAttribute("user.id", userId)
+        span.setAttribute("user_notification.id", userNotificationId)
+
+        const { error, data } = await supabase
+          .from('user_notifications')
+          .update({ 
+            is_read: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('id', userNotificationId)
+          .select()
+
+        if (error) {
+          span.setAttribute("unmark.success", false)
+          span.setAttribute("unmark.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'mark_as_unread',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'markNotificationAsUnread',
+              user_id: userId,
+              user_notification_id: userNotificationId,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('❌ Ошибка при отметке уведомления как непрочитанного:', error)
+          throw error
+        }
+
+        span.setAttribute("unmark.success", true)
+        span.setAttribute("updated.count", data?.length || 0)
+      } catch (error) {
+        span.setAttribute("unmark.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'mark_as_unread',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'markNotificationAsUnread',
+            user_id: userId,
+            user_notification_id: userNotificationId,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+
+/**
+ * Установить флаг архива для уведомления пользователя
+ */
+export async function setUserNotificationArchived(
+  userId: string,
+  userNotificationId: string,
+  isArchived: boolean
+): Promise<void> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.set_archived",
+      name: "Set User Notification Archived",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+        span.setAttribute("user.id", userId)
+        span.setAttribute("user_notification.id", userNotificationId)
+        span.setAttribute("archived.value", isArchived)
+
+        const { error, data } = await supabase
+          .from('user_notifications')
+          .update({ 
+            is_archived: isArchived,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('id', userNotificationId)
+          .select()
+
+        if (error) {
+          span.setAttribute("archived.success", false)
+          span.setAttribute("archived.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'set_archived',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'setUserNotificationArchived',
+              user_id: userId,
+              user_notification_id: userNotificationId,
+              is_archived: isArchived,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('❌ Ошибка при установке архива для уведомления:', error)
+          throw error
+        }
+
+        span.setAttribute("archived.success", true)
+        span.setAttribute("updated.count", data?.length || 0)
+      } catch (error) {
+        span.setAttribute("archived.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'set_archived',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'setUserNotificationArchived',
+            user_id: userId,
+            user_notification_id: userNotificationId,
+            is_archived: isArchived,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+/**
  * Отметить все уведомления как прочитанные
  */
 export async function markAllNotificationsAsRead(userId: string): Promise<void> {
