@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
+import * as Sentry from "@sentry/nextjs"
 import type { Section, Loading, Department, Team } from "../types"
 // Обновляем импорты, добавляя новые функции
 import {
@@ -96,6 +97,7 @@ interface PlanningState {
     responsibleAvatarUrl?: string | null
     responsibleTeamName?: string | null
   }) => Promise<{ success: boolean; error?: string; loadingId?: string }>
+  refreshSectionLoadings: (sectionId: string) => Promise<{ success: boolean; error?: string }>
   archiveLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
   restoreLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
   fetchArchivedLoadings: (sectionId?: string, employeeId?: string) => Promise<Loading[]>
@@ -144,7 +146,18 @@ const parseTimestampTz = (timestamptz: string | null): Date | null => {
     // Преобразуем строку в объект Date
     return new Date(dateString)
   } catch (error) {
-    console.error("Ошибка при преобразовании даты:", error, timestamptz)
+    Sentry.captureException(error, {
+      tags: { 
+        module: 'planning', 
+        action: 'parse_timestamp',
+        function: 'parseTimestampTz'
+      },
+      extra: {
+        timestamptz: timestamptz,
+        timestamp: new Date().toISOString()
+      },
+      level: 'warning'
+    })
     return null
   }
 }
@@ -362,7 +375,16 @@ export const usePlanningStore = create<PlanningState>()(
               expandedSections: {},
             })
           } catch (error) {
-            console.error("Ошибка при загрузке разделов:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_sections',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                timestamp: new Date().toISOString()
+              }
+            })
             set({ isLoadingSections: false })
           }
         },
@@ -421,6 +443,33 @@ export const usePlanningStore = create<PlanningState>()(
 
             console.log("👥 Данные о сотрудниках:", employeeData?.length, "записей")
 
+            // Получаем видимый период таймлайна, чтобы подтянуть только нужные дни отпусков
+            const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
+            const { startDate, daysToShow } = usePlanningViewStore.getState()
+            const vacationsPeriodStart = new Date(startDate)
+            const vacationsPeriodEnd = new Date(startDate)
+            vacationsPeriodEnd.setDate(vacationsPeriodEnd.getDate() + daysToShow - 1)
+
+            // Формируем фильтры по отделу/команде для отпусков
+            // Выбираем через функцию (RLS-friendly)
+            const { data: vacationsDaily, error: vacationsError } = await supabase
+              .rpc("get_employee_vacations_daily", {
+                p_start: vacationsPeriodStart.toISOString().split("T")[0],
+                p_end: vacationsPeriodEnd.toISOString().split("T")[0],
+                p_department: selectedDepartmentId || null,
+                p_team: selectedTeamId || null,
+              })
+
+            if (vacationsError) {
+              console.error("Ошибка при загрузке отпусков:", vacationsError)
+              throw vacationsError
+            }
+
+            console.log("🏝️ Отпуска (дни):", vacationsDaily?.length, "период:", vacationsPeriodStart.toISOString().split("T")[0], "—", vacationsPeriodEnd.toISOString().split("T")[0])
+            if (vacationsDaily && vacationsDaily.length > 0) {
+              console.log("🏝️ Первые 3 отпуска:", vacationsDaily.slice(0, 3))
+            }
+
             // Группируем данные по отделам и командам
             const departmentsMap = new Map<string, Department>()
             const teamsMap = new Map<string, Team>()
@@ -444,6 +493,7 @@ export const usePlanningStore = create<PlanningState>()(
                   departmentName: item.final_department_name,
                   loadings: [],
                   dailyWorkloads: {},
+                  vacationsDaily: {},
                   hasLoadings: item.has_loadings,
                   loadingsCount: item.loadings_count,
                   employmentRate: item.employment_rate || 1,
@@ -492,6 +542,24 @@ export const usePlanningStore = create<PlanningState>()(
                 })
               }
             })
+
+            // Вносим отпуска: считаем каждый день как 1.0 ставки и отмечаем для отрисовки
+            let vacationsProcessed = 0
+            vacationsDaily?.forEach((v: { user_id: string; vacation_date: string }) => {
+              const userId = v.user_id as string
+              const dateKey = new Date(v.vacation_date).toISOString().split("T")[0]
+              const employee = employeesMap.get(userId)
+              if (!employee) {
+                console.log("🚨 Сотрудник не найден для отпуска:", userId, dateKey)
+                return
+              }
+              if (!employee.vacationsDaily) employee.vacationsDaily = {}
+              employee.vacationsDaily[dateKey] = 1
+              // Отпуск не влияет на расчёт workloadRate - оставляем оригинальную загрузку для правильного отображения
+              // employee.dailyWorkloads[dateKey] остается как есть
+              vacationsProcessed++
+            })
+            console.log("🏝️ Обработано отпусков:", vacationsProcessed)
 
             // Теперь обрабатываем организационную структуру
             orgData?.forEach((item) => {
@@ -601,7 +669,16 @@ export const usePlanningStore = create<PlanningState>()(
 
             console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
           } catch (error) {
-            console.error("❌ Ошибка при загрузке организационной структуры:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_departments',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                timestamp: new Date().toISOString()
+              }
+            })
             set({ isLoadingDepartments: false })
           }
         },
@@ -612,7 +689,17 @@ export const usePlanningStore = create<PlanningState>()(
             const loadings = await fetchLoadings(sectionId, true)
             return Array.isArray(loadings) && loadings.length > 0
           } catch (error) {
-            console.error("Ошибка при проверке загрузок раздела:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'check_section_has_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return false
           }
         },
@@ -622,19 +709,31 @@ export const usePlanningStore = create<PlanningState>()(
           try {
             const loadingsData = await fetchLoadings(sectionId)
 
+            // Проверяем, что данные получены успешно
+            if (!Array.isArray(loadingsData)) {
+              // Если получили объект ошибки
+              if (loadingsData && 'success' in loadingsData && !loadingsData.success) {
+                console.error("Ошибка при загрузке загрузок раздела:", loadingsData.error, loadingsData.details)
+                return []
+              }
+              // Если получили что-то неожиданное
+              console.warn("Неожиданный формат данных от fetchLoadings:", loadingsData)
+              return []
+            }
+
             // Преобразуем данные в формат Loading
-            const loadings: Loading[] = Array.isArray(loadingsData) ? loadingsData.map((item: any) => ({
+            const loadings: Loading[] = loadingsData.map((item: any) => ({
               id: item.loading_id,
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
               responsibleAvatarUrl: item.responsible_avatar || undefined,
-              sectionId: item.loading_section,
+              sectionId: item.section_id, // Исправлено: используем section_id из view_sections_with_loadings
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
               createdAt: parseTimestampTz(item.loading_created) || new Date(),
               updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
-            })) : []
+            }))
 
             // Обновляем раздел с загрузками в обоих массивах: sections и allSections
             const { sections, allSections } = get()
@@ -666,15 +765,36 @@ export const usePlanningStore = create<PlanningState>()(
 
             return loadings
           } catch (error) {
-            console.error("Ошибка при загрузке загрузок раздела:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_section_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return []
           }
         },
 
         // Создание новой загрузки
         createLoading: async (loadingData) => {
-          try {
-            // Подготавливаем данные для API
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Создание загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("responsible_id", loadingData.responsibleId)
+                span.setAttribute("section_id", loadingData.sectionId)
+                span.setAttribute("project_name", loadingData.projectName || "")
+                span.setAttribute("rate", loadingData.rate)
+
+                // Подготавливаем данные для API
             const apiData = {
               responsibleId: loadingData.responsibleId,
               sectionId: loadingData.sectionId,
@@ -709,7 +829,7 @@ export const usePlanningStore = create<PlanningState>()(
             }
 
             // Обновляем локальное состояние
-            const { sections, allSections, loadingsMap, departments } = get()
+            const { sections, allSections, loadingsMap, departments, expandedSections } = get()
 
             // Обновляем в карте загрузок
             const updatedLoadingsMap = { ...loadingsMap }
@@ -754,10 +874,66 @@ export const usePlanningStore = create<PlanningState>()(
               return section
             })
 
+            // Обновляем загрузки сотрудников в отделах
+            const updatedDepartments = departments.map(department => ({
+              ...department,
+              teams: department.teams.map(team => ({
+                ...team,
+                employees: team.employees.map(employee => {
+                  if (employee.id === loadingData.responsibleId) {
+                    const existingLoadings = employee.loadings || []
+                    const hasExistingLoading = existingLoadings.some(loading => loading.id === newLoading.id)
+                    
+                    // Пересчитываем dailyWorkloads
+                    const updatedLoadings = hasExistingLoading ? existingLoadings : [...existingLoadings, newLoading]
+                    const dailyWorkloads: Record<string, number> = {}
+                    
+                    updatedLoadings.forEach((loading: Loading) => {
+                      const startDate = new Date(loading.startDate)
+                      const endDate = new Date(loading.endDate)
+                      const currentDate = new Date(startDate)
+
+                      while (currentDate <= endDate) {
+                        const dateKey = currentDate.toISOString().split("T")[0]
+                        if (!dailyWorkloads[dateKey]) {
+                          dailyWorkloads[dateKey] = 0
+                        }
+                        dailyWorkloads[dateKey] += loading.rate || 1
+                        currentDate.setDate(currentDate.getDate() + 1)
+                      }
+                    })
+
+                    return {
+                      ...employee,
+                      loadings: updatedLoadings,
+                      dailyWorkloads,
+                      hasLoadings: updatedLoadings.length > 0,
+                      loadingsCount: updatedLoadings.length,
+                    }
+                  }
+                  return employee
+                })
+              }))
+            }))
+
+            // Автоматически раскрываем раздел для показа новой загрузки
+            if (!expandedSections[loadingData.sectionId]) {
+              get().toggleSectionExpanded(loadingData.sectionId)
+            }
+
+            // Обновляем состояние с отделами
             set({
               sections: updatedSections,
               allSections: updatedAllSections,
               loadingsMap: updatedLoadingsMap,
+              departments: updatedDepartments,
+            })
+
+            console.log("✅ Загрузка успешно создана и добавлена в локальное состояние:", {
+              loadingId: result.loadingId,
+              sectionId: loadingData.sectionId,
+              responsibleId: loadingData.responsibleId,
+              loadingsCount: updatedLoadingsMap[loadingData.sectionId]?.length || 0
             })
 
             return { success: true, loadingId: result.loadingId }
@@ -765,11 +941,80 @@ export const usePlanningStore = create<PlanningState>()(
             console.error("Ошибка при создании загрузки:", error)
             return { success: false, error: "Произошла неожиданная ошибка" }
           }
+        }
+        );
+        },
+
+        // Функция для обновления конкретного раздела с загрузками
+        refreshSectionLoadings: async (sectionId: string) => {
+          try {
+            console.log("🔄 Обновление загрузок для раздела:", sectionId)
+            
+            // Загружаем свежие данные для конкретного раздела
+            const freshLoadings = await get().fetchSectionLoadings(sectionId)
+            
+            const { sections, allSections, loadingsMap } = get()
+
+            // Обновляем карту загрузок
+            const updatedLoadingsMap = {
+              ...loadingsMap,
+              [sectionId]: freshLoadings
+            }
+
+            // Обновляем раздел в sections
+            const updatedSections = sections.map(section => {
+              if (section.id === sectionId) {
+                return {
+                  ...section,
+                  loadings: freshLoadings,
+                  hasLoadings: freshLoadings.length > 0
+                }
+              }
+              return section
+            })
+
+            // Обновляем раздел в allSections
+            const updatedAllSections = allSections.map(section => {
+              if (section.id === sectionId) {
+                return {
+                  ...section,
+                  loadings: freshLoadings,
+                  hasLoadings: freshLoadings.length > 0
+                }
+              }
+              return section
+            })
+
+            set({
+              sections: updatedSections,
+              allSections: updatedAllSections,
+              loadingsMap: updatedLoadingsMap,
+            })
+
+            console.log("✅ Раздел успешно обновлен:", {
+              sectionId,
+              loadingsCount: freshLoadings.length
+            })
+
+            return { success: true }
+          } catch (error) {
+            console.error("Ошибка при обновлении раздела:", error)
+            return { success: false, error: "Не удалось обновить раздел" }
+          }
         },
 
         // Обновление загрузки
         updateLoading: async (loadingId: string, updates: Partial<Loading>) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Обновление загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
+                if (updates.sectionId) span.setAttribute("section_id", updates.sectionId)
+                if (updates.rate !== undefined) span.setAttribute("rate", updates.rate)
             // Подготавливаем данные для API
             const apiUpdates: any = {}
             if (updates.startDate) {
@@ -876,17 +1121,41 @@ export const usePlanningStore = create<PlanningState>()(
               }
             }
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.map((loading) =>
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.map((loading) =>
                     loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
-                  ),
-                })),
+                  ) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -897,21 +1166,44 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            console.log("✅ Загрузка успешно обновлена в сторе с актуальными данными:", {
+            console.log("✅ Загрузка успешно обновлена и UI обновлен:", {
               loadingId,
-              finalUpdates
+              finalUpdates,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при обновлении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'update_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    updates: JSON.stringify(updates),
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Удаление загрузки
         deleteLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Удаление загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Импортируем функцию удаления
             const { deleteLoading: deleteLoadingAPI } = await import("@/lib/supabase-client")
 
@@ -944,15 +1236,39 @@ export const usePlanningStore = create<PlanningState>()(
               )
             })
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.filter((loading) => loading.id !== loadingId),
-                })),
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.filter((loading) => loading.id !== loadingId) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -963,16 +1279,42 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при удалении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+            console.log("✅ Загрузка успешно удалена и UI обновлен:", {
+              loadingId,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
+            })
+
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'delete_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Архивирование загрузки
         archiveLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action",
+              name: "Архивирование загрузки в сторе планирования",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Вызываем API
             const result = await archiveLoadingAPI(loadingId)
 
@@ -1002,15 +1344,39 @@ export const usePlanningStore = create<PlanningState>()(
               )
             })
 
-            // Обновляем в отделах
+            // Обновляем в отделах с пересчетом dailyWorkloads
             const updatedDepartments = departments.map((department) => ({
               ...department,
               teams: department.teams.map((team) => ({
                 ...team,
-                employees: team.employees.map((employee) => ({
-                  ...employee,
-                  loadings: employee.loadings?.filter((loading) => loading.id !== loadingId),
-                })),
+                employees: team.employees.map((employee) => {
+                  const updatedLoadings = employee.loadings?.filter((loading) => loading.id !== loadingId) || []
+                  
+                  // Пересчитываем dailyWorkloads
+                  const dailyWorkloads: Record<string, number> = {}
+                  updatedLoadings.forEach((loading) => {
+                    const startDate = new Date(loading.startDate)
+                    const endDate = new Date(loading.endDate)
+                    const currentDate = new Date(startDate)
+
+                    while (currentDate <= endDate) {
+                      const dateKey = currentDate.toISOString().split("T")[0]
+                      if (!dailyWorkloads[dateKey]) {
+                        dailyWorkloads[dateKey] = 0
+                      }
+                      dailyWorkloads[dateKey] += loading.rate || 1
+                      currentDate.setDate(currentDate.getDate() + 1)
+                    }
+                  })
+
+                  return {
+                    ...employee,
+                    loadings: updatedLoadings,
+                    dailyWorkloads,
+                    hasLoadings: updatedLoadings.length > 0,
+                    loadingsCount: updatedLoadings.length,
+                  }
+                }),
               })),
             }))
 
@@ -1021,16 +1387,42 @@ export const usePlanningStore = create<PlanningState>()(
               departments: updatedDepartments,
             })
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при архивировании загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+            console.log("✅ Загрузка успешно заархивирована и UI обновлен:", {
+              loadingId,
+              sectionsUpdated: updatedSections.length,
+              departmentsUpdated: updatedDepartments.length
+            })
+
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'archive_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Восстановление загрузки из архива
         restoreLoading: async (loadingId: string) => {
-          try {
+          return Sentry.startSpan(
+            {
+              op: "store.action", 
+              name: "Восстановление загрузки из архива",
+            },
+            async (span) => {
+              try {
+                span.setAttribute("loading_id", loadingId)
             // Вызываем API
             const result = await restoreLoadingAPI(loadingId)
 
@@ -1044,11 +1436,28 @@ export const usePlanningStore = create<PlanningState>()(
               await get().fetchDepartments()
             }
 
-            return { success: true }
-          } catch (error) {
-            console.error("Ошибка при восстановлении загрузки:", error)
-            return { success: false, error: "Произошла неожиданная ошибка" }
-          }
+            console.log("✅ Загрузка успешно восстановлена и UI обновлен:", {
+              loadingId
+            })
+
+                return { success: true }
+              } catch (error) {
+                span.setAttribute("db.success", false)
+                Sentry.captureException(error, {
+                  tags: { 
+                    module: 'planning', 
+                    action: 'restore_loading',
+                    store: 'usePlanningStore'
+                  },
+                  extra: {
+                    loading_id: loadingId,
+                    timestamp: new Date().toISOString()
+                  }
+                })
+                return { success: false, error: "Произошла неожиданная ошибка" }
+              }
+            }
+          )
         },
 
         // Получение архивных загрузок
@@ -1072,7 +1481,18 @@ export const usePlanningStore = create<PlanningState>()(
 
             return loadings
           } catch (error) {
-            console.error("Ошибка при загрузке архивных загрузок:", error)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_archived_loadings',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                section_id: sectionId,
+                employee_id: employeeId,
+                timestamp: new Date().toISOString()
+              }
+            })
             return []
           }
         },

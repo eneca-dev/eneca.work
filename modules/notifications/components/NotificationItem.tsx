@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useCallback } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
@@ -10,6 +11,7 @@ import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
+import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 
 interface NotificationItemProps {
@@ -49,6 +51,10 @@ const notificationTags = {
     text: "Передача заданий",
     color: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200",
   },
+  section_comment: {
+    text: "Комментарий",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200",
+  },
 }
 
 // Функция для получения тега уведомления
@@ -73,8 +79,14 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
     ? notification.payload?.from_section
     : null
 
+  // Получаем имя автора комментария из payload для комментариев
+  const commentAuthor = (notification.entityType === 'section_comment') 
+    ? notification.payload?.section_comment?.author_name 
+    : null
+
   const { markAsRead, markAsReadInDB } = useNotificationsStore()
   const { highlightAnnouncement } = useAnnouncementsStore()
+  const { highlightSection } = useProjectsStore()
 
   // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
@@ -82,19 +94,88 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
-    // Если это уведомление об объявлении, переходим к нему
-    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
-      const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Notification Item Click",
+      },
+      (span) => {
+        try {
+          span.setAttribute("notification.id", notification.id)
+          span.setAttribute("notification.entity_type", notification.entityType || "unknown")
+          span.setAttribute("notification.is_read", notification.isRead)
+          span.setAttribute("notification.type", notification.type || "info")
+          
+          // Если это уведомление об объявлении, переходим к нему
+          if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+            const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
+            
+            span.setAttribute("announcement.id", announcementId || "not_found")
+            span.setAttribute("navigation.target", "dashboard")
+            
+            if (announcementId) {
+              // Выделяем объявление в store
+              highlightAnnouncement(announcementId)
+              
+              // Переходим на страницу dashboard
+              router.push('/dashboard')
+              
+              span.setAttribute("click.success", true)
+              
+              Sentry.addBreadcrumb({
+                message: 'Navigated to announcement from notification',
+                category: 'notifications',
+                level: 'info',
+                data: {
+                  notification_id: notification.id,
+                  announcement_id: announcementId,
+                  entity_type: notification.entityType
+                }
+              })
+            } else {
+              span.setAttribute("click.success", false)
+              span.setAttribute("click.error", "announcement_id_not_found")
+              console.warn('Не найден ID объявления в уведомлении:', notification)
+            }
+          } else {
+            span.setAttribute("click.skipped", true)
+            span.setAttribute("click.skip_reason", "unsupported_entity_type")
+          }
+        } catch (error) {
+          span.setAttribute("click.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              component: 'NotificationItem',
+              action: 'handle_click',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              notification_id: notification.id,
+              notification_entity_type: notification.entityType,
+              notification_is_read: notification.isRead,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка при клике на уведомление:', error)
+        }
+      }
+    );
+    
+    // Если это уведомление о комментарии, подсвечиваем раздел
+    if (notification.entityType === 'section_comment') {
+      const sectionId = notification.payload?.section_comment?.section_id
       
-      if (announcementId) {
-        // Выделяем объявление в store
-        highlightAnnouncement(announcementId)
+      if (sectionId) {
+        // Подсвечиваем раздел (всегда открывает комментарии)
+        highlightSection(sectionId)
         
-        // Переходим на страницу dashboard
-        router.push('/dashboard')
+        // Переходим на страницу проектов (чистый URL!)
+        router.push('/dashboard/projects')
       }
     }
-  }, [notification, highlightAnnouncement, router])
+  }, [notification, highlightAnnouncement, router, highlightSection])
 
   return (
     <div
@@ -147,6 +228,11 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
             {fromSection && (
               <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
                 из {fromSection}
+              </p>
+            )}
+            {commentAuthor && (
+              <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+                 {commentAuthor}
               </p>
             )}
           </div>

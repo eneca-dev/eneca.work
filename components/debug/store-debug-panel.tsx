@@ -169,7 +169,7 @@ export function StoreDebugPanel() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-500 dark:text-gray-400">Уведомление:</p>
-                        <p className="truncate">{uiState.notification || "Нет активных уведомлений"}</p>
+                        <p className="truncate">{typeof uiState.notification === 'string' ? uiState.notification : JSON.stringify(uiState.notification) || "Нет активных уведомлений"}</p>
                       </div>
                     </div>
                     

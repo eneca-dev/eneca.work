@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useMemo } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Label } from "@/modules/calendar/components/ui/label"
 import { Input } from "@/modules/calendar/components/ui/input"
@@ -23,6 +24,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { isWeekend } from "@/modules/calendar/utils"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface UnifiedWorkScheduleFormProps {
   onClose: () => void
@@ -37,14 +39,13 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const isAuthenticated = userStore.isAuthenticated
   
   // Проверяем права - ОПТИМИЗИРОВАННО  
+  const { hasPermission } = usePermissions()
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
-    const hasWorkSchedule = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_view_and_edit_work_schedule")
+    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
+    const hasWorkSchedule = hasPermission("calendar.admin") || hasPermission("calendar.edit.work_schedule")
     
     return { hasGlobalEvents, hasWorkSchedule }
-  }, [userStore])
+  }, [hasPermission])
 
   const [activeTab, setActiveTab] = useState("dayoff")
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
@@ -83,14 +84,14 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const submitPersonalEvent = async () => {
     if (!dateRange.from || !currentUserId) return
 
-    let eventType: "Отгул" | "Отпуск" | "Больничный"
+    let eventType: "Отгул" | "Отпуск запрошен" | "Больничный"
 
     switch (activeTab) {
       case "dayoff":
         eventType = "Отгул"
         break
       case "vacation":
-        eventType = "Отпуск"
+        eventType = "Отпуск запрошен"
         break
       case "sick":
         eventType = "Больничный"
@@ -159,25 +160,73 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const submitEvent = async () => {
     if (!isAuthenticated || !currentUserId) return
 
-    setIsSubmitting(true)
+    return Sentry.startSpan(
+      {
+        op: "ui.form.submit",
+        name: "Submit Work Schedule Form",
+      },
+      async (span) => {
+        setIsSubmitting(true)
 
-    try {
-      // Определяем тип события и вызываем соответствующую функцию
-      if (activeTab === "transfer" && permissions.hasGlobalEvents) {
-        await submitTransferEvent()
-      } else if (activeTab === "holiday" && permissions.hasGlobalEvents) {
-        await submitHolidayEvent()
-      } else {
-        await submitPersonalEvent()
+        try {
+          span.setAttribute("user.id", currentUserId)
+          span.setAttribute("form.tab", activeTab)
+          span.setAttribute("user.has_global_permissions", permissions.hasGlobalEvents)
+          span.setAttribute("user.has_schedule_permissions", permissions.hasWorkSchedule)
+
+          // Определяем тип события и вызываем соответствующую функцию
+          if (activeTab === "transfer" && permissions.hasGlobalEvents) {
+            span.setAttribute("event.type", "transfer")
+            await submitTransferEvent()
+          } else if (activeTab === "holiday" && permissions.hasGlobalEvents) {
+            span.setAttribute("event.type", "holiday")
+            await submitHolidayEvent()
+          } else {
+            span.setAttribute("event.type", "personal")
+            span.setAttribute("event.personal_type", activeTab)
+            await submitPersonalEvent()
+          }
+
+          span.setAttribute("submit.success", true)
+
+          Sentry.addBreadcrumb({
+            message: 'Work schedule form submitted successfully',
+            category: 'calendar',
+            level: 'info',
+            data: {
+              component: 'UnifiedWorkScheduleForm',
+              user_id: currentUserId,
+              tab: activeTab,
+              has_global_permissions: permissions.hasGlobalEvents
+            }
+          })
+
+          onClose()
+        } catch (error) {
+          span.setAttribute("submit.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'calendar',
+              component: 'UnifiedWorkScheduleForm',
+              action: 'submit_work_schedule',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              user_id: currentUserId,
+              tab: activeTab,
+              has_global_permissions: permissions.hasGlobalEvents,
+              has_schedule_permissions: permissions.hasWorkSchedule,
+              timestamp: new Date().toISOString()
+            }
+          })
+          // Ошибка уже обрабатывается в createEvent
+        } finally {
+          setIsSubmitting(false)
+          setShowConfirmation(false)
+        }
       }
-
-      onClose()
-    } catch (error) {
-      // Ошибка уже обрабатывается в createEvent
-    } finally {
-      setIsSubmitting(false)
-      setShowConfirmation(false)
-    }
+    )
   }
 
   const handleConfirm = async () => {
@@ -369,7 +418,10 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             Отмена
           </Button>
           <Button type="submit" disabled={isSubmitting || !isFormValid()}>
-            {isSubmitting ? "Добавление..." : "Добавить"}
+            {isSubmitting 
+              ? (activeTab === "vacation" ? "Запрашиваем..." : "Добавление...")
+              : (activeTab === "vacation" ? "Запросить отпуск" : "Добавить")
+            }
           </Button>
         </div>
       </form>

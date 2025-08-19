@@ -523,8 +523,7 @@ export function markdownToHtml(text: string): string {
 /**
  * Нормализует HTML из contentEditable, удаляя лишние стили
  */
-function normalizeContentEditableHTML(html: string): string {
-  console.log('Normalizing HTML:', html)
+export function normalizeContentEditableHTML(html: string): string {
   
   // Создаем временный элемент для обработки
   const tempDiv = document.createElement('div')
@@ -633,17 +632,16 @@ function normalizeContentEditableHTML(html: string): string {
   }
   
   const normalized = tempDiv.innerHTML
-  console.log('Normalized HTML:', normalized)
   return normalized
 }
 
 /**
  * Конвертирует HTML обратно в markdown
  */
-export function htmlToMarkdown(html: string): string {
-  
-  // Сначала нормализуем HTML, удаляя лишние стили
-  const normalizedHtml = normalizeContentEditableHTML(html)
+export function htmlToMarkdown(html: string, options?: { normalize?: boolean }): string {
+  // По умолчанию НЕ нормализуем во время набора текста
+  const shouldNormalize = Boolean(options?.normalize)
+  const normalizedHtml = shouldNormalize ? normalizeContentEditableHTML(html) : html
   
   // Создаем временный элемент для парсинга
   const tempDiv = document.createElement('div')

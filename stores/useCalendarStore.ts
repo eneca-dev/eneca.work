@@ -4,7 +4,7 @@ import { toast } from "sonner"
 
 export interface CalendarEvent {
   calendar_event_id: string
-  calendar_event_type: "Отгул" | "Больничный" | "Перенос" | "Отпуск" | "Праздник" | "Событие"
+  calendar_event_type: "Отгул" | "Больничный" | "Перенос" | "Отпуск запрошен" | "Отпуск одобрен" | "Отпуск отклонен" | "Праздник" | "Событие"
   calendar_event_comment?: string
   calendar_event_is_global: boolean
   calendar_event_is_weekday: boolean | null

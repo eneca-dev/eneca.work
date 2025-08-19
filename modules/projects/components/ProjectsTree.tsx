@@ -1,7 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Expand, Minimize, List, Search, Calendar } from 'lucide-react'
+import * as Sentry from '@sentry/nextjs'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
@@ -13,16 +16,26 @@ import { CreateStageModal } from './CreateStageModal'
 import { EditObjectModal } from './EditObjectModal'
 import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
+import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
+import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import SectionDecompositionTab from './SectionDecompositionTab'
+import SectionTasksPreview from './SectionTasksPreview'
+import SectionDescriptionCompact from './SectionDescriptionCompact'
+import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
 interface ProjectNode {
   id: string
   name: string
-  type: 'manager' | 'project' | 'stage' | 'object' | 'section'
+  type: 'manager' | 'project' | 'stage' | 'object' | 'section' | 'client'
   managerId?: string
   projectId?: string
   stageId?: string
   objectId?: string
+  clientId?: string
   children?: ProjectNode[]
   dates?: {
     start?: string
@@ -33,6 +46,11 @@ interface ProjectNode {
   projectName?: string
   stageName?: string
   departmentName?: string
+  clientName?: string
+  // Поля для статуса секции
+  statusId?: string
+  statusName?: string
+  statusColor?: string
 }
 
 interface ProjectsTreeProps {
@@ -43,6 +61,10 @@ interface ProjectsTreeProps {
   selectedDepartmentId?: string | null
   selectedTeamId?: string | null
   selectedEmployeeId?: string | null
+  selectedStatusIds?: string[]
+  urlSectionId?: string | null
+  urlTab?: 'overview' | 'details' | 'comments'
+  externalSearchQuery?: string
 }
 
 interface TreeNodeProps {
@@ -58,6 +80,9 @@ interface TreeNodeProps {
   onCreateStage: (project: ProjectNode, e: React.MouseEvent) => void
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
+  onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenStatusManagement: () => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 const supabase = createClient()
@@ -75,12 +100,96 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenSection,
   onCreateStage,
   onCreateObject,
-  onCreateSection
+  onCreateSection,
+  onDeleteProject,
+  onOpenStatusManagement,
+  statuses
 }) => {
+  const { assignments } = useTaskTransferStore()
+  const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
+  const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
   const [hoveredResponsible, setHoveredResponsible] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const statusDropdownRef = React.useRef<HTMLDivElement>(null)
+
+  // Разворачиваемое содержимое для раздела
+  const [innerTab, setInnerTab] = useState<'decomposition' | 'tasks'>('decomposition')
+  const [miniDecomp, setMiniDecomp] = useState<Array<{ id: string; desc: string; catId: string; hours: number; due: string | null }>>([])
+  const [miniDecompLoading, setMiniDecompLoading] = useState(false)
+  const [catMap, setCatMap] = useState<Map<string, string>>(new Map())
+  // Мобильный режим: переключатель между контентом и комментариями
+  const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
+  const [sectionTotals, setSectionTotals] = useState<{ planned: number; actual: number } | null>(null)
+  const [sectionDue, setSectionDue] = useState<string | null>(null)
+
+  const loadMiniDecomposition = async () => {
+    try {
+      setMiniDecompLoading(true)
+      const [itemsRes, catsRes] = await Promise.all([
+        supabase
+          .from('decomposition_items')
+          .select('decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date')
+          .eq('decomposition_item_section_id', node.id)
+          .order('decomposition_item_order', { ascending: true }),
+        supabase
+          .from('work_categories')
+          .select('work_category_id, work_category_name')
+      ])
+      let plannedSum = 0
+      if (!itemsRes.error && itemsRes.data) {
+        const mapped = itemsRes.data.map((r: any) => ({
+          id: r.decomposition_item_id,
+          desc: r.decomposition_item_description,
+          catId: r.decomposition_item_work_category_id,
+          hours: Number(r.decomposition_item_planned_hours || 0),
+          due: r.decomposition_item_planned_due_date,
+        }))
+        plannedSum = mapped.reduce((acc, i) => acc + (i.hours || 0), 0)
+        setMiniDecomp(mapped)
+      }
+      if (!catsRes.error && catsRes.data) {
+        const m = new Map<string, string>()
+        for (const c of catsRes.data as any[]) m.set(c.work_category_id, c.work_category_name)
+        setCatMap(m)
+      }
+      // Дополнительно тянем агрегаты план/факт и крайний срок секции
+      try {
+        const [totals, dates] = await Promise.all([
+          supabase
+            .from('view_section_decomposition_totals')
+            .select('planned_hours, actual_hours')
+            .eq('section_id', node.id)
+            .single(),
+          supabase
+            .from('sections')
+            .select('section_end_date')
+            .eq('section_id', node.id)
+            .single(),
+        ])
+        if (!totals.error && totals.data) {
+          setSectionTotals({
+            planned: plannedSum, // план считаем как сумму из декомпозиции
+            actual: Number(totals.data.actual_hours || 0),
+          })
+        } else {
+          // даже если totals не пришел, сохраним план по декомпозиции
+          setSectionTotals({ planned: plannedSum, actual: 0 })
+        }
+        if (!dates.error && dates.data) {
+          setSectionDue(dates.data.section_end_date || null)
+        }
+      } catch (e) {
+        // не критично
+      }
+    } finally {
+      setMiniDecompLoading(false)
+    }
+  }
 
   const hasChildren = node.children && node.children.length > 0
+
   const isExpanded = expandedNodes.has(node.id)
 
   const getNodeIcon = (type: string, nodeName?: string) => {
@@ -89,13 +198,20 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       return <User className="h-4 w-4 text-gray-500" />
     }
     
+    // Специальная иконка для категории "Без заказчика"
+    if (type === 'client' && nodeName === 'Без заказчика') {
+      return <Building className="h-4 w-4 text-gray-500" />
+    }
+    
     switch (type) {
+      case 'client':
+        return <Building className="h-4 w-4 text-indigo-600" />
       case 'manager':
         return <User className="h-4 w-4 text-blue-600" />
       case 'project':
         return <FolderOpen className="h-4 w-4 text-green-600" />
       case 'stage':
-        return <Building className="h-4 w-4 text-purple-600" />
+        return <SquareStack className="h-4 w-4 text-purple-600" />
       case 'object':
         return <Package className="h-4 w-4 text-orange-600" />
       case 'section':
@@ -114,6 +230,44 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       return `${day}.${month}`
     } catch (error) {
       return "-"
+    }
+  }
+
+  const updateSectionStatus = async (statusId: string | null) => {
+    if (node.type !== 'section') return
+    
+    setUpdatingStatus(true)
+    try {
+      const { error } = await supabase
+        .from('sections')
+        .update({ section_status_id: statusId })
+        .eq('section_id', node.id)
+
+      if (error) throw error
+
+      // Обновляем локальные данные узла
+      const updatedStatus = statuses.find(s => s.id === statusId)
+      node.statusId = statusId || undefined
+      node.statusName = updatedStatus?.name || undefined
+      node.statusColor = updatedStatus?.color || undefined
+
+      // Создаем событие для уведомления других компонентов об изменении
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sectionPanel:statusUpdated', {
+          detail: {
+            sectionId: node.id,
+            statusId: statusId,
+            statusName: updatedStatus?.name || null,
+            statusColor: updatedStatus?.color || null
+          }
+        }))
+      }
+
+      console.log('Статус обновлен:', statusId ? 'установлен' : 'снят')
+    } catch (error) {
+      console.error('Ошибка обновления статуса:', error)
+    } finally {
+      setUpdatingStatus(false)
     }
   }
 
@@ -199,31 +353,86 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
 
             {/* Иконка раскрытия и название */}
-            <div className="flex items-center" style={{ maxWidth: 'calc(100% - 360px)' }}>
-              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2">
-                {hasChildren ? (
+            <div className="flex items-center min-w-0 flex-1 gap-2">
+              <button
+                className="flex-shrink-0 w-4 h-4 flex items-center justify-center mr-2"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  onToggleNode(node.id)
+                  if (node.type === 'section' && !expandedNodes.has(node.id)) {
+                    await loadMiniDecomposition()
+                  }
+                }}
+                aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
+              >
+                {(node.type === 'section' || hasChildren) ? (
                   isExpanded ? (
                     <ChevronDown className="h-3 w-3 text-teal-500" />
                   ) : (
                     <ChevronRight className="h-3 w-3 text-teal-500" />
                   )
-                ) : (
-                  <div className="h-3 w-3 rounded bg-teal-500" />
-                )}
-              </div>
+                ) : null}
+              </button>
               <span 
-                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors break-words"
+                className="font-semibold text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-teal-600 dark:hover:text-teал-400 transition-colors truncate max-w-[900px] xl:max-w-[1100px]"
                 onClick={(e) => onOpenSection(node, e)}
-                style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+                title={node.name}
               >
                 {node.name}
               </span>
+              {node.type === 'section' && (incomingCount > 0 || outgoingCount > 0) && (
+                <div
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 cursor-default"
+                  title={`Исходящие: ${outgoingCount} • Входящие: ${incomingCount}`}
+                >
+                  <span className="text-primary font-semibold">{outgoingCount}</span>
+                  <span className="opacity-60">/</span>
+                  <span className="text-secondary-foreground font-semibold">{incomingCount}</span>
+                </div>
+              )}
             </div>
 
-            {/* Информация справа с фиксированными ширинами */}
+            {/* Информация справа с адаптивными ширинами */}
             <div className="flex items-center text-xs ml-auto mr-8">
-              {/* Даты - фиксированная ширина */}
-              <div className="flex items-center gap-1 w-24 justify-end">
+              {/* Статус секции - скрывается последним (>= 600px) */}
+              <div className="hidden min-[600px]:flex items-center w-32 justify-end mr-4 relative">
+                {updatingStatus ? (
+                  <div className="flex items-center gap-1 px-2 py-1">
+                    <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                    <span className="text-xs text-gray-500">Обновление...</span>
+                  </div>
+                ) : node.statusName ? (
+                  <div 
+                    className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // управление статусами теперь в верхнем меню
+                    }}
+                    title="Нажмите для изменения статуса"
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: node.statusColor || '#6B7280' }}
+                    />
+                    <span className="text-xs text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      {node.statusName}
+                    </span>
+                  </div>
+                ) : (
+                  <span 
+                    className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
+                    onClick={(e) => { e.stopPropagation() }}
+                    title="Нажмите для назначения статуса"
+                  >
+                    Без статуса
+                  </span>
+                )}
+
+                {/* Выпадающий список статусов удален */}
+              </div>
+              
+              {/* Даты - скрывается третьими (>= 800px) */}
+              <div className="hidden min-[800px]:flex items-center gap-1 w-28 justify-end flex-shrink-0">
                 <Calendar className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 <span className="text-blue-700 dark:text-blue-300">
                   {(node.dates?.start || node.dates?.end) ? (
@@ -238,13 +447,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 </span>
               </div>
 
-              {/* Отдел - фиксированная ширина */}
-              <div className="w-20 flex justify-end ml-4">
+              {/* Отдел - скрывается вторым (>= 1000px) */}
+              <div className="hidden min-[1000px]:flex w-32 justify-end flex-shrink-0 min-w-0">
                 {node.departmentName && (
-                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1">
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded px-2 py-1 max-w-full">
                     <div className="flex items-center gap-1">
                       <User className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate">
+                      <span className="text-xs text-emerald-700 dark:text-emerald-300 truncate max-w-[84px]">
                         {node.departmentName}
                       </span>
                     </div>
@@ -252,8 +461,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 )}
               </div>
 
-              {/* Проект, стадия и ответственный - фиксированная ширина */}
-              <div className="w-36 flex flex-col gap-1 text-right ml-4">
+              {/* Проект, стадия и ответственный - скрывается первым (>= 1200px) */}
+              <div className="hidden min-[1200px]:flex w-36 flex-col gap-1 text-right ml-4">
                 {node.projectName && (
                   <span className="dark:text-slate-500 text-slate-400 truncate">
                     {node.projectName}
@@ -319,6 +528,13 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                   title="Редактировать проект"
                 >
                   <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                </button>
+                <button
+                  onClick={(e) => onDeleteProject(node, e)}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all ml-1"
+                  title="Удалить проект"
+                >
+                  <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
                 </button>
               </div>
             )}
@@ -413,7 +629,140 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         )}
       </div>
 
-      {hasChildren && isExpanded && (
+      {(node.type === 'section' && isExpanded) && (
+        <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
+          {/* Компактный режим: вкладки Контент / Комментарии (до 2xl) */}
+          <div className="2xl:hidden mb-3">
+            <div className="inline-flex h-9 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
+              {[
+                { key: 'content', label: 'Контент' },
+                { key: 'comments', label: 'Комментарии' },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setMobileTab(t.key as 'content' | 'comments')}
+                  className={cn('px-3 py-1.5 text-xs rounded-sm', mobileTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Компактный режим: показываем выбранную вкладку */}
+          {mobileTab === 'content' && (
+            <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
+              {/* Описание сверху, естественная высота + аналитика */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                    <SectionDescriptionCompact sectionId={node.id} />
+                  </div>
+                  {/* Аналитические показатели */}
+                  <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                    {sectionDue && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">Дней до завершения:</span>
+                        <span className="font-semibold tabular-nums">
+                          {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                        </span>
+                      </div>
+                    )}
+                    {sectionTotals && (
+                      <div className="inline-flex items-center gap-2">
+                        <span className="whitespace-nowrap">План/Факт, ч:</span>
+                        <span className="font-semibold tabular-nums">
+                          {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
+                </div>
+              </div>
+            </div>
+          )}
+          {mobileTab === 'comments' && (
+            <div className="2xl:hidden h-[80vh] max-h-[80vh] overflow-hidden">
+              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Полная версия (>=2xl): две колонки, справа комментарии */}
+          <div className="hidden 2xl:flex gap-4 items-stretch">
+            {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
+            <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
+            {/* Описание сверху + аналитика */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
+                  <SectionDescriptionCompact sectionId={node.id} />
+                </div>
+                {/* Аналитические показатели */}
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
+                  {sectionDue && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">Дней до завершения:</span>
+                      <span className="font-semibold tabular-nums">
+                        {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
+                      </span>
+                    </div>
+                  )}
+                  {sectionTotals && (
+                    <div className="inline-flex items-center gap-2">
+                      <span className="whitespace-nowrap">План/Факт, ч:</span>
+                      <span className="font-semibold tabular-nums">
+                        {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+              {/* Блоки ниже: высота по содержимому */}
+              <div className="flex flex-col gap-4">
+                {/* Декомпозиция (верхняя половина) */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <SectionDecompositionTab sectionId={node.id} compact />
+                </div>
+
+                {/* Задания (нижняя половина) */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <SectionTasksPreview sectionId={node.id} />
+                </div>
+              </div>
+            </div>
+
+            {/* Правая колонка: Комментарии на всю высоту блока */}
+            <div className="w-[680px] self-stretch hidden 2xl:block">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col h-[80vh] max-h-[80vh] overflow-hidden">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
+                <div className="flex-1 min-h-0">
+                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasChildren && isExpanded && node.type !== 'section' && (
         <div>
           {node.children!.map((child, index) => (
             <TreeNode
@@ -430,6 +779,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateStage={onCreateStage}
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
+              onDeleteProject={onDeleteProject}
+              onOpenStatusManagement={onOpenStatusManagement}
+              statuses={statuses}
             />
           ))}
         </div>
@@ -445,13 +797,29 @@ export function ProjectsTree({
   selectedObjectId,
   selectedDepartmentId,
   selectedTeamId,
-  selectedEmployeeId
+  selectedEmployeeId,
+  selectedStatusIds = [],
+  urlSectionId,
+  urlTab,
+  externalSearchQuery
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
-  const { expandedNodes, toggleNode: toggleNodeInStore } = useProjectsStore()
+  const { 
+    expandedNodes, 
+    toggleNode: toggleNodeInStore,
+    highlightedSectionId,
+    clearHighlight,
+    showManagers,
+    toggleShowManagers,
+    groupByClient,
+    toggleGroupByClient
+  } = useProjectsStore()
+  const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  // Удалены локальные refs и dropdown для статусов; управление сверху
+  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -469,68 +837,311 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+  
+
+  // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
+
+  // Глобальные события от верхней панели
+  useEffect(() => {
+    const toggleGroup = () => toggleGroupByClient()
+    const toggleManagers = () => toggleShowManagers()
+    const expandAll = () => expandAllNodes()
+    const collapseAll = () => collapseAllNodes()
+    const onlySections = () => setShowOnlySections((v) => !v)
+    const openStatusManagement = () => setShowStatusManagementModal(true)
+
+    window.addEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
+    window.addEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
+    window.addEventListener('projectsTree:expandAll', expandAll as EventListener)
+    window.addEventListener('projectsTree:collapseAll', collapseAll as EventListener)
+    window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+    window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+
+    return () => {
+      window.removeEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
+      window.removeEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
+      window.removeEventListener('projectsTree:expandAll', expandAll as EventListener)
+      window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
+      window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+      window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+    }
+  }, [toggleGroupByClient, toggleShowManagers])
 
   // Загрузка данных
   useEffect(() => {
     loadTreeData()
-  }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+  }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, showManagers, groupByClient])
+
+  // Если приходит внешний поиск из верхней панели — используем его как источник правды
+  useEffect(() => {
+    setSearchQuery(externalSearchQuery ?? '')
+  }, [externalSearchQuery])
+
+  // Функция поиска раздела по ID в дереве
+  const findSectionById = (sectionId: string): ProjectNode | null => {
+    const findInNodes = (nodes: ProjectNode[]): ProjectNode | null => {
+      for (const node of nodes) {
+        if (node.type === 'section' && node.id === sectionId) {
+          return node
+        }
+        if (node.children && node.children.length > 0) {
+          const found = findInNodes(node.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    return findInNodes(treeData)
+  }
+
+  // Слушаем события обновления статуса секции
+  useEffect(() => {
+    const handleSectionStatusUpdate = (event: CustomEvent) => {
+      const { sectionId, statusId, statusName, statusColor } = event.detail
+
+      // Рекурсивно обновляем статус узла в дереве
+      const updateNodeStatus = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.id === sectionId) {
+            return {
+              ...node,
+              statusId: statusId || undefined,
+              statusName: statusName || undefined,
+              statusColor: statusColor || undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateNodeStatus(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => updateNodeStatus(currentTreeData))
+    }
+
+    // Обработчик изменения статуса (обновление названия, цвета, описания)
+    const handleStatusUpdate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusUpdated в ProjectsTree:', { statusId, statusName, statusColor });
+
+      // Рекурсивно обновляем все узлы с этим статусом
+      const updateStatusInNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusName: statusName,
+              statusColor: statusColor
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateStatusInNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => {
+        const updatedData = updateStatusInNodes(currentTreeData)
+        console.log('🔄 Обновили статус в дереве:', updatedData);
+        return updatedData
+      })
+      
+      // Убираем полную перезагрузку - достаточно обновить статусы в памяти
+    }
+
+    // Обработчик создания нового статуса
+    const handleStatusCreate = (event: CustomEvent) => {
+      const { statusId, statusName, statusColor } = event.detail
+      console.log('📥 Получили событие statusCreated в ProjectsTree:', { statusId, statusName, statusColor });
+      
+      // При создании нового статуса просто обновляем статусы в useSectionStatuses
+      // Никаких изменений в существующих узлах не требуется
+      console.log('✅ Новый статус создан, список статусов обновится автоматически');
+    }
+
+    // Обработчик удаления статуса
+    const handleStatusDelete = (event: CustomEvent) => {
+      const { statusId } = event.detail
+
+      // Рекурсивно убираем удаленный статус у всех узлов
+      const removeStatusFromNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'section' && node.statusId === statusId) {
+            return {
+              ...node,
+              statusId: undefined,
+              statusName: undefined,
+              statusColor: undefined
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: removeStatusFromNodes(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => removeStatusFromNodes(currentTreeData))
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sectionPanel:statusUpdated', handleSectionStatusUpdate as EventListener)
+      window.addEventListener('statusCreated', handleStatusCreate as EventListener)
+      window.addEventListener('statusUpdated', handleStatusUpdate as EventListener)
+      window.addEventListener('statusDeleted', handleStatusDelete as EventListener)
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('sectionPanel:statusUpdated', handleSectionStatusUpdate as EventListener)
+        window.removeEventListener('statusCreated', handleStatusCreate as EventListener)
+        window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
+        window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
+      }
+    }
+  }, [])
+
+  // Обработка подсвеченного раздела для навигации к комментариям
+  useEffect(() => {
+    if (!loading && highlightedSectionId && treeData.length > 0) {
+      console.log('🎯 Открываем раздел с комментариями:', highlightedSectionId)
+      
+      const section = findSectionById(highlightedSectionId)
+      if (section) {
+        console.log('✅ Найден раздел:', section)
+        setSelectedSectionForPanel(section)
+        setShowSectionPanel(true)
+        
+        // Очищаем подсветку через 3 секунды
+        setTimeout(() => {
+          clearHighlight()
+        }, 3000)
+      } else {
+        console.warn('⚠️ Раздел не найден:', highlightedSectionId)
+      }
+    }
+  }, [loading, highlightedSectionId, treeData, clearHighlight])
+
+  // Обработка URL параметров для прямой навигации к разделу (fallback)
+  useEffect(() => {
+    if (!loading && urlSectionId && urlTab && treeData.length > 0 && !highlightedSectionId) {
+      console.log('🎯 Обрабатываем URL навигацию (fallback):', { urlSectionId, urlTab })
+      
+      const section = findSectionById(urlSectionId)
+      if (section) {
+        console.log('✅ Найден раздел по URL:', section)
+        setSelectedSectionForPanel(section)
+        setShowSectionPanel(true)
+      } else {
+        console.warn('⚠️ Раздел не найден по URL:', urlSectionId)
+      }
+    }
+  }, [loading, urlSectionId, urlTab, treeData, highlightedSectionId])
 
   const loadTreeData = async () => {
-    console.log('🌳 Загружаю данные дерева проектов...')
-    console.log('🔍 Фильтры:', { 
-      selectedManagerId, 
-      selectedProjectId, 
-      selectedStageId, 
-      selectedObjectId,
-      selectedDepartmentId,
-      selectedTeamId,
-      selectedEmployeeId
-    })
-    setLoading(true)
-    try {
-      // Используем новое представление view_project_tree
-      let query = supabase
-        .from('view_project_tree')
-        .select('*')
+    return Sentry.startSpan(
+      {
+        op: "projects.load_tree_data",
+        name: "Load Projects Tree Data",
+      },
+      async (span: any) => {
+        console.log('🌳 Загружаю данные дерева проектов...')
+        console.log('🔍 Фильтры:', { 
+          selectedManagerId, 
+          selectedProjectId, 
+          selectedStageId, 
+          selectedObjectId,
+          selectedDepartmentId,
+          selectedTeamId,
+          selectedEmployeeId
+        })
+        
+        span.setAttribute("filters.manager_id", selectedManagerId || "none")
+        span.setAttribute("filters.project_id", selectedProjectId || "none")
+        span.setAttribute("filters.stage_id", selectedStageId || "none")
+        span.setAttribute("filters.object_id", selectedObjectId || "none")
+        span.setAttribute("filters.department_id", selectedDepartmentId || "none")
+        span.setAttribute("filters.team_id", selectedTeamId || "none")
+        span.setAttribute("filters.employee_id", selectedEmployeeId || "none")
+        
+        setLoading(true)
+        try {
+          // Используем новое представление view_project_tree
+          let query = supabase
+            .from('view_project_tree')
+            .select('*')
 
-      // Применяем фильтры по проектной иерархии
-      if (selectedManagerId && selectedManagerId !== 'no-manager') {
-        query = query.eq('manager_id', selectedManagerId)
-      } else if (selectedManagerId === 'no-manager') {
-        query = query.is('manager_id', null)
-      }
-      if (selectedProjectId) {
-        query = query.eq('project_id', selectedProjectId)
-      }
-      if (selectedStageId) {
-        query = query.eq('stage_id', selectedStageId)
-      }
-      if (selectedObjectId) {
-        query = query.eq('object_id', selectedObjectId)
-      }
+          // Применяем фильтры по проектной иерархии
+          if (selectedManagerId && selectedManagerId !== 'no-manager') {
+            query = query.eq('manager_id', selectedManagerId)
+          } else if (selectedManagerId === 'no-manager') {
+            query = query.is('manager_id', null)
+          }
+          if (selectedProjectId) {
+            query = query.eq('project_id', selectedProjectId)
+          }
+          if (selectedStageId) {
+            query = query.eq('stage_id', selectedStageId)
+          }
+          if (selectedObjectId) {
+            query = query.eq('object_id', selectedObjectId)
+          }
 
-      // Применяем фильтры по ответственным (отделы, команды, сотрудники)
-      if (selectedDepartmentId) {
-        query = query.eq('responsible_department_id', selectedDepartmentId)
-      }
-      if (selectedTeamId) {
-        query = query.eq('responsible_team_id', selectedTeamId)
-      }
-      if (selectedEmployeeId) {
-        query = query.eq('section_responsible_id', selectedEmployeeId)
-      }
+          // Применяем фильтры по ответственным (отделы, команды, сотрудники)
+          if (selectedDepartmentId) {
+            query = query.eq('responsible_department_id', selectedDepartmentId)
+          }
+          if (selectedTeamId) {
+            query = query.eq('responsible_team_id', selectedTeamId)
+          }
+          if (selectedEmployeeId) {
+            query = query.eq('section_responsible_id', selectedEmployeeId)
+          }
 
-      const { data, error } = await query
+          const { data, error } = await query
 
-      if (error) {
-        console.error('❌ Error loading tree data:', error)
-        return
-      }
+          if (error) {
+            span.setAttribute("load.success", false)
+            span.setAttribute("load.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'load_tree_data',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'ProjectsTree',
+                filters: {
+                  manager_id: selectedManagerId,
+                  project_id: selectedProjectId,
+                  stage_id: selectedStageId,
+                  object_id: selectedObjectId,
+                  department_id: selectedDepartmentId,
+                  team_id: selectedTeamId,
+                  employee_id: selectedEmployeeId
+                },
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('❌ Error loading tree data:', error)
+            return
+          }
 
-      console.log('📊 Данные из view_project_tree с фильтрацией:', data)
+          console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
       // Преобразуем данные в иерархическую структуру
-      const tree = buildTreeStructureFromProjectTree(data || [])
+      const tree = buildTreeStructureFromProjectTree(data || [], showManagers, groupByClient)
       console.log('🌳 Построенное дерево:', tree)
       setTreeData(tree)
     } catch (error) {
@@ -538,9 +1149,12 @@ export function ProjectsTree({
     } finally {
       setLoading(false)
     }
+    }
+    );
   }
 
-  const buildTreeStructureFromProjectTree = (data: any[]): ProjectNode[] => {
+  const buildTreeStructureFromProjectTree = (data: any[], showManagers: boolean, groupByClient: boolean): ProjectNode[] => {
+    const clients = new Map<string, ProjectNode>()
     const managers = new Map<string, ProjectNode>()
     const projects = new Map<string, ProjectNode>()
     const stages = new Map<string, ProjectNode>()
@@ -555,9 +1169,31 @@ export function ProjectsTree({
       children: []
     }
 
+    // Создаем специальную категорию для проектов без заказчика
+    const NO_CLIENT_ID = 'no-client'
+    const noClientCategory: ProjectNode = {
+      id: NO_CLIENT_ID,
+      name: 'Без заказчика',
+      type: 'client',
+      children: []
+    }
+
     // Обрабатываем все записи из view_project_tree
     data.forEach(row => {
-      // 1. Менеджеры
+      // 1. Заказчики (если включена группировка по заказчикам)
+      const clientId = row.client_id || NO_CLIENT_ID
+      if (groupByClient) {
+        if (row.client_id && !clients.has(row.client_id)) {
+          clients.set(row.client_id, {
+            id: row.client_id,
+            name: row.client_name || 'Неизвестный заказчик',
+            type: 'client',
+            children: []
+          })
+        }
+      }
+
+      // 2. Менеджеры
       const managerId = row.manager_id || NO_MANAGER_ID
       if (row.manager_id && !managers.has(row.manager_id)) {
         managers.set(row.manager_id, {
@@ -568,18 +1204,19 @@ export function ProjectsTree({
         })
       }
 
-      // 2. Проекты
+      // 3. Проекты
       if (!projects.has(row.project_id)) {
         projects.set(row.project_id, {
           id: row.project_id,
           name: row.project_name,
           type: 'project',
           managerId: managerId,
+          clientId: clientId,
           children: []
         })
       }
 
-      // 3. Стадии
+      // 4. Стадии
       if (row.stage_id && !stages.has(row.stage_id)) {
         stages.set(row.stage_id, {
           id: row.stage_id,
@@ -590,7 +1227,7 @@ export function ProjectsTree({
         })
       }
 
-      // 4. Объекты
+      // 5. Объекты
       if (row.object_id && !objects.has(row.object_id)) {
         objects.set(row.object_id, {
           id: row.object_id,
@@ -602,7 +1239,7 @@ export function ProjectsTree({
         })
       }
 
-      // 5. Разделы
+      // 6. Разделы
       if (row.section_id) {
         const section: ProjectNode = {
           id: row.section_id,
@@ -617,7 +1254,11 @@ export function ProjectsTree({
           responsibleAvatarUrl: row.section_responsible_avatar,
           projectName: row.project_name,
           stageName: row.stage_name,
-          departmentName: row.responsible_department_name
+          departmentName: row.responsible_department_name,
+          // Поля статуса секции
+          statusId: row.section_status_id,
+          statusName: row.section_status_name,
+          statusColor: row.section_status_color
         }
 
         // Добавляем раздел к объекту
@@ -639,18 +1280,6 @@ export function ProjectsTree({
     stages.forEach(stage => {
       if (stage.projectId && projects.has(stage.projectId)) {
         projects.get(stage.projectId)!.children!.push(stage)
-      }
-    })
-
-    // Добавляем проекты к менеджерам
-    let hasProjectsWithoutManager = false
-
-    projects.forEach(project => {
-      if (project.managerId === NO_MANAGER_ID) {
-        noManagerCategory.children!.push(project)
-        hasProjectsWithoutManager = true
-      } else if (project.managerId && managers.has(project.managerId)) {
-        managers.get(project.managerId)!.children!.push(project)
       }
     })
 
@@ -687,16 +1316,60 @@ export function ProjectsTree({
         }))
     }
 
-    // Собираем результат
-    const result = Array.from(managers.values())
-    
-    // Добавляем категорию "Руководитель проекта не назначен" в начало списка, если есть такие проекты
-    if (hasProjectsWithoutManager) {
-      result.unshift(noManagerCategory)
-    }
+    // Строим иерархию в зависимости от настроек группировки
+    if (groupByClient) {
+      // Группировка по заказчикам
+      let hasProjectsWithoutClient = false
 
-    // Применяем сортировку ко всему дереву
-    return sortTreeRecursively(result)
+      // Добавляем проекты к заказчикам
+      projects.forEach(project => {
+        if (project.clientId === NO_CLIENT_ID) {
+          noClientCategory.children!.push(project)
+          hasProjectsWithoutClient = true
+        } else if (project.clientId && clients.has(project.clientId)) {
+          clients.get(project.clientId)!.children!.push(project)
+        }
+      })
+
+      const result = Array.from(clients.values())
+      
+      // Добавляем категорию "Без заказчика" в конец списка, если есть такие проекты
+      if (hasProjectsWithoutClient) {
+        result.push(noClientCategory)
+      }
+
+      return sortTreeRecursively(result)
+    } else {
+      // Обычная группировка по менеджерам или без группировки
+      let hasProjectsWithoutManager = false
+
+      // Добавляем проекты к менеджерам
+      projects.forEach(project => {
+        if (project.managerId === NO_MANAGER_ID) {
+          noManagerCategory.children!.push(project)
+          hasProjectsWithoutManager = true
+        } else if (project.managerId && managers.has(project.managerId)) {
+          managers.get(project.managerId)!.children!.push(project)
+        }
+      })
+
+      // Собираем результат в зависимости от showManagers
+      if (!showManagers) {
+        // Если не показываем менеджеров, возвращаем проекты напрямую
+        const allProjects = Array.from(projects.values())
+        return sortTreeRecursively(allProjects)
+      }
+
+      // Если показываем менеджеров, строим полную иерархию
+      const result = Array.from(managers.values())
+      
+      // Добавляем категорию "Руководитель проекта не назначен" в начало списка, если есть такие проекты
+      if (hasProjectsWithoutManager) {
+        result.unshift(noManagerCategory)
+      }
+
+      return sortTreeRecursively(result)
+    }
   }
 
   const toggleNode = (nodeId: string) => {
@@ -784,11 +1457,53 @@ export function ProjectsTree({
     return filterRecursive(nodes)
   }
 
+  // Фильтрация по статусам (снизу вверх)
+  const filterNodesByStatus = (nodes: ProjectNode[], statusIds: string[]): ProjectNode[] => {
+    if (!statusIds || statusIds.length === 0) {
+      return nodes // Если статусы не выбраны, возвращаем все узлы
+    }
+
+    const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+      const filtered: ProjectNode[] = []
+
+      for (const node of nodeList) {
+        let shouldInclude = false
+        let filteredChildren: ProjectNode[] = []
+
+        // Если это раздел, проверяем его статус
+        if (node.type === 'section') {
+          shouldInclude = node.statusId ? statusIds.includes(node.statusId) : false
+        } else {
+          // Для остальных типов узлов фильтруем детей
+          if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+        }
+
+        // Включаем узел если он подходит по критериям
+        if (shouldInclude) {
+          filtered.push({
+            ...node,
+            children: node.type === 'section' ? node.children : filteredChildren
+          })
+        }
+      }
+
+      return filtered
+    }
+
+    return filterRecursive(nodes)
+  }
+
   // Фильтрация данных для отображения только разделов и применение поиска
   const getFilteredTreeData = (): ProjectNode[] => {
     let data = treeData
 
-    // Сначала применяем фильтр "только разделы"
+    // Сначала применяем фильтр по статусам
+    data = filterNodesByStatus(data, selectedStatusIds)
+
+    // Затем применяем фильтр "только разделы"
     if (showOnlySections) {
       const sections: ProjectNode[] = []
       
@@ -867,15 +1582,10 @@ export function ProjectsTree({
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
-        <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
-          <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">
-            Структура проектов
-          </h3>
-        </div>
+      <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
         <div className="p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
-          <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Загрузка структуры проектов...</p>
+          <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Загрузка...</p>
         </div>
       </div>
     )
@@ -884,68 +1594,8 @@ export function ProjectsTree({
   const filteredData = getFilteredTreeData();
 
   return (
-    <>
-      <div className="bg-white dark:bg-slate-900 rounded-lg border dark:border-slate-700 border-slate-200 overflow-hidden">
-        <div className="p-4 border-b dark:border-slate-700 border-slate-200 bg-slate-50 dark:bg-slate-800">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold dark:text-slate-200 text-slate-800">
-              Структура проектов
-            </h3>
-            <div className="flex items-center gap-3">
-              {/* Поиск по структуре */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Поиск по структуре..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-sm border rounded-md w-64 bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                />
-                <Search 
-                  size={16} 
-                  className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleOnlySections}
-                  title={showOnlySections ? "Показать всю структуру" : "Только разделы"}
-                  className={cn(
-                    "flex items-center justify-center p-2 rounded-md h-8 w-8 transition-colors",
-                    showOnlySections
-                      ? "bg-purple-500/20 text-purple-600 hover:bg-purple-500/30 dark:bg-purple-500/30 dark:text-purple-400 dark:hover:bg-purple-500/40"
-                      : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
-                  )}
-                >
-                  <List size={14} />
-                </button>
-                <button
-                  onClick={expandAllNodes}
-                  title="Развернуть все"
-                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30 transition-colors"
-                >
-                  <Expand size={14} />
-                </button>
-                <button
-                  onClick={collapseAllNodes}
-                  title="Свернуть все"
-                  className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30 transition-colors"
-                >
-                  <Minimize size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+    <TooltipProvider>
+      <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
         <div>
           {filteredData.length === 0 ? (
             <div className="p-8 text-center">
@@ -971,6 +1621,9 @@ export function ProjectsTree({
                 onCreateStage={handleCreateStage}
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
+                onDeleteProject={handleDeleteProject}
+                onOpenStatusManagement={() => setShowStatusManagementModal(true)}
+                statuses={statuses || []}
               />
             ))
           )}
@@ -997,6 +1650,24 @@ export function ProjectsTree({
           projectId={selectedProject.id}
           onProjectUpdated={() => {
             loadTreeData() // Перезагружаем данные после обновления
+          }}
+        />
+      )}
+
+      {/* Модальное окно удаления проекта */}
+      {showDeleteModal && selectedProject && (
+        <DeleteProjectModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false)
+            setSelectedProject(null)
+          }}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
+          onSuccess={() => {
+            setShowDeleteModal(false)
+            setSelectedProject(null)
+            loadTreeData() // Перезагружаем данные после удаления проекта
           }}
         />
       )}
@@ -1040,6 +1711,7 @@ export function ProjectsTree({
             setSelectedSectionForPanel(null)
           }}
           sectionId={selectedSectionForPanel.id}
+          initialTab={highlightedSectionId ? 'comments' : (urlTab || 'overview')}
         />
       )}
 
@@ -1092,6 +1764,12 @@ export function ProjectsTree({
         />
       )}
 
-    </>
+      {/* Модальное окно управления статусами */}
+      <StatusManagementModal
+        isOpen={showStatusManagementModal}
+        onClose={() => setShowStatusManagementModal(false)}
+      />
+
+    </TooltipProvider>
   )
 } 

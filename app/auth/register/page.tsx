@@ -6,7 +6,8 @@ import { useState } from "react"
 import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/utils/supabase/client"
+// import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -16,45 +17,214 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const router = useRouter()
-  const supabase = createClient()
+  // const supabase = createClient()
+
+  // Функция для получения понятного сообщения об ошибке
+  const getErrorMessage = (error: any): string => {
+    if (!error?.message) return "Произошла неизвестная ошибка"
+    
+    const message = error.message.toLowerCase()
+    
+    // Проверка различных типов ошибок
+    if (message.includes('user already registered')) {
+      return "Пользователь с таким email уже зарегистрирован. Попробуйте войти в систему или восстановить пароль."
+    }
+    
+    if (message.includes('invalid email')) {
+      return "Указан некорректный email адрес. Проверьте правильность ввода."
+    }
+    
+    if (message.includes('password should be at least')) {
+      return "Пароль должен содержать минимум 6 символов."
+    }
+    
+    if (message.includes('weak password')) {
+      return "Пароль слишком простой. Используйте комбинацию букв, цифр и специальных символов."
+    }
+    
+    if (message.includes('signup is disabled')) {
+      return "Регистрация временно отключена. Обратитесь к администратору."
+    }
+    
+    if (message.includes('email rate limit')) {
+      return "Превышен лимит отправки писем. Попробуйте позже."
+    }
+    
+    if (message.includes('smtp') || message.includes('email') && message.includes('send')) {
+      return "Ошибка отправки письма подтверждения. Проверьте правильность email адреса и попробуйте снова."
+    }
+    
+    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
+    return error.message
+  }
+
+  const validateForm = (): string | null => {
+    // Проверка имени
+    if (!name.trim()) {
+      return "Введите ваше имя"
+    }
+    
+    if (name.trim().length < 2) {
+      return "Имя должно содержать минимум 2 символа"
+    }
+    
+    // Проверка email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return "Введите корректный email адрес"
+    }
+    
+    // Проверка пароля
+    if (password.length < 6) {
+      return "Пароль должен содержать минимум 6 символов"
+    }
+    
+    return null
+  }
+
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+
+      if (!response.ok) {
+        console.error('Ошибка при проверке email:', response.statusText)
+        return false // В случае ошибки API, продолжаем с регистрацией
+      }
+
+      const data = await response.json()
+      return data.exists
+    } catch (error) {
+      console.error('Ошибка при проверке email:', error)
+      return false // В случае ошибки, продолжаем с регистрацией
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError("Пароли не совпадают")
+    // Базовая валидация формы (без проверки совпадения паролей)
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       setLoading(false)
       return
     }
 
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
+    return Sentry.startSpan(
+      {
+        op: "auth.register",
+        name: "User Registration",
+      },
+      async (span) => {
+        try {
+          const trimmedEmail = email.trim()
+          const trimmedName = name.trim()
+          span.setAttribute("auth.email", trimmedEmail)
+          span.setAttribute("auth.name", trimmedName)
+          span.setAttribute("auth.method", "email_password")
 
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
+          // Сначала проверяем существование email
+          const emailExists = await checkEmailExists(trimmedEmail)
+          span.setAttribute("auth.email_exists_checked", true)
+          if (emailExists) {
+            setError("Пользователь с таким email уже зарегистрирован.")
+            setLoading(false)
+            return
+          }
+
+          // Теперь проверяем совпадение паролей
+          if (password !== confirmPassword) {
+            setError("Пароли не совпадают")
+            setLoading(false)
+            return
+          }
+
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: trimmedName,
+              email: trimmedEmail,
+              password,
+            }),
+          })
+
+          const result = await response.json().catch(() => null)
+
+          if (!response.ok) {
+            span.setAttribute("auth.success", false)
+            const apiError = new Error(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
+            Sentry.captureException(apiError, {
+              tags: { 
+                module: 'auth', 
+                action: 'register',
+                error_type: 'registration_failed'
+              },
+              user: { email: trimmedEmail, name: trimmedName },
+              extra: { 
+                status: response.status,
+                timestamp: new Date().toISOString()
+              }
+            })
+            setError(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
+            setLoading(false)
+            return
+          }
+
+          // Успешное создание пользователя. Если письмо ушло — ведем на страницу ожидания подтверждения
+          // Сохраняем email, чтобы на странице ожидания можно было повторно отправить письмо
+          try {
+            sessionStorage.setItem('pendingEmail', trimmedEmail)
+          } catch {}
+
+          span.setAttribute("auth.success", true)
+          Sentry.addBreadcrumb({
+            message: 'User registration successful',
+            category: 'auth',
+            level: 'info',
+            data: { email: trimmedEmail, name: trimmedName }
+          })
+
+          if (result?.emailSent) {
+            router.push('/auth/pending-verification')
+            return
+          }
+
+          // Пользователь создан, но письмо не отправлено — показываем сообщение
+          setError(result?.message || 'Аккаунт создан, но не удалось отправить письмо подтверждения. Обратитесь к администратору.')
+          setLoading(false)
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'register',
+              error_type: 'unexpected_error'
+            },
+            user: { email, name },
+            extra: { 
+              component: 'RegisterPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Registration error:", err)
+          setError("Произошла непредвиденная ошибка при регистрации. Проверьте подключение к интернету и попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      // Redirect to pending verification page
-      router.push("/auth/pending-verification")
-    } catch (err) {
-      console.error("Registration error:", err)
-      setError("Произошла ошибка при регистрации. Пожалуйста, попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (
@@ -67,6 +237,7 @@ export default function RegisterPage() {
       {error && (
         <div className="p-3 bg-red-100 border border-red-200 text-red-600 text-sm rounded-md dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
           {error}
+          {error.includes("уже зарегистрирован")}
         </div>
       )}
 
@@ -80,6 +251,12 @@ export default function RegisterPage() {
           autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            minLength: 2,
+            maxLength: 50
+          }}
         />
 
         <AuthInput
@@ -91,6 +268,11 @@ export default function RegisterPage() {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            email: true
+          }}
         />
 
         <AuthInput
@@ -102,6 +284,17 @@ export default function RegisterPage() {
           showPasswordToggle={true}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          validateOnChange={true}
+          // validationRules={{
+          //   required: true,
+          //   minLength: 6,
+          //   custom: (value: string) => {
+          //     if (value.length >= 8 && !/(?=.*[a-zA-Z])(?=.*\d)/.test(value)) {
+          //       return "Рекомендуется использовать буквы и цифры для большей безопасности"
+          //     }
+          //     return null
+          //   }
+          // }}
         />
 
         <AuthInput
@@ -113,6 +306,16 @@ export default function RegisterPage() {
           showPasswordToggle={true}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            custom: (value: string) => {
+              if (password && value !== password) {
+                return "Пароли не совпадают"
+              }
+              return null
+            }
+          }}
         />
 
         <AuthButton type="submit" loading={loading}>

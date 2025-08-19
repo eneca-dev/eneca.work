@@ -113,9 +113,23 @@ export function TimelineRow({
   const loadings = section.loadings || []
   
   // Фильтруем дубликаты загрузок по ID для избежания проблем с React ключами
-  const uniqueLoadings = loadings.filter((loading, index, array) => 
-    array.findIndex(l => l.id === loading.id) === index
-  )
+  // Убираем дубликаты и сортируем загрузки так, чтобы записи одного человека шли рядом
+  const uniqueLoadings = loadings
+    .filter((loading, index, array) => array.findIndex(l => l.id === loading.id) === index)
+    .sort((a, b) => {
+      // Сначала ответственный за раздел
+      const aIsSectionResponsible = a.responsibleId && section && (a.responsibleId === (section as any).responsibleId)
+      const bIsSectionResponsible = b.responsibleId && section && (b.responsibleId === (section as any).responsibleId)
+      if (aIsSectionResponsible && !bIsSectionResponsible) return -1
+      if (!aIsSectionResponsible && bIsSectionResponsible) return 1
+      const nameA = (a.responsibleName || "").toLowerCase()
+      const nameB = (b.responsibleName || "").toLowerCase()
+      if (nameA !== nameB) return nameA.localeCompare(nameB, "ru")
+      // внутри одного сотрудника сортируем по дате начала
+      const aStart = new Date(a.startDate).getTime()
+      const bStart = new Date(b.startDate).getTime()
+      return aStart - bStart
+    })
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
@@ -291,7 +305,7 @@ export function TimelineRow({
                   
                   <span
                     className={cn(
-                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[185px] cursor-pointer hover:underline",
+                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline",
                       theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
                     )}
                     onClick={(e) => {
@@ -331,6 +345,7 @@ export function TimelineRow({
                         <span>{formatDate(section.endDate)}</span>
                       </div>
                     )}
+
                   </div>
 
                   {/* Вторая строка - стадия и отдел */}
@@ -521,6 +536,7 @@ export function TimelineRow({
             cellWidth={cellWidth}
             stickyColumnShadow={stickyColumnShadow}
             totalFixedWidth={totalFixedWidth}
+            sectionResponsibleId={(section as any)?.responsibleId || null}
           />
         ))}
       {/* Модальное окно назначения ответственного */}
@@ -553,6 +569,7 @@ interface LoadingRowProps {
   cellWidth: number
   stickyColumnShadow: string
   totalFixedWidth: number
+  sectionResponsibleId?: string | null
 }
 
 function LoadingRow({
@@ -567,6 +584,7 @@ function LoadingRow({
   cellWidth,
   stickyColumnShadow,
   totalFixedWidth,
+  sectionResponsibleId,
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -705,8 +723,20 @@ function LoadingRow({
                   </Tooltip>
                   <div className="ml-2">
                     {/* Имя ответственного - уменьшаем размер шрифта */}
-                    <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>
+                    <div className={cn("text-xs font-medium flex items-center gap-1", theme === "dark" ? "text-slate-200" : "text-slate-700")}> 
                       {loading.responsibleName || "Не указан"}
+                      {/* Маркер ответственного за раздел */}
+                      {sectionResponsibleId && (loading.responsibleId === sectionResponsibleId) && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center justify-center rounded-sm text-[10px] px-1 py-0.5",
+                            theme === "dark" ? "bg-amber-900/60 text-amber-300" : "bg-amber-100 text-amber-700"
+                          )}
+                          title="Ответственный за раздел"
+                        >
+                          ★
+                        </span>
+                      )}
                     </div>
                     {/* Команда ответственного - еще меньший размер */}
                     <div className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>

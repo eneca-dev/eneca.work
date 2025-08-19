@@ -50,7 +50,7 @@ export default function RemoveHeadConfirmModal({
           .from("team_leads")
           .delete()
           .eq("team_id", entityId)
-          .eq("is_active", true)
+
 
         if (error) {
           console.error("Ошибка при удалении руководителя команды:", error)

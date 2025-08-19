@@ -1,20 +1,25 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { TimelineView } from "./components/timeline-view"
-import { useUserStore } from "@/stores/useUserStore"
+import { PlanningGuide } from "./components/PlanningGuide"
 
 export default function PlanningPage() {
-  // Initialize permissions for testing
-  const setRoleAndPermissions = useUserStore((state) => state.setRoleAndPermissions)
-  const permissions = useUserStore((state) => state.permissions)
+  const [showGuide, setShowGuide] = useState(false)
 
+  // Слушаем событие для показа руководства
   useEffect(() => {
-    // Only set permissions if they don't already exist
-    if (!permissions.includes("project.view")) {
-      setRoleAndPermissions("user", ["project.view", "project.manage"])
+    const handleShowGuide = () => {
+      setShowGuide(true)
     }
-  }, [permissions, setRoleAndPermissions])
+
+    window.addEventListener('showPlanningGuide', handleShowGuide)
+    return () => window.removeEventListener('showPlanningGuide', handleShowGuide)
+  }, [])
+
+  if (showGuide) {
+    return <PlanningGuide onClose={() => setShowGuide(false)} />
+  }
 
   return <TimelineView />
 }

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Check, Trash2 } from 'lucide-react'
+import { Check, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { parseNotionContent, markdownToHtml } from '@/modules/notions/utils'
@@ -14,6 +14,7 @@ import type { Notion } from '@/modules/notions/types'
 interface NoteCardProps {
   notion: Notion
   isSelected: boolean
+  isActive?: boolean
   onToggleSelect: (id: string) => void
   onUpdate: (id: string, content: string) => void
   onToggleDone: (id: string) => void
@@ -26,6 +27,7 @@ interface NoteCardProps {
 export function NoteCard({
   notion,
   isSelected,
+  isActive = false,
   onToggleSelect,
   onUpdate,
   onToggleDone,
@@ -35,6 +37,7 @@ export function NoteCard({
   showSelection = false
 }: NoteCardProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   const handleDelete = () => {
     setShowDeleteModal(true)
@@ -65,14 +68,21 @@ export function NoteCard({
     onOpenFullView(notion)
   }
 
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
+  }
+
 
 
   return (
     <Card 
       className={cn(
-        "p-4 transition-all duration-200 hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-gray-500/20 cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600",
+        "p-4 transition-all duration-300 hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-gray-500/20 cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600",
+        isActive && "bg-gray-50 dark:bg-gray-600/60",
         notion.notion_done && "opacity-50 bg-gray-50 dark:bg-gray-800/50",
-        isSelected && "border-2 border-primary"
+        isSelected && "border-2 border-primary",
+        isExpanded && "shadow-lg dark:shadow-xl"
       )}
       onClick={handleCardClick}
     >
@@ -86,7 +96,10 @@ export function NoteCard({
           />
 
           {/* Основное содержимое с ограничением высоты */}
-          <div className="flex-1 min-w-0 max-h-[140px] overflow-hidden">
+          <div className={cn(
+            "flex-1 min-w-0 transition-all duration-300",
+            isExpanded ? "max-h-none" : "max-h-[140px] overflow-hidden"
+          )}>
             {/* Парсим контент для разделения заголовка и содержимого */}
             {(() => {
               const parsed = parseNotionContent(notion)
@@ -95,7 +108,7 @@ export function NoteCard({
                   {/* Заголовок заметки */}
                   {parsed.title && (
                     <h1 className={cn(
-                      "text-2xl font-bold leading-tight mb-2 line-clamp-2 text-gray-900 dark:text-gray-100",
+                      "text-xl font-semibold leading-tight mb-2 line-clamp-2 text-gray-900 dark:text-gray-100",
                       notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
                     )}>
                       {parsed.title}
@@ -107,7 +120,7 @@ export function NoteCard({
                     <div className="relative">
                       <div className={cn(
                         "max-w-none text-sm leading-relaxed relative text-gray-700 dark:text-gray-300",
-                        parsed.title ? "line-clamp-3" : "line-clamp-4",
+                        !isExpanded && (parsed.title ? "line-clamp-3" : "line-clamp-4"),
                         notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
                       )}
                       >
@@ -148,6 +161,20 @@ export function NoteCard({
 
           {/* Действия */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Кнопка разворачивания/сворачивания */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleExpand}
+              className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-600"
+              title={isExpanded ? "Свернуть заметку" : "Развернуть заметку"}
+            >
+              <ChevronDown className={cn(
+                "h-4 w-4 text-gray-600 dark:text-gray-400 transition-transform duration-300",
+                isExpanded && "rotate-180"
+              )} />
+            </Button>
+
             {/* Кнопка отметки выполнения */}
             <Button
               variant="ghost"

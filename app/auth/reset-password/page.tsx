@@ -7,6 +7,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 function ResetPasswordForm() {
   const [loading, setLoading] = useState(false)
@@ -45,6 +46,20 @@ function ResetPasswordForm() {
           setIsValidSession(true)
         }
       } catch (err) {
+        // Отправляем ошибку проверки токена в Sentry
+        Sentry.captureException(err, {
+          tags: { 
+            module: 'auth', 
+            action: 'reset_password_verification',
+            error_type: 'token_verification_failed'
+          },
+          extra: { 
+            token_present: !!searchParams.get('token'),
+            type: searchParams.get('type'),
+            timestamp: new Date().toISOString()
+          }
+        })
+
         console.error('Password reset session error:', err)
         setError("Произошла ошибка при проверке ссылки")
       } finally {
@@ -56,42 +71,152 @@ function ResetPasswordForm() {
   // Run once per query-param change
   }, [searchParams])
 
+  // Функция для получения понятного сообщения об ошибке
+  const getErrorMessage = (error: any): string => {
+    if (!error?.message) return "Произошла неизвестная ошибка"
+    
+    const message = error.message.toLowerCase()
+    
+    // Проверка различных типов ошибок
+    if (message.includes('weak password')) {
+      return "Пароль слишком простой. Используйте комбинацию букв, цифр и специальных символов."
+    }
+    
+    if (message.includes('password should be at least')) {
+      return "Пароль должен содержать минимум 6 символов."
+    }
+    
+    if (message.includes('same password')) {
+      return "Новый пароль должен отличаться от текущего."
+    }
+    
+    if (message.includes('session not found') || message.includes('invalid session')) {
+      return "Сессия истекла. Запросите новую ссылку для сброса пароля."
+    }
+    
+    if (message.includes('user not found')) {
+      return "Пользователь не найден. Запросите новую ссылку для сброса пароля."
+    }
+    
+    if (message.includes('token expired') || message.includes('invalid token')) {
+      return "Ссылка истекла или недействительна. Запросите новую ссылку для сброса пароля."
+    }
+    
+    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
+    return error.message
+  }
+
+  const validateForm = (): string | null => {
+    // Проверка пароля
+    if (!password) {
+      return "Введите новый пароль"
+    }
+    
+    if (password.length < 6) {
+      return "Пароль должен содержать минимум 6 символов"
+    }
+    
+    // Проверка подтверждения пароля
+    if (!confirmPassword) {
+      return "Подтвердите новый пароль"
+    }
+    
+    if (password !== confirmPassword) {
+      return "Пароли не совпадают"
+    }
+    
+    // Проверка сложности пароля
+    if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(password) && password.length < 8) {
+      return "Рекомендуется использовать пароль длиной от 8 символов с буквами и цифрами"
+    }
+    
+    return null
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError("Пароли не совпадают")
+    // Валидация формы
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       setLoading(false)
       return
     }
 
-    if (password.length < 6) {
-      setError("Пароль должен содержать минимум 6 символов")
-      setLoading(false)
-      return
-    }
+    return Sentry.startSpan(
+      {
+        op: "auth.reset_password",
+        name: "Password Reset Submit",
+      },
+      async (span: any) => {
+        try {
+          span.setAttribute("auth.method", "password_reset")
+          span.setAttribute("auth.password_length", password.length)
 
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password,
-      })
+          const { error } = await supabase.auth.updateUser({
+            password,
+          })
 
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
+          if (error) {
+            span.setAttribute("auth.success", false)
+            span.setAttribute("auth.error", error.message)
+            
+            // Отправляем ошибку сброса пароля в Sentry
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'auth', 
+                action: 'reset_password',
+                error_type: 'password_update_failed'
+              },
+              extra: { 
+                error_code: error.message,
+                password_length: password.length,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(getErrorMessage(error))
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+          
+          // Логируем успешный сброс пароля
+          Sentry.addBreadcrumb({
+            message: 'Password reset successful',
+            category: 'auth',
+            level: 'info'
+          })
+
+          // Success - redirect to login page
+          router.push("/auth/login?message=Пароль успешно изменен")
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'reset_password',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'ResetPasswordForm',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Password reset error:", err)
+          setError("Произошла непредвиденная ошибка при сбросе пароля. Проверьте подключение к интернету и попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      // Success - redirect to login page
-      router.push("/auth/login?message=Пароль успешно изменен")
-    } catch (err) {
-      console.error("Password reset error:", err)
-      setError("Произошла ошибка при сбросе пароля. Пожалуйста, попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   if (sessionLoading) {
@@ -155,6 +280,17 @@ function ResetPasswordForm() {
           showPasswordToggle={true}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          validateOnChange={true}
+          // validationRules={{
+          //   required: true,
+          //   minLength: 6,
+          //   custom: (value: string) => {
+          //     if (value.length >= 8 && !/(?=.*[a-zA-Z])(?=.*\d)/.test(value)) {
+          //       return "Рекомендуется использовать буквы и цифры для большей безопасности"
+          //     }
+          //     return null
+          //   }
+          // }}
         />
 
         <AuthInput
@@ -166,6 +302,16 @@ function ResetPasswordForm() {
           showPasswordToggle={true}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            custom: (value: string) => {
+              if (password && value !== password) {
+                return "Пароли не совпадают"
+              }
+              return null
+            }
+          }}
         />
 
         <AuthButton type="submit" loading={loading}>

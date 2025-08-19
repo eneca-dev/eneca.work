@@ -10,7 +10,6 @@ export type User = {
   team: string
   category: string
   role?: string
-  isActive: boolean
   dateJoined: string
   workLocation: "office" | "remote" | "hybrid"
   address: string
@@ -38,6 +37,13 @@ export type Position = {
 export type Category = {
   id: string
   name: string
+}
+
+export type UsersFilter = {
+  roles: string[]
+  departments: string[]
+  teams: string[]
+  search: string
 }
 
 export type Json =

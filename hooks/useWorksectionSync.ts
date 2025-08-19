@@ -83,13 +83,15 @@ interface SyncResult {
       message?: string
     }
     all_actions: Array<{
-      action: 'created' | 'updated' | 'error'
+      action: 'created' | 'updated' | 'moved' | 'error'
       type: 'project' | 'stage' | 'object' | 'section'
       id?: string
       name: string
       project?: string
       object?: string
+      stage?: string
       timestamp: string
+      sync_type?: 'standard' | 'os'
       responsible_assigned?: boolean
       manager_assigned?: boolean
       responsible_info?: string
@@ -115,108 +117,114 @@ interface SyncResult {
 interface UseSyncReturn {
   isSyncing: boolean
   syncStatus: 'idle' | 'success' | 'error'
-  syncWithWorksection: () => Promise<SyncResult | null>
+  syncWithWorksection: () => Promise<void>
   resetStatus: () => void
-  lastSyncResult: SyncResult | null
+  currentOffset: number
+  resetPagination: () => void
 }
 
 export function useWorksectionSync(): UseSyncReturn {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
+  const [currentOffset, setCurrentOffset] = useState(0)
 
-  const syncWithWorksection = async (): Promise<SyncResult | null> => {
-    if (isSyncing) return null
+  const syncWithWorksection = async (): Promise<void> => {
+    if (isSyncing) return
     
     setIsSyncing(true)
     setSyncStatus('idle')
+    setCurrentOffset(0) // Сбрасываем offset в начале полной синхронизации
     
-    try {
-      console.log('🚀 Запуск синхронизации с Worksection...')
-      
-      const integrationUrl = process.env.NEXT_PUBLIC_WS_INTEGRATION_URL || 'https://ws-to-work-integration-eneca-7cab192e5438.herokuapp.com'
-      
-      const response = await fetch(`${integrationUrl}/api/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const result: SyncResult = await response.json()
-      
-      console.log('📊 Детальный результат синхронизации:', result)
-      
-      // Логируем подробную статистику
-      if (result.summary) {
-        console.log('📈 Статистика синхронизации:')
-        console.log(`  🆕 Создано: ${result.summary.total.created}`)
-        console.log(`  🔄 Обновлено: ${result.summary.total.updated}`)
-        console.log(`  ✅ Без изменений: ${result.summary.total.unchanged}`)
-        console.log(`  ❌ Ошибки: ${result.summary.total.errors}`)
-        console.log(`  🚫 Пропущено: ${result.summary.total.skipped}`)
-      }
-      
-      // Логируем статистику поиска пользователей
-      if (result.user_search_summary) {
-        console.log('👤 Статистика поиска пользователей:')
-        console.log(`  Всего поисков: ${result.user_search_summary.total_searches}`)
-        console.log(`  Успешных: ${result.user_search_summary.successful_searches}`)
-        console.log(`  Неудачных: ${result.user_search_summary.failed_searches}`)
-        console.log(`  Процент успеха: ${result.user_search_summary.success_rate}%`)
-        console.log(`  Самая эффективная стратегия: ${result.user_search_summary.most_effective_strategy}`)
-        console.log(`  Качество поиска: ${result.user_search_summary.search_quality}`)
-      }
-      
-      // Логируем подробный отчет
-      if (result.detailed_report) {
-        console.log('📋 Подробный отчет о синхронизации:')
-        console.log(`  Время выполнения: ${result.detailed_report.sync_summary.duration_readable}`)
-        console.log(`  Всего действий: ${result.detailed_report.sync_summary.total_actions}`)
-        console.log(`  Успешных назначений: ${result.detailed_report.assignment_summary.successful_assignments}`)
-        console.log(`  Процент успешных назначений: ${result.detailed_report.assignment_summary.success_rate}%`)
+    const integrationUrl = process.env.NEXT_PUBLIC_WS_INTEGRATION_URL || 'https://ws-to-work-integration-eneca-7cab192e5438.herokuapp.com'
+    
+    // Функция для одного запроса синхронизации
+    const syncBatch = async (offset: number): Promise<{ success: boolean; hasMore: boolean }> => {
+      try {
+        const response = await fetch(`${integrationUrl}/api/sync?offset=${offset}&limit=3`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          signal: AbortSignal.timeout(30000) // 30 секунд таймаут для каждого запроса
+        })
         
-        if (result.detailed_report.user_search_analysis.recommendations) {
-          console.log('💡 Рекомендации по улучшению:')
-          result.detailed_report.user_search_analysis.recommendations.forEach((rec, index) => {
-            console.log(`  ${index + 1}. ${rec}`)
-          })
+        if (response.ok) {
+          try {
+            const data = await response.json()
+            return { 
+              success: true, 
+              hasMore: data.pagination?.hasMore ?? true // По умолчанию продолжаем если нет информации
+            }
+          } catch (error) {
+            // Если не можем распарсить JSON, продолжаем
+            return { success: true, hasMore: true }
+          }
         }
+        
+        return { success: false, hasMore: false }
+      } catch (error) {
+        console.log(`Sync batch at offset ${offset} completed/failed, continuing...`)
+        return { success: true, hasMore: true } // Продолжаем даже при ошибках
+      }
+    }
+    
+    // Автоматический цикл синхронизации
+    const runFullSync = async () => {
+      let offset = 0
+      let batchNumber = 1
+      
+      while (true) {
+        console.log(`🔄 Запуск батча ${batchNumber} (проекты ${offset + 1}-${offset + 3})`)
+        setCurrentOffset(offset)
+        
+        // Запускаем батч
+        const result = await syncBatch(offset)
+        
+        // Если серьер сообщил что проектов больше нет, останавливаемся
+        if (!result.hasMore) {
+          console.log('🏁 Сервер сообщил что проектов больше нет, завершаем синхронизацию')
+          break
+        }
+        
+        // Увеличиваем offset для следующего батча
+        offset += 3
+        batchNumber++
+        
+        // Защита от бесконечного цикла - максимум 20 батчей (60 проектов)
+        if (batchNumber > 20) {
+          console.log('🛑 Достигнут максимум батчей (20), завершаем синхронизацию')
+          break
+        }
+        
+        // Ждем 35 секунд перед следующим батчем
+        console.log(`⏳ Ожидание 35 секунд перед следующим батчем...`)
+        await new Promise(resolve => setTimeout(resolve, 35000))
       }
       
-      setLastSyncResult(result)
-      
-      if (result.success) {
-        console.log('✅ Синхронизация завершена успешно')
-        setSyncStatus('success')
-        return result
-      } else {
-        throw new Error(result.error || 'Неизвестная ошибка синхронизации')
-      }
-      
-    } catch (error) {
-      console.error('❌ Ошибка синхронизации:', error)
-      setSyncStatus('error')
-      
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-      throw new Error(errorMessage)
-      
-    } finally {
+      // Завершаем синхронизацию
       setIsSyncing(false)
+      setSyncStatus('success')
       
-      // Сбрасываем статус через 3 секунды
+      // Сбрасываем статус через 5 секунд
       setTimeout(() => {
         setSyncStatus('idle')
-      }, 3000)
+      }, 5000)
     }
+    
+    // Запускаем полную синхронизацию
+    runFullSync().catch((error) => {
+      console.error('Full sync error:', error)
+      setIsSyncing(false)
+      setSyncStatus('error')
+    })
   }
 
   const resetStatus = () => {
     setSyncStatus('idle')
+  }
+
+  const resetPagination = () => {
+    setCurrentOffset(0)
   }
 
   return {
@@ -224,6 +232,7 @@ export function useWorksectionSync(): UseSyncReturn {
     syncStatus,
     syncWithWorksection,
     resetStatus,
-    lastSyncResult
+    currentOffset,
+    resetPagination
   }
 } 

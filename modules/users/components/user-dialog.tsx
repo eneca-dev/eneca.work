@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Modal, ModalButton } from '@/components/modals'
-import { Save } from 'lucide-react'
+import { Save, Trash2 } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { updateUser, getDepartments, getTeams, getPositions, getCategories, getAvailableRoles } from "@/services/org-data-service"
-import { getUserRoleAndPermissions } from "@/utils/role-utils"
+// УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
 import type { User, Department, Team, Position, Category } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
@@ -37,7 +37,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     category: "",
     role: "",
     roleId: "",
-    isActive: true,
     workLocation: "office",
     address: "",
   })
@@ -50,8 +49,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
+  // Состояния для удаления профиля
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const setUser = useUserStore((state) => state.setUser)
   const currentUserId = useUserStore((state) => state.id)
+  const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
   const { canEditAllUsers, canEditStructures } = useUserPermissions()
 
@@ -69,6 +74,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
+
+  // Текст для подтверждения удаления
+  const deleteConfirmationPhrase = `Я хочу удалить навсегда профиль ${currentUserEmail}`
 
   // Загрузка справочных данных
   useEffect(() => {
@@ -137,7 +145,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         category: user.category,
         role: roleValue,
         roleId,
-        isActive: user.isActive,
         workLocation: user.workLocation,
         address: user.address,
       })
@@ -152,7 +159,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         category: "",
         role: "",
         roleId: "",
-        isActive: true,
         workLocation: "office",
         address: "",
       })
@@ -223,9 +229,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           if (formData.category) updateData.category = formData.category
           // Добавляем roleId если пользователь может редактировать роли И роль выбрана
           if (canEditRoles && formData.roleId) updateData.roleId = formData.roleId
-          // ВРЕМЕННО ОТКЛЮЧЕНО: колонка is_active отсутствует в таблице profiles
-          // TODO: Раскомментировать после добавления колонки is_active
-          // if (formData.isActive !== undefined) updateData.isActive = formData.isActive
         }
         
         console.log("Итоговые данные для updateUser:", updateData);
@@ -271,13 +274,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               },
             })
             
-            // Всегда обновляем разрешения при редактировании собственного профиля
-            // (не только при изменении роли, т.к. разрешения могли измениться в БД)
-            const { roleId, permissions } = await getUserRoleAndPermissions(user.id, freshSupabase)
-            if (roleId) {
-              useUserStore.getState().setRoleAndPermissions(roleId, permissions)
-              console.log("Разрешения обновлены для пользователя:", { roleId, permissions })
-            }
+            // УДАЛЕНО: Legacy обновление разрешений через getUserRoleAndPermissions
           }
         } else {
           console.log("Не обновляем Zustand, так как редактируем другого пользователя");
@@ -306,6 +303,69 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       setIsLoading(false)
     }
   }
+
+  // Функция для обработки удаления профиля
+  const handleDeleteProfile = async () => {
+    if (!user) return
+    
+    setIsDeleting(true)
+    try {
+      // Используем API endpoint для безопасного удаления
+      const response = await fetch(`/api/admin/delete-user?userId=${user.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Ошибка удаления пользователя')
+      }
+      
+      toast({
+        title: "Успешно",
+        description: "Профиль успешно удален",
+      })
+      
+      // Закрываем все модальные окна
+      setShowDeleteConfirmation(false)
+      onOpenChange(false)
+      
+      // Если пользователь удалил свой собственный профиль, выходим из системы
+      if (isEditingOwnProfile) {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+        window.location.href = '/auth/login'
+      } else if (onUserUpdated) {
+        onUserUpdated()
+      }
+      
+    } catch (error) {
+      console.error("Ошибка при удалении профиля:", error)
+      toast({
+        title: "Ошибка",
+        description: `Не удалось удалить профиль: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // Функция для обработки ввода в поле подтверждения (блокируем вставку)
+  const handleDeleteConfirmationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDeleteConfirmationText(e.target.value)
+  }
+
+  // Блокируем вставку в поле подтверждения
+  const handleDeleteConfirmationPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+  }
+
+  // Проверяем, совпадает ли введенный текст с требуемой фразой
+  const isDeleteConfirmationValid = deleteConfirmationText === deleteConfirmationPhrase
 
   return (
     <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
@@ -494,21 +554,91 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               />
             </div>
 
-            {!isSelfEdit && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="isActive" className="text-right">
-                  Активен
-                </Label>
-                <div className="flex items-center space-x-2 col-span-3">
-                  <Switch
-                    id="isActive"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => handleChange("isActive", checked)}
-                  />
-                  <Label htmlFor="isActive">{formData.isActive ? "Да" : "Нет"}</Label>
-                </div>
-              </div>
+
+
+          </div>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <div className="flex justify-between w-full">
+            {/* Кнопка удаления профиля слева (только для самостоятельного редактирования) */}
+            {isSelfEdit ? (
+              <ModalButton 
+                type="button" 
+                variant="danger"
+                onClick={() => setShowDeleteConfirmation(true)}
+                disabled={isLoading}
+                icon={<Trash2 />}
+              >
+                Удалить профиль
+              </ModalButton>
+            ) : (
+              <div></div>
             )}
+            
+            {/* Кнопки управления справа */}
+            <div className="flex gap-2">
+              <ModalButton 
+                type="button" 
+                variant="cancel"
+                onClick={() => onOpenChange(false)} 
+                disabled={isLoading}
+              >
+                Отмена
+              </ModalButton>
+              <ModalButton 
+                type="submit" 
+                variant="success"
+                loading={isLoading}
+                icon={<Save />}
+              >
+                {isLoading ? "Сохранение..." : "Сохранить"}
+              </ModalButton>
+            </div>
+          </div>
+        </Modal.Footer>
+      </form>
+
+      {/* Модальное окно подтверждения удаления */}
+      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="md">
+        <Modal.Header 
+          title="Подтверждение удаления профиля"
+          subtitle="Это действие нельзя отменить. Ваш профиль и все связанные данные будут удалены навсегда."
+        />
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800 font-medium mb-2">
+                Внимание! Это действие необратимо.
+              </p>
+              <p className="text-sm text-red-700">
+                Для подтверждения удаления введите следующую фразу:
+              </p>
+              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900">
+                {deleteConfirmationPhrase}
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="deleteConfirmation" className="text-sm font-medium">
+                Введите фразу подтверждения:
+              </Label>
+              <Input
+                id="deleteConfirmation"
+                type="text"
+                value={deleteConfirmationText}
+                onChange={handleDeleteConfirmationInput}
+                onPaste={handleDeleteConfirmationPaste}
+                placeholder="Введите фразу для подтверждения"
+                className="mt-1"
+                autoComplete="off"
+              />
+              {deleteConfirmationText && !isDeleteConfirmationValid && (
+                <p className="text-xs text-red-600 mt-1">
+                  Фраза не совпадает. Проверьте правильность ввода.
+                </p>
+              )}
+            </div>
           </div>
         </Modal.Body>
         
@@ -516,21 +646,26 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           <ModalButton 
             type="button" 
             variant="cancel"
-            onClick={() => onOpenChange(false)} 
-            disabled={isLoading}
+            onClick={() => {
+              setShowDeleteConfirmation(false)
+              setDeleteConfirmationText("")
+            }}
+            disabled={isDeleting}
           >
             Отмена
           </ModalButton>
           <ModalButton 
-            type="submit" 
-            variant="success"
-            loading={isLoading}
-            icon={<Save />}
+            type="button" 
+            variant="danger"
+            onClick={handleDeleteProfile}
+            disabled={!isDeleteConfirmationValid || isDeleting}
+            loading={isDeleting}
+            icon={<Trash2 />}
           >
-            {isLoading ? "Сохранение..." : "Сохранить"}
+            {isDeleting ? "Удаление..." : "Удалить навсегда"}
           </ModalButton>
         </Modal.Footer>
-      </form>
+      </Modal>
     </Modal>
   )
 }

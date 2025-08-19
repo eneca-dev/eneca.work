@@ -8,7 +8,8 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { LoginAnimation } from "@/components/login-animation"
 import { createClient } from "@/utils/supabase/client"
-import { syncCurrentUserState } from "@/services/org-data-service"
+// УДАЛЕНО: Legacy import syncCurrentUserState - теперь синхронизация автоматическая
+import * as Sentry from "@sentry/nextjs"
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
@@ -18,42 +19,179 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Функция для получения понятного сообщения об ошибке
+  const getErrorMessage = (error: any): string => {
+    if (!error?.message) return "Произошла неизвестная ошибка"
+    
+    const message = error.message.toLowerCase()
+    
+    // Проверка различных типов ошибок
+    if (message.includes('invalid login credentials') || message.includes('invalid credentials')) {
+      return "Неверный email или пароль. Проверьте правильность ввода данных."
+    }
+    
+    if (message.includes('email not confirmed')) {
+      return "Email не подтвержден. Проверьте почту и перейдите по ссылке подтверждения."
+    }
+    
+    if (message.includes('user not found')) {
+      return "Пользователь с таким email не найден. Проверьте правильность email или зарегистрируйтесь."
+    }
+    
+    if (message.includes('invalid email')) {
+      return "Указан некорректный email адрес. Проверьте правильность ввода."
+    }
+    
+    if (message.includes('too many requests') || message.includes('rate limit')) {
+      return "Слишком много попыток входа. Подождите несколько минут и попробуйте снова."
+    }
+    
+    if (message.includes('account is disabled') || message.includes('user disabled')) {
+      return "Ваш аккаунт заблокирован. Обратитесь к администратору."
+    }
+    
+    if (message.includes('signup is disabled')) {
+      return "Система временно недоступна. Попробуйте позже или обратитесь к администратору."
+    }
+    
+    // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
+    return error.message
+  }
+
+  const validateForm = (): string | null => {
+    // Проверка email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!email) {
+      return "Введите email адрес"
+    }
+    
+    if (!emailRegex.test(email)) {
+      return "Введите корректный email адрес"
+    }
+    
+    // Проверка пароля
+    if (!password) {
+      return "Введите пароль"
+    }
+    
+    if (password.length < 6) {
+      return "Пароль должен содержать минимум 6 символов"
+    }
+    
+    return null
+  }
+
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+
+      if (!response.ok) {
+        console.error('Ошибка при проверке email:', response.statusText)
+        return true // В случае ошибки API, продолжаем с попыткой входа
+      }
+
+      const data = await response.json()
+      return data.exists
+    } catch (error) {
+      console.error('Ошибка при проверке email:', error)
+      return true // В случае ошибки, продолжаем с попыткой входа
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) {
-        setError(signInError.message)
-        setLoading(false)
-        return
-      }
-
-      console.log("Успешный вход, запускаем синхронизацию состояния...");
-      const syncSuccess = await syncCurrentUserState();
-
-      if (!syncSuccess) {
-        setError("Не удалось синхронизировать данные пользователя после входа.");
-        setLoading(false);
-        return;
-      }
-
-      console.log("Синхронизация состояния после входа прошла успешно.");
-
-      router.refresh()
-      router.push("/dashboard")
-
-    } catch (err) {
-      console.error("Login error:", err)
-      setError("Произошла непредвиденная ошибка при входе. Пожалуйста, попробуйте снова.")
+    // Валидация формы
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       setLoading(false)
+      return
     }
+
+    return Sentry.startSpan(
+      {
+        op: "auth.login",
+        name: "User Login",
+      },
+      async (span: any) => {
+        try {
+          const trimmedEmail = email.trim()
+          span.setAttribute("auth.email", trimmedEmail)
+          span.setAttribute("auth.method", "password")
+          // Сначала проверяем существование email
+          const emailExists = await checkEmailExists(trimmedEmail)
+          span.setAttribute("auth.email_exists_checked", true)
+          if (!emailExists) {
+            setError("Пользователь с таким email не найден. Пожалуйста, зарегистрируйтесь или проверьте правильность email адреса.")
+            setLoading(false)
+            return
+          }
+
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+          })
+
+          if (signInError) {
+            span.setAttribute("auth.error", signInError.message)
+            span.setAttribute("auth.success", false)
+            
+            // Отправляем ошибку авторизации в Sentry
+            Sentry.captureException(signInError, {
+              tags: { 
+                module: 'auth', 
+                action: 'login',
+                error_type: 'auth_failed'
+              },
+              user: { email: trimmedEmail },
+              extra: { 
+                error_code: signInError.message,
+                timestamp: new Date().toISOString()
+              }
+            })
+
+            setError(getErrorMessage(signInError))
+            setLoading(false)
+            return
+          }
+
+          span.setAttribute("auth.success", true)
+
+          router.refresh()
+          router.push("/dashboard")
+
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'login',
+              error_type: 'unexpected_error'
+            },
+            user: { email },
+            extra: { 
+              component: 'LoginPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Login error:", err)
+          setError("Произошла непредвиденная ошибка при входе. Пожалуйста, попробуйте снова.")
+          setLoading(false)
+        }
+      }
+    )
   }
 
   return (
@@ -67,6 +205,7 @@ export default function LoginPage() {
         {error && (
           <div className="p-3 bg-red-100 border border-red-200 text-red-600 text-sm rounded-md dark:bg-red-900/30 dark:border-red-800 dark:text-red-400">
             {error}
+            {error.includes("не найден")}
           </div>
         )}
 
@@ -80,6 +219,11 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            validateOnChange={true}
+            validationRules={{
+              required: true,
+              email: true
+            }}
           />
 
           <div className="space-y-2">
@@ -93,6 +237,11 @@ export default function LoginPage() {
                 showPasswordToggle={true}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                validateOnChange={true}
+                validationRules={{
+                  required: true,
+                  minLength: 6
+                }}
               />
             </div>
             <div className="flex justify-end">

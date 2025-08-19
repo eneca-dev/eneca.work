@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useMemo } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Input } from "@/modules/calendar/components/ui/input"
 import { Label } from "@/modules/calendar/components/ui/label"
@@ -21,6 +22,7 @@ import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useUserStore } from "@/stores/useUserStore"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface UnifiedEventFormProps {
   onClose: () => void
@@ -34,13 +36,13 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права - ОПТИМИЗИРОВАННО  
+    // Проверяем права - ОПТИМИЗИРОВАННО  
+  const { hasPermission } = usePermissions()
   const permissions = useMemo(() => {
-    const hasGlobalEvents = userStore.hasPermission("calendar.admin") || 
-                           userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
     
     return { hasGlobalEvents }
-  }, [userStore])
+  }, [hasPermission])
 
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
@@ -64,26 +66,70 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const submitEvent = async () => {
     if (!isAuthenticated || !currentUserId || !dateRange.from) return
 
-    setIsSubmitting(true)
+    return Sentry.startSpan(
+      {
+        op: "ui.form.submit",
+        name: "Submit Calendar Event Form",
+      },
+      async (span) => {
+        setIsSubmitting(true)
 
-    try {
-      await createEvent({
-        calendar_event_type: "Событие",
-        calendar_event_comment: comment,
-        calendar_event_is_global: permissions.hasGlobalEvents ? isGlobal : false,
-        calendar_event_is_weekday: null,
-        calendar_event_created_by: currentUserId,
-        calendar_event_date_start: formatDateToString(dateRange.from),
-        calendar_event_date_end: dateRange.to ? formatDateToString(dateRange.to) : undefined,
-      }, currentUserId)
+        try {
+          span.setAttribute("user.id", currentUserId)
+          span.setAttribute("event.is_global", permissions.hasGlobalEvents ? isGlobal : false)
+          span.setAttribute("event.has_end_date", !!dateRange.to)
+          span.setAttribute("event.comment_length", comment.length)
 
-      onClose()
-    } catch (error) {
-      // Ошибка уже обрабатывается в createEvent
-    } finally {
-      setIsSubmitting(false)
-      setShowConfirmation(false)
-    }
+          await createEvent({
+            calendar_event_type: "Событие",
+            calendar_event_comment: comment,
+            calendar_event_is_global: permissions.hasGlobalEvents ? isGlobal : false,
+            calendar_event_is_weekday: null,
+            calendar_event_created_by: currentUserId,
+            calendar_event_date_start: formatDateToString(dateRange.from),
+            calendar_event_date_end: dateRange.to ? formatDateToString(dateRange.to) : undefined,
+          }, currentUserId)
+
+          span.setAttribute("submit.success", true)
+
+          Sentry.addBreadcrumb({
+            message: 'Calendar event form submitted successfully',
+            category: 'calendar',
+            level: 'info',
+            data: {
+              component: 'UnifiedEventForm',
+              user_id: currentUserId,
+              is_global: permissions.hasGlobalEvents ? isGlobal : false,
+              has_end_date: !!dateRange.to
+            }
+          })
+
+          onClose()
+        } catch (error) {
+          span.setAttribute("submit.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'calendar',
+              component: 'UnifiedEventForm',
+              action: 'submit_event',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              user_id: currentUserId,
+              is_global: permissions.hasGlobalEvents ? isGlobal : false,
+              comment_length: comment.length,
+              has_end_date: !!dateRange.to,
+              timestamp: new Date().toISOString()
+            }
+          })
+          // Ошибка уже обрабатывается в createEvent
+        } finally {
+          setIsSubmitting(false)
+          setShowConfirmation(false)
+        }
+      }
+    )
   }
 
   const handleConfirm = async () => {

@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
+import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
 
 interface AdminAccessCheckProps {
   children: React.ReactNode
@@ -20,28 +21,34 @@ export function AdminAccessCheck({
 }: AdminAccessCheckProps) {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const permissions = useUserStore((state) => state.permissions)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
+  const { hasPermission, isLoading: permissionsLoading, error: permissionsError } = usePermissions()
   const router = useRouter()
 
   useEffect(() => {
     const checkAccess = () => {
       try {
-        // If permissions haven't been loaded yet, wait
-        if (!permissions || permissions.length === 0) {
-          // Check if user is authenticated to determine if we should wait for permissions
-          if (isAuthenticated) {
-            // User is authenticated but permissions not loaded yet, keep loading
-            return
-          }
+        if (permissionsLoading) {
+          // Ждем загрузки разрешений
+          return
         }
         
-        // Check for user_admin_panel_can_view permission with safe access
-        const canViewAdminPanel = permissions?.includes("user_admin_panel_can_view") ?? false
+        // Если есть ошибка загрузки разрешений - блокируем доступ
+        if (permissionsError) {
+          console.error('❌ Ошибка загрузки разрешений, блокируем доступ:', permissionsError)
+          setHasAccess(false)
+          if (redirectOnFailure) {
+            router.push("/dashboard/users")
+          }
+          setIsLoading(false)
+          return
+        }
         
+        // Проверяем разрешение на админ панель
+        const canViewAdminPanel = hasPermission(PERMISSIONS.USERS.ADMIN_PANEL)
         setHasAccess(canViewAdminPanel)
         
-        // If no access and need to redirect, return to user list
+        // Редиректим если нет доступа
         if (!canViewAdminPanel && redirectOnFailure) {
           router.push("/dashboard/users")
         }
@@ -57,11 +64,9 @@ export function AdminAccessCheck({
       }
     }
 
-    // Wait for permissions to be loaded before checking access
-    if (permissions !== null) {
-      checkAccess()
-    }
-  }, [permissions, isAuthenticated, redirectOnFailure, router])
+    // Проверяем доступ при изменении разрешений
+    checkAccess()
+  }, [isAuthenticated, permissionsLoading, permissionsError, hasPermission, redirectOnFailure, router])
 
   if (isLoading) {
     return (

@@ -1,10 +1,13 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Calendar, User } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
+import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
+import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 
 interface CreateSectionModalProps {
   isOpen: boolean
@@ -30,6 +33,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [sectionResponsible, setSectionResponsible] = useState('')
   const [sectionStartDate, setSectionStartDate] = useState('')
   const [sectionEndDate, setSectionEndDate] = useState('')
+  const [sectionStatusId, setSectionStatusId] = useState('')
   const [loading, setLoading] = useState(false)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [searchResponsible, setSearchResponsible] = useState('')
@@ -37,6 +41,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [actualProjectId, setActualProjectId] = useState<string | null>(null)
   
   const { setNotification } = useUiStore()
+  const { statuses } = useSectionStatuses()
 
   useEffect(() => {
     if (isOpen) {
@@ -44,6 +49,19 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       loadProjectId()
     }
   }, [isOpen])
+
+  // Устанавливаем статус "План" по умолчанию
+  useEffect(() => {
+    if (isOpen && statuses.length > 0 && !sectionStatusId) {
+      const planStatus = statuses.find(status => 
+        status.name.toLowerCase() === 'план' || 
+        status.name.toLowerCase() === 'plan'
+      )
+      if (planStatus) {
+        setSectionStatusId(planStatus.id)
+      }
+    }
+  }, [isOpen, statuses, sectionStatusId])
 
   const loadProjectId = async () => {
     if (projectId) {
@@ -128,6 +146,11 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       return
     }
 
+    if (!sectionStatusId.trim()) {
+      setNotification('Статус раздела обязателен')
+      return
+    }
+
     if (!objectId) {
       setNotification('Не указан объект для создания раздела')
       return
@@ -138,57 +161,128 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
       return
     }
 
-    setLoading(true)
-    try {
-      const sectionData = {
-        section_name: sectionName.trim(),
-        section_description: sectionDescription.trim() || null,
-        section_responsible: sectionResponsible || null,
-        section_start_date: sectionStartDate || null,
-        section_end_date: sectionEndDate || null,
+    return Sentry.startSpan(
+      {
+        op: "projects.create_section",
+        name: "Create Section",
+      },
+      async (span) => {
+        setLoading(true)
+        try {
+          span.setAttribute("section.name", sectionName.trim())
+          span.setAttribute("object.id", objectId)
+          span.setAttribute("object.name", objectName)
+          span.setAttribute("project.id", actualProjectId)
+          span.setAttribute("section.has_responsible", !!sectionResponsible)
+          span.setAttribute("section.has_dates", !!(sectionStartDate && sectionEndDate))
+
+          const sectionData = {
+            section_name: sectionName.trim(),
+            section_description: sectionDescription.trim() || null,
+            section_responsible: sectionResponsible || null,
+            section_start_date: sectionStartDate || null,
+            section_end_date: sectionEndDate || null,
+            section_status_id: sectionStatusId,
         section_object_id: objectId,
-        section_project_id: actualProjectId
-      }
+            section_project_id: actualProjectId
+          }
 
-      console.log('Отправляем данные раздела:', sectionData)
+          console.log('Отправляем данные раздела:', sectionData)
 
-      const { data, error } = await supabase
-        .from('sections')
-        .insert(sectionData)
-        .select()
+          const { data, error } = await supabase
+            .from('sections')
+            .insert(sectionData)
+            .select()
 
-      console.log('Результат создания раздела:', { data, error })
+          console.log('Результат создания раздела:', { data, error })
 
-      if (error) throw error
+          if (error) {
+            span.setAttribute("create.success", false)
+            span.setAttribute("create.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'create_section',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'CreateSectionModal',
+                section_name: sectionName.trim(),
+                object_id: objectId,
+                object_name: objectName,
+                project_id: actualProjectId,
+                responsible_id: sectionResponsible,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
 
-      setNotification(`Раздел "${sectionName}" успешно создан`)
-      onSuccess()
-      handleClose()
-    } catch (error) {
-      console.error('=== ОШИБКА СОЗДАНИЯ РАЗДЕЛА ===')
-      console.error('Полная ошибка:', error)
-      console.error('Тип ошибки:', typeof error)
-      console.error('JSON ошибки:', JSON.stringify(error, null, 2))
-      
-      let errorMessage = 'Неизвестная ошибка создания раздела'
-      
-      if (error && typeof error === 'object') {
-        if ('message' in error && error.message) {
-          errorMessage = error.message as string
-        } else if ('error' in error && error.error) {
-          errorMessage = error.error as string
-        } else if ('details' in error && error.details) {
-          errorMessage = error.details as string
+          span.setAttribute("create.success", true)
+          
+          Sentry.addBreadcrumb({
+            message: 'Section created successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              section_name: sectionName.trim(),
+              object_id: objectId,
+              object_name: objectName,
+              project_id: actualProjectId,
+              has_responsible: !!sectionResponsible
+            }
+          })
+
+          setNotification(`Раздел "${sectionName}" успешно создан`)
+          onSuccess()
+          handleClose()
+        } catch (error) {
+          span.setAttribute("create.success", false)
+          span.recordException(error as Error)
+          
+          console.error('=== ОШИБКА СОЗДАНИЯ РАЗДЕЛА ===')
+          console.error('Полная ошибка:', error)
+          console.error('Тип ошибки:', typeof error)
+          console.error('JSON ошибки:', JSON.stringify(error, null, 2))
+          
+          let errorMessage = 'Неизвестная ошибка создания раздела'
+          
+          if (error && typeof error === 'object') {
+            if ('message' in error && error.message) {
+              errorMessage = error.message as string
+            } else if ('error' in error && error.error) {
+              errorMessage = error.error as string
+            } else if ('details' in error && error.details) {
+              errorMessage = error.details as string
+            }
+          } else if (typeof error === 'string') {
+            errorMessage = error
+          }
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'projects', 
+              action: 'create_section',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'CreateSectionModal',
+              section_name: sectionName.trim(),
+              object_id: objectId,
+              object_name: objectName,
+              project_id: actualProjectId,
+              error_message: errorMessage,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          console.error('Итоговое сообщение об ошибке:', errorMessage)
+          setNotification(errorMessage)
+        } finally {
+          setLoading(false)
         }
-      } else if (typeof error === 'string') {
-        errorMessage = error
       }
-      
-      console.error('Итоговое сообщение об ошибке:', errorMessage)
-      setNotification(errorMessage)
-    } finally {
-      setLoading(false)
-    }
+    )
   }
 
   const handleClose = () => {
@@ -197,6 +291,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     setSectionResponsible('')
     setSectionStartDate('')
     setSectionEndDate('')
+    setSectionStatusId('') // Сбрасывается, чтобы при следующем открытии снова установился "План"
     setSearchResponsible('')
     setShowResponsibleDropdown(false)
     setActualProjectId(null)
@@ -238,6 +333,19 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите описание раздела (необязательно)"
               disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+              Статус раздела *
+            </label>
+            <StatusSelector
+              value={sectionStatusId}
+              onChange={setSectionStatusId}
+              disabled={loading}
+              required={true}
+              placeholder="Выберите статус раздела..."
             />
           </div>
 
@@ -344,7 +452,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
         <ModalButton 
           variant="success" 
           onClick={() => handleSubmit()}
-          disabled={loading || !sectionName.trim()}
+          disabled={loading || !sectionName.trim() || !sectionStatusId.trim()}
           icon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         >
           {loading ? 'Создание...' : 'Создать раздел'}

@@ -177,13 +177,12 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
         throw new Error('Заметка не найдена или у вас нет прав на её изменение')
       }
 
-      // Обновляем заметку в локальном состоянии и пересортируем
+      // Обновляем заметку в локальном состоянии БЕЗ пересортировки
       const currentNotions = get().notions
       const updatedNotions = currentNotions.map(notion =>
         notion.notion_id === id ? { ...notion, ...data[0] } : notion
       )
-      const sortedNotions = sortNotions(updatedNotions)
-      set({ notions: sortedNotions })
+      set({ notions: updatedNotions })
       
       toast.success('Заметка обновлена')
     } catch (error) {
@@ -220,13 +219,12 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
         throw new Error('Заметка не найдена или у вас нет прав на её изменение')
       }
 
-      // Обновляем заметку в локальном состоянии и пересортируем
+      // Обновляем заметку в локальном состоянии БЕЗ пересортировки
       const currentNotions = get().notions
       const updatedNotions = currentNotions.map(notion =>
         notion.notion_id === id ? { ...notion, ...data[0] } : notion
       )
-      const sortedNotions = sortNotions(updatedNotions)
-      set({ notions: sortedNotions })
+      set({ notions: updatedNotions })
       
       return data[0]
     } catch (error) {

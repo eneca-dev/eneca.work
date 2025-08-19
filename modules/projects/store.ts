@@ -11,6 +11,11 @@ interface ProjectsState {
   isDetailsPanelOpen: boolean;
   activeDetailsTab: 'overview' | 'team' | 'files';
   expandedNodes: Set<string>;
+  showManagers: boolean; // Флаг для показа/скрытия уровня руководителей проектов
+  groupByClient: boolean; // Флаг для группировки проектов по заказчикам
+  
+  // Подсвеченный раздел для навигации к комментариям
+  highlightedSectionId: string | null;
   
   // Уведомления
   notification: string | null;
@@ -30,6 +35,12 @@ interface ProjectsState {
   toggleDetailsPanel: () => void;
   setActiveDetailsTab: (tab: ProjectsState['activeDetailsTab']) => void;
   toggleNode: (nodeId: string) => void;
+  toggleShowManagers: () => void;
+  toggleGroupByClient: () => void;
+  
+  // Действия для навигации к разделам (всегда открывает комментарии)
+  highlightSection: (sectionId: string) => void;
+  clearHighlight: () => void;
   
   // Действия для уведомлений
   setNotification: (message: string) => void;
@@ -37,6 +48,7 @@ interface ProjectsState {
   
   // Действия для обновления разделов
   updateSectionResponsible: (sectionId: string, updates: { responsibleName?: string; responsibleAvatarUrl?: string }) => void;
+  updateSectionStatus: (sectionId: string, updates: { statusId?: string | null; statusName?: string | null; statusColor?: string | null }) => void;
   
   // CRUD операции (заглушки пока)
   setProjects: (projects: Project[]) => void;
@@ -61,6 +73,9 @@ export const useProjectsStore = create<ProjectsState>()(
       isDetailsPanelOpen: false,
       activeDetailsTab: 'overview',
       expandedNodes: new Set(),
+      showManagers: true, // По умолчанию показываем руководителей проектов
+      groupByClient: false, // По умолчанию не группируем по заказчикам
+      highlightedSectionId: null,
       notification: null,
       projects: [],
       stages: [],
@@ -110,6 +125,30 @@ export const useProjectsStore = create<ProjectsState>()(
           }
           return { expandedNodes: newExpandedNodes };
         }),
+
+      toggleShowManagers: () =>
+        set((state) => ({
+          showManagers: !state.showManagers,
+          // При включении показа руководителей отключаем группировку по заказчикам
+          groupByClient: state.showManagers ? state.groupByClient : false
+        })),
+
+      toggleGroupByClient: () =>
+        set((state) => ({
+          groupByClient: !state.groupByClient,
+          // При включении группировки по заказчикам отключаем показ руководителей
+          showManagers: state.groupByClient ? state.showManagers : false
+        })),
+        
+      highlightSection: (sectionId) =>
+        set({ 
+          highlightedSectionId: sectionId
+        }),
+        
+      clearHighlight: () =>
+        set({ 
+          highlightedSectionId: null
+        }),
         
       setProjects: (projects) => set(() => ({ projects })),
       setStages: (stages) => set(() => ({ stages })),
@@ -126,6 +165,17 @@ export const useProjectsStore = create<ProjectsState>()(
         // В реальном приложении здесь можно было бы обновить локальное состояние
         console.log('Обновление ответственного за раздел:', sectionId, updates)
       },
+
+      // Функция обновления статуса раздела
+      updateSectionStatus: (sectionId, updates) => {
+        set((state) => ({
+          sections: state.sections.map(section =>
+            section.section_id === sectionId
+              ? { ...section, section_status_id: updates.statusId || section.section_status_id }
+              : section
+          )
+        }));
+      },
     }),
     {
       name: 'projects-storage',
@@ -133,6 +183,8 @@ export const useProjectsStore = create<ProjectsState>()(
         filters: state.filters,
         expandedNodes: Array.from(state.expandedNodes),
         activeDetailsTab: state.activeDetailsTab,
+        showManagers: state.showManagers,
+        groupByClient: state.groupByClient,
       }),
       onRehydrateStorage: () => (state) => {
         // Восстанавливаем Set из массива при загрузке из localStorage

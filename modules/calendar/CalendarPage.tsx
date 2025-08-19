@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { CalendarHeader } from "@/modules/calendar/components/calendar-header"
 import { CalendarGrid } from "@/modules/calendar/components/calendar-grid"
 import { Button } from "@/modules/calendar/components/ui/button"
@@ -10,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/modules/cale
 import { UnifiedEventForm } from "@/modules/calendar/components/unified-event-form"
 import { UnifiedWorkScheduleForm } from "@/modules/calendar/components/unified-work-schedule-form"
 import { UnifiedEventsList } from "@/modules/calendar/components/unified-events-list"
+import { VacationManagementModal } from "@/modules/vacation-management"
 import { useUserStore } from "@/stores/useUserStore"
 import { useUiStore } from "@/stores/useUiStore"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useWorkSchedule } from "@/modules/calendar/hooks/useWorkSchedule"
 
@@ -23,28 +26,101 @@ export default function CalendarPage() {
 
   const [activeDialog, setActiveDialog] = useState<string | null>(null)
   const [showEventsList, setShowEventsList] = useState(false)
+  const [showVacationManagement, setShowVacationManagement] = useState(false)
 
   // Загружаем события когда пользователь определен
   useEffect(() => {
     const currentUserId = userStore.id
     if (currentUserId && userStore.isAuthenticated) {
-      fetchEvents(currentUserId)
-      fetchWorkSchedules(currentUserId)
+      Sentry.startSpan(
+        {
+          op: "calendar.load_data",
+          name: "Load Calendar Data",
+        },
+        async (span) => {
+          try {
+            span.setAttribute("user.id", currentUserId)
+            span.setAttribute("user.authenticated", userStore.isAuthenticated)
+            
+            await Promise.all([
+              fetchEvents(currentUserId),
+              fetchWorkSchedules(currentUserId)
+            ])
+            
+            span.setAttribute("load.success", true)
+            
+            Sentry.addBreadcrumb({
+              message: 'Calendar data loaded successfully',
+              category: 'calendar',
+              level: 'info',
+              data: {
+                user_id: currentUserId,
+                component: 'CalendarPage'
+              }
+            })
+          } catch (error) {
+            span.setAttribute("load.success", false)
+            span.recordException(error as Error)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'calendar',
+                component: 'CalendarPage',
+                action: 'load_data',
+                error_type: 'unexpected_error'
+              },
+              extra: {
+                user_id: currentUserId,
+                authenticated: userStore.isAuthenticated,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка при загрузке данных календаря:', error)
+          }
+        }
+      )
     }
   }, [userStore.id, userStore.isAuthenticated, fetchEvents, fetchWorkSchedules])
 
-  // Проверяем права на создание глобальных событий (календарь) - ОПТИМИЗИРОВАННО
+    // Проверяем права на создание глобальных событий (календарь) - ОПТИМИЗИРОВАННО
+  const { hasPermission } = usePermissions()
   const canCreateGlobalEvents = useMemo(() => {
-    const result = userStore.hasPermission("calendar.admin") || 
-                   userStore.hasPermission("calendar_can_create_and_edit_global_events")
+    const result = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
     
     return result
-  }, [userStore.id, userStore.permissions])
+  }, [hasPermission])
 
   const currentUser = userStore
 
   const handleCloseDialog = () => {
-    setActiveDialog(null)
+    try {
+      setActiveDialog(null)
+      
+      Sentry.addBreadcrumb({
+        message: 'Calendar dialog closed',
+        category: 'calendar',
+        level: 'info',
+        data: {
+          component: 'CalendarPage',
+          previous_dialog: activeDialog
+        }
+      })
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: 'calendar',
+          component: 'CalendarPage',
+          action: 'close_dialog',
+          error_type: 'unexpected_error'
+        },
+        extra: {
+          active_dialog: activeDialog,
+          timestamp: new Date().toISOString()
+        }
+      })
+      console.error('Ошибка при закрытии диалога календаря:', error)
+      // Все равно закрываем диалог
+      setActiveDialog(null)
+    }
   }
 
   if (!userStore.isAuthenticated || !userStore.id) {
@@ -83,6 +159,12 @@ export default function CalendarPage() {
           <div className="flex flex-wrap gap-4">
             <Button onClick={() => setActiveDialog("event")}>Добавить событие</Button>
             <Button onClick={() => setActiveDialog("work-schedule")}>Изменить рабочий график</Button>
+            <Button 
+              onClick={() => setShowVacationManagement(true)}
+              variant="outline"
+            >
+              Управление отпусками
+            </Button>
           </div>
         </div>
 
@@ -124,6 +206,12 @@ export default function CalendarPage() {
 
       {/* Unified Events List */}
       <UnifiedEventsList isOpen={showEventsList} onClose={() => setShowEventsList(false)} />
+
+      {/* Модальное окно управления отпусками */}
+      <VacationManagementModal
+        isOpen={showVacationManagement}
+        onClose={() => setShowVacationManagement(false)}
+      />
     </div>
   )
 } 

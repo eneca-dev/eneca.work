@@ -179,13 +179,6 @@ export function ProjectsFilters({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Кнопка синхронизации с Worksection */}
-          <SyncButton 
-            size="md"
-            theme={theme}
-            showText={true}
-          />
-
           {/* Кнопка сброса фильтров */}
           {hasActiveFilters && (
             <button

@@ -72,6 +72,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-width: 768px;
   }
 }
 
@@ -130,6 +131,36 @@
     -webkit-line-clamp: 6;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  /* Глобальные минималистичные скроллбары без фона */
+  .no-scrollbar-bg::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+  }
+  .no-scrollbar-bg::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .no-scrollbar-bg::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  .no-scrollbar-bg::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.55);
+  }
+  .dark .no-scrollbar-bg::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.35);
+  }
+  .dark .no-scrollbar-bg::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.6);
+  }
+  /* Firefox */
+  .no-scrollbar-bg {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
   }
 
   /* ContentEditable placeholder */

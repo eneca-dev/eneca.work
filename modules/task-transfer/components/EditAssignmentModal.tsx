@@ -10,6 +10,7 @@ import { Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "../store"
 import type { Assignment, UpdateAssignmentData } from "../types"
+import * as Sentry from "@sentry/nextjs"
 
 interface EditAssignmentModalProps {
   assignment: Assignment | null
@@ -64,40 +65,85 @@ export function EditAssignmentModal({ assignment, isOpen, onClose }: EditAssignm
 
     setIsUpdating(true)
 
-    try {
-      const updateData: UpdateAssignmentData = {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        planned_duration: duration,
-        due_date: dueDate || undefined,
-        link: link.trim() || undefined
-      }
+    await Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Редактирование задания в модальном окне",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("component", "EditAssignmentModal")
+          span.setAttribute("assignment_id", assignment.assignment_id)
+          span.setAttribute("fields_changed", [
+            title !== assignment.title ? "title" : null,
+            description !== assignment.description ? "description" : null,
+            duration !== assignment.planned_duration ? "planned_duration" : null,
+            dueDate !== assignment.due_date ? "due_date" : null,
+            link !== assignment.link ? "link" : null
+          ].filter(Boolean).join(", "))
+          
+          const updateData: UpdateAssignmentData = {
+            title: title.trim(),
+            description: description.trim() || undefined,
+            planned_duration: duration,
+            due_date: dueDate || undefined,
+            link: link.trim() || undefined
+          }
 
-      const result = await updateAssignment(assignment.assignment_id, updateData)
+          const result = await updateAssignment(assignment.assignment_id, updateData)
 
-      if (result.success) {
-        toast({
-          title: "Успех", 
-          description: "Задание успешно обновлено",
-        })
-        onClose()
-      } else {
-        toast({
-          title: "Ошибка",
-          description: "Не удалось обновить задание",
-          variant: "destructive",
-        })
+          if (result.success) {
+            span.setAttribute("update.success", true)
+            toast({
+              title: "Успех", 
+              description: "Задание успешно обновлено",
+            })
+            onClose()
+          } else {
+            span.setAttribute("update.success", false)
+            toast({
+              title: "Ошибка",
+              description: "Не удалось обновить задание",
+              variant: "destructive",
+            })
+          }
+        } catch (error) {
+          span.setAttribute("error", true)
+          span.setAttribute("error.message", (error as Error).message)
+          
+          Sentry.captureException(error, {
+            tags: {
+              module: 'task_transfer',
+              component: 'EditAssignmentModal',
+              action: 'update_assignment',
+              assignment_id: assignment.assignment_id
+            },
+            extra: {
+              assignment_id: assignment.assignment_id,
+              original_title: assignment.title,
+              new_title: title,
+              update_data: JSON.stringify({
+                title: title.trim(),
+                description: description.trim() || undefined,
+                planned_duration: duration,
+                due_date: dueDate || undefined,
+                link: link.trim() || undefined
+              }),
+              error_message: (error as Error).message,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          toast({
+            title: "Ошибка",
+            description: "Произошла неожиданная ошибка",
+            variant: "destructive",
+          })
+        } finally {
+          setIsUpdating(false)
+        }
       }
-    } catch (error) {
-      console.error('Ошибка обновления задания:', error)
-      toast({
-        title: "Ошибка",
-        description: "Произошла неожиданная ошибка",
-        variant: "destructive",
-      })
-    } finally {
-      setIsUpdating(false)
-    }
+    )
   }
 
   const handleClose = () => {
