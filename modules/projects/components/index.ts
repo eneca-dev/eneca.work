@@ -8,4 +8,7 @@ export { EditObjectModal } from './EditObjectModal'
 export { DeleteObjectModal } from './DeleteObjectModal'
 export { CreateObjectModal } from './CreateObjectModal'
 export { CreateSectionModal } from './CreateSectionModal'
-export { DeleteSectionModal } from './DeleteSectionModal' 
+export { DeleteSectionModal } from './DeleteSectionModal'
+
+export { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
+export { CompactTaskSchedule } from './CompactTaskSchedule' 

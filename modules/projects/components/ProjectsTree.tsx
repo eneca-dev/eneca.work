@@ -16,6 +16,7 @@ import { CreateStageModal } from './CreateStageModal'
 import { EditObjectModal } from './EditObjectModal'
 import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
+import { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
@@ -80,6 +81,7 @@ interface TreeNodeProps {
   onCreateStage: (project: ProjectNode, e: React.MouseEvent) => void
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
+  onCreateAssignment: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
@@ -101,6 +103,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateStage,
   onCreateObject,
   onCreateSection,
+  onCreateAssignment,
   onDeleteProject,
   onOpenStatusManagement,
   statuses
@@ -569,6 +572,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <PlusCircle className="h-3 w-3 text-teal-600 dark:text-teal-400" />
                 </button>
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => onCreateAssignment(node, e)}
+                      className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all mr-1"
+                    >
+                      <SquareStack className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Создать задание</p>
+                  </TooltipContent>
+                </UiTooltip>
                 <button
                   onClick={(e) => onEditObject(node, e)}
                   className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-all"
@@ -779,6 +795,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateStage={onCreateStage}
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
+              onCreateAssignment={onCreateAssignment}
               onDeleteProject={onDeleteProject}
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
@@ -837,6 +854,8 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+  const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false)
+  const [selectedObjectForAssignment, setSelectedObjectForAssignment] = useState<ProjectNode | null>(null)
   
 
   // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
@@ -1235,6 +1254,8 @@ export function ProjectsTree({
           type: 'object',
           stageId: row.stage_id,
           projectId: row.project_id,
+          projectName: row.project_name,
+          stageName: row.stage_name,
           children: []
         })
       }
@@ -1580,6 +1601,12 @@ export function ProjectsTree({
     setShowCreateSectionModal(true)
   }
 
+  const handleCreateAssignment = (object: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedObjectForAssignment(object)
+    setShowCreateAssignmentModal(true)
+  }
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
@@ -1621,6 +1648,7 @@ export function ProjectsTree({
                 onCreateStage={handleCreateStage}
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
+                onCreateAssignment={handleCreateAssignment}
                 onDeleteProject={handleDeleteProject}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
@@ -1769,6 +1797,22 @@ export function ProjectsTree({
         isOpen={showStatusManagementModal}
         onClose={() => setShowStatusManagementModal(false)}
       />
+
+      {/* Модальное окно создания задания для объекта */}
+      {showCreateAssignmentModal && selectedObjectForAssignment && (
+        <CreateObjectAssignmentModal
+          isOpen={showCreateAssignmentModal}
+          onClose={() => {
+            setShowCreateAssignmentModal(false)
+            setSelectedObjectForAssignment(null)
+          }}
+          objectId={selectedObjectForAssignment.id}
+          objectName={selectedObjectForAssignment.name}
+          projectId={selectedObjectForAssignment.projectId || ''}
+          projectName={selectedObjectForAssignment.projectName || ''}
+          stageId={selectedObjectForAssignment.stageId || ''}
+        />
+      )}
 
     </TooltipProvider>
   )

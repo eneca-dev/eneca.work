@@ -13,6 +13,7 @@ import { ProjectsTree } from './components';
 import { useUiStore } from '@/stores/useUiStore';
 import { SyncButton } from '@/components/ui/sync-button';
 import { Search } from 'lucide-react';
+import { useTaskTransferStore } from '@/modules/task-transfer/store';
 
 import { X } from 'lucide-react';
 
@@ -24,6 +25,9 @@ export default function ProjectsPage() {
     selectedSectionId,
     isDetailsPanelOpen 
   } = useProjectsStore();
+  
+  // Загружаем данные для task-transfer store (нужно для создания заданий)
+  const { loadInitialData } = useTaskTransferStore();
 
   // GlobalNotification компонент сам управляет уведомлениями
 
@@ -132,6 +136,12 @@ export default function ProjectsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStore.selectedProjectId, filterStore.selectedStageId, filterStore.selectedObjectId])
+
+  // Загружаем данные для task-transfer store (для создания заданий)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    loadInitialData()
+  }, [loadInitialData])
 
   return (
     <div className="px-0 pt-0 pb-0">

@@ -60,7 +60,7 @@ interface TaskTransferStore {
   loadAssignments: (filters?: TaskFilters) => Promise<void>
   refreshData: () => Promise<void>
   createNewAssignment: (assignmentData: CreateAssignmentData) => Promise<{ success: boolean; error?: any }>
-  updateAssignment: (assignmentId: string, updateData: UpdateAssignmentData) => Promise<{ success: boolean; error?: any }>
+  updateAssignment: (assignmentId: string, updateData: UpdateAssignmentData) => Promise<{ success: boolean; data?: Assignment; error?: any }>
   advanceStatus: (assignmentId: string, currentStatus: any) => Promise<{ success: boolean; error?: any }>
   advanceStatusWithDuration: (assignmentId: string, currentStatus: any, duration?: number) => Promise<{ success: boolean; error?: any }>
   revertStatus: (assignmentId: string, currentStatus: any) => Promise<{ success: boolean; error?: any }>
@@ -410,14 +410,16 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
             console.log('✅ Задание успешно обновлено, обновляю локально...')
             
             // Обновляем задание локально в store
+            const updatedAssignment = {
+              ...get().assignments.find(a => a.assignment_id === assignmentId)!,
+              ...updateData,
+              updated_at: new Date().toISOString()
+            }
+            
             set((state) => ({
               assignments: state.assignments.map(assignment => 
                 assignment.assignment_id === assignmentId 
-                  ? { 
-                      ...assignment, 
-                      ...updateData,
-                      updated_at: new Date().toISOString()
-                    }
+                  ? updatedAssignment
                   : assignment
               )
             }))
@@ -443,7 +445,7 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
                 // Не останавливаем выполнение, если история не загрузилась
               }
               
-              return { success: true }
+              return { success: true, data: updatedAssignment }
             } else {
               span.setAttribute("db.success", false)
               Sentry.captureException(new Error(result.error || "Неизвестная ошибка обновления задания"), {
