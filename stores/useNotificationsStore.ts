@@ -59,6 +59,9 @@ interface NotificationsState {
   error: string | null
   realtimeChannel: RealtimeChannel | null
   currentUserId: string | null
+  // Состояние UI панели уведомлений
+  isPanelOpen: boolean
+  panelWidthPx: number
   
   // Колбэк для обновления модулей
   onModuleUpdate: ((entityType: string) => void) | null
@@ -78,6 +81,12 @@ interface NotificationsState {
   setError: (error: string | null) => void
   setCurrentUserId: (userId: string | null) => void
   setModuleUpdateCallback: (callback: ((entityType: string) => void) | null) => void
+  
+  // Методы управления панелью уведомлений
+  openPanel: () => void
+  closePanel: () => void
+  togglePanel: () => void
+  setPanelWidth: (widthPx: number) => void
   
   // Методы для Realtime
   initializeRealtime: () => void
@@ -186,6 +195,8 @@ export const useNotificationsStore = create<NotificationsState>()(
       realtimeChannel: null,
       currentUserId: null,
       onModuleUpdate: null, // Инициализируем колбэк
+      isPanelOpen: false,
+      panelWidthPx: 420,
 
       // Методы для работы с уведомлениями
       setNotifications: (notifications) => {
@@ -279,6 +290,12 @@ export const useNotificationsStore = create<NotificationsState>()(
       setError: (error) => set({ error }),
       setCurrentUserId: (userId) => set({ currentUserId: userId }),
       setModuleUpdateCallback: (callback) => set({ onModuleUpdate: callback }),
+      
+      // Управление панелью
+      openPanel: () => set({ isPanelOpen: true }),
+      closePanel: () => set({ isPanelOpen: false }),
+      togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
+      setPanelWidth: (widthPx) => set({ panelWidthPx: Math.max(320, Math.min(720, Math.round(widthPx))) }),
 
       // Методы для Realtime
       initializeRealtime: () => {

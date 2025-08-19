@@ -13,7 +13,9 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ collapsed = false }: NotificationBellProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const isOpen = useNotificationsStore((s) => s.isPanelOpen)
+  const togglePanel = useNotificationsStore((s) => s.togglePanel)
+  const closePanel = useNotificationsStore((s) => s.closePanel)
   const [mounted, setMounted] = useState(false)
   const unreadCount = useNotificationsStore((state) => state.unreadCount)
   
@@ -65,7 +67,7 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
           span.setAttribute("bell.unread_count", unreadCount)
           span.setAttribute("bell.has_unread", hasUnread)
           
-          setIsOpen(newIsOpen)
+          togglePanel()
           
           Sentry.addBreadcrumb({
             message: newIsOpen ? 'Notifications panel opened' : 'Notifications panel closed',
@@ -103,7 +105,7 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
 
   const handlePanelClose = () => {
     try {
-      setIsOpen(false)
+      closePanel()
       
       Sentry.addBreadcrumb({
         message: 'Notifications panel closed',
@@ -130,12 +132,12 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
       })
       console.error('Ошибка при закрытии панели уведомлений:', error)
       // Все равно закрываем панель, даже если произошла ошибка
-      setIsOpen(false)
+      closePanel()
     }
   }
 
   return (
-    <div className="relative">
+    <div className="relative" data-notifications-bell>
       <Button
         variant="ghost"
         size="icon"
@@ -153,7 +155,7 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
         )}
       </Button>
 
-      {isOpen && <NotificationsPanel onClose={handlePanelClose} collapsed={collapsed} />}
+      {isOpen && <NotificationsPanel onCloseAction={handlePanelClose} collapsed={collapsed} />}
     </div>
   )
 }
