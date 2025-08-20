@@ -645,7 +645,7 @@ export async function getUserNotifications(
               *,
               entity_types:entity_type_id (*)
             )
-          `)
+          `, { count: 'exact' })
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
 
@@ -655,7 +655,6 @@ export async function getUserNotifications(
 
         const { data, error, count } = await query
           .range(offset, offset + limit - 1)
-          .limit(limit)
 
         console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
         console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)

@@ -68,6 +68,16 @@ interface NotificationsState {
   isPanelOpen: boolean
   panelWidthPx: number
   
+  // Пагинация
+  hasMore: boolean
+  isLoadingMore: boolean
+  currentPage: number
+  
+  // Поиск
+  searchQuery: string
+  isSearchMode: boolean
+  allNotifications: Notification[] // Все уведомления для поиска
+  
   // Колбэк для обновления модулей
   onModuleUpdate: ((entityType: string) => void) | null
   
@@ -105,6 +115,13 @@ interface NotificationsState {
   // Методы для загрузки данных
   fetchNotifications: () => Promise<void>
   fetchUnreadCount: () => Promise<void>
+  loadMoreNotifications: () => Promise<void>
+  resetPagination: () => void
+  
+  // Методы для поиска
+  searchNotifications: (query: string) => Promise<void>
+  clearSearch: () => void
+  setSearchQuery: (query: string) => void
   
   // Диагностические методы
   debugStore: () => NotificationsState
@@ -210,6 +227,16 @@ export const useNotificationsStore = create<NotificationsState>()(
       onModuleUpdate: null, // Инициализируем колбэк
       isPanelOpen: false,
       panelWidthPx: 420,
+      
+      // Пагинация
+      hasMore: true,
+      isLoadingMore: false,
+      currentPage: 1,
+      
+      // Поиск
+      searchQuery: '',
+      isSearchMode: false,
+      allNotifications: [],
 
       // Методы для работы с уведомлениями
       setNotifications: (notifications) => {
@@ -370,7 +397,15 @@ export const useNotificationsStore = create<NotificationsState>()(
             unreadCount: 0,
             realtimeChannel: null,
             error: null,
-            isLoading: false
+            isLoading: false,
+            // Сбрасываем пагинацию
+            currentPage: 1,
+            hasMore: true,
+            isLoadingMore: false,
+            // Сбрасываем поиск
+            searchQuery: '',
+            isSearchMode: false,
+            allNotifications: []
           })
           
           // Если новый пользователь установлен, загружаем его данные
@@ -388,6 +423,125 @@ export const useNotificationsStore = create<NotificationsState>()(
         }
       },
       setModuleUpdateCallback: (callback) => set({ onModuleUpdate: callback }),
+      
+      // Методы для пагинации
+      resetPagination: () => {
+        set({ 
+          currentPage: 1, 
+          hasMore: true, 
+          isLoadingMore: false 
+        })
+      },
+      
+      // Методы для поиска
+      setSearchQuery: (query) => {
+        set({ searchQuery: query })
+      },
+      
+      searchNotifications: async (query) => {
+        const state = get()
+        const requestUserId = state.currentUserId
+        
+        if (!requestUserId) {
+          console.warn('⚠️ Нет currentUserId для поиска уведомлений')
+          return
+        }
+
+        const trimmedQuery = query.trim()
+        console.log('🔍 Поиск уведомлений:', trimmedQuery)
+
+        try {
+          set({ 
+            isLoading: state.allNotifications.length === 0, // Показываем загрузку только если еще не загружали все уведомления
+            error: null, 
+            searchQuery: trimmedQuery,
+            isSearchMode: true
+          })
+          
+          let allNotifications = state.allNotifications
+          
+          // Если у нас еще нет всех уведомлений, загружаем их
+          if (allNotifications.length === 0) {
+            console.log('📥 Загрузка всех уведомлений для поиска...')
+            const allUserNotifications: UserNotificationWithNotification[] = []
+            let currentPage = 1
+            let hasMorePages = true
+            
+            while (hasMorePages) {
+              const { notifications: pageNotifications, hasMore } = await getUserNotifications(
+                requestUserId, 
+                currentPage, 
+                100 // Загружаем большими порциями
+              )
+              
+              allUserNotifications.push(...pageNotifications)
+              hasMorePages = hasMore
+              currentPage++
+              
+              console.log(`📦 Загружена страница ${currentPage - 1}, получено ${pageNotifications.length} уведомлений, всего: ${allUserNotifications.length}`)
+            }
+            
+            console.log(`✅ Загружено всего ${allUserNotifications.length} уведомлений для поиска`)
+            
+            // Проверяем, не изменился ли пользователь во время запроса
+            const currentState = get()
+            if (currentState.currentUserId !== requestUserId) {
+              console.log('⚠️ Пользователь изменился во время поиска, отменяем обновление')
+              return
+            }
+
+            // Преобразуем данные в формат UI
+            allNotifications = allUserNotifications.map(transformNotificationData)
+          } else {
+            console.log('🔍 Используем уже загруженные уведомления для поиска')
+          }
+          
+          // Фильтруем по поисковому запросу
+          const filteredNotifications = trimmedQuery 
+            ? allNotifications.filter(notification => 
+                notification.title.toLowerCase().includes(trimmedQuery.toLowerCase()) ||
+                notification.message.toLowerCase().includes(trimmedQuery.toLowerCase())
+              )
+            : allNotifications
+          
+          console.log(`🔍 Найдено ${filteredNotifications.length} уведомлений по запросу "${trimmedQuery}"`)
+          
+          set({ 
+            notifications: filteredNotifications,
+            allNotifications: allNotifications, // Сохраняем все для дальнейшего поиска
+            hasMore: false, // В режиме поиска пагинация отключена
+            currentPage: 1,
+            isLoadingMore: false
+          })
+          
+          console.log('✅ Результаты поиска загружены')
+        } catch (error) {
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            console.error('❌ Ошибка при поиске уведомлений:', error)
+            set({ error: 'Ошибка при поиске уведомлений' })
+          }
+        } finally {
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            set({ isLoading: false })
+          }
+        }
+      },
+      
+      clearSearch: () => {
+        console.log('🧹 Очищаем поиск')
+        set({ 
+          searchQuery: '', 
+          isSearchMode: false,
+          allNotifications: [],
+          currentPage: 1,
+          hasMore: true,
+          isLoadingMore: false
+        })
+        // Перезагружаем обычные уведомления
+        get().fetchNotifications()
+      },
       
       // Управление панелью
       openPanel: () => set({ isPanelOpen: true }),
@@ -468,11 +622,11 @@ export const useNotificationsStore = create<NotificationsState>()(
         }
       },
 
-      // Загрузка уведомлений
+      // Загрузка уведомлений (первые 10)
       fetchNotifications: async () => {
         const state = get()
         const requestUserId = state.currentUserId
-        console.log('🔄 Загрузка уведомлений для пользователя:', requestUserId)
+        console.log('🔄 Загрузка первых 10 уведомлений для пользователя:', requestUserId)
         
         if (!requestUserId) {
           console.warn('⚠️ Нет currentUserId для загрузки уведомлений')
@@ -482,9 +636,9 @@ export const useNotificationsStore = create<NotificationsState>()(
         try {
           set({ isLoading: true, error: null })
           
-          console.log('📥 Получение уведомлений из базы данных...')
-          const { notifications: userNotifications } = await getUserNotifications(requestUserId)
-          console.log('📦 Получено уведомлений из базы:', userNotifications?.length || 0)
+          console.log('📥 Получение первых 10 уведомлений из базы данных...')
+          const { notifications: userNotifications, hasMore } = await getUserNotifications(requestUserId, 1, 10)
+          console.log('📦 Получено уведомлений из базы:', userNotifications?.length || 0, 'hasMore:', hasMore)
           
           // Проверяем, не изменился ли пользователь во время запроса
           const currentState = get()
@@ -512,8 +666,14 @@ export const useNotificationsStore = create<NotificationsState>()(
             console.log('✨ Все преобразованные уведомления:', notifications)
           }
 
-          set({ notifications, unreadCount })
-          console.log('✅ Уведомления успешно загружены в стор')
+          set({ 
+            notifications, 
+            unreadCount,
+            currentPage: 1,
+            hasMore,
+            isLoadingMore: false
+          })
+          console.log('✅ Первые 10 уведомлений успешно загружены в стор')
         } catch (error) {
           // Проверяем, актуален ли еще этот запрос
           const currentState = get()
@@ -528,6 +688,68 @@ export const useNotificationsStore = create<NotificationsState>()(
           const currentState = get()
           if (currentState.currentUserId === requestUserId) {
             set({ isLoading: false })
+          }
+        }
+      },
+
+      // Загрузка дополнительных уведомлений
+      loadMoreNotifications: async () => {
+        const state = get()
+        const requestUserId = state.currentUserId
+        
+        if (!requestUserId || !state.hasMore || state.isLoadingMore || state.isLoading) {
+          console.log('🚫 Отменяем загрузку дополнительных уведомлений:', {
+            hasUserId: !!requestUserId,
+            hasMore: state.hasMore,
+            isLoadingMore: state.isLoadingMore,
+            isLoading: state.isLoading
+          })
+          return
+        }
+
+        const nextPage = state.currentPage + 1
+        console.log('🔄 Загрузка дополнительных уведомлений, страница:', nextPage)
+
+        try {
+          set({ isLoadingMore: true, error: null })
+          
+          const { notifications: userNotifications, hasMore } = await getUserNotifications(requestUserId, nextPage, 10)
+          console.log('📦 Получено дополнительных уведомлений:', userNotifications?.length || 0, 'hasMore:', hasMore)
+          
+          // Проверяем, не изменился ли пользователь во время запроса
+          const currentState = get()
+          if (currentState.currentUserId !== requestUserId) {
+            console.log('⚠️ Пользователь изменился во время загрузки, отменяем обновление')
+            return
+          }
+
+          // Преобразуем данные в формат UI
+          const newNotifications: Notification[] = userNotifications.map(transformNotificationData)
+          console.log('✨ Преобразованные дополнительные уведомления:', newNotifications.length)
+
+          // Добавляем к существующим уведомлениям
+          set((prevState) => ({
+            notifications: [...prevState.notifications, ...newNotifications],
+            currentPage: nextPage,
+            hasMore,
+            isLoadingMore: false
+          }))
+          
+          console.log('✅ Дополнительные уведомления успешно загружены')
+        } catch (error) {
+          // Проверяем, актуален ли еще этот запрос
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            console.error('❌ Ошибка при загрузке дополнительных уведомлений:', error)
+            set({ error: 'Ошибка при загрузке дополнительных уведомлений' })
+          } else {
+            console.log('⚠️ Ошибка загрузки для устаревшего пользователя, игнорируем')
+          }
+        } finally {
+          // Сбрасываем loading только если пользователь не изменился
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            set({ isLoadingMore: false })
           }
         }
       },
@@ -619,6 +841,9 @@ export const useNotificationsStore = create<NotificationsState>()(
         notifications: state.notifications,
         unreadCount: state.unreadCount,
         currentUserId: state.currentUserId,
+        // Сохраняем состояние пагинации
+        currentPage: state.currentPage,
+        hasMore: state.hasMore,
       }),
     },
   ),

@@ -7,17 +7,19 @@ import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
-import { AlertCircle, CheckCircle, Info, AlertTriangle, ChevronDown, Square, SquareCheck, Archive, Undo2 } from "lucide-react"
+import { AlertCircle, CheckCircle, Info, AlertTriangle, ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
 import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
 
 interface NotificationItemProps {
   notification: Notification
   isVisible?: boolean // Для отслеживания видимости
+  onEditAnnouncement?: (announcementId: string) => void // Функция для редактирования объявлений
 }
 
 const typeIcons = {
@@ -64,7 +66,7 @@ function getNotificationTag(entityType?: string) {
   return notificationTags[entityType as keyof typeof notificationTags]
 }
 
-export function NotificationItem({ notification, isVisible = false }: NotificationItemProps) {
+export function NotificationItem({ notification, isVisible = false, onEditAnnouncement }: NotificationItemProps) {
   const Icon = typeIcons[notification.type || "info"]
   const iconColor = typeColors[notification.type || "info"]
   const notificationTag = getNotificationTag(notification.entityType)
@@ -89,6 +91,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
   const { markAsRead, markAsUnread, markAsReadInDB, markAsUnreadInDB, setArchivedInDB, setNotificationArchived } = useNotificationsStore()
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
+  const { canCreate: canEditAnnouncements } = useAnnouncementsPermissions()
 
   // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
@@ -355,6 +358,27 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
                       <SquareCheck className="h-4 w-4" />
                     )}
                   </Button>
+
+                  {/* Кнопка редактирования для объявлений */}
+                  {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
+                   canEditAnnouncements && 
+                   onEditAnnouncement && 
+                   announcementId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEditAnnouncement(announcementId)
+                      }}
+                      className="h-7 w-7 text-gray-500 hover:text-blue-600"
+                      aria-label="Редактировать объявление"
+                      title="Редактировать объявление"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </Button>
+                  )}
 
                   {/* Архив */}
                   <Button

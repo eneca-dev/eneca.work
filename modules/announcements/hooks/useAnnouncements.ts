@@ -144,11 +144,10 @@ export function useAnnouncements() {
         ? [userData.first_name, userData.last_name].filter(Boolean).join(' ') || 'Неизвестный пользователь'
         : 'Неизвестный пользователь';
 
-      // Получаем всех пользователей для отправки уведомлений
+      // Получаем всех пользователей для отправки уведомлений (включая автора)
       const { data: allUsers, error: usersError } = await supabase
         .from('profiles')
         .select('user_id')
-        .neq('user_id', userId); // Исключаем автора объявления
 
       if (usersError) {
         console.error('Ошибка получения списка пользователей:', usersError);
@@ -156,7 +155,7 @@ export function useAnnouncements() {
 
       const userIds = allUsers?.map(user => user.user_id) || [];
 
-             // Отправляем уведомления всем пользователям (кроме автора)
+             // Отправляем уведомления всем пользователям (включая автора)
        if (userIds.length > 0) {
          try {
            await sendNotification({
