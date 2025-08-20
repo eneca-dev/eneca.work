@@ -662,6 +662,21 @@ export async function getUserNotifications(
         
         if (data && data.length > 0) {
           console.log('🔍 getUserNotifications: первая запись:', data[0])
+          console.log('🔍 getUserNotifications: структура notifications в первой записи:', data[0].notifications)
+          console.log('🔍 getUserNotifications: структура entity_types в первой записи:', data[0].notifications?.entity_types)
+          
+          // Проверяем все записи на наличие связанных данных
+          data.forEach((item, index) => {
+            console.log(`🔍 getUserNotifications: запись ${index}:`, {
+              id: item.id,
+              notification_id: item.notification_id,
+              has_notifications: !!item.notifications,
+              notifications_id: item.notifications?.id,
+              has_entity_types: !!item.notifications?.entity_types,
+              entity_name: item.notifications?.entity_types?.entity_name,
+              payload: item.notifications?.payload
+            })
+          })
         }
 
         if (error) {
@@ -1124,6 +1139,29 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     console.error('🔍 DEBUG: ошибка user_notifications:', userError)
   }
   
+  // Проверяем полный JOIN запрос - такой же как в getUserNotifications
+  const { data: joinedData, error: joinError } = await supabase
+    .from('user_notifications')
+    .select(`
+      *,
+      notifications:notification_id (
+        *,
+        entity_types:entity_type_id (*)
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+    
+  console.log('🔍 DEBUG: JOIN запрос результат:', joinedData?.length || 0)
+  if (joinedData && joinedData.length > 0) {
+    console.log('🔍 DEBUG: полные данные JOIN:', JSON.stringify(joinedData, null, 2))
+  }
+  
+  if (joinError) {
+    console.error('🔍 DEBUG: ошибка JOIN запроса:', joinError)
+  }
+  
   // Проверяем все записи в notifications
   const { data: notifications, error: notifError } = await supabase
     .from('notifications')
@@ -1152,5 +1190,100 @@ export async function debugUserNotifications(userId: string): Promise<void> {
   
   if (entityError) {
     console.error('🔍 DEBUG: ошибка entity_types:', entityError)
+  }
+  
+  // Проверяем конкретные notification_id из вашей таблицы
+  const testNotificationIds = [
+    '18c5808d-ebd1-4989-8f94-d9db531ca7e7',
+    '1e3ff8c4-ddb6-426c-adc9-3eeb98fbcdf3',
+    '7140d06a-b69e-4ebd-b245-079967dd2e39',
+    'cd960712-8a2f-4fbb-9ded-180b2bff63d3',
+    '4792c6f4-daaf-42f9-8d10-d2af9a417968'
+  ]
+  
+  for (const notifId of testNotificationIds) {
+    const { data: notifData, error: notifError } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('id', notifId)
+      .single()
+      
+    console.log(`🔍 DEBUG: notification ${notifId}:`, notifData || 'НЕ НАЙДЕНО', notifError?.message || '')
+  }
+}
+
+/**
+ * Тестовая функция для создания тестового уведомления
+ */
+export async function createTestNotification(userId: string): Promise<void> {
+  const supabase = createClient()
+  
+  try {
+    // Сначала проверим, есть ли entity_type для 'test'
+    let { data: entityType, error: entityError } = await supabase
+      .from('entity_types')
+      .select('*')
+      .eq('entity_name', 'test')
+      .single()
+    
+    if (entityError || !entityType) {
+      // Создаем entity_type если его нет
+      const { data: newEntityType, error: createEntityError } = await supabase
+        .from('entity_types')
+        .insert({ entity_name: 'test' })
+        .select()
+        .single()
+      
+      if (createEntityError) {
+        console.error('❌ Ошибка создания entity_type:', createEntityError)
+        return
+      }
+      
+      entityType = newEntityType
+    }
+    
+    // Создаем уведомление
+    const { data: notification, error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        entity_type_id: entityType.id,
+        payload: {
+          title: 'Тестовое уведомление',
+          message: 'Это тестовое уведомление для проверки системы',
+          type: 'info'
+        },
+        rendered_text: 'Тестовое уведомление: Это тестовое уведомление для проверки системы'
+      })
+      .select()
+      .single()
+    
+    if (notificationError) {
+      console.error('❌ Ошибка создания уведомления:', notificationError)
+      return
+    }
+    
+    // Создаем user_notification
+    const { data: userNotification, error: userNotificationError } = await supabase
+      .from('user_notifications')
+      .insert({
+        notification_id: notification.id,
+        user_id: userId,
+        is_read: false,
+        is_archived: false
+      })
+      .select()
+      .single()
+    
+    if (userNotificationError) {
+      console.error('❌ Ошибка создания user_notification:', userNotificationError)
+      return
+    }
+    
+    console.log('✅ Тестовое уведомление создано:', {
+      notification: notification.id,
+      userNotification: userNotification.id
+    })
+  } catch (error) {
+    console.error('❌ Ошибка при создании тестового уведомления:', error)
   }
 } 

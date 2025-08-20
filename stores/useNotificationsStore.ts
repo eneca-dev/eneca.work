@@ -106,6 +106,9 @@ interface NotificationsState {
   fetchNotifications: () => Promise<void>
   fetchUnreadCount: () => Promise<void>
   
+  // Диагностические методы
+  debugStore: () => NotificationsState
+  
   // Обработчик новых уведомлений из Realtime
   handleNewNotification: (userNotification: DatabaseUserNotification) => void
 }
@@ -187,7 +190,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
     message,
     createdAt: new Date(un.created_at),
     isRead: un.is_read,
-    isArchived: Boolean(payload.is_archived || payload.archived || payload.isArchived || false),
+    isArchived: Boolean((un as any).is_archived || false),
     type: payload.type || 'info',
     payload: notification?.payload,
     entityType,
@@ -345,7 +348,45 @@ export const useNotificationsStore = create<NotificationsState>()(
       // Методы для состояния
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error }),
-      setCurrentUserId: (userId) => set({ currentUserId: userId }),
+      setCurrentUserId: (userId) => {
+        const currentState = get()
+        
+        // Если пользователь изменился, очищаем все данные
+        if (currentState.currentUserId !== userId) {
+          console.log('👤 Смена пользователя:', {
+            from: currentState.currentUserId,
+            to: userId
+          })
+          
+          // Отписываемся от текущих Realtime подписок
+          if (currentState.realtimeChannel) {
+            currentState.realtimeChannel.unsubscribe()
+          }
+          
+          // Очищаем все данные уведомлений
+          set({ 
+            currentUserId: userId,
+            notifications: [],
+            unreadCount: 0,
+            realtimeChannel: null,
+            error: null,
+            isLoading: false
+          })
+          
+          // Если новый пользователь установлен, загружаем его данные
+          if (userId) {
+            // Инициализируем заново для нового пользователя
+            setTimeout(() => {
+              const newState = get()
+              newState.fetchNotifications()
+              newState.initializeRealtime()
+            }, 100)
+          }
+        } else {
+          // Если пользователь тот же, просто обновляем ID
+          set({ currentUserId: userId })
+        }
+      },
       setModuleUpdateCallback: (callback) => set({ onModuleUpdate: callback }),
       
       // Управление панелью
@@ -367,18 +408,24 @@ export const useNotificationsStore = create<NotificationsState>()(
 
       subscribeToNotifications: () => {
         const state = get()
-        if (!state.currentUserId) return
+        if (!state.currentUserId) {
+          console.log('⚠️ Нет currentUserId для подписки на Realtime')
+          return
+        }
 
         const supabase = createClient()
         
         // Отписываемся от предыдущего канала
         if (state.realtimeChannel) {
+          console.log('🔄 Отписываемся от предыдущего Realtime канала')
           state.realtimeChannel.unsubscribe()
         }
 
+        console.log('📡 Подписываемся на Realtime для пользователя:', state.currentUserId)
+
         // Создаем новый канал
         const channel = supabase
-          .channel('realtime:user_notifications')
+          .channel(`realtime:user_notifications:${state.currentUserId}`)
           .on(
             'postgres_changes',
             {
@@ -388,11 +435,26 @@ export const useNotificationsStore = create<NotificationsState>()(
               filter: `user_id=eq.${state.currentUserId}`
             },
             (payload) => {
-              console.log('Получено новое уведомление:', payload)
+              console.log('📨 Получено новое уведомление:', payload)
               state.handleNewNotification(payload.new as DatabaseUserNotification)
             }
           )
-          .subscribe()
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'user_notifications',
+              filter: `user_id=eq.${state.currentUserId}`
+            },
+            (payload) => {
+              console.log('🔄 Обновлено уведомление:', payload)
+              // Можно добавить обработку обновлений уведомлений
+            }
+          )
+          .subscribe((status) => {
+            console.log('📡 Realtime статус подписки:', status)
+          })
 
         set({ realtimeChannel: channel })
       },
@@ -400,6 +462,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       unsubscribeFromNotifications: () => {
         const state = get()
         if (state.realtimeChannel) {
+          console.log('🔌 Отписываемся от Realtime уведомлений')
           state.realtimeChannel.unsubscribe()
           set({ realtimeChannel: null })
         }
@@ -408,9 +471,10 @@ export const useNotificationsStore = create<NotificationsState>()(
       // Загрузка уведомлений
       fetchNotifications: async () => {
         const state = get()
-        console.log('🔄 Загрузка уведомлений для пользователя:', state.currentUserId)
+        const requestUserId = state.currentUserId
+        console.log('🔄 Загрузка уведомлений для пользователя:', requestUserId)
         
-        if (!state.currentUserId) {
+        if (!requestUserId) {
           console.warn('⚠️ Нет currentUserId для загрузки уведомлений')
           return
         }
@@ -419,23 +483,52 @@ export const useNotificationsStore = create<NotificationsState>()(
           set({ isLoading: true, error: null })
           
           console.log('📥 Получение уведомлений из базы данных...')
-          const { notifications: userNotifications } = await getUserNotifications(state.currentUserId)
+          const { notifications: userNotifications } = await getUserNotifications(requestUserId)
           console.log('📦 Получено уведомлений из базы:', userNotifications?.length || 0)
           
-          const unreadCount = await getUnreadNotificationsCount(state.currentUserId)
+          // Проверяем, не изменился ли пользователь во время запроса
+          const currentState = get()
+          if (currentState.currentUserId !== requestUserId) {
+            console.log('⚠️ Пользователь изменился во время загрузки, отменяем обновление')
+            return
+          }
+          
+          const unreadCount = await getUnreadNotificationsCount(requestUserId)
           console.log('📊 Количество непрочитанных:', unreadCount)
+
+          // Еще раз проверяем, не изменился ли пользователь
+          const finalState = get()
+          if (finalState.currentUserId !== requestUserId) {
+            console.log('⚠️ Пользователь изменился во время загрузки, отменяем обновление')
+            return
+          }
 
           // Преобразуем данные в формат UI
           const notifications: Notification[] = userNotifications.map(transformNotificationData)
           console.log('✨ Преобразованные уведомления:', notifications.length)
+          
+          if (notifications.length > 0) {
+            console.log('✨ Первое преобразованное уведомление:', notifications[0])
+            console.log('✨ Все преобразованные уведомления:', notifications)
+          }
 
           set({ notifications, unreadCount })
           console.log('✅ Уведомления успешно загружены в стор')
         } catch (error) {
-          console.error('❌ Ошибка при загрузке уведомлений:', error)
-          set({ error: 'Ошибка при загрузке уведомлений' })
+          // Проверяем, актуален ли еще этот запрос
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            console.error('❌ Ошибка при загрузке уведомлений:', error)
+            set({ error: 'Ошибка при загрузке уведомлений' })
+          } else {
+            console.log('⚠️ Ошибка загрузки для устаревшего пользователя, игнорируем')
+          }
         } finally {
-          set({ isLoading: false })
+          // Сбрасываем loading только если пользователь не изменился
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            set({ isLoading: false })
+          }
         }
       },
 
@@ -450,6 +543,21 @@ export const useNotificationsStore = create<NotificationsState>()(
           console.error('Ошибка при получении количества непрочитанных уведомлений:', error)
           set({ error: 'Ошибка при получении количества непрочитанных уведомлений' })
         }
+      },
+
+      // Диагностическая функция для проверки состояния store
+      debugStore: () => {
+        const state = get()
+        console.log('🔍 DEBUG Store состояние:', {
+          currentUserId: state.currentUserId,
+          notificationsCount: state.notifications.length,
+          unreadCount: state.unreadCount,
+          isLoading: state.isLoading,
+          error: state.error,
+          hasRealtimeChannel: !!state.realtimeChannel,
+          isPanelOpen: state.isPanelOpen
+        })
+        return state
       },
 
       // Обработчик новых уведомлений из Realtime
