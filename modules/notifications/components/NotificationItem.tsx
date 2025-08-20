@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { useRouter } from "next/navigation"
 
@@ -117,6 +117,72 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/__(.*?)__/g, '<u>$1</u>')
   }
+
+  // Реф и вычисление: есть ли обрезка (только для анонсов)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [isExpandableAnnouncement, setIsExpandableAnnouncement] = useState(false)
+
+  useEffect(() => {
+    if (!(notification.entityType === 'announcement' || notification.entityType === 'announcements')) {
+      setIsExpandableAnnouncement(false)
+      return
+    }
+
+    const el = contentRef.current
+    if (!el || !fullAnnouncementText) {
+      setIsExpandableAnnouncement(false)
+      return
+    }
+
+    const measure = () => {
+      try {
+        const styleAny = el.style as any
+        const prevWebkitLineClamp = styleAny.webkitLineClamp
+        const prevWebkitBoxOrient = styleAny.webkitBoxOrient
+        const prevDisplay = el.style.display
+        const prevOverflow = el.style.overflow
+
+        // Временно убираем line-clamp, чтобы получить натуральную высоту
+        styleAny.webkitLineClamp = 'unset'
+        styleAny.webkitBoxOrient = 'unset'
+        el.style.display = 'block'
+        el.style.overflow = 'visible'
+
+        // Принудительный рефлоу
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        el.offsetHeight
+
+        const computed = window.getComputedStyle(el)
+        const lineHeight = parseFloat(computed.lineHeight)
+        const naturalHeight = el.scrollHeight
+
+        // Возвращаем исходные стили
+        styleAny.webkitLineClamp = prevWebkitLineClamp
+        styleAny.webkitBoxOrient = prevWebkitBoxOrient
+        el.style.display = prevDisplay
+        el.style.overflow = prevOverflow
+
+        if (lineHeight > 0) {
+          const lines = naturalHeight / lineHeight
+          setIsExpandableAnnouncement(lines > 2.1)
+        } else {
+          // Фоллбек: грубая эвристика по длине текста
+          const plain = formatAnnouncementText(fullAnnouncementText)
+            .replace(/<[^>]*>/g, "")
+            .replace(/\s+/g, " ")
+            .trim()
+          setIsExpandableAnnouncement(plain.length > 160)
+        }
+      } catch {
+        setIsExpandableAnnouncement(false)
+      }
+    }
+
+    measure()
+    const onResize = () => measure()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [notification.entityType, fullAnnouncementText])
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
@@ -375,9 +441,20 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
             </div>
           </div>
 
-          <p className="text-xs mt-1 line-clamp-2 text-gray-600 dark:text-gray-400">
-            {notification.message}
-          </p>
+          {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText ? (
+            <div
+              className={cn(
+                "text-xs mt-1 text-gray-600 dark:text-gray-400 break-words",
+                isExpanded ? "whitespace-pre-wrap" : "line-clamp-2"
+              )}
+              ref={contentRef}
+              dangerouslySetInnerHTML={{ __html: formatAnnouncementText(fullAnnouncementText) }}
+            />
+          ) : (
+            <p className="text-xs mt-1 line-clamp-2 text-gray-600 dark:text-gray-400 break-words">
+              {notification.message}
+            </p>
+          )}
 
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500 dark:text-gray-500">
@@ -406,7 +483,7 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
             )}
           </div>
 
-          {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && (
+          {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && isExpandableAnnouncement && (
             <div className="mt-2">
               <button
                 type="button"
@@ -416,12 +493,6 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
                 <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
                 {isExpanded ? 'Свернуть' : 'Читать полностью'}
               </button>
-              {isExpanded && (
-                <div
-                  className="mt-2 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: formatAnnouncementText(fullAnnouncementText) }}
-                />
-              )}
             </div>
           )}
         </div>
