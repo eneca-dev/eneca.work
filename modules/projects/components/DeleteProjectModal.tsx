@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { AlertTriangle, Trash2, Loader2 } from 'lucide-react'
 import { Modal, ModalButton, useModalState } from '@/components/modals'
 import { createClient } from '@/utils/supabase/client'
@@ -46,110 +47,266 @@ export function DeleteProjectModal({
   }, [isOpen, projectId])
 
   const loadProjectStats = async () => {
-    setIsLoadingStats(true)
-    setError(null)
-    
-    try {
-      const { data, error } = await supabase.rpc('get_project_delete_stats', {
-        project_id_param: projectId
-      })
-      
-      if (error) {
-        console.error('Ошибка загрузки статистики:', error)
-        setError('Не удалось загрузить статистику проекта')
-      } else {
-        setStats(data[0] || {
-          stages_count: 0,
-          objects_count: 0,
-          sections_count: 0,
-          tasks_count: 0,
-          loadings_count: 0,
-          assignments_count: 0,
-          contracts_count: 0,
-          decompositions_count: 0
-        })
+    return Sentry.startSpan(
+      {
+        op: "projects.load_delete_stats",
+        name: "Load Project Delete Statistics",
+      },
+      async (span) => {
+        setIsLoadingStats(true)
+        setError(null)
+        
+        try {
+          span.setAttribute("project.id", projectId)
+          span.setAttribute("project.name", projectName)
+          
+          const { data, error } = await supabase.rpc('get_project_delete_stats', {
+            project_id_param: projectId
+          })
+          
+          if (error) {
+            span.setAttribute("load.success", false)
+            span.setAttribute("load.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'load_delete_stats',
+                error_type: 'db_error'
+              },
+              extra: { 
+                component: 'DeleteProjectModal',
+                project_id: projectId,
+                project_name: projectName,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка загрузки статистики:', error)
+            setError('Не удалось загрузить статистику проекта')
+          } else {
+            const statsData = data[0] || {
+              stages_count: 0,
+              objects_count: 0,
+              sections_count: 0,
+              tasks_count: 0,
+              loadings_count: 0,
+              assignments_count: 0,
+              contracts_count: 0,
+              decompositions_count: 0
+            }
+            
+            span.setAttribute("load.success", true)
+            span.setAttribute("stats.stages", statsData.stages_count)
+            span.setAttribute("stats.objects", statsData.objects_count)
+            span.setAttribute("stats.sections", statsData.sections_count)
+            setStats(statsData)
+            
+            Sentry.addBreadcrumb({
+              message: 'Project delete stats loaded',
+              category: 'projects',
+              level: 'info',
+              data: { 
+                project_id: projectId,
+                project_name: projectName,
+                total_stages: statsData.stages_count,
+                total_objects: statsData.objects_count,
+                total_sections: statsData.sections_count
+              }
+            })
+          }
+        } catch (err) {
+          span.setAttribute("load.success", false)
+          span.recordException(err as Error)
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'projects', 
+              action: 'load_delete_stats',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'DeleteProjectModal',
+              project_id: projectId,
+              project_name: projectName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка:', err)
+          setError('Произошла ошибка при загрузке данных')
+        } finally {
+          setIsLoadingStats(false)
+        }
       }
-    } catch (err) {
-      console.error('Ошибка:', err)
-      setError('Произошла ошибка при загрузке данных')
-    } finally {
-      setIsLoadingStats(false)
-    }
+    )
   }
 
   const handleDelete = async () => {
     if (!projectId) return
 
-    setIsDeleting(true)
-    setError(null)
+    return Sentry.startSpan(
+      {
+        op: "projects.delete_project",
+        name: "Delete Project Cascade",
+      },
+      async (span) => {
+        setIsDeleting(true)
+        setError(null)
 
-    try {
-      // Удаляем проект
-      const { error } = await supabase.rpc('delete_project_cascade', {
-        project_id_param: projectId
-      })
+        try {
+          span.setAttribute("project.id", projectId)
+          span.setAttribute("project.name", projectName)
+          if (stats) {
+            span.setAttribute("delete.stages_count", stats.stages_count)
+            span.setAttribute("delete.objects_count", stats.objects_count)
+            span.setAttribute("delete.sections_count", stats.sections_count)
+            span.setAttribute("delete.tasks_count", stats.tasks_count)
+          }
 
-      if (error) {
-        console.error('Ошибка удаления проекта:', error)
-        setError(error.message || 'Не удалось удалить проект')
-        return
+          // Удаляем проект
+          const { error } = await supabase.rpc('delete_project_cascade', {
+            project_id_param: projectId
+          })
+
+          if (error) {
+            span.setAttribute("delete.success", false)
+            span.setAttribute("delete.error", error.message)
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'projects', 
+                action: 'delete_project',
+                error_type: 'cascade_delete_failed'
+              },
+              extra: { 
+                component: 'DeleteProjectModal',
+                project_id: projectId,
+                project_name: projectName,
+                stats: stats,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка удаления проекта:', error)
+            setError(error.message || 'Не удалось удалить проект')
+            return
+          }
+
+          // Проверяем что проект действительно удален
+          const { data: verificationData, error: verifyError } = await supabase.rpc('verify_project_deleted', {
+            project_id_param: projectId
+          })
+
+          if (verifyError) {
+            span.setAttribute("verify.success", false)
+            span.setAttribute("verify.error", verifyError.message)
+            Sentry.captureException(verifyError, {
+              tags: { 
+                module: 'projects', 
+                action: 'verify_project_deleted',
+                error_type: 'verification_failed'
+              },
+              extra: { 
+                component: 'DeleteProjectModal',
+                project_id: projectId,
+                project_name: projectName,
+                timestamp: new Date().toISOString()
+              }
+            })
+            console.error('Ошибка проверки удаления:', verifyError)
+            setError('Не удалось проверить результат удаления')
+            return
+          }
+
+          const verification = verificationData?.[0]
+          if (verification?.project_exists) {
+            // Проект все еще существует
+            const deps = verification.remaining_dependencies
+            const remainingItems = Object.entries(deps || {})
+              .filter(([_, count]) => Number(count) > 0)
+              .map(([type, count]) => `${type}: ${count}`)
+              .join(', ')
+            
+            span.setAttribute("delete.success", false)
+            span.setAttribute("delete.incomplete", true)
+            span.setAttribute("remaining_dependencies", remainingItems)
+            
+            Sentry.captureMessage('Project deletion incomplete - dependencies remain', {
+              level: 'warning',
+              tags: { 
+                module: 'projects', 
+                action: 'delete_project',
+                error_type: 'incomplete_deletion'
+              },
+              extra: { 
+                project_id: projectId,
+                project_name: projectName,
+                remaining_dependencies: deps,
+                timestamp: new Date().toISOString()
+              }
+            })
+            
+            setError(`Проект не был удален полностью. Остались зависимости: ${remainingItems}`)
+            return
+          }
+
+          // Проект успешно удален
+          span.setAttribute("delete.success", true)
+          span.setAttribute("verify.success", true)
+          
+          console.log('✅ Проект успешно удален и проверен')
+          
+          Sentry.addBreadcrumb({
+            message: 'Project deleted successfully',
+            category: 'projects',
+            level: 'info',
+            data: { 
+              project_id: projectId,
+              project_name: projectName,
+              deleted_stats: stats
+            }
+          })
+          
+          // Показываем детальное уведомление об успешном удалении
+          const deletedStats = stats ? [
+            `${stats.stages_count} стадий`,
+            `${stats.objects_count} объектов`, 
+            `${stats.sections_count} разделов`,
+            `${stats.tasks_count} задач`,
+            `${stats.loadings_count} загрузок`,
+            `${stats.assignments_count} передач`,
+            `${stats.contracts_count} договоров`,
+            `${stats.decompositions_count} декомпозиций`
+          ].filter((item, idx) => [
+            stats.stages_count, stats.objects_count, stats.sections_count, 
+            stats.tasks_count, stats.loadings_count, stats.assignments_count,
+            stats.contracts_count, stats.decompositions_count
+          ][idx] > 0).join(', ') : ''
+          
+          setTimeout(() => {
+            alert(`✅ Проект "${projectName}" успешно удален!\n\nТакже удалено: ${deletedStats || 'нет связанных данных'}`)
+          }, 100)
+          
+          onSuccess()
+          onClose()
+        } catch (err) {
+          span.setAttribute("delete.success", false)
+          span.recordException(err as Error)
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'projects', 
+              action: 'delete_project',
+              error_type: 'unexpected_error'
+            },
+            extra: { 
+              component: 'DeleteProjectModal',
+              project_id: projectId,
+              project_name: projectName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка:', err)
+          setError('Произошла ошибка при удалении проекта')
+        } finally {
+          setIsDeleting(false)
+        }
       }
-
-      // Проверяем что проект действительно удален
-      const { data: verificationData, error: verifyError } = await supabase.rpc('verify_project_deleted', {
-        project_id_param: projectId
-      })
-
-      if (verifyError) {
-        console.error('Ошибка проверки удаления:', verifyError)
-        setError('Не удалось проверить результат удаления')
-        return
-      }
-
-      const verification = verificationData?.[0]
-      if (verification?.project_exists) {
-        // Проект все еще существует
-        const deps = verification.remaining_dependencies
-        const remainingItems = Object.entries(deps || {})
-          .filter(([_, count]) => Number(count) > 0)
-          .map(([type, count]) => `${type}: ${count}`)
-          .join(', ')
-        
-        setError(`Проект не был удален полностью. Остались зависимости: ${remainingItems}`)
-        return
-      }
-
-      // Проект успешно удален
-      console.log('✅ Проект успешно удален и проверен')
-      
-      // Показываем детальное уведомление об успешном удалении
-      const deletedStats = stats ? [
-        `${stats.stages_count} стадий`,
-        `${stats.objects_count} объектов`, 
-        `${stats.sections_count} разделов`,
-        `${stats.tasks_count} задач`,
-        `${stats.loadings_count} загрузок`,
-        `${stats.assignments_count} передач`,
-        `${stats.contracts_count} договоров`,
-        `${stats.decompositions_count} декомпозиций`
-      ].filter((item, idx) => [
-        stats.stages_count, stats.objects_count, stats.sections_count, 
-        stats.tasks_count, stats.loadings_count, stats.assignments_count,
-        stats.contracts_count, stats.decompositions_count
-      ][idx] > 0).join(', ') : ''
-      
-      setTimeout(() => {
-        alert(`✅ Проект "${projectName}" успешно удален!\n\nТакже удалено: ${deletedStats || 'нет связанных данных'}`)
-      }, 100)
-      
-      onSuccess()
-      onClose()
-    } catch (err) {
-      console.error('Ошибка:', err)
-      setError('Произошла ошибка при удалении проекта')
-    } finally {
-      setIsDeleting(false)
-    }
+    )
   }
 
   const handleClose = () => {

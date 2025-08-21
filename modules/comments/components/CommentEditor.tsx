@@ -40,6 +40,20 @@ interface CommentEditorProps {
   placeholder?: string
 }
 
+// Удаляет хвостовые пробелы и пустые переносы строк в HTML контенте
+const trimTrailingWhitespaceFromHTML = (html: string): string => {
+  if (!html) return html
+  let cleaned = html
+    // Пробелы/табуляции перед закрывающими блочными тегами
+    .replace(/([^\S\r\n]+)(?=<\/(p|li|h[1-6]|div)>)/gi, '')
+    // Хвостовые пустые параграфы/брейки/nbsp в самом конце документа
+    .replace(/(?:<p>(?:\s|&nbsp;|<br\s*\/?>(\s|&nbsp;)*)*<\/p>)+$/i, '')
+    .replace(/(?:<div>(?:\s|&nbsp;|<br\s*\/?>(\s|&nbsp;)*)*<\/div>)+$/i, '')
+    // Финальные пробелы и переносы
+    .replace(/\s+$/g, '')
+  return cleaned
+}
+
 export function CommentEditor({ 
   sectionId, 
   onSubmit, 
@@ -179,7 +193,8 @@ export function CommentEditor({
     ],
     content: '<p></p>', // Как в заметках
     onUpdate: ({ editor }) => {
-      setContent(editor.getHTML())
+      const html = editor.getHTML()
+      setContent(trimTrailingWhitespaceFromHTML(html))
     },
     editorProps: {
       attributes: {
@@ -191,11 +206,10 @@ export function CommentEditor({
         if (event.ctrlKey && event.key === 'Enter') {
           event.preventDefault()
           event.stopPropagation()
-          
-          //  Получаем актуальный контент из редактора, а не из потенциально устаревшего состояния
+          //  Получаем актуальный контент из редактора и чистим хвостовые пробелы/переносы
           const currentHtmlContent = editor?.getHTML() || ''
-          
-          if (!currentHtmlContent.trim()) return true
+          const cleanedCurrent = trimTrailingWhitespaceFromHTML(currentHtmlContent)
+          if (!cleanedCurrent.trim()) return true
           
           // Переиспользуем handleSubmit вместо дублирования логики
           handleSubmit()
@@ -209,23 +223,26 @@ export function CommentEditor({
 
   // Функция отправки для кнопки
   const handleSubmit = useCallback(async () => {
-    if (!editor || !content.trim()) return
+    if (!editor) return
 
-    const mentions = extractMentions(content)
-    const plainContent = editor.getText()
+    const cleanedHTML = trimTrailingWhitespaceFromHTML(editor.getHTML())
+    if (!cleanedHTML.trim()) return
+
+    const mentions = extractMentions(cleanedHTML)
+    const plainContent = editor.getText().replace(/\s+$/g, '')
 
     if (plainContent.length > 3000) {
       return // Валидация уже показана в UI
     }
 
     try {
-      await onSubmit(content, mentions)
+      await onSubmit(cleanedHTML, mentions)
       editor.commands.clearContent()
       setContent('')
     } catch (error) {
       console.error('Ошибка отправки комментария:', error)
     }
-  }, [editor, content, onSubmit, extractMentions])
+  }, [editor, onSubmit, extractMentions])
 
   // ✅ ОПТИМИЗАЦИЯ: Объединяем все вычисления в один useMemo
   const editorState = useMemo(() => {

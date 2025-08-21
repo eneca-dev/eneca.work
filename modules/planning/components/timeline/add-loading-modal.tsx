@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef } from "react"
 import type { Employee } from "../../types"
@@ -78,33 +79,80 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
 
   // Загрузка списка проектов
   const fetchProjects = async () => {
-    setIsLoadingProjects(true)
-    try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("project_id, project_name")
-        .eq("project_status", "active")
-        .order("project_name")
+    await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "Загрузка списка проектов для модала",
+      },
+      async (span) => {
+        setIsLoadingProjects(true)
+        try {
+          span.setAttribute("table", "projects")
+          span.setAttribute("modal_type", "add_loading")
+          span.setAttribute("employee_id", employee.id)
+          
+          const { data, error } = await supabase
+            .from("projects")
+            .select("project_id, project_name")
+            .eq("project_status", "active")
+            .order("project_name")
 
-      if (error) {
-        console.error("Ошибка при загрузке проектов:", error)
-        setNotification("Ошибка при загрузке списка проектов. Попробуйте обновить страницу.")
-        errorTimeoutRef.current = setTimeout(() => {
-          clearNotification()
-        }, 5000)
-        return
+          if (error) {
+            span.setAttribute("db.success", false)
+            span.setAttribute("db.error", error.message)
+            
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_projects_for_loading',
+                modal: 'add_loading_modal'
+              },
+              extra: {
+                employee_id: employee.id,
+                employee_name: employee.fullName,
+                error_code: error.code,
+                error_details: error.details,
+                timestamp: new Date().toISOString()
+              }
+            })
+            
+            setNotification("Ошибка при загрузке списка проектов. Попробуйте обновить страницу.")
+            errorTimeoutRef.current = setTimeout(() => {
+              clearNotification()
+            }, 5000)
+            return
+          }
+
+          span.setAttribute("db.success", true)
+          span.setAttribute("projects_count", data?.length || 0)
+          
+          setProjects(data || [])
+        } catch (error) {
+          span.setAttribute("db.success", false)
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'planning', 
+              action: 'fetch_projects_for_loading',
+              error_type: 'unexpected_error',
+              modal: 'add_loading_modal'
+            },
+            extra: {
+              employee_id: employee.id,
+              employee_name: employee.fullName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          setNotification("Ошибка при загрузке списка проектов. Проверьте подключение к интернету.")
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          setIsLoadingProjects(false)
+        }
       }
-
-      setProjects(data || [])
-    } catch (error) {
-      console.error("Ошибка при загрузке проектов:", error)
-      setNotification("Ошибка при загрузке списка проектов. Проверьте подключение к интернету.")
-      errorTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 5000)
-    } finally {
-      setIsLoadingProjects(false)
-    }
+    )
   }
 
   // Загрузка разделов для выбранного проекта
@@ -114,33 +162,83 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       return
     }
 
-    setIsLoadingSections(true)
-    try {
-      const { data, error } = await supabase
-        .from("view_section_hierarchy")
-        .select("section_id, section_name, project_id")
-        .eq("project_id", projectId)
-        .order("section_name")
+    await Sentry.startSpan(
+      {
+        op: "db.query",
+        name: "Загрузка разделов проекта для модала",
+      },
+      async (span) => {
+        setIsLoadingSections(true)
+        try {
+          span.setAttribute("table", "view_section_hierarchy")
+          span.setAttribute("project_id", projectId)
+          span.setAttribute("modal_type", "add_loading")
+          span.setAttribute("employee_id", employee.id)
+          
+          const { data, error } = await supabase
+            .from("view_section_hierarchy")
+            .select("section_id, section_name, project_id")
+            .eq("project_id", projectId)
+            .order("section_name")
 
-      if (error) {
-        console.error("Ошибка при загрузке разделов:", error)
-        setNotification("Ошибка при загрузке разделов проекта. Попробуйте выбрать проект заново.")
-        errorTimeoutRef.current = setTimeout(() => {
-          clearNotification()
-        }, 5000)
-        return
+          if (error) {
+            span.setAttribute("db.success", false)
+            span.setAttribute("db.error", error.message)
+            
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_sections_for_loading',
+                modal: 'add_loading_modal'
+              },
+              extra: {
+                project_id: projectId,
+                employee_id: employee.id,
+                employee_name: employee.fullName,
+                error_code: error.code,
+                error_details: error.details,
+                timestamp: new Date().toISOString()
+              }
+            })
+            
+            setNotification("Ошибка при загрузке разделов проекта. Попробуйте выбрать проект заново.")
+            errorTimeoutRef.current = setTimeout(() => {
+              clearNotification()
+            }, 5000)
+            return
+          }
+
+          span.setAttribute("db.success", true)
+          span.setAttribute("sections_count", data?.length || 0)
+          
+          setSections(data || [])
+        } catch (error) {
+          span.setAttribute("db.success", false)
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'planning', 
+              action: 'fetch_sections_for_loading',
+              error_type: 'unexpected_error',
+              modal: 'add_loading_modal'
+            },
+            extra: {
+              project_id: projectId,
+              employee_id: employee.id,
+              employee_name: employee.fullName,
+              timestamp: new Date().toISOString()
+            }
+          })
+          
+          setNotification("Ошибка при загрузке разделов проекта. Проверьте подключение к интернету.")
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          setIsLoadingSections(false)
+        }
       }
-
-      setSections(data || [])
-    } catch (error) {
-      console.error("Ошибка при загрузке разделов:", error)
-      setNotification("Ошибка при загрузке разделов проекта. Проверьте подключение к интернету.")
-      errorTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 5000)
-    } finally {
-      setIsLoadingSections(false)
-    }
+    )
   }
 
   // Загрузка проектов при открытии модального окна
@@ -272,73 +370,116 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       return
     }
 
-    // Устанавливаем состояние загрузки
-    setIsSaving(true)
+    await Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Создание загрузки сотрудника",
+      },
+      async (span) => {
+        // Устанавливаем состояние загрузки
+        setIsSaving(true)
 
-    try {
-      // Получаем названия проекта и раздела
-      const selectedProject = projects.find((p) => p.project_id === formData.projectId)
-      const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
+        try {
+          // Получаем названия проекта и раздела
+          const selectedProject = projects.find((p) => p.project_id === formData.projectId)
+          const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
 
-      if (!selectedProject || !selectedSection) {
-        throw new Error("Не удалось найти выбранный проект или раздел")
+          if (!selectedProject || !selectedSection) {
+            throw new Error("Не удалось найти выбранный проект или раздел")
+          }
+
+          // Устанавливаем атрибуты spans
+          span.setAttribute("employee.id", employee.id)
+          span.setAttribute("employee.name", employee.fullName || employee.name)
+          span.setAttribute("project.id", formData.projectId)
+          span.setAttribute("project.name", selectedProject.project_name)
+          span.setAttribute("section.id", formData.sectionId)
+          span.setAttribute("section.name", selectedSection.section_name)
+          span.setAttribute("loading.start_date", formData.startDate)
+          span.setAttribute("loading.end_date", formData.endDate)
+          span.setAttribute("loading.rate", formData.rate)
+
+          // Создаем загрузку через стор
+          const result = await createLoadingInStore({
+            responsibleId: employee.id,
+            sectionId: formData.sectionId,
+            startDate: new Date(formData.startDate),
+            endDate: new Date(formData.endDate),
+            rate: formData.rate,
+            projectName: selectedProject?.project_name,
+            sectionName: selectedSection?.section_name,
+            responsibleName: employee.fullName || employee.name,
+            responsibleAvatarUrl: employee.avatarUrl,
+            responsibleTeamName: employee.teamName,
+          })
+
+          if (!result.success) {
+            span.setAttribute("operation.success", false)
+            span.setAttribute("operation.error", result.error || "Неизвестная ошибка")
+            throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
+          }
+
+          span.setAttribute("operation.success", true)
+          span.setAttribute("loading.id", result.loadingId || "unknown")
+
+          // Показываем уведомление об успехе
+          const projectName = selectedProject?.project_name || "Неизвестный проект"
+          setNotification(`Загрузка для сотрудника ${employee.fullName} на проект "${projectName}" успешно создана`)
+
+          // Автоматически раскрываем раздел, чтобы показать новую загрузку
+          toggleSectionExpanded(formData.sectionId)
+
+          // Автоматически скрываем уведомление через 3 секунды
+          successTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 3000)
+
+          // Закрываем модальное окно
+          setShowAddModal(false)
+
+          console.log("Загрузка успешно создана:", result.loadingId, {
+            employee: employee.fullName,
+            project: selectedProject?.project_name,
+            section: selectedSection?.section_name,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            rate: formData.rate,
+          })
+        } catch (error) {
+          span.setAttribute("operation.success", false)
+          span.setAttribute("operation.error", error instanceof Error ? error.message : "Неизвестная ошибка")
+          
+          Sentry.captureException(error, {
+            tags: { 
+              module: 'planning', 
+              action: 'create_loading',
+              modal: 'add_loading_modal'
+            },
+            extra: {
+              employee_id: employee.id,
+              employee_name: employee.fullName || employee.name,
+              project_id: formData.projectId,
+              section_id: formData.sectionId,
+              start_date: formData.startDate,
+              end_date: formData.endDate,
+              rate: formData.rate,
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          // Показываем уведомление об ошибке
+          setNotification(`Ошибка при создании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+
+          // Автоматически скрываем уведомление через 5 секунд
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          // Сбрасываем состояние загрузки
+          setIsSaving(false)
+        }
       }
-
-      // Создаем загрузку через стор
-      const result = await createLoadingInStore({
-        responsibleId: employee.id,
-        sectionId: formData.sectionId,
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
-        rate: formData.rate,
-        projectName: selectedProject?.project_name,
-        sectionName: selectedSection?.section_name,
-        responsibleName: employee.fullName || employee.name,
-        responsibleAvatarUrl: employee.avatarUrl,
-        responsibleTeamName: employee.teamName,
-      })
-
-      if (!result.success) {
-        throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
-      }
-
-      // Показываем уведомление об успехе
-      const projectName = selectedProject?.project_name || "Неизвестный проект"
-      setNotification(`Загрузка для сотрудника ${employee.fullName} на проект "${projectName}" успешно создана`)
-
-      // Автоматически раскрываем раздел, чтобы показать новую загрузку
-      toggleSectionExpanded(formData.sectionId)
-
-      // Автоматически скрываем уведомление через 3 секунды
-      successTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 3000)
-
-      // Закрываем модальное окно
-      setShowAddModal(false)
-
-      console.log("Загрузка успешно создана:", result.loadingId, {
-        employee: employee.fullName,
-        project: selectedProject?.project_name,
-        section: selectedSection?.section_name,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        rate: formData.rate,
-      })
-    } catch (error) {
-      console.error("Ошибка при создании загрузки:", error)
-
-      // Показываем уведомление об ошибке
-      setNotification(`Ошибка при создании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-
-      // Автоматически скрываем уведомление через 5 секунд
-      errorTimeoutRef.current = setTimeout(() => {
-        clearNotification()
-      }, 5000)
-    } finally {
-      // Сбрасываем состояние загрузки
-      setIsSaving(false)
-    }
+    )
   }
 
   const handleProjectSelect = (project: Project) => {

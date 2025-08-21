@@ -30,4 +30,6 @@ ws-to-work-integration/
 .env.local
 .env.*.local
 
-tsconfig.tsbuildinfo
+# Sentry Config File
+.env.sentry-build-plugin
+

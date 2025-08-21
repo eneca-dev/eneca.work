@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { EditAssignmentModal } from "./EditAssignmentModal"
 import { AssignmentAuditHistory } from "./AssignmentAuditHistory"
 import type { Assignment, TaskFilters, AssignmentDirection, AssignmentStatus } from "../types"
+import * as Sentry from "@sentry/nextjs"
 
 interface TaskListProps {
   filters?: TaskFilters
@@ -85,7 +86,21 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
         })
       }
     } catch (error) {
-      console.error('Ошибка обновления статуса:', error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'task_transfer',
+          component: 'TaskList',
+          action: 'advance_status',
+          assignment_id: selectedAssignment.assignment_id
+        },
+        extra: {
+          assignment_id: selectedAssignment.assignment_id,
+          current_status: selectedAssignment.status,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
+      
       toast({
         title: "Ошибка",
         description: "Произошла неожиданная ошибка",
@@ -128,7 +143,22 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
         })
       }
     } catch (error) {
-      console.error('Ошибка обновления статуса:', error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'task_transfer',
+          component: 'TaskList',
+          action: 'advance_status_with_duration',
+          assignment_id: selectedAssignment.assignment_id
+        },
+        extra: {
+          assignment_id: selectedAssignment.assignment_id,
+          current_status: selectedAssignment.status,
+          duration: duration,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
+      
       toast({
         title: "Ошибка",
         description: "Произошла неожиданная ошибка",
@@ -159,7 +189,21 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
         })
       }
     } catch (error) {
-      console.error('Ошибка отмены статуса:', error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'task_transfer',
+          component: 'TaskList',
+          action: 'revert_status',
+          assignment_id: selectedAssignment.assignment_id
+        },
+        extra: {
+          assignment_id: selectedAssignment.assignment_id,
+          current_status: selectedAssignment.status,
+          error_message: (error as Error).message,
+          timestamp: new Date().toISOString()
+        }
+      })
+      
       toast({
         title: "Ошибка",
         description: "Произошла неожиданная ошибка",

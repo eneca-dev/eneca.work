@@ -1,13 +1,15 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
-import { UserPermissionsSyncProvider } from "@/modules/permissions"
+import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
+import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
@@ -21,6 +23,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
+  const pathname = usePathname()
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)
@@ -37,7 +40,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Обработчик ошибок авторизации
   const handleAuthError = useCallback((error: Error) => {
-    console.error("❌ DashboardLayout: Ошибка авторизации:", error)
+    if (!isMounted.current) return
+    
+    console.error("Ошибка авторизации:", error)
     toast({
       title: "Ошибка авторизации",
       description: "Пожалуйста, войдите в систему заново",
@@ -45,31 +50,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })
     useUserStore.getState().clearState()
     router.push('/auth/login')
-  }, [router])
+  }, [router, email, name, isAuthenticated])
 
-  // УДАЛЕНО: Legacy функция получения разрешений
-  // Теперь разрешения загружаются через permissions модуль
+  // Загрузка прав доступа теперь происходит автоматически через UserPermissionsSyncProvider
+  // Отслеживаем состояние загрузки прав через permissions store
+  const permissionsLoading = usePermissionsLoading()
+
+  // Синхронизируем локальный флаг с состоянием permissions store
+  useEffect(() => {
+    if (!mounted) return
+    setPermissionsLoaded(!permissionsLoading)
+  }, [mounted, permissionsLoading])
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
+    if (!isMounted.current) return
+    
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
-        console.error("DashboardLayout: Ошибка при получении пользователя:", error)
+        console.error("Ошибка при получении пользователя:", error)
         router.push('/auth/login')
         return
       }
       
       if (!user) {
-        console.log("DashboardLayout: Пользователь не авторизован")
+        console.log("Пользователь не авторизован")
         router.push('/auth/login')
         return
       }
       
-      // УДАЛЕНО: Legacy загрузка разрешений
-      // Теперь разрешения автоматически загружаются через permissions модуль
-      setPermissionsLoaded(true) // Временно, пока не подключим новую систему
+      // Права загружаются через UserPermissionsSyncProvider и usePermissionsStore
       
       // Проверяем, нужно ли обновлять остальные данные пользователя
       const userState = useUserStore.getState()
@@ -83,7 +95,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           .single()
         
         if (profileError) {
-          console.error("DashboardLayout: Ошибка при получении профиля:", profileError)
+          if (!isMounted.current) return
+          
+          console.error("Ошибка при получении профиля:", profileError)
           toast({
             title: "Ошибка получения профиля",
             description: "Некоторые данные могут отображаться некорректно",
@@ -106,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           
           useUserStore.getState().setUser(userDataToSet)
         } catch (setUserError) {
-          console.error("DashboardLayout: Ошибка при установке данных пользователя:", setUserError)
+          console.error("Ошибка при установке данных пользователя:", setUserError)
           toast({
             title: "Ошибка обновления данных",
             description: "Не удалось обновить данные пользователя",
@@ -115,7 +129,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       }
     } catch (error) {
-      console.error("DashboardLayout: Критическая ошибка при получении данных:", error)
+      if (!isMounted.current) return
+      
+      console.error("Критическая ошибка при получении данных:", error)
       handleAuthError(error as Error)
     }
   }, [supabase, router, handleAuthError])
@@ -127,7 +143,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (mounted && !permissionsLoaded) {
       const fallbackTimer = setTimeout(() => {
-        console.warn("Timeout при загрузке прав, продолжаем без них")
+        try {
+          Sentry.captureMessage?.("Timeout при загрузке прав, продолжаем без них")
+        } catch {}
         setPermissionsLoaded(true)
       }, 5000) // 5 секунд максимум
 
@@ -142,14 +160,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [mounted, fetchUser])
 
-  if (!mounted || !permissionsLoaded) {
+  if (!mounted) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">
-            {!mounted ? "Инициализация..." : "Загрузка прав доступа..."}
-          </p>
+          <p className="text-muted-foreground">Инициализация...</p>
         </div>
       </div>
     )
@@ -169,9 +185,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева */}
-      <div className={`flex-1 p-6 transition-all duration-300 ${marginLeft}`}>
+      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300 ${marginLeft}`}>
         <UserPermissionsSyncProvider>
-          {children}
+          {!permissionsLoaded ? (
+            <div className="min-h-[60vh] flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Загрузка прав доступа...</p>
+              </div>
+            </div>
+          ) : (
+            <NotificationsProvider>
+              {children}
+            </NotificationsProvider>
+          )}
         </UserPermissionsSyncProvider>
       </div>
     </div>

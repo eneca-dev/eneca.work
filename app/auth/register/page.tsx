@@ -7,6 +7,7 @@ import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
 import { useRouter } from "next/navigation"
 // import { createClient } from "@/utils/supabase/client"
+import * as Sentry from "@sentry/nextjs"
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -117,59 +118,113 @@ export default function RegisterPage() {
       return
     }
 
-    try {
-      // Сначала проверяем существование email
-      const emailExists = await checkEmailExists(email)
-      if (emailExists) {
-        setError("Пользователь с таким email уже зарегистрирован.")
-        setLoading(false)
-        return
+    return Sentry.startSpan(
+      {
+        op: "auth.register",
+        name: "User Registration",
+      },
+      async (span) => {
+        try {
+          const trimmedEmail = email.trim()
+          const trimmedName = name.trim()
+          span.setAttribute("auth.email", trimmedEmail)
+          span.setAttribute("auth.name", trimmedName)
+          span.setAttribute("auth.method", "email_password")
+
+          // Сначала проверяем существование email
+          const emailExists = await checkEmailExists(trimmedEmail)
+          span.setAttribute("auth.email_exists_checked", true)
+          if (emailExists) {
+            setError("Пользователь с таким email уже зарегистрирован.")
+            setLoading(false)
+            return
+          }
+
+          // Теперь проверяем совпадение паролей
+          if (password !== confirmPassword) {
+            setError("Пароли не совпадают")
+            setLoading(false)
+            return
+          }
+
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: trimmedName,
+              email: trimmedEmail,
+              password,
+            }),
+          })
+
+          const result = await response.json().catch(() => null)
+
+          if (!response.ok) {
+            span.setAttribute("auth.success", false)
+            const apiError = new Error(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
+            Sentry.captureException(apiError, {
+              tags: { 
+                module: 'auth', 
+                action: 'register',
+                error_type: 'registration_failed'
+              },
+              user: { email: trimmedEmail, name: trimmedName },
+              extra: { 
+                status: response.status,
+                timestamp: new Date().toISOString()
+              }
+            })
+            setError(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
+            setLoading(false)
+            return
+          }
+
+          // Успешное создание пользователя. Если письмо ушло — ведем на страницу ожидания подтверждения
+          // Сохраняем email, чтобы на странице ожидания можно было повторно отправить письмо
+          try {
+            sessionStorage.setItem('pendingEmail', trimmedEmail)
+          } catch {}
+
+          span.setAttribute("auth.success", true)
+          Sentry.addBreadcrumb({
+            message: 'User registration successful',
+            category: 'auth',
+            level: 'info',
+            data: { email: trimmedEmail, name: trimmedName }
+          })
+
+          if (result?.emailSent) {
+            router.push('/auth/pending-verification')
+            return
+          }
+
+          // Пользователь создан, но письмо не отправлено — показываем сообщение
+          setError(result?.message || 'Аккаунт создан, но не удалось отправить письмо подтверждения. Обратитесь к администратору.')
+          setLoading(false)
+        } catch (err) {
+          span.setAttribute("auth.success", false)
+          span.recordException(err as Error)
+          
+          // Отправляем неожиданную ошибку в Sentry
+          Sentry.captureException(err, {
+            tags: { 
+              module: 'auth', 
+              action: 'register',
+              error_type: 'unexpected_error'
+            },
+            user: { email, name },
+            extra: { 
+              component: 'RegisterPage',
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          console.error("Registration error:", err)
+          setError("Произошла непредвиденная ошибка при регистрации. Проверьте подключение к интернету и попробуйте снова.")
+          setLoading(false)
+        }
       }
-
-      // Теперь проверяем совпадение паролей
-      if (password !== confirmPassword) {
-        setError("Пароли не совпадают")
-        setLoading(false)
-        return
-      }
-
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          password,
-        }),
-      })
-
-      const result = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        setError(result?.error || 'Не удалось создать аккаунт. Попробуйте снова.')
-        setLoading(false)
-        return
-      }
-
-      // Успешное создание пользователя. Если письмо ушло — ведем на страницу ожидания подтверждения
-      // Сохраняем email, чтобы на странице ожидания можно было повторно отправить письмо
-      try {
-        sessionStorage.setItem('pendingEmail', email.trim())
-      } catch {}
-
-      if (result?.emailSent) {
-        router.push('/auth/pending-verification')
-        return
-      }
-
-      // Пользователь создан, но письмо не отправлено — показываем сообщение
-      setError(result?.message || 'Аккаунт создан, но не удалось отправить письмо подтверждения. Обратитесь к администратору.')
-      setLoading(false)
-    } catch (err) {
-      console.error("Registration error:", err)
-      setError("Произошла непредвиденная ошибка при регистрации. Проверьте подключение к интернету и попробуйте снова.")
-      setLoading(false)
-    }
+    )
   }
 
   return (

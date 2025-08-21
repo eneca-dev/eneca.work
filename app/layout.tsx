@@ -19,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={`${inter.className} no-scrollbar-bg`} suppressHydrationWarning>
         <ClientProviders>
           {children}
         </ClientProviders>

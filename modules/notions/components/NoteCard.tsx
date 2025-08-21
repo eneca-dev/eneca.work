@@ -14,6 +14,7 @@ import type { Notion } from '@/modules/notions/types'
 interface NoteCardProps {
   notion: Notion
   isSelected: boolean
+  isActive?: boolean
   onToggleSelect: (id: string) => void
   onUpdate: (id: string, content: string) => void
   onToggleDone: (id: string) => void
@@ -26,6 +27,7 @@ interface NoteCardProps {
 export function NoteCard({
   notion,
   isSelected,
+  isActive = false,
   onToggleSelect,
   onUpdate,
   onToggleDone,
@@ -77,6 +79,7 @@ export function NoteCard({
     <Card 
       className={cn(
         "p-4 transition-all duration-300 hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-gray-500/20 cursor-pointer bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600",
+        isActive && "bg-gray-50 dark:bg-gray-600/60",
         notion.notion_done && "opacity-50 bg-gray-50 dark:bg-gray-800/50",
         isSelected && "border-2 border-primary",
         isExpanded && "shadow-lg dark:shadow-xl"
@@ -105,7 +108,7 @@ export function NoteCard({
                   {/* Заголовок заметки */}
                   {parsed.title && (
                     <h1 className={cn(
-                      "text-2xl font-bold leading-tight mb-2 line-clamp-2 text-gray-900 dark:text-gray-100",
+                      "text-xl font-semibold leading-tight mb-2 line-clamp-2 text-gray-900 dark:text-gray-100",
                       notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
                     )}>
                       {parsed.title}

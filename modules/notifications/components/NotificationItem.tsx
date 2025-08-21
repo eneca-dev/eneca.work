@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useCallback } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
@@ -93,18 +94,74 @@ export function NotificationItem({ notification, isVisible = false }: Notificati
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
-    // Если это уведомление об объявлении, переходим к нему
-    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
-      const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
-      
-      if (announcementId) {
-        // Выделяем объявление в store
-        highlightAnnouncement(announcementId)
-        
-        // Переходим на страницу dashboard
-        router.push('/dashboard')
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Notification Item Click",
+      },
+      (span) => {
+        try {
+          span.setAttribute("notification.id", notification.id)
+          span.setAttribute("notification.entity_type", notification.entityType || "unknown")
+          span.setAttribute("notification.is_read", notification.isRead)
+          span.setAttribute("notification.type", notification.type || "info")
+          
+          // Если это уведомление об объявлении, переходим к нему
+          if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+            const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
+            
+            span.setAttribute("announcement.id", announcementId || "not_found")
+            span.setAttribute("navigation.target", "dashboard")
+            
+            if (announcementId) {
+              // Выделяем объявление в store
+              highlightAnnouncement(announcementId)
+              
+              // Переходим на страницу dashboard
+              router.push('/dashboard')
+              
+              span.setAttribute("click.success", true)
+              
+              Sentry.addBreadcrumb({
+                message: 'Navigated to announcement from notification',
+                category: 'notifications',
+                level: 'info',
+                data: {
+                  notification_id: notification.id,
+                  announcement_id: announcementId,
+                  entity_type: notification.entityType
+                }
+              })
+            } else {
+              span.setAttribute("click.success", false)
+              span.setAttribute("click.error", "announcement_id_not_found")
+              console.warn('Не найден ID объявления в уведомлении:', notification)
+            }
+          } else {
+            span.setAttribute("click.skipped", true)
+            span.setAttribute("click.skip_reason", "unsupported_entity_type")
+          }
+        } catch (error) {
+          span.setAttribute("click.success", false)
+          span.recordException(error as Error)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              component: 'NotificationItem',
+              action: 'handle_click',
+              error_type: 'unexpected_error'
+            },
+            extra: {
+              notification_id: notification.id,
+              notification_entity_type: notification.entityType,
+              notification_is_read: notification.isRead,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('Ошибка при клике на уведомление:', error)
+        }
       }
-    }
+    );
     
     // Если это уведомление о комментарии, подсвечиваем раздел
     if (notification.entityType === 'section_comment') {
