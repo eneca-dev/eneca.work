@@ -5,10 +5,10 @@ import * as Sentry from '@sentry/nextjs'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const firstName: string = (body?.firstName ?? '').trim()
-    const lastName: string = (body?.lastName ?? '').trim()
-    const email: string = (body?.email ?? '').trim().toLowerCase()
-    const password: string = body?.password ?? ''
+    const firstName: string = typeof body?.firstName === 'string' ? body.firstName.trim() : ''
+    const lastName: string = typeof body?.lastName === 'string' ? body.lastName.trim() : ''
+    const email: string = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const password: string = typeof body?.password === 'string' ? body.password : ''
 
     if (!firstName || !lastName || !email || !password) {
       return NextResponse.json({ error: 'Имя, фамилия, email и пароль обязательны' }, { status: 400 })

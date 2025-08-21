@@ -92,14 +92,26 @@ export async function POST(request: NextRequest) {
         // Обработка страны/города
         if (userData.country && userData.city) {
           try {
+            // Подготавливаем заголовки для внутреннего API вызова
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+            
+            // Захватываем cookie из входящего запроса для передачи аутентификации
+            const incomingCookie = request.headers.get('cookie')
+            if (incomingCookie) {
+              headers['Cookie'] = incomingCookie
+            } else {
+              console.warn('Отсутствует cookie в запросе - внутренний API вызов может быть неаутентифицирован')
+            }
+
             // Гарантируем наличие country/city и получаем city_id через наш API апсерт
-            const resp = await fetch('/api/geo/upsert', {
+            // Construct an absolute URL for the server-side fetch
+            const upsertUrl = new URL('/api/geo/upsert', request.nextUrl.origin).toString()
+            const resp = await fetch(upsertUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ countryName: userData.country, cityName: userData.city })
             })
-            if (resp.ok) {
-              const { cityId } = await resp.json()
+            if (resp.ok) {              const { cityId } = await resp.json()
               profileData.city_id = cityId
               console.log("Добавлено: city_id =", cityId)
             } else {
