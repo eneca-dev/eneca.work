@@ -128,6 +128,9 @@ interface NotificationsState {
   
   // Обработчик новых уведомлений из Realtime
   handleNewNotification: (userNotification: DatabaseUserNotification) => void
+
+  // Синхронизация данных уведомлений с изменениями сущностей
+  updateAnnouncementTitle: (announcementId: string, newTitle: string) => void
 }
 
 // Вспомогательная функция для преобразования данных из API в UI формат
@@ -355,6 +358,28 @@ export const useNotificationsStore = create<NotificationsState>()(
           return {
             notifications: state.notifications.filter((n) => n.id !== id),
             unreadCount: wasUnread ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
+          }
+        })
+      },
+
+      // Локально обновляем заголовки уведомлений, связанных с объявлением
+      updateAnnouncementTitle: (announcementId, newTitle) => {
+        set((state) => {
+          const updateList = (list: Notification[]) => list.map((n) => {
+            if (n.entityType !== 'announcement' && n.entityType !== 'announcements') return n
+            const payload = n.payload || {}
+            const idFromPayload = payload.announcement_id || payload?.action?.data?.announcementId
+            if (idFromPayload === announcementId) {
+              return { ...n, title: newTitle }
+            }
+            return n
+          })
+
+          return {
+            notifications: updateList(state.notifications),
+            allNotifications: state.allNotifications && state.allNotifications.length > 0
+              ? updateList(state.allNotifications)
+              : state.allNotifications,
           }
         })
       },

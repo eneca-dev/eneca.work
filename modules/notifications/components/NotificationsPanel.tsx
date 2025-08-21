@@ -47,6 +47,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
+  const allFilteredRef = useRef(0)
 
   const { 
     notifications, 
@@ -67,6 +68,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     clearSearch,
     setSearchQuery
   } = useNotificationsStore()
+
+  // Локальные состояния для клиентской пагинации при активных фильтрах
+  const [isPreloadingAll, setIsPreloadingAll] = useState(false)
+  const [visibleFilteredCount, setVisibleFilteredCount] = useState(10)
+  const isClientFilterMode = useMemo(
+    () => !isSearchMode && (selectedTypes.size > 0 || readFilter !== 'all'),
+    [isSearchMode, selectedTypes, readFilter]
+  )
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
@@ -102,6 +111,41 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     onCloseAction()
   }, [onCloseAction])
 
+  // Фоновая предзагрузка всех уведомлений для корректной фильтрации по всей выборке
+  const ensureAllNotificationsLoaded = useCallback(async () => {
+    if (isSearchMode) return
+    if (isPreloadingAll) return
+    try {
+      setIsPreloadingAll(true)
+      // Догружаем все страницы, пока есть hasMore
+      // Используем getState, чтобы получать актуальные значения в цикле
+      // и вызывать loadMoreNotifications последовательно
+      // Прерываем цикл, если hasMore станет false
+      /* eslint-disable no-constant-condition */
+      while (true) {
+        const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
+        if (!more) break
+        if (!loadingMore) {
+          await loadMore()
+        } else {
+          await new Promise((r) => setTimeout(r, 100))
+        }
+      }
+      /* eslint-enable no-constant-condition */
+    } catch (e) {
+      console.error('Ошибка предзагрузки всех уведомлений:', e)
+    } finally {
+      setIsPreloadingAll(false)
+    }
+  }, [isSearchMode, isPreloadingAll])
+
+  // При открытии поповера типов — предзагружаем все уведомления для корректных счетчиков
+  useEffect(() => {
+    if (isTypeFilterOpen && !isSearchMode) {
+      ensureAllNotificationsLoaded()
+    }
+  }, [isTypeFilterOpen, isSearchMode, ensureAllNotificationsLoaded])
+
   // Обработка изменения фильтра по типам
   const handleTypeFilterChange = useCallback((type: string, checked: boolean) => {
     setSelectedTypes(prev => {
@@ -113,7 +157,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       }
       return newSet
     })
-  }, [])
+    setVisibleFilteredCount(10)
+    ensureAllNotificationsLoaded()
+  }, [ensureAllNotificationsLoaded])
 
   // Сброс всех фильтров
   const handleClearFilters = useCallback(() => {
@@ -121,6 +167,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     setSelectedTypes(new Set())
     setReadFilter('all')
     clearSearch() // Очищаем серверный поиск
+    setVisibleFilteredCount(10)
   }, [clearSearch])
 
   // Обработчики для модального окна создания объявлений
@@ -159,11 +206,24 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Обработка прокрутки для бесконечной загрузки (отключаем в режиме поиска)
   useEffect(() => {
     const scrollElement = scrollRef.current
-    if (!scrollElement || isSearchMode) return // Отключаем пагинацию в режиме поиска
+    if (!scrollElement) return
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollElement
-      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200 // Загружаем за 200px до конца
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200
+
+      // В режиме поиска не скроллим вручную
+      if (isSearchMode) return
+
+      if (isClientFilterMode) {
+        if (isNearBottom) {
+          const totalFiltered = allFilteredRef.current
+          if (visibleFilteredCount < totalFiltered) {
+            setVisibleFilteredCount((prev) => Math.min(prev + 10, totalFiltered))
+          }
+        }
+        return
+      }
 
       if (isNearBottom && hasMore && !isLoadingMore && !isLoading) {
         console.log('📜 Достигнут конец списка, загружаем дополнительные уведомления')
@@ -173,7 +233,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
     scrollElement.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollElement.removeEventListener('scroll', handleScroll)
-  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isSearchMode])
+  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isSearchMode, isClientFilterMode, visibleFilteredCount])
 
   // Авто-прочтение отключено: больше не помечаем как прочитанные при появлении в зоне видимости
 
@@ -248,7 +308,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }
 
     // В обычном режиме применяем все фильтры
-    return notifications.filter((notification) => {
+    const allFiltered = notifications.filter((notification) => {
       // Фильтр по поисковому запросу (только если не в режиме серверного поиска)
       const matchesSearch = 
         localSearchQuery === '' ||
@@ -273,7 +333,25 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       
       return matchesSearch && matchesType && matchesRead
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [notifications, localSearchQuery, selectedTypes, readFilter, isSearchMode])
+
+    // Обновляем общее количество отфильтрованных
+    allFilteredRef.current = allFiltered.length
+
+    // В режиме клиентских фильтров отдаем только видимую часть
+    if (isClientFilterMode) {
+      return allFiltered.slice(0, visibleFilteredCount)
+    }
+
+    return allFiltered
+  }, [notifications, localSearchQuery, selectedTypes, readFilter, isSearchMode, isClientFilterMode, visibleFilteredCount])
+
+  // При входе в режим клиентских фильтров загружаем все уведомления и сбрасываем лимит
+  useEffect(() => {
+    if (isClientFilterMode) {
+      setVisibleFilteredCount(10)
+      ensureAllNotificationsLoaded()
+    }
+  }, [isClientFilterMode, ensureAllNotificationsLoaded])
 
   // Обновление уведомлений
   const handleRefresh = async () => {
@@ -507,7 +585,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                           variant="secondary" 
                           className={cn("text-xs", type.color)}
                         >
-                          {notifications.filter(n => n.entityType === type.value).length}
+                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
+                          {useNotificationsStore.getState().notifications.filter(n => n.entityType === type.value).length}
                         </Badge>
                       </div>
                     ))}
@@ -627,7 +706,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         isOpen={isAnnouncementFormOpen} 
         onClose={handleCloseAnnouncementForm} 
         size="lg"
-        closeOnOverlayClick={false}
+        closeOnOverlayClick={true}
       >
         <Modal.Header 
           title={editingAnnouncement ? "Редактировать объявление" : "Создать объявление"} 
