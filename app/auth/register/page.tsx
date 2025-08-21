@@ -2,9 +2,10 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
+import { PasswordRequirementCheckbox } from "@/components/password-requirement-checkbox"
 import { useRouter } from "next/navigation"
 // import { createClient } from "@/utils/supabase/client"
 import * as Sentry from "@sentry/nextjs"
@@ -19,6 +20,28 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const router = useRouter()
   // const supabase = createClient()
+
+  // Вычисляем состояние требований к паролю
+  const passwordRequirements = useMemo(() => {
+    if (!password) return null
+    
+    return {
+      minLength: password.length >= 8,
+      hasDigit: /\d/.test(password),
+      hasSpecial: /[^a-zA-Z0-9 ]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasUppercase: /[A-Z]/.test(password),
+    }
+  }, [password])
+
+  // Проверяем, выполнены ли все требования
+  const allRequirementsMet = useMemo(() => {
+    if (!passwordRequirements) return false
+    return Object.values(passwordRequirements).every(Boolean)
+  }, [passwordRequirements])
+
+  // Показываем окошко требований только если пароль введен и не все требования выполнены
+  const showRequirements = password && !allRequirementsMet
 
   // Функция для получения понятного сообщения об ошибке
   const getErrorMessage = (error: any): string => {
@@ -36,11 +59,11 @@ export default function RegisterPage() {
     }
     
     if (message.includes('password should be at least')) {
-      return "Пароль должен содержать минимум 6 символов."
+      return "Пароль должен содержать минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
     }
     
     if (message.includes('weak password')) {
-      return "Пароль слишком простой. Используйте комбинацию букв, цифр и специальных символов."
+      return "Пароль слишком простой. Убедитесь, что он содержит минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
     }
     
     if (message.includes('signup is disabled')) {
@@ -57,6 +80,32 @@ export default function RegisterPage() {
     
     // Возвращаем оригинальное сообщение, если не нашли подходящего перевода
     return error.message
+  }
+
+  const validatePassword = (password: string): string[] => {
+    const errors = []
+    
+    if (password.length < 8) {
+      errors.push("Минимум 8 символов")
+    }
+    
+    if (!/\d/.test(password)) {
+      errors.push("Минимум одна цифра")
+    }
+    
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      errors.push("Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\"<> ")
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      errors.push("Минимум одна строчная буква")
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Минимум одна заглавная буква")
+    }
+    
+    return errors
   }
 
   const validateForm = (): string | null => {
@@ -85,8 +134,9 @@ export default function RegisterPage() {
     }
     
     // Проверка пароля
-    if (password.length < 6) {
-      return "Пароль должен содержать минимум 6 символов"
+    const passwordErrors = validatePassword(password)
+    if (passwordErrors.length > 0) {
+      return `Пароль не соответствует требованиям: ${passwordErrors.join(", ")}`
     }
     
     return null
@@ -315,17 +365,49 @@ export default function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           validateOnChange={true}
-          // validationRules={{
-          //   required: true,
-          //   minLength: 6,
-          //   custom: (value: string) => {
-          //     if (value.length >= 8 && !/(?=.*[a-zA-Z])(?=.*\d)/.test(value)) {
-          //       return "Рекомендуется использовать буквы и цифры для большей безопасности"
-          //     }
-          //     return null
-          //   }
-          // }}
+          validationRules={{
+            required: true,
+            custom: (value: string) => {
+              // Убираем красный текст ошибки валидации для поля пароля
+              // Вместо этого покажем требования в отдельном блоке
+              return null
+            }
+          }}
         />
+
+        {/* Индикатор требований к паролю с анимацией */}
+        <div className={`
+          transition-all duration-300 ease-in-out overflow-hidden
+          ${showRequirements 
+            ? 'max-h-48 opacity-100 transform translate-y-0' 
+            : 'max-h-0 opacity-0 transform -translate-y-2'
+          }
+        `}>
+          <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-md dark:bg-gray-800/30 dark:border-gray-700">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Требования к паролю:</p>
+            <div className="space-y-2">
+              {passwordRequirements && (
+                <>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.minLength}>
+                    Минимум 8 символов
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasDigit}>
+                    Минимум одна цифра
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasSpecial}>
+                    Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\")
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasLowercase}>
+                    Минимум одна строчная буква
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasUppercase}>
+                    Минимум одна заглавная буква
+                  </PasswordRequirementCheckbox>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
         <AuthInput
           label="Подтверждение пароля"
