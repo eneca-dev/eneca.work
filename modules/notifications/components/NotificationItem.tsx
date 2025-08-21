@@ -277,254 +277,258 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       data-notification-id={notification.id}
       onClick={handleClick}
       className={cn(
-        "relative p-3 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
+        "relative p-4 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
         "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700",
         // Зеленая окантовка и подсветка для непрочитанных уведомлений
         !notification.isRead && "border-green-500 bg-green-50/30 dark:bg-green-900/10"
       )}
     >
-      <div className="flex items-start gap-3">
-        <Icon className={cn("h-4 w-4 mt-0.5 flex-shrink-0", iconColor)} />
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1 min-w-0">
-              {notification.title}
-            </h4>
-            {notificationTag && (
-              <span className={cn(
-                "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
-                notificationTag.color
-              )}>
-                {notificationTag.text}
-              </span>
-            )}
-            <div className="ml-auto flex items-center gap-1 pr-1 flex-shrink-0">
-              {/* Если уведомление не в архиве — показываем чекбокс и иконку Архива */}
-              {!notification.isArchived && (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      try {
-                        await Sentry.startSpan({ op: "notifications.toggle_read_click", name: "Toggle Read Click" }, async (span) => {
-                          span.setAttribute("notification.id", notification.id)
-                          if (!notification.isRead) {
-                            markAsRead(notification.id)
-                            try {
-                              await markAsReadInDB(notification.id)
-                              span.setAttribute("mark.success", true)
-                            } catch (error) {
-                              span.setAttribute("mark.success", false)
-                              span.recordException(error as Error)
-                              Sentry.captureException(error, {
-                                tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'db_error' },
-                                extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                              })
-                            }
-                          } else {
-                            // Делаем непрочитанным локально и в БД
-                            markAsUnread(notification.id)
-                            try {
-                              await markAsUnreadInDB(notification.id)
-                              span.setAttribute("unmark.success", true)
-                            } catch (error) {
-                              span.setAttribute("unmark.success", false)
-                              span.recordException(error as Error)
-                              Sentry.captureException(error, {
-                                tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_unread_click', error_type: 'db_error' },
-                                extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                              })
-                            }
-                          }
-                        })
-                      } catch (error) {
-                        Sentry.captureException(error, {
-                          tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'unexpected_error' },
-                          extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                        })
+      {/* Первый уровень: иконка слева, кнопки действий справа */}
+      <div className="flex items-center justify-between mb-3">
+        <Icon className={cn("h-4 w-4 flex-shrink-0", iconColor)} />
+        <div className="flex items-center gap-1">
+          {/* Если уведомление не в архиве — показываем чекбокс и иконку Архива */}
+          {!notification.isArchived && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  try {
+                    await Sentry.startSpan({ op: "notifications.toggle_read_click", name: "Toggle Read Click" }, async (span) => {
+                      span.setAttribute("notification.id", notification.id)
+                      if (!notification.isRead) {
+                        markAsRead(notification.id)
+                        try {
+                          await markAsReadInDB(notification.id)
+                          span.setAttribute("mark.success", true)
+                        } catch (error) {
+                          span.setAttribute("mark.success", false)
+                          span.recordException(error as Error)
+                          Sentry.captureException(error, {
+                            tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'db_error' },
+                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                          })
+                        }
+                      } else {
+                        // Делаем непрочитанным локально и в БД
+                        markAsUnread(notification.id)
+                        try {
+                          await markAsUnreadInDB(notification.id)
+                          span.setAttribute("unmark.success", true)
+                        } catch (error) {
+                          span.setAttribute("unmark.success", false)
+                          span.recordException(error as Error)
+                          Sentry.captureException(error, {
+                            tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_unread_click', error_type: 'db_error' },
+                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                          })
+                        }
                       }
-                    }}
-                    className={cn("h-7 w-7", notification.isRead ? "text-gray-400" : "text-green-600 hover:text-green-700")}
-                    aria-label={notification.isRead ? "Прочитано" : "Отметить прочитанным"}
-                    title={notification.isRead ? "Сделать непрочитанным" : "Отметить прочитанным"}
-                  >
-                    {notification.isRead ? (
-                      <Square className="h-4 w-4" />
-                    ) : (
-                      <SquareCheck className="h-4 w-4" />
-                    )}
-                  </Button>
+                    })
+                  } catch (error) {
+                    Sentry.captureException(error, {
+                      tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'unexpected_error' },
+                      extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                    })
+                  }
+                }}
+                className={cn("h-7 w-7", notification.isRead ? "text-gray-400" : "text-green-600 hover:text-green-700")}
+                aria-label={notification.isRead ? "Прочитано" : "Отметить прочитанным"}
+                title={notification.isRead ? "Сделать непрочитанным" : "Отметить прочитанным"}
+              >
+                {notification.isRead ? (
+                  <Square className="h-4 w-4" />
+                ) : (
+                  <SquareCheck className="h-4 w-4" />
+                )}
+              </Button>
 
-                  {/* Кнопка редактирования для объявлений */}
-                  {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
-                   canEditAnnouncements && 
-                   onEditAnnouncement && 
-                   announcementId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onEditAnnouncement(announcementId)
-                      }}
-                      className="h-7 w-7 text-gray-500 hover:text-blue-600"
-                      aria-label="Редактировать объявление"
-                      title="Редактировать объявление"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                  )}
-
-                  {/* Архив */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      try {
-                        await Sentry.startSpan({ op: "notifications.archive_click", name: "Archive Notification" }, async (span) => {
-                          span.setAttribute("notification.id", notification.id)
-                          // При архивации помечаем прочитанным
-                          if (!notification.isRead) {
-                            markAsRead(notification.id)
-                            try { await markAsReadInDB(notification.id) } catch {}
-                          }
-                          setNotificationArchived(notification.id, true)
-                          try {
-                            await setArchivedInDB(notification.id, true)
-                            span.setAttribute("archive.success", true)
-                          } catch (error) {
-                            span.setAttribute("archive.success", false)
-                            span.recordException(error as Error)
-                            Sentry.captureException(error, {
-                              tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'db_error' },
-                              extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                            })
-                          }
-                        })
-                      } catch (error) {
-                        Sentry.captureException(error, {
-                          tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'unexpected_error' },
-                          extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                        })
-                      }
-                    }}
-                    className="h-7 w-7 text-gray-500 hover:text-gray-700"
-                    aria-label="В архив"
-                    title="В архив"
-                  >
-                    <Archive className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-
-              {/* Если уведомление в архиве — показываем кнопку разархивации */}
-              {notification.isArchived && (
+              {/* Кнопка редактирования для объявлений */}
+              {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
+               canEditAnnouncements && 
+               onEditAnnouncement && 
+               announcementId && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation()
+                    onEditAnnouncement(announcementId)
+                  }}
+                  className="h-7 w-7 text-gray-500 hover:text-blue-600"
+                  aria-label="Редактировать объявление"
+                  title="Редактировать объявление"
+                >
+                  <PencilIcon className="h-4 w-4" />
+                </Button>
+              )}
+
+              {/* Архив */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  try {
+                    await Sentry.startSpan({ op: "notifications.archive_click", name: "Archive Notification" }, async (span) => {
+                      span.setAttribute("notification.id", notification.id)
+                      // При архивации помечаем прочитанным
+                      if (!notification.isRead) {
+                        markAsRead(notification.id)
+                        try { await markAsReadInDB(notification.id) } catch {}
+                      }
+                      setNotificationArchived(notification.id, true)
+                      try {
+                        await setArchivedInDB(notification.id, true)
+                        span.setAttribute("archive.success", true)
+                      } catch (error) {
+                        span.setAttribute("archive.success", false)
+                        span.recordException(error as Error)
+                        Sentry.captureException(error, {
+                          tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'db_error' },
+                          extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                        })
+                      }
+                    })
+                  } catch (error) {
+                    Sentry.captureException(error, {
+                      tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'unexpected_error' },
+                      extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                    })
+                  }
+                }}
+                className="h-7 w-7 text-gray-500 hover:text-gray-700"
+                aria-label="В архив"
+                title="В архив"
+              >
+                <Archive className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+
+          {/* Если уведомление в архиве — показываем кнопку разархивации */}
+          {notification.isArchived && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={async (e) => {
+                e.stopPropagation()
+                try {
+                  await Sentry.startSpan({ op: "notifications.unarchive_click", name: "Unarchive Notification" }, async (span) => {
+                    span.setAttribute("notification.id", notification.id)
+                    setNotificationArchived(notification.id, false)
                     try {
-                      await Sentry.startSpan({ op: "notifications.unarchive_click", name: "Unarchive Notification" }, async (span) => {
-                        span.setAttribute("notification.id", notification.id)
-                        setNotificationArchived(notification.id, false)
-                        try {
-                          await setArchivedInDB(notification.id, false)
-                          span.setAttribute("unarchive.success", true)
-                        } catch (error) {
-                          span.setAttribute("unarchive.success", false)
-                          span.recordException(error as Error)
-                          Sentry.captureException(error, {
-                            tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'db_error' },
-                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                          })
-                        }
-                      })
+                      await setArchivedInDB(notification.id, false)
+                      span.setAttribute("unarchive.success", true)
                     } catch (error) {
+                      span.setAttribute("unarchive.success", false)
+                      span.recordException(error as Error)
                       Sentry.captureException(error, {
-                        tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'unexpected_error' },
+                        tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'db_error' },
                         extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
                       })
                     }
-                  }}
-                  className="h-7 w-7 text-gray-500 hover:text-gray-700"
-                  aria-label="Вернуть из архива"
-                  title="Вернуть из архива"
-                >
-                  <Undo2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText ? (
-            <div
-              className={cn(
-                "text-xs mt-1 text-gray-600 dark:text-gray-400 break-words",
-                isExpanded ? "whitespace-pre-wrap" : "line-clamp-2"
-              )}
-              ref={contentRef}
-              dangerouslySetInnerHTML={{ __html: formatAnnouncementText(fullAnnouncementText) }}
-            />
-          ) : (
-            <p className="text-xs mt-1 line-clamp-2 text-gray-600 dark:text-gray-400 break-words">
-              {notification.message}
-            </p>
-          )}
-
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-gray-500 dark:text-gray-500">
-              {shouldShowDateTime 
-                ? format(notification.createdAt, "dd.MM.yyyy HH:mm", { locale: ru })
-                : formatDistanceToNow(notification.createdAt, {
-                    addSuffix: true,
-                    locale: ru,
                   })
-              }
-            </p>
-            {userName && (
-              <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
-                {userName}
-              </p>
-            )}
-            {fromSection && (
-              <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
-                из {fromSection}
-              </p>
-            )}
-            {commentAuthor && (
-              <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
-                 {commentAuthor}
-              </p>
-            )}
-          </div>
-
-          {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && isExpandableAnnouncement && (
-            <div className="mt-2">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setIsExpanded((prev) => !prev) }}
-                className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-                {isExpanded ? 'Свернуть' : 'Читать полностью'}
-              </button>
-            </div>
+                } catch (error) {
+                  Sentry.captureException(error, {
+                    tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'unexpected_error' },
+                    extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                  })
+                }
+              }}
+              className="h-7 w-7 text-gray-500 hover:text-gray-700"
+              aria-label="Вернуть из архива"
+              title="Вернуть из архива"
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Индикатор нового уведомления */
-      }
-      {/* Убрали точку-индикатор, остаётся только зелёная окантовка у непрочитанных */}
+      {/* Второй уровень: заголовок слева, тип уведомления справа */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0 pr-3">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
+            {notification.title}
+          </h4>
+        </div>
+        {notificationTag && (
+          <span className={cn(
+            "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0",
+            notificationTag.color
+          )}>
+            {notificationTag.text}
+          </span>
+        )}
+      </div>
+
+      {/* Контент уведомления */}
+      <div className="mb-3">
+        {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText ? (
+          <div
+            className={cn(
+              "text-xs text-gray-600 dark:text-gray-400 break-words",
+              isExpanded ? "whitespace-pre-wrap" : "line-clamp-2"
+            )}
+            ref={contentRef}
+            dangerouslySetInnerHTML={{ __html: formatAnnouncementText(fullAnnouncementText) }}
+          />
+        ) : (
+          <p className="text-xs line-clamp-2 text-gray-600 dark:text-gray-400 break-words">
+            {notification.message}
+          </p>
+        )}
+      </div>
+
+      {/* Кнопка раскрытия для объявлений */}
+      {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && isExpandableAnnouncement && (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setIsExpanded((prev) => !prev) }}
+            className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+            {isExpanded ? 'Свернуть' : 'Читать полностью'}
+          </button>
+        </div>
+      )}
+
+      {/* Нижняя строка: время и дополнительная информация */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500 dark:text-gray-500">
+          {shouldShowDateTime 
+            ? format(notification.createdAt, "dd.MM.yyyy HH:mm", { locale: ru })
+            : formatDistanceToNow(notification.createdAt, {
+                addSuffix: true,
+                locale: ru,
+              })
+          }
+        </p>
+        {userName && (
+          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+            {userName}
+          </p>
+        )}
+        {fromSection && (
+          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+            из {fromSection}
+          </p>
+        )}
+        {commentAuthor && (
+          <p className="text-xs text-gray-500 dark:text-gray-500 font-medium">
+             {commentAuthor}
+          </p>
+        )}
+      </div>
+
     </div>
   )
 }
