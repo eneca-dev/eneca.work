@@ -408,7 +408,15 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                           </Badge>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p>{user.address}</p>
+                                          <p>
+                                            {user.country && user.city 
+                                              ? `${user.city}, ${user.country}`
+                                              : user.country 
+                                                ? user.country
+                                                : user.city 
+                                                  ? user.city 
+                                                  : "Местоположение не указано"}
+                                          </p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
@@ -541,7 +549,15 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                                   </Badge>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                  <p>{user.address}</p>
+                                                  <p>
+                                                    {user.country && user.city 
+                                                      ? `${user.city}, ${user.country}`
+                                                      : user.country 
+                                                        ? user.country
+                                                        : user.city 
+                                                          ? user.city 
+                                                          : "Местоположение не указано"}
+                                                  </p>
                                                 </TooltipContent>
                                               </Tooltip>
                                             </TooltipProvider>

@@ -88,7 +88,8 @@ export async function getUsers(): Promise<User[]> {
           isActive: user.is_active || true,
           dateJoined: user.created_at,
           workLocation: mapWorkFormat(user.work_format),
-          address: user.address || "",
+          country: user.country_name || "",
+          city: user.city_name || "",
           employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
           salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
           isHourly: user.is_hourly !== null ? user.is_hourly : true,
@@ -646,10 +647,7 @@ export async function updateUser(
     console.log("Добавлено: work_format =", updates.work_format);
   }
 
-  if (userData.address !== undefined) {
-    updates.address = userData.address
-    console.log("Добавлено: address =", userData.address);
-  }
+
 
   // Обработка страны/города -> profiles.city_id
   if (userData.country !== undefined || userData.city !== undefined) {
@@ -782,7 +780,8 @@ export async function createUser(userData: {
   category?: string
   roleId?: string
   workLocation?: "office" | "remote" | "hybrid"
-  address?: string
+  country?: string
+  city?: string
 }) {
   return Sentry.startSpan(
     {
@@ -839,10 +838,30 @@ export async function createUser(userData: {
           last_name: userData.lastName,
           email: userData.email,
           work_format: mapWorkFormatToDb(userData.workLocation || "office"),
-          address: userData.address || null,
           employment_rate: 1,
           salary: 0,
           is_hourly: true,
+        }
+
+        // Обработка страны/города
+        if (userData.country && userData.city) {
+          try {
+            // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+            const resp = await fetch('/api/geo/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ countryName: userData.country, cityName: userData.city })
+            })
+            if (resp.ok) {
+              const { cityId } = await resp.json()
+              profileData.city_id = cityId
+              console.log("Добавлено: city_id =", cityId)
+            } else {
+              console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+            }
+          } catch (error) {
+            console.error('Ошибка вызова /api/geo/upsert:', error)
+          }
         }
 
         // 3. Найдем ID для связанных сущностей

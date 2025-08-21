@@ -12,7 +12,8 @@ import * as Sentry from "@sentry/nextjs"
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [name, setName] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -60,12 +61,21 @@ export default function RegisterPage() {
 
   const validateForm = (): string | null => {
     // Проверка имени
-    if (!name.trim()) {
+    if (!firstName.trim()) {
       return "Введите ваше имя"
     }
     
-    if (name.trim().length < 2) {
+    if (firstName.trim().length < 2) {
       return "Имя должно содержать минимум 2 символа"
+    }
+    
+    // Проверка фамилии
+    if (!lastName.trim()) {
+      return "Введите вашу фамилию"
+    }
+    
+    if (lastName.trim().length < 2) {
+      return "Фамилия должна содержать минимум 2 символа"
     }
     
     // Проверка email
@@ -126,9 +136,11 @@ export default function RegisterPage() {
       async (span) => {
         try {
           const trimmedEmail = email.trim()
-          const trimmedName = name.trim()
+          const trimmedFirstName = firstName.trim()
+          const trimmedLastName = lastName.trim()
           span.setAttribute("auth.email", trimmedEmail)
-          span.setAttribute("auth.name", trimmedName)
+          span.setAttribute("auth.first_name", trimmedFirstName)
+          span.setAttribute("auth.last_name", trimmedLastName)
           span.setAttribute("auth.method", "email_password")
 
           // Сначала проверяем существование email
@@ -151,7 +163,8 @@ export default function RegisterPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: trimmedName,
+              firstName: trimmedFirstName,
+              lastName: trimmedLastName,
               email: trimmedEmail,
               password,
             }),
@@ -168,7 +181,7 @@ export default function RegisterPage() {
                 action: 'register',
                 error_type: 'registration_failed'
               },
-              user: { email: trimmedEmail, name: trimmedName },
+              user: { email: trimmedEmail, first_name: trimmedFirstName, last_name: trimmedLastName },
               extra: { 
                 status: response.status,
                 timestamp: new Date().toISOString()
@@ -190,7 +203,7 @@ export default function RegisterPage() {
             message: 'User registration successful',
             category: 'auth',
             level: 'info',
-            data: { email: trimmedEmail, name: trimmedName }
+            data: { email: trimmedEmail, first_name: trimmedFirstName, last_name: trimmedLastName }
           })
 
           if (result?.emailSent) {
@@ -212,7 +225,7 @@ export default function RegisterPage() {
               action: 'register',
               error_type: 'unexpected_error'
             },
-            user: { email, name },
+            user: { email, first_name: firstName, last_name: lastName },
             extra: { 
               component: 'RegisterPage',
               timestamp: new Date().toISOString()
@@ -244,13 +257,30 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInput
           label="Имя"
-          id="name"
+          id="firstName"
           type="text"
-          placeholder="Иван Иванов"
+          placeholder="Иван"
           required
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          autoComplete="given-name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            minLength: 2,
+            maxLength: 50
+          }}
+        />
+
+        <AuthInput
+          label="Фамилия"
+          id="lastName"
+          type="text"
+          placeholder="Иванов"
+          required
+          autoComplete="family-name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
           validateOnChange={true}
           validationRules={{
             required: true,

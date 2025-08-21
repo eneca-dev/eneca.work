@@ -28,7 +28,7 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string; country?: string; city?: string }>>({
+  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string }>>({
     firstName: "",
     lastName: "",
     email: "",
@@ -39,7 +39,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     role: "",
     roleId: "",
     workLocation: "office",
-    address: "",
     country: "",
     city: "",
   })
@@ -54,6 +53,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
   const [cities, setCities] = useState<{ name: string }[]>([])
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
+  
+  // Добавляем состояния для поиска
+  const [countrySearch, setCountrySearch] = useState("")
+  const [citySearch, setCitySearch] = useState("")
+  const [filteredCountries, setFilteredCountries] = useState<{ code: string; name: string }[]>([])
+  const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
+  const [countrySelectOpen, setCountrySelectOpen] = useState(false)
+  const [citySelectOpen, setCitySelectOpen] = useState(false)
 
   // Состояния для удаления профиля
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
@@ -125,11 +132,25 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     if (!open) return
     const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
     setCountries(all)
+    setFilteredCountries(all)
   }, [open])
+
+  // Фильтрация стран по поиску
+  useEffect(() => {
+    if (!countrySearch.trim()) {
+      setFilteredCountries(countries)
+    } else {
+      const filtered = countries.filter(country =>
+        country.name.toLowerCase().includes(countrySearch.toLowerCase())
+      )
+      setFilteredCountries(filtered)
+    }
+  }, [countrySearch, countries])
 
   useEffect(() => {
     if (!selectedCountryCode) {
       setCities([])
+      setFilteredCities([])
       return
     }
     const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
@@ -143,7 +164,44 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       }
     }
     setCities(unique)
+    setFilteredCities(unique)
   }, [selectedCountryCode])
+
+  // Фильтрация городов по поиску
+  useEffect(() => {
+    if (!citySearch.trim()) {
+      setFilteredCities(cities)
+    } else {
+      const filtered = cities.filter(city =>
+        city.name.toLowerCase().includes(citySearch.toLowerCase())
+      )
+      setFilteredCities(filtered)
+    }
+  }, [citySearch, cities])
+
+  // Автофокус на поле поиска стран при открытии
+  useEffect(() => {
+    if (countrySelectOpen) {
+      setTimeout(() => {
+        const countrySearchInput = document.querySelector('#country-search') as HTMLInputElement
+        if (countrySearchInput) {
+          countrySearchInput.focus()
+        }
+      }, 100)
+    }
+  }, [countrySelectOpen])
+
+  // Автофокус на поле поиска городов при открытии
+  useEffect(() => {
+    if (citySelectOpen && selectedCountryCode) {
+      setTimeout(() => {
+        const citySearchInput = document.querySelector('#city-search') as HTMLInputElement
+        if (citySearchInput) {
+          citySearchInput.focus()
+        }
+      }, 100)
+    }
+  }, [citySelectOpen, selectedCountryCode])
 
   // Изменим установку данных пользователя при открытии диалога
   useEffect(() => {
@@ -177,13 +235,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         role: roleValue,
         roleId,
         workLocation: user.workLocation,
-        address: user.address,
-        country: (user as any).country || "",
-        city: (user as any).city || "",
+        country: user.country || "",
+        city: user.city || "",
       })
       // Инициализируем выбранную страну
-      const matchCountry = Country.getAllCountries().find(c => c.name === ((user as any).country || ""))
+      const matchCountry = Country.getAllCountries().find(c => c.name === (user.country || ""))
       setSelectedCountryCode(matchCountry?.isoCode || "")
+      
+      // Сбрасываем поиск
+      setCountrySearch("")
+      setCitySearch("")
     } else {
       setFormData({
         firstName: "",
@@ -196,11 +257,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         role: "",
         roleId: "",
         workLocation: "office",
-        address: "",
         country: "",
         city: "",
       })
       setSelectedCountryCode("")
+      setCountrySearch("")
+      setCitySearch("")
     }
   }, [user, open, roles])
 
@@ -250,12 +312,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
-          address: formData.address,
+          country: formData.country,
+          city: formData.city,
           workLocation: formData.workLocation,
         }
-
-        if (formData.country) updateData.country = String(formData.country)
-        if (formData.city) updateData.city = String(formData.city)
         
         // Добавляем организационные поля только если пользователь может их редактировать
         if (canEditOrganizationalFields) {
@@ -310,7 +370,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 salary: freshProfile.salary,
                 isHourly: freshProfile.is_hourly,
                 employmentRate: freshProfile.employment_rate,
-                address: freshProfile.address,
+                country: freshProfile.country_name,
+                city: freshProfile.city_name,
                 roleId: freshProfile.role_id,
                 avatar_url: freshProfile.avatar_url,
               },
@@ -396,6 +457,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
   }
 
+  // Функция для сброса поиска
+  const resetSearch = () => {
+    setCountrySearch("")
+    setCitySearch("")
+    setCountrySelectOpen(false)
+    setCitySelectOpen(false)
+  }
+
   // Функция для обработки ввода в поле подтверждения (блокируем вставку)
   const handleDeleteConfirmationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDeleteConfirmationText(e.target.value)
@@ -410,7 +479,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const isDeleteConfirmationValid = deleteConfirmationText === deleteConfirmationPhrase
 
   return (
-    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
+    <Modal isOpen={open} onClose={() => {
+      onOpenChange(false)
+      resetSearch()
+    }} size="lg">
       <form onSubmit={handleSubmit}>
         <Modal.Header 
           title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
@@ -592,13 +664,43 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   setSelectedCountryCode(code)
                   const found = countries.find(c => c.code === code)
                   setFormData(prev => ({ ...prev, country: found?.name || "", city: "" }))
+                  // Сбрасываем поиск при выборе
+                  setCountrySearch("")
+                  setCitySearch("")
+                  setCountrySelectOpen(false)
                 }}
+                open={countrySelectOpen}
+                onOpenChange={setCountrySelectOpen}
               >
                 <SelectTrigger id="country" className="col-span-3">
                   <SelectValue placeholder="Выберите страну" />
                 </SelectTrigger>
                 <SelectContent>
-                  {countries.map((c) => (
+                  {/* Поле поиска по странам */}
+                  <div className="p-2 border-b">
+                    <Input
+                      id="country-search"
+                      placeholder="Поиск по странам..."
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      onKeyDown={(e) => {
+                        // Предотвращаем обработку клавиш в Select при фокусе на Input
+                        e.stopPropagation();
+                        
+                        // Обработка Enter для выбора первой страны из списка
+                        if (e.key === 'Enter' && filteredCountries.length > 0) {
+                          const firstCountry = filteredCountries[0];
+                          setSelectedCountryCode(firstCountry.code);
+                          setFormData(prev => ({ ...prev, country: firstCountry.name, city: "" }));
+                          setCountrySearch("");
+                          setCitySearch("");
+                          setCountrySelectOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {filteredCountries.map((c) => (
                     <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -610,32 +712,50 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               </Label>
               <Select
                 value={formData.city || ""}
-                onValueChange={(value) => handleChange("city", value)}
+                onValueChange={(value) => {
+                  handleChange("city", value)
+                  // Сбрасываем поиск при выборе
+                  setCitySearch("")
+                  setCitySelectOpen(false)
+                }}
                 disabled={!selectedCountryCode}
+                open={citySelectOpen}
+                onOpenChange={setCitySelectOpen}
               >
                 <SelectTrigger id="city" className="col-span-3">
                   <SelectValue placeholder={selectedCountryCode ? "Выберите город" : "Сначала выберите страну"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {cities.map((c) => (
+                  {/* Поле поиска по городам */}
+                  <div className="p-2 border-b">
+                    <Input
+                      id="city-search"
+                      placeholder="Поиск по городам..."
+                      value={citySearch}
+                      onChange={(e) => setCitySearch(e.target.value)}
+                      className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      disabled={!selectedCountryCode}
+                      onKeyDown={(e) => {
+                        // Предотвращаем обработку клавиш в Select при фокусе на Input
+                        e.stopPropagation();
+                        
+                        // Обработка Enter для выбора первого города из списка
+                        if (e.key === 'Enter' && filteredCities.length > 0) {
+                          const firstCity = filteredCities[0];
+                          handleChange("city", firstCity.name);
+                          setCitySearch("");
+                          setCitySelectOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {filteredCities.map((c) => (
                     <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="address" className="text-right">
-                Адрес
-              </Label>
-              <Textarea
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleChange("address", e.target.value)}
-                className="col-span-3"
-                placeholder="Укажите адрес"
-                rows={2}
-              />
-            </div>
+
 
 
 
@@ -664,7 +784,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               <ModalButton 
                 type="button" 
                 variant="cancel"
-                onClick={() => onOpenChange(false)} 
+                onClick={() => {
+                  onOpenChange(false)
+                  resetSearch()
+                }} 
                 disabled={isLoading}
               >
                 Отмена

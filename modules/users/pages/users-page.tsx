@@ -118,7 +118,8 @@ export default function UsersPage() {
 
     dateJoined: new Date().toISOString(),
     workLocation: "hybrid" as const,
-    address: "ул. Ленина, 10, Москва / Домашний офис",
+    country: "Россия",
+    city: "Москва",
     employmentRate: 1,
     salary: 1500,
     isHourly: false,

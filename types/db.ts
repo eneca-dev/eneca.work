@@ -12,7 +12,8 @@ export type User = {
   role?: string
   dateJoined: string
   workLocation: "office" | "remote" | "hybrid"
-  address: string
+  country?: string
+  city?: string
   employmentRate: number
   salary: number
   isHourly: boolean
