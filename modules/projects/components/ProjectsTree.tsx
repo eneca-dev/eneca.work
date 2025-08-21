@@ -839,7 +839,6 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
-  const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
 
 
   // Закрытие выпадающего списка статусов при клике вне его
