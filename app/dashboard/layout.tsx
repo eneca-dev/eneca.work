@@ -8,6 +8,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
+import { ChatInterface } from "@/modules/chat"
 import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
 import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
 
@@ -201,6 +202,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </UserPermissionsSyncProvider>
       </div>
+      
+      {/* Chat Interface */}
+      <ChatInterface />
     </div>
   )
 }
