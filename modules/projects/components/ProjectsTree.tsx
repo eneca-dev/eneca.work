@@ -21,6 +21,7 @@ import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
+import { CompactStatusSelector } from './CompactStatusSelector'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
@@ -401,34 +402,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
                     <span className="text-xs text-gray-500">Обновление...</span>
                   </div>
-                ) : node.statusName ? (
-                  <div 
-                    className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      // управление статусами теперь в верхнем меню
-                    }}
-                    title="Нажмите для изменения статуса"
-                  >
-                    <div 
-                      className="w-2 h-2 rounded-full" 
-                      style={{ backgroundColor: node.statusColor || '#6B7280' }}
-                    />
-                    <span className="text-xs text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                      {node.statusName}
-                    </span>
-                  </div>
                 ) : (
-                  <span 
-                    className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
-                    onClick={(e) => { e.stopPropagation() }}
-                    title="Нажмите для назначения статуса"
-                  >
-                    Без статуса
-                  </span>
+                  <div className="w-full" onClick={(e) => e.stopPropagation()}>
+                    <CompactStatusSelector
+                      value={node.statusId || ''}
+                      onChange={(statusId) => updateSectionStatus(statusId || null)}
+                      disabled={updatingStatus}
+                      currentStatusName={node.statusName}
+                      currentStatusColor={node.statusColor}
+                    />
+                  </div>
                 )}
-
-                {/* Выпадающий список статусов удален */}
               </div>
               
               {/* Даты - скрывается третьими (>= 800px) */}

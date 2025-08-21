@@ -9,6 +9,7 @@ import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
+import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
@@ -194,7 +195,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
           ) : (
-            children
+            <NotificationsProvider>
+              {children}
+            </NotificationsProvider>
           )}
         </UserPermissionsSyncProvider>
       </div>
