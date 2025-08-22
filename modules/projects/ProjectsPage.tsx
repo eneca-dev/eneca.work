@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, List, Expand, Minimize, Settings } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings } from 'lucide-react';
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 import { useFilterStore } from '@/modules/projects/filters/store';
 import { useSearchParams } from 'next/navigation';
@@ -47,7 +47,7 @@ export default function ProjectsPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [projectSearch, setProjectSearch] = useState<string>('');
   const [treeSearch, setTreeSearch] = useState<string>('');
-  const [showOnlySections, setShowOnlySections] = useState(false);
+  // "Только разделы" теперь управляется через событие для дерева
   const { statuses } = useSectionStatuses();
   const [statusSearch, setStatusSearch] = useState('');
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
@@ -195,22 +195,8 @@ export default function ProjectsPage() {
               >
                 <User size={14} />
               </button>
-              {/* Только разделы */}
-              <button
-                className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
-                title="Только разделы"
-                onClick={() => setShowOnlySections(v => !v)}
-              >
-                <List size={14} />
-              </button>
-              {/* Развернуть/свернуть */}
-              <button
-                className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30"
-                title="Развернуть все"
-                onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:expandAll')) }}
-              >
-                <Expand size={14} />
-              </button>
+              {/* Только разделы — удалено */}
+              {/* Свернуть */}
               <button
                 className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30"
                 title="Свернуть все"
@@ -250,22 +236,8 @@ export default function ProjectsPage() {
             >
               <User size={14} />
             </button>
-            {/* Только разделы */}
-            <button
-              className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400 dark:hover:bg-purple-500/30"
-              title="Только разделы"
-              onClick={() => setShowOnlySections(v => !v)}
-            >
-              <List size={14} />
-            </button>
-            {/* Развернуть/свернуть */}
-            <button
-              className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/30"
-              title="Развернуть все"
-              onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:expandAll')) }}
-            >
-              <Expand size={14} />
-            </button>
+            {/* Только разделы — удалено */}
+            {/* Свернуть */}
             <button
               className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30"
               title="Свернуть все"

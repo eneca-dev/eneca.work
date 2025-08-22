@@ -38,8 +38,10 @@ export function CompactStatusSelector({
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       setDropdownPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
+        // Для position: fixed координаты должны быть в системе viewport,
+        // поэтому НЕ добавляем scrollX/scrollY (rect уже относителен viewport)
+        top: rect.bottom,
+        left: rect.left,
         width: Math.max(rect.width, 200) // Минимальная ширина для удобства
       });
     }
@@ -176,7 +178,7 @@ export function CompactStatusSelector({
 
             {/* Опция "Не выбран" */}
             <div
-              onClick={() => handleSelect(null)}
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(null); }}
               className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600"
             >
               <div className="text-gray-500 dark:text-slate-400 text-sm">
@@ -204,7 +206,7 @@ export function CompactStatusSelector({
               filteredStatuses.map((status) => (
                 <div
                   key={status.id}
-                  onClick={() => handleSelect(status.id)}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(status.id); }}
                   className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center"
                 >
                   <div className="flex items-center">

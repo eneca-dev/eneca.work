@@ -847,27 +847,25 @@ export function ProjectsTree({
   useEffect(() => {
     const toggleGroup = () => toggleGroupByClient()
     const toggleManagers = () => toggleShowManagers()
-    const expandAll = () => expandAllNodes()
     const collapseAll = () => collapseAllNodes()
-    const onlySections = () => setShowOnlySections((v) => !v)
+    const onlySections = () => setShowOnlySections((v) => v) // отключено, держим состояние как есть
     const openStatusManagement = () => setShowStatusManagementModal(true)
 
     window.addEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
     window.addEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
-    window.addEventListener('projectsTree:expandAll', expandAll as EventListener)
     window.addEventListener('projectsTree:collapseAll', collapseAll as EventListener)
-    window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+    // обработчик toggleOnlySections оставлен на будущее, но логика отключена
+    // window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
     window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
 
     return () => {
       window.removeEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
       window.removeEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
-      window.removeEventListener('projectsTree:expandAll', expandAll as EventListener)
       window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
-      window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+      // window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
       window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
     }
-  }, [toggleGroupByClient, toggleShowManagers])
+  }, [toggleGroupByClient, toggleShowManagers, collapseAllNodes, showOnlySections, groupByClient, expandedNodes])
 
   // Загрузка данных
   useEffect(() => {
@@ -1395,18 +1393,15 @@ export function ProjectsTree({
     return ids
   }
 
-  // Развернуть все узлы
-  const expandAllNodes = () => {
-    const allNodeIds = collectAllNodeIds(getFilteredTreeData())
-    allNodeIds.forEach(nodeId => {
-      if (!expandedNodes.has(nodeId)) {
-        toggleNodeInStore(nodeId)
-      }
-    })
-  }
-
   // Свернуть все узлы
-  const collapseAllNodes = () => {
+  function collapseAllNodes() {
+    // Гарантируем целевое состояние верхнего уровня: список руководителей
+    // 1) выключаем группировку по заказчикам
+    if (groupByClient) toggleGroupByClient()
+    // 2) выключаем режим "только разделы"
+    if (showOnlySections) setShowOnlySections(false)
+    // 3) включаем отображение руководителей
+    if (!showManagers) toggleShowManagers()
     // Закрываем все открытые узлы
     Array.from(expandedNodes).forEach(nodeId => {
       toggleNodeInStore(nodeId)
