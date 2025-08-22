@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createServerClient } from '@supabase/ssr'
+import * as Sentry from '@sentry/nextjs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,50 +13,81 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Имя, email и пароль обязательны' }, { status: 400 })
     }
 
-    const admin = createAdminClient()
+    // Создаем серверный Supabase клиент с anon-ключом
+    let response = NextResponse.next()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    // 1) Создаем пользователя в БД (БЕЗ отправки письма подтверждения)
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      user_metadata: { name },
-      email_confirm: false,
+    if (!supabaseUrl || !supabaseAnonKey) {
+      const err = new Error('Отсутствуют переменные окружения Supabase')
+      Sentry.captureException(err, {
+        tags: { module: 'auth', action: 'register', error_type: 'env_missing', critical: true },
+        extra: { has_url: !!supabaseUrl, has_anon: !!supabaseAnonKey, origin: request.nextUrl.origin },
+      })
+      console.error('Отсутствуют переменные окружения Supabase')
+      return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })
+    }
+
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next()
+          response.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options: any) {
+          request.cookies.set({ name, value: '', ...options })
+          response = NextResponse.next()
+          response.cookies.set({ name, value: '', ...options })
+        },
+      },
     })
 
-    if (createError) {
-      const message = createError.message?.toLowerCase?.() || ''
-      if (message.includes('user already registered') || message.includes('already exists')) {
+    // 1) Регистрация через anon клиент — Supabase сам отправит письмо подтверждения
+    const redirectTo = `${request.nextUrl.origin}/auth/callback`
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectTo,
+        data: { name },
+      },
+    })
+
+    if (signUpError) {
+      const msg = signUpError.message?.toLowerCase?.() || ''
+      if (msg.includes('user already registered') || msg.includes('already exists')) {
         return NextResponse.json(
           { error: 'Пользователь с таким email уже зарегистрирован' },
           { status: 409 }
         )
       }
-      console.error('Ошибка создания пользователя:', createError)
+      Sentry.captureException(signUpError, {
+        tags: { module: 'auth', action: 'register', error_type: 'signup_failed', critical: true },
+        user: { email },
+        extra: { redirect_to: redirectTo },
+      })
+      console.error('Ошибка регистрации пользователя:', signUpError)
       return NextResponse.json({ error: 'Не удалось создать пользователя' }, { status: 500 })
     }
 
-    const userId = created.user?.id ?? null
-
-    // 2) Отправляем письмо подтверждения после успешного создания пользователя
-    const redirectTo = `${request.nextUrl.origin}/auth/callback`
-    const { error: resendError } = await admin.auth.resend({
-      type: 'signup',
-      email,
-      options: { emailRedirectTo: redirectTo },
-    })
-
-    // Возвращаем успех даже если письмо не ушло, так как пользователь уже создан
+    // Возвращаем успех. Письмо отправляет Supabase
     return NextResponse.json(
       {
-        userId,
-        emailSent: !resendError,
-        message: resendError
-          ? 'Аккаунт создан, но не удалось отправить письмо подтверждения. Обратитесь к администратору.'
-          : 'Аккаунт создан. Проверьте почту для подтверждения.'
+        userId: data.user?.id ?? null,
+        emailSent: true,
+        message: 'Аккаунт создан. Проверьте почту для подтверждения.'
       },
       { status: 201 }
     )
   } catch (error) {
+    Sentry.captureException(error, {
+      tags: { module: 'auth', action: 'register', error_type: 'unexpected_error', critical: true },
+      extra: { url: request.url },
+    })
     console.error('Неожиданная ошибка при регистрации:', error)
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })
   }

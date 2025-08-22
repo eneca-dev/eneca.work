@@ -8,14 +8,17 @@ import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
+import { ChatInterface } from "@/modules/chat"
 import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
+import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
+import { useSidebarState } from "@/hooks/useSidebarState"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarState()
   const name = useUserStore((state) => state.name)
   const email = useUserStore((state) => state.email)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
@@ -180,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar
           user={{ name: name || "Пользователь", email: email || "" }}
           collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((c) => !c)}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
       {/* Контент с отступом слева */}
@@ -194,10 +197,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
           ) : (
-            children
+            <NotificationsProvider>
+              {children}
+            </NotificationsProvider>
           )}
         </UserPermissionsSyncProvider>
       </div>
+      
+      {/* Chat Interface */}
+      <ChatInterface />
     </div>
   )
 }

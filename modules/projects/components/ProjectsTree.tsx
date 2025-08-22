@@ -22,11 +22,13 @@ import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
+import { CompactStatusSelector } from './CompactStatusSelector'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+
 import { SectionDetailTabs } from './SectionDetailTabs'
 
 interface ProjectNode {
@@ -67,6 +69,7 @@ interface ProjectsTreeProps {
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 interface TreeNodeProps {
@@ -84,6 +87,7 @@ interface TreeNodeProps {
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onCreateAssignment: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
@@ -106,6 +110,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateSection,
   onCreateAssignment,
   onDeleteProject,
+  onOpenProjectDashboard,
   onOpenStatusManagement,
   statuses
 }) => {
@@ -405,34 +410,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
                     <span className="text-xs text-gray-500">Обновление...</span>
                   </div>
-                ) : node.statusName ? (
-                  <div 
-                    className="flex items-center gap-1 px-2 py-1 rounded-full border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      // управление статусами теперь в верхнем меню
-                    }}
-                    title="Нажмите для изменения статуса"
-                  >
-                    <div 
-                      className="w-2 h-2 rounded-full" 
-                      style={{ backgroundColor: node.statusColor || '#6B7280' }}
-                    />
-                    <span className="text-xs text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                      {node.statusName}
-                    </span>
-                  </div>
                 ) : (
-                  <span 
-                    className="text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer transition-colors whitespace-nowrap"
-                    onClick={(e) => { e.stopPropagation() }}
-                    title="Нажмите для назначения статуса"
-                  >
-                    Без статуса
-                  </span>
+                  <div className="w-full" onClick={(e) => e.stopPropagation()}>
+                    <CompactStatusSelector
+                      value={node.statusId || ''}
+                      onChange={(statusId) => updateSectionStatus(statusId || null)}
+                      disabled={updatingStatus}
+                      currentStatusName={node.statusName}
+                      currentStatusColor={node.statusColor}
+                    />
+                  </div>
                 )}
-
-                {/* Выпадающий список статусов удален */}
               </div>
               
               {/* Даты - скрывается третьими (>= 800px) */}
@@ -507,12 +495,24 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
             
             {/* Название */}
-            <span className={cn(
-              "font-medium text-sm dark:text-slate-200 text-slate-800",
-              node.type === 'manager' && "font-semibold"
-            )}>
-              {node.name}
-            </span>
+            {node.type === 'project' && onOpenProjectDashboard ? (
+              <span 
+                className={cn(
+                  "font-medium text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                )}
+                onClick={(e) => onOpenProjectDashboard(node, e)}
+                title="Открыть дашборд проекта"
+              >
+                {node.name}
+              </span>
+            ) : (
+              <span className={cn(
+                "font-medium text-sm dark:text-slate-200 text-slate-800",
+                node.type === 'manager' && "font-semibold"
+              )}>
+                {node.name}
+              </span>
+            )}
 
 
 
@@ -775,6 +775,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateSection={onCreateSection}
               onCreateAssignment={onCreateAssignment}
               onDeleteProject={onDeleteProject}
+              onOpenProjectDashboard={onOpenProjectDashboard}
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
             />
@@ -796,7 +797,8 @@ export function ProjectsTree({
   selectedStatusIds = [],
   urlSectionId,
   urlTab,
-  externalSearchQuery
+  externalSearchQuery,
+  onOpenProjectDashboard
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { 
@@ -832,6 +834,9 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+
+
+  // Закрытие выпадающего списка статусов при клике вне его
   const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false)
   const [selectedObjectForAssignment, setSelectedObjectForAssignment] = useState<ProjectNode | null>(null)
   
@@ -1579,6 +1584,8 @@ export function ProjectsTree({
     setShowCreateSectionModal(true)
   }
 
+
+
   const handleCreateAssignment = (object: ProjectNode, e: React.MouseEvent) => {
     e.stopPropagation() // Предотвращаем раскрытие узла
     setSelectedObjectForAssignment(object)
@@ -1628,6 +1635,7 @@ export function ProjectsTree({
                 onCreateSection={handleCreateSection}
                 onCreateAssignment={handleCreateAssignment}
                 onDeleteProject={handleDeleteProject}
+                onOpenProjectDashboard={onOpenProjectDashboard}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
               />
@@ -1775,6 +1783,8 @@ export function ProjectsTree({
         isOpen={showStatusManagementModal}
         onClose={() => setShowStatusManagementModal(false)}
       />
+
+
 
       {/* Модальное окно создания задания для объекта */}
       {showCreateAssignmentModal && selectedObjectForAssignment && (
