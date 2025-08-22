@@ -27,6 +27,7 @@ import {
   Briefcase,
   Users,
   Tag,
+  RotateCcw,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -82,6 +83,14 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(100)
   const [showAll, setShowAll] = useState(false)
+  
+  // Состояния для поиска в dropdown фильтрах
+  const [searchDepartmentDropdown, setSearchDepartmentDropdown] = useState("")
+  const [searchTeamDropdown, setSearchTeamDropdown] = useState("")
+  const [searchPositionDropdown, setSearchPositionDropdown] = useState("")
+  const [searchCategoryDropdown, setSearchCategoryDropdown] = useState("")
+  const [searchRoleDropdown, setSearchRoleDropdown] = useState("")
+  const [searchLocationDropdown, setSearchLocationDropdown] = useState("")
   
   const router = useRouter()
 
@@ -148,8 +157,13 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
 
   // ОПТИМИЗАЦИЯ: Мемоизируем группировку пользователей
   const groupedUsers = useMemo(() => {
-    const usersToGroup = showAll ? filteredUsers : paginatedUsers
-    if (groupBy === "none") return { "": usersToGroup }
+    // Группировка всегда работает со всем отфильтрованным списком
+    const usersToGroup = filteredUsers
+    
+    if (groupBy === "none") {
+      // Для режима "без группировки" применяем пагинацию
+      return { "": showAll ? filteredUsers : paginatedUsers }
+    }
 
     if (groupBy === "department") {
       const groups: Record<string, User[]> = {}
@@ -181,7 +195,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     })
 
     return nestedGroups
-  }, [paginatedUsers, filteredUsers, groupBy, showAll])
+  }, [filteredUsers, paginatedUsers, groupBy, showAll])
 
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчики
   const handleEditUser = useCallback((user: User) => {
@@ -259,6 +273,49 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     setCurrentPage(1)
   }, [filters, searchTerm])
 
+  // Функция сброса всех фильтров
+  const handleResetFilters = useCallback(() => {
+    // Сбрасываем все фильтры
+    setFilters({
+      departments: [],
+      teams: [],
+      categories: [],
+      positions: [],
+      workLocations: [],
+      roles: [],
+    })
+    
+    // Сбрасываем поисковые строки в dropdown'ах
+    setSearchDepartmentDropdown("")
+    setSearchTeamDropdown("")
+    setSearchPositionDropdown("")
+    setSearchCategoryDropdown("")
+    setSearchRoleDropdown("")
+    setSearchLocationDropdown("")
+    
+    // Сбрасываем основной поиск
+    setSearchTerm("")
+  }, [])
+
+  // Проверяем есть ли активные фильтры
+  const hasActiveFilters = useMemo(() => {
+    return searchTerm.length > 0 || 
+           Object.values(filters).some(filterArray => filterArray.length > 0)
+  }, [searchTerm, filters])
+
+  // Функция для получения пагинированных пользователей из группы
+  const getPaginatedUsersFromGroup = useCallback((groupUsers: User[]) => {
+    // Если включена группировка или показать всех - показываем всех пользователей группы
+    if (groupBy !== "none" || showAll) {
+      return groupUsers
+    }
+    
+    // Только для режима "без группировки" применяем пагинацию к группе
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return groupUsers.slice(startIndex, endIndex)
+  }, [groupBy, showAll, currentPage, itemsPerPage])
+
   // Получение инициалов для аватара
   const getInitials = useCallback((name: string) => {
     return name
@@ -270,7 +327,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   }, [])
 
   return (
-    <Card className="w-full">
+    <TooltipProvider>
+      <Card className="w-full">
              <CardHeader className="pb-4 px-4">
          {/* Адаптивная строка с фильтрами */}
          <div className="flex items-center gap-0.5 flex-wrap w-full border-b border-gray-200 dark:border-gray-700 pb-4">
@@ -300,9 +358,17 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск отделов..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск отделов..." 
+                   className="h-8 text-xs"
+                   value={searchDepartmentDropdown}
+                   onChange={(e) => setSearchDepartmentDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.department).filter(Boolean))].sort().map(dept => (
+                   {[...new Set(users.map(u => u.department).filter(Boolean))]
+                     .sort()
+                     .filter(dept => dept.toLowerCase().includes(searchDepartmentDropdown.toLowerCase()))
+                     .map(dept => (
                      <div key={dept} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -341,9 +407,17 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск команд..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск команд..." 
+                   className="h-8 text-xs"
+                   value={searchTeamDropdown}
+                   onChange={(e) => setSearchTeamDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.team).filter(Boolean))].sort().map(team => (
+                   {[...new Set(users.map(u => u.team).filter(Boolean))]
+                     .sort()
+                     .filter(team => team.toLowerCase().includes(searchTeamDropdown.toLowerCase()))
+                     .map(team => (
                      <div key={team} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -382,9 +456,17 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск должностей..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск должностей..." 
+                   className="h-8 text-xs"
+                   value={searchPositionDropdown}
+                   onChange={(e) => setSearchPositionDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.position).filter(Boolean))].sort().map(position => (
+                   {[...new Set(users.map(u => u.position).filter(Boolean))]
+                     .sort()
+                     .filter(position => position.toLowerCase().includes(searchPositionDropdown.toLowerCase()))
+                     .map(position => (
                      <div key={position} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -423,9 +505,17 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск категорий..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск категорий..." 
+                   className="h-8 text-xs"
+                   value={searchCategoryDropdown}
+                   onChange={(e) => setSearchCategoryDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.category).filter(Boolean))].sort().map(category => (
+                   {[...new Set(users.map(u => u.category).filter(Boolean))]
+                     .sort()
+                     .filter(category => category.toLowerCase().includes(searchCategoryDropdown.toLowerCase()))
+                     .map(category => (
                      <div key={category} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -464,9 +554,17 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск ролей..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск ролей..." 
+                   className="h-8 text-xs"
+                   value={searchRoleDropdown}
+                   onChange={(e) => setSearchRoleDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.role).filter(Boolean))].sort().map(role => (
+                   {[...new Set(users.map(u => u.role).filter(Boolean))]
+                     .sort()
+                     .filter(role => role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
+                     .map(role => (
                      <div key={role} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -505,9 +603,21 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuTrigger>
              <DropdownMenuContent align="start" className="w-64">
                <div className="p-2 space-y-2">
-                 <Input placeholder="Поиск расположений..." className="h-8 text-xs" />
+                 <Input 
+                   placeholder="Поиск расположений..." 
+                   className="h-8 text-xs"
+                   value={searchLocationDropdown}
+                   onChange={(e) => setSearchLocationDropdown(e.target.value)}
+                 />
                  <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.workLocation).filter(Boolean))].sort().map(location => (
+                   {[...new Set(users.map(u => u.workLocation).filter(Boolean))]
+                     .sort()
+                     .filter(location => {
+                       const { label } = getWorkLocationInfo(location)
+                       return label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
+                              location.toLowerCase().includes(searchLocationDropdown.toLowerCase())
+                     })
+                     .map(location => (
                      <div key={location} className="flex items-center space-x-2">
                        <input
                          type="checkbox"
@@ -530,6 +640,24 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
             </div>
              </DropdownMenuContent>
            </DropdownMenu>
+
+           {/* Кнопка сброса фильтров */}
+           <Tooltip>
+             <TooltipTrigger asChild>
+               <Button
+                 variant="ghost"
+                 size="sm"
+                 className="h-7 w-7 p-0 text-xs"
+                 onClick={handleResetFilters}
+                 disabled={!hasActiveFilters}
+               >
+                 <RotateCcw className="h-4 w-4" />
+               </Button>
+             </TooltipTrigger>
+             <TooltipContent>
+               <p>Сброс фильтров</p>
+             </TooltipContent>
+           </Tooltip>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
@@ -556,18 +684,20 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </DropdownMenuContent>
            </DropdownMenu>
 
-           {/* Кнопка показать всех */}
-           <Button 
-             variant="ghost" 
-             size="sm" 
-             className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
-             onClick={handleToggleShowAll}
-           >
-             {showAll ? "Пагинация" : "Показать всех"}
-           </Button>
+           {/* Кнопка показать всех - скрываем при группировке */}
+           {groupBy === "none" && (
+             <Button 
+               variant="ghost" 
+               size="sm" 
+               className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
+               onClick={handleToggleShowAll}
+             >
+               {showAll ? "Пагинация" : "Показать всех"}
+             </Button>
+           )}
 
-           {/* Навигация по страницам */}
-           {!showAll && totalPages > 1 && (
+           {/* Навигация по страницам - скрываем при группировке */}
+           {groupBy === "none" && !showAll && totalPages > 1 && (
              <>
                <div className="flex items-center gap-0.5 text-xs text-gray-500">
                  <Button
@@ -621,7 +751,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                     <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">Категория</TableHead>
                                          <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Роль</TableHead>
                     <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Расположение</TableHead>
-                    {canEditAllUsers && <TableHead className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">Действия</TableHead>}
+                    {canEditAllUsers && <TableHead className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">Действия</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -649,7 +779,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                           )}
 
                         {(groupBy === "none" || expandedGroups[groupName]) &&
-                          groupUsers.map((user) => {
+                          getPaginatedUsersFromGroup(groupUsers).map((user) => {
                             const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
                             
                             return (
@@ -664,37 +794,37 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                     </Avatar>
                                     <div className="min-w-0 flex-1">
                                       <div className="font-medium text-xs sm:text-sm">
-                                        <span className="block truncate max-w-full md:max-w-32 sm:max-w-24">{user.name}</span>
+                                        <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.name}</span>
                                       </div>
                                       <div className="text-xs text-gray-500 hidden sm:block">
-                                        <span className="block truncate max-w-full md:max-w-32 sm:max-w-24">{user.email}</span>
+                                        <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.email}</span>
                                       </div>
                                     </div>
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <span className="block truncate max-w-full md:max-w-24 sm:max-w-16 text-xs sm:text-sm">{user.department || '—'}</span>
+                                  <span className="block sm:truncate sm:max-w-16 md:max-w-24 lg:max-w-32 xl:max-w-40 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.team || '—'}</span>
+                                  <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                  <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.position || '—'}</span>
+                                  <span className="block lg:truncate lg:max-w-20 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                  <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.category || '—'}</span>
+                                  <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
-                                  <span className="block truncate max-w-full md:max-w-16 text-xs sm:text-sm">{user.role || '—'}</span>
+                                  <span className="block xl:truncate xl:max-w-16 2xl:max-w-none text-xs sm:text-sm">{user.role || '—'}</span>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
                                   <div className="flex items-center space-x-1">
                                     {workLocationInfo.icon}
-                                    <span className="block truncate max-w-full lg:max-w-16 text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                    <span className="block xl:truncate xl:max-w-16 2xl:max-w-none text-xs sm:text-sm">{workLocationInfo.label}</span>
                                   </div>
                                 </TableCell>
                                 {canEditAllUsers && (
-                                  <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">
+                                  <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon">
@@ -761,7 +891,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                   </TableRow>
 
                                 {/* Пользователи команды */}
-                                {teamUsers.map((user) => {
+                                {getPaginatedUsersFromGroup(teamUsers).map((user) => {
                                   const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
                                   
                                   return (
@@ -776,37 +906,37 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                             </Avatar>
                                             <div className="min-w-0 flex-1">
                                               <div className="font-medium text-xs sm:text-sm">
-                                                <span className="block truncate max-w-full md:max-w-28 sm:max-w-20">{user.name}</span>
+                                                <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
                                               </div>
                                             <div className="text-xs text-gray-500 hidden sm:block">
-                                              <span className="block truncate max-w-full md:max-w-28 sm:max-w-20">{user.email}</span>
+                                              <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.email}</span>
                                               </div>
                                             </div>
                                           </div>
                                         </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                        <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.department || '—'}</span>
+                                        <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
                                       </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                        <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.team || '—'}</span>
+                                        <span className="block sm:truncate sm:max-w-12 md:max-w-18 lg:max-w-24 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
                                       </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                        <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.position || '—'}</span>
+                                        <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
                                       </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                        <span className="block truncate max-w-full md:max-w-16 sm:max-w-10 text-xs sm:text-sm">{user.category || '—'}</span>
+                                        <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                       </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
-                                        <span className="block truncate max-w-full md:max-w-14 text-xs sm:text-sm">{user.role || '—'}</span>
+                                        <span className="block xl:truncate xl:max-w-14 2xl:max-w-none text-xs sm:text-sm">{user.role || '—'}</span>
                                       </TableCell>
                                         <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
                                         <div className="flex items-center space-x-1">
                                           {workLocationInfo.icon}
-                                          <span className="block truncate max-w-full lg:max-w-14 text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                          <span className="block xl:truncate xl:max-w-14 2xl:max-w-none text-xs sm:text-sm">{workLocationInfo.label}</span>
                                         </div>
                                         </TableCell>
                                         {canEditAllUsers && (
-                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">
+                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">
                                             <DropdownMenu>
                                               <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon">
@@ -854,5 +984,6 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
         onUserUpdated={handleUserUpdated}
       />
     </Card>
+    </TooltipProvider>
   )
 }
