@@ -113,12 +113,26 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     (notification.payload?.body) ||
     (notification.payload?.text)
 
-  // Простейшее форматирование: жирный, курсив, подчеркивание
-  function formatAnnouncementText(text: string) {
-    return text
+  // Безопасное форматирование текста без использования dangerouslySetInnerHTML
+  function formatAnnouncementText(text: string): string {
+    // Экранируем HTML-символы для предотвращения XSS
+    const escapeHtml = (str: string) => {
+      const div = document.createElement('div')
+      div.textContent = str
+      return div.innerHTML
+    }
+
+    // Экранируем весь текст
+    let escapedText = escapeHtml(text)
+
+    // Применяем простое форматирование через безопасные замены
+    escapedText = escapedText
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/\n/g, '<br>')
+
+    return escapedText
   }
 
   // Реф и вычисление: есть ли обрезка (только для анонсов)

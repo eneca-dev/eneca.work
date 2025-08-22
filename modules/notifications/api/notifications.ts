@@ -20,6 +20,51 @@ import { createClient } from '@/utils/supabase/client'
 // URL для Edge Function
 const NOTIFICATIONS_ENDPOINT = '/api/notifications'
 
+// Конфигурация для защищенного логирования
+const DEBUG_NOTIFICATIONS = process.env.DEBUG_NOTIFICATIONS === 'true' || process.env.NODE_ENV === 'development'
+
+/**
+ * Безопасная функция логирования для уведомлений
+ * Логирует только нечувствительные идентификаторы и флаги
+ */
+function logNotificationDebug(message: string, data?: any) {
+  if (!DEBUG_NOTIFICATIONS) return
+  
+  if (data && typeof data === 'object') {
+    // Логируем только безопасные поля
+    const safeData = {
+      id: data.id,
+      notification_id: data.notification_id,
+      has_notifications: !!data.notifications,
+      has_entity_types: !!data.notifications?.entity_types,
+      count: data.length || data.count,
+      error: data.error ? 'Error occurred' : undefined
+    }
+    console.log(`🔍 ${message}`, safeData)
+  } else {
+    console.log(`🔍 ${message}`, data)
+  }
+}
+
+/**
+ * Безопасное логирование для массивов записей
+ */
+function logNotificationRecords(records: any[], prefix: string) {
+  if (!DEBUG_NOTIFICATIONS || !records?.length) return
+  
+  records.forEach((item, index) => {
+    const safeItem = {
+      index,
+      id: item.id,
+      notification_id: item.notification_id,
+      has_notifications: !!item.notifications,
+      has_entity_types: !!item.notifications?.entity_types,
+      entity_name: item.notifications?.entity_types?.entity_name
+    }
+    console.log(`🔍 ${prefix} запись ${index}:`, safeItem)
+  })
+}
+
 /**
  * Отправляет уведомление через Supabase Edge Function
  */
@@ -634,8 +679,7 @@ export async function getUserNotifications(
         span.setAttribute("pagination.offset", offset)
         span.setAttribute("filter.only_unread", onlyUnread)
 
-        console.log('🔍 getUserNotifications: запрос для пользователя:', userId)
-        console.log('🔍 getUserNotifications: параметры:', { page, limit, onlyUnread, offset })
+        logNotificationDebug('getUserNotifications: запрос для пользователя', { id: userId, page, limit, onlyUnread, offset })
 
         let query = supabase
           .from('user_notifications')
@@ -656,26 +700,16 @@ export async function getUserNotifications(
         const { data, error, count } = await query
           .range(offset, offset + limit - 1)
 
-        console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
-        console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)
+        logNotificationDebug('getUserNotifications: результат запроса', { data, error, count })
+        logNotificationDebug('getUserNotifications: количество записей', data?.length || 0)
         
         if (data && data.length > 0) {
-          console.log('🔍 getUserNotifications: первая запись:', data[0])
-          console.log('🔍 getUserNotifications: структура notifications в первой записи:', data[0].notifications)
-          console.log('🔍 getUserNotifications: структура entity_types в первой записи:', data[0].notifications?.entity_types)
+          logNotificationDebug('getUserNotifications: первая запись', data[0])
+          logNotificationDebug('getUserNotifications: структура notifications в первой записи', data[0].notifications)
+          logNotificationDebug('getUserNotifications: структура entity_types в первой записи', data[0].notifications?.entity_types)
           
           // Проверяем все записи на наличие связанных данных
-          data.forEach((item, index) => {
-            console.log(`🔍 getUserNotifications: запись ${index}:`, {
-              id: item.id,
-              notification_id: item.notification_id,
-              has_notifications: !!item.notifications,
-              notifications_id: item.notifications?.id,
-              has_entity_types: !!item.notifications?.entity_types,
-              entity_name: item.notifications?.entity_types?.entity_name,
-              payload: item.notifications?.payload
-            })
-          })
+          logNotificationRecords(data, 'getUserNotifications')
         }
 
         if (error) {
@@ -787,10 +821,7 @@ export async function markNotificationAsRead(
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
 
-        console.log('📝 Помечаем уведомление как прочитанное:', {
-          userId,
-          userNotificationId
-        })
+        logNotificationDebug('Помечаем уведомление как прочитанное', { id: userId, notification_id: userNotificationId })
 
         const { error, data } = await supabase
           .from('user_notifications')
@@ -836,7 +867,7 @@ export async function markNotificationAsRead(
           }
         })
 
-        console.log('✅ Уведомление успешно помечено как прочитанное:', data)
+        logNotificationDebug('Уведомление успешно помечено как прочитанное', data)
       } catch (error) {
         span.setAttribute("mark.success", false)
         span.recordException(error as Error)
@@ -900,11 +931,9 @@ export async function markNotificationAsUnread(
             extra: {
               component: 'markNotificationAsUnread',
               user_id: userId,
-              user_notification_id: userNotificationId,
-              timestamp: new Date().toISOString()
+              user_notification_id: userNotificationId
             }
           })
-          console.error('❌ Ошибка при отметке уведомления как непрочитанного:', error)
           throw error
         }
 
@@ -922,8 +951,7 @@ export async function markNotificationAsUnread(
           extra: {
             component: 'markNotificationAsUnread',
             user_id: userId,
-            user_notification_id: userNotificationId,
-            timestamp: new Date().toISOString()
+            user_notification_id: userNotificationId
           }
         })
         throw error
@@ -932,9 +960,6 @@ export async function markNotificationAsUnread(
   )
 }
 
-/**
- * Установить флаг архива для уведомления пользователя
- */
 export async function setUserNotificationArchived(
   userId: string,
   userNotificationId: string,
@@ -952,13 +977,28 @@ export async function setUserNotificationArchived(
         span.setAttribute("user_notification.id", userNotificationId)
         span.setAttribute("archived.value", isArchived)
 
+        // Enforce authenticated user
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError || !authData?.user) {
+          span.setAttribute("auth.status", "unauthenticated")
+          throw new Error("Not authenticated")
+        }
+        if (authData.user.id !== userId) {
+          span.setAttribute("auth.status", "mismatch")
+          Sentry.captureMessage("setUserNotificationArchived: userId mismatch with session", {
+            level: "warning",
+            extra: { userIdParam: userId, sessionUserId: authData.user.id, userNotificationId, isArchived }
+          })
+          throw new Error("Forbidden: cannot modify another user's notifications")
+        }
+
         const { error, data } = await supabase
           .from('user_notifications')
-          .update({ 
+          .update({
             is_archived: isArchived,
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', userId)
+          .eq('user_id', authData.user.id)
           .eq('id', userNotificationId)
           .select()
 
@@ -1119,7 +1159,7 @@ export async function getRecentNotifications(
 export async function debugUserNotifications(userId: string): Promise<void> {
   const supabase = createClient()
   
-  console.log('🔍 DEBUG: Проверка user_notifications для пользователя:', userId)
+  logNotificationDebug('DEBUG: Проверка user_notifications для пользователя', { id: userId })
   
   // Проверяем все записи в user_notifications для этого пользователя
   const { data: userNotifications, error: userError } = await supabase
@@ -1129,9 +1169,9 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .order('created_at', { ascending: false })
     .limit(10)
     
-  console.log('🔍 DEBUG: user_notifications записи:', userNotifications?.length || 0)
+  logNotificationDebug('DEBUG: user_notifications записи', userNotifications?.length || 0)
   if (userNotifications && userNotifications.length > 0) {
-    console.log('🔍 DEBUG: последние user_notifications:', userNotifications)
+    logNotificationDebug('DEBUG: последние user_notifications', userNotifications)
   }
   
   if (userError) {
@@ -1152,9 +1192,9 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .order('created_at', { ascending: false })
     .limit(5)
     
-  console.log('🔍 DEBUG: JOIN запрос результат:', joinedData?.length || 0)
+  logNotificationDebug('DEBUG: JOIN запрос результат', joinedData?.length || 0)
   if (joinedData && joinedData.length > 0) {
-    console.log('🔍 DEBUG: полные данные JOIN:', JSON.stringify(joinedData, null, 2))
+    logNotificationDebug('DEBUG: полные данные JOIN', joinedData)
   }
   
   if (joinError) {
@@ -1168,9 +1208,9 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .order('created_at', { ascending: false })
     .limit(5)
     
-  console.log('🔍 DEBUG: notifications записи:', notifications?.length || 0)
+  logNotificationDebug('DEBUG: notifications записи', notifications?.length || 0)
   if (notifications && notifications.length > 0) {
-    console.log('🔍 DEBUG: последние notifications:', notifications)
+    logNotificationDebug('DEBUG: последние notifications', notifications)
   }
   
   if (notifError) {
@@ -1182,9 +1222,9 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .from('entity_types')
     .select('*')
     
-  console.log('🔍 DEBUG: entity_types записи:', entityTypes?.length || 0)
+  logNotificationDebug('DEBUG: entity_types записи', entityTypes?.length || 0)
   if (entityTypes && entityTypes.length > 0) {
-    console.log('🔍 DEBUG: entity_types:', entityTypes)
+    logNotificationDebug('DEBUG: entity_types', entityTypes)
   }
   
   if (entityError) {
@@ -1207,7 +1247,7 @@ export async function debugUserNotifications(userId: string): Promise<void> {
       .eq('id', notifId)
       .single()
       
-    console.log(`🔍 DEBUG: notification ${notifId}:`, notifData || 'НЕ НАЙДЕНО', notifError?.message || '')
+    logNotificationDebug(`DEBUG: notification ${notifId}`, notifData || 'НЕ НАЙДЕНО')
   }
 }
 
@@ -1278,7 +1318,7 @@ export async function createTestNotification(userId: string): Promise<void> {
       return
     }
     
-    console.log('✅ Тестовое уведомление создано:', {
+    logNotificationDebug('✅ Тестовое уведомление создано', {
       notification: notification.id,
       userNotification: userNotification.id
     })

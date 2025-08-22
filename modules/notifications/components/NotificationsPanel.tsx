@@ -21,6 +21,7 @@ import { AnnouncementForm } from "@/modules/announcements/components/Announcemen
 import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements"
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
+import { toast } from "@/components/ui/use-toast"
 
 interface NotificationsPanelProps {
   // Переименовано для соответствия правилу сериализуемых пропсов в Next.js
@@ -48,6 +49,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const scrollRef = useRef<HTMLDivElement>(null)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
   const allFilteredRef = useRef(0)
+  const isMountedRef = useRef(true)
 
   const { 
     notifications, 
@@ -83,8 +85,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const { announcements } = useAnnouncementsStore()
 
   // Debounced поиск
-  const debouncedSearchQuery = useMemo(() => {
-    const timeoutId = setTimeout(() => {
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
       if (localSearchQuery !== storeSearchQuery) {
         if (localSearchQuery.trim()) {
           searchNotifications(localSearchQuery)
@@ -93,13 +101,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         }
       }
     }, 500)
-
-    return () => clearTimeout(timeoutId)
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
   }, [localSearchQuery, storeSearchQuery, searchNotifications, clearSearch])
-
-  useEffect(() => {
-    return debouncedSearchQuery
-  }, [debouncedSearchQuery])
 
   // Функция для закрытия панели
   const handleClose = useCallback(() => {
@@ -115,27 +123,37 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const ensureAllNotificationsLoaded = useCallback(async () => {
     if (isSearchMode) return
     if (isPreloadingAll) return
+    
     try {
       setIsPreloadingAll(true)
-      // Догружаем все страницы, пока есть hasMore
-      // Используем getState, чтобы получать актуальные значения в цикле
-      // и вызывать loadMoreNotifications последовательно
-      // Прерываем цикл, если hasMore станет false
-      /* eslint-disable no-constant-condition */
-      while (true) {
+      
+      // Рекурсивная функция для загрузки всех страниц
+      const loadAllPages = async (): Promise<void> => {
+        // Проверяем, что компонент еще смонтирован
+        if (!isMountedRef.current) return
+        
         const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
-        if (!more) break
+        
+        if (!more) return
+        
         if (!loadingMore) {
           await loadMore()
+          // Рекурсивно вызываем себя для загрузки следующей страницы
+          return loadAllPages()
         } else {
-          await new Promise((r) => setTimeout(r, 100))
+          // Ждем небольшую задержку и пробуем снова
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          return loadAllPages()
         }
       }
-      /* eslint-enable no-constant-condition */
+      
+      await loadAllPages()
     } catch (e) {
       console.error('Ошибка предзагрузки всех уведомлений:', e)
     } finally {
-      setIsPreloadingAll(false)
+      if (isMountedRef.current) {
+        setIsPreloadingAll(false)
+      }
     }
   }, [isSearchMode, isPreloadingAll])
 
@@ -178,13 +196,15 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   const handleEditAnnouncement = useCallback(async (announcementId: string) => {
     try {
-      // Сначала попробуем найти объявление в локальном store
-      let announcement = announcements.find(a => a.id === announcementId)
+      // Сначала ищем в локальном store
+      let announcement = announcements.find((a: any) => a.id === announcementId)
       
-      // Если не найдено в store, попробуем загрузить все объявления
+      // Если не найдено, загружаем свежие данные
       if (!announcement) {
         await fetchAnnouncementsData()
-        announcement = announcements.find(a => a.id === announcementId)
+        // После загрузки ищем в обновленном store
+        const updatedAnnouncements = useAnnouncementsStore.getState().announcements
+        announcement = updatedAnnouncements.find((a: any) => a.id === announcementId)
       }
       
       if (announcement) {
@@ -192,9 +212,19 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         setIsAnnouncementFormOpen(true)
       } else {
         console.error('Объявление не найдено:', announcementId)
+        toast({
+          title: "Ошибка",
+          description: "Не удалось найти объявление для редактирования",
+          variant: "destructive"
+        })
       }
     } catch (error) {
       console.error('Ошибка при загрузке объявления:', error)
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при загрузке объявления",
+        variant: "destructive"
+      })
     }
   }, [announcements, fetchAnnouncementsData])
 
@@ -284,6 +314,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     document.addEventListener("keydown", handleEscape)
     return () => document.removeEventListener("keydown", handleEscape)
   }, [handleClose, isAnnouncementFormOpen])
+
+  // Отслеживание состояния монтирования компонента
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // Фильтрация уведомлений
   const filteredNotifications = useMemo(() => {
@@ -586,8 +624,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                           className={cn("text-xs", type.color)}
                         >
                           {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
-                          {useNotificationsStore.getState().notifications.filter(n => n.entityType === type.value).length}
-                        </Badge>
+                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
+                          {notifications.filter(n => n.entityType === type.value).length}                        </Badge>
                       </div>
                     ))}
                   </div>
