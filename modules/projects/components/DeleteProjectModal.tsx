@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import * as Sentry from "@sentry/nextjs"
-import { AlertTriangle, Trash2, Loader2 } from 'lucide-react'
+import { AlertTriangle, Trash2, Loader2, Info, CheckCircle, XCircle } from 'lucide-react'
 import { Modal, ModalButton, useModalState } from '@/components/modals'
 import { createClient } from '@/utils/supabase/client'
 
@@ -38,6 +38,7 @@ export function DeleteProjectModal({
   const [stats, setStats] = useState<ProjectStats | null>(null)
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteResult, setDeleteResult] = useState<{success: boolean, message: string, deletedCounts?: any} | null>(null)
 
   // Загружаем статистику при открытии модального окна
   useEffect(() => {
@@ -144,11 +145,12 @@ export function DeleteProjectModal({
     return Sentry.startSpan(
       {
         op: "projects.delete_project",
-        name: "Delete Project Cascade",
+        name: "Delete Project Safe",
       },
       async (span) => {
         setIsDeleting(true)
         setError(null)
+        setDeleteResult(null)
 
         try {
           span.setAttribute("project.id", projectId)
@@ -160,8 +162,8 @@ export function DeleteProjectModal({
             span.setAttribute("delete.tasks_count", stats.tasks_count)
           }
 
-          // Удаляем проект
-          const { error } = await supabase.rpc('delete_project_cascade', {
+          // Используем новую безопасную функцию удаления
+          const { data, error } = await supabase.rpc('safe_delete_project', {
             project_id_param: projectId
           })
 
@@ -172,7 +174,7 @@ export function DeleteProjectModal({
               tags: { 
                 module: 'projects', 
                 action: 'delete_project',
-                error_type: 'cascade_delete_failed'
+                error_type: 'safe_delete_failed'
               },
               extra: { 
                 component: 'DeleteProjectModal',
@@ -187,103 +189,58 @@ export function DeleteProjectModal({
             return
           }
 
-          // Проверяем что проект действительно удален
-          const { data: verificationData, error: verifyError } = await supabase.rpc('verify_project_deleted', {
-            project_id_param: projectId
-          })
-
-          if (verifyError) {
-            span.setAttribute("verify.success", false)
-            span.setAttribute("verify.error", verifyError.message)
-            Sentry.captureException(verifyError, {
+          const result = data?.[0]
+          if (result?.success) {
+            span.setAttribute("delete.success", true)
+            span.setAttribute("delete.message", result.message)
+            
+            setDeleteResult({
+              success: true,
+              message: result.message,
+              deletedCounts: result.deleted_counts
+            })
+            
+            Sentry.addBreadcrumb({
+              message: 'Project deleted successfully',
+              category: 'projects',
+              level: 'info',
+              data: { 
+                project_id: projectId,
+                project_name: projectName,
+                deleted_counts: result.deleted_counts
+              }
+            })
+            
+            // Закрываем модальное окно через 2 секунды
+            setTimeout(() => {
+              onSuccess()
+              onClose()
+            }, 2000)
+          } else {
+            span.setAttribute("delete.success", false)
+            span.setAttribute("delete.message", result?.message || 'Неизвестная ошибка')
+            
+            setDeleteResult({
+              success: false,
+              message: result?.message || 'Неизвестная ошибка при удалении'
+            })
+            
+            Sentry.captureException(new Error(result?.message || 'Неизвестная ошибка при удалении'), {
               tags: { 
                 module: 'projects', 
-                action: 'verify_project_deleted',
-                error_type: 'verification_failed'
+                action: 'delete_project',
+                error_type: 'delete_failed'
               },
               extra: { 
                 component: 'DeleteProjectModal',
                 project_id: projectId,
                 project_name: projectName,
+                result: result,
                 timestamp: new Date().toISOString()
               }
             })
-            console.error('Ошибка проверки удаления:', verifyError)
-            setError('Не удалось проверить результат удаления')
-            return
           }
-
-          const verification = verificationData?.[0]
-          if (verification?.project_exists) {
-            // Проект все еще существует
-            const deps = verification.remaining_dependencies
-            const remainingItems = Object.entries(deps || {})
-              .filter(([_, count]) => Number(count) > 0)
-              .map(([type, count]) => `${type}: ${count}`)
-              .join(', ')
-            
-            span.setAttribute("delete.success", false)
-            span.setAttribute("delete.incomplete", true)
-            span.setAttribute("remaining_dependencies", remainingItems)
-            
-            Sentry.captureMessage('Project deletion incomplete - dependencies remain', {
-              level: 'warning',
-              tags: { 
-                module: 'projects', 
-                action: 'delete_project',
-                error_type: 'incomplete_deletion'
-              },
-              extra: { 
-                project_id: projectId,
-                project_name: projectName,
-                remaining_dependencies: deps,
-                timestamp: new Date().toISOString()
-              }
-            })
-            
-            setError(`Проект не был удален полностью. Остались зависимости: ${remainingItems}`)
-            return
-          }
-
-          // Проект успешно удален
-          span.setAttribute("delete.success", true)
-          span.setAttribute("verify.success", true)
           
-          console.log('✅ Проект успешно удален и проверен')
-          
-          Sentry.addBreadcrumb({
-            message: 'Project deleted successfully',
-            category: 'projects',
-            level: 'info',
-            data: { 
-              project_id: projectId,
-              project_name: projectName,
-              deleted_stats: stats
-            }
-          })
-          
-          // Показываем детальное уведомление об успешном удалении
-          const deletedStats = stats ? [
-            `${stats.stages_count} стадий`,
-            `${stats.objects_count} объектов`, 
-            `${stats.sections_count} разделов`,
-            `${stats.tasks_count} задач`,
-            `${stats.loadings_count} загрузок`,
-            `${stats.assignments_count} передач`,
-            `${stats.contracts_count} договоров`,
-            `${stats.decompositions_count} декомпозиций`
-          ].filter((item, idx) => [
-            stats.stages_count, stats.objects_count, stats.sections_count, 
-            stats.tasks_count, stats.loadings_count, stats.assignments_count,
-            stats.contracts_count, stats.decompositions_count
-          ][idx] > 0).join(', ') : ''
-          
-          setTimeout(() => {
-            alert(`✅ Проект "${projectName}" успешно удален!\n\nТакже удалено: ${deletedStats || 'нет связанных данных'}`)
-          }, 100)
-          
-          onSuccess()
-          onClose()
         } catch (err) {
           span.setAttribute("delete.success", false)
           span.recordException(err as Error)
@@ -301,7 +258,7 @@ export function DeleteProjectModal({
             }
           })
           console.error('Ошибка:', err)
-          setError('Произошла ошибка при удалении проекта')
+          setError('Произошла непредвиденная ошибка при удалении проекта')
         } finally {
           setIsDeleting(false)
         }
@@ -309,110 +266,123 @@ export function DeleteProjectModal({
     )
   }
 
-  const handleClose = () => {
-    if (!isDeleting) {
-      setError(null)
-      setStats(null)
-      onClose()
+  const renderStats = () => {
+    if (!stats) return null
+
+    const statItems = [
+      { label: 'Стадии', count: stats.stages_count, icon: '🏗️' },
+      { label: 'Объекты', count: stats.objects_count, icon: '🏢' },
+      { label: 'Разделы', count: stats.sections_count, icon: '📋' },
+      { label: 'Задачи', count: stats.tasks_count, icon: '✅' },
+      { label: 'Загрузки', count: stats.loadings_count, icon: '⏰' },
+      { label: 'Передачи', count: stats.assignments_count, icon: '🔄' },
+      { label: 'Договоры', count: stats.contracts_count, icon: '📄' },
+      { label: 'Декомпозиция', count: stats.decompositions_count, icon: '🔧' }
+    ]
+
+    return (
+      <div className="space-y-3">
+        <h4 className="font-medium text-gray-900">Будет удалено:</h4>
+        <div className="grid grid-cols-2 gap-3">
+          {statItems.map((item) => (
+            <div key={item.label} className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg">
+              <span className="text-lg">{item.icon}</span>
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-700">{item.label}</div>
+                <div className="text-lg font-bold text-gray-900">{item.count}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const renderDeleteResult = () => {
+    if (!deleteResult) return null
+
+    if (deleteResult.success) {
+      return (
+        <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <CheckCircle className="h-6 w-6 text-green-600" />
+          <div>
+            <h4 className="font-medium text-green-900">Проект успешно удален!</h4>
+            <p className="text-sm text-green-700">{deleteResult.message}</p>
+            {deleteResult.deletedCounts && (
+              <div className="mt-2 text-xs text-green-600">
+                Удалено записей: {Object.values(deleteResult.deletedCounts).reduce((a: any, b: any) => a + b, 0)}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    } else {
+      return (
+        <div className="flex items-center space-x-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <XCircle className="h-6 w-6 text-red-600" />
+          <div>
+            <h4 className="font-medium text-red-900">Ошибка удаления</h4>
+            <p className="text-sm text-red-700">{deleteResult.message}</p>
+          </div>
+        </div>
+      )
     }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <Modal.Header 
-        title="Удаление проекта"
-        subtitle="Это действие нельзя отменить"
+        title="Удаление проекта" 
+        subtitle={`Вы собираетесь удалить проект "${projectName}"`}
       />
       
       <Modal.Body>
         <div className="space-y-6">
           {/* Предупреждение */}
-          <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start space-x-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-800 dark:text-red-200 mb-1">
-                Внимание! Данное действие необратимо
-              </h3>
-              <p className="text-sm text-red-700 dark:text-red-300">
-                Будет удален проект <strong>"{projectName}"</strong> и все связанные с ним данные.
+              <h4 className="font-medium text-amber-900">Внимание!</h4>
+              <p className="text-sm text-amber-700">
+                Это действие нельзя отменить. Все связанные данные (стадии, объекты, разделы, задачи, загрузки, передачи, договоры, элементы декомпозиции) будут безвозвратно удалены.
               </p>
             </div>
           </div>
 
           {/* Статистика */}
-          <div>
-            <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
-              Будет удалено:
-            </h4>
-            
-            {isLoadingStats ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-                <span className="ml-2 text-gray-500">Загрузка статистики...</span>
-              </div>
-            ) : error ? (
-              <div className="text-red-600 dark:text-red-400 text-sm">
-                {error}
-              </div>
-            ) : stats ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Стадии:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.stages_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Объекты:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.objects_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Разделы:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.sections_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Задачи:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.tasks_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Загрузки:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.loadings_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Передачи:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.assignments_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Договоры:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.contracts_count}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Декомпозиции:</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{stats.decompositions_count}</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Ошибка */}
-          {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          {isLoadingStats ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-gray-600">Загрузка статистики...</span>
             </div>
+          ) : error ? (
+            <div className="flex items-center space-x-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <XCircle className="h-5 w-5 text-red-600" />
+              <div>
+                <h4 className="font-medium text-red-900">Ошибка загрузки</h4>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          ) : (
+            stats && renderStats()
           )}
+
+          {/* Результат удаления */}
+          {renderDeleteResult()}
         </div>
       </Modal.Body>
 
       <Modal.Footer>
-        <ModalButton variant="cancel" onClick={handleClose} disabled={isDeleting}>
+        <ModalButton variant="cancel" onClick={onClose} disabled={isDeleting}>
           Отмена
         </ModalButton>
         <ModalButton 
           variant="danger" 
-          onClick={handleDelete}
-          loading={isDeleting}
-          disabled={isLoadingStats || !!error}
-          icon={<Trash2 />}
+          onClick={handleDelete} 
+          disabled={isDeleting || isLoadingStats || !!error}
+          icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 />}
         >
-          Удалить проект
+          {isDeleting ? 'Удаление...' : 'Удалить проект'}
         </ModalButton>
       </Modal.Footer>
     </Modal>
