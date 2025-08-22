@@ -28,6 +28,7 @@ import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
+
 interface ProjectNode {
   id: string
   name: string
@@ -66,6 +67,7 @@ interface ProjectsTreeProps {
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 interface TreeNodeProps {
@@ -82,6 +84,7 @@ interface TreeNodeProps {
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
+  onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
@@ -103,6 +106,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateObject,
   onCreateSection,
   onDeleteProject,
+  onOpenProjectDashboard,
   onOpenStatusManagement,
   statuses
 }) => {
@@ -487,12 +491,24 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
             
             {/* Название */}
-            <span className={cn(
-              "font-medium text-sm dark:text-slate-200 text-slate-800",
-              node.type === 'manager' && "font-semibold"
-            )}>
-              {node.name}
-            </span>
+            {node.type === 'project' && onOpenProjectDashboard ? (
+              <span 
+                className={cn(
+                  "font-medium text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                )}
+                onClick={(e) => onOpenProjectDashboard(node, e)}
+                title="Открыть дашборд проекта"
+              >
+                {node.name}
+              </span>
+            ) : (
+              <span className={cn(
+                "font-medium text-sm dark:text-slate-200 text-slate-800",
+                node.type === 'manager' && "font-semibold"
+              )}>
+                {node.name}
+              </span>
+            )}
 
 
 
@@ -764,6 +780,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
               onDeleteProject={onDeleteProject}
+              onOpenProjectDashboard={onOpenProjectDashboard}
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
             />
@@ -785,7 +802,8 @@ export function ProjectsTree({
   selectedStatusIds = [],
   urlSectionId,
   urlTab,
-  externalSearchQuery
+  externalSearchQuery,
+  onOpenProjectDashboard
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const { 
@@ -821,6 +839,9 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+
+
+  // Закрытие выпадающего списка статусов при клике вне его
   
 
   // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
@@ -1564,6 +1585,8 @@ export function ProjectsTree({
     setShowCreateSectionModal(true)
   }
 
+
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
@@ -1606,6 +1629,7 @@ export function ProjectsTree({
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
                 onDeleteProject={handleDeleteProject}
+                onOpenProjectDashboard={onOpenProjectDashboard}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
               />
@@ -1753,6 +1777,8 @@ export function ProjectsTree({
         isOpen={showStatusManagementModal}
         onClose={() => setShowStatusManagementModal(false)}
       />
+
+
 
     </TooltipProvider>
   )

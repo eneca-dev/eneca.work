@@ -1,6 +1,7 @@
 'use client'
 
 import { AnnouncementsWidget } from '@/modules/announcements'
+import { MyWorkWidget } from '@/modules/my-work'
 import { useUserStore } from '@/stores/useUserStore'
 
 export default function DashboardPage() {
@@ -9,10 +10,15 @@ export default function DashboardPage() {
 
   return (
     <main className="w-full h-full flex flex-col px-4 md:px-0">
-      <div className="grid grid-cols-1 gap-6 w-full h-full">
-        {/* Виджет объявлений */}
-        <div className="animate-fade-in transition-colors duration-200 w-full">
+      <div className="bg-white dark:bg-gray-800 rounded-xl h-[calc(100vh-58px)] animate-fade-in transition-colors duration-200">
+        {/* Виджет объявлений - скрыт */}
+        <div className="hidden">
           <AnnouncementsWidget />
+        </div>
+        
+        {/* Виджет "Моя работа" - на всю ширину */}
+        <div className="w-full">
+          <MyWorkWidget />
         </div>
       </div>
     </main>
