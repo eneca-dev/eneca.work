@@ -34,9 +34,15 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createClient()
     const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
     
+    console.log('Auth check result:', {
+      hasUser: !!currentUser,
+      userId: currentUser?.id,
+      authError: authError?.message
+    })
+    
     if (authError || !currentUser) {
       return NextResponse.json(
-        { error: 'Неавторизован' },
+        { error: 'Неавторизован', details: authError?.message },
         { status: 401 }
       )
     }
@@ -47,20 +53,40 @@ export async function DELETE(request: NextRequest) {
     // Если пользователь не удаляет свой профиль, проверяем права доступа
     if (!isDeletingOwnProfile) {
       // Сначала достаем роль текущего пользователя
+      console.log('Looking up profile for user:', currentUser.id)
+      
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role_id, roles(name)')
+        .select('role_id, roles!profiles_role_id_fkey(name)')
         .eq('user_id', currentUser.id)
         .single()
+        
+      console.log('Profile lookup result:', {
+        hasProfile: !!profile,
+        profileData: profile,
+        profileError: profileError?.message
+      })
 
       // Проверяем ошибку запроса
       if (profileError) {
         console.error('Ошибка получения профиля текущего пользователя:', {
           userId: currentUser.id,
-          error: profileError
+          error: profileError,
+          errorCode: profileError.code,
+          errorDetails: profileError.details,
+          errorHint: profileError.hint
         })
+        
+        // Более детальная ошибка для отладки
+        let errorMessage = 'Ошибка получения профиля пользователя'
+        if (profileError.code === 'PGRST116') {
+          errorMessage = 'Профиль пользователя не найден в базе данных'
+        } else if (profileError.code === 'PGRST301') {
+          errorMessage = 'Ошибка подключения к базе данных'
+        }
+        
         return NextResponse.json(
-          { error: 'Ошибка получения профиля пользователя' },
+          { error: errorMessage, details: profileError.message },
           { status: 500 }
         )
       }
@@ -84,24 +110,32 @@ export async function DELETE(request: NextRequest) {
       if (roleId) {
         const { data: rolePerms, error: rolePermsError } = await supabase
           .from('role_permissions')
-          .select('permissions(name)')
+          .select('permissions!role_permissions_permission_id_fkey(name)')
           .eq('role_id', roleId)
 
         if (rolePermsError) {
           console.error('Ошибка получения разрешений роли:', {
             roleId,
             userId: currentUser.id,
-            error: rolePermsError
+            error: rolePermsError,
+            errorCode: rolePermsError.code,
+            errorDetails: rolePermsError.details
           })
           return NextResponse.json(
-            { error: 'Ошибка проверки прав доступа' },
+            { error: 'Ошибка проверки прав доступа', details: rolePermsError.message },
             { status: 500 }
           )
         }
 
-        permissions = (rolePerms || [])
-          .map((rp: any) => rp?.permissions?.name)
-          .filter(Boolean)
+              permissions = (rolePerms || [])
+        .map((rp: any) => rp?.permissions?.name)
+        .filter(Boolean)
+        
+      console.log('Permissions lookup result:', {
+        roleId,
+        rolePerms,
+        extractedPermissions: permissions
+      })
       }
 
       // Проверяем, есть ли разрешение на удаление других пользователей
@@ -110,6 +144,13 @@ export async function DELETE(request: NextRequest) {
                             permissions.includes('user.delete') ||
                             permissions.includes('users_can_edit_all') ||
                             roleName === 'admin'
+                            
+      console.log('Permission check result:', {
+        roleName,
+        permissions,
+        canDeleteUsers,
+        isDeletingOwnProfile
+      })
 
       if (!canDeleteUsers) {
         return NextResponse.json(
