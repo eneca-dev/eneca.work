@@ -27,6 +27,7 @@ import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+import { SectionDetailTabs } from './SectionDetailTabs'
 
 interface ProjectNode {
   id: string
@@ -718,12 +719,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
           )}
 
-          {/* Полная версия (>=2xl): две колонки, справа комментарии */}
-          <div className="hidden 2xl:flex gap-4 items-stretch">
-            {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
-            <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
-            {/* Описание сверху + аналитика */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          {/* Полная версия (>=2xl): описание + вкладки на всю ширину */}
+          <div className="hidden 2xl:block">
+            {/* Описание раздела */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 mb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
@@ -751,29 +750,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
             </div>
 
-              {/* Блоки ниже: высота по содержимому */}
-              <div className="flex flex-col gap-4">
-                {/* Декомпозиция (верхняя половина) */}
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <SectionDecompositionTab sectionId={node.id} compact />
-                </div>
-
-                {/* Задания (нижняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                  <SectionTasksPreview sectionId={node.id} />
-                </div>
-              </div>
-            </div>
-
-            {/* Правая колонка: Комментарии на всю высоту блока */}
-            <div className="w-[680px] self-stretch hidden 2xl:block">
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col h-[80vh] max-h-[80vh] overflow-hidden">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
-                <div className="flex-1 min-h-0">
-                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
-                </div>
-              </div>
-            </div>
+            {/* Панели с вкладками на полную ширину */}
+            <SectionDetailTabs sectionId={node.id} />
           </div>
         </div>
       )}

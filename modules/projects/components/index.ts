@@ -11,4 +11,5 @@ export { CreateSectionModal } from './CreateSectionModal'
 export { DeleteSectionModal } from './DeleteSectionModal'
 
 export { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
-export { CompactTaskSchedule } from './CompactTaskSchedule' 
+export { CompactTaskSchedule } from './CompactTaskSchedule'
+export { SectionDetailTabs } from './SectionDetailTabs' 

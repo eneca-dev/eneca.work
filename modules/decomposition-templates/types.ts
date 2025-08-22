@@ -17,6 +17,9 @@ export interface DecompositionTemplateItem {
   planned_hours: number
   due_offset_days?: number | null
   order: number
+  responsible_id?: string | null
+  status_id?: string | null
+  progress?: number | null
 }
 
 export interface CreateTemplatePayload {
@@ -39,6 +42,9 @@ export interface CreateTemplateItemPayload {
   planned_hours?: number
   due_offset_days?: number | null
   order?: number
+  responsible_id?: string | null
+  status_id?: string | null
+  progress?: number | null
 }
 
 export interface UpdateTemplateItemPayload {
@@ -47,4 +53,7 @@ export interface UpdateTemplateItemPayload {
   planned_hours?: number
   due_offset_days?: number | null
   order?: number
+  responsible_id?: string | null
+  status_id?: string | null
+  progress?: number | null
 }

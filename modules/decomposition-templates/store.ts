@@ -33,6 +33,7 @@ interface TemplatesStore {
   updateTemplate: (id: string, p: UpdateTemplatePayload) => Promise<DecompositionTemplate>
   deleteTemplate: (id: string) => Promise<void>
   createItem: (p: CreateTemplateItemPayload) => Promise<DecompositionTemplateItem>
+  updateItemLocal: (id: string, p: UpdateTemplateItemPayload) => void
   updateItem: (id: string, p: UpdateTemplateItemPayload) => Promise<DecompositionTemplateItem>
   deleteItem: (id: string) => Promise<void>
   applyTemplateAppend: (section_id: string, template_id: string, base_date?: string | null) => Promise<number>
@@ -83,19 +84,26 @@ export const useTemplatesStore = create<TemplatesStore>()(
     },
     createItem: async (p) => {
       const it = await createTemplateItem(p)
-      await get().openTemplate(p.template_id)
+      // оптимистично добавляем в список без повторной загрузки
+      set((state) => ({ templateItems: [...state.templateItems, it] }))
       return it
+    },
+    updateItemLocal: (id, p) => {
+      set((state) => ({
+        templateItems: state.templateItems.map((it) => (it.id === id ? { ...it, ...p } : it)),
+      }))
     },
     updateItem: async (id, p) => {
       const it = await updateTemplateItem(id, p)
-      const tpl = get().selectedTemplate
-      if (tpl) await get().openTemplate(tpl.id)
+      // обновляем локально, не перезагружая весь шаблон
+      set((state) => ({
+        templateItems: state.templateItems.map((row) => (row.id === id ? { ...row, ...it } : row)),
+      }))
       return it
     },
     deleteItem: async (id) => {
       await deleteTemplateItem(id)
-      const tpl = get().selectedTemplate
-      if (tpl) await get().openTemplate(tpl.id)
+      set((state) => ({ templateItems: state.templateItems.filter((it) => it.id !== id) }))
     },
     applyTemplateAppend: async (section_id, template_id, base_date) => {
       const res = await applyTemplateAppend({ section_id, template_id, base_date })
