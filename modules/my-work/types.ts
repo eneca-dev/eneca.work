@@ -86,4 +86,6 @@ export interface WorkLogEntry {
 
 export interface DeadlinesBlockProps {
   loadings: UserLoading[]
+  isCompact?: boolean
+  hideHeader?: boolean
 }
