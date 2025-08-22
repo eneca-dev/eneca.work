@@ -135,7 +135,8 @@ export type Database = {
       }
       profiles: {
         Row: {
-          address: string | null
+          city: string | null
+          country: string | null
           avatar_url: string | null
           category_id: string
           created_at: string
@@ -153,7 +154,8 @@ export type Database = {
           work_format: Database["public"]["Enums"]["work_format_type"] | null
         }
         Insert: {
-          address?: string | null
+          city?: string | null
+          country?: string | null
           avatar_url?: string | null
           category_id: string
           created_at?: string
@@ -171,7 +173,8 @@ export type Database = {
           work_format?: Database["public"]["Enums"]["work_format_type"] | null
         }
         Update: {
-          address?: string | null
+          city?: string | null
+          country?: string | null
           avatar_url?: string | null
           category_id?: string
           created_at?: string

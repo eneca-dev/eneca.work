@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
+interface ProfileWithRole {
+  role_id: string | null
+  roles: {
+    name: string
+  }[] | null
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     // Получаем ID пользователя из URL или body
@@ -40,21 +47,57 @@ export async function DELETE(request: NextRequest) {
     // Если пользователь не удаляет свой профиль, проверяем права доступа
     if (!isDeletingOwnProfile) {
       // Сначала достаем роль текущего пользователя
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role_id, roles(name)')
         .eq('user_id', currentUser.id)
         .single()
 
-      const roleId = (profile as any)?.role_id as string | undefined
-      const roleName = (profile as any)?.roles?.name as string | undefined
+      // Проверяем ошибку запроса
+      if (profileError) {
+        console.error('Ошибка получения профиля текущего пользователя:', {
+          userId: currentUser.id,
+          error: profileError
+        })
+        return NextResponse.json(
+          { error: 'Ошибка получения профиля пользователя' },
+          { status: 500 }
+        )
+      }
+
+      // Проверяем, что профиль существует
+      if (!profile) {
+        console.error('Профиль не найден для пользователя:', {
+          userId: currentUser.id
+        })
+        return NextResponse.json(
+          { error: 'Профиль пользователя не найден' },
+          { status: 404 }
+        )
+      }
+
+      const typedProfile = profile as ProfileWithRole
+      const roleId = typedProfile.role_id ?? null
+      const roleName = typedProfile.roles?.[0]?.name ?? null
 
       let permissions: string[] = []
       if (roleId) {
-        const { data: rolePerms } = await supabase
+        const { data: rolePerms, error: rolePermsError } = await supabase
           .from('role_permissions')
           .select('permissions(name)')
           .eq('role_id', roleId)
+
+        if (rolePermsError) {
+          console.error('Ошибка получения разрешений роли:', {
+            roleId,
+            userId: currentUser.id,
+            error: rolePermsError
+          })
+          return NextResponse.json(
+            { error: 'Ошибка проверки прав доступа' },
+            { status: 500 }
+          )
+        }
 
         permissions = (rolePerms || [])
           .map((rp: any) => rp?.permissions?.name)

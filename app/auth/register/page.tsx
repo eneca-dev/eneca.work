@@ -28,7 +28,7 @@ export default function RegisterPage() {
     return {
       minLength: password.length >= 8,
       hasDigit: /\d/.test(password),
-      hasSpecial: /[^a-zA-Z0-9 ]/.test(password),
+      hasSpecial: /[^a-zA-Z0-9]/.test(password),
       hasLowercase: /[a-z]/.test(password),
       hasUppercase: /[A-Z]/.test(password),
     }
@@ -93,8 +93,8 @@ export default function RegisterPage() {
       errors.push("Минимум одна цифра")
     }
     
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      errors.push("Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\"<> ")
+    if (!/[^a-zA-Z0-9]/.test(password)) {
+      errors.push("Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'")
     }
     
     if (!/[a-z]/.test(password)) {

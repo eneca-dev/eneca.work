@@ -28,7 +28,7 @@ function ResetPasswordForm() {
     return {
       minLength: password.length >= 8,
       hasDigit: /\d/.test(password),
-      hasSpecial: /[^a-zA-Z0-9 ]/.test(password),
+      hasSpecial: /[^a-zA-Z0-9]/.test(password),
       hasLowercase: /[a-z]/.test(password),
       hasUppercase: /[A-Z]/.test(password),
     }
@@ -140,7 +140,7 @@ function ResetPasswordForm() {
       errors.push("Минимум одна цифра")
     }
     
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    if (!/[^a-zA-Z0-9]/.test(password)) {
       errors.push("Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\"<>)")
     }
     
@@ -356,8 +356,7 @@ function ResetPasswordForm() {
                     Минимум одна цифра
                   </PasswordRequirementCheckbox>
                   <PasswordRequirementCheckbox isValid={passwordRequirements.hasSpecial}>
-                    Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\")
-                  </PasswordRequirementCheckbox>
+                    Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'")                  </PasswordRequirementCheckbox>
                   <PasswordRequirementCheckbox isValid={passwordRequirements.hasLowercase}>
                     Минимум одна строчная буква
                   </PasswordRequirementCheckbox>

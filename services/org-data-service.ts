@@ -845,22 +845,43 @@ export async function createUser(userData: {
 
         // Обработка страны/города
         if (userData.country && userData.city) {
-          try {
-            // Гарантируем наличие country/city и получаем city_id через наш API апсерт
-            const resp = await fetch('/api/geo/upsert', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ countryName: userData.country, cityName: userData.city })
-            })
-            if (resp.ok) {
-              const { cityId } = await resp.json()
-              profileData.city_id = cityId
-              console.log("Добавлено: city_id =", cityId)
-            } else {
-              console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+          // Trim and validate country and city values
+          const trimmedCountry = userData.country.trim()
+          const trimmedCity = userData.city.trim()
+          
+          // Validate that both values are non-empty after trimming
+          if (trimmedCountry && trimmedCity) {
+            try {
+              // Normalize casing - capitalize first letter of each word
+              const normalizedCountry = trimmedCountry.replace(/\b\w/g, l => l.toUpperCase())
+              const normalizedCity = trimmedCity.replace(/\b\w/g, l => l.toUpperCase())
+              
+              // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+              const resp = await fetch('/api/geo/upsert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  countryName: normalizedCountry, 
+                  cityName: normalizedCity 
+                })
+              })
+              if (resp.ok) {
+                const { cityId } = await resp.json()
+                profileData.city_id = cityId
+                console.log("Добавлено: city_id =", cityId)
+              } else {
+                console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+              }
+            } catch (error) {
+              console.error('Ошибка вызова /api/geo/upsert:', error)
             }
-          } catch (error) {
-            console.error('Ошибка вызова /api/geo/upsert:', error)
+          } else {
+            console.warn('Пропускаем вызов /api/geo/upsert: страна или город пустые после обрезки пробелов', {
+              originalCountry: userData.country,
+              originalCity: userData.city,
+              trimmedCountry,
+              trimmedCity
+            })
           }
         }
 

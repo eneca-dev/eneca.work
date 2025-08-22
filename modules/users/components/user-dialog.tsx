@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
@@ -61,6 +61,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
   const [countrySelectOpen, setCountrySelectOpen] = useState(false)
   const [citySelectOpen, setCitySelectOpen] = useState(false)
+
+  // Refs для автофокуса на поля поиска
+  const countrySearchRef = useRef<HTMLInputElement | null>(null)
+  const citySearchRef = useRef<HTMLInputElement | null>(null)
 
   // Состояния для удаления профиля
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
@@ -155,14 +159,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
     const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
     // Дедупликация по названию города (в некоторых странах повторяются)
-    const seen = new Set<string>()
-    const unique: { name: string }[] = []
+    const cityMap = new Map<string, { name: string }>()
     for (const c of loaded) {
-      if (!seen.has(c.name)) {
-        seen.add(c.name)
-        unique.push({ name: c.name })
+      if (!cityMap.has(c.name)) {
+        cityMap.set(c.name, { name: c.name })
       }
     }
+    const unique = Array.from(cityMap.values())
     setCities(unique)
     setFilteredCities(unique)
   }, [selectedCountryCode])
@@ -183,9 +186,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   useEffect(() => {
     if (countrySelectOpen) {
       setTimeout(() => {
-        const countrySearchInput = document.querySelector('#country-search') as HTMLInputElement
-        if (countrySearchInput) {
-          countrySearchInput.focus()
+        if (countrySearchRef.current) {
+          countrySearchRef.current.focus()
         }
       }, 100)
     }
@@ -195,9 +197,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   useEffect(() => {
     if (citySelectOpen && selectedCountryCode) {
       setTimeout(() => {
-        const citySearchInput = document.querySelector('#city-search') as HTMLInputElement
-        if (citySearchInput) {
-          citySearchInput.focus()
+        if (citySearchRef.current) {
+          citySearchRef.current.focus()
         }
       }, 100)
     }
@@ -264,8 +265,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       setCountrySearch("")
       setCitySearch("")
     }
-  }, [user, open, roles])
-
+  }, [user, open, roles, teams])
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     if (formData.department) {
@@ -680,6 +680,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   <div className="p-2 border-b">
                     <Input
                       id="country-search"
+                      ref={countrySearchRef}
                       placeholder="Поиск по странам..."
                       value={countrySearch}
                       onChange={(e) => setCountrySearch(e.target.value)}
@@ -730,6 +731,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   <div className="p-2 border-b">
                     <Input
                       id="city-search"
+                      ref={citySearchRef}
                       placeholder="Поиск по городам..."
                       value={citySearch}
                       onChange={(e) => setCitySearch(e.target.value)}
@@ -806,7 +808,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       </form>
 
       {/* Модальное окно подтверждения удаления */}
-      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="md">
+      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="lg" className="min-w-[500px] max-w-[800px]">
         <Modal.Header 
           title="Подтверждение удаления профиля"
           subtitle="Это действие нельзя отменить. Ваш профиль и все связанные данные будут удалены навсегда."
@@ -818,9 +820,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 Внимание! Это действие необратимо.
               </p>
               <p className="text-sm text-red-700">
-                Для подтверждения удаления введите следующую фразу:
+                Для подтверждения удаления введите в одну строку следующую фразу:
               </p>
-              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900">
+              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900 whitespace-nowrap overflow-x-auto">
                 {deleteConfirmationPhrase}
               </p>
             </div>
@@ -836,7 +838,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 onChange={handleDeleteConfirmationInput}
                 onPaste={handleDeleteConfirmationPaste}
                 placeholder="Введите фразу для подтверждения"
-                className="mt-1"
+                className="mt-1 min-w-full"
                 autoComplete="off"
               />
               {deleteConfirmationText && !isDeleteConfirmationValid && (

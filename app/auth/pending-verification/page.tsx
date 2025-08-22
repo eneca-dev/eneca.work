@@ -53,6 +53,12 @@ export default function PendingVerificationPage() {
           <p className="text-muted-foreground">После подтверждения вы будете автоматически перенаправлены.</p>
         </div>
       </div>
+      
+      <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+        <div className="text-sm text-amber-800 dark:text-amber-200">
+          <p>Если вы не получили письмо, <strong>проверьте папку "Спам"</strong> и <strong>отметьте это письмо как "Не спам"</strong> для корректной отправки будущих писем.</p>
+        </div>
+      </div>
 
       <div className="space-y-6">
         <AuthButton variant="outline" onClick={handleResend} loading={resending} disabled={!email}>

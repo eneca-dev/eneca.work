@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -18,6 +18,13 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm }: Delet
   const [showSecondConfirm, setShowSecondConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Reset to first step when dialog is closed externally
+  useEffect(() => {
+    if (!open) {
+      setShowSecondConfirm(false)
+    }
+  }, [open])
+
   const handleFirstConfirm = () => {
     setShowSecondConfirm(true)
   }
@@ -32,15 +39,21 @@ export function DeleteUserConfirm({ open, onOpenChange, user, onConfirm }: Delet
     }
   }
 
+  const handleOpenChange = (open: boolean) => {
+    onOpenChange(open)
+    if (!open) {
+      setShowSecondConfirm(false)
+    }
+  }
+
   const handleClose = () => {
-    setShowSecondConfirm(false)
-    onOpenChange(false)
+    handleOpenChange(false)
   }
 
   if (!user) return null
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">

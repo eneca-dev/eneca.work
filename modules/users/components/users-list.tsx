@@ -205,21 +205,37 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
     if (!userToDelete) return
     setIsDeleting(userToDelete.id)
     try {
-      const response = await fetch(`/api/admin/delete-user?userId=${userToDelete.id}`, {
+      const params = new URLSearchParams({ userId: userToDelete.id })
+      const response = await fetch(`/api/admin/delete-user?${params}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
         credentials: 'include',
       })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(result?.error || 'Ошибка удаления пользователя')
+      
+      // Safely parse JSON response
+      let result: { error?: string } = {}
+      try {
+        result = await response.json()
+      } catch (parseError) {
+        // If JSON parsing fails, we'll use response.statusText or generic message
+        console.warn('Failed to parse JSON response:', parseError)
       }
+      
+      if (!response.ok) {
+        throw new Error(result?.error || response.statusText || `Delete failed (${response.status})`)
+      }
+      
       onUserUpdated?.()
       toast({ title: 'Успешно', description: 'Пользователь успешно удален' })
     } catch (error) {
       console.error('Ошибка при удалении пользователя:', error)
-      toast({ title: 'Ошибка', description: error instanceof Error ? error.message : 'Не удалось удалить пользователя', variant: 'destructive' })
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось удалить пользователя'
+      toast({ 
+        title: 'Ошибка', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      })
     } finally {
       setIsDeleting(null)
       setIsDeleteDialogOpen(false)

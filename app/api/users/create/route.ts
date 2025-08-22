@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
             const upsertUrl = new URL('/api/geo/upsert', request.nextUrl.origin).toString()
             const resp = await fetch(upsertUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: headers,
               body: JSON.stringify({ countryName: userData.country, cityName: userData.city })
             })
             if (resp.ok) {              const { cityId } = await resp.json()
