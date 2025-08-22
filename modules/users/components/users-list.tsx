@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from "react"
+import React, { useState, useMemo, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -21,16 +21,18 @@ import {
   Trash,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Home,
   Building2,
   Briefcase,
   Users,
+  Tag,
 } from "lucide-react"
-import { UserDialog } from "./user-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { UserDialog } from "./user-dialog"
 import { deleteUser } from "@/services/org-data-service"
-import type { User, UsersFilter } from "@/types/db"
+import type { User } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
@@ -40,112 +42,132 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface UsersListProps {
   users: User[]
-  filters: {
-    departments: string[]
-    teams: string[]
-    categories: string[]
-    positions: string[]
-    workLocations: string[]
-    roles: string[]
-  }
   onUserUpdated?: () => void
 }
 
-// Изменим тип для группировки
+// Тип для группировки (восстановлен из оригинала)
 type GroupBy = "none" | "department" | "nested"
 
-export default function UsersList({ users: initialUsers, filters: initialFilters, onUserUpdated }: UsersListProps) {
-  const [users, setUsers] = useState<User[]>(initialUsers)
-  const [filteredUsers, setFilteredUsers] = useState<User[]>(initialUsers)
+// Функция для получения информации о расположении (восстановлена из оригинала)
+const getWorkLocationInfo = (location: string) => {
+  switch (location) {
+    case "office":
+      return { icon: <Building2 className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />, label: "В офисе" }
+    case "remote":
+      return { icon: <Home className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />, label: "Удаленно" }
+    case "hybrid":
+      return { icon: <Briefcase className="h-4 w-4 mr-2 text-purple-600 dark:text-purple-400" />, label: "Гибридный" }
+    default:
+      return { icon: null, label: location }
+  }
+}
+
+export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [groupBy, setGroupBy] = useState<GroupBy>("none")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [filters, setFilters] = useState({
+    departments: [] as string[],
+    teams: [] as string[],
+    categories: [] as string[],
+    positions: [] as string[],
+    workLocations: [] as string[],
+    roles: [] as string[],
+  })
+  
+  // Состояния пагинации
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(100)
+  const [showAll, setShowAll] = useState(false)
+  
   const router = useRouter()
 
   // Получаем разрешения пользователя
   const { canEditAllUsers } = useUserPermissions()
 
-  // Состояние для фильтров
-  const [filters, setFilters] = useState(initialFilters)
+  // ОПТИМИЗАЦИЯ: Мемоизируем фильтрацию пользователей (как в оригинале, но оптимизированно)
+  const filteredUsers = useMemo(() => {
+    if (!users || users.length === 0) return []
 
-  // Применение фильтров и поиска
-  useEffect(() => {
-    let result = [...users]
+    let result = users
 
     // Применение поиска
-    if (searchTerm) {
-      result = result.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.position.toLowerCase().includes(searchTerm.toLowerCase()),
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase()
+      result = result.filter(user =>
+        user.name?.toLowerCase().includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        user.department?.toLowerCase().includes(searchLower) ||
+        user.team?.toLowerCase().includes(searchLower) ||
+        user.position?.toLowerCase().includes(searchLower)
       )
     }
 
     // Применение фильтров
     if (filters.departments.length > 0) {
-      result = result.filter((user) => filters.departments.includes(user.department))
+      result = result.filter(user => user.department && filters.departments.includes(user.department))
     }
 
     if (filters.teams.length > 0) {
-      result = result.filter((user) => filters.teams.includes(user.team))
+      result = result.filter(user => user.team && filters.teams.includes(user.team))
     }
 
     if (filters.categories.length > 0) {
-      result = result.filter((user) => filters.categories.includes(user.category))
+      result = result.filter(user => user.category && filters.categories.includes(user.category))
     }
 
-    // Добавим фильтрацию по должностям
     if (filters.positions.length > 0) {
-      result = result.filter((user) => filters.positions.includes(user.position))
+      result = result.filter(user => user.position && filters.positions.includes(user.position))
     }
 
-    // Добавим фильтрацию по расположению
     if (filters.workLocations.length > 0) {
-      result = result.filter((user) => user.workLocation && filters.workLocations.includes(user.workLocation))
+      result = result.filter(user => user.workLocation && filters.workLocations.includes(user.workLocation))
     }
 
-    // Добавим фильтрацию по ролям
     if (filters.roles.length > 0) {
-      result = result.filter((user) => user.role && filters.roles.includes(user.role))
+      result = result.filter(user => user.role && filters.roles.includes(user.role))
     }
 
-    setFilteredUsers(result)
+    return result
   }, [users, searchTerm, filters])
 
-  useEffect(() => {
-    setFilters(initialFilters)
-  }, [initialFilters])
+  // ОПТИМИЗАЦИЯ: Мемоизируем пагинированные пользователи
+  const paginatedUsers = useMemo(() => {
+    if (showAll) return filteredUsers
+    
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredUsers.slice(startIndex, endIndex)
+  }, [filteredUsers, currentPage, itemsPerPage, showAll])
 
-  // Заменим функцию группировки пользователей на новую с поддержкой вложенной структуры
-  const groupUsers = () => {
-    if (groupBy === "none") return { "": filteredUsers }
+  // Вычисляем общее количество страниц
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage)
+
+  // ОПТИМИЗАЦИЯ: Мемоизируем группировку пользователей
+  const groupedUsers = useMemo(() => {
+    const usersToGroup = showAll ? filteredUsers : paginatedUsers
+    if (groupBy === "none") return { "": usersToGroup }
 
     if (groupBy === "department") {
       const groups: Record<string, User[]> = {}
-
-      filteredUsers.forEach((user) => {
-        const groupKey = user.department
+      usersToGroup.forEach((user) => {
+        const groupKey = user.department || "Без отдела"
         if (!groups[groupKey]) {
           groups[groupKey] = []
         }
         groups[groupKey].push(user)
       })
-
       return groups
     }
 
     // Вложенная группировка: отделы -> команды
     const nestedGroups: Record<string, Record<string, User[]>> = {}
-
-    filteredUsers.forEach((user) => {
-      const department = user.department
-      const team = user.team
+    usersToGroup.forEach((user) => {
+      const department = user.department || "Без отдела"
+      const team = user.team || "Без команды"
 
       if (!nestedGroups[department]) {
         nestedGroups[department] = {}
@@ -159,53 +181,31 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
     })
 
     return nestedGroups
-  }
+  }, [paginatedUsers, filteredUsers, groupBy, showAll])
 
-  const groupedUsers = groupUsers()
-
-  // Функция для переключения состояния развернутости группы
-  const toggleGroup = (groupName: string) => {
-    setExpandedGroups((prev) => ({
-      ...prev,
-      [groupName]: !prev[groupName],
-    }))
-  }
-
-  // Инициализируем состояние развернутости для всех групп
-  const initializeExpandedGroups = () => {
-    const newExpandedGroups: Record<string, boolean> = {}
-    Object.keys(groupedUsers).forEach((group) => {
-      if (!expandedGroups.hasOwnProperty(group)) {
-        newExpandedGroups[group] = true // По умолчанию все группы развернуты
-      }
-    })
-    if (Object.keys(newExpandedGroups).length > 0) {
-      setExpandedGroups((prev) => ({ ...prev, ...newExpandedGroups }))
-    }
-  }
-
-  // Вызываем инициализацию при изменении групп
-  React.useEffect(() => {
-    initializeExpandedGroups()
-  }, [groupBy, filteredUsers.length])
-
-  const handleEditUser = (user: User) => {
+  // ОПТИМИЗАЦИЯ: Мемоизируем обработчики
+  const handleEditUser = useCallback((user: User) => {
     setSelectedUser(user)
     setIsDialogOpen(true)
+  }, [])
+
+  const handleDeleteUser = useCallback(async (userId: string) => {
+    if (!confirm("Вы уверены, что хотите удалить этого пользователя?")) {
+      return
   }
 
-  const handleDeleteUser = async (userId: string) => {
-    if (confirm("Вы уверены, что хотите удалить этого пользователя?")) {
       setIsDeleting(userId)
       try {
         await deleteUser(userId)
-        onUserUpdated?.()
         toast({
-          title: "Успешно",
+        title: "Успех",
           description: "Пользователь успешно удален",
         })
+      if (onUserUpdated) {
+        onUserUpdated()
+      }
       } catch (error) {
-        console.error("Ошибка при удалении пользователя:", error)
+      console.error("Ошибка удаления пользователя:", error)
         toast({
           title: "Ошибка",
           description: "Не удалось удалить пользователя",
@@ -214,198 +214,487 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
       } finally {
         setIsDeleting(null)
       }
+  }, [onUserUpdated])
+
+  const handleDialogClose = useCallback(() => {
+    setIsDialogOpen(false)
+    setSelectedUser(null)
+  }, [])
+
+  const handleUserUpdated = useCallback(() => {
+    handleDialogClose()
+    if (onUserUpdated) {
+      onUserUpdated()
     }
-  }
+  }, [handleDialogClose, onUserUpdated])
 
-  const handleUserUpdated = () => {
-    // Обновляем список пользователей после изменения
-    onUserUpdated?.()
-  }
+  // Функция для переключения состояния развернутости группы
+  const toggleGroup = useCallback((groupName: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }))
+  }, [])
 
-  // Функция для отображения значка и цвета в зависимости от расположения
-  const getLocationBadge = (location: "office" | "remote" | "hybrid") => {
-    switch (location) {
-      case "office":
-        return {
-          icon: <Building2 className="h-3 w-3 mr-1" />,
-          label: "В офисе",
-          variant: "outline" as const,
-          className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
-        }
-      case "remote":
-        return {
-          icon: <Home className="h-3 w-3 mr-1" />,
-          label: "Удаленно",
-          variant: "outline" as const,
-          className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
-        }
-      case "hybrid":
-        return {
-          icon: <Briefcase className="h-3 w-3 mr-1" />,
-          label: "Гибридный",
-          variant: "outline" as const,
-          className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
-        }
+  // ОПТИМИЗАЦИЯ: Мемоизируем функции пагинации
+  const handlePrevPage = useCallback(() => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1)
     }
-  }
+  }, [currentPage])
 
-  // Функция для получения общего количества отображаемых пользователей
-  const getTotalDisplayedUsers = () => {
-    if (groupBy !== "nested") {
-      return filteredUsers.length
-    } else {
-      // Для вложенной группировки нужно посчитать сумму всех пользователей во всех командах
-      let total = 0
-      Object.values(groupedUsers as Record<string, Record<string, User[]>>).forEach((teams) => {
-        Object.values(teams).forEach((users) => {
-          total += users.length
-        })
-      })
-      return total
+  const handleNextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1)
     }
-  }
+  }, [currentPage, totalPages])
 
-  // Получаем общее количество отображаемых пользователей
-  const totalDisplayedUsers = getTotalDisplayedUsers()
+  const handleToggleShowAll = useCallback(() => {
+    setShowAll(!showAll)
+    setCurrentPage(1) // Сбрасываем на первую страницу
+  }, [showAll])
 
-  // Формируем текст для счетчика
-  const getCounterText = () => {
-    const total = users.length
-    const filtered = totalDisplayedUsers
+  // Сброс на первую страницу при изменении фильтров
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters, searchTerm])
 
-    if (filtered === total) {
-      return `Показано ${filtered} из ${total} сотрудников`
-    } else {
-      return `Отфильтровано: ${filtered} из ${total} сотрудников`
-    }
-  }
+  // Получение инициалов для аватара
+  const getInitials = useCallback((name: string) => {
+    return name
+      .split(' ')
+      .map(part => part.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }, [])
 
   return (
-    <TooltipProvider>
-      <Card>
-        <CardContent className="p-0">
-          <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
-              <div className="relative w-full sm:w-64 lg:w-96">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+    <Card className="w-full">
+             <CardHeader className="pb-4 px-4">
+         {/* Адаптивная строка с фильтрами */}
+         <div className="flex items-center gap-0.5 flex-wrap w-full border-b border-gray-200 dark:border-gray-700 pb-4">
+           {/* Поиск */}
+           <div className="relative">
+             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  type="search"
-                  placeholder="Поиск пользователей..."
-                  className="w-full pl-8"
+                  placeholder="Поиск сотрудников"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+               className="pl-8 w-52 h-7"
                 />
               </div>
-              <div className="w-full sm:w-auto">
-                <Select value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Группировка" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Без группировки</SelectItem>
-                    <SelectItem value="department">По отделам</SelectItem>
-                    <SelectItem value="nested">Отделы и команды</SelectItem>
-                  </SelectContent>
-                </Select>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по отделам */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                 <Building2 className="h-4 w-4 mr-1" />
+                 Отдел
+                 {filters.departments.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.departments.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск отделов..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.department).filter(Boolean))].sort().map(dept => (
+                     <div key={dept} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`dept-${dept}`}
+                         checked={filters.departments.includes(dept)}
+                         onChange={(e) => {
+                           const newDepts = e.target.checked
+                             ? [...filters.departments, dept]
+                             : filters.departments.filter(d => d !== dept)
+                           setFilters({...filters, departments: newDepts})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`dept-${dept}`} className="text-xs cursor-pointer">
+                         {dept}
+                       </label>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по командам */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                 <Users className="h-4 w-4 mr-1" />
+                 Команда
+                 {filters.teams.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.teams.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск команд..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.team).filter(Boolean))].sort().map(team => (
+                     <div key={team} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`team-${team}`}
+                         checked={filters.teams.includes(team)}
+                         onChange={(e) => {
+                           const newTeams = e.target.checked
+                             ? [...filters.teams, team]
+                             : filters.teams.filter(t => t !== team)
+                           setFilters({...filters, teams: newTeams})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`team-${team}`} className="text-xs cursor-pointer">
+                         {team}
+                       </label>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по должностям */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden md:inline-flex">
+                 <Briefcase className="h-4 w-4 mr-1" />
+                 Должность
+                 {filters.positions.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.positions.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск должностей..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.position).filter(Boolean))].sort().map(position => (
+                     <div key={position} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`position-${position}`}
+                         checked={filters.positions.includes(position)}
+                         onChange={(e) => {
+                           const newPositions = e.target.checked
+                             ? [...filters.positions, position]
+                             : filters.positions.filter(p => p !== position)
+                           setFilters({...filters, positions: newPositions})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`position-${position}`} className="text-xs cursor-pointer">
+                         {position}
+                       </label>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по категориям */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden lg:inline-flex">
+                 <Tag className="h-4 w-4 mr-1" />
+                 Категория
+                 {filters.categories.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.categories.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск категорий..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.category).filter(Boolean))].sort().map(category => (
+                     <div key={category} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`category-${category}`}
+                         checked={filters.categories.includes(category)}
+                         onChange={(e) => {
+                           const newCategories = e.target.checked
+                             ? [...filters.categories, category]
+                             : filters.categories.filter(c => c !== category)
+                           setFilters({...filters, categories: newCategories})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`category-${category}`} className="text-xs cursor-pointer">
+                         {category}
+                       </label>
+                     </div>
+                   ))}
+                 </div>
               </div>
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 ml-auto">
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по ролям */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden xl:inline-flex">
                 <Users className="h-4 w-4 mr-1" />
-                <span>{getCounterText()}</span>
+                 Роль
+                 {filters.roles.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.roles.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск ролей..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.role).filter(Boolean))].sort().map(role => (
+                     <div key={role} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`role-${role}`}
+                         checked={filters.roles.includes(role as string)}
+                         onChange={(e) => {
+                           const newRoles = e.target.checked
+                             ? [...filters.roles, role as string]
+                             : filters.roles.filter(r => r !== role)
+                           setFilters({...filters, roles: newRoles})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`role-${role}`} className="text-xs cursor-pointer">
+                         {role}
+                       </label>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Фильтр по расположению */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden xl:inline-flex">
+                 <Home className="h-4 w-4 mr-1" />
+                 Расположение
+                 {filters.workLocations.length > 0 && (
+                   <span className="ml-2 text-xs text-blue-600">({filters.workLocations.length})</span>
+                 )}
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start" className="w-64">
+               <div className="p-2 space-y-2">
+                 <Input placeholder="Поиск расположений..." className="h-8 text-xs" />
+                 <div className="max-h-32 overflow-y-auto space-y-1">
+                   {[...new Set(users.map(u => u.workLocation).filter(Boolean))].sort().map(location => (
+                     <div key={location} className="flex items-center space-x-2">
+                       <input
+                         type="checkbox"
+                         id={`location-${location}`}
+                         checked={filters.workLocations.includes(location)}
+                         onChange={(e) => {
+                           const newLocations = e.target.checked
+                             ? [...filters.workLocations, location]
+                             : filters.workLocations.filter(l => l !== location)
+                           setFilters({...filters, workLocations: newLocations})
+                         }}
+                         className="rounded"
+                       />
+                       <label htmlFor={`location-${location}`} className="text-xs cursor-pointer">
+                         {getWorkLocationInfo(location).label}
+                       </label>
+                     </div>
+                   ))}
               </div>
             </div>
-          </div>
+             </DropdownMenuContent>
+           </DropdownMenu>
 
-          <div className="border-t border-gray-200 dark:border-gray-800">
-            <div className="relative overflow-x-auto">
-              <Table>
+           <Separator orientation="vertical" className="h-3 opacity-40" />
+
+           {/* Группировка */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                 {groupBy === "none" ? "Без группировки" : 
+                  groupBy === "department" ? "По отделам" : 
+                  "Отделы → Команды"}
+                 <ChevronDown className="h-3 w-3 ml-1" />
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="start">
+               <DropdownMenuItem onClick={() => setGroupBy("none")}>
+                 Без группировки
+               </DropdownMenuItem>
+               <DropdownMenuItem onClick={() => setGroupBy("department")}>
+                 По отделам
+               </DropdownMenuItem>
+               <DropdownMenuItem onClick={() => setGroupBy("nested")}>
+                 Отделы → Команды
+               </DropdownMenuItem>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           {/* Кнопка показать всех */}
+           <Button 
+             variant="ghost" 
+             size="sm" 
+             className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
+             onClick={handleToggleShowAll}
+           >
+             {showAll ? "Пагинация" : "Показать всех"}
+           </Button>
+
+           {/* Навигация по страницам */}
+           {!showAll && totalPages > 1 && (
+             <>
+               <div className="flex items-center gap-0.5 text-xs text-gray-500">
+                 <Button
+                   variant="ghost"
+                   size="sm"
+                   className="h-6 w-6 p-0"
+                   onClick={handlePrevPage}
+                   disabled={currentPage === 1}
+                 >
+                   <ChevronLeft className="h-3 w-3" />
+                 </Button>
+                 
+                 <span className="whitespace-nowrap">
+                   {currentPage} из {totalPages}
+                 </span>
+                 
+                 <Button
+                   variant="ghost"
+                   size="sm"
+                   className="h-6 w-6 p-0"
+                   onClick={handleNextPage}
+                   disabled={currentPage === totalPages}
+                 >
+                   <ChevronRight className="h-3 w-3" />
+                 </Button>
+              </div>
+             </>
+           )}
+          </div>
+       </CardHeader>
+      
+      <CardContent className="p-4">
+        {(showAll ? filteredUsers : paginatedUsers).length === 0 ? (
+          <EmptyState
+            title="Пользователи не найдены"
+            description={
+              searchTerm || Object.values(filters).some(f => f.length > 0)
+                ? "Попробуйте изменить критерии поиска или фильтры"
+                : "В системе нет пользователей"
+            }
+          />
+        ) : (
+          <div>
+            <Table className="table-auto w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[300px]">Пользователь</TableHead>
-                    <TableHead>Отдел</TableHead>
-                    <TableHead>Команда</TableHead>
-                    <TableHead>Должность</TableHead>
-                    <TableHead>Категория</TableHead>
-                    <TableHead>Роль</TableHead>
-                    <TableHead>Расположение</TableHead>
-                    {canEditAllUsers && <TableHead className="text-center">Действия</TableHead>}
+                  <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Пользователь</TableHead>
+                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Отдел</TableHead>
+                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Команда</TableHead>
+                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">Должность</TableHead>
+                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">Категория</TableHead>
+                                         <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Роль</TableHead>
+                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Расположение</TableHead>
+                    {canEditAllUsers && <TableHead className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">Действия</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupBy !== "nested"
-                    ? // Обычная группировка (без группировки или только по отделам)
+                {groupBy === "none" || groupBy === "department"
+                  ? // Простая группировка или без группировки
                       Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
-                        <React.Fragment key={groupName || "ungrouped"}>
-                          {groupName && (
-                            <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
-                              <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
-                                <div
-                                  className="flex items-center cursor-pointer"
+                      <React.Fragment key={groupName}>
+                        {groupBy === "department" && groupName && (
+                          <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                            <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2">
+                              <div
+                                className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(groupName)}
                                 >
                                   {expandedGroups[groupName] ? (
-                                    <ChevronDown className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-500" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-500" />
-                                  )}
-                                  <span className="font-medium">
-                                    {groupBy === "department" ? "Отдел: " : ""}
-                                    {groupName}
-                                  </span>
-                                  <span className="ml-2 text-gray-500 dark:text-gray-400 text-sm">
-                                    ({groupUsers.length})
-                                  </span>
+                                  <ChevronDown className="h-4 w-4 mr-1" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 mr-1" />
+                                )}
+                                <Building2 className="h-4 w-4 mr-1" />
+                                {groupName} ({groupUsers.length})
                                 </div>
                               </TableCell>
                             </TableRow>
                           )}
 
-                          {(groupName === "" || expandedGroups[groupName]) &&
-                            groupUsers.map((user) => (
-                              <TableRow key={user.id}>
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-3">
-                                    <Avatar>
-                                      <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
-                                      <AvatarFallback>
-                                        {user.name
-                                          .split(" ")
-                                          .map((n) => n[0])
-                                          .join("")}
+                        {(groupBy === "none" || expandedGroups[groupName]) &&
+                          groupUsers.map((user) => {
+                            const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
+                            
+                            return (
+                              <TableRow key={user.id} className="h-16">
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                  <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3">
+                                    <Avatar className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8">
+                                      <AvatarImage src={user.avatar_url || ""} alt={user.name} />
+                                      <AvatarFallback className="text-xs">
+                                        {getInitials(user.name)}
                                       </AvatarFallback>
                                     </Avatar>
-                                    <div>
-                                      <div className="font-medium">{user.name}</div>
-                                      <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-medium text-xs sm:text-sm">
+                                        <span className="block truncate max-w-full md:max-w-32 sm:max-w-24">{user.name}</span>
+                                      </div>
+                                      <div className="text-xs text-gray-500 hidden sm:block">
+                                        <span className="block truncate max-w-full md:max-w-32 sm:max-w-24">{user.email}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell>{user.department}</TableCell>
-                                <TableCell>{user.team}</TableCell>
-                                <TableCell>{user.position}</TableCell>
-                                <TableCell>{user.category}</TableCell>
-                                <TableCell>{user.role}</TableCell>
-                                <TableCell>
-                                  {user.workLocation && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Badge
-                                            variant={getLocationBadge(user.workLocation).variant}
-                                            className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
-                                          >
-                                            {getLocationBadge(user.workLocation).icon}
-                                            {getLocationBadge(user.workLocation).label}
-                                          </Badge>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>{user.address}</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                  <span className="block truncate max-w-full md:max-w-24 sm:max-w-16 text-xs sm:text-sm">{user.department || '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                  <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.team || '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                  <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.position || '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                  <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.category || '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                  <span className="block truncate max-w-full md:max-w-16 text-xs sm:text-sm">{user.role || '—'}</span>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                  <div className="flex items-center space-x-1">
+                                    {workLocationInfo.icon}
+                                    <span className="block truncate max-w-full lg:max-w-16 text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                  </div>
                                 </TableCell>
                                 {canEditAllUsers && (
-                                  <TableCell className="text-center">
+                                  <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon">
@@ -432,7 +721,8 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                   </TableCell>
                                 )}
                               </TableRow>
-                            ))}
+                            )
+                          })}
                         </React.Fragment>
                       ))
                     : // Вложенная группировка (отделы -> команды)
@@ -440,105 +730,83 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                         ([department, teams]) => (
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
-                            <TableRow className="bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors">
+                          <TableRow className="bg-gray-50 dark:bg-gray-800/50">
                               <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
                                 <div
-                                  className="flex items-center cursor-pointer"
+                                className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(department)}
                                 >
                                   {expandedGroups[department] ? (
-                                    <ChevronDown className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-500" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-500" />
-                                  )}
-                                  <span className="font-medium">{department}</span>
-                                  <span className="ml-2 text-gray-500 dark:text-gray-400 text-sm">
-                                    ({Object.values(teams).flat().length})
-                                  </span>
+                                  <ChevronDown className="h-4 w-4 mr-1" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 mr-1" />
+                                )}
+                                <Building2 className="h-4 w-4 mr-1" />
+                                {department} ({Object.values(teams).reduce((sum, teamUsers) => sum + teamUsers.length, 0)})
                                 </div>
                               </TableCell>
                             </TableRow>
 
-                            {/* Команды внутри отдела */}
                             {expandedGroups[department] &&
-                              Object.entries(teams).map(([team, users]) => (
+                            Object.entries(teams).map(([team, teamUsers]) => (
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
-                                  <TableRow className="bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/70 dark:hover:bg-gray-800/40 transition-colors">
-                                    <TableCell
-                                      colSpan={canEditAllUsers ? 8 : 7}
-                                      className="py-1 pl-8 border-l-2 border-gray-200 dark:border-gray-700 ml-4"
-                                    >
-                                      <div
-                                        className="flex items-center cursor-pointer"
-                                        onClick={() => toggleGroup(`${department}-${team}`)}
-                                      >
-                                        {expandedGroups[`${department}-${team}`] ? (
-                                          <ChevronDown className="h-3 w-3 mr-2 text-emerald-500 dark:text-emerald-400" />
-                                        ) : (
-                                          <ChevronRight className="h-3 w-3 mr-2 text-emerald-500 dark:text-emerald-400" />
-                                        )}
-                                        <span className="font-medium text-sm">{team}</span>
-                                        <span className="ml-2 text-gray-500 dark:text-gray-400 text-xs">
-                                          ({users.length})
-                                        </span>
+                                <TableRow className="bg-gray-25 dark:bg-gray-900/25">
+                                  <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-1.5 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
+                                    <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300">
+                                      <Users className="h-3 w-3 mr-2" />
+                                      {team} ({teamUsers.length})
                                       </div>
                                     </TableCell>
                                   </TableRow>
 
-                                  {/* Пользователи в команде */}
-                                  {expandedGroups[`${department}-${team}`] &&
-                                    users.map((user) => (
-                                      <TableRow
-                                        key={user.id}
-                                        className="hover:bg-gray-50/80 dark:hover:bg-gray-900/30 transition-colors"
-                                      >
-                                        <TableCell className="font-medium pl-12">
-                                          <div className="flex items-center gap-3">
-                                            <Avatar>
-                                              <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
-                                              <AvatarFallback>
-                                                {user.name
-                                                  .split(" ")
-                                                  .map((n) => n[0])
-                                                  .join("")}
+                                {/* Пользователи команды */}
+                                {teamUsers.map((user) => {
+                                  const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
+                                  
+                                  return (
+                                    <TableRow key={user.id} className="pl-12 h-16">
+                                      <TableCell className="pl-3 sm:pl-6 lg:pl-12 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                        <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3">
+                                          <Avatar className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8">
+                                            <AvatarImage src={user.avatar_url || ""} alt={user.name} />
+                                            <AvatarFallback className="text-xs">
+                                              {getInitials(user.name)}
                                               </AvatarFallback>
                                             </Avatar>
-                                            <div>
-                                              <div className="font-medium">{user.name}</div>
-                                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                                {user.email}
+                                            <div className="min-w-0 flex-1">
+                                              <div className="font-medium text-xs sm:text-sm">
+                                                <span className="block truncate max-w-full md:max-w-28 sm:max-w-20">{user.name}</span>
+                                              </div>
+                                            <div className="text-xs text-gray-500 hidden sm:block">
+                                              <span className="block truncate max-w-full md:max-w-28 sm:max-w-20">{user.email}</span>
                                               </div>
                                             </div>
                                           </div>
                                         </TableCell>
-                                        <TableCell>{user.department}</TableCell>
-                                        <TableCell>{user.team}</TableCell>
-                                        <TableCell>{user.position}</TableCell>
-                                        <TableCell>{user.category}</TableCell>
-                                        <TableCell>{user.role}</TableCell>
-                                        <TableCell>
-                                          {user.workLocation && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Badge
-                                                    variant={getLocationBadge(user.workLocation).variant}
-                                                    className={`flex items-center ${getLocationBadge(user.workLocation).className}`}
-                                                  >
-                                                    {getLocationBadge(user.workLocation).icon}
-                                                    {getLocationBadge(user.workLocation).label}
-                                                  </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                  <p>{user.address}</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                        <span className="block truncate max-w-full md:max-w-20 sm:max-w-14 text-xs sm:text-sm">{user.department || '—'}</span>
+                                      </TableCell>
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                        <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.team || '—'}</span>
+                                      </TableCell>
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                        <span className="block truncate max-w-full md:max-w-18 sm:max-w-12 text-xs sm:text-sm">{user.position || '—'}</span>
+                                      </TableCell>
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                        <span className="block truncate max-w-full md:max-w-16 sm:max-w-10 text-xs sm:text-sm">{user.category || '—'}</span>
+                                      </TableCell>
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                        <span className="block truncate max-w-full md:max-w-14 text-xs sm:text-sm">{user.role || '—'}</span>
+                                      </TableCell>
+                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                        <div className="flex items-center space-x-1">
+                                          {workLocationInfo.icon}
+                                          <span className="block truncate max-w-full lg:max-w-14 text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                        </div>
                                         </TableCell>
                                         {canEditAllUsers && (
-                                          <TableCell className="text-center">
+                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden xl:table-cell">
                                             <DropdownMenu>
                                               <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon">
@@ -565,33 +833,26 @@ export default function UsersList({ users: initialUsers, filters: initialFilters
                                           </TableCell>
                                         )}
                                       </TableRow>
-                                    ))}
+                                  )
+                                })}
                                 </React.Fragment>
                               ))}
                           </React.Fragment>
-                        ),
-                      )}
-
-                  {filteredUsers.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={canEditAllUsers ? 8 : 7} className="h-24 text-center">
-                        Пользователи не найдены.
-                      </TableCell>
-                    </TableRow>
+                      )
                   )}
                 </TableBody>
               </Table>
             </div>
-          </div>
+        )}
         </CardContent>
-      </Card>
 
+      {/* Диалог редактирования пользователя */}
       <UserDialog
         open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
+        onOpenChange={handleDialogClose}
         user={selectedUser}
         onUserUpdated={handleUserUpdated}
       />
-    </TooltipProvider>
+    </Card>
   )
 }

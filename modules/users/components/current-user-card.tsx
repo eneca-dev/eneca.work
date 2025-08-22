@@ -221,7 +221,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
               />
               <div>
                 <h3 className="text-lg font-medium">{currentUser.name}</h3>
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hidden lg:flex">
                   {currentUser.position && <span>{currentUser.position}</span>}
                   {currentUser.position && (currentUser.department || currentUser.team) && <span>•</span>}
                   {currentUser.department && <span>{currentUser.department}</span>}
