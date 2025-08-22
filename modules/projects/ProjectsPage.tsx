@@ -13,6 +13,8 @@ import { ProjectsTree } from './components';
 import { useUiStore } from '@/stores/useUiStore';
 import { SyncButton } from '@/components/ui/sync-button';
 import { Search } from 'lucide-react';
+import { Modal, ModalButton } from '@/components/modals';
+import { InlineDashboard } from '@/modules/dashboard/InlineDashboard';
 
 import { X } from 'lucide-react';
 
@@ -31,7 +33,6 @@ export default function ProjectsPage() {
   const urlSectionId = searchParams.get('section');
   const urlTab = searchParams.get('tab') as 'overview' | 'details' | 'comments' | null;
 
-
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -47,6 +48,10 @@ export default function ProjectsPage() {
   const [statusSearch, setStatusSearch] = useState('');
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
   const filteredStatuses = (statuses || []).filter(s => !statusSearch.trim() || s.name.toLowerCase().includes(statusSearch.toLowerCase()) || (s.description && s.description.toLowerCase().includes(statusSearch.toLowerCase())));
+
+  // Состояние для модального окна дашборда проекта
+  const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
+  const [dashboardProject, setDashboardProject] = useState<{id: string, name: string} | null>(null);
 
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
@@ -82,6 +87,19 @@ export default function ProjectsPage() {
     filterStore.resetFilters()
     // Очищаем локальный поиск по проектам
     setProjectSearch('')
+  };
+
+  // Обработчик открытия дашборда проекта
+  const handleOpenProjectDashboard = (project: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDashboardProject({ id: project.id, name: project.name });
+    setIsDashboardModalOpen(true);
+  };
+
+  // Обработчик закрытия модального окна
+  const handleCloseDashboardModal = () => {
+    setIsDashboardModalOpen(false);
+    setDashboardProject(null);
   };
 
   // Проектный стор фильтров (независимый от отчётов)
@@ -506,20 +524,50 @@ export default function ProjectsPage() {
       {/* Нижняя панель инструментов удалена — инструменты перенесены в верхний дропдаун */}
 
       <div className="p-0">
-      <ProjectsTree
-        selectedManagerId={filterStore.selectedManagerId}
-        selectedProjectId={filterStore.selectedProjectId}
-        selectedStageId={filterStore.selectedStageId}
-        selectedObjectId={filterStore.selectedObjectId}
-        selectedDepartmentId={filterStore.selectedDepartmentId}
-        selectedTeamId={filterStore.selectedTeamId}
-        selectedEmployeeId={filterStore.selectedEmployeeId}
-        selectedStatusIds={selectedStatusIdsLocal}
-        externalSearchQuery={treeSearch}
-        urlSectionId={urlSectionId}
-        urlTab={urlTab || 'overview'}
-      />
+        <ProjectsTree
+          selectedManagerId={filterStore.selectedManagerId}
+          selectedProjectId={filterStore.selectedProjectId}
+          selectedStageId={filterStore.selectedStageId}
+          selectedObjectId={filterStore.selectedObjectId}
+          selectedDepartmentId={filterStore.selectedDepartmentId}
+          selectedTeamId={filterStore.selectedTeamId}
+          selectedEmployeeId={filterStore.selectedEmployeeId}
+          selectedStatusIds={selectedStatusIdsLocal}
+          externalSearchQuery={treeSearch}
+          urlSectionId={urlSectionId}
+          urlTab={urlTab || 'overview'}
+          onOpenProjectDashboard={handleOpenProjectDashboard}
+        />
       </div>
+
+      {/* Модальное окно с дашбордом проекта */}
+      <Modal 
+        isOpen={isDashboardModalOpen} 
+        onClose={handleCloseDashboardModal} 
+        size="xl"
+      >
+        <Modal.Header 
+          title={`Дашборд проекта: ${dashboardProject?.name || ''}`}
+          subtitle="Детальная информация о проекте"
+        />
+        <Modal.Body className="p-4">
+          {dashboardProject && (
+            <div className="h-[80vh] overflow-auto">
+              <InlineDashboard 
+                projectId={dashboardProject.id}
+                isClosing={false}
+                onClose={handleCloseDashboardModal}
+                isModal={true}
+              />
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <ModalButton variant="cancel" onClick={handleCloseDashboardModal}>
+            Закрыть
+          </ModalButton>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 } 

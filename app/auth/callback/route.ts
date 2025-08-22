@@ -18,7 +18,7 @@ export async function GET(request: Request) {
         span.setAttribute("auth.redirect_url", next)
 
         if (code) {
-          const supabase = createClient()
+          const supabase = await createClient()
           
           const { error } = await supabase.auth.exchangeCodeForSession(code)
           

@@ -49,6 +49,10 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   // Состояния для поиска
   const [searchDepartment, setSearchDepartment] = useState("")
   const [searchTeam, setSearchTeam] = useState("")
+  const [searchPosition, setSearchPosition] = useState("")
+  const [searchCategory, setSearchCategory] = useState("")
+  const [searchRole, setSearchRole] = useState("")
+  const [searchWorkLocation, setSearchWorkLocation] = useState("")
 
   // Загрузка данных при монтировании компонента
   useEffect(() => {
@@ -332,19 +336,31 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openPositions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по должностям */}
+                <input
+                  type="text"
+                  placeholder="Поиск должностей..."
+                  value={searchPosition}
+                  onChange={(e) => setSearchPosition(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
                 <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
-                  {positions.map((position) => (
-                    <div key={position} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`position-${position}`}
-                        checked={selectedPositions.includes(position)}
-                        onCheckedChange={(checked) => handlePositionChange(position, checked as boolean)}
-                      />
-                      <Label htmlFor={`position-${position}`} className="body-text">
-                        {position}
-                      </Label>
-                    </div>
-                  ))}
+                  {positions
+                    .filter((position) =>
+                      position.toLowerCase().includes(searchPosition.toLowerCase()),
+                    )
+                    .map((position) => (
+                      <div key={position} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`position-${position}`}
+                          checked={selectedPositions.includes(position)}
+                          onCheckedChange={(checked) => handlePositionChange(position, checked as boolean)}
+                        />
+                        <Label htmlFor={`position-${position}`} className="body-text">
+                          {position}
+                        </Label>
+                      </div>
+                    ))}
                 </div>
               </CollapsibleContent>
             </Collapsible>
@@ -356,19 +372,31 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openCategories ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по категориям */}
+                <input
+                  type="text"
+                  placeholder="Поиск категорий..."
+                  value={searchCategory}
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
                 <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
-                  {categories.map((category) => (
-                    <div key={category} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`category-${category}`}
-                        checked={selectedCategories.includes(category)}
-                        onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
-                      />
-                      <Label htmlFor={`category-${category}`} className="body-text">
-                        {category}
-                      </Label>
-                    </div>
-                  ))}
+                  {categories
+                    .filter((category) =>
+                      category.toLowerCase().includes(searchCategory.toLowerCase()),
+                    )
+                    .map((category) => (
+                      <div key={category} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`category-${category}`}
+                          checked={selectedCategories.includes(category)}
+                          onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
+                        />
+                        <Label htmlFor={`category-${category}`} className="body-text">
+                          {category}
+                        </Label>
+                      </div>
+                    ))}
                 </div>
               </CollapsibleContent>
             </Collapsible>
@@ -380,19 +408,31 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openRoles ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по ролям */}
+                <input
+                  type="text"
+                  placeholder="Поиск ролей..."
+                  value={searchRole}
+                  onChange={(e) => setSearchRole(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
                 <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
-                  {roles.map((role) => (
-                    <div key={role} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`role-${role}`}
-                        checked={selectedRoles.includes(role)}
-                        onCheckedChange={(checked) => handleRoleChange(role, checked as boolean)}
-                      />
-                      <Label htmlFor={`role-${role}`} className="body-text">
-                        {role}
-                      </Label>
-                    </div>
-                  ))}
+                  {roles
+                    .filter((role) =>
+                      role.toLowerCase().includes(searchRole.toLowerCase()),
+                    )
+                    .map((role) => (
+                      <div key={role} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`role-${role}`}
+                          checked={selectedRoles.includes(role)}
+                          onCheckedChange={(checked) => handleRoleChange(role, checked as boolean)}
+                        />
+                        <Label htmlFor={`role-${role}`} className="body-text">
+                          {role}
+                        </Label>
+                      </div>
+                    ))}
                 </div>
               </CollapsibleContent>
             </Collapsible>
@@ -404,23 +444,37 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
                 {openWorkLocations ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
+                {/* Поиск по расположению */}
+                <input
+                  type="text"
+                  placeholder="Поиск расположений..."
+                  value={searchWorkLocation}
+                  onChange={(e) => setSearchWorkLocation(e.target.value)}
+                  className="mb-2 w-full px-2 py-1 border rounded body-text bg-background"
+                />
                 <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2 px-2">
-                  {workLocations.map((location) => {
-                    const { icon, label } = getWorkLocationInfo(location)
-                    return (
-                      <div key={location} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`location-${location}`}
-                          checked={selectedWorkLocations.includes(location)}
-                          onCheckedChange={(checked) => handleWorkLocationChange(location, checked as boolean)}
-                        />
-                        <Label htmlFor={`location-${location}`} className="body-text flex items-center">
-                          {icon}
-                          {label}
-                        </Label>
-                      </div>
-                    )
-                  })}
+                  {workLocations
+                    .filter((location) => {
+                      const { label } = getWorkLocationInfo(location)
+                      return label.toLowerCase().includes(searchWorkLocation.toLowerCase()) ||
+                             location.toLowerCase().includes(searchWorkLocation.toLowerCase())
+                    })
+                    .map((location) => {
+                      const { icon, label } = getWorkLocationInfo(location)
+                      return (
+                        <div key={location} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`location-${location}`}
+                            checked={selectedWorkLocations.includes(location)}
+                            onCheckedChange={(checked) => handleWorkLocationChange(location, checked as boolean)}
+                          />
+                          <Label htmlFor={`location-${location}`} className="body-text flex items-center">
+                            {icon}
+                            {label}
+                          </Label>
+                        </div>
+                      )
+                    })}
                 </div>
               </CollapsibleContent>
             </Collapsible>
