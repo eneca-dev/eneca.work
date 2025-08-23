@@ -88,7 +88,8 @@ export async function getUsers(): Promise<User[]> {
           isActive: user.is_active || true,
           dateJoined: user.created_at,
           workLocation: mapWorkFormat(user.work_format),
-          address: user.address || "",
+          country: user.country_name || "",
+          city: user.city_name || "",
           employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
           salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
           isHourly: user.is_hourly !== null ? user.is_hourly : true,
@@ -646,9 +647,38 @@ export async function updateUser(
     console.log("Добавлено: work_format =", updates.work_format);
   }
 
-  if (userData.address !== undefined) {
-    updates.address = userData.address
-    console.log("Добавлено: address =", userData.address);
+
+
+  // Обработка страны/города -> profiles.city_id
+  if (userData.country !== undefined || userData.city !== undefined) {
+    const countryName = typeof userData.country === 'string' ? userData.country.trim() : ''
+    const cityName = typeof userData.city === 'string' ? userData.city.trim() : ''
+
+    if (!countryName && !cityName) {
+      // Сброс города
+      updates.city_id = null
+      console.log("Добавлено: city_id = null (очистка)");
+    } else if (countryName && cityName) {
+      try {
+        // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+        const resp = await fetch('/api/geo/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ countryName, cityName })
+        })
+        if (resp.ok) {
+          const { cityId } = await resp.json()
+          updates.city_id = cityId
+          console.log("Добавлено: city_id =", cityId)
+        } else {
+          console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+        }
+      } catch (error) {
+        console.error('Ошибка вызова /api/geo/upsert:', error)
+      }
+    } else {
+      console.warn("Для установки города требуются и страна, и город. Передано:", { countryName, cityName })
+    }
   }
 
   if (userData.employmentRate !== undefined) {
@@ -750,7 +780,8 @@ export async function createUser(userData: {
   category?: string
   roleId?: string
   workLocation?: "office" | "remote" | "hybrid"
-  address?: string
+  country?: string
+  city?: string
 }) {
   return Sentry.startSpan(
     {
@@ -807,10 +838,51 @@ export async function createUser(userData: {
           last_name: userData.lastName,
           email: userData.email,
           work_format: mapWorkFormatToDb(userData.workLocation || "office"),
-          address: userData.address || null,
           employment_rate: 1,
           salary: 0,
           is_hourly: true,
+        }
+
+        // Обработка страны/города
+        if (userData.country && userData.city) {
+          // Trim and validate country and city values
+          const trimmedCountry = userData.country.trim()
+          const trimmedCity = userData.city.trim()
+          
+          // Validate that both values are non-empty after trimming
+          if (trimmedCountry && trimmedCity) {
+            try {
+              // Normalize casing - capitalize first letter of each word
+              const normalizedCountry = trimmedCountry.replace(/\b\w/g, l => l.toUpperCase())
+              const normalizedCity = trimmedCity.replace(/\b\w/g, l => l.toUpperCase())
+              
+              // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+              const resp = await fetch('/api/geo/upsert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  countryName: normalizedCountry, 
+                  cityName: normalizedCity 
+                })
+              })
+              if (resp.ok) {
+                const { cityId } = await resp.json()
+                profileData.city_id = cityId
+                console.log("Добавлено: city_id =", cityId)
+              } else {
+                console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+              }
+            } catch (error) {
+              console.error('Ошибка вызова /api/geo/upsert:', error)
+            }
+          } else {
+            console.warn('Пропускаем вызов /api/geo/upsert: страна или город пустые после обрезки пробелов', {
+              originalCountry: userData.country,
+              originalCity: userData.city,
+              trimmedCountry,
+              trimmedCity
+            })
+          }
         }
 
         // 3. Найдем ID для связанных сущностей

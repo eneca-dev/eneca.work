@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getDepartments, getTeams, getPositions, getCategories, getAvailableRoles } from "@/services/org-data-service"
+import { Country, City } from "country-state-city"
 import { createUserViaAPI } from "@/services/user-api"
 import type { Department, Team, Position, Category } from "@/types/db"
 import { toast } from "sonner"
@@ -26,7 +27,8 @@ interface AddUserFormData {
   role: string
   roleId: string
   workLocation: "office" | "remote" | "hybrid"
-  address: string
+  country: string
+  city: string
 }
 
 interface AddUserFormProps {
@@ -47,7 +49,8 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
     role: "",
     roleId: "",
     workLocation: "office",
-    address: "",
+    country: "",
+    city: "",
   })
 
   const [departments, setDepartments] = useState<Department[]>([])
@@ -58,6 +61,17 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
   const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isDataLoaded, setIsDataLoaded] = useState(false)
+  
+  // Состояния для стран и городов
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
+  const [cities, setCities] = useState<{ name: string }[]>([])
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
+  const [countrySearch, setCountrySearch] = useState("")
+  const [citySearch, setCitySearch] = useState("")
+  const [filteredCountries, setFilteredCountries] = useState<{ code: string; name: string }[]>([])
+  const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
+  const [countrySelectOpen, setCountrySelectOpen] = useState(false)
+  const [citySelectOpen, setCitySelectOpen] = useState(false)
 
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
 
@@ -93,6 +107,58 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
 
     loadReferenceData()
   }, [canAddAdminRole])
+
+  // Загрузка стран
+  useEffect(() => {
+    const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
+    setCountries(all)
+    setFilteredCountries(all)
+  }, [])
+
+  // Фильтрация стран по поиску
+  useEffect(() => {
+    if (!countrySearch.trim()) {
+      setFilteredCountries(countries)
+    } else {
+      const filtered = countries.filter(country =>
+        country.name.toLowerCase().includes(countrySearch.toLowerCase())
+      )
+      setFilteredCountries(filtered)
+    }
+  }, [countrySearch, countries])
+
+  // Загрузка городов при выборе страны
+  useEffect(() => {
+    if (!selectedCountryCode) {
+      setCities([])
+      setFilteredCities([])
+      return
+    }
+    const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
+    // Дедупликация по названию города
+    const seen = new Set<string>()
+    const unique: { name: string }[] = []
+    for (const c of loaded) {
+      if (!seen.has(c.name)) {
+        seen.add(c.name)
+        unique.push({ name: c.name })
+      }
+    }
+    setCities(unique)
+    setFilteredCities(unique)
+  }, [selectedCountryCode])
+
+  // Фильтрация городов по поиску
+  useEffect(() => {
+    if (!citySearch.trim()) {
+      setFilteredCities(cities)
+    } else {
+      const filtered = cities.filter(city =>
+        city.name.toLowerCase().includes(citySearch.toLowerCase())
+      )
+      setFilteredCities(filtered)
+    }
+  }, [citySearch, cities])
 
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
@@ -134,8 +200,12 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
       role: "",
       roleId: "",
       workLocation: "office",
-      address: "",
+      country: "",
+      city: "",
     })
+    setSelectedCountryCode("")
+    setCountrySearch("")
+    setCitySearch("")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -172,7 +242,8 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
         category: formData.category || undefined,
         roleId: formData.roleId || undefined,
         workLocation: formData.workLocation,
-        address: formData.address || undefined,
+        country: formData.country || undefined,
+        city: formData.city || undefined,
       }
       
       const result = await createUserViaAPI(userData)
@@ -422,17 +493,99 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
             </Select>
           </div>
 
-          {/* Адрес */}
+          {/* Страна */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="address" className="text-right">Адрес</Label>
-            <Textarea
-              id="address"
-              value={formData.address}
-              onChange={(e) => handleChange("address", e.target.value)}
-              className="col-span-3"
-              placeholder="Укажите адрес"
-              rows={2}
-            />
+            <Label htmlFor="country" className="text-right">Страна</Label>
+            <Select
+              value={selectedCountryCode}
+              onValueChange={(code) => {
+                setSelectedCountryCode(code)
+                const found = countries.find(c => c.code === code)
+                handleChange("country", found?.name || "")
+                handleChange("city", "")
+                setCountrySearch("")
+                setCitySearch("")
+                setCountrySelectOpen(false)
+              }}
+              open={countrySelectOpen}
+              onOpenChange={setCountrySelectOpen}
+            >
+              <SelectTrigger id="country" className="col-span-3">
+                <SelectValue placeholder="Выберите страну" />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Поле поиска по странам */}
+                <div className="p-2 border-b">
+                  <Input
+                    id="country-search"
+                    placeholder="Поиск по странам..."
+                    value={countrySearch}
+                    onChange={(e) => setCountrySearch(e.target.value)}
+                    className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter' && filteredCountries.length > 0) {
+                        const firstCountry = filteredCountries[0];
+                        setSelectedCountryCode(firstCountry.code);
+                        handleChange("country", firstCountry.name);
+                        handleChange("city", "");
+                        setCountrySearch("");
+                        setCitySearch("");
+                        setCountrySelectOpen(false);
+                      }
+                    }}
+                  />
+                </div>
+                {filteredCountries.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Город */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="city" className="text-right">Город</Label>
+            <Select
+              value={formData.city || ""}
+              onValueChange={(value) => {
+                handleChange("city", value)
+                setCitySearch("")
+                setCitySelectOpen(false)
+              }}
+              disabled={!selectedCountryCode}
+              open={citySelectOpen}
+              onOpenChange={setCitySelectOpen}
+            >
+              <SelectTrigger id="city" className="col-span-3">
+                <SelectValue placeholder={selectedCountryCode ? "Выберите город" : "Сначала выберите страну"} />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Поле поиска по городам */}
+                <div className="p-2 border-b">
+                  <Input
+                    id="city-search"
+                    placeholder="Поиск по городам..."
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    disabled={!selectedCountryCode}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter' && filteredCities.length > 0) {
+                        const firstCity = filteredCities[0];
+                        handleChange("city", firstCity.name);
+                        setCitySearch("");
+                        setCitySelectOpen(false);
+                      }
+                    }}
+                  />
+                </div>
+                {filteredCities.map((c) => (
+                  <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Кнопки */}

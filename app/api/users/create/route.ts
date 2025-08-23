@@ -84,10 +84,42 @@ export async function POST(request: NextRequest) {
           last_name: userData.lastName,
           email: userData.email,
           work_format: mapWorkFormatToDb(userData.workLocation || "office"),
-          address: userData.address || null,
           employment_rate: 1,
           salary: 0,
           is_hourly: true,
+        }
+
+        // Обработка страны/города
+        if (userData.country && userData.city) {
+          try {
+            // Подготавливаем заголовки для внутреннего API вызова
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+            
+            // Захватываем cookie из входящего запроса для передачи аутентификации
+            const incomingCookie = request.headers.get('cookie')
+            if (incomingCookie) {
+              headers['Cookie'] = incomingCookie
+            } else {
+              console.warn('Отсутствует cookie в запросе - внутренний API вызов может быть неаутентифицирован')
+            }
+
+            // Гарантируем наличие country/city и получаем city_id через наш API апсерт
+            // Construct an absolute URL for the server-side fetch
+            const upsertUrl = new URL('/api/geo/upsert', request.nextUrl.origin).toString()
+            const resp = await fetch(upsertUrl, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({ countryName: userData.country, cityName: userData.city })
+            })
+            if (resp.ok) {              const { cityId } = await resp.json()
+              profileData.city_id = cityId
+              console.log("Добавлено: city_id =", cityId)
+            } else {
+              console.warn('Не удалось апсертить страну/город через API:', await resp.text())
+            }
+          } catch (error) {
+            console.error('Ошибка вызова /api/geo/upsert:', error)
+          }
         }
 
         // 3. Найдем ID для связанных сущностей, используя обычный клиент

@@ -39,7 +39,7 @@ import { useRouter } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/ui/empty-state"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DeleteUserConfirm } from "./DeleteUserConfirm"
 
 interface UsersListProps {
   users: User[]
@@ -70,6 +70,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   const [groupBy, setGroupBy] = useState<GroupBy>("none")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [filters, setFilters] = useState({
     departments: [] as string[],
     teams: [] as string[],
@@ -204,30 +206,26 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   }, [])
 
   const handleDeleteUser = useCallback(async (userId: string) => {
-    if (!confirm("Вы уверены, что хотите удалить этого пользователя?")) {
-      return
-  }
-
-      setIsDeleting(userId)
-      try {
-        await deleteUser(userId)
-        toast({
+    setIsDeleting(userId)
+    try {
+      await deleteUser(userId)
+      toast({
         title: "Успех",
-          description: "Пользователь успешно удален",
-        })
+        description: "Пользователь успешно удален",
+      })
       if (onUserUpdated) {
         onUserUpdated()
       }
-      } catch (error) {
+    } catch (error) {
       console.error("Ошибка удаления пользователя:", error)
-        toast({
-          title: "Ошибка",
-          description: "Не удалось удалить пользователя",
-          variant: "destructive",
-        })
-      } finally {
-        setIsDeleting(null)
-      }
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось удалить пользователя",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(null)
+    }
   }, [onUserUpdated])
 
   const handleDialogClose = useCallback(() => {
@@ -267,6 +265,11 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     setShowAll(!showAll)
     setCurrentPage(1) // Сбрасываем на первую страницу
   }, [showAll])
+
+  const openDeleteDialog = useCallback((user: User) => {
+    setUserToDelete(user)
+    setDeleteDialogOpen(true)
+  }, [])
 
   // Сброс на первую страницу при изменении фильтров
   useEffect(() => {
@@ -840,7 +843,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           className="text-red-600 dark:text-red-400"
-                                          onClick={() => handleDeleteUser(user.id)}
+                                          onClick={() => openDeleteDialog(user)}
                                           disabled={isDeleting === user.id}
                                         >
                                           <Trash className="mr-2 h-4 w-4" />
@@ -952,7 +955,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
                                                   className="text-red-600 dark:text-red-400"
-                                                  onClick={() => handleDeleteUser(user.id)}
+                                                  onClick={() => openDeleteDialog(user)}
                                                   disabled={isDeleting === user.id}
                                                 >
                                                   <Trash className="mr-2 h-4 w-4" />
@@ -982,6 +985,19 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
         onOpenChange={handleDialogClose}
         user={selectedUser}
         onUserUpdated={handleUserUpdated}
+      />
+
+      {/* Диалог подтверждения удаления */}
+      <DeleteUserConfirm
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        user={userToDelete}
+        onConfirm={async () => {
+          if (userToDelete) {
+            await handleDeleteUser(userToDelete.id)
+            setDeleteDialogOpen(false)
+          }
+        }}
       />
     </Card>
     </TooltipProvider>

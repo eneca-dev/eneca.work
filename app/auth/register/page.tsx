@@ -2,9 +2,10 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
+import { PasswordRequirementCheckbox } from "@/components/password-requirement-checkbox"
 import { useRouter } from "next/navigation"
 // import { createClient } from "@/utils/supabase/client"
 import * as Sentry from "@sentry/nextjs"
@@ -12,12 +13,35 @@ import * as Sentry from "@sentry/nextjs"
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [name, setName] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const router = useRouter()
   // const supabase = createClient()
+
+  // Вычисляем состояние требований к паролю
+  const passwordRequirements = useMemo(() => {
+    if (!password) return null
+    
+    return {
+      minLength: password.length >= 8,
+      hasDigit: /\d/.test(password),
+      hasSpecial: /[^a-zA-Z0-9]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasUppercase: /[A-Z]/.test(password),
+    }
+  }, [password])
+
+  // Проверяем, выполнены ли все требования
+  const allRequirementsMet = useMemo(() => {
+    if (!passwordRequirements) return false
+    return Object.values(passwordRequirements).every(Boolean)
+  }, [passwordRequirements])
+
+  // Показываем окошко требований только если пароль введен и не все требования выполнены
+  const showRequirements = password && !allRequirementsMet
 
   // Функция для получения понятного сообщения об ошибке
   const getErrorMessage = (error: any): string => {
@@ -35,11 +59,11 @@ export default function RegisterPage() {
     }
     
     if (message.includes('password should be at least')) {
-      return "Пароль должен содержать минимум 6 символов."
+      return "Пароль должен содержать минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
     }
     
     if (message.includes('weak password')) {
-      return "Пароль слишком простой. Используйте комбинацию букв, цифр и специальных символов."
+      return "Пароль слишком простой. Убедитесь, что он содержит минимум 8 символов, включая цифры, специальные символы, строчные и заглавные буквы."
     }
     
     if (message.includes('signup is disabled')) {
@@ -58,14 +82,49 @@ export default function RegisterPage() {
     return error.message
   }
 
+  const validatePassword = (password: string): string[] => {
+    const errors = []
+    
+    if (password.length < 8) {
+      errors.push("Минимум 8 символов")
+    }
+    
+    if (!/\d/.test(password)) {
+      errors.push("Минимум одна цифра")
+    }
+    
+    if (!/[^a-zA-Z0-9]/.test(password)) {
+      errors.push("Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'")
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      errors.push("Минимум одна строчная буква")
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Минимум одна заглавная буква")
+    }
+    
+    return errors
+  }
+
   const validateForm = (): string | null => {
     // Проверка имени
-    if (!name.trim()) {
+    if (!firstName.trim()) {
       return "Введите ваше имя"
     }
     
-    if (name.trim().length < 2) {
+    if (firstName.trim().length < 2) {
       return "Имя должно содержать минимум 2 символа"
+    }
+    
+    // Проверка фамилии
+    if (!lastName.trim()) {
+      return "Введите вашу фамилию"
+    }
+    
+    if (lastName.trim().length < 2) {
+      return "Фамилия должна содержать минимум 2 символа"
     }
     
     // Проверка email
@@ -75,8 +134,9 @@ export default function RegisterPage() {
     }
     
     // Проверка пароля
-    if (password.length < 6) {
-      return "Пароль должен содержать минимум 6 символов"
+    const passwordErrors = validatePassword(password)
+    if (passwordErrors.length > 0) {
+      return `Пароль не соответствует требованиям: ${passwordErrors.join(", ")}`
     }
     
     return null
@@ -126,9 +186,11 @@ export default function RegisterPage() {
       async (span) => {
         try {
           const trimmedEmail = email.trim()
-          const trimmedName = name.trim()
+          const trimmedFirstName = firstName.trim()
+          const trimmedLastName = lastName.trim()
           span.setAttribute("auth.email", trimmedEmail)
-          span.setAttribute("auth.name", trimmedName)
+          span.setAttribute("auth.first_name", trimmedFirstName)
+          span.setAttribute("auth.last_name", trimmedLastName)
           span.setAttribute("auth.method", "email_password")
 
           // Сначала проверяем существование email
@@ -151,7 +213,8 @@ export default function RegisterPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: trimmedName,
+              firstName: trimmedFirstName,
+              lastName: trimmedLastName,
               email: trimmedEmail,
               password,
             }),
@@ -168,7 +231,7 @@ export default function RegisterPage() {
                 action: 'register',
                 error_type: 'registration_failed'
               },
-              user: { email: trimmedEmail, name: trimmedName },
+              user: { email: trimmedEmail, first_name: trimmedFirstName, last_name: trimmedLastName },
               extra: { 
                 status: response.status,
                 timestamp: new Date().toISOString()
@@ -190,7 +253,7 @@ export default function RegisterPage() {
             message: 'User registration successful',
             category: 'auth',
             level: 'info',
-            data: { email: trimmedEmail, name: trimmedName }
+            data: { email: trimmedEmail, first_name: trimmedFirstName, last_name: trimmedLastName }
           })
 
           if (result?.emailSent) {
@@ -212,7 +275,7 @@ export default function RegisterPage() {
               action: 'register',
               error_type: 'unexpected_error'
             },
-            user: { email, name },
+            user: { email, first_name: firstName, last_name: lastName },
             extra: { 
               component: 'RegisterPage',
               timestamp: new Date().toISOString()
@@ -244,13 +307,30 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInput
           label="Имя"
-          id="name"
+          id="firstName"
           type="text"
-          placeholder="Иван Иванов"
+          placeholder="Иван"
           required
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          autoComplete="given-name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          validateOnChange={true}
+          validationRules={{
+            required: true,
+            minLength: 2,
+            maxLength: 50
+          }}
+        />
+
+        <AuthInput
+          label="Фамилия"
+          id="lastName"
+          type="text"
+          placeholder="Иванов"
+          required
+          autoComplete="family-name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
           validateOnChange={true}
           validationRules={{
             required: true,
@@ -285,17 +365,49 @@ export default function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           validateOnChange={true}
-          // validationRules={{
-          //   required: true,
-          //   minLength: 6,
-          //   custom: (value: string) => {
-          //     if (value.length >= 8 && !/(?=.*[a-zA-Z])(?=.*\d)/.test(value)) {
-          //       return "Рекомендуется использовать буквы и цифры для большей безопасности"
-          //     }
-          //     return null
-          //   }
-          // }}
+          validationRules={{
+            required: true,
+            custom: (value: string) => {
+              // Убираем красный текст ошибки валидации для поля пароля
+              // Вместо этого покажем требования в отдельном блоке
+              return null
+            }
+          }}
         />
+
+        {/* Индикатор требований к паролю с анимацией */}
+        <div className={`
+          transition-all duration-300 ease-in-out overflow-hidden
+          ${showRequirements 
+            ? 'max-h-48 opacity-100 transform translate-y-0' 
+            : 'max-h-0 opacity-0 transform -translate-y-2'
+          }
+        `}>
+          <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-md dark:bg-gray-800/30 dark:border-gray-700">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Требования к паролю:</p>
+            <div className="space-y-2">
+              {passwordRequirements && (
+                <>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.minLength}>
+                    Минимум 8 символов
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasDigit}>
+                    Минимум одна цифра
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasSpecial}>
+                    Минимум один специальный символ (_/\!@#$%^&*(),.?:{}|'\")
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasLowercase}>
+                    Минимум одна строчная буква
+                  </PasswordRequirementCheckbox>
+                  <PasswordRequirementCheckbox isValid={passwordRequirements.hasUppercase}>
+                    Минимум одна заглавная буква
+                  </PasswordRequirementCheckbox>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
         <AuthInput
           label="Подтверждение пароля"

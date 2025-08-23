@@ -76,7 +76,8 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
               userData.work_format === "В офисе" ? "office" : 
               userData.work_format === "Удаленно" ? "remote" : 
               "office",
-            address: userData.address || "",
+            country: userData.country_name || "",
+            city: userData.city_name || "",
             employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) * 100 : 100,
             salary: userData.salary || 0,
             isHourly: userData.is_hourly || false
@@ -118,7 +119,8 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
           userState.profile?.workFormat === "В офисе" ? "office" : 
           userState.profile?.workFormat === "Удаленно" ? "remote" : 
           "office",
-        address: userState.profile?.address || "",
+        country: userState.profile?.country || "",
+        city: userState.profile?.city || "",
         employmentRate: userState.profile?.employmentRate || 100,
         salary: userState.profile?.salary || 0,
         isHourly: userState.profile?.isHourly || false
@@ -242,7 +244,15 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{currentUser.address || "Адрес не указан"}</p>
+                        <p>
+                          {currentUser.country && currentUser.city 
+                            ? `${currentUser.city}, ${currentUser.country}`
+                            : currentUser.country 
+                              ? currentUser.country
+                              : currentUser.city 
+                                ? currentUser.city 
+                                : "Местоположение не указано"}
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   )}

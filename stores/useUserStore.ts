@@ -16,7 +16,8 @@ export interface UserProfile {
   salary?: number | null
   isHourly?: boolean | null
   employmentRate?: number | null
-  address?: string | null
+  country?: string | null
+  city?: string | null
   roleId?: string | null
   avatar_url?: string | null
   
@@ -95,9 +96,10 @@ export const useUserStore = create<UserState>()(
               categoryId: user.profile.categoryId || user.profile.category_id,
               workFormat: user.profile.workFormat || user.profile.work_format,
               salary: user.profile.salary,
-              isHourly: user.profile.isHourly || user.profile.is_hourly,
-              employmentRate: user.profile.employmentRate || user.profile.employment_rate,
-              address: user.profile.address,
+              isHourly: user.profile.isHourly ?? user.profile.is_hourly,
+              employmentRate: user.profile.employmentRate ?? user.profile.employment_rate,
+              country: user.profile.country,
+              city: user.profile.city,
               roleId: user.profile.roleId || user.profile.role_id,
               avatar_url: user.profile.avatar_url
             };

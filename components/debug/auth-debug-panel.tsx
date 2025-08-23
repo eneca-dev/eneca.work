@@ -93,7 +93,8 @@ export function AuthDebugPanel() {
                 salary: profileData.salary !== undefined && profileData.salary !== null ? Number(profileData.salary) : null,
                 isHourly: profileData.is_hourly !== undefined && profileData.is_hourly !== null ? Boolean(profileData.is_hourly) : null,
                 employmentRate: profileData.employment_rate !== undefined && profileData.employment_rate !== null ? Number(profileData.employment_rate) : null,
-                address: profileData.address ?? null,
+                city: profileData.city ?? null,
+                country: profileData.country ?? null,
                 roleId: profileData.role_id ?? null
               } : null;
               
