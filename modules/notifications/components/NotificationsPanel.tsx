@@ -1,27 +1,55 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { NotificationItem } from "./NotificationItem"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { X, Search, Loader2, RefreshCw } from "lucide-react"
+import { X, Search, Loader2, RefreshCw, Filter, ChevronDown, SlidersHorizontal, Check, Megaphone } from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { Modal } from "@/components/modals"
+import { AnnouncementForm } from "@/modules/announcements/components/AnnouncementForm"
+import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements"
+import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
+import { useAnnouncementsStore } from "@/modules/announcements/store"
+import { toast } from "@/components/ui/use-toast"
 
 interface NotificationsPanelProps {
-  onClose: () => void
+  // Переименовано для соответствия правилу сериализуемых пропсов в Next.js
+  onCloseAction: () => void
   collapsed?: boolean
 }
 
-export function NotificationsPanel({ onClose, collapsed = false }: NotificationsPanelProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [visibleNotifications, setVisibleNotifications] = useState<Set<string>>(new Set())
-  const [processedNotifications, setProcessedNotifications] = useState<Set<string>>(new Set())
+// Доступные типы уведомлений
+const NOTIFICATION_TYPES = [
+  { value: 'announcement', label: 'Объявления', color: 'bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-200' },
+  { value: 'assignments', label: 'Передача заданий', color: 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200' },
+  { value: 'section_comment', label: 'Комментарии', color: 'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200' },
+  { value: 'task', label: 'Задачи', color: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-200' },
+]
+
+export function NotificationsPanel({ onCloseAction, collapsed = false }: NotificationsPanelProps) {
+  const [localSearchQuery, setLocalSearchQuery] = useState("")
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
+  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'archived'>('all')
+  const [isTypeFilterOpen, setIsTypeFilterOpen] = useState(false)
+  const [isReadFilterOpen, setIsReadFilterOpen] = useState(false)
+  const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false)
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const markAsReadRealtimeRef = useRef<((notificationId: string) => Promise<void>) | undefined>(undefined)
+  const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
+  const allFilteredRef = useRef(0)
+  const isMountedRef = useRef(true)
 
   const { 
     notifications, 
@@ -30,216 +58,236 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
     fetchNotifications, 
     markAsRead,
     markAsReadInDB,
-    clearAll 
+    clearAll,
+    // Поля для пагинации
+    hasMore,
+    isLoadingMore,
+    loadMoreNotifications,
+    // Поля для поиска
+    searchQuery: storeSearchQuery,
+    isSearchMode,
+    searchNotifications,
+    clearSearch,
+    setSearchQuery
   } = useNotificationsStore()
 
-  // Функция для пометки уведомления как прочитанного в реальном времени
-  const markNotificationAsReadRealtime = useCallback(async (notificationId: string) => {
-    return Sentry.startSpan(
-      {
-        op: "notifications.mark_as_read_realtime",
-        name: "Mark Notification As Read Realtime",
-      },
-      async (span) => {
-        try {
-          const notification = notifications.find(n => n.id === notificationId)
-          
-          span.setAttribute("notification.id", notificationId)
-          span.setAttribute("notification.found", !!notification)
-          span.setAttribute("notification.is_read", notification?.isRead || false)
-          
-          if (notification && !notification.isRead) {
-            console.log('📖 Помечаем уведомление как прочитанное в реальном времени:', notificationId)
-            
-            // Сначала обновляем локальное состояние (счетчик уменьшится автоматически)
-            markAsRead(notificationId)
-            
-            // Затем обновляем в базе данных
-            try {
-              await markAsReadInDB(notificationId)
-              span.setAttribute("mark.success", true)
-              
-              Sentry.addBreadcrumb({
-                message: 'Notification marked as read in realtime',
-                category: 'notifications',
-                level: 'info',
-                data: {
-                  notification_id: notificationId,
-                  entity_type: notification.entityType
-                }
-              })
-            } catch (error) {
-              span.setAttribute("mark.success", false)
-              span.recordException(error as Error)
-              Sentry.captureException(error, {
-                tags: {
-                  module: 'notifications',
-                  component: 'NotificationsPanel',
-                  action: 'mark_as_read_realtime',
-                  error_type: 'db_error'
-                },
-                extra: {
-                  notification_id: notificationId,
-                  notification_entity_type: notification.entityType,
-                  timestamp: new Date().toISOString()
-                }
-              })
-              console.error(`❌ Ошибка при пометке уведомления ${notificationId} как прочитанного в БД:`, error)
-            }
-          } else {
-            span.setAttribute("mark.skipped", true)
-            span.setAttribute("mark.skip_reason", notification ? "already_read" : "not_found")
-          }
-        } catch (error) {
-          span.setAttribute("mark.success", false)
-          span.recordException(error as Error)
-          Sentry.captureException(error, {
-            tags: {
-              module: 'notifications',
-              component: 'NotificationsPanel',
-              action: 'mark_as_read_realtime',
-              error_type: 'unexpected_error'
-            },
-            extra: {
-              notification_id: notificationId,
-              timestamp: new Date().toISOString()
-            }
-          })
-          console.error('Ошибка в markNotificationAsReadRealtime:', error)
+  // Локальные состояния для клиентской пагинации при активных фильтрах
+  const [isPreloadingAll, setIsPreloadingAll] = useState(false)
+  const [visibleFilteredCount, setVisibleFilteredCount] = useState(10)
+  const isClientFilterMode = useMemo(
+    () => !isSearchMode && (selectedTypes.size > 0 || readFilter !== 'all'),
+    [isSearchMode, selectedTypes, readFilter]
+  )
+
+  // Хуки для работы с объявлениями
+  const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
+  const { canCreate: canCreateAnnouncements } = useAnnouncementsPermissions()
+  const { announcements } = useAnnouncementsStore()
+
+  // Debounced поиск
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      if (localSearchQuery !== storeSearchQuery) {
+        if (localSearchQuery.trim()) {
+          searchNotifications(localSearchQuery)
+        } else {
+          clearSearch()
         }
       }
-    )
-  }, [notifications, markAsRead, markAsReadInDB])
-
-  // Обновляем ref при изменении функции
-  markAsReadRealtimeRef.current = markNotificationAsReadRealtime
+    }, 500)
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [localSearchQuery, storeSearchQuery, searchNotifications, clearSearch])
 
   // Функция для закрытия панели
   const handleClose = useCallback(() => {
     console.log('🔒 Закрываем панель уведомлений')
     
-    // Очищаем состояние
-    setVisibleNotifications(new Set())
-    setProcessedNotifications(new Set())
-    onClose()
-  }, [onClose])
+    // Очищаем состояние фильтров
+    setSelectedTypes(new Set())
+    setReadFilter('all')
+    onCloseAction()
+  }, [onCloseAction])
 
-  // Intersection Observer для отслеживания видимых уведомлений
-  useEffect(() => {
+  // Фоновая предзагрузка всех уведомлений для корректной фильтрации по всей выборке
+  const ensureAllNotificationsLoaded = useCallback(async () => {
+    if (isSearchMode) return
+    if (isPreloadingAll) return
+    
     try {
-      if (!scrollRef.current) return
-
-      console.log('👀 Инициализируем Intersection Observer для', notifications.length, 'уведомлений')
-
-      Sentry.addBreadcrumb({
-        message: 'Initializing Intersection Observer',
-        category: 'notifications',
-        level: 'info',
-        data: {
-          notifications_count: notifications.length,
-          processed_count: processedNotifications.size
-        }
-      })
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          try {
-            entries.forEach((entry) => {
-              const notificationId = entry.target.getAttribute('data-notification-id')
-              if (notificationId && entry.isIntersecting) {
-                console.log(`👁️ Уведомление ${notificationId} стало видимым`)
-                
-                // Добавляем в видимые
-                setVisibleNotifications(prev => new Set(prev).add(notificationId))
-                
-                // Помечаем как прочитанное, если еще не обработано
-                if (!processedNotifications.has(notificationId)) {
-                  const notification = notifications.find(n => n.id === notificationId)
-                  if (notification && !notification.isRead) {
-                    if (markAsReadRealtimeRef.current) {
-                      markAsReadRealtimeRef.current(notificationId)
-                    }
-                    setProcessedNotifications(prev => new Set(prev).add(notificationId))
-                  }
-                }
-              }
-            })
-          } catch (error) {
-            Sentry.captureException(error, {
-              tags: {
-                module: 'notifications',
-                component: 'NotificationsPanel',
-                action: 'intersection_observer_callback',
-                error_type: 'unexpected_error'
-              },
-              extra: {
-                entries_count: entries.length,
-                timestamp: new Date().toISOString()
-              }
-            })
-            console.error('Ошибка в Intersection Observer callback:', error)
-          }
-        },
-        {
-          root: scrollRef.current,
-          threshold: 0.5 // Считаем видимым, когда 50% элемента видно
-        }
-      )
-
-      // Наблюдаем за всеми элементами уведомлений
-      const notificationElements = scrollRef.current.querySelectorAll('[data-notification-id]')
-      console.log('🔍 Найдено элементов уведомлений для отслеживания:', notificationElements.length)
+      setIsPreloadingAll(true)
       
-      Sentry.addBreadcrumb({
-        message: 'Starting observation of notification elements',
-        category: 'notifications',
-        level: 'info',
-        data: {
-          elements_count: notificationElements.length
-        }
-      })
-      
-      notificationElements.forEach(element => observer.observe(element))
-
-      return () => {
-        try {
-          observer.disconnect()
-        } catch (error) {
-          Sentry.captureException(error, {
-            tags: {
-              module: 'notifications',
-              component: 'NotificationsPanel',
-              action: 'intersection_observer_cleanup',
-              error_type: 'unexpected_error'
-            },
-            extra: {
-              timestamp: new Date().toISOString()
-            }
-          })
-          console.error('Ошибка при отключении Intersection Observer:', error)
+      // Рекурсивная функция для загрузки всех страниц
+      const loadAllPages = async (): Promise<void> => {
+        // Проверяем, что компонент еще смонтирован
+        if (!isMountedRef.current) return
+        
+        const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
+        
+        if (!more) return
+        
+        if (!loadingMore) {
+          await loadMore()
+          // Рекурсивно вызываем себя для загрузки следующей страницы
+          return loadAllPages()
+        } else {
+          // Ждем небольшую задержку и пробуем снова
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          return loadAllPages()
         }
       }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: 'notifications',
-          component: 'NotificationsPanel',
-          action: 'intersection_observer_init',
-          error_type: 'unexpected_error'
-        },
-        extra: {
-          notifications_count: notifications.length,
-          processed_count: processedNotifications.size,
-          timestamp: new Date().toISOString()
-        }
-      })
-      console.error('Ошибка при инициализации Intersection Observer:', error)
+      
+      await loadAllPages()
+    } catch (e) {
+      console.error('Ошибка предзагрузки всех уведомлений:', e)
+    } finally {
+      if (isMountedRef.current) {
+        setIsPreloadingAll(false)
+      }
     }
-  }, [notifications, processedNotifications])
+  }, [isSearchMode, isPreloadingAll])
+
+  // При открытии поповера типов — предзагружаем все уведомления для корректных счетчиков
+  useEffect(() => {
+    if (isTypeFilterOpen && !isSearchMode) {
+      ensureAllNotificationsLoaded()
+    }
+  }, [isTypeFilterOpen, isSearchMode, ensureAllNotificationsLoaded])
+
+  // Обработка изменения фильтра по типам
+  const handleTypeFilterChange = useCallback((type: string, checked: boolean) => {
+    setSelectedTypes(prev => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(type)
+      } else {
+        newSet.delete(type)
+      }
+      return newSet
+    })
+    setVisibleFilteredCount(10)
+    ensureAllNotificationsLoaded()
+  }, [ensureAllNotificationsLoaded])
+
+  // Сброс всех фильтров
+  const handleClearFilters = useCallback(() => {
+    setLocalSearchQuery("")
+    setSelectedTypes(new Set())
+    setReadFilter('all')
+    clearSearch() // Очищаем серверный поиск
+    setVisibleFilteredCount(10)
+  }, [clearSearch])
+
+  // Обработчики для модального окна создания объявлений
+  const handleCreateAnnouncement = useCallback(() => {
+    setEditingAnnouncement(null)
+    setIsAnnouncementFormOpen(true)
+  }, [])
+
+  const handleEditAnnouncement = useCallback(async (announcementId: string) => {
+    try {
+      // Сначала ищем в локальном store
+      let announcement = announcements.find((a: any) => a.id === announcementId)
+      
+      // Если не найдено, загружаем свежие данные
+      if (!announcement) {
+        await fetchAnnouncementsData()
+        // После загрузки ищем в обновленном store
+        const updatedAnnouncements = useAnnouncementsStore.getState().announcements
+        announcement = updatedAnnouncements.find((a: any) => a.id === announcementId)
+      }
+      
+      if (announcement) {
+        setEditingAnnouncement(announcement)
+        setIsAnnouncementFormOpen(true)
+      } else {
+        console.error('Объявление не найдено:', announcementId)
+        toast({
+          title: "Ошибка",
+          description: "Не удалось найти объявление для редактирования",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error('Ошибка при загрузке объявления:', error)
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при загрузке объявления",
+        variant: "destructive"
+      })
+    }
+  }, [announcements, fetchAnnouncementsData])
+
+  const handleCloseAnnouncementForm = useCallback(() => {
+    setIsAnnouncementFormOpen(false)
+    setEditingAnnouncement(null)
+  }, [])
+
+  // Обработка прокрутки для бесконечной загрузки (отключаем в режиме поиска)
+  useEffect(() => {
+    const scrollElement = scrollRef.current
+    if (!scrollElement) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollElement
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200
+
+      // В режиме поиска не скроллим вручную
+      if (isSearchMode) return
+
+      if (isClientFilterMode) {
+        if (isNearBottom) {
+          const totalFiltered = allFilteredRef.current
+          if (visibleFilteredCount < totalFiltered) {
+            setVisibleFilteredCount((prev) => Math.min(prev + 10, totalFiltered))
+          }
+        }
+        return
+      }
+
+      if (isNearBottom && hasMore && !isLoadingMore && !isLoading) {
+        console.log('📜 Достигнут конец списка, загружаем дополнительные уведомления')
+        loadMoreNotifications()
+      }
+    }
+
+    scrollElement.addEventListener('scroll', handleScroll, { passive: true })
+    return () => scrollElement.removeEventListener('scroll', handleScroll)
+  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isSearchMode, isClientFilterMode, visibleFilteredCount])
+
+  // Авто-прочтение отключено: больше не помечаем как прочитанные при появлении в зоне видимости
 
   // Закрытие панели при клике вне её
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      // Не закрываем панель, если открыто модальное окно создания объявлений
+      if (isAnnouncementFormOpen) {
+        return
+      }
+      
+      const target = event.target as HTMLElement | null
+      // Игнорируем клики по колокольчику, чтобы не было двойного toggle
+      if (target && target.closest('[data-notifications-bell]')) {
+        return
+      }
+      // Игнорируем клики по элементам фильтра (Popover)
+      if (target && target.closest('[data-radix-popper-content-wrapper]')) {
+        return
+      }
+      // Игнорируем клики в модальном окне создания объявлений
+      if (target && target.closest('[role="dialog"]')) {
+        return
+      }
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         console.log('🖱️ Клик вне панели - закрываем')
         handleClose()
@@ -248,12 +296,16 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
 
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [handleClose])
+  }, [handleClose, isAnnouncementFormOpen])
 
   // Обработка нажатия Escape
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
+        // Если открыто модальное окно, не закрываем панель (модальное окно само обработает Escape)
+        if (isAnnouncementFormOpen) {
+          return
+        }
         console.log('⌨️ Нажата Escape - закрываем панель')
         handleClose()
       }
@@ -261,16 +313,83 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
 
     document.addEventListener("keydown", handleEscape)
     return () => document.removeEventListener("keydown", handleEscape)
-  }, [handleClose])
+  }, [handleClose, isAnnouncementFormOpen])
 
-  // Фильтрация уведомлений по поисковому запросу
-  const filteredNotifications = notifications
-    .filter(
-      (notification) =>
-        notification.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        notification.message.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  // Отслеживание состояния монтирования компонента
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  // Фильтрация уведомлений
+  const filteredNotifications = useMemo(() => {
+    // В режиме поиска показываем результаты как есть (поиск уже выполнен на сервере)
+    if (isSearchMode) {
+      return notifications.filter((notification) => {
+        // Применяем только клиентские фильтры (типы и статус)
+        const matchesType = selectedTypes.size === 0 || 
+          (notification.entityType && selectedTypes.has(notification.entityType))
+        
+        let matchesRead = true
+        if (readFilter === 'unread') {
+          matchesRead = !notification.isRead && !Boolean((notification as any).isArchived)
+        } else if (readFilter === 'archived') {
+          matchesRead = Boolean((notification as any).isArchived)
+        } else {
+          matchesRead = !Boolean((notification as any).isArchived)
+        }
+        
+        return matchesType && matchesRead
+      })
+    }
+
+    // В обычном режиме применяем все фильтры
+    const allFiltered = notifications.filter((notification) => {
+      // Фильтр по поисковому запросу (только если не в режиме серверного поиска)
+      const matchesSearch = 
+        localSearchQuery === '' ||
+        notification.title.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
+        notification.message.toLowerCase().includes(localSearchQuery.toLowerCase())
+      
+      // Фильтр по типам (если выбраны типы)
+      const matchesType = selectedTypes.size === 0 || 
+        (notification.entityType && selectedTypes.has(notification.entityType))
+      
+      // Фильтр по статусу прочтения/архиву
+      let matchesRead = true
+      if (readFilter === 'unread') {
+        // Показываем только непрочитанные и незаархивированные
+        matchesRead = !notification.isRead && !Boolean((notification as any).isArchived)
+      } else if (readFilter === 'archived') {
+        matchesRead = Boolean((notification as any).isArchived)
+      } else {
+        // В "Все" скрываем заархивированные
+        matchesRead = !Boolean((notification as any).isArchived)
+      }
+      
+      return matchesSearch && matchesType && matchesRead
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    // Обновляем общее количество отфильтрованных
+    allFilteredRef.current = allFiltered.length
+
+    // В режиме клиентских фильтров отдаем только видимую часть
+    if (isClientFilterMode) {
+      return allFiltered.slice(0, visibleFilteredCount)
+    }
+
+    return allFiltered
+  }, [notifications, localSearchQuery, selectedTypes, readFilter, isSearchMode, isClientFilterMode, visibleFilteredCount])
+
+  // При входе в режим клиентских фильтров загружаем все уведомления и сбрасываем лимит
+  useEffect(() => {
+    if (isClientFilterMode) {
+      setVisibleFilteredCount(10)
+      ensureAllNotificationsLoaded()
+    }
+  }, [isClientFilterMode, ensureAllNotificationsLoaded])
 
   // Обновление уведомлений
   const handleRefresh = async () => {
@@ -319,95 +438,328 @@ export function NotificationsPanel({ onClose, collapsed = false }: Notifications
     )
   }
 
+  // Проверяем, есть ли активные фильтры
+  const hasActiveFilters = localSearchQuery || selectedTypes.size > 0 || readFilter !== 'all' || isSearchMode
+
   return (
     <div
       ref={panelRef}
       className={cn(
-        "absolute top-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50",
-        collapsed ? "left-0 w-80" : "left-0 w-96",
+        // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
+        "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
       )}
+      style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
     >
-      {/* Заголовок */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Уведомления
-        </h3>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="h-6 w-6"
-          >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Поиск */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Поиск уведомлений..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Действия */}
-      {notifications.length > 0 && (
-        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Всего: {filteredNotifications.length}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Список уведомлений */}
-      <div ref={scrollRef} className="h-80 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-            <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center text-red-500 dark:text-red-400">
-            <p className="text-sm">Ошибка загрузки уведомлений</p>
-            <p className="text-xs mt-1 text-gray-500">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
+      {/* Контент панели: header + scrollable list, full height */}
+      <div className="flex h-full flex-col">
+        {/* Заголовок */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Уведомления
+          </h3>
+          <div className="flex items-center gap-2">
+            {/* Кнопка создания объявлений */}
+            {canCreateAnnouncements && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleCreateAnnouncement}
+                className="h-6 w-6"
+                title="Создать объявление"
+              >
+                <Megaphone className="h-4 w-4" />
+              </Button>
+            )}
+            <Button 
+              variant="ghost" 
+              size="icon" 
               onClick={handleRefresh}
-              className="mt-3"
+              disabled={isLoading}
+              className="h-6 w-6"
             >
-              Попробовать снова
+              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
+              <X className="h-4 w-4" />
             </Button>
           </div>
-        ) : filteredNotifications.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            {searchQuery ? "Уведомления не найдены" : "Нет уведомлений"}
-          </div>
-        ) : (
-          <div className="p-2 space-y-2">
-            {filteredNotifications.map((notification) => (
-              <NotificationItem 
-                key={notification.id} 
-                notification={notification} 
-                isVisible={visibleNotifications.has(notification.id)}
+        </div>
+
+        {/* Поиск и фильтры */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            {/* Поиск */}
+            <div className="relative flex-1">
+              <Search className={cn(
+                "absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4",
+                isSearchMode ? "text-blue-500" : "text-gray-400"
+              )} />
+              <Input
+                placeholder={isSearchMode ? "Поиск по всем уведомлениям..." : "Поиск уведомлений..."}
+                value={localSearchQuery}
+                onChange={(e) => setLocalSearchQuery(e.target.value)}
+                className={cn(
+                  "pl-10",
+                  isSearchMode && "border-blue-300 ring-1 ring-blue-200"
+                )}
               />
-            ))}
+              {isSearchMode && (
+                <button
+                  onClick={() => {
+                    setLocalSearchQuery("")
+                    clearSearch()
+                  }}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Очистить поиск"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            
+            {/* Фильтр по статусу (иконка-меню) */}
+            <Popover open={isReadFilterOpen} onOpenChange={setIsReadFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "relative h-10 w-10",
+                    readFilter !== 'all' && "text-blue-600 border-blue-300 dark:text-blue-400"
+                  )}
+                  aria-label="Фильтр уведомлений"
+                  title="Фильтр уведомлений"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-1" align="end">
+                <div className="flex flex-col">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'all' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('all'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'all' && <Check className="h-4 w-4" />} Все
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'unread' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('unread'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'unread' && <Check className="h-4 w-4" />} Непрочитанное
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("justify-start gap-2", readFilter === 'archived' && "bg-gray-100 dark:bg-gray-800")}
+                    onClick={() => { setReadFilter('archived'); setIsReadFilterOpen(false) }}
+                  >
+                    {readFilter === 'archived' && <Check className="h-4 w-4" />} Архив
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Фильтр по типам */}
+            <Popover open={isTypeFilterOpen} onOpenChange={setIsTypeFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative h-10 w-10"
+                >
+                  <Filter className="h-4 w-4" />
+                  {/* Счетчик выбранных типов */}
+                  {selectedTypes.size > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs flex items-center justify-center bg-blue-600 text-white"
+                    >
+                      {selectedTypes.size}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="end">
+                <div className="p-3">
+                  {/* Заголовок с кнопкой сброса */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Типы уведомлений
+                    </span>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearFilters}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Сбросить
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Список типов */}
+                  <div className="space-y-2">
+                    {NOTIFICATION_TYPES.map((type) => (
+                      <div key={type.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={type.value}
+                          checked={selectedTypes.has(type.value)}
+                          onCheckedChange={(checked) => 
+                            handleTypeFilterChange(type.value, checked as boolean)
+                          }
+                        />
+                        <label
+                          htmlFor={type.value}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                        >
+                          {type.label}
+                        </label>
+                        <Badge 
+                          variant="secondary" 
+                          className={cn("text-xs", type.color)}
+                        >
+                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
+                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
+                          {notifications.filter(n => n.entityType === type.value).length}                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Информация о поиске */}
+        {isSearchMode && (
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-blue-700 dark:text-blue-300">
+                Поиск: "{storeSearchQuery}" • Найдено: {filteredNotifications.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setLocalSearchQuery("")
+                  clearSearch()
+                }}
+                className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+              >
+                Очистить
+              </Button>
+            </div>
           </div>
         )}
+
+        {/* Список уведомлений */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center text-red-500 dark:text-red-400">
+              <p className="text-sm">Ошибка загрузки уведомлений</p>
+              <p className="text-xs mt-1 text-gray-500">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                className="mt-3"
+              >
+                Попробовать снова
+              </Button>
+            </div>
+          ) : filteredNotifications.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+              <p className="mb-4">
+                {isSearchMode 
+                  ? `Уведомления по запросу "${storeSearchQuery}" не найдены`
+                  : hasActiveFilters 
+                    ? "Уведомления по заданным фильтрам не найдены" 
+                    : "Нет уведомлений"
+                }
+              </p>
+              {(hasActiveFilters || isSearchMode) && (
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={isSearchMode ? () => {
+                      setLocalSearchQuery("")
+                      clearSearch()
+                    } : handleClearFilters}
+                    className="px-4"
+                  >
+                    {isSearchMode ? "Очистить поиск" : "Сбросить фильтры"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-2 space-y-2">
+              {filteredNotifications.map((notification) => (
+                <NotificationItem 
+                  key={notification.id} 
+                  notification={notification}
+                  onEditAnnouncement={handleEditAnnouncement}
+                />
+              ))}
+              
+              {/* Индикатор загрузки дополнительных уведомлений (только не в режиме поиска) */}
+              {!isSearchMode && isLoadingMore && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                  <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+                </div>
+              )}
+              
+              {/* Сообщение о том, что все уведомления загружены (только не в режиме поиска) */}
+              {!isSearchMode && !hasMore && filteredNotifications.length > 0 && (
+                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  Все уведомления загружены
+                </div>
+              )}
+              
+              {/* Информация в режиме поиска */}
+              {isSearchMode && filteredNotifications.length > 0 && (
+                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  Показаны все найденные уведомления
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Модальное окно создания/редактирования объявлений */}
+      <Modal 
+        isOpen={isAnnouncementFormOpen} 
+        onClose={handleCloseAnnouncementForm} 
+        size="lg"
+        closeOnOverlayClick={true}
+      >
+        <Modal.Header 
+          title={editingAnnouncement ? "Редактировать объявление" : "Создать объявление"} 
+          onClose={handleCloseAnnouncementForm} 
+        />
+        <Modal.Body>
+          <div onClick={(e) => e.stopPropagation()}>
+            <AnnouncementForm 
+              onClose={handleCloseAnnouncementForm}
+              editingAnnouncement={editingAnnouncement}
+              onDelete={removeAnnouncement}
+            />
+          </div>
+        </Modal.Body>
+      </Modal>
     </div>
   )
 }
