@@ -1,22 +1,18 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { DataConstraint, UserPermissions } from '../types'
 import { checkPermission, checkAnyPermission, checkAllPermissions, getPermissionLevel } from '../utils/permissionUtils'
+import { ROLE_TEMPLATES } from '../constants/roles'
 
 interface PermissionsState {
   // Состояние
   permissions: string[]
-  constraints: DataConstraint[]
-  roles: string[]
   isLoading: boolean
   error: string | null
   lastUpdated: Date | null
-  userId: string | null // Для предотвращения race conditions
   
   // Методы
   setPermissions: (permissions: string[]) => void
-  setConstraints: (constraints: DataConstraint[]) => void
-  setRoles: (roles: string[]) => void
+  setFromRole: (roleName?: string | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
@@ -27,20 +23,13 @@ interface PermissionsState {
   hasAnyPermission: (permissions: string[]) => boolean
   hasAllPermissions: (permissions: string[]) => boolean
   getPermissionLevel: (module: string) => 'none' | 'view' | 'edit' | 'admin'
-  
-  // Загрузка данных
-  loadPermissions: (userId: string) => Promise<void>
-  refreshPermissions: () => Promise<void>
 }
 
 const initialState = {
   permissions: [],
-  constraints: [],
-  roles: [],
   isLoading: false,
   error: null,
-  lastUpdated: null,
-  userId: null
+  lastUpdated: null
 }
 
 export const usePermissionsStore = create<PermissionsState>()(
@@ -56,19 +45,15 @@ export const usePermissionsStore = create<PermissionsState>()(
           error: null 
         })
       },
-      
-      setConstraints: (constraints: DataConstraint[]) => {
-        set({ 
-          constraints, 
-          lastUpdated: new Date() 
-        })
-      },
-      
-      setRoles: (roles: string[]) => {
-        set({ 
-          roles, 
-          lastUpdated: new Date() 
-        })
+
+      setFromRole: (roleName?: string | null) => {
+        if (!roleName) {
+          set({ permissions: [], lastUpdated: new Date(), error: null })
+          return
+        }
+        const template = ROLE_TEMPLATES[roleName as keyof typeof ROLE_TEMPLATES]
+        const permissions = template ? [...template.permissions] as string[] : []
+        set({ permissions, lastUpdated: new Date(), error: null })
       },
       
       setLoading: (loading: boolean) => {
@@ -106,66 +91,6 @@ export const usePermissionsStore = create<PermissionsState>()(
       getPermissionLevel: (module: string) => {
         const { permissions } = get()
         return getPermissionLevel(permissions, module)
-      },
-      
-      // Загрузка разрешений
-      loadPermissions: async (userId: string) => {
-        const currentState = get()
-        
-        // Предотвращаем множественные запросы для одного пользователя
-        if (currentState.isLoading && currentState.userId === userId) {
-          console.log('⏸️ Разрешения уже загружаются для пользователя:', userId)
-          return
-        }
-        
-        set({ isLoading: true, error: null, userId })
-        
-        try {
-          // Загружаем разрешения из Supabase
-          const { getUserPermissions, getDataConstraints } = await import('../supabase/supabasePermissions')
-          
-          console.log('🔄 Загружаем разрешения для пользователя:', userId)
-          
-          const [permissions, constraints] = await Promise.all([
-            getUserPermissions(userId),
-            getDataConstraints(userId)
-          ])
-          
-          // Проверяем что пользователь не изменился во время загрузки
-          const finalState = get()
-          if (finalState.userId !== userId) {
-            console.log('🔄 Пользователь изменился во время загрузки, игнорируем результат')
-            return
-          }
-          
-          console.log('✅ Разрешения загружены:', { permissions, constraints })
-          
-          set({
-            permissions,
-            constraints,
-            roles: [], // TODO: Добавить загрузку ролей пользователя если нужно
-            isLoading: false,
-            lastUpdated: new Date(),
-            error: null
-          })
-        } catch (error) {
-          console.error('❌ Ошибка загрузки разрешений:', error)
-          set({
-            error: error instanceof Error ? error.message : 'Ошибка загрузки разрешений',
-            isLoading: false
-          })
-        }
-      },
-      
-      refreshPermissions: async (userId?: string) => {
-        // Получаем userId из аргумента или из текущего состояния (потребуется интеграция с useUserStore)
-        if (!userId) {
-          console.warn('⚠️ userId не предоставлен для refreshPermissions')
-          return
-        }
-        
-        console.log('🔄 Обновляем разрешения для пользователя:', userId)
-        await get().loadPermissions(userId)
       }
     }),
     {
@@ -176,8 +101,6 @@ export const usePermissionsStore = create<PermissionsState>()(
 
 // Селекторы для оптимизации ре-рендеров
 export const usePermissions = () => usePermissionsStore(state => state.permissions)
-export const useConstraints = () => usePermissionsStore(state => state.constraints)
-export const useRoles = () => usePermissionsStore(state => state.roles)
 export const usePermissionsLoading = () => usePermissionsStore(state => state.isLoading)
 export const usePermissionsError = () => usePermissionsStore(state => state.error)
 
@@ -189,4 +112,4 @@ export const useHasAnyPermission = (permissions: string[]) =>
   usePermissionsStore(state => state.hasAnyPermission(permissions))
 
 export const usePermissionLevel = (module: string) => 
-  usePermissionsStore(state => state.getPermissionLevel(module)) 
+  usePermissionsStore(state => state.getPermissionLevel(module))

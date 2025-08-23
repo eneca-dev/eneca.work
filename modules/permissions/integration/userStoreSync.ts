@@ -1,25 +1,24 @@
 import { useEffect } from 'react'
 import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '../store/usePermissionsStore'
+import { ROLE_TEMPLATES } from '../constants/roles'
 
 /**
  * Хук для синхронизации permissions модуля с useUserStore
  * Автоматически загружает разрешения при смене пользователя
  */
 export function useUserPermissionsSync() {
-  const userId = useUserStore(state => state.id)
   const isAuthenticated = useUserStore(state => state.isAuthenticated)
-  const { loadPermissions, reset } = usePermissionsStore()
+  const roleId = useUserStore(state => state.profile?.roleId)
+  const { setFromRole, reset } = usePermissionsStore()
 
   useEffect(() => {
-    if (userId && isAuthenticated) {
-      console.log('🔄 Пользователь изменился, загружаем разрешения:', userId)
-      loadPermissions(userId)
+    if (isAuthenticated) {
+      setFromRole(roleId)
     } else {
-      console.log('🗑️ Пользователь не авторизован, очищаем разрешения')
       reset()
     }
-  }, [userId, isAuthenticated, loadPermissions, reset])
+  }, [isAuthenticated, roleId, setFromRole, reset])
 
   useEffect(() => {
     // Очищаем разрешения при размонтировании компонента

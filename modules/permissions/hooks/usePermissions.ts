@@ -1,5 +1,3 @@
-import { useEffect } from 'react'
-import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '../store/usePermissionsStore'
 import type { UsePermissionsReturn } from '../types'
 
@@ -7,9 +5,6 @@ import type { UsePermissionsReturn } from '../types'
  * Основной хук для работы с разрешениями
  */
 export const usePermissions = (): UsePermissionsReturn => {
-  const userId = useUserStore(state => state.id)
-  const isAuthenticated = useUserStore(state => state.isAuthenticated)
-  
   const {
     permissions,
     isLoading,
@@ -17,8 +12,7 @@ export const usePermissions = (): UsePermissionsReturn => {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    getPermissionLevel,
-    loadPermissions
+    getPermissionLevel
   } = usePermissionsStore()
 
   // УБРАНО: Автозагрузка разрешений - теперь это делает UserPermissionsSyncProvider

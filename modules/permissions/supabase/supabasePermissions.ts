@@ -1,46 +1,23 @@
 import { createClient } from "@/utils/supabase/client"
-import type { Permission, Role, RolePermission, UserRole, DataConstraint } from '../types'
+import type { Permission, Role } from '../types'
+import { ROLE_TEMPLATES } from '../constants/roles'
 
 /**
  * Получает разрешения пользователя
  */
 export async function getUserPermissions(userId: string): Promise<string[]> {
   const supabase = createClient()
-  
   try {
-    // Получаем роль пользователя из профиля
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role_id')
       .eq('user_id', userId)
       .single()
-    
-    if (profileError || !profile?.role_id) {
-      console.error('Ошибка получения профиля:', profileError)
-      return []
-    }
-    
-    // Получаем разрешения роли
-    const { data: rolePermissions, error: permissionsError } = await supabase
-      .from('role_permissions')
-      .select(`
-        permissions(name)
-      `)
-      .eq('role_id', profile.role_id)
-    
-    if (permissionsError) {
-      console.error('Ошибка получения разрешений:', permissionsError)
-      return []
-    }
-    
-    // Извлекаем названия разрешений
-    const permissions = rolePermissions
-      ?.map((rp: any) => rp.permissions?.name)
-      .filter(Boolean) || []
-    
-    return permissions
-  } catch (error) {
-    console.error('Ошибка в getUserPermissions:', error)
+    const roleName = profile?.role_id as keyof typeof ROLE_TEMPLATES | undefined
+    if (!roleName) return []
+    const template = ROLE_TEMPLATES[roleName]
+    return template ? [...template.permissions] as string[] : []
+  } catch {
     return []
   }
 }
@@ -49,30 +26,9 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
  * Получает разрешения роли
  */
 export async function getRolePermissions(roleId: string): Promise<string[]> {
-  const supabase = createClient()
-  
-  try {
-    const { data: rolePermissions, error } = await supabase
-      .from('role_permissions')
-      .select(`
-        permissions(name)
-      `)
-      .eq('role_id', roleId)
-    
-    if (error) {
-      console.error('Ошибка получения разрешений роли:', error)
-      return []
-    }
-    
-    const permissions = rolePermissions
-      ?.map((rp: any) => rp.permissions?.name)
-      .filter(Boolean) || []
-    
-    return permissions
-  } catch (error) {
-    console.error('Ошибка в getRolePermissions:', error)
-    return []
-  }
+  const roleName = roleId as keyof typeof ROLE_TEMPLATES
+  const template = ROLE_TEMPLATES[roleName]
+  return template ? [...template.permissions] as string[] : []
 }
 
 /**
@@ -102,11 +58,7 @@ export async function updateUserRole(userId: string, roleId: string): Promise<bo
 /**
  * Получает ограничения данных для пользователя
  */
-export async function getDataConstraints(userId: string): Promise<DataConstraint[]> {
-  // TODO: Реализовать после создания таблицы data_constraints
-  // Пока возвращаем пустой массив
-  return []
-}
+// Упрощение Этап 2: constraints не используются
 
 /**
  * Получает все роли
