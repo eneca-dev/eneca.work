@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useMemo, useState, useRef, useEffect } from 'react'
+import { BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { WorkLogEntry } from '../types'
 
@@ -167,6 +168,12 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
 
   // Максимальное количество задач для масштабирования
   const maxTasks = Math.max(...chartData.map(d => d.tasksCount), 1)
+  
+  // Проверяем есть ли данные
+  const hasAnyData = workLogs.length > 0
+  
+  // Определяем компактность для адаптивности
+  const isCompact = height < 140
 
   // Ширина каждого столбика (используем динамическую ширину контейнера, учитываем px-12 отступы = 96px)
   const barWidth = Math.max(Math.floor((containerWidth - 200) / daysToShow), 8)
@@ -216,7 +223,26 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
       </div>
 
       {/* График */}
-      <div ref={containerRef} className="relative bg-white/2 rounded-lg border border-white/5 px-12 py-3 overflow-visible">
+      <div ref={containerRef} className="relative bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 px-12 py-3 overflow-visible">
+        {/* Сообщение для пустого состояния */}
+        {!hasAnyData && (
+          <div className={`absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 flex items-center text-gray-900 dark:text-white animate-in fade-in-0 duration-300 max-w-sm ${
+            isCompact ? 'gap-2 px-4 py-3' : 'gap-3 px-6 py-4'
+          }`}>
+            <BarChart3 className={`text-emerald-400 ${isCompact ? 'w-4 h-4' : 'w-6 h-6'}`} />
+            <div className="text-center">
+              <div className={`font-medium ${isCompact ? 'text-sm' : 'text-base'}`}>
+                У вас нет выполненных задач
+              </div>
+              {!isCompact && (
+                <div className="text-gray-600 dark:text-gray-300 text-sm mt-1">
+                  Чтобы отметить выполнение задачи, составьте отчет на вкладке декомпозиции
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
         <div 
           className="flex items-end justify-center gap-1"
           style={{ height: `${height}px` }}
@@ -288,10 +314,10 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
 
         {/* Tooltip с детальной информацией */}
         {hoveredBarData && hoveredBarData.tasksCount > 0 && (
-          <div className="absolute top-4 left-4 bg-gray-900/95 backdrop-blur-sm text-white p-3 rounded-lg shadow-lg border border-white/20 text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs">
+          <div className="absolute top-4 left-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm text-gray-900 dark:text-white p-3 rounded-lg shadow-lg border border-gray-200 dark:border-white/20 text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs">
             {/* Заголовок с датой и общими показателями */}
-            <div className="mb-2 pb-2 border-b border-white/20">
-              <div className="font-semibold text-white mb-1">
+            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-white/20">
+              <div className="font-semibold text-gray-900 dark:text-white mb-1">
                 {hoveredBarData.date.toLocaleDateString('ru-RU', { 
                   day: '2-digit', 
                   month: '2-digit',
@@ -313,21 +339,21 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
               {hoveredBarData.workLogs.slice(0, 5).map((log, idx) => (
                 <div 
                   key={log.work_log_id} 
-                  className="p-2 rounded border bg-white/5 border-white/10"
+                  className="p-2 rounded border bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10"
                 >
-                  <div className="text-white text-xs mb-1 line-clamp-2">
+                  <div className="text-gray-900 dark:text-white text-xs mb-1 line-clamp-2">
                     {log.work_category_name || 'Без категории'}
                   </div>
-                  <div className="text-gray-300 text-xs mb-1">
+                  <div className="text-gray-600 dark:text-gray-300 text-xs mb-1">
                     {log.section_name || 'Неизвестный раздел'}
                   </div>
-                  <div className="text-gray-400 text-xs">
+                  <div className="text-gray-500 dark:text-gray-400 text-xs">
                     {log.work_log_hours} {pluralize(log.work_log_hours, ['час', 'часа', 'часов'])}
                   </div>
                 </div>
               ))}
               {hoveredBarData.workLogs.length > 5 && (
-                <div className="text-gray-400 text-xs text-center">
+                <div className="text-gray-500 dark:text-gray-400 text-xs text-center">
                   ... и еще {hoveredBarData.workLogs.length - 5} {pluralizeReports(hoveredBarData.workLogs.length - 5)}
                 </div>
               )}

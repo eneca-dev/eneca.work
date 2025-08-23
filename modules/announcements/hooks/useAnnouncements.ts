@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useAnnouncementsStore } from '@/modules/announcements/store';
+import { useNotificationsStore } from '@/stores/useNotificationsStore';
 import { Announcement, AnnouncementFormData } from '@/modules/announcements/types';
 import { toast } from 'sonner';
 
@@ -144,11 +145,10 @@ export function useAnnouncements() {
         ? [userData.first_name, userData.last_name].filter(Boolean).join(' ') || 'Неизвестный пользователь'
         : 'Неизвестный пользователь';
 
-      // Получаем всех пользователей для отправки уведомлений
+      // Получаем всех пользователей для отправки уведомлений (включая автора)
       const { data: allUsers, error: usersError } = await supabase
         .from('profiles')
         .select('user_id')
-        .neq('user_id', userId); // Исключаем автора объявления
 
       if (usersError) {
         console.error('Ошибка получения списка пользователей:', usersError);
@@ -156,7 +156,7 @@ export function useAnnouncements() {
 
       const userIds = allUsers?.map(user => user.user_id) || [];
 
-             // Отправляем уведомления всем пользователям (кроме автора)
+             // Отправляем уведомления всем пользователям (включая автора)
        if (userIds.length > 0) {
          try {
            await sendNotification({
@@ -208,6 +208,16 @@ export function useAnnouncements() {
         .single();
 
       if (error) throw error;
+
+      // Если изменен заголовок, синхронизируем заголовки соответствующих уведомлений
+      if (announcementData.header && announcementData.header.trim()) {
+        try {
+          useNotificationsStore.getState().updateAnnouncementTitle(id, announcementData.header.trim());
+        } catch (e) {
+          // Безопасно игнорируем проблемы локальной синхронизации уведомлений
+          console.warn('Не удалось обновить заголовки уведомлений локально:', e);
+        }
+      }
 
       // Перезагружаем все объявления после обновления
       await fetchAnnouncements();

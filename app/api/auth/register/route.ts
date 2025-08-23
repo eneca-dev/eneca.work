@@ -5,12 +5,13 @@ import * as Sentry from '@sentry/nextjs'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const name: string = (body?.name ?? '').trim()
-    const email: string = (body?.email ?? '').trim().toLowerCase()
-    const password: string = body?.password ?? ''
+    const firstName: string = typeof body?.firstName === 'string' ? body.firstName.trim() : ''
+    const lastName: string = typeof body?.lastName === 'string' ? body.lastName.trim() : ''
+    const email: string = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const password: string = typeof body?.password === 'string' ? body.password : ''
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Имя, email и пароль обязательны' }, { status: 400 })
+    if (!firstName || !lastName || !email || !password) {
+      return NextResponse.json({ error: 'Имя, фамилия, email и пароль обязательны' }, { status: 400 })
     }
 
     // Создаем серверный Supabase клиент с anon-ключом
@@ -53,7 +54,11 @@ export async function POST(request: NextRequest) {
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: { name },
+        data: { 
+          first_name: firstName,
+          last_name: lastName,
+          name: `${firstName} ${lastName}` // Keep for backward compatibility
+        },
       },
     })
 

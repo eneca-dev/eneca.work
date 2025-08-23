@@ -12,7 +12,8 @@ export type User = {
   role?: string
   dateJoined: string
   workLocation: "office" | "remote" | "hybrid"
-  address: string
+  country?: string
+  city?: string
   employmentRate: number
   salary: number
   isHourly: boolean
@@ -134,7 +135,8 @@ export type Database = {
       }
       profiles: {
         Row: {
-          address: string | null
+          city: string | null
+          country: string | null
           avatar_url: string | null
           category_id: string
           created_at: string
@@ -152,7 +154,8 @@ export type Database = {
           work_format: Database["public"]["Enums"]["work_format_type"] | null
         }
         Insert: {
-          address?: string | null
+          city?: string | null
+          country?: string | null
           avatar_url?: string | null
           category_id: string
           created_at?: string
@@ -170,7 +173,8 @@ export type Database = {
           work_format?: Database["public"]["Enums"]["work_format_type"] | null
         }
         Update: {
-          address?: string | null
+          city?: string | null
+          country?: string | null
           avatar_url?: string | null
           category_id?: string
           created_at?: string

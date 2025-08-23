@@ -20,6 +20,51 @@ import { createClient } from '@/utils/supabase/client'
 // URL для Edge Function
 const NOTIFICATIONS_ENDPOINT = '/api/notifications'
 
+// Конфигурация для защищенного логирования
+const DEBUG_NOTIFICATIONS = process.env.DEBUG_NOTIFICATIONS === 'true' || process.env.NODE_ENV === 'development'
+
+/**
+ * Безопасная функция логирования для уведомлений
+ * Логирует только нечувствительные идентификаторы и флаги
+ */
+function logNotificationDebug(message: string, data?: any) {
+  if (!DEBUG_NOTIFICATIONS) return
+  
+  if (data && typeof data === 'object') {
+    // Логируем только безопасные поля
+    const safeData = {
+      id: data.id,
+      notification_id: data.notification_id,
+      has_notifications: !!data.notifications,
+      has_entity_types: !!data.notifications?.entity_types,
+      count: data.length || data.count,
+      error: data.error ? 'Error occurred' : undefined
+    }
+    console.log(`🔍 ${message}`, safeData)
+  } else {
+    console.log(`🔍 ${message}`, data)
+  }
+}
+
+/**
+ * Безопасное логирование для массивов записей
+ */
+function logNotificationRecords(records: any[], prefix: string) {
+  if (!DEBUG_NOTIFICATIONS || !records?.length) return
+  
+  records.forEach((item, index) => {
+    const safeItem = {
+      index,
+      id: item.id,
+      notification_id: item.notification_id,
+      has_notifications: !!item.notifications,
+      has_entity_types: !!item.notifications?.entity_types,
+      entity_name: item.notifications?.entity_types?.entity_name
+    }
+    console.log(`🔍 ${prefix} запись ${index}:`, safeItem)
+  })
+}
+
 /**
  * Отправляет уведомление через Supabase Edge Function
  */
@@ -634,8 +679,7 @@ export async function getUserNotifications(
         span.setAttribute("pagination.offset", offset)
         span.setAttribute("filter.only_unread", onlyUnread)
 
-        console.log('🔍 getUserNotifications: запрос для пользователя:', userId)
-        console.log('🔍 getUserNotifications: параметры:', { page, limit, onlyUnread, offset })
+        logNotificationDebug('getUserNotifications: запрос для пользователя', { id: userId, page, limit, onlyUnread, offset })
 
         let query = supabase
           .from('user_notifications')
@@ -645,7 +689,7 @@ export async function getUserNotifications(
               *,
               entity_types:entity_type_id (*)
             )
-          `)
+          `, { count: 'exact' })
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
 
@@ -655,13 +699,17 @@ export async function getUserNotifications(
 
         const { data, error, count } = await query
           .range(offset, offset + limit - 1)
-          .limit(limit)
 
-        console.log('🔍 getUserNotifications: результат запроса:', { data, error, count })
-        console.log('🔍 getUserNotifications: количество записей:', data?.length || 0)
+        logNotificationDebug('getUserNotifications: результат запроса', { data, error, count })
+        logNotificationDebug('getUserNotifications: количество записей', data?.length || 0)
         
         if (data && data.length > 0) {
-          console.log('🔍 getUserNotifications: первая запись:', data[0])
+          logNotificationDebug('getUserNotifications: первая запись', data[0])
+          logNotificationDebug('getUserNotifications: структура notifications в первой записи', data[0].notifications)
+          logNotificationDebug('getUserNotifications: структура entity_types в первой записи', data[0].notifications?.entity_types)
+          
+          // Проверяем все записи на наличие связанных данных
+          logNotificationRecords(data, 'getUserNotifications')
         }
 
         if (error) {
@@ -773,10 +821,7 @@ export async function markNotificationAsRead(
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
 
-        console.log('📝 Помечаем уведомление как прочитанное:', {
-          userId,
-          userNotificationId
-        })
+        logNotificationDebug('Помечаем уведомление как прочитанное', { id: userId, notification_id: userNotificationId })
 
         const { error, data } = await supabase
           .from('user_notifications')
@@ -822,7 +867,7 @@ export async function markNotificationAsRead(
           }
         })
 
-        console.log('✅ Уведомление успешно помечено как прочитанное:', data)
+        logNotificationDebug('Уведомление успешно помечено как прочитанное', data)
       } catch (error) {
         span.setAttribute("mark.success", false)
         span.recordException(error as Error)
@@ -845,6 +890,163 @@ export async function markNotificationAsRead(
   )
 }
 
+/**
+ * Отметить уведомление как непрочитанное
+ */
+export async function markNotificationAsUnread(
+  userId: string,
+  userNotificationId: string
+): Promise<void> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.mark_as_unread",
+      name: "Mark Notification As Unread",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+
+        span.setAttribute("user.id", userId)
+        span.setAttribute("user_notification.id", userNotificationId)
+
+        const { error, data } = await supabase
+          .from('user_notifications')
+          .update({ 
+            is_read: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('id', userNotificationId)
+          .select()
+
+        if (error) {
+          span.setAttribute("unmark.success", false)
+          span.setAttribute("unmark.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'mark_as_unread',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'markNotificationAsUnread',
+              user_id: userId,
+              user_notification_id: userNotificationId
+            }
+          })
+          throw error
+        }
+
+        span.setAttribute("unmark.success", true)
+        span.setAttribute("updated.count", data?.length || 0)
+      } catch (error) {
+        span.setAttribute("unmark.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'mark_as_unread',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'markNotificationAsUnread',
+            user_id: userId,
+            user_notification_id: userNotificationId
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+
+export async function setUserNotificationArchived(
+  userId: string,
+  userNotificationId: string,
+  isArchived: boolean
+): Promise<void> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.set_archived",
+      name: "Set User Notification Archived",
+    },
+    async (span) => {
+      try {
+        const supabase = createClient()
+        span.setAttribute("user.id", userId)
+        span.setAttribute("user_notification.id", userNotificationId)
+        span.setAttribute("archived.value", isArchived)
+
+        // Enforce authenticated user
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError || !authData?.user) {
+          span.setAttribute("auth.status", "unauthenticated")
+          throw new Error("Not authenticated")
+        }
+        if (authData.user.id !== userId) {
+          span.setAttribute("auth.status", "mismatch")
+          Sentry.captureMessage("setUserNotificationArchived: userId mismatch with session", {
+            level: "warning",
+            extra: { userIdParam: userId, sessionUserId: authData.user.id, userNotificationId, isArchived }
+          })
+          throw new Error("Forbidden: cannot modify another user's notifications")
+        }
+
+        const { error, data } = await supabase
+          .from('user_notifications')
+          .update({
+            is_archived: isArchived,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', authData.user.id)
+          .eq('id', userNotificationId)
+          .select()
+
+        if (error) {
+          span.setAttribute("archived.success", false)
+          span.setAttribute("archived.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'set_archived',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'setUserNotificationArchived',
+              user_id: userId,
+              user_notification_id: userNotificationId,
+              is_archived: isArchived,
+              timestamp: new Date().toISOString()
+            }
+          })
+          console.error('❌ Ошибка при установке архива для уведомления:', error)
+          throw error
+        }
+
+        span.setAttribute("archived.success", true)
+        span.setAttribute("updated.count", data?.length || 0)
+      } catch (error) {
+        span.setAttribute("archived.success", false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'set_archived',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'setUserNotificationArchived',
+            user_id: userId,
+            user_notification_id: userNotificationId,
+            is_archived: isArchived,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
 /**
  * Отметить все уведомления как прочитанные
  */
@@ -957,7 +1159,7 @@ export async function getRecentNotifications(
 export async function debugUserNotifications(userId: string): Promise<void> {
   const supabase = createClient()
   
-  console.log('🔍 DEBUG: Проверка user_notifications для пользователя:', userId)
+  logNotificationDebug('DEBUG: Проверка user_notifications для пользователя', { id: userId })
   
   // Проверяем все записи в user_notifications для этого пользователя
   const { data: userNotifications, error: userError } = await supabase
@@ -967,13 +1169,36 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .order('created_at', { ascending: false })
     .limit(10)
     
-  console.log('🔍 DEBUG: user_notifications записи:', userNotifications?.length || 0)
+  logNotificationDebug('DEBUG: user_notifications записи', userNotifications?.length || 0)
   if (userNotifications && userNotifications.length > 0) {
-    console.log('🔍 DEBUG: последние user_notifications:', userNotifications)
+    logNotificationDebug('DEBUG: последние user_notifications', userNotifications)
   }
   
   if (userError) {
     console.error('🔍 DEBUG: ошибка user_notifications:', userError)
+  }
+  
+  // Проверяем полный JOIN запрос - такой же как в getUserNotifications
+  const { data: joinedData, error: joinError } = await supabase
+    .from('user_notifications')
+    .select(`
+      *,
+      notifications:notification_id (
+        *,
+        entity_types:entity_type_id (*)
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(5)
+    
+  logNotificationDebug('DEBUG: JOIN запрос результат', joinedData?.length || 0)
+  if (joinedData && joinedData.length > 0) {
+    logNotificationDebug('DEBUG: полные данные JOIN', joinedData)
+  }
+  
+  if (joinError) {
+    console.error('🔍 DEBUG: ошибка JOIN запроса:', joinError)
   }
   
   // Проверяем все записи в notifications
@@ -983,9 +1208,9 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .order('created_at', { ascending: false })
     .limit(5)
     
-  console.log('🔍 DEBUG: notifications записи:', notifications?.length || 0)
+  logNotificationDebug('DEBUG: notifications записи', notifications?.length || 0)
   if (notifications && notifications.length > 0) {
-    console.log('🔍 DEBUG: последние notifications:', notifications)
+    logNotificationDebug('DEBUG: последние notifications', notifications)
   }
   
   if (notifError) {
@@ -997,12 +1222,107 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     .from('entity_types')
     .select('*')
     
-  console.log('🔍 DEBUG: entity_types записи:', entityTypes?.length || 0)
+  logNotificationDebug('DEBUG: entity_types записи', entityTypes?.length || 0)
   if (entityTypes && entityTypes.length > 0) {
-    console.log('🔍 DEBUG: entity_types:', entityTypes)
+    logNotificationDebug('DEBUG: entity_types', entityTypes)
   }
   
   if (entityError) {
     console.error('🔍 DEBUG: ошибка entity_types:', entityError)
+  }
+  
+  // Проверяем конкретные notification_id из вашей таблицы
+  const testNotificationIds = [
+    '18c5808d-ebd1-4989-8f94-d9db531ca7e7',
+    '1e3ff8c4-ddb6-426c-adc9-3eeb98fbcdf3',
+    '7140d06a-b69e-4ebd-b245-079967dd2e39',
+    'cd960712-8a2f-4fbb-9ded-180b2bff63d3',
+    '4792c6f4-daaf-42f9-8d10-d2af9a417968'
+  ]
+  
+  for (const notifId of testNotificationIds) {
+    const { data: notifData, error: notifError } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('id', notifId)
+      .single()
+      
+    logNotificationDebug(`DEBUG: notification ${notifId}`, notifData || 'НЕ НАЙДЕНО')
+  }
+}
+
+/**
+ * Тестовая функция для создания тестового уведомления
+ */
+export async function createTestNotification(userId: string): Promise<void> {
+  const supabase = createClient()
+  
+  try {
+    // Сначала проверим, есть ли entity_type для 'test'
+    let { data: entityType, error: entityError } = await supabase
+      .from('entity_types')
+      .select('*')
+      .eq('entity_name', 'test')
+      .single()
+    
+    if (entityError || !entityType) {
+      // Создаем entity_type если его нет
+      const { data: newEntityType, error: createEntityError } = await supabase
+        .from('entity_types')
+        .insert({ entity_name: 'test' })
+        .select()
+        .single()
+      
+      if (createEntityError) {
+        console.error('❌ Ошибка создания entity_type:', createEntityError)
+        return
+      }
+      
+      entityType = newEntityType
+    }
+    
+    // Создаем уведомление
+    const { data: notification, error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        entity_type_id: entityType.id,
+        payload: {
+          title: 'Тестовое уведомление',
+          message: 'Это тестовое уведомление для проверки системы',
+          type: 'info'
+        },
+        rendered_text: 'Тестовое уведомление: Это тестовое уведомление для проверки системы'
+      })
+      .select()
+      .single()
+    
+    if (notificationError) {
+      console.error('❌ Ошибка создания уведомления:', notificationError)
+      return
+    }
+    
+    // Создаем user_notification
+    const { data: userNotification, error: userNotificationError } = await supabase
+      .from('user_notifications')
+      .insert({
+        notification_id: notification.id,
+        user_id: userId,
+        is_read: false,
+        is_archived: false
+      })
+      .select()
+      .single()
+    
+    if (userNotificationError) {
+      console.error('❌ Ошибка создания user_notification:', userNotificationError)
+      return
+    }
+    
+    logNotificationDebug('✅ Тестовое уведомление создано', {
+      notification: notification.id,
+      userNotification: userNotification.id
+    })
+  } catch (error) {
+    console.error('❌ Ошибка при создании тестового уведомления:', error)
   }
 } 

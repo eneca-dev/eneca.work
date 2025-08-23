@@ -119,6 +119,8 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
   useEffect(() => {
     if (!mounted || typeof window === 'undefined') return
     
+    const supabase = createClient()
+    
     // Получаем текущего пользователя
     const getCurrentUser = async () => {
       return Sentry.startSpan(
@@ -129,7 +131,6 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         async (span) => {
           try {
             console.log('🔍 NotificationsProvider: Получение текущего пользователя...')
-            const supabase = createClient()
             const { data: { user }, error } = await supabase.auth.getUser()
             
             if (error) {
@@ -147,6 +148,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
                 }
               })
               console.error('❌ NotificationsProvider: Ошибка получения пользователя:', error)
+              setCurrentUserId(null) // Очищаем при ошибке
               return
             }
             
@@ -170,6 +172,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
               span.setAttribute("auth.success", true)
               span.setAttribute("user.found", false)
               console.warn('⚠️ NotificationsProvider: Пользователь не найден')
+              setCurrentUserId(null) // Очищаем если пользователя нет
             }
           } catch (error) {
             span.setAttribute("auth.success", false)
@@ -186,12 +189,39 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
               }
             })
             console.error('❌ NotificationsProvider: Неожиданная ошибка при получении пользователя:', error)
+            setCurrentUserId(null) // Очищаем при ошибке
           }
         }
       )
     }
 
+    // Подписываемся на изменения аутентификации
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 NotificationsProvider: Auth state change:', event, session?.user?.id)
+      
+      if (event === 'SIGNED_OUT') {
+        console.log('👋 NotificationsProvider: Пользователь вышел')
+        setCurrentUserId(null)
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const userId = session?.user?.id || null
+        console.log('👤 NotificationsProvider: Пользователь вошел:', userId)
+        setCurrentUserId(userId)
+      } else if (event === 'USER_UPDATED') {
+        const userId = session?.user?.id || null
+        console.log('🔄 NotificationsProvider: Данные пользователя обновлены:', userId)
+        setCurrentUserId(userId)
+      }
+    })
+
+    // Получаем текущего пользователя при инициализации
     getCurrentUser()
+
+    // Отписываемся при размонтировании
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [setCurrentUserId, mounted])
 
   useEffect(() => {
@@ -205,8 +235,12 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         console.log('📥 NotificationsProvider: Загрузка уведомлений...')
         
         // Отладочная проверка базы данных
-        const { debugUserNotifications } = await import('../api/notifications')
+        const { debugUserNotifications, createTestNotification } = await import('../api/notifications')
         await debugUserNotifications(currentUserId)
+        
+        // Временно: создаем тестовое уведомление для диагностики
+        // Раскомментируйте следующую строку если нужно создать тестовое уведомление:
+        // await createTestNotification(currentUserId)
         
         fetchNotifications()
         
@@ -214,16 +248,13 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         console.log('📡 NotificationsProvider: Инициализация Realtime...')
         initializeRealtime()
       } else {
-        console.log('⏳ NotificationsProvider: Ожидание currentUserId...')
+        console.log('⏳ NotificationsProvider: currentUserId не установлен, очищаем уведомления')
+        // Если пользователя нет, отписываемся от всех подписок
+        unsubscribeFromNotifications()
       }
     }
 
     initializeProvider()
-
-    // Отписываемся при размонтировании
-    return () => {
-      unsubscribeFromNotifications()
-    }
   }, [currentUserId, fetchNotifications, initializeRealtime, unsubscribeFromNotifications, mounted])
 
   return <>{children}</>

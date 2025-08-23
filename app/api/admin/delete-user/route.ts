@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
+interface ProfileWithRole {
+  role_id: string | null
+  roles: {
+    name: string
+  }[] | null
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     // Получаем ID пользователя из URL или body
@@ -27,9 +34,15 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createClient()
     const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
     
+    console.log('Auth check result:', {
+      hasUser: !!currentUser,
+      userId: currentUser?.id,
+      authError: authError?.message
+    })
+    
     if (authError || !currentUser) {
       return NextResponse.json(
-        { error: 'Неавторизован' },
+        { error: 'Неавторизован', details: authError?.message },
         { status: 401 }
       )
     }
@@ -39,28 +52,105 @@ export async function DELETE(request: NextRequest) {
 
     // Если пользователь не удаляет свой профиль, проверяем права доступа
     if (!isDeletingOwnProfile) {
-      const { data: profile } = await supabase
+      // Сначала достаем роль текущего пользователя
+      console.log('Looking up profile for user:', currentUser.id)
+      
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select(`
-          role_id,
-          roles!inner(
-            name,
-            role_permissions!inner(
-              permissions!inner(name)
-            )
-          )
-        `)
+        .select('role_id, roles!profiles_role_id_fkey(name)')
         .eq('user_id', currentUser.id)
         .single()
+        
+      console.log('Profile lookup result:', {
+        hasProfile: !!profile,
+        profileData: profile,
+        profileError: profileError?.message
+      })
 
-      const permissions = (profile?.roles as any)?.role_permissions?.map(
-        (rp: any) => rp.permissions.name
-      ) || []
+      // Проверяем ошибку запроса
+      if (profileError) {
+        console.error('Ошибка получения профиля текущего пользователя:', {
+          userId: currentUser.id,
+          error: profileError,
+          errorCode: profileError.code,
+          errorDetails: profileError.details,
+          errorHint: profileError.hint
+        })
+        
+        // Более детальная ошибка для отладки
+        let errorMessage = 'Ошибка получения профиля пользователя'
+        if (profileError.code === 'PGRST116') {
+          errorMessage = 'Профиль пользователя не найден в базе данных'
+        } else if (profileError.code === 'PGRST301') {
+          errorMessage = 'Ошибка подключения к базе данных'
+        }
+        
+        return NextResponse.json(
+          { error: errorMessage, details: profileError.message },
+          { status: 500 }
+        )
+      }
+
+      // Проверяем, что профиль существует
+      if (!profile) {
+        console.error('Профиль не найден для пользователя:', {
+          userId: currentUser.id
+        })
+        return NextResponse.json(
+          { error: 'Профиль пользователя не найден' },
+          { status: 404 }
+        )
+      }
+
+      const typedProfile = profile as ProfileWithRole
+      const roleId = typedProfile.role_id ?? null
+      const roleName = typedProfile.roles?.[0]?.name ?? null
+
+      let permissions: string[] = []
+      if (roleId) {
+        const { data: rolePerms, error: rolePermsError } = await supabase
+          .from('role_permissions')
+          .select('permissions!role_permissions_permission_id_fkey(name)')
+          .eq('role_id', roleId)
+
+        if (rolePermsError) {
+          console.error('Ошибка получения разрешений роли:', {
+            roleId,
+            userId: currentUser.id,
+            error: rolePermsError,
+            errorCode: rolePermsError.code,
+            errorDetails: rolePermsError.details
+          })
+          return NextResponse.json(
+            { error: 'Ошибка проверки прав доступа', details: rolePermsError.message },
+            { status: 500 }
+          )
+        }
+
+              permissions = (rolePerms || [])
+        .map((rp: any) => rp?.permissions?.name)
+        .filter(Boolean)
+        
+      console.log('Permissions lookup result:', {
+        roleId,
+        rolePerms,
+        extractedPermissions: permissions
+      })
+      }
 
       // Проверяем, есть ли разрешение на удаление других пользователей
-      const canDeleteUsers = permissions.includes('user.delete') || 
+      // Поддерживаем оба варианта названия пермишена на случай расхождений в данных
+      const canDeleteUsers = permissions.includes('users.delete') ||
+                            permissions.includes('user.delete') ||
                             permissions.includes('users_can_edit_all') ||
-                            (profile?.roles as any)?.name === 'admin'
+                            roleName === 'admin'
+                            
+      console.log('Permission check result:', {
+        roleName,
+        permissions,
+        canDeleteUsers,
+        isDeletingOwnProfile
+      })
 
       if (!canDeleteUsers) {
         return NextResponse.json(

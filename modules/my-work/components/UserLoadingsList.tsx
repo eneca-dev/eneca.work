@@ -56,8 +56,16 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
 
   if (loadings.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        У вас нет активных загрузок
+      <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 px-6 pb-6 pt-3 mx-6 mt-3">
+        <div className="flex items-center justify-center gap-4 py-6 text-center">
+          <CheckSquare className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+          <div>
+            <div className="font-medium text-gray-900 dark:text-white text-base">У вас нет активных загрузок</div>
+            <div className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+              Загрузки появятся здесь, когда будут назначены
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -73,7 +81,7 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                 ? 'bg-emerald-500/10 border-emerald-500/20 shadow-lg' 
                 : highlightedLoadingId === loading.loading_id
                   ? 'bg-blue-500/10 border-blue-500/20 shadow-md'
-                  : 'bg-white/2 border-white/5 hover:bg-white/5 hover:border-white/10'
+                  : 'bg-gray-50 dark:bg-slate-600/20 border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 hover:border-gray-200 dark:hover:border-slate-500/30'
             }`}
             onClick={() => onLoadingClick(loading)}
             onMouseEnter={() => onLoadingHover?.(loading.loading_id)}
@@ -113,16 +121,16 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                 </div>
                 
                 {isDecompositionLoading ? (
-                  <div className="text-sm text-gray-400">Загрузка...</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Загрузка...</div>
                 ) : decompositionError ? (
                   <div className="text-sm text-red-400">Ошибка: {decompositionError}</div>
                 ) : decompositionItems.length === 0 ? (
-                  <div className="text-sm text-gray-400">Декомпозиция не создана</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Декомпозиция не создана</div>
                 ) : (
-                  <div className="bg-white/2 rounded-lg overflow-hidden backdrop-blur-sm border border-white/5">
+                  <div className="bg-gray-50 dark:bg-slate-600/20 rounded-lg overflow-hidden backdrop-blur-sm border border-gray-100 dark:border-slate-500/20">
                     {/* Заголовок таблицы */}
                     <div 
-                      className="p-3 bg-white/5 text-xs font-medium text-gray-300"
+                      className="p-3 bg-gray-100 dark:bg-slate-600/15 text-xs font-medium text-gray-700 dark:text-gray-300"
                       style={{ 
                         display: 'grid', 
                         gridTemplateColumns: '1.5fr 1.2fr 80px 70px', 
@@ -136,11 +144,11 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                     </div>
                     
                     {/* Строки таблицы */}
-                    <div className="divide-y divide-white/5">
+                    <div className="divide-y divide-gray-100 dark:divide-slate-500/20">
                       {decompositionItems.map((item, index) => (
                         <div 
                           key={index} 
-                          className="p-3 text-sm text-gray-200"
+                          className="p-3 text-sm text-gray-900 dark:text-gray-200"
                           style={{ 
                             display: 'grid', 
                             gridTemplateColumns: '1.5fr 1.2fr 80px 70px', 
@@ -150,17 +158,17 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                           <div title={item.work_content}>
                             {truncateText(item.work_content, 50)}
                           </div>
-                          <div className="text-gray-400 whitespace-nowrap overflow-hidden" title={item.work_type}>
+                          <div className="text-gray-600 dark:text-gray-400 whitespace-nowrap overflow-hidden" title={item.work_type}>
                             {truncateText(item.work_type, 20)}
                           </div>
                           <div className="text-center font-mono text-sm">
-                            <span className={item.actual_hours !== undefined && item.actual_hours > item.labor_costs ? "text-red-400" : "text-white"}>
+                            <span className={item.actual_hours !== undefined && item.actual_hours > item.labor_costs ? "text-red-500 dark:text-red-400" : "text-gray-900 dark:text-white"}>
                               {item.actual_hours !== undefined ? item.actual_hours : 0}
                             </span>
                             <span className="text-gray-500">/</span>
-                            <span className="text-white">{item.labor_costs}</span>
+                            <span className="text-gray-900 dark:text-white">{item.labor_costs}</span>
                           </div>
-                          <div className="text-center text-gray-400 text-xs">
+                          <div className="text-center text-gray-600 dark:text-gray-400 text-xs">
                             {item.due_date ? new Date(item.due_date).toLocaleDateString('ru-RU') : '—'}
                           </div>
                         </div>
@@ -178,25 +186,25 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                 </div>
                 
                 {isTasksLoading ? (
-                  <div className="text-sm text-gray-400">Загрузка заданий...</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Загрузка заданий...</div>
                 ) : tasksError ? (
                   <div className="text-sm text-red-400">Ошибка: {tasksError}</div>
                 ) : tasks.length === 0 ? (
-                  <div className="text-sm text-gray-400">Нет заданий для данного раздела</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Нет заданий для данного раздела</div>
                 ) : (
                   <div className="space-y-2">
                     {tasks.map((task) => (
-                      <div key={task.task_id} className="flex items-center justify-between p-3 bg-white/2 rounded-lg backdrop-blur-sm border border-white/5">
+                      <div key={task.task_id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-600/20 rounded-lg backdrop-blur-sm border border-gray-100 dark:border-slate-500/20">
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-200">{task.task_name}</div>
-                          <div className="text-xs text-gray-400">от {task.section_name}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-200">{task.task_name}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">от {task.section_name}</div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white">
                             {task.task_status === 'active' || task.task_status === 'in_progress' ? 'В работе' : 
                              task.task_status === 'pending' ? 'Ожидание' : task.task_status}
                           </div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
                             {task.task_end_date ? formatDate(task.task_end_date) : '—'}
                           </div>
                         </div>

@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter, usePathname } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
+import { useNotificationsStore } from "@/stores/useNotificationsStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { ChatInterface } from "@/modules/chat"
@@ -26,6 +27,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const supabase = createClient()
   const pathname = usePathname()
+  const isNotificationsOpen = useNotificationsStore((s) => s.isPanelOpen)
+  const notificationsPanelWidth = useNotificationsStore((s) => s.panelWidthPx)
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)
@@ -186,8 +189,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
-      {/* Контент с отступом слева */}
-      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300 ${marginLeft}`}>
+      {/* Контент с отступом слева и динамическим отступом слева под панель уведомлений (панель раскрывается справа от сайдбара) */}
+      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300`}
+        style={{ marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0) }}>
         <UserPermissionsSyncProvider>
           {!permissionsLoaded ? (
             <div className="min-h-[60vh] flex items-center justify-center">

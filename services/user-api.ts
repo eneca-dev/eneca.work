@@ -11,7 +11,8 @@ export interface CreateUserData {
   category?: string
   roleId?: string
   workLocation?: "office" | "remote" | "hybrid"
-  address?: string
+  country?: string
+  city?: string
 }
 
 export interface CreateUserResponse {

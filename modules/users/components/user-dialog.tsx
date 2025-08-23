@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
 import { Save, Trash2 } from 'lucide-react'
 import { Input } from "@/components/ui/input"
@@ -38,7 +39,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     role: "",
     roleId: "",
     workLocation: "office",
-    address: "",
+    country: "",
+    city: "",
   })
 
   const [departments, setDepartments] = useState<Department[]>([])
@@ -48,6 +50,21 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [categories, setCategories] = useState<Category[]>([])
   const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
+  const [cities, setCities] = useState<{ name: string }[]>([])
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
+  
+  // Добавляем состояния для поиска
+  const [countrySearch, setCountrySearch] = useState("")
+  const [citySearch, setCitySearch] = useState("")
+  const [filteredCountries, setFilteredCountries] = useState<{ code: string; name: string }[]>([])
+  const [filteredCities, setFilteredCities] = useState<{ name: string }[]>([])
+  const [countrySelectOpen, setCountrySelectOpen] = useState(false)
+  const [citySelectOpen, setCitySelectOpen] = useState(false)
+
+  // Refs для автофокуса на поля поиска
+  const countrySearchRef = useRef<HTMLInputElement | null>(null)
+  const citySearchRef = useRef<HTMLInputElement | null>(null)
 
   // Состояния для удаления профиля
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
@@ -114,6 +131,79 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
   }, [open, canEditRoles, canAddAdminRole])
 
+  // Загрузка стран/городов
+  useEffect(() => {
+    if (!open) return
+    const all = Country.getAllCountries().map(c => ({ code: c.isoCode, name: c.name }))
+    setCountries(all)
+    setFilteredCountries(all)
+  }, [open])
+
+  // Фильтрация стран по поиску
+  useEffect(() => {
+    if (!countrySearch.trim()) {
+      setFilteredCountries(countries)
+    } else {
+      const filtered = countries.filter(country =>
+        country.name.toLowerCase().includes(countrySearch.toLowerCase())
+      )
+      setFilteredCountries(filtered)
+    }
+  }, [countrySearch, countries])
+
+  useEffect(() => {
+    if (!selectedCountryCode) {
+      setCities([])
+      setFilteredCities([])
+      return
+    }
+    const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
+    // Дедупликация по названию города (в некоторых странах повторяются)
+    const cityMap = new Map<string, { name: string }>()
+    for (const c of loaded) {
+      if (!cityMap.has(c.name)) {
+        cityMap.set(c.name, { name: c.name })
+      }
+    }
+    const unique = Array.from(cityMap.values())
+    setCities(unique)
+    setFilteredCities(unique)
+  }, [selectedCountryCode])
+
+  // Фильтрация городов по поиску
+  useEffect(() => {
+    if (!citySearch.trim()) {
+      setFilteredCities(cities)
+    } else {
+      const filtered = cities.filter(city =>
+        city.name.toLowerCase().includes(citySearch.toLowerCase())
+      )
+      setFilteredCities(filtered)
+    }
+  }, [citySearch, cities])
+
+  // Автофокус на поле поиска стран при открытии
+  useEffect(() => {
+    if (countrySelectOpen) {
+      setTimeout(() => {
+        if (countrySearchRef.current) {
+          countrySearchRef.current.focus()
+        }
+      }, 100)
+    }
+  }, [countrySelectOpen])
+
+  // Автофокус на поле поиска городов при открытии
+  useEffect(() => {
+    if (citySelectOpen && selectedCountryCode) {
+      setTimeout(() => {
+        if (citySearchRef.current) {
+          citySearchRef.current.focus()
+        }
+      }, 100)
+    }
+  }, [citySelectOpen, selectedCountryCode])
+
   // Изменим установку данных пользователя при открытии диалога
   useEffect(() => {
     if (user) {
@@ -146,8 +236,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         role: roleValue,
         roleId,
         workLocation: user.workLocation,
-        address: user.address,
+        country: user.country || "",
+        city: user.city || "",
       })
+      // Инициализируем выбранную страну
+      const matchCountry = Country.getAllCountries().find(c => c.name === (user.country || ""))
+      setSelectedCountryCode(matchCountry?.isoCode || "")
+      
+      // Сбрасываем поиск
+      setCountrySearch("")
+      setCitySearch("")
     } else {
       setFormData({
         firstName: "",
@@ -160,11 +258,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         role: "",
         roleId: "",
         workLocation: "office",
-        address: "",
+        country: "",
+        city: "",
       })
+      setSelectedCountryCode("")
+      setCountrySearch("")
+      setCitySearch("")
     }
-  }, [user, open, roles])
-
+  }, [user, open, roles, teams])
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     if (formData.department) {
@@ -211,7 +312,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
-          address: formData.address,
+          country: formData.country,
+          city: formData.city,
           workLocation: formData.workLocation,
         }
         
@@ -268,7 +370,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 salary: freshProfile.salary,
                 isHourly: freshProfile.is_hourly,
                 employmentRate: freshProfile.employment_rate,
-                address: freshProfile.address,
+                country: freshProfile.country_name,
+                city: freshProfile.city_name,
                 roleId: freshProfile.role_id,
                 avatar_url: freshProfile.avatar_url,
               },
@@ -354,6 +457,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
   }
 
+  // Функция для сброса поиска
+  const resetSearch = () => {
+    setCountrySearch("")
+    setCitySearch("")
+    setCountrySelectOpen(false)
+    setCitySelectOpen(false)
+  }
+
   // Функция для обработки ввода в поле подтверждения (блокируем вставку)
   const handleDeleteConfirmationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDeleteConfirmationText(e.target.value)
@@ -368,7 +479,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const isDeleteConfirmationValid = deleteConfirmationText === deleteConfirmationPhrase
 
   return (
-    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
+    <Modal isOpen={open} onClose={() => {
+      onOpenChange(false)
+      resetSearch()
+    }} size="lg">
       <form onSubmit={handleSubmit}>
         <Modal.Header 
           title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
@@ -541,18 +655,109 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="address" className="text-right">
-                Адрес
+              <Label htmlFor="country" className="text-right">
+                Страна
               </Label>
-              <Textarea
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleChange("address", e.target.value)}
-                className="col-span-3"
-                placeholder="Укажите адрес"
-                rows={2}
-              />
+              <Select
+                value={selectedCountryCode}
+                onValueChange={(code) => {
+                  setSelectedCountryCode(code)
+                  const found = countries.find(c => c.code === code)
+                  setFormData(prev => ({ ...prev, country: found?.name || "", city: "" }))
+                  // Сбрасываем поиск при выборе
+                  setCountrySearch("")
+                  setCitySearch("")
+                  setCountrySelectOpen(false)
+                }}
+                open={countrySelectOpen}
+                onOpenChange={setCountrySelectOpen}
+              >
+                <SelectTrigger id="country" className="col-span-3">
+                  <SelectValue placeholder="Выберите страну" />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* Поле поиска по странам */}
+                  <div className="p-2 border-b">
+                    <Input
+                      id="country-search"
+                      ref={countrySearchRef}
+                      placeholder="Поиск по странам..."
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      onKeyDown={(e) => {
+                        // Предотвращаем обработку клавиш в Select при фокусе на Input
+                        e.stopPropagation();
+                        
+                        // Обработка Enter для выбора первой страны из списка
+                        if (e.key === 'Enter' && filteredCountries.length > 0) {
+                          const firstCountry = filteredCountries[0];
+                          setSelectedCountryCode(firstCountry.code);
+                          setFormData(prev => ({ ...prev, country: firstCountry.name, city: "" }));
+                          setCountrySearch("");
+                          setCitySearch("");
+                          setCountrySelectOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {filteredCountries.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="city" className="text-right">
+                Город
+              </Label>
+              <Select
+                value={formData.city || ""}
+                onValueChange={(value) => {
+                  handleChange("city", value)
+                  // Сбрасываем поиск при выборе
+                  setCitySearch("")
+                  setCitySelectOpen(false)
+                }}
+                disabled={!selectedCountryCode}
+                open={citySelectOpen}
+                onOpenChange={setCitySelectOpen}
+              >
+                <SelectTrigger id="city" className="col-span-3">
+                  <SelectValue placeholder={selectedCountryCode ? "Выберите город" : "Сначала выберите страну"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* Поле поиска по городам */}
+                  <div className="p-2 border-b">
+                    <Input
+                      id="city-search"
+                      ref={citySearchRef}
+                      placeholder="Поиск по городам..."
+                      value={citySearch}
+                      onChange={(e) => setCitySearch(e.target.value)}
+                      className="w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      disabled={!selectedCountryCode}
+                      onKeyDown={(e) => {
+                        // Предотвращаем обработку клавиш в Select при фокусе на Input
+                        e.stopPropagation();
+                        
+                        // Обработка Enter для выбора первого города из списка
+                        if (e.key === 'Enter' && filteredCities.length > 0) {
+                          const firstCity = filteredCities[0];
+                          handleChange("city", firstCity.name);
+                          setCitySearch("");
+                          setCitySelectOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {filteredCities.map((c) => (
+                    <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
 
 
 
@@ -581,7 +786,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               <ModalButton 
                 type="button" 
                 variant="cancel"
-                onClick={() => onOpenChange(false)} 
+                onClick={() => {
+                  onOpenChange(false)
+                  resetSearch()
+                }} 
                 disabled={isLoading}
               >
                 Отмена
@@ -600,7 +808,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       </form>
 
       {/* Модальное окно подтверждения удаления */}
-      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="md">
+      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="lg" className="min-w-[500px] max-w-[800px]">
         <Modal.Header 
           title="Подтверждение удаления профиля"
           subtitle="Это действие нельзя отменить. Ваш профиль и все связанные данные будут удалены навсегда."
@@ -612,9 +820,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 Внимание! Это действие необратимо.
               </p>
               <p className="text-sm text-red-700">
-                Для подтверждения удаления введите следующую фразу:
+                Для подтверждения удаления введите в одну строку следующую фразу:
               </p>
-              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900">
+              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900 whitespace-nowrap overflow-x-auto">
                 {deleteConfirmationPhrase}
               </p>
             </div>
@@ -630,7 +838,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 onChange={handleDeleteConfirmationInput}
                 onPaste={handleDeleteConfirmationPaste}
                 placeholder="Введите фразу для подтверждения"
-                className="mt-1"
+                className="mt-1 min-w-full"
                 autoComplete="off"
               />
               {deleteConfirmationText && !isDeleteConfirmationValid && (

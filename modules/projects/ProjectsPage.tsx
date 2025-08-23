@@ -16,6 +16,8 @@ import { Search } from 'lucide-react';
 import { Modal, ModalButton } from '@/components/modals';
 import { InlineDashboard } from '@/modules/dashboard/InlineDashboard';
 import { useTaskTransferStore } from '@/modules/task-transfer/store';
+import { useSidebarState } from '@/hooks/useSidebarState';
+
 
 import { X } from 'lucide-react';
 
@@ -56,6 +58,9 @@ export default function ProjectsPage() {
   // Состояние для модального окна дашборда проекта
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
   const [dashboardProject, setDashboardProject] = useState<{id: string, name: string} | null>(null);
+  
+  // Состояние сайдбара для правильного позиционирования модального окна
+  const { collapsed: sidebarCollapsed } = useSidebarState();
 
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
@@ -523,33 +528,33 @@ export default function ProjectsPage() {
       </div>
 
       {/* Модальное окно с дашбордом проекта */}
-      <Modal 
-        isOpen={isDashboardModalOpen} 
-        onClose={handleCloseDashboardModal} 
-        size="xl"
-      >
-        <Modal.Header 
-          title={`Дашборд проекта: ${dashboardProject?.name || ''}`}
-          subtitle="Детальная информация о проекте"
-        />
-        <Modal.Body className="p-4">
-          {dashboardProject && (
-            <div className="h-[80vh] overflow-auto">
-              <InlineDashboard 
-                projectId={dashboardProject.id}
-                isClosing={false}
-                onClose={handleCloseDashboardModal}
-                isModal={true}
-              />
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <ModalButton variant="cancel" onClick={handleCloseDashboardModal}>
-            Закрыть
-          </ModalButton>
-        </Modal.Footer>
-      </Modal>
+      {isDashboardModalOpen && (
+        <div 
+          className="fixed inset-y-0 z-50 flex bg-black bg-opacity-50 transition-all duration-300"
+          style={{
+            left: sidebarCollapsed ? '80px' : '256px',
+            right: '8px',
+            width: sidebarCollapsed ? 'calc(100vw - 88px)' : 'calc(100vw - 264px)'
+          }}
+          onClick={handleCloseDashboardModal}
+        >
+          <div 
+            className="w-full h-full bg-gray-50 dark:bg-gray-900 flex"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {dashboardProject && (
+              <div className="flex-1 h-full">
+                <InlineDashboard 
+                  projectId={dashboardProject.id}
+                  isClosing={false}
+                  onClose={handleCloseDashboardModal}
+                  isModal={true}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
