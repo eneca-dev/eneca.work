@@ -62,6 +62,14 @@ export const getFilteredAssignments = (
     )
   }
 
+  // Фильтрация по разделу (показывать только задания где участвует данный раздел)
+  if (filters.sectionId) {
+    filteredAssignments = filteredAssignments.filter(assignment => 
+      assignment.from_section_id === filters.sectionId || 
+      assignment.to_section_id === filters.sectionId
+    )
+  }
+
   // Фильтрация по отделу - используем данные из view_section_hierarchy
   if (filters.departmentId && !filters.teamId && !filters.specialistId) {
     // Получаем разделы, за которые отвечают сотрудники данного отдела

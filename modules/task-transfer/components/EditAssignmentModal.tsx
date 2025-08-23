@@ -16,9 +16,10 @@ interface EditAssignmentModalProps {
   assignment: Assignment | null
   isOpen: boolean
   onClose: () => void
+  onUpdate?: (assignment: Assignment) => void
 }
 
-export function EditAssignmentModal({ assignment, isOpen, onClose }: EditAssignmentModalProps) {
+export function EditAssignmentModal({ assignment, isOpen, onClose, onUpdate }: EditAssignmentModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [plannedDuration, setPlannedDuration] = useState("")
@@ -98,7 +99,14 @@ export function EditAssignmentModal({ assignment, isOpen, onClose }: EditAssignm
               title: "Успех", 
               description: "Задание успешно обновлено",
             })
-            onClose()
+            
+            // Если есть колбек onUpdate, обновляем данные без закрытия модального окна
+            if (onUpdate && result.data) {
+              onUpdate(result.data)
+            } else {
+              // Закрываем только если нет колбека onUpdate (обратная совместимость)
+              onClose()
+            }
           } else {
             span.setAttribute("update.success", false)
             toast({

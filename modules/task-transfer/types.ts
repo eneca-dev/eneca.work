@@ -86,6 +86,7 @@ export interface TaskFilters {
   teamId?: string | null
   specialistId?: string | null
   status?: AssignmentStatus | null
+  sectionId?: string | null
 }
 
 // Интерфейс для данных из view_section_hierarchy

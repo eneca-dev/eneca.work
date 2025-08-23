@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, KeyboardEvent, useRef } from "react"
 import { createClient } from "@/utils/supabase/client"
-import { Loader2, MoreHorizontal, Pencil, Trash2, Check, X, PlusCircle, Clock, Calendar as CalendarIcon, LayoutTemplate } from "lucide-react"
+import { Loader2, MoreHorizontal, Trash2, PlusCircle, Clock, LayoutTemplate } from "lucide-react"
 import { useUiStore } from "@/stores/useUiStore"
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import AddWorkLogModal from "./AddWorkLogModal"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { TemplatesPanel } from "@/modules/decomposition-templates"
+// no slider for progress editing; using numeric input and a capsule view
 
 interface SectionDecompositionTabProps {
   sectionId: string
@@ -25,6 +26,20 @@ interface WorkCategory {
   work_category_name: string
 }
 
+interface Profile {
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+}
+
+interface SectionStatus {
+  id: string
+  name: string
+  color: string
+  description: string | null
+}
+
 interface DecompositionItemRow {
   decomposition_item_id: string
   decomposition_item_description: string
@@ -32,6 +47,11 @@ interface DecompositionItemRow {
   decomposition_item_planned_hours: number
   decomposition_item_planned_due_date: string | null
   decomposition_item_order: number
+  decomposition_item_responsible: string | null
+  decomposition_item_status_id: string | null
+  decomposition_item_progress: number
+  responsible_profile?: Profile | null
+  status?: SectionStatus | null
 }
 
 const supabase = createClient()
@@ -51,10 +71,22 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [newCategoryId, setNewCategoryId] = useState("")
   const [newPlannedHours, setNewPlannedHours] = useState("")
   const [newPlannedDueDate, setNewPlannedDueDate] = useState("")
+  const [newResponsibleSearch, setNewResponsibleSearch] = useState("")
+  const [newProgress, setNewProgress] = useState("0")
+
+  // Состояние для работы с профилями
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  
+  // Состояние для работы со статусами
+  const [statuses, setStatuses] = useState<SectionStatus[]>([])
+  const [newStatusId, setNewStatusId] = useState("")
+
+  // Состояния для ответственного (убираем поиск и dropdown, как у категории)
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<DecompositionItemRow | null>(null)
+  const [responsibleSearch, setResponsibleSearch] = useState<string>("")
   const [savingId, setSavingId] = useState<string | null>(null)
   const [isLogModalOpen, setIsLogModalOpen] = useState(false)
   const [selectedForLog, setSelectedForLog] = useState<string | null>(null)
@@ -67,16 +99,36 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     const init = async () => {
       setLoading(true)
       try {
-        const [cats, rows, totals] = await Promise.all([
+        const [cats, rows, totals, profilesRes, statusesRes] = await Promise.all([
           supabase
             .from("work_categories")
             .select("work_category_id, work_category_name")
             .order("work_category_name", { ascending: true }),
           supabase
             .from("decomposition_items")
-            .select(
-              "decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date, decomposition_item_order"
-            )
+            .select(`
+              decomposition_item_id, 
+              decomposition_item_description, 
+              decomposition_item_work_category_id, 
+              decomposition_item_planned_hours, 
+              decomposition_item_planned_due_date, 
+              decomposition_item_order,
+              decomposition_item_responsible,
+              decomposition_item_status_id,
+              decomposition_item_progress,
+              profiles!decomposition_item_responsible (
+                user_id,
+                first_name,
+                last_name,
+                email
+              ),
+              section_statuses!decomposition_item_status_id (
+                id,
+                name,
+                color,
+                description
+              )
+            `)
             .eq("decomposition_item_section_id", sectionId)
             .order("decomposition_item_order", { ascending: true })
             .order("decomposition_item_created_at", { ascending: true }),
@@ -84,11 +136,22 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             .from("view_section_decomposition_totals")
             .select("planned_hours, actual_hours, actual_amount")
             .eq("section_id", sectionId)
-            .single()
+            .single(),
+          supabase
+            .from("profiles")
+            .select("user_id, first_name, last_name, email")
+            .order("first_name", { ascending: true }),
+          supabase
+            .from("section_statuses")
+            .select("id, name, color, description")
+            .order("name", { ascending: true })
         ])
 
         if (cats.error) throw cats.error
         if (rows.error) throw rows.error
+        if (profilesRes.error) throw profilesRes.error
+        if (statusesRes.error) throw statusesRes.error
+        
         if (!totals.error) {
           setSectionTotals({
             planned_hours: Number(totals.data?.planned_hours || 0),
@@ -98,7 +161,23 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         }
 
         setCategories(cats.data || [])
-        setItems((rows.data as DecompositionItemRow[]) || [])
+        setProfiles(profilesRes.data || [])
+        setStatuses(statusesRes.data || [])
+        
+        // Устанавливаем статус по умолчанию "План" для новых строк
+        const defaultStatus = statusesRes.data?.find((s: any) => s.name === "План")
+        if (defaultStatus) {
+          setNewStatusId(defaultStatus.id)
+        }
+        
+        // Обрабатываем данные и нормализуем profiles и статусы
+        const normalizedItems = (rows.data || []).map((item: any) => ({
+          ...item,
+          responsible_profile: item.profiles || null,
+          status: item.section_statuses || null
+        })) as DecompositionItemRow[]
+        
+        setItems(normalizedItems)
       } catch (error) {
         console.error("Ошибка загрузки декомпозиции:", error)
         setNotification("Ошибка загрузки декомпозиции")
@@ -159,6 +238,21 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     return map
   }, [categories])
 
+  // Utility функции для работы с профилями
+  const getProfileName = (profile: Profile) => {
+    const fullName = `${profile.first_name} ${profile.last_name}`.trim()
+    return fullName || profile.email
+  }
+
+  const getResponsibleName = (item: DecompositionItemRow) => {
+    if (!item.decomposition_item_responsible || !item.responsible_profile) return ""
+    return getProfileName(item.responsible_profile)
+  }
+
+  // Простая функция для получения имени ответственного (как у категории)
+
+
+
   const canAdd = useMemo(() => {
     const hours = Number(newPlannedHours)
     return (
@@ -178,6 +272,15 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       if (!userId) throw new Error("Пользователь не найден")
 
       const nextOrder = (items[items.length - 1]?.decomposition_item_order ?? -1) + 1
+      // Поиск ответственного по введённому тексту
+      let responsibleId: string | null = null
+      if (newResponsibleSearch.trim().length > 0) {
+        const val = newResponsibleSearch.trim().toLowerCase()
+        const match = profiles.find(p => getProfileName(p).toLowerCase() === val) ||
+                      profiles.find(p => getProfileName(p).toLowerCase().startsWith(val)) ||
+                      profiles.find(p => getProfileName(p).toLowerCase().includes(val))
+        responsibleId = match ? match.user_id : null
+      }
       const { error } = await supabase
         .from("decomposition_items")
         .insert({
@@ -186,6 +289,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           decomposition_item_work_category_id: newCategoryId,
           decomposition_item_planned_hours: Number(newPlannedHours),
           decomposition_item_planned_due_date: newPlannedDueDate || null,
+          decomposition_item_responsible: responsibleId,
+          decomposition_item_status_id: newStatusId || null,
+          decomposition_item_progress: Number(newProgress) || 0,
           decomposition_item_order: nextOrder,
           decomposition_item_created_by: userId,
         })
@@ -195,20 +301,55 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       // Reload
       const { data, error: reloadErr } = await supabase
         .from("decomposition_items")
-        .select(
-          "decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date, decomposition_item_order"
-        )
+        .select(`
+          decomposition_item_id, 
+          decomposition_item_description, 
+          decomposition_item_work_category_id, 
+          decomposition_item_planned_hours, 
+          decomposition_item_planned_due_date, 
+          decomposition_item_order,
+          decomposition_item_responsible,
+          decomposition_item_status_id,
+          decomposition_item_progress,
+          profiles!decomposition_item_responsible (
+            user_id,
+            first_name,
+            last_name,
+            email
+          ),
+          section_statuses!decomposition_item_status_id (
+            id,
+            name,
+            color,
+            description
+          )
+        `)
         .eq("decomposition_item_section_id", sectionId)
         .order("decomposition_item_order", { ascending: true })
         .order("decomposition_item_created_at", { ascending: true })
 
       if (reloadErr) throw reloadErr
-      setItems((data as DecompositionItemRow[]) || [])
+      
+      // Обрабатываем данные и нормализуем profiles и статусы
+      const normalizedReloadItems = (data || []).map((item: any) => ({
+        ...item,
+        responsible_profile: item.profiles || null,
+        status: item.section_statuses || null
+      })) as DecompositionItemRow[]
+      
+      setItems(normalizedReloadItems)
 
       setNewDescription("")
       setNewCategoryId("")
       setNewPlannedHours("")
       setNewPlannedDueDate("")
+      setNewResponsibleSearch("")
+      setNewProgress("0")
+      // Сбрасываем статус на "План" (по умолчанию)
+      const defaultStatus = statuses.find(s => s.name === "План")
+      if (defaultStatus) {
+        setNewStatusId(defaultStatus.id)
+      }
       setNotification("Строка декомпозиции добавлена")
     } catch (error) {
       console.error("Ошибка добавления строки декомпозиции:", error)
@@ -221,6 +362,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const startEdit = (item: DecompositionItemRow) => {
     setEditingId(item.decomposition_item_id)
     setEditDraft({ ...item })
+    setResponsibleSearch(getResponsibleName(item) || "")
   }
 
   const cancelEdit = () => {
@@ -240,26 +382,77 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   }
 
   const saveEdit = async () => {
+    await saveEditWithPatch()
+  }
+
+  // Мгновенное сохранение отдельных полей (категория/ответственный/статус)
+  const updateItemFields = async (
+    id: string,
+    patch: Partial<Pick<DecompositionItemRow,
+      'decomposition_item_work_category_id' | 'decomposition_item_responsible' | 'decomposition_item_status_id'>>
+  ) => {
+    try {
+      setSavingId(id)
+      const { error } = await supabase
+        .from('decomposition_items')
+        .update(patch)
+        .eq('decomposition_item_id', id)
+      if (error) throw error
+      // Добавляем производные поля для локального отображения
+      const derived: Partial<DecompositionItemRow> = {}
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_responsible')) {
+        const rid = patch.decomposition_item_responsible as (string | null | undefined)
+        derived.responsible_profile = rid ? (profiles.find(p => p.user_id === rid) || null) : null
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_status_id')) {
+        const sid = patch.decomposition_item_status_id as (string | null | undefined)
+        derived.status = sid ? (statuses.find(s => s.id === sid) || null) : null
+      }
+      setItems(prev => prev.map(i => i.decomposition_item_id === id ? { ...i, ...patch, ...derived } : i))
+      if (editDraft && editDraft.decomposition_item_id === id) setEditDraft({ ...editDraft, ...patch } as DecompositionItemRow)
+      setNotification('Изменения сохранены')
+    } catch (e) {
+      console.error('Ошибка сохранения поля:', e)
+      setNotification('Ошибка сохранения')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  // Сохранение с объединением патча (чтобы избежать гонок setState)
+  const saveEditWithPatch = async (patch?: Partial<DecompositionItemRow>) => {
     if (!editingId || !editDraft) return
+    const merged: DecompositionItemRow = { ...editDraft, ...(patch || {}) } as DecompositionItemRow
     setSavingId(editingId)
     try {
       const { error } = await supabase
-        .from("decomposition_items")
+        .from('decomposition_items')
         .update({
-          decomposition_item_description: editDraft.decomposition_item_description,
-          decomposition_item_work_category_id: editDraft.decomposition_item_work_category_id,
-          decomposition_item_planned_hours: Number(editDraft.decomposition_item_planned_hours),
-          decomposition_item_planned_due_date: editDraft.decomposition_item_planned_due_date,
+          decomposition_item_description: merged.decomposition_item_description,
+          decomposition_item_work_category_id: merged.decomposition_item_work_category_id,
+          decomposition_item_planned_hours: Number(merged.decomposition_item_planned_hours),
+          decomposition_item_planned_due_date: merged.decomposition_item_planned_due_date,
+          decomposition_item_responsible: merged.decomposition_item_responsible,
+          decomposition_item_status_id: merged.decomposition_item_status_id,
+          decomposition_item_progress: Number(merged.decomposition_item_progress) || 0,
         })
-        .eq("decomposition_item_id", editingId)
-
+        .eq('decomposition_item_id', editingId)
       if (error) throw error
 
-      setItems(prev => prev.map(i => (i.decomposition_item_id === editingId ? { ...editDraft } : i)))
-      setNotification("Изменения сохранены")
-    } catch (error) {
-      console.error("Ошибка сохранения строки:", error)
-      setNotification("Ошибка сохранения строки")
+      const enriched: DecompositionItemRow = {
+        ...merged,
+        responsible_profile: merged.decomposition_item_responsible
+          ? (profiles.find(p => p.user_id === merged.decomposition_item_responsible) || null)
+          : null,
+        status: merged.decomposition_item_status_id
+          ? (statuses.find(s => s.id === merged.decomposition_item_status_id) || null)
+          : null,
+      }
+      setItems(prev => prev.map(i => (i.decomposition_item_id === editingId ? enriched : i)))
+      setNotification('Изменения сохранены')
+    } catch (e) {
+      console.error('Ошибка сохранения строки:', e)
+      setNotification('Ошибка сохранения строки')
     } finally {
       setSavingId(null)
       cancelEdit()
@@ -287,9 +480,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
   // Фиксированная сетка колонок для стабильной вёрстки (Notion-стиль)
   // Единая сетка колонок для идеального выравнивания
-  // [шаблон/лог/плюс, описание (растяжение), категория, план, факт, срок]
+  // [шаблон/лог/плюс, описание (растяжение), категория, ответственный, статус, процент, план, факт, срок]
   // Первая колонка max-content: вмещает кнопку "Шаблон" в шапке и иконку лога в строках
-  const rowGridClass = "grid grid-cols-[max-content_1fr_240px_96px_96px_160px]"
+  const rowGridClass = "grid grid-cols-[max-content_1fr_200px_180px_120px_80px_96px_96px_160px]"
 
   if (loading) {
     return (
@@ -345,7 +538,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       )}
 
       <div className="overflow-x-auto">
-        <div className={(compact ? "text-xs " : "text-sm ") + "w-full min-w-[960px] border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden"}>
+        <div className={(compact ? "text-xs " : "text-sm ") + "w-full min-w-[1340px] border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden"}>
           {/* Шапка */}
           <div className={(compact ? "text-[12px] " : "text-[12px] xl:text-[13px] ") + `sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 ${rowGridClass} items-center px-3 py-2 border-b border-slate-200 dark:border-slate-700`}>
             <div className="flex items-center">
@@ -356,6 +549,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             </div>
             <div className="px-2 flex items-center font-medium">Описание работ</div>
             <div className="px-2 flex items-center font-medium">Категория</div>
+            <div className="px-2 flex items-center font-medium">Ответственный</div>
+            <div className="px-2 flex items-center font-medium">Статус</div>
+            <div className="px-2 text-center flex items-center justify-center font-medium">%</div>
             <div className="px-2 text-center flex items-center justify-center font-medium">План</div>
             <div className="px-2 text-center flex items-center justify-center font-medium">Факт</div>
             <div className="px-2 flex items-center font-medium">Срок</div>
@@ -370,7 +566,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     <Clock className="h-4 w-4 text-emerald-600" />
                   </button>
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[12px] xl:text-[14px]" onClick={() => startEdit(item)}>
+                <div className="px-2 dark:text-slate-200 text-[12px] xl:text-[14px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <textarea autoFocus value={editDraft?.decomposition_item_description || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_description: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} maxLength={MAX_DESC_CHARS} rows={3} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white resize-y min-h-[2.5rem] max-h-40" />
                   ) : (
@@ -379,9 +575,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </div>
                   )}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px]" onClick={() => startEdit(item)}>
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
-                    <select value={editDraft?.decomposition_item_work_category_id || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white">
+                    <select value={editDraft?.decomposition_item_work_category_id || ""} onChange={e => { const v = e.target.value; setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: v } as DecompositionItemRow : prev); updateItemFields(item.decomposition_item_id, { decomposition_item_work_category_id: v }); }} onKeyDown={handleEditKey} className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white">
                       {categories.map(c => (
                         <option key={c.work_category_id} value={c.work_category_id}>{c.work_category_name}</option>
                       ))}
@@ -390,7 +586,98 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     <span className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">{categoryById.get(item.decomposition_item_work_category_id) || "—"}</span>
                   )}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px]" onClick={() => startEdit(item)}>
+                {/* Колонка ответственного с поиском (Command) */}
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                  {editingId === item.decomposition_item_id ? (
+                    <div className="relative">
+                      <input
+                        list={`profiles-${item.decomposition_item_id}`}
+                        className="w-full pl-2 pr-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white text-[11px]"
+                        placeholder="Начните вводить имя"
+                        value={responsibleSearch}
+                        onChange={(e) => setResponsibleSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            const val = responsibleSearch.trim().toLowerCase()
+                            const match = profiles.find(p => getProfileName(p).toLowerCase() === val) ||
+                                          profiles.find(p => getProfileName(p).toLowerCase().startsWith(val)) ||
+                                          profiles.find(p => getProfileName(p).toLowerCase().includes(val))
+                            const selectedId = match ? match.user_id : null
+                            setEditDraft(prev => prev ? { ...prev, decomposition_item_responsible: selectedId } as DecompositionItemRow : prev)
+                            saveEditWithPatch({ decomposition_item_responsible: selectedId })
+                          }
+                        }}
+                      />
+                      <datalist id={`profiles-${item.decomposition_item_id}`}>
+                        <option value="" />
+                        {profiles.map(p => (
+                          <option key={p.user_id} value={getProfileName(p)} />
+                        ))}
+                      </datalist>
+                    </div>
+                  ) : (
+                    <span className="inline-block max-w-full truncate text-[11px]">
+                      {getResponsibleName(item) || "—"}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Колонка статуса */}
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                  {editingId === item.decomposition_item_id ? (
+                    <select 
+                      value={editDraft?.decomposition_item_status_id || ""} 
+                      onChange={e => { const v = e.target.value || null; setEditDraft(prev => prev ? { ...prev, decomposition_item_status_id: v } as DecompositionItemRow : prev); updateItemFields(item.decomposition_item_id, { decomposition_item_status_id: v }); }} 
+                      onKeyDown={handleEditKey} 
+                      className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white text-[11px]"
+                    >
+                      {statuses.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span 
+                      className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      style={{ 
+                        backgroundColor: item.status?.color || '#6c757d', 
+                        color: 'white' 
+                      }}
+                    >
+                      {item.status?.name || "—"}
+                    </span>
+                  )}
+                              </div>
+                
+                {/* Колонка процента готовности */}
+                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                  {editingId === item.decomposition_item_id ? (
+                    <div className="flex items-center justify-center">
+                      <input 
+                        type="number" 
+                        min={0} 
+                        max={100} 
+                        value={editDraft?.decomposition_item_progress ?? 0} 
+                        onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_progress: Math.min(100, Math.max(0, Number(e.target.value))) } as DecompositionItemRow : prev)} 
+                        onKeyDown={handleEditKey} 
+                        className="w-12 px-1 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white text-[11px]" 
+                      />
+                      <span className="ml-1 text-[10px] text-slate-500">%</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-500"
+                          style={{ width: `${Math.min(100, Math.max(0, Number(item.decomposition_item_progress || 0)))}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] w-8 text-right">{item.decomposition_item_progress || 0}%</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <input type="number" step="0.25" min={0} value={editDraft?.decomposition_item_planned_hours ?? 0} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-16 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white" />
                   ) : (
@@ -413,21 +700,17 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     )
                   })()}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] whitespace-nowrap" onClick={() => startEdit(item)}>
+                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] whitespace-nowrap hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
-                      <button type="button" onClick={(e) => { const input = (e.currentTarget.nextSibling as HTMLInputElement | null); input?.showPicker?.(); input?.focus() }} title="Выбрать дату" className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
-                        <CalendarIcon className="h-4 w-4" />
-                      </button>
-                      <input type="date" value={editDraft?.decomposition_item_planned_due_date || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="sr-only" />
-                      <div className="ml-auto flex items-center gap-1">
-                        <button title="Сохранить" className="p-1 rounded text-emerald-600 hover:bg-emerald-50 disabled:opacity-50" onClick={saveEdit} disabled={savingId === item.decomposition_item_id}>
-                          {savingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Check className="h-4 w-4" />)}
-                        </button>
-                        <button title="Отмена" className="p-1 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" onClick={cancelEdit}>
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <input 
+                        type="date" 
+                        value={editDraft?.decomposition_item_planned_due_date || ""} 
+                        onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: e.target.value } as DecompositionItemRow : prev)} 
+                        onKeyDown={handleEditKey} 
+                        onBlur={saveEdit}
+                        className="flex-1 px-2 py-1.5 text-[11px] border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
+                      />
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
@@ -440,9 +723,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="min-w-[8rem]">
-                            <DropdownMenuItem onClick={() => startEdit(item)}>
-                              <Pencil className="h-4 w-4" /> Редактировать
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
                               {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
                               Удалить
@@ -496,6 +776,54 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   ))}
                 </select>
               </div>
+              {/* Ответственный — поиск по тексту */}
+              <div className="px-2">
+                <input
+                  list="new-row-profiles"
+                  className="w-full bg-transparent pl-2 pr-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
+                  placeholder="Ответственный"
+                  value={newResponsibleSearch}
+                  onChange={(e) => setNewResponsibleSearch(e.target.value)}
+                  onKeyDown={handleEditKey}
+                />
+                <datalist id="new-row-profiles">
+                  <option value="" />
+                  {profiles.map(p => (
+                    <option key={p.user_id} value={getProfileName(p)} />
+                  ))}
+                </datalist>
+              </div>
+              {/* Статус — простой select */}
+              <div className="px-2">
+                <select
+                  value={newStatusId}
+                  onChange={e => setNewStatusId(e.target.value)}
+                  className="w-full bg-transparent pl-2 pr-6 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
+                  onKeyDown={handleEditKey}
+                >
+                  {statuses.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                  </div>
+              
+              {/* Процент готовности — компактный инпут */}
+              <div className="px-2">
+                <div className="flex items-center justify-center">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newProgress}
+                    onChange={e => setNewProgress(Math.min(100, Math.max(0, Number(e.target.value))).toString())}
+                    placeholder="0"
+                    className="w-12 text-center tabular-nums bg-transparent px-1 py-1.5 border border-transparent focus:border-slate-300 rounded-md dark:text-white text-[11px]"
+                    onKeyDown={handleEditKey}
+                  />
+                  <span className="ml-1 text-[10px] text-slate-500">%</span>
+                </div>
+              </div>
+
               {/* План, ч — компактный инпут */}
               <div className="px-2">
                 <input
@@ -526,14 +854,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         </div>
       </div>
       {!compact && (
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Подсказка: нажмите Enter, чтобы сохранить изменения или добавить новую строку.</div>
-          <button
-            onClick={() => { setSelectedForLog(null); setIsLogModalOpen(true); }}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-          >
-            <PlusCircle className="h-4 w-4" /> Добавить отчёт
-          </button>
+        <div className="flex items-center justify-start">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Подсказка: кликните по любому полю для редактирования. Enter — сохранить изменения.</div>
         </div>
       )}
 
@@ -546,13 +868,40 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           // Обновим статистику и список
           const { data, error } = await supabase
             .from("decomposition_items")
-            .select(
-              "decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date, decomposition_item_order"
-            )
+            .select(`
+              decomposition_item_id,
+              decomposition_item_description,
+              decomposition_item_work_category_id,
+              decomposition_item_planned_hours,
+              decomposition_item_planned_due_date,
+              decomposition_item_order,
+              decomposition_item_responsible,
+              decomposition_item_status_id,
+              decomposition_item_progress,
+              profiles!decomposition_item_responsible (
+                user_id,
+                first_name,
+                last_name,
+                email
+              ),
+              section_statuses!decomposition_item_status_id (
+                id,
+                name,
+                color,
+                description
+              )
+            `)
             .eq("decomposition_item_section_id", sectionId)
             .order("decomposition_item_order", { ascending: true })
             .order("decomposition_item_created_at", { ascending: true })
-          if (!error) setItems((data as any) || [])
+          if (!error) {
+            const normalized = ((data as any[]) || []).map((item: any) => ({
+              ...item,
+              responsible_profile: item.profiles || null,
+              status: item.section_statuses || null,
+            }))
+            setItems(normalized as any)
+          }
           // Обновим сводные по секции
           const totals = await supabase
             .from('view_section_decomposition_totals')
@@ -581,13 +930,40 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               // Перезагрузка списка после применения шаблона
               const { data, error } = await supabase
                 .from("decomposition_items")
-                .select(
-                  "decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_planned_hours, decomposition_item_planned_due_date, decomposition_item_order"
-                )
+                .select(`
+                  decomposition_item_id,
+                  decomposition_item_description,
+                  decomposition_item_work_category_id,
+                  decomposition_item_planned_hours,
+                  decomposition_item_planned_due_date,
+                  decomposition_item_order,
+                  decomposition_item_responsible,
+                  decomposition_item_status_id,
+                  decomposition_item_progress,
+                  profiles!decomposition_item_responsible (
+                    user_id,
+                    first_name,
+                    last_name,
+                    email
+                  ),
+                  section_statuses!decomposition_item_status_id (
+                    id,
+                    name,
+                    color,
+                    description
+                  )
+                `)
                 .eq("decomposition_item_section_id", sectionId)
                 .order("decomposition_item_order", { ascending: true })
                 .order("decomposition_item_created_at", { ascending: true })
-              if (!error) setItems((data as any) || [])
+              if (!error) {
+                const normalized = ((data as any[]) || []).map((item: any) => ({
+                  ...item,
+                  responsible_profile: item.profiles || null,
+                  status: item.section_statuses || null,
+                }))
+                setItems(normalized as any)
+              }
               // Обновим сводные по секции
               const totals = await supabase
                 .from('view_section_decomposition_totals')

@@ -16,6 +16,7 @@ import { CreateStageModal } from './CreateStageModal'
 import { EditObjectModal } from './EditObjectModal'
 import { CreateObjectModal } from './CreateObjectModal'
 import { CreateSectionModal } from './CreateSectionModal'
+import { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
@@ -28,6 +29,7 @@ import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 
+import { SectionDetailTabs } from './SectionDetailTabs'
 
 interface ProjectNode {
   id: string
@@ -83,6 +85,7 @@ interface TreeNodeProps {
   onCreateStage: (project: ProjectNode, e: React.MouseEvent) => void
   onCreateObject: (stage: ProjectNode, e: React.MouseEvent) => void
   onCreateSection: (object: ProjectNode, e: React.MouseEvent) => void
+  onCreateAssignment: (object: ProjectNode, e: React.MouseEvent) => void
   onDeleteProject: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
@@ -105,6 +108,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onCreateStage,
   onCreateObject,
   onCreateSection,
+  onCreateAssignment,
   onDeleteProject,
   onOpenProjectDashboard,
   onOpenStatusManagement,
@@ -569,6 +573,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <PlusCircle className="h-3 w-3 text-teal-600 dark:text-teal-400" />
                 </button>
+                <UiTooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => onCreateAssignment(node, e)}
+                      className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all mr-1"
+                    >
+                      <SquareStack className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Создать задание</p>
+                  </TooltipContent>
+                </UiTooltip>
                 <button
                   onClick={(e) => onEditObject(node, e)}
                   className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-all"
@@ -702,12 +719,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
           )}
 
-          {/* Полная версия (>=2xl): две колонки, справа комментарии */}
-          <div className="hidden 2xl:flex gap-4 items-stretch">
-            {/* Левая колонка: вверху описание, ниже два блока по высоте, равные комментариям */}
-            <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-[80vh] 2xl:max-h-[80vh] 2xl:overflow-hidden">
-            {/* Описание сверху + аналитика */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          {/* Полная версия (>=2xl): описание + вкладки на всю ширину */}
+          <div className="hidden 2xl:block">
+            {/* Описание раздела */}
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 mb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
@@ -735,29 +750,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </div>
             </div>
 
-              {/* Блоки ниже: высота по содержимому */}
-              <div className="flex flex-col gap-4">
-                {/* Декомпозиция (верхняя половина) */}
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <SectionDecompositionTab sectionId={node.id} compact />
-                </div>
-
-                {/* Задания (нижняя половина) */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                  <SectionTasksPreview sectionId={node.id} />
-                </div>
-              </div>
-            </div>
-
-            {/* Правая колонка: Комментарии на всю высоту блока */}
-            <div className="w-[680px] self-stretch hidden 2xl:block">
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col h-[80vh] max-h-[80vh] overflow-hidden">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
-                <div className="flex-1 min-h-0">
-                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
-                </div>
-              </div>
-            </div>
+            {/* Панели с вкладками на полную ширину */}
+            <SectionDetailTabs sectionId={node.id} />
           </div>
         </div>
       )}
@@ -779,6 +773,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onCreateStage={onCreateStage}
               onCreateObject={onCreateObject}
               onCreateSection={onCreateSection}
+              onCreateAssignment={onCreateAssignment}
               onDeleteProject={onDeleteProject}
               onOpenProjectDashboard={onOpenProjectDashboard}
               onOpenStatusManagement={onOpenStatusManagement}
@@ -842,6 +837,8 @@ export function ProjectsTree({
 
 
   // Закрытие выпадающего списка статусов при клике вне его
+  const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false)
+  const [selectedObjectForAssignment, setSelectedObjectForAssignment] = useState<ProjectNode | null>(null)
   
 
   // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
@@ -850,27 +847,25 @@ export function ProjectsTree({
   useEffect(() => {
     const toggleGroup = () => toggleGroupByClient()
     const toggleManagers = () => toggleShowManagers()
-    const expandAll = () => expandAllNodes()
     const collapseAll = () => collapseAllNodes()
-    const onlySections = () => setShowOnlySections((v) => !v)
+    const onlySections = () => setShowOnlySections((v) => v) // отключено, держим состояние как есть
     const openStatusManagement = () => setShowStatusManagementModal(true)
 
     window.addEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
     window.addEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
-    window.addEventListener('projectsTree:expandAll', expandAll as EventListener)
     window.addEventListener('projectsTree:collapseAll', collapseAll as EventListener)
-    window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+    // обработчик toggleOnlySections оставлен на будущее, но логика отключена
+    // window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
     window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
 
     return () => {
       window.removeEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
       window.removeEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
-      window.removeEventListener('projectsTree:expandAll', expandAll as EventListener)
       window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
-      window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
+      // window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
       window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
     }
-  }, [toggleGroupByClient, toggleShowManagers])
+  }, [toggleGroupByClient, toggleShowManagers, collapseAllNodes, showOnlySections, groupByClient, expandedNodes])
 
   // Загрузка данных
   useEffect(() => {
@@ -1240,6 +1235,8 @@ export function ProjectsTree({
           type: 'object',
           stageId: row.stage_id,
           projectId: row.project_id,
+          projectName: row.project_name,
+          stageName: row.stage_name,
           children: []
         })
       }
@@ -1396,18 +1393,15 @@ export function ProjectsTree({
     return ids
   }
 
-  // Развернуть все узлы
-  const expandAllNodes = () => {
-    const allNodeIds = collectAllNodeIds(getFilteredTreeData())
-    allNodeIds.forEach(nodeId => {
-      if (!expandedNodes.has(nodeId)) {
-        toggleNodeInStore(nodeId)
-      }
-    })
-  }
-
   // Свернуть все узлы
-  const collapseAllNodes = () => {
+  function collapseAllNodes() {
+    // Гарантируем целевое состояние верхнего уровня: список руководителей
+    // 1) выключаем группировку по заказчикам
+    if (groupByClient) toggleGroupByClient()
+    // 2) выключаем режим "только разделы"
+    if (showOnlySections) setShowOnlySections(false)
+    // 3) включаем отображение руководителей
+    if (!showManagers) toggleShowManagers()
     // Закрываем все открытые узлы
     Array.from(expandedNodes).forEach(nodeId => {
       toggleNodeInStore(nodeId)
@@ -1587,6 +1581,12 @@ export function ProjectsTree({
 
 
 
+  const handleCreateAssignment = (object: ProjectNode, e: React.MouseEvent) => {
+    e.stopPropagation() // Предотвращаем раскрытие узла
+    setSelectedObjectForAssignment(object)
+    setShowCreateAssignmentModal(true)
+  }
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
@@ -1628,6 +1628,7 @@ export function ProjectsTree({
                 onCreateStage={handleCreateStage}
                 onCreateObject={handleCreateObject}
                 onCreateSection={handleCreateSection}
+                onCreateAssignment={handleCreateAssignment}
                 onDeleteProject={handleDeleteProject}
                 onOpenProjectDashboard={onOpenProjectDashboard}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
@@ -1779,6 +1780,22 @@ export function ProjectsTree({
       />
 
 
+
+      {/* Модальное окно создания задания для объекта */}
+      {showCreateAssignmentModal && selectedObjectForAssignment && (
+        <CreateObjectAssignmentModal
+          isOpen={showCreateAssignmentModal}
+          onClose={() => {
+            setShowCreateAssignmentModal(false)
+            setSelectedObjectForAssignment(null)
+          }}
+          objectId={selectedObjectForAssignment.id}
+          objectName={selectedObjectForAssignment.name}
+          projectId={selectedObjectForAssignment.projectId || ''}
+          projectName={selectedObjectForAssignment.projectName || ''}
+          stageId={selectedObjectForAssignment.stageId || ''}
+        />
+      )}
 
     </TooltipProvider>
   )

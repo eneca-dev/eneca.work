@@ -10,6 +10,8 @@ import type {
 
 const supabase = createClient()
 
+// We always include extended fields; DB has columns per migration
+
 export async function listTemplatesByDepartment(department_id: string): Promise<DecompositionTemplate[]> {
   const { data, error } = await supabase
     .from('decomposition_templates')
@@ -40,7 +42,7 @@ export async function listTemplatesByDepartment(department_id: string): Promise<
 }
 
 export async function getTemplate(id: string): Promise<{ template: DecompositionTemplate; items: DecompositionTemplateItem[] }> {
-  const [{ data: tData, error: tErr }, { data: iData, error: iErr }] = await Promise.all([
+  const [{ data: tData, error: tErr }] = await Promise.all([
     supabase
       .from('decomposition_templates')
       .select(
@@ -56,23 +58,35 @@ export async function getTemplate(id: string): Promise<{ template: Decomposition
       )
       .eq('decomposition_template_id', id)
       .single(),
-    supabase
-      .from('decomposition_template_items')
-      .select(
-        [
-          'decomposition_template_item_id',
-          'decomposition_template_item_template_id',
-          'decomposition_template_item_description',
-          'decomposition_template_item_work_category_id',
-          'decomposition_template_item_planned_hours',
-          'decomposition_template_item_due_offset_days',
-          'decomposition_template_item_order',
-        ].join(', ')
-      )
-      .eq('decomposition_template_item_template_id', id)
-      .order('decomposition_template_item_order', { ascending: true }),
   ])
   if (tErr) throw tErr
+
+  // Items with fallback if new columns don't exist yet
+  let iData: any[] | null = null
+  let iErr: any = null
+  try {
+    const sel = [
+      'decomposition_template_item_id',
+      'decomposition_template_item_template_id',
+      'decomposition_template_item_description',
+      'decomposition_template_item_work_category_id',
+      'decomposition_template_item_planned_hours',
+      'decomposition_template_item_due_offset_days',
+      'decomposition_template_item_order',
+      'decomposition_template_item_responsible',
+      'decomposition_template_item_status_id',
+      'decomposition_template_item_progress',
+    ].join(', ')
+    const { data, error } = await supabase
+      .from('decomposition_template_items')
+      .select(sel)
+      .eq('decomposition_template_item_template_id', id)
+      .order('decomposition_template_item_order', { ascending: true })
+    if (error) throw error
+    iData = (data as any[]) || []
+  } catch (e) {
+    iErr = e
+  }
   if (iErr) throw iErr
 
   const template: DecompositionTemplate = {
@@ -93,6 +107,9 @@ export async function getTemplate(id: string): Promise<{ template: Decomposition
     planned_hours: Number(r.decomposition_template_item_planned_hours ?? 0),
     due_offset_days: r.decomposition_template_item_due_offset_days,
     order: Number(r.decomposition_template_item_order ?? 0),
+    responsible_id: r.decomposition_template_item_responsible ?? null,
+    status_id: r.decomposition_template_item_status_id ?? null,
+    progress: r.decomposition_template_item_progress ?? null,
   }))
 
   return { template, items }
@@ -177,13 +194,16 @@ export async function deleteTemplate(id: string): Promise<void> {
 }
 
 export async function createTemplateItem(payload: CreateTemplateItemPayload): Promise<DecompositionTemplateItem> {
-  const insertPayload = {
+  const insertPayload: Record<string, unknown> = {
     decomposition_template_item_template_id: payload.template_id,
     decomposition_template_item_description: payload.description,
     decomposition_template_item_work_category_id: payload.work_category_id,
     decomposition_template_item_planned_hours: payload.planned_hours ?? 0,
     decomposition_template_item_due_offset_days: payload.due_offset_days ?? null,
     decomposition_template_item_order: payload.order ?? 0,
+    decomposition_template_item_responsible: payload.responsible_id ?? null,
+    decomposition_template_item_status_id: payload.status_id ?? null,
+    decomposition_template_item_progress: payload.progress ?? null,
   }
   const { data, error } = await supabase
     .from('decomposition_template_items')
@@ -197,10 +217,14 @@ export async function createTemplateItem(payload: CreateTemplateItemPayload): Pr
         'decomposition_template_item_planned_hours',
         'decomposition_template_item_due_offset_days',
         'decomposition_template_item_order',
+        // The next fields may not exist pre-migration; keep them but PostgREST will ignore if not present due to select
+        'decomposition_template_item_responsible',
+        'decomposition_template_item_status_id',
+        'decomposition_template_item_progress',
       ].join(', ')
     )
     .single()
-  if (error) throw error
+  if (error) throw new Error(error.message)
   const it: DecompositionTemplateItem = {
     id: (data as any).decomposition_template_item_id,
     template_id: (data as any).decomposition_template_item_template_id,
@@ -209,6 +233,9 @@ export async function createTemplateItem(payload: CreateTemplateItemPayload): Pr
     planned_hours: Number((data as any).decomposition_template_item_planned_hours ?? 0),
     due_offset_days: (data as any).decomposition_template_item_due_offset_days,
     order: Number((data as any).decomposition_template_item_order ?? 0),
+    responsible_id: (data as any).decomposition_template_item_responsible ?? null,
+    status_id: (data as any).decomposition_template_item_status_id ?? null,
+    progress: (data as any).decomposition_template_item_progress ?? null,
   }
   return it
 }
@@ -220,6 +247,9 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
   if (payload.planned_hours !== undefined) updatePayload['decomposition_template_item_planned_hours'] = payload.planned_hours
   if (payload.due_offset_days !== undefined) updatePayload['decomposition_template_item_due_offset_days'] = payload.due_offset_days
   if (payload.order !== undefined) updatePayload['decomposition_template_item_order'] = payload.order
+  if (payload.responsible_id !== undefined) updatePayload['decomposition_template_item_responsible'] = payload.responsible_id
+  if (payload.status_id !== undefined) updatePayload['decomposition_template_item_status_id'] = payload.status_id
+  if (payload.progress !== undefined) updatePayload['decomposition_template_item_progress'] = payload.progress
 
   const { data, error } = await supabase
     .from('decomposition_template_items')
@@ -234,10 +264,46 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
         'decomposition_template_item_planned_hours',
         'decomposition_template_item_due_offset_days',
         'decomposition_template_item_order',
+        'decomposition_template_item_responsible',
+        'decomposition_template_item_status_id',
+        'decomposition_template_item_progress',
       ].join(', ')
     )
-    .single()
-  if (error) throw error
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) {
+    const { data: refetch, error: refetchErr } = await supabase
+      .from('decomposition_template_items')
+      .select(
+        [
+          'decomposition_template_item_id',
+          'decomposition_template_item_template_id',
+          'decomposition_template_item_description',
+          'decomposition_template_item_work_category_id',
+          'decomposition_template_item_planned_hours',
+          'decomposition_template_item_due_offset_days',
+          'decomposition_template_item_order',
+          'decomposition_template_item_responsible',
+          'decomposition_template_item_status_id',
+          'decomposition_template_item_progress',
+        ].join(', ')
+      )
+      .eq('decomposition_template_item_id', id)
+      .single()
+    if (refetchErr) throw new Error(refetchErr.message)
+    return {
+      id: (refetch as any).decomposition_template_item_id,
+      template_id: (refetch as any).decomposition_template_item_template_id,
+      description: (refetch as any).decomposition_template_item_description,
+      work_category_id: (refetch as any).decomposition_template_item_work_category_id,
+      planned_hours: Number((refetch as any).decomposition_template_item_planned_hours ?? 0),
+      due_offset_days: (refetch as any).decomposition_template_item_due_offset_days,
+      order: Number((refetch as any).decomposition_template_item_order ?? 0),
+      responsible_id: (refetch as any).decomposition_template_item_responsible ?? null,
+      status_id: (refetch as any).decomposition_template_item_status_id ?? null,
+      progress: (refetch as any).decomposition_template_item_progress ?? null,
+    }
+  }
   const it: DecompositionTemplateItem = {
     id: (data as any).decomposition_template_item_id,
     template_id: (data as any).decomposition_template_item_template_id,
@@ -246,6 +312,9 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
     planned_hours: Number((data as any).decomposition_template_item_planned_hours ?? 0),
     due_offset_days: (data as any).decomposition_template_item_due_offset_days,
     order: Number((data as any).decomposition_template_item_order ?? 0),
+    responsible_id: (data as any).decomposition_template_item_responsible ?? null,
+    status_id: (data as any).decomposition_template_item_status_id ?? null,
+    progress: (data as any).decomposition_template_item_progress ?? null,
   }
   return it
 }
@@ -273,22 +342,24 @@ export async function applyTemplateAppend(params: ApplyTemplateParams): Promise<
   if (!userId) throw new Error('Пользователь не найден')
 
   // 2) тянем позиции шаблона
+  const sel = [
+    'decomposition_template_item_id',
+    'decomposition_template_item_template_id',
+    'decomposition_template_item_description',
+    'decomposition_template_item_work_category_id',
+    'decomposition_template_item_planned_hours',
+    'decomposition_template_item_due_offset_days',
+    'decomposition_template_item_order',
+    'decomposition_template_item_responsible',
+    'decomposition_template_item_status_id',
+    'decomposition_template_item_progress',
+  ].join(', ')
   const { data: items, error: iErr } = await supabase
     .from('decomposition_template_items')
-    .select(
-      [
-        'decomposition_template_item_id',
-        'decomposition_template_item_template_id',
-        'decomposition_template_item_description',
-        'decomposition_template_item_work_category_id',
-        'decomposition_template_item_planned_hours',
-        'decomposition_template_item_due_offset_days',
-        'decomposition_template_item_order',
-      ].join(', ')
-    )
+    .select(sel)
     .eq('decomposition_template_item_template_id', params.template_id)
     .order('decomposition_template_item_order', { ascending: true })
-  if (iErr) throw iErr
+  if (iErr) throw new Error(iErr.message || String(iErr))
   const templateItems: DecompositionTemplateItem[] = ((items || []) as any[]).map((r) => ({
     id: r.decomposition_template_item_id,
     template_id: r.decomposition_template_item_template_id,
@@ -297,6 +368,9 @@ export async function applyTemplateAppend(params: ApplyTemplateParams): Promise<
     planned_hours: Number(r.decomposition_template_item_planned_hours ?? 0),
     due_offset_days: r.decomposition_template_item_due_offset_days,
     order: Number(r.decomposition_template_item_order ?? 0),
+    responsible_id: r.decomposition_template_item_responsible ?? null,
+    status_id: r.decomposition_template_item_status_id ?? null,
+    progress: r.decomposition_template_item_progress ?? null,
   }))
   if (templateItems.length === 0) return { inserted: 0 }
 
@@ -320,6 +394,9 @@ export async function applyTemplateAppend(params: ApplyTemplateParams): Promise<
       decomposition_item_planned_due_date: null, // даты больше не переносим из шаблонов
       decomposition_item_order: startOrder + idx,
       decomposition_item_created_by: userId,
+      decomposition_item_responsible: ti.responsible_id ?? null,
+      decomposition_item_status_id: ti.status_id ?? null,
+      decomposition_item_progress: ti.progress ?? 0,
     }
   })
 
