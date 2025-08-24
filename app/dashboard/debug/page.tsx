@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useUserStore } from "@/stores/useUserStore"
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore"
+import { PermissionsDebugPanel } from "@/modules/permissions/components/PermissionsDebugPanel"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
@@ -77,6 +78,11 @@ export default function DebugPage() {
   
   return (
     <div className="container mx-auto py-8 px-4">
+      {/* Панель отладки разрешений */}
+      <div className="mb-6">
+        <PermissionsDebugPanel />
+      </div>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Отладка</h1>
         <div className="flex space-x-2">

@@ -1,31 +1,7 @@
 // Экспорт основных типов
 export type * from './types'
 
-// Экспорт констант
-export { PERMISSIONS, getPermissionParts, buildPermission, isSystemPermission } from './constants/permissions'
-export { 
-  ROLE_NAMES,
-  ROLE_DESCRIPTIONS,
-  ROLE_COLORS,
-  ROLE_TEMPLATES, 
-  SYSTEM_ROLES, 
-  ROLE_ASSIGNERS, 
-  ROLE_HIERARCHY_LEVEL,
-  isSystemRole,
-  canUserAssignRoles,
-  getRolePermissions,
-  getRoleDescription,
-  getRoleColor,
-  getRoleHierarchyLevel,
-  sortRolesByImportance,
-  canAssignRole as canAssignRoleFromRoles,
-  validateRoleName,
-  validateRoleDescription,
-  checkRoleConflicts,
-  getRecommendedRoles
-} from './constants/roles'
-
-// Экспорт утилит
+// Экспорт утилит (константы теперь встроены в утилиты)
 export { 
   checkPermission, 
   checkAnyPermission, 
@@ -36,7 +12,9 @@ export {
   getModulePermissions,
   canAssignRole,
   getPermissionDescription,
-  groupPermissionsByModule
+  groupPermissionsByModule,
+  getPermissionParts,
+  isSystemPermission
 } from './utils/permissionUtils'
 
 export { 
@@ -60,10 +38,14 @@ export {
   useAnnouncementsPermissions
 } from './hooks/usePermissions'
 
+export { usePermissionsLoader } from './hooks/usePermissionsLoader'
+
 // Экспорт компонентов
 export * from './components/PermissionGuard'
 export * from './components/RoleGuard'
 export * from './components/PermissionBoundary'
+export { PermissionsErrorBoundary } from './components/PermissionsErrorBoundary'
+export { PermissionsDebugPanel } from './components/PermissionsDebugPanel'
 
 // Экспорт хранилищ
 export { 

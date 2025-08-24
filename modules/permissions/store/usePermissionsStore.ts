@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { checkPermission, checkAnyPermission, checkAllPermissions, getPermissionLevel } from '../utils/permissionUtils'
-import { ROLE_TEMPLATES } from '../constants/roles'
 
 interface PermissionsState {
   // Состояние
@@ -12,7 +11,6 @@ interface PermissionsState {
   
   // Методы
   setPermissions: (permissions: string[]) => void
-  setFromRole: (roleName?: string | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   clearError: () => void
@@ -46,15 +44,7 @@ export const usePermissionsStore = create<PermissionsState>()(
         })
       },
 
-      setFromRole: (roleName?: string | null) => {
-        if (!roleName) {
-          set({ permissions: [], lastUpdated: new Date(), error: null })
-          return
-        }
-        const template = ROLE_TEMPLATES[roleName as keyof typeof ROLE_TEMPLATES]
-        const permissions = template ? [...template.permissions] as string[] : []
-        set({ permissions, lastUpdated: new Date(), error: null })
-      },
+      // УДАЛЕНО: setFromRole больше не нужен - разрешения загружаются из БД
       
       setLoading: (loading: boolean) => {
         set({ isLoading: loading })

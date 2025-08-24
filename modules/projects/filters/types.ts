@@ -3,6 +3,7 @@ export interface FilterOption {
   name: string
   departmentId?: string // для команд - связь с отделом
   managerId?: string    // для проектов - связь с менеджером
+  teamId?: string       // для сотрудников - связь с командой
 }
 
 export interface FilterState {
@@ -92,6 +93,7 @@ export interface FilterStore {
   setFilter: (type: string, value: string | null) => void
   resetFilters: () => void
   isFilterLocked: (type: string) => boolean
+  applyPermissionDefaults: () => void
   getFilteredProjects: () => FilterOption[]
   getFilteredStages: () => FilterOption[]
   getFilteredObjects: () => FilterOption[]

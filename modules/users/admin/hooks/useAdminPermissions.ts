@@ -1,17 +1,17 @@
-import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 import { AdminPermissions } from "../types/admin"
 
 export function useAdminPermissions(): AdminPermissions {
   const { hasPermission } = usePermissions()
 
   return {
-    canViewAdminPanel: hasPermission(PERMISSIONS.USERS.ADMIN_PANEL),
-    canManageRoles: hasPermission(PERMISSIONS.USERS.MANAGE_ROLES),
-    canManageDepartments: hasPermission(PERMISSIONS.USERS.MANAGE_DEPARTMENTS),
-    canManageTeams: hasPermission(PERMISSIONS.USERS.MANAGE_TEAMS),
-    canManagePositions: hasPermission(PERMISSIONS.USERS.MANAGE_POSITIONS),
-    canManageCategories: hasPermission(PERMISSIONS.USERS.MANAGE_CATEGORIES),
-    canChangeRoles: hasPermission(PERMISSIONS.USERS.ASSIGN_ROLES),
-    canAddAdminRole: hasPermission(PERMISSIONS.USERS.ASSIGN_ADMIN_ROLE),
+    canViewAdminPanel: hasPermission('users.admin_panel'),
+    canManageRoles: hasPermission('users.manage.roles'),
+    canManageDepartments: hasPermission('users.manage.departments'),
+    canManageTeams: hasPermission('users.manage.teams'),
+    canManagePositions: hasPermission('users.manage.positions'),
+    canManageCategories: hasPermission('users.manage.categories'),
+    canChangeRoles: hasPermission('users.assign_roles'),
+    canAddAdminRole: hasPermission('users.assign_admin_role'),
   }
 } 

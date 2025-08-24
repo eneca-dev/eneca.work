@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
-import { PERMISSIONS, usePermissionsStore } from '@/modules/permissions'
+import { usePermissionsStore } from '@/modules/permissions'
 import type { FilterStore, FilterOption, FilterConfigs } from './types'
 
 const supabase = createClient()
@@ -64,12 +64,21 @@ export const useFilterStore = create<FilterStore>()(
           if (state.selectedStageId) {
             get().loadObjects(state.selectedStageId)
           }
+          // Применяем дефолты по правам (мягко)
+          get().applyPermissionDefaults()
         },
         
         // Универсальный метод установки фильтра
         setFilter: (type: string, value: string | null) => {
           console.log(`🔄 setFilter: ${type} = ${value}`)
           const state = get()
+          
+          // Проверяем, не заблокирован ли фильтр
+          if (state.isFilterLocked(type)) {
+            console.warn(`🔒 Фильтр ${type} заблокирован и не может быть изменён`)
+            return
+          }
+          
           const updates: any = {}
           
           // Устанавливаем значение
@@ -139,37 +148,109 @@ export const useFilterStore = create<FilterStore>()(
           })
           
           set(updates)
+          // После сброса мягко восстановим дефолты по правам
+          get().applyPermissionDefaults()
         },
         
-        // Проверка блокировки фильтра на основе hierarchy permissions (обновлено для новой системы)
+        // Проверка блокировки фильтра на основе hierarchy permissions + наличие дефолтного значения
         isFilterLocked: (type: string) => {
           const permissionsState = usePermissionsStore.getState()
           const { permissions } = permissionsState
+          const userState = useUserStore.getState()
+          const userId = userState.id
+          const profile: any = userState.profile
           
           if (!permissions || permissions.length === 0) return false
           
           // Проверяем hierarchy permissions для автоблокировки фильтров
-          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_PROJECT_MANAGER)) {
-            // Руководитель проекта - блокируем выбор менеджера (только свои проекты)
-            return type === 'manager'
+          const isAdmin = permissions.includes('hierarchy.is_admin')
+          if (isAdmin) return false
+
+          const state = get()
+          const hasDept = !!(profile?.departmentId)
+          const hasTeam = !!(profile?.teamId)
+          const hasManager = !!userId && (userId.length > 0)
+          const hasEmployee = !!userId && state.employees.some(e => e.id === userId)
+
+          if (permissions.includes('hierarchy.is_project_manager')) {
+            // Блокируем менеджера и все проектные фильтры, если есть дефолт
+            if (type === 'manager') return hasManager
+            // Проектные фильтры блокируются только если уже выбран проект менеджера
+            if (type === 'project' || type === 'stage' || type === 'object') {
+              return !!state.selectedManagerId && state.selectedManagerId === userId
+            }
           }
-          
-          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_DEPARTMENT_HEAD)) {
-            // Руководитель отдела - блокируем выбор отдела (только свой отдел)
-            return type === 'department'
+
+          if (permissions.includes('hierarchy.is_department_head')) {
+            // Блокируем только отдел, команды и сотрудников можно выбирать внутри отдела
+            if (type === 'department') return hasDept
+            // Команду и сотрудников НЕ блокируем - пусть выбирает внутри своего отдела
           }
-          
-          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_TEAM_LEAD)) {
-            // Руководитель команды - блокируем отдел и команду (только своя команда)
-            return type === 'department' || type === 'team'
+
+          if (permissions.includes('hierarchy.is_team_lead')) {
+            // Блокируем отдел/команду, сотрудников можно выбирать внутри команды
+            if (type === 'department') return hasDept
+            if (type === 'team') return hasTeam
+            // Сотрудников НЕ блокируем - пусть выбирает внутри своей команды
           }
-          
+
+          // Обычный пользователь: блокируем отдел/команду/сотрудника при наличии дефолтов
+          if (permissions.includes('hierarchy.is_user')) {
+            if (type === 'department') return hasDept
+            if (type === 'team') return hasTeam
+            if (type === 'employee') return hasEmployee
+          }
+
           // Админ не имеет ограничений
-          if (permissions.includes(PERMISSIONS.HIERARCHY.IS_ADMIN)) {
-            return false
-          }
-          
           return false
+        },
+
+        // Применение дефолтов согласно правам пользователя (мягко: не перетираем явный выбор)
+        applyPermissionDefaults: () => {
+          const permissionsState = usePermissionsStore.getState()
+          const { permissions } = permissionsState
+          const userState = useUserStore.getState()
+          const userId = userState.id
+          const profile: any = userState.profile
+          const state = get()
+
+          if (!permissions || permissions.length === 0) return
+
+          const updates: any = {}
+
+          // Department Head → по умолчанию отдел
+          if (permissions.includes('hierarchy.is_department_head')) {
+            const deptId = profile?.departmentId
+            if (deptId && !state.selectedDepartmentId) updates.selectedDepartmentId = deptId
+          }
+
+          // Team Lead → по умолчанию отдел и команда
+          if (permissions.includes('hierarchy.is_team_lead')) {
+            const deptId = profile?.departmentId
+            const teamId = profile?.teamId
+            if (deptId && !state.selectedDepartmentId) updates.selectedDepartmentId = deptId
+            if (teamId && !state.selectedTeamId) updates.selectedTeamId = teamId
+          }
+
+          // Project Manager → по умолчанию руководитель проекта = текущий пользователь
+          if (permissions.includes('hierarchy.is_project_manager')) {
+            if (userId && !state.selectedManagerId) {
+              updates.selectedManagerId = userId
+              // подгружаем проекты этого менеджера
+              state.loadProjects(userId)
+            }
+          }
+
+          // User → по умолчанию сотрудник = сам
+          if (permissions.includes('hierarchy.is_user')) {
+            if (userId && !state.selectedEmployeeId) updates.selectedEmployeeId = userId
+            const deptId = profile?.departmentId || state.employees.find(e => e.id === userId)?.departmentId
+            const teamId = profile?.teamId || state.employees.find(e => e.id === userId)?.teamId
+            if (deptId && !state.selectedDepartmentId) updates.selectedDepartmentId = deptId
+            if (teamId && !state.selectedTeamId) updates.selectedTeamId = teamId
+          }
+
+          if (Object.keys(updates).length > 0) set(updates)
         },
         
         // Фильтрованные данные
@@ -232,6 +313,8 @@ export const useFilterStore = create<FilterStore>()(
             const managers = Array.from(managerMap.values())
             console.log('✅ Менеджеры загружены:', managers)
             set({ managers })
+            // Применяем дефолты по ролям (если требуется)
+            get().applyPermissionDefaults()
           } catch (error) {
             console.error('❌ Ошибка загрузки менеджеров:', error)
           }
@@ -351,6 +434,8 @@ export const useFilterStore = create<FilterStore>()(
               departments: Array.from(departmentsMap.values()),
               teams: Array.from(teamsMap.values())
             })
+            // Применяем дефолты по ролям (если требуется)
+            get().applyPermissionDefaults()
           } catch (error) {
             console.error('Ошибка загрузки отделов:', error)
           }
@@ -388,6 +473,8 @@ export const useFilterStore = create<FilterStore>()(
             })
             
             set({ employees: Array.from(employeesMap.values()) })
+            // Применяем дефолты по ролям (если требуется)
+            get().applyPermissionDefaults()
           } catch (error) {
             console.error('Ошибка загрузки сотрудников:', error)
           }

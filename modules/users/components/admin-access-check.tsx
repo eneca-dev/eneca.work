@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
-import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 
 interface AdminAccessCheckProps {
   children: React.ReactNode
@@ -45,7 +45,7 @@ export function AdminAccessCheck({
         }
         
         // Проверяем разрешение на админ панель
-        const canViewAdminPanel = hasPermission(PERMISSIONS.USERS.ADMIN_PANEL)
+        const canViewAdminPanel = hasPermission('users.admin_panel')
         setHasAccess(canViewAdminPanel)
         
         // Редиректим если нет доступа

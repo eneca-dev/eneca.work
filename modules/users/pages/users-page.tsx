@@ -14,7 +14,7 @@ import { getUsers } from "@/services/org-data-service"
 import type { User } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
-import { PermissionGuard, PERMISSIONS } from "@/modules/permissions"
+import { PermissionGuard } from "@/modules/permissions"
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -142,7 +142,7 @@ export default function UsersPage() {
                 <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
                 <TabsTrigger value="payment">Оплата</TabsTrigger>
                 <TabsTrigger value="analytics">Аналитика</TabsTrigger>
-                <PermissionGuard permission={PERMISSIONS.USERS.ADMIN_PANEL}>
+                <PermissionGuard permission="users.admin_panel">
                   <TabsTrigger value="admin">Администратор</TabsTrigger>
                 </PermissionGuard>
               </TabsList>

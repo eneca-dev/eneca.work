@@ -1,5 +1,27 @@
 import type { DataConstraint, DataScope, UserPermissions } from '../types'
-import { getPermissionParts, isSystemPermission } from '../constants/permissions'
+
+/**
+ * Разбивает разрешение на части
+ */
+export const getPermissionParts = (permission: string): { module: string; action: string; scope?: string } => {
+  const parts = permission.split('.')
+  if (parts.length < 2) {
+    throw new Error(`Неверный формат разрешения: ${permission}`)
+  }
+  
+  return {
+    module: parts[0],
+    action: parts[1],
+    scope: parts[2]
+  }
+}
+
+/**
+ * Проверяет является ли разрешение системным
+ */
+export const isSystemPermission = (permission: string): boolean => {
+  return permission.startsWith('hierarchy.') || permission.startsWith('system.')
+}
 
 /**
  * Проверяет наличие разрешения у пользователя

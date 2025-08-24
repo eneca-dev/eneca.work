@@ -41,7 +41,14 @@ export function FilterSelect({
         )}
       >
         {label}
-        {locked && <Lock size={12} className="text-amber-500" />}
+        {locked && (
+          <div className="group/tooltip relative">
+            <Lock size={12} className="text-amber-500" />
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-amber-500 text-white rounded shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap z-10">
+              Фильтр заблокирован на основе ваших прав доступа
+            </div>
+          </div>
+        )}
         {loading && <Loader2 size={12} className="animate-spin text-teal-500" />}
       </label>
       

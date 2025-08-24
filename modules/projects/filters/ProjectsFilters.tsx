@@ -3,6 +3,7 @@ import { X, ChevronDown, ChevronRight, Filter, RotateCcw, Eye, EyeOff, Expand, M
 import { cn } from '@/lib/utils'
 import { useFilterStore } from './store'
 import { FilterSelect } from './FilterSelect'
+import { OrganizationFilters } from './OrganizationFilters'
 import { projectsConfig } from './configs'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useTheme } from 'next-themes'
@@ -111,9 +112,6 @@ export function ProjectsFilters({
   const filteredProjects = getFilteredProjects()
   const filteredStages = getFilteredStages()
   const filteredObjects = getFilteredObjects()
-  const filteredTeams = teams.filter(team => 
-    !selectedDepartmentId || team.departmentId === selectedDepartmentId
-  )
   const filteredEmployees = getFilteredEmployees()
 
   const hasActiveFilters = !!(
@@ -256,46 +254,18 @@ export function ProjectsFilters({
           </div>
 
           {/* Организационные фильтры */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <FilterSelect
-              id="department"
-              label="Отдел"
-              value={selectedDepartmentId}
-              onChange={(value) => setFilter('department', value)}
-              disabled={isLoading}
-              locked={isFilterLocked('department')}
-              options={departments}
-              placeholder="Выберите отдел"
-              theme={theme}
-              loading={isLoading}
-            />
-
-            <FilterSelect
-              id="team"
-              label="Команда"
-              value={selectedTeamId}
-              onChange={(value) => setFilter('team', value)}
-              disabled={isLoading || !selectedDepartmentId}
-              locked={isFilterLocked('team')}
-              options={filteredTeams}
-              placeholder="Выберите команду"
-              theme={theme}
-              loading={isLoading}
-            />
-
-            <FilterSelect
-              id="employee"
-              label="Сотрудник"
-              value={selectedEmployeeId}
-              onChange={(value) => setFilter('employee', value)}
-              disabled={isLoading || !selectedTeamId}
-              locked={isFilterLocked('employee')}
-              options={filteredEmployees}
-              placeholder={!selectedTeamId ? "Сначала выберите команду" : "Выберите сотрудника"}
-              theme={theme}
-              loading={isLoading}
-            />
-          </div>
+          <OrganizationFilters
+            departments={departments}
+            teams={teams}
+            employees={employees}
+            selectedDepartmentId={selectedDepartmentId}
+            selectedTeamId={selectedTeamId}
+            selectedEmployeeId={selectedEmployeeId}
+            isLoading={isLoading}
+            setFilter={setFilter}
+            isFilterLocked={isFilterLocked}
+            theme={theme}
+          />
         </div>
       )}
     </div>

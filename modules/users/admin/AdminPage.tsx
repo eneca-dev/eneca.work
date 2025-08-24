@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import AdminPanel from "@/modules/users/admin/AdminPanel"
 import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
-import { usePermissionsHook as usePermissions, PERMISSIONS } from "@/modules/permissions"
+import { usePermissionsHook as usePermissions } from "@/modules/permissions"
 import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { Loader2, ShieldX } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -30,7 +30,7 @@ export default function AdminPage() {
       return
     }
     
-    const canViewAdminPanel = hasPermission(PERMISSIONS.USERS.ADMIN_PANEL)
+    const canViewAdminPanel = hasPermission('users.admin_panel')
     setIsAuthorized(canViewAdminPanel)
     setIsChecking(false)
   }, [permissionsLoading, permissionsError, hasPermission])

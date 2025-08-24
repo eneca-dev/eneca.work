@@ -1,32 +1,20 @@
-import { useEffect } from 'react'
-import { useUserStore } from '@/stores/useUserStore'
-import { usePermissionsStore } from '../store/usePermissionsStore'
-import { ROLE_TEMPLATES } from '../constants/roles'
+import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
 
 /**
  * Хук для синхронизации permissions модуля с useUserStore
- * Автоматически загружает разрешения при смене пользователя
+ * Автоматически загружает разрешения при смене пользователя из Supabase
  */
 export function useUserPermissionsSync() {
-  const isAuthenticated = useUserStore(state => state.isAuthenticated)
-  const roleId = useUserStore(state => state.profile?.roleId)
-  const { setFromRole, reset } = usePermissionsStore()
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      setFromRole(roleId)
-    } else {
-      reset()
-    }
-  }, [isAuthenticated, roleId, setFromRole, reset])
-
-  useEffect(() => {
-    // Очищаем разрешения при размонтировании компонента
-    return () => {
-      console.log('🧹 Очистка permissions при размонтировании')
-      reset()
-    }
-  }, [reset])
+  // Используем новый надёжный загрузчик разрешений
+  const { isLoading, error, hasPermissions, reloadPermissions } = usePermissionsLoader()
+  
+  // Возвращаем состояние для компонентов
+  return {
+    isLoading,
+    error,
+    hasPermissions,
+    reloadPermissions
+  }
 }
 
 /**

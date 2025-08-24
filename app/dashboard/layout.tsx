@@ -10,7 +10,8 @@ import { useNotificationsStore } from "@/stores/useNotificationsStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { ChatInterface } from "@/modules/chat"
-import { UserPermissionsSyncProvider, usePermissionsLoading } from "@/modules/permissions"
+import { UserPermissionsSyncProvider, useUserPermissionsSync } from "@/modules/permissions"
+import { PermissionsErrorBoundary } from "@/modules/permissions/components/PermissionsErrorBoundary"
 import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
 import { useSidebarState } from "@/hooks/useSidebarState"
 
@@ -57,15 +58,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/auth/login')
   }, [router, email, name, isAuthenticated])
 
-  // Загрузка прав доступа теперь происходит автоматически через UserPermissionsSyncProvider
-  // Отслеживаем состояние загрузки прав через permissions store
-  const permissionsLoading = usePermissionsLoading()
+  // Компонент для управления состоянием разрешений
+  function PermissionsManager({ children }: { children: React.ReactNode }) {
+    const { isLoading, error, hasPermissions, reloadPermissions } = useUserPermissionsSync()
+    
+    // Синхронизируем локальный флаг с состоянием permissions
+    useEffect(() => {
+      if (!mounted) return
+      setPermissionsLoaded(!isLoading && (hasPermissions || !!error))
+    }, [mounted, isLoading, hasPermissions, error])
 
-  // Синхронизируем локальный флаг с состоянием permissions store
-  useEffect(() => {
-    if (!mounted) return
-    setPermissionsLoaded(!permissionsLoading)
-  }, [mounted, permissionsLoading])
+    // Если есть ошибка загрузки разрешений
+    if (error) {
+      return (
+        <PermissionsErrorBoundary 
+          error={error}
+          onRetry={reloadPermissions}
+        />
+      )
+    }
+
+    // Если загружаем разрешения
+    if (isLoading) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Загрузка прав доступа...</p>
+          </div>
+        </div>
+      )
+    }
+
+    return children
+  }
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
@@ -193,18 +219,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300`}
         style={{ marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0) }}>
         <UserPermissionsSyncProvider>
-          {!permissionsLoaded ? (
-            <div className="min-h-[60vh] flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Загрузка прав доступа...</p>
-              </div>
-            </div>
-          ) : (
+          <PermissionsManager>
             <NotificationsProvider>
               {children}
             </NotificationsProvider>
-          )}
+          </PermissionsManager>
         </UserPermissionsSyncProvider>
       </div>
       
