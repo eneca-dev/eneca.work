@@ -1154,6 +1154,50 @@ export async function getRecentNotifications(
 } 
 
 /**
+ * Серверный подсчет количества уведомлений по типам для пользователя.
+ * Исключает архивированные уведомления.
+ */
+export async function getNotificationTypeCounts(
+  userId: string,
+  options?: { includeArchived?: boolean }
+): Promise<Record<string, number>> {
+  const supabase = createClient()
+
+  const includeArchived = options?.includeArchived ?? false
+
+  let query = supabase
+    .from('user_notifications')
+    .select(`
+      notifications:notification_id (
+        entity_types:entity_type_id ( entity_name )
+      ),
+      is_archived
+    `)
+    .eq('user_id', userId)
+
+  if (!includeArchived) {
+    query = query.eq('is_archived', false)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Ошибка при подсчете типов уведомлений:', error)
+    throw error
+  }
+
+  const counts: Record<string, number> = {}
+  for (const row of data || []) {
+    const raw = (row as any).notifications?.entity_types?.entity_name as string | undefined
+    const entity = raw === 'assignments' ? 'assignment' : raw // нормализация
+    if (!entity) continue
+    counts[entity] = (counts[entity] || 0) + 1
+  }
+
+  return counts
+}
+
+/**
  * Временная функция для отладки - проверяет все записи в user_notifications
  */
 export async function debugUserNotifications(userId: string): Promise<void> {
