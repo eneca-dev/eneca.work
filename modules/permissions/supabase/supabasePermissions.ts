@@ -331,7 +331,6 @@ export async function checkUserPermission(userId: string, permission: string): P
 export async function assignRoleToUser(
   userId: string, 
   roleId: string, 
-  isPrimary: boolean = false,
   assignedBy?: string
 ): Promise<boolean> {
   const supabase = createClient()

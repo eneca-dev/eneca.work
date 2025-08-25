@@ -44,10 +44,12 @@ export default function DepartmentsTab() {
       setIsLoading(true)
       const supabase = createClient()
       
+      // Принудительно очищаем кэш для получения свежих данных
       const { data, error } = await supabase
         .from("view_departments_with_heads")
         .select("*")
         .order("department_name")
+        .abortSignal(AbortSignal.timeout(10000)) // Таймаут 10 секунд
       
       if (error) {
         console.error("Ошибка при загрузке отделов:", error)
@@ -68,17 +70,71 @@ export default function DepartmentsTab() {
       
       console.log("📊 Уникальные отделы:", uniqueData)
       setDepartments(uniqueData)
+      
+      // Дополнительная проверка: если данные не изменились, принудительно обновляем
+      if (uniqueData.length === departments.length) {
+        console.log("📊 Данные не изменились, принудительно обновляем состояние")
+        setDepartments([...uniqueData])
+      }
     } catch (error) {
       console.error("Ошибка при загрузке отделов:", error)
       toast.error("Произошла ошибка при загрузке данных")
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [departments.length])
+
+  // Принудительное обновление данных
+  const forceRefresh = useCallback(async () => {
+    console.log("🔄 Принудительное обновление данных...")
+    setIsLoading(true)
+    try {
+      await fetchDepartments()
+      toast.success("Данные обновлены")
+    } catch (error) {
+      console.error("Ошибка при обновлении данных:", error)
+      toast.error("Не удалось обновить данные")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [fetchDepartments])
 
   useEffect(() => {
     fetchDepartments()
   }, [fetchDepartments])
+
+  // Дополнительное обновление данных каждые 30 секунд для синхронизации
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchDepartments()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [fetchDepartments])
+
+  // Обновление данных при фокусе на странице
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchDepartments()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [fetchDepartments])
+
+  // Автоматическое обновление данных при изменении поискового запроса
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search.trim()) {
+        fetchDepartments()
+      } else if (search === "") {
+        // Если поиск очищен, обновляем данные для показа всех отделов
+        fetchDepartments()
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [search, fetchDepartments])
 
   // Фильтрация отделов по поиску с дедупликацией
   const filteredDepartments = useMemo(() => {
@@ -98,11 +154,13 @@ export default function DepartmentsTab() {
   }, [departments, search])
 
   // Обработчики для управления отделами
-  const handleCreateDepartment = useCallback(() => {
+  const handleCreateDepartment = useCallback(async () => {
+    // Обновляем данные перед открытием модального окна
+    await fetchDepartments()
     setModalMode("create")
     setSelectedDepartment(null)
     setModalOpen(true)
-  }, [])
+  }, [fetchDepartments])
 
   const handleEditDepartment = useCallback((department: Department) => {
     setModalMode("edit")
@@ -143,15 +201,40 @@ export default function DepartmentsTab() {
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="text-xl font-semibold">Управление отделами</CardTitle>
-              <div className="flex justify-end gap-2">
-                <Input
-                  placeholder="Поиск отделов..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="max-w-xs"
-                />
-                <Button size="default" onClick={handleCreateDepartment}>Создать отдел</Button>
-              </div>
+                          <div className="flex justify-end gap-2">
+              <Input
+                placeholder="Поиск отделов..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="max-w-xs"
+              />
+              <Button 
+                variant="outline" 
+                size="default" 
+                onClick={forceRefresh}
+                disabled={isLoading}
+                className="transition-all duration-200 hover:scale-105"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    Обновление...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm">🔄</div>
+                    Обновить
+                  </div>
+                )}
+              </Button>
+              <Button 
+                size="default" 
+                onClick={handleCreateDepartment}
+                className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
+              >
+                Создать отдел
+              </Button>
+            </div>
             </div>
           </CardContent>
         </Card>
@@ -189,7 +272,32 @@ export default function DepartmentsTab() {
                 onChange={e => setSearch(e.target.value)}
                 className="max-w-xs"
               />
-              <Button size="default" onClick={handleCreateDepartment}>Создать отдел</Button>
+              <Button 
+                variant="outline" 
+                size="default" 
+                onClick={forceRefresh}
+                disabled={isLoading}
+                className="transition-all duration-200 hover:scale-105"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    Обновление...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm">🔄</div>
+                    Обновить
+                  </div>
+                )}
+              </Button>
+              <Button 
+                size="default" 
+                onClick={handleCreateDepartment}
+                className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
+              >
+                Создать отдел
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -321,7 +429,19 @@ export default function DepartmentsTab() {
       {/* Модальное окно для создания/редактирования отдела */}
       <EntityModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={async (open) => {
+          setModalOpen(open)
+          // Если модальное окно закрывается, обновляем данные
+          if (!open) {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await fetchDepartments()
+            
+            // Дополнительное обновление через 1 секунду для надежности
+            setTimeout(async () => {
+              await fetchDepartments()
+            }, 1000)
+          }
+        }}
         title={modalMode === "create" ? "Создать отдел" : "Редактировать отдел"}
         mode={modalMode}
         table="departments"
@@ -330,7 +450,23 @@ export default function DepartmentsTab() {
         entity={entityData}
         existingNames={departments.map(d => d.department_name)}
         entityType="department"
-        onSuccess={fetchDepartments}
+        onSuccess={async () => {
+          // Небольшая задержка для завершения транзакции
+          await new Promise(resolve => setTimeout(resolve, 500))
+          await fetchDepartments()
+          
+          // Дополнительное обновление через 1 секунду для надежности
+          setTimeout(async () => {
+            await fetchDepartments()
+          }, 1000)
+          
+          // Показываем уведомление об успешном создании/редактировании
+          if (modalMode === "create") {
+            toast.success("Отдел успешно создан и данные обновлены")
+          } else {
+            toast.success("Отдел успешно отредактирован и данные обновлены")
+          }
+        }}
       />
 
       {/* Модальное окно для удаления отдела */}
@@ -343,7 +479,18 @@ export default function DepartmentsTab() {
           table="departments"
           idField="department_id"
           entityId={selectedDepartment.department_id}
-          onSuccess={fetchDepartments}
+          onSuccess={async () => {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await fetchDepartments()
+            
+            // Дополнительное обновление через 1 секунду для надежности
+            setTimeout(async () => {
+              await fetchDepartments()
+            }, 1000)
+            
+            // Показываем уведомление об успешном удалении
+            toast.success("Отдел успешно удален и данные обновлены")
+          }}
         />
       )}
 
@@ -353,7 +500,18 @@ export default function DepartmentsTab() {
           open={headModalOpen}
           onOpenChange={setHeadModalOpen}
           department={selectedDepartment}
-          onSuccess={fetchDepartments}
+          onSuccess={async () => {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await fetchDepartments()
+            
+            // Дополнительное обновление через 1 секунду для надежности
+            setTimeout(async () => {
+              await fetchDepartments()
+            }, 1000)
+            
+            // Показываем уведомление об успешном назначении руководителя
+            toast.success("Руководитель отдела успешно назначен и данные обновлены")
+          }}
         />
       )}
 
@@ -365,7 +523,18 @@ export default function DepartmentsTab() {
           type="department"
           entityName={selectedDepartment.department_name}
           entityId={selectedDepartment.department_id}
-          onSuccess={fetchDepartments}
+          onSuccess={async () => {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            await fetchDepartments()
+            
+            // Дополнительное обновление через 1 секунду для надежности
+            setTimeout(async () => {
+              await fetchDepartments()
+            }, 1000)
+            
+            // Показываем уведомление об успешном удалении руководителя
+            toast.success("Руководитель отдела успешно удален и данные обновлены")
+          }}
         />
       )}
     </div>

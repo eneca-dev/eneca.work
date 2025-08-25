@@ -53,6 +53,10 @@ type GroupBy = "none" | "department" | "nested"
 
 // Функция для получения информации о расположении (восстановлена из оригинала)
 const getWorkLocationInfo = (location: string | null) => {
+  if (!location) {
+    return { icon: null, label: "Не указано" }
+  }
+  
   switch (location) {
     case "office":
       return { icon: <Building2 className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />, label: "В офисе" }
@@ -61,7 +65,7 @@ const getWorkLocationInfo = (location: string | null) => {
     case "hybrid":
       return { icon: <Briefcase className="h-4 w-4 mr-2 text-purple-600 dark:text-purple-400" />, label: "Гибридный" }
     default:
-      return { icon: null, label: location || "Не указано" }
+      return { icon: null, label: location }
   }
 }
 
@@ -654,8 +658,9 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                          {[...new Set(users.map(u => u.workLocation).filter(Boolean))]
                            .sort()
                            .filter(location => {
-                             const { label } = getWorkLocationInfo(location)
-                             return label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
+                             const locationInfo = getWorkLocationInfo(location)
+                             if (!locationInfo) return false
+                             return locationInfo.label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
                                     location.toLowerCase().includes(searchLocationDropdown.toLowerCase())
                            })
                            .map(location => (
@@ -673,7 +678,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                className="rounded"
                              />
                              <label htmlFor={`location-${location}`} className="text-xs cursor-pointer">
-                               {getWorkLocationInfo(location).label}
+                               {getWorkLocationInfo(location)?.label || location}
                              </label>
                            </div>
                          ))}
@@ -811,7 +816,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                     <span>Должность и Категория</span>
                   </div>
                 </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell min-w-24">
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden min-w-24">
                   <div className="flex items-center space-x-1">
                     <Tag className="h-3 w-3" />
                     <span>Роли</span>
@@ -819,8 +824,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                 </TableHead>
                 <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
                   <div className="flex items-center space-x-1">
-                    <Home className="h-3 w-3" />
-                    <span>Расположение</span>
+                    <Tag className="h-3 w-3" />
+                    <span>Роль и Расположение</span>
                   </div>
                 </TableHead>
                 {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
@@ -832,8 +837,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                       Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
                       <React.Fragment key={groupName}>
                         {groupBy === "department" && groupName && (
-                          <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                            <TableCell colSpan={canEditAllUsers ? 6 : 5} className="py-2">
+                                                      <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-2">
                               <div
                                 className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(groupName)}
@@ -894,7 +899,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden">
                                   <div className="flex flex-wrap gap-1">
                                     <Badge variant="secondary" className="text-xs">
                                       {user.role || '—'}
@@ -902,9 +907,36 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <div className="flex items-center space-x-1">
-                                    {workLocationInfo.icon}
-                                    <span className="block text-xs">{workLocationInfo.label}</span>
+                                  <div className="flex flex-col space-y-1">
+                                    {/* Роли всегда видны */}
+                                    <div className="flex flex-wrap gap-1">
+                                      {user.role ? (
+                                        // Если есть несколько ролей (разделены запятыми), показываем их отдельными чипами
+                                        user.role.includes(',') ? (
+                                          user.role.split(',').map((role, index) => (
+                                            <Badge key={index} variant="secondary" className="text-xs">
+                                              {role.trim()}
+                                            </Badge>
+                                          ))
+                                        ) : (
+                                          // Если одна роль, показываем как обычно
+                                          <Badge variant="secondary" className="text-xs">
+                                            {user.role}
+                                          </Badge>
+                                        )
+                                      ) : (
+                                        <Badge variant="secondary" className="text-xs">
+                                          —
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {/* Расположение показываем на средних и широких экранах как чип */}
+                                    <div className="hidden md:flex items-center space-x-1">
+                                      <Badge variant="outline" className="text-xs">
+                                        {workLocationInfo?.icon}
+                                        <span className="ml-1">{workLocationInfo?.label || user.workLocation || "Не указано"}</span>
+                                      </Badge>
+                                    </div>
                                   </div>
                                 </TableCell>
                                 {canEditAllUsers && (
@@ -947,7 +979,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
                           <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
+                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
                                 <div
                                 className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(department)}
@@ -968,7 +1000,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
                                 <TableRow className="bg-gray-25 dark:bg-gray-900/25">
-                                  <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-1.5 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
+                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1.5 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
                                     <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300">
                                       <Users className="h-3 w-3 mr-2" />
                                       {team} ({teamUsers.length})
@@ -1012,17 +1044,35 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
                                         <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                       </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden">
                                         <div className="flex flex-wrap gap-1">
                                           <Badge variant="secondary" className="text-xs">
                                             {user.role || '—'}
                                           </Badge>
                                         </div>
                                       </TableCell>
-                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
-                                        <div className="flex items-center space-x-1">
-                                          {workLocationInfo.icon}
-                                          <span className="block xl:truncate xl:max-w-14 2xl:max-w-none text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                        <div className="flex flex-col space-y-1">
+                                          {/* Роли всегда видны */}
+                                          <div className="flex flex-wrap gap-1">
+                                            {user.role ? (
+                                              // Если есть роль, показываем её
+                                              <Badge variant="secondary" className="text-xs">
+                                                {user.role}
+                                              </Badge>
+                                            ) : (
+                                              <Badge variant="secondary" className="text-xs">
+                                                —
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          {/* Расположение показываем на средних и широких экранах как чип */}
+                                          <div className="hidden md:flex items-center space-x-1">
+                                            <Badge variant="outline" className="text-xs">
+                                              {workLocationInfo?.icon}
+                                              <span className="ml-1">{workLocationInfo?.label || user.workLocation || "Не указано"}</span>
+                                            </Badge>
+                                            </div>
                                         </div>
                                         </TableCell>
                                         {canEditAllUsers && (
