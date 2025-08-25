@@ -440,93 +440,105 @@ export async function updateUser(
   }
 
   // Найдем ID для связанных сущностей, если они изменились
-  if (userData.department && userData.department.trim() !== "") {
-    console.log("Ищем отдел:", userData.department);
-    try {
-      const { data: department, error: deptError } = await supabase
-        .from("departments")
-        .select("department_id")
-        .eq("department_name", userData.department)
-        .single()
+  if (userData.department !== undefined) {
+    if (userData.department && userData.department.trim() !== "") {
+      console.log("Ищем отдел:", userData.department);
+      try {
+        const { data: department, error: deptError } = await supabase
+          .from("departments")
+          .select("department_id")
+          .eq("department_name", userData.department)
+          .single()
 
-      if (deptError) {
-        Sentry.captureException(deptError, {
+        if (deptError) {
+          Sentry.captureException(deptError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'update_user_find_department',
+              user_id: userId
+            },
+            extra: {
+              department_name: userData.department,
+              error_code: deptError.code,
+              error_details: deptError.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+        } else if (department) {
+          updates.department_id = department.department_id
+          console.log("Найден отдел, ID =", department.department_id);
+        } else {
+          console.warn("Отдел не найден:", userData.department);
+        }
+      } catch (error) {
+        Sentry.captureException(error, {
           tags: {
             module: 'org_data_service',
-            action: 'update_user_find_department',
+            action: 'update_user_process_department',
             user_id: userId
           },
           extra: {
             department_name: userData.department,
-            error_code: deptError.code,
-            error_details: deptError.details,
+            error_message: (error as Error).message,
             timestamp: new Date().toISOString()
           }
         })
-      } else if (department) {
-        updates.department_id = department.department_id
-        console.log("Найден отдел, ID =", department.department_id);
-      } else {
-        console.warn("Отдел не найден:", userData.department);
       }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: 'org_data_service',
-          action: 'update_user_process_department',
-          user_id: userId
-        },
-        extra: {
-          department_name: userData.department,
-          error_message: (error as Error).message,
-          timestamp: new Date().toISOString()
-        }
-      })
+    } else {
+      // Устанавливаем department_id в NULL
+      updates.department_id = null
+      console.log("Устанавливаем department_id = NULL (без отдела)");
     }
   }
 
-  if (userData.team && userData.team.trim() !== "") {
-    console.log("Ищем команду:", userData.team);
-    try {
-      const { data: team, error: teamError } = await supabase
-        .from("teams")
-        .select("team_id")
-        .eq("team_name", userData.team)
-        .single()
+  if (userData.team !== undefined) {
+    if (userData.team && userData.team.trim() !== "") {
+      console.log("Ищем команду:", userData.team);
+      try {
+        const { data: team, error: teamError } = await supabase
+          .from("teams")
+          .select("team_id")
+          .eq("team_name", userData.team)
+          .single()
 
-      if (teamError) {
-        Sentry.captureException(teamError, {
+        if (teamError) {
+          Sentry.captureException(teamError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'update_user_find_team',
+              user_id: userId
+            },
+            extra: {
+              team_name: userData.team,
+              error_code: teamError.code,
+              error_details: teamError.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+        } else if (team) {
+          updates.team_id = team.team_id
+          console.log("Найдена команда, ID =", team.team_id);
+        } else {
+          console.warn("Команда не найдена:", userData.team);
+        }
+      } catch (error) {
+        Sentry.captureException(error, {
           tags: {
             module: 'org_data_service',
-            action: 'update_user_find_team',
+            action: 'update_user_process_team',
             user_id: userId
           },
           extra: {
             team_name: userData.team,
-            error_code: teamError.code,
-            error_details: teamError.details,
+            error_message: (error as Error).message,
             timestamp: new Date().toISOString()
           }
         })
-      } else if (team) {
-        updates.team_id = team.team_id
-        console.log("Найдена команда, ID =", team.team_id);
-      } else {
-        console.warn("Команда не найдена:", userData.team);
       }
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: 'org_data_service',
-          action: 'update_user_process_team',
-          user_id: userId
-        },
-        extra: {
-          team_name: userData.team,
-          error_message: (error as Error).message,
-          timestamp: new Date().toISOString()
-        }
-      })
+    } else {
+      // Устанавливаем team_id в NULL
+      updates.team_id = null
+      console.log("Устанавливаем team_id = NULL (без команды)");
     }
   }
 

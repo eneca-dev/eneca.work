@@ -4,13 +4,15 @@ import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
-import { Save, Trash2 } from 'lucide-react'
+import { Save, Trash2, Plus, Building2, Users } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { updateUser, getDepartments, getTeams, getPositions, getCategories, getAvailableRoles } from "@/services/org-data-service"
+import { updateUser, getDepartments, getTeams, getPositions, getCategories } from "@/services/org-data-service"
+import { getAllRoles, assignRoleToUser, revokeRoleFromUser, getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
+import type { Role } from "@/modules/permissions/types"
 // УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
 import type { User, Department, Team, Position, Category } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
@@ -30,7 +32,7 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
-  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string; roleId?: string }>>({
+  const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string }>>({
     firstName: "",
     lastName: "",
     email: "",
@@ -38,8 +40,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     department: "",
     team: "",
     category: "",
-    role: "",
-    roleId: "",
     workLocation: "office",
     country: "",
     city: "",
@@ -50,19 +50,26 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [roles, setRoles] = useState<{ id: string; name: string; description?: string }[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
   const [cities, setCities] = useState<{ name: string }[]>([])
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
   
-  // Добавляем состояние для всех ролей пользователя
+  // Состояние для ролей пользователя (новая система)
   const [userRoles, setUserRoles] = useState<Array<{
-    id: string
-    role_name: string
-    role_description?: string
-    assigned_at: string
+    roleId: string
+    roleName: string
+    assignedAt: string
+    assignedByName?: string
   }>>([])
+  
+  // Состояние для управления ролями
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([])
+  const [isManagingRoles, setIsManagingRoles] = useState(false)
+  const [isRolesModalOpen, setIsRolesModalOpen] = useState(false)
+  const [tempSelectedRoles, setTempSelectedRoles] = useState<string[]>([])
+  const [isSavingRoles, setIsSavingRoles] = useState(false)
   
   // Добавляем состояния для поиска
   const [countrySearch, setCountrySearch] = useState("")
@@ -114,7 +121,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           getTeams(),
           getPositions(),
           getCategories(),
-          getAvailableRoles()
+          getAllRoles()
         ])
         
         console.log("=== UserDialog: Загружены справочные данные ===")
@@ -145,6 +152,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           description: "Не удалось загрузить справочные данные",
           variant: "destructive",
         })
+        
+        // Устанавливаем пустые массивы при ошибке для предотвращения ошибок рендеринга
+        setDepartments([])
+        setTeams([])
+        setFilteredTeams([])
+        setPositions([])
+        setCategories([])
+        setRoles([])
       }
     }
     
@@ -154,17 +169,19 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   // Функция для загрузки ролей пользователя
   const loadUserRoles = async (userId: string) => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('view_user_roles')
-        .select('*')
-        .eq('user_id', userId)
-        .order('assigned_at', { ascending: true })
+      const result = await getUserRoles(userId)
+      if (result.error) {
+        console.error("Ошибка загрузки ролей пользователя:", result.error)
+        return
+      }
       
-      if (error) throw error
+      console.log("UserDialog: Загружены роли пользователя:", result.roles)
+      setUserRoles(result.roles)
       
-      console.log("UserDialog: Загружены роли пользователя:", data)
-      setUserRoles(data || [])
+      // Устанавливаем выбранные роли для управления
+      const roleIds = result.roles.map(r => r.roleId)
+      setSelectedRoles(roleIds)
+      console.log("UserDialog: Установлены selectedRoles:", roleIds)
     } catch (error) {
       console.error("Ошибка загрузки ролей пользователя:", error)
     }
@@ -269,7 +286,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         team: user.team || "",
         category: user.category || "",
         role: user.role || "",
-        roleId: "",
         workLocation: user.workLocation || "office",
         country: user.country || "",
         city: user.city || "",
@@ -291,16 +307,20 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         }
       }
       
-      // Устанавливаем roleId для редактирования
-      if (canEditRoles) {
-        const roleId = roles.find(r => r.name === user.role)?.id || ""
-        setFormData(prev => ({ ...prev, roleId }))
-      }
+      // Роли теперь управляются отдельно через handleRoleToggle
       
-      // Устанавливаем значение роли для Select (роль как есть, без fallback на "none")
-      setFormData(prev => ({ ...prev, role: user.role || "" }))
+      // Инициализируем filteredTeams на основе отдела пользователя
+      if (user.department && user.department !== "") {
+        const departmentId = departments.find((d) => d.name === user.department)?.id
+        if (departmentId) {
+          const filtered = teams.filter((t) => t.departmentId === departmentId)
+          setFilteredTeams(filtered)
+        }
+      } else {
+        setFilteredTeams([])
+      }
     }
-  }, [open, user, countries, roles, canEditRoles])
+  }, [open, user, countries, roles, canEditRoles, departments, teams])
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     console.log("=== UserDialog: Фильтрация команд ===")
@@ -309,26 +329,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     console.log("departments:", departments)
     console.log("teams:", teams)
     
-    if (formData.department) {
+    if (formData.department && formData.department !== "") {
       const departmentId = departments.find((d) => d.name === formData.department)?.id
       console.log("Найденный departmentId:", departmentId)
       
       const filtered = teams.filter((t) => t.departmentId === departmentId)
       console.log("Отфильтрованные команды:", filtered)
-      console.log("Команды с их departmentId:")
-      filtered.forEach(team => {
-        console.log(`  ${team.name} -> departmentId: ${team.departmentId}`)
-      })
       setFilteredTeams(filtered)
 
       // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
-      if (formData.team) {
-        console.log("Ищем команду:", formData.team)
-        console.log("В отфильтрованном списке:")
-        filtered.forEach(team => {
-          console.log(`  ${team.name} === ${formData.team}? ${team.name === formData.team}`)
-        })
-        
+      if (formData.team && formData.team !== "") {
         const teamExists = filtered.some((t) => t.name === formData.team)
         console.log("Команда найдена по имени:", teamExists)
         
@@ -338,18 +348,179 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         }
       }
     } else {
-      console.log("Отдел не выбран, показываем все команды")
-      setFilteredTeams(teams)
+      console.log("Отдел не выбран, сбрасываем команду и показываем пустой список")
+      setFilteredTeams([])
+      // Сбрасываем команду при сбросе отдела
+      if (formData.team && formData.team !== "") {
+        setFormData((prev) => ({ ...prev, team: "" }))
+      }
     }
   }, [formData.department, departments, teams])
 
   const handleChange = (field: string, value: string | boolean | number) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => {
+      let processedValue = value
+      
+      // Преобразуем специальные значения в пустые строки для внутреннего состояния
+      if (field === "department" && value === "no-department") {
+        processedValue = ""
+      } else if (field === "team" && value === "no-team") {
+        processedValue = ""
+      }
+      
+      const newData = { ...prev, [field]: processedValue }
+      
+      // При изменении отдела сбрасываем команду
+      if (field === "department") {
+        newData.team = ""
+      }
+      
+      return newData
+    })
+  }
+
+  // Функции для управления ролями
+  const handleRoleToggle = async (roleId: string, isSelected: boolean) => {
+    if (!user?.id) return
     
-    // Если изменяется роль, обновляем roleId
-    if (field === "role") {
-      const selectedRole = roles.find(r => r.name === value)
-      setFormData((prev) => ({ ...prev, roleId: selectedRole?.id || "" }))
+    try {
+      if (isSelected) {
+        // Убираем роль
+        const success = await revokeRoleFromUser(user.id, roleId)
+        if (success) {
+          setUserRoles(prev => prev.filter(r => r.roleId !== roleId))
+          setSelectedRoles(prev => prev.filter(id => id !== roleId))
+          toast({
+            title: "Роль убрана",
+            description: "Роль успешно убрана у пользователя",
+          })
+        } else {
+          toast({
+            title: "Ошибка",
+            description: "Не удалось убрать роль",
+            variant: "destructive",
+          })
+        }
+      } else {
+        // Добавляем роль
+        const success = await assignRoleToUser(user.id, roleId, currentUserId || undefined)
+        if (success) {
+          const role = roles.find(r => r.id === roleId)
+          if (role) {
+            const newUserRole = {
+              roleId: role.id,
+              roleName: role.name,
+              assignedAt: new Date().toISOString(),
+              assignedByName: undefined
+            }
+            setUserRoles(prev => [...prev, newUserRole])
+            setSelectedRoles(prev => [...prev, roleId])
+            toast({
+              title: "Роль назначена",
+              description: "Роль успешно назначена пользователю",
+            })
+          }
+        } else {
+          toast({
+            title: "Ошибка",
+            description: "Не удалось назначить роль",
+            variant: "destructive",
+          })
+        }
+        
+        // Закрываем модальное окно после успешного добавления роли
+        if (success && !isSelected) {
+          setIsRolesModalOpen(false)
+        }
+      }
+    } catch (error) {
+      console.error("Ошибка управления ролями:", error)
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при управлении ролями",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Функция для сохранения изменений ролей
+  const handleSaveRoles = async () => {
+    if (!user?.id) return
+    
+    setIsSavingRoles(true)
+    try {
+      // Получаем текущие роли пользователя
+      const currentRoleIds = userRoles.map(ur => ur.roleId)
+      
+      // Роли для добавления
+      const rolesToAdd = tempSelectedRoles.filter(roleId => !currentRoleIds.includes(roleId))
+      
+      // Роли для удаления
+      const rolesToRemove = currentRoleIds.filter(roleId => !tempSelectedRoles.includes(roleId))
+      
+      console.log("=== handleSaveRoles ===")
+      console.log("currentRoleIds:", currentRoleIds)
+      console.log("tempSelectedRoles:", tempSelectedRoles)
+      console.log("rolesToAdd:", rolesToAdd)
+      console.log("rolesToRemove:", rolesToRemove)
+      
+      let success = true
+      let addedCount = 0
+      let removedCount = 0
+      
+      // Добавляем новые роли
+      for (const roleId of rolesToAdd) {
+        const result = await assignRoleToUser(user.id, roleId, currentUserId || undefined)
+        if (result) {
+          addedCount++
+        } else {
+          success = false
+          break
+        }
+      }
+      
+      // Удаляем роли
+      for (const roleId of rolesToRemove) {
+        const result = await revokeRoleFromUser(user.id, roleId)
+        if (result) {
+          removedCount++
+        } else {
+          success = false
+          break
+        }
+      }
+      
+      if (success) {
+        // Обновляем список ролей пользователя
+        await loadUserRoles(user.id)
+        
+        // Обновляем tempSelectedRoles для синхронизации с основным интерфейсом
+        // После loadUserRoles selectedRoles уже обновлены
+        setTempSelectedRoles(selectedRoles)
+        
+        toast({
+          title: "Успешно",
+          description: `Роли обновлены: добавлено ${addedCount}, удалено ${removedCount}`,
+        })
+        
+        // Закрываем модальное окно
+        setIsRolesModalOpen(false)
+      } else {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось обновить роли",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Ошибка при сохранении ролей:', error)
+      toast({
+        title: "Ошибка",
+        description: "Произошла ошибка при сохранении ролей",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingRoles(false)
     }
   }
 
@@ -378,19 +549,17 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         
         // Добавляем организационные поля только если пользователь может их редактировать
         if (canEditOrganizationalFields) {
-          if (formData.department) updateData.department = formData.department
-          if (formData.team) {
-            // Преобразуем ID команды обратно в название для API
-            const selectedTeam = teams.find(t => t.id === formData.team)
-            if (selectedTeam) {
-              updateData.team = selectedTeam.name
-            }
-          }
+          // Отдел - может быть пустым (null)
+          updateData.department = formData.department && formData.department !== "" ? formData.department : null
+          
+          // Команда - может быть пустой (null) независимо от отдела
+          updateData.team = formData.team && formData.team !== "" ? formData.team : null
+          
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
-          // Добавляем roleId если пользователь может редактировать роли И роль выбрана
-          if (canEditRoles && formData.roleId) updateData.roleId = formData.roleId
         }
+        
+        // Роли теперь управляются отдельно через handleRoleToggle
         
         console.log("Итоговые данные для updateUser:", updateData);
         
@@ -431,7 +600,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 employmentRate: freshProfile.employment_rate,
                 country: freshProfile.country_name,
                 city: freshProfile.city_name,
-                roleId: freshProfile.role_id,
+                // Роли теперь управляются отдельно через handleRoleToggle
                 avatar_url: freshProfile.avatar_url,
               },
             })
@@ -541,7 +710,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     <Modal isOpen={open} onClose={() => {
       onOpenChange(false)
       resetSearch()
-    }} size="lg">
+    }} size="xl">
       <form onSubmit={handleSubmit}>
         <Modal.Header 
           title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
@@ -554,9 +723,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="grid gap-4 py-4">
             {/* Имя и Фамилия в одну строку */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Имя и Фамилия</Label>
-              <div className="col-span-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label className="text-right md:col-span-1 col-span-full">Имя и Фамилия</Label>
+              <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Input
                   id="firstName"
                   value={formData.firstName}
@@ -574,8 +743,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               </div>
             </div>
             
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right md:col-span-1 col-span-full">
                 Email
               </Label>
               <Input
@@ -583,73 +752,143 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
-                className="col-span-3"
+                className="md:col-span-3 col-span-full"
                 required
               />
             </div>
             
-            {/* Роли */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Роли</Label>
-              <div className="col-span-3 flex flex-wrap gap-2">
-                {userRoles.map((role) => (
-                  <div key={role.id} className="group relative">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-help">
-                      {role.role_name}
-                    </span>
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                      {role.role_description || 'Описание роли отсутствует'}
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                    </div>
+            {/* Роли пользователя */}
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label className="text-right md:col-span-1 col-span-full">Роли пользователя</Label>
+              <div className="md:col-span-3 col-span-full">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  {/* Текущие роли */}
+                  <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                    {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
+                      <div key={role.roleId} className="group relative">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
+                          <span className="truncate">{role.roleName}</span>
+                          <button
+                            onClick={() => handleRoleToggle(role.roleId, true)}
+                            className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 flex-shrink-0"
+                            title="Убрать роль"
+                          >
+                            ×
+                          </button>
+                        </span>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                          Назначена: {new Date(role.assignedAt).toLocaleDateString()}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                      </div>
+                    )) : (
+                      <span className="text-sm text-gray-500">Роли не назначены</span>
+                    )}
                   </div>
-                ))}
+                  
+                  {/* Кнопка добавления ролей */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Инициализируем tempSelectedRoles текущими ролями пользователя
+                      const currentRoleIds = userRoles.map(ur => ur.roleId)
+                      setTempSelectedRoles(currentRoleIds)
+                      setIsRolesModalOpen(true)
+                    }}
+                    className="h-8 w-8 p-0 flex-shrink-0 self-start sm:self-center"
+                    title="Добавить роли"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
             
             {/* Отдел и Команда в одну строку */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Отдел и Команда</Label>
-              <div className="col-span-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label className="text-right md:col-span-1 col-span-full flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Отдел и Команда
+              </Label>
+              <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Select
                   value={formData.department}
                   onValueChange={(value) => handleChange("department", value)}
                   disabled={!canEditOrganizationalFields}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
                   </SelectTrigger>
                   <SelectContent>
-                    {departments.map((department) => (
+                    <SelectItem value="no-department" className="text-orange-600">
+                      <span className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Без отдела
+                      </span>
+                    </SelectItem>
+                    {departments && departments.length > 0 ? departments.map((department) => (
                       <SelectItem key={department.id} value={department.name}>
-                        {department.name}
+                        <span className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          {department.name}
+                        </span>
                       </SelectItem>
-                    ))}
+                    )) : (
+                      <SelectItem value="loading-departments" disabled>Загрузка отделов...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 
                 <Select
                   value={formData.team}
                   onValueChange={(value) => handleChange("team", value)}
-                  disabled={!canEditOrganizationalFields}
+                  disabled={!canEditOrganizationalFields || !formData.department}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите команду" />
+                  <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
+                    <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredTeams.map((team) => (
+                    <SelectItem value="no-team" className="text-blue-600">
+                      <span className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Без команды
+                      </span>
+                    </SelectItem>
+                    {filteredTeams && filteredTeams.length > 0 ? filteredTeams.map((team) => (
                       <SelectItem key={team.id} value={team.name}>
-                        {team.name}
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          {team.name}
+                        </span>
                       </SelectItem>
-                    ))}
+                    )) : formData.department ? (
+                      <SelectItem value="no-teams" disabled>Нет команд в отделе</SelectItem>
+                    ) : (
+                      <SelectItem value="select-department-first" disabled>Сначала выберите отдел</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
+              {/* Информационное сообщение */}
+              <div className="md:col-span-4 col-span-full">
+                <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-2 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <div className="min-w-0">
+                      <strong>Логика назначения:</strong> Команда может быть назначена только при выбранном отделе. 
+                      Если отдел не выбран, команда автоматически сбрасывается.
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             {/* Должность и Категория в одну строку */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Должность и Категория</Label>
-              <div className="col-span-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label className="text-right md:col-span-1 col-span-full">Должность и Категория</Label>
+              <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Select
                   value={formData.position}
                   onValueChange={(value) => handleChange("position", value)}
@@ -659,11 +898,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                     <SelectValue placeholder="Выберите должность" />
                   </SelectTrigger>
                   <SelectContent>
-                    {positions.map((position) => (
+                    {positions && positions.length > 0 ? positions.map((position) => (
                       <SelectItem key={position.id} value={position.name}>
                         {position.name}
                       </SelectItem>
-                    ))}
+                    )) : (
+                      <SelectItem value="loading-positions" disabled>Загрузка должностей...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 
@@ -676,48 +917,29 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                     <SelectValue placeholder="Выберите категорию" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
+                    {categories && categories.length > 0 ? categories.map((category) => (
                       <SelectItem key={category.id} value={category.name}>
                         {category.name}
                       </SelectItem>
-                    ))}
+                    )) : (
+                      <SelectItem value="loading-categories" disabled>Загрузка категорий...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             
-            {canEditRoles && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="role" className="text-right">
-                  Роль
-                </Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) => handleChange("role", value)}
-                >
-                  <SelectTrigger id="role" className="col-span-3">
-                    <SelectValue placeholder="Выберите роль" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.name}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+
             
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="workLocation" className="text-right">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label htmlFor="workLocation" className="text-right md:col-span-1 col-span-full">
                 Расположение
               </Label>
               <Select
                 value={formData.workLocation}
                 onValueChange={(value) => handleChange("workLocation", value as "office" | "remote" | "hybrid")}
               >
-                <SelectTrigger id="workLocation" className="col-span-3">
+                <SelectTrigger id="workLocation" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите расположение" />
                 </SelectTrigger>
                 <SelectContent>
@@ -727,8 +949,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="country" className="text-right">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label htmlFor="country" className="text-right md:col-span-1 col-span-full">
                 Страна
               </Label>
               <Select
@@ -745,7 +967,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 open={countrySelectOpen}
                 onOpenChange={setCountrySelectOpen}
               >
-                <SelectTrigger id="country" className="col-span-3">
+                <SelectTrigger id="country" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите страну" />
                 </SelectTrigger>
                 <SelectContent>
@@ -774,14 +996,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                       }}
                     />
                   </div>
-                  {filteredCountries.map((c) => (
+                  {filteredCountries && filteredCountries.length > 0 ? filteredCountries.map((c) => (
                     <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="loading-countries" disabled>Загрузка стран...</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="city" className="text-right">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+              <Label htmlFor="city" className="text-right md:col-span-1 col-span-full">
                 Город
               </Label>
               <Select
@@ -796,7 +1020,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 open={citySelectOpen}
                 onOpenChange={setCitySelectOpen}
               >
-                <SelectTrigger id="city" className="col-span-3">
+                <SelectTrigger id="city" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder={selectedCountryCode ? "Выберите город" : "Сначала выберите страну"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -824,9 +1048,11 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                       }}
                     />
                   </div>
-                  {filteredCities.map((c) => (
+                  {filteredCities && filteredCities.length > 0 ? filteredCities.map((c) => (
                     <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="loading-cities" disabled>Загрузка городов...</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -838,7 +1064,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         </Modal.Body>
         
         <Modal.Footer>
-          <div className="flex justify-between w-full">
+          <div className="flex flex-col sm:flex-row justify-between w-full gap-4">
             {/* Кнопка удаления профиля слева (только для самостоятельного редактирования) */}
             {isSelfEdit ? (
               <ModalButton 
@@ -847,6 +1073,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 onClick={() => setShowDeleteConfirmation(true)}
                 disabled={isLoading}
                 icon={<Trash2 />}
+                className="w-full sm:w-auto"
               >
                 Удалить профиль
               </ModalButton>
@@ -855,7 +1082,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
             )}
             
             {/* Кнопки управления справа */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <ModalButton 
                 type="button" 
                 variant="cancel"
@@ -864,6 +1091,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   resetSearch()
                 }} 
                 disabled={isLoading}
+                className="w-full sm:w-auto"
               >
                 Отмена
               </ModalButton>
@@ -872,6 +1100,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 variant="success"
                 loading={isLoading}
                 icon={<Save />}
+                className="w-full sm:w-auto"
               >
                 {isLoading ? "Сохранение..." : "Сохранить"}
               </ModalButton>
@@ -880,8 +1109,103 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         </Modal.Footer>
       </form>
 
+      {/* Модальное окно управления ролями */}
+      <Modal isOpen={isRolesModalOpen} onClose={() => setIsRolesModalOpen(false)} size="xl">
+        <Modal.Header 
+          title="Управление ролями пользователя"
+          subtitle={`Назначение ролей для ${user?.name || 'пользователя'}`}
+        />
+        <Modal.Body>
+          <div className="space-y-4">
+            {/* Текущие роли */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Текущие роли:</Label>
+              <div className="flex flex-wrap gap-2 min-w-0">
+                {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
+                  <div key={role.roleId} className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
+                    <span className="truncate">{role.roleName}</span>
+                    <button
+                      onClick={() => handleRoleToggle(role.roleId, true)}
+                      className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 flex-shrink-0"
+                      title="Убрать роль"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )) : (
+                  <span className="text-sm text-gray-500">Роли не назначены</span>
+                )}
+              </div>
+            </div>
+
+            {/* Доступные роли для добавления */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Доступные роли:</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto border rounded-md p-3">
+                {roles && roles.length > 0 ? roles.map((role) => {
+                  const isSelected = tempSelectedRoles.includes(role.id)
+                  return (
+                    <div key={role.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0">
+                      <input
+                        type="checkbox"
+                        id={`modal-role-${role.id}`}
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setTempSelectedRoles(prev => [...prev, role.id])
+                          } else {
+                            setTempSelectedRoles(prev => prev.filter(id => id !== role.id))
+                          }
+                        }}
+                        className="mt-1 rounded flex-shrink-0"
+                      />
+                      <label htmlFor={`modal-role-${role.id}`} className="text-sm cursor-pointer flex-1 min-w-0">
+                        <span className="font-medium block truncate">{role.name}</span>
+                        {role.description && (
+                          <span className="text-xs text-gray-500 block mt-1 overflow-hidden text-ellipsis line-clamp-2">{role.description}</span>
+                        )}
+                      </label>
+                    </div>
+                  )
+                }) : (
+                  <span className="text-sm text-gray-500 col-span-2">Роли не загружены</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <ModalButton 
+              type="button" 
+              variant="cancel"
+              onClick={() => {
+                // Сбрасываем к исходному состоянию
+                const currentRoleIds = userRoles.map(ur => ur.roleId)
+                setTempSelectedRoles(currentRoleIds)
+                setIsRolesModalOpen(false)
+              }}
+              className="w-full sm:w-auto"
+            >
+              Отмена
+            </ModalButton>
+            <ModalButton 
+              type="button" 
+              variant="success"
+              onClick={handleSaveRoles}
+              disabled={isSavingRoles}
+              icon={isSavingRoles ? undefined : <Save className="h-4 w-4" />}
+              className="w-full sm:w-auto"
+            >
+              {isSavingRoles ? 'Сохранение...' : 'Сохранить'}
+            </ModalButton>
+          </div>
+        </Modal.Footer>
+      </Modal>
+
       {/* Модальное окно подтверждения удаления */}
-      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="lg" className="min-w-[500px] max-w-[800px]">
+      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="lg">
         <Modal.Header 
           title="Подтверждение удаления профиля"
           subtitle="Это действие нельзя отменить. Ваш профиль и все связанные данные будут удалены навсегда."
@@ -895,7 +1219,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               <p className="text-sm text-red-700">
                 Для подтверждения удаления введите в одну строку следующую фразу:
               </p>
-              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900 whitespace-nowrap overflow-x-auto">
+              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900 break-all">
                 {deleteConfirmationPhrase}
               </p>
             </div>
@@ -911,7 +1235,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 onChange={handleDeleteConfirmationInput}
                 onPaste={handleDeleteConfirmationPaste}
                 placeholder="Введите фразу для подтверждения"
-                className="mt-1 min-w-full"
+                className="mt-1 w-full"
                 autoComplete="off"
               />
               {deleteConfirmationText && !isDeleteConfirmationValid && (
@@ -924,27 +1248,31 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         </Modal.Body>
         
         <Modal.Footer>
-          <ModalButton 
-            type="button" 
-            variant="cancel"
-            onClick={() => {
-              setShowDeleteConfirmation(false)
-              setDeleteConfirmationText("")
-            }}
-            disabled={isDeleting}
-          >
-            Отмена
-          </ModalButton>
-          <ModalButton 
-            type="button" 
-            variant="danger"
-            onClick={handleDeleteProfile}
-            disabled={!isDeleteConfirmationValid || isDeleting}
-            loading={isDeleting}
-            icon={<Trash2 />}
-          >
-            {isDeleting ? "Удаление..." : "Удалить навсегда"}
-          </ModalButton>
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <ModalButton 
+              type="button" 
+              variant="cancel"
+              onClick={() => {
+                setShowDeleteConfirmation(false)
+                setDeleteConfirmationText("")
+              }}
+              disabled={isDeleting}
+              className="w-full sm:w-auto"
+            >
+              Отмена
+            </ModalButton>
+            <ModalButton 
+              type="button" 
+              variant="danger"
+              onClick={handleDeleteProfile}
+              disabled={!isDeleteConfirmationValid || isDeleting}
+              loading={isDeleting}
+              icon={<Trash2 />}
+              className="w-full sm:w-auto"
+            >
+              {isDeleting ? "Удаление..." : "Удалить навсегда"}
+            </ModalButton>
+          </div>
         </Modal.Footer>
       </Modal>
     </Modal>

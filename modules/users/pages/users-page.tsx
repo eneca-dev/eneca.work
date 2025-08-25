@@ -124,7 +124,7 @@ export default function UsersPage() {
     department: user.department_name || "",
     team: user.team_name || "",
     category: user.category_name || "",
-    role: user.role_name || "",
+    role: user.has_multiple_roles && user.roles_display_string ? user.roles_display_string : (user.role_name || ""),
     dateJoined: user.created_at,
     workLocation: (user.work_format === "В офисе" ? "office" : user.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
     country: user.country_name || "",

@@ -133,6 +133,13 @@ export default function EntityModal({
           insertData[nameField] = validation.normalizedValue
         }
         
+        // Обрабатываем пустые значения для полей select
+        for (const field of extraFields) {
+          if (field.type === "select" && insertData[field.name] === "") {
+            insertData[field.name] = null
+          }
+        }
+        
         // Для некоторых таблиц нужно явно генерировать UUID
         if ((table === "departments" && idField === "department_id") || 
             (table === "positions" && idField === "position_id") ||
@@ -150,6 +157,9 @@ export default function EntityModal({
 
         if (error) throw error
         toast.success("Запись успешно создана")
+        
+        // Дополнительная задержка для завершения транзакции
+        await new Promise(resolve => setTimeout(resolve, 200))
       } else {
         if (!entity || entity[idField] === undefined) {
           throw new Error("Не удается найти ID записи для обновления")
@@ -162,6 +172,13 @@ export default function EntityModal({
           updateData[nameField] = validation.normalizedValue
         }
         
+        // Обрабатываем пустые значения для полей select
+        for (const field of extraFields) {
+          if (field.type === "select" && updateData[field.name] === "") {
+            updateData[field.name] = null
+          }
+        }
+        
         const { error } = await supabase
           .from(table)
           .update(updateData)
@@ -169,8 +186,13 @@ export default function EntityModal({
 
         if (error) throw error
         toast.success("Запись успешно обновлена")
+        
+        // Дополнительная задержка для завершения транзакции
+        await new Promise(resolve => setTimeout(resolve, 200))
       }
 
+      // Вызываем onSuccess с дополнительной задержкой
+      await new Promise(resolve => setTimeout(resolve, 300))
       onSuccess()
       onOpenChange(false)
     } catch (error) {
@@ -182,7 +204,9 @@ export default function EntityModal({
   }
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    // Для полей select с пустым значением (например, "Не назначен") устанавливаем null
+    const processedValue = value === "" ? null : value
+    setFormData(prev => ({ ...prev, [field]: processedValue }))
   }
 
   // Определяем, можно ли сохранять
@@ -208,8 +232,18 @@ export default function EntityModal({
     return true
   }, [formData, nameField, validation.isValid, duplicateError, extraFields])
 
+  // Обработчик закрытия модального окна с дополнительным обновлением
+  const handleClose = async () => {
+    // Если это создание, принудительно обновляем данные
+    if (mode === "create") {
+      await new Promise(resolve => setTimeout(resolve, 200))
+      onSuccess()
+    }
+    onOpenChange(false)
+  }
+
   return (
-    <Modal isOpen={open} onClose={() => onOpenChange(false)} size="md">
+    <Modal isOpen={open} onClose={handleClose} size="md">
       <Modal.Header 
         title={title}
         subtitle={mode === "create" 
@@ -224,7 +258,7 @@ export default function EntityModal({
                   : "Заполните необходимые поля для создания новой записи. После заполнения нажмите кнопку «Сохранить»."
           : "Отредактируйте необходимые поля. Изменения вступят в силу после нажатия кнопки «Сохранить»."
         }
-        onClose={() => onOpenChange(false)}
+        onClose={handleClose}
       />
       
       <form onSubmit={handleSubmit}>
@@ -288,7 +322,7 @@ export default function EntityModal({
           <ModalButton 
             type="button" 
             variant="cancel"
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
           >
             Отмена
           </ModalButton>
