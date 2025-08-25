@@ -33,3 +33,4 @@ ws-to-work-integration/
 # Sentry Config File
 .env.sentry-build-plugin
 
+docs/database/public_schema.md

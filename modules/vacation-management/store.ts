@@ -83,7 +83,8 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
         set({ isLoading: true, error: null })
         
         try {
-          const { data, error } = await supabase
+          // Получаем профили сотрудников
+          const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select(`
               user_id,
@@ -92,13 +93,40 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
               email,
               department_id,
               avatar_url,
-              departments!inner(department_name),
-              positions(position_name)
+              position_id
             `)
             .eq('department_id', departmentId)
             .order('last_name')
 
-          if (error) throw error
+          if (profilesError) throw profilesError
+
+          // Получаем название отдела
+          const { data: departmentData, error: departmentError } = await supabase
+            .from('departments')
+            .select('department_name')
+            .eq('department_id', departmentId)
+            .single()
+
+          if (departmentError) throw departmentError
+
+          // Получаем должности
+          const positionIds = profilesData?.map(p => p.position_id).filter(Boolean) || []
+          let positionsData: any[] = []
+          
+          if (positionIds.length > 0) {
+            const { data: posData, error: posError } = await supabase
+              .from('positions')
+              .select('position_id, position_name')
+              .in('position_id', positionIds)
+            
+            if (posError) throw posError
+            positionsData = posData || []
+          }
+
+          // Создаем мапу должностей
+          const positionMap = new Map(positionsData.map(p => [p.position_id, p.position_name]))
+
+          const data = profilesData
 
           // Проверяем, что запрос все еще актуален
           const { currentRequestToken: currentToken } = get()
@@ -113,8 +141,8 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
             last_name: profile.last_name,
             email: profile.email,
             department_id: profile.department_id,
-            department_name: profile.departments.department_name,
-            position_name: profile.positions?.position_name,
+            department_name: departmentData?.department_name || '',
+            position_name: profile.position_id ? positionMap.get(profile.position_id) : undefined,
             avatar_url: profile.avatar_url
           })) || []
 
@@ -136,7 +164,13 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           // Проверяем актуальность запроса перед установкой ошибки
           const { currentRequestToken: errorToken } = get()
           if (requestToken === errorToken) {
-            console.error('Ошибка загрузки сотрудников:', error)
+            console.error('Ошибка загрузки сотрудников:', {
+              error,
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+              errorStack: error instanceof Error ? error.stack : undefined,
+              departmentId,
+              requestToken
+            })
             set({ error: 'Не удалось загрузить список сотрудников' })
           }
         } finally {
@@ -156,7 +190,8 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
         set({ isLoading: true, error: null })
         
         try {
-          const { data, error } = await supabase
+          // Получаем события календаря
+          const { data: eventsData, error: eventsError } = await supabase
             .from('calendar_events')
             .select(`
               calendar_event_id,
@@ -165,19 +200,26 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
               calendar_event_type,
               calendar_event_comment,
               calendar_event_created_by,
-              calendar_event_created_at,
-              profiles!inner(
-                user_id,
-                first_name,
-                last_name,
-                email
-              )
+              calendar_event_created_at
             `)
             .in('calendar_event_created_by', employeeIds)
             .in('calendar_event_type', ['Отпуск запрошен', 'Отпуск одобрен', 'Отпуск отклонен'])
             .order('calendar_event_date_start')
 
-          if (error) throw error
+          if (eventsError) throw eventsError
+
+          // Получаем профили пользователей
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('user_id, first_name, last_name, email')
+            .in('user_id', employeeIds)
+
+          if (profilesError) throw profilesError
+
+          // Создаем мапу профилей
+          const profileMap = new Map(profilesData?.map(p => [p.user_id, p]) || [])
+
+          const data = eventsData
 
           // Проверяем, что запрос все еще актуален
           const { currentRequestToken: currentToken } = get()
@@ -186,18 +228,21 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
             return
           }
 
-          const vacations: VacationEvent[] = data?.map((event: any) => ({
-            calendar_event_id: event.calendar_event_id,
-            calendar_event_date_start: event.calendar_event_date_start,
-            calendar_event_date_end: event.calendar_event_date_end,
-            calendar_event_type: event.calendar_event_type as any,
-            calendar_event_comment: event.calendar_event_comment,
-            calendar_event_created_by: event.calendar_event_created_by,
-            calendar_event_created_at: event.calendar_event_created_at,
-            user_id: event.profiles.user_id,
-            user_name: `${event.profiles.first_name} ${event.profiles.last_name}`,
-            user_email: event.profiles.email
-          })) || []
+          const vacations: VacationEvent[] = data?.map((event: any) => {
+            const profile = profileMap.get(event.calendar_event_created_by)
+            return {
+              calendar_event_id: event.calendar_event_id,
+              calendar_event_date_start: event.calendar_event_date_start,
+              calendar_event_date_end: event.calendar_event_date_end,
+              calendar_event_type: event.calendar_event_type as any,
+              calendar_event_comment: event.calendar_event_comment,
+              calendar_event_created_by: event.calendar_event_created_by,
+              calendar_event_created_at: event.calendar_event_created_at,
+              user_id: profile?.user_id || event.calendar_event_created_by,
+              user_name: profile ? `${profile.first_name} ${profile.last_name}` : 'Неизвестный пользователь',
+              user_email: profile?.email || ''
+            }
+          }) || []
 
           // Еще раз проверяем актуальность перед обновлением состояния
           const { currentRequestToken: finalToken } = get()
@@ -211,7 +256,13 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           // Проверяем актуальность запроса перед установкой ошибки
           const { currentRequestToken: errorToken } = get()
           if (requestToken === errorToken) {
-            console.error('Ошибка загрузки отпусков:', error)
+            console.error('Ошибка загрузки отпусков:', {
+              error,
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+              errorStack: error instanceof Error ? error.stack : undefined,
+              employeeIds,
+              requestToken
+            })
             set({ error: 'Не удалось загрузить данные об отпусках' })
           }
         } finally {
