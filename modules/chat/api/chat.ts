@@ -21,7 +21,7 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       ? getContextForRequest(userId) 
       : []
     
-    const response = await fetch('https://eneca.app.n8n.cloud/webhook/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
+    const response = await fetch('https://eneca.app.n8n.cloud/webhook-test/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
