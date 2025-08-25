@@ -1,4 +1,10 @@
 import {withSentryConfig} from '@sentry/nextjs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 let userConfig = undefined
 try {
   // try to import ESM first
@@ -40,7 +46,7 @@ const nextConfig = {
       config.cache.buildDependencies = {
         config: [__filename],
       };
-      config.cache.cacheDirectory = '.next/cache';
+      config.cache.cacheDirectory = join(__dirname, '.next', 'cache');
       config.cache.maxMemoryGenerations = 1;
       config.cache.compression = 'gzip';
       config.cache.hashAlgorithm = 'md4';
