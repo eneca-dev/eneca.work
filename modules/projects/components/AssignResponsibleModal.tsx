@@ -79,9 +79,9 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
                 last_name,
                 email,
                 avatar_url,
-                departments!inner(department_name),
-                teams!inner(team_name),
-                positions!inner(position_name)
+                departments!profiles_department_membership_fkey(department_name),
+                teams!profiles_team_membership_fkey(team_name),
+                positions!profiles_position_id_fkey(position_name)
               `)
               .not('first_name', 'is', null)
               .neq('first_name', '')
@@ -114,8 +114,8 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
               email: emp.email,
               avatar_url: emp.avatar_url,
               position_name: emp.positions?.position_name || null,
-              team_name: emp.teams?.team_name || null,
-              department_name: emp.departments?.department_name || null,
+              team_name: (emp as any).teams?.team_name || (emp as any).profiles_team_membership_fkey?.team_name || null,
+              department_name: (emp as any).departments?.department_name || (emp as any).profiles_department_membership_fkey?.department_name || null,
             })) || []
 
             span.setAttribute("load.success", true)
