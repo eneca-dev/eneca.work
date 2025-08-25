@@ -134,7 +134,9 @@ export default function TeamsTab() {
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
     return teams.filter(team => {
-      const matchesDept = !activeDept || (team.departmentId && team.departmentId === activeDept)
+      // Фильтрация по отделу: если выбран конкретный отдел, показываем команды этого отдела
+      // Если выбрано "Все отделы" (activeDept === null), показываем все команды
+      const matchesDept = !activeDept || team.departmentId === activeDept
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
@@ -147,13 +149,19 @@ export default function TeamsTab() {
 
   // Мемоизируем extraFields для EntityModal
   const extraFields = useMemo(() => {
+    // Добавляем опцию "Не назначен" для команд без отдела
+    const departmentOptions = [
+      { value: "", label: "Не назначен" },
+      ...departments.map(dep => ({ value: dep.id, label: dep.name }))
+    ]
+    
     return [
       {
         name: "department_id",
         label: "Отдел",
         type: "select" as const,
-        options: departments.map(dep => ({ value: dep.id, label: dep.name })),
-        required: true
+        options: departmentOptions,
+        required: false // Отдел не обязателен для команды
       }
     ]
   }, [departments])
@@ -165,7 +173,7 @@ export default function TeamsTab() {
     return {
       team_id: selectedTeam.id,
       team_name: selectedTeam.name,
-      department_id: selectedTeam.departmentId
+      department_id: selectedTeam.departmentId || "" // Пустая строка для "Не назначен"
     }
   }, [selectedTeam])
 
@@ -293,8 +301,21 @@ export default function TeamsTab() {
           
           <div className="mt-4">
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant={activeDept === null ? "default" : "outline"} onClick={() => setActiveDept(null)} className="h-7 text-xs rounded font-normal">
+              <Button 
+                size="sm" 
+                variant={activeDept === null ? "default" : "outline"} 
+                onClick={() => setActiveDept(null)} 
+                className="h-7 text-xs rounded font-normal"
+              >
                 Все отделы
+              </Button>
+              <Button 
+                size="sm" 
+                variant={activeDept === "" ? "default" : "outline"} 
+                onClick={() => setActiveDept("")} 
+                className="h-7 text-xs rounded font-normal"
+              >
+                Без отдела
               </Button>
               {departments.map((dep) => (
                 <Button
@@ -328,7 +349,9 @@ export default function TeamsTab() {
                 filtered.map(team => (
                   <TableRow key={team.id}>
                     <TableCell className="text-base font-medium">{team.name}</TableCell>
-                    <TableCell className="text-base">{team.departmentName || "-"}</TableCell>
+                    <TableCell className="text-base">
+                      {team.departmentId ? team.departmentName : "Не назначен"}
+                    </TableCell>
                     <TableCell className="text-base">
                       {team.team_lead_id ? (
                         <div className="flex items-center gap-3">

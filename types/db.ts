@@ -176,7 +176,7 @@ export type Database = {
           avatar_url: string | null
           category_id: string
           created_at: string
-          department_id: string
+          department_id: string | null
           email: string
           employment_rate: number | null
           first_name: string
@@ -185,7 +185,7 @@ export type Database = {
           position_id: string
           role_id: string
           salary: number | null
-          team_id: string
+          team_id: string | null
           user_id: string
           work_format: Database["public"]["Enums"]["work_format_type"] | null
         }
@@ -195,7 +195,7 @@ export type Database = {
           avatar_url?: string | null
           category_id: string
           created_at?: string
-          department_id: string
+          department_id?: string | null
           email: string
           employment_rate?: number | null
           first_name: string
@@ -204,7 +204,7 @@ export type Database = {
           position_id: string
           role_id: string
           salary?: number | null
-          team_id: string
+          team_id?: string | null
           user_id: string
           work_format?: Database["public"]["Enums"]["work_format_type"] | null
         }
@@ -214,7 +214,7 @@ export type Database = {
           avatar_url?: string | null
           category_id?: string
           created_at?: string
-          department_id?: string
+          department_id?: string | null
           email?: string
           employment_rate?: number | null
           first_name?: string
@@ -223,7 +223,7 @@ export type Database = {
           position_id?: string
           role_id?: string
           salary?: number | null
-          team_id?: string
+          team_id?: string | null
           user_id?: string
           work_format?: Database["public"]["Enums"]["work_format_type"] | null
         }
@@ -355,14 +355,20 @@ export type Database = {
         Row: {
           role_id: string
           user_id: string
+          assigned_by?: string | null
+          assigned_at?: string | null
         }
         Insert: {
           role_id: string
           user_id: string
+          assigned_by?: string | null
+          assigned_at?: string | null
         }
         Update: {
           role_id?: string
           user_id?: string
+          assigned_by?: string | null
+          assigned_at?: string | null
         }
         Relationships: [
           {

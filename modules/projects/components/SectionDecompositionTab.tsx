@@ -400,16 +400,16 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       if (error) throw error
       // Добавляем производные поля для локального отображения
       const derived: Partial<DecompositionItemRow> = {}
-      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_responsible')) {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_responsible')) {
         const rid = patch.decomposition_item_responsible as (string | null | undefined)
         derived.responsible_profile = rid ? (profiles.find(p => p.user_id === rid) || null) : null
       }
-      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_status_id')) {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_status_id')) {
         const sid = patch.decomposition_item_status_id as (string | null | undefined)
         derived.status = sid ? (statuses.find(s => s.id === sid) || null) : null
       }
-      setItems(prev => prev.map(i => i.decomposition_item_id === id ? { ...i, ...patch, ...derived } : i))
-      if (editDraft && editDraft.decomposition_item_id === id) setEditDraft({ ...editDraft, ...patch } as DecompositionItemRow)
+      setItems(prev => prev.map(i => i.decomposition_item_id === id ? { ...i, ...(patch || {}), ...derived } : i))
+      if (editDraft && editDraft.decomposition_item_id === id) setEditDraft({ ...editDraft, ...(patch || {}) } as DecompositionItemRow)
       setNotification('Изменения сохранены')
     } catch (e) {
       console.error('Ошибка сохранения поля:', e)
