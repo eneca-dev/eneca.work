@@ -25,9 +25,9 @@ interface Department {
 interface Team {
   id: string;
   name: string;
-  departmentId: string | null;
-  departmentName: string | null;
-  headUserId: string | null;
+  departmentId: string;
+  departmentName: string;
+  team_lead_id: string | null;
   headFirstName: string | null;
   headLastName: string | null;
   headFullName: string | null;
@@ -53,9 +53,9 @@ export default function TeamsTab() {
       setIsLoading(true)
       const supabase = createClient()
       
-      // Получаем команды с руководителями из view_organizational_structure
+      // Получаем команды с руководителями из view_teams_with_leads
       const { data: teamsData, error: teamsError } = await supabase
-        .from("view_organizational_structure")
+        .from("view_teams_with_leads")
         .select(`
           team_id,
           team_name,
@@ -68,7 +68,6 @@ export default function TeamsTab() {
           team_lead_email,
           team_lead_avatar_url
         `)
-        .not("team_id", "is", null)
         .order("team_name")
       
       if (teamsError) {
@@ -97,7 +96,7 @@ export default function TeamsTab() {
             name: team.team_name,
             departmentId: team.department_id,
             departmentName: team.department_name,
-            headUserId: team.team_lead_id,
+            team_lead_id: team.team_lead_id,
             headFirstName: team.team_lead_first_name,
             headLastName: team.team_lead_last_name,
             headFullName: team.team_lead_full_name,
@@ -175,12 +174,16 @@ export default function TeamsTab() {
     if (!selectedTeam) return undefined
     
     return {
-      team_id: selectedTeam.id,
-      team_name: selectedTeam.name,
-      department_id: selectedTeam.departmentId,
-      department_name: selectedTeam.departmentName,
-      head_user_id: selectedTeam.headUserId,
-      head_full_name: selectedTeam.headFullName
+      id: selectedTeam.id,
+      name: selectedTeam.name,
+      departmentId: selectedTeam.departmentId,
+      departmentName: selectedTeam.departmentName,
+      team_lead_id: selectedTeam.team_lead_id,
+      headFirstName: selectedTeam.headFirstName,
+      headLastName: selectedTeam.headLastName,
+      headFullName: selectedTeam.headFullName,
+      headEmail: selectedTeam.headEmail,
+      headAvatarUrl: selectedTeam.headAvatarUrl
     }
   }, [selectedTeam])
 
@@ -327,7 +330,7 @@ export default function TeamsTab() {
                     <TableCell className="text-base font-medium">{team.name}</TableCell>
                     <TableCell className="text-base">{team.departmentName || "-"}</TableCell>
                     <TableCell className="text-base">
-                      {team.headUserId ? (
+                      {team.team_lead_id ? (
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={team.headAvatarUrl || undefined} />

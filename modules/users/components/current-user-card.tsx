@@ -66,7 +66,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
             avatar_url: userData.avatar_url || "",
             position: userData.position_name === "Без должности" ? "" : userData.position_name || "",
             department: userData.department_name === "Без отдела" ? "" : userData.department_name || "",
-            team: userData.team_name === "Без команды" ? "" : userData.team_name || "",
+            team: userData.team_name || "",
             category: userData.category_name === "Не применяется" ? "" : userData.category_name || "",
             role: userData.role_name || "",
 

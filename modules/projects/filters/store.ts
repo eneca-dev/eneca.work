@@ -172,6 +172,14 @@ export const useFilterStore = create<FilterStore>()(
           const hasManager = !!userId && (userId.length > 0)
           const hasEmployee = !!userId && state.employees.some(e => e.id === userId)
 
+          // Приоритет ролей: admin > department_head > project_manager > team_lead > user
+          // Department Head - блокируем только отдел, команды и сотрудников можно выбирать внутри отдела
+          if (permissions.includes('hierarchy.is_department_head')) {
+            if (type === 'department') return hasDept
+            // Команду и сотрудников НЕ блокируем - пусть выбирает внутри своего отдела
+            return false
+          }
+
           if (permissions.includes('hierarchy.is_project_manager')) {
             // Блокируем менеджера и все проектные фильтры, если есть дефолт
             if (type === 'manager') return hasManager
@@ -179,12 +187,7 @@ export const useFilterStore = create<FilterStore>()(
             if (type === 'project' || type === 'stage' || type === 'object') {
               return !!state.selectedManagerId && state.selectedManagerId === userId
             }
-          }
-
-          if (permissions.includes('hierarchy.is_department_head')) {
-            // Блокируем только отдел, команды и сотрудников можно выбирать внутри отдела
-            if (type === 'department') return hasDept
-            // Команду и сотрудников НЕ блокируем - пусть выбирает внутри своего отдела
+            return false
           }
 
           if (permissions.includes('hierarchy.is_team_lead')) {
@@ -192,6 +195,7 @@ export const useFilterStore = create<FilterStore>()(
             if (type === 'department') return hasDept
             if (type === 'team') return hasTeam
             // Сотрудников НЕ блокируем - пусть выбирает внутри своей команды
+            return false
           }
 
           // Обычный пользователь: блокируем отдел/команду/сотрудника при наличии дефолтов
@@ -199,6 +203,7 @@ export const useFilterStore = create<FilterStore>()(
             if (type === 'department') return hasDept
             if (type === 'team') return hasTeam
             if (type === 'employee') return hasEmployee
+            return false
           }
 
           // Админ не имеет ограничений

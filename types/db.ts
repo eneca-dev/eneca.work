@@ -19,6 +19,42 @@ export type User = {
   isHourly: boolean
 }
 
+// Расширенный тип пользователя с информацией о ролях из view_users
+export type UserWithRoles = {
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+  created_at: string
+  work_format: string | null
+  employment_rate: string | null
+  salary: string | null
+  is_hourly: boolean | null
+  avatar_url: string | null
+  department_id: string | null
+  department_name: string | null
+  team_id: string | null
+  team_name: string | null
+  position_id: string | null
+  position_name: string | null
+  category_id: string | null
+  category_name: string | null
+  role_id: string | null
+  role_name: string | null
+  role_description: string | null
+  city_id: string | null
+  city_name: string | null
+  country_id: string | null
+  country_name: string | null
+  full_name: string
+  is_active: boolean
+  // Новые поля для ролей
+  primary_role: string | null
+  roles_display_string: string | null
+  roles_count: number
+  has_multiple_roles: boolean
+}
+
 export type Department = {
   id: string
   name: string

@@ -43,6 +43,10 @@ export default function ReportsPage() {
   const [orgOpen, setOrgOpen] = useState(true)
   const [projOpen, setProjOpen] = useState(true)
   const [timeOpen, setTimeOpen] = useState(true)
+  
+  // Состояние для адаптивного отображения текста фильтров
+  const [isCompactMode, setIsCompactMode] = useState(false)
+  
   // Организационные фильтры через стор
   const {
     initialize: initOrgFilters,
@@ -372,14 +376,30 @@ export default function ReportsPage() {
     loadCategories()
   }, [])
 
+  // Эффект для определения компактного режима
+  useEffect(() => {
+    const checkCompactMode = () => {
+      // Включаем компактный режим при ширине экрана меньше 1200px
+      setIsCompactMode(window.innerWidth < 1200);
+    };
+
+    checkCompactMode();
+    window.addEventListener('resize', checkCompactMode);
+    
+    return () => window.removeEventListener('resize', checkCompactMode);
+  }, []);
+
   return (
     <div className="px-0 pt-0 pb-0 h-screen overflow-y-auto overscroll-y-none">
       <FilterBar title="Отчёты">
           {/* Кнопка: Автор */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap">
-                <Users className="h-4 w-4" /> Автор
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out">
+                <Users className="h-4 w-4" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Автор
+                </span>
                 {authorId && (
                   <span aria-label="Фильтр применён" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 )}
@@ -417,8 +437,11 @@ export default function ReportsPage() {
           {/* Кнопка: Организация */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap" title={orgTitle}>
-                <Building2 className="h-4 w-4" /> Организация
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out" title={orgTitle}>
+                <Building2 className="h-4 w-4" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Организация
+                </span>
                 {orgActiveCount > 0 && (
                   <span aria-label="Фильтр применён" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 )}
@@ -468,8 +491,11 @@ export default function ReportsPage() {
           {/* Кнопка: Проект */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap">
-                <FolderOpen className="h-4 w-4" /> Проект
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out">
+                <FolderOpen className="h-4 w-4" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Проект
+                </span>
                 {(projectId || stageId || objectId || sectionIdFilter) && (
                   <span aria-label="Фильтр применён" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 )}
@@ -521,8 +547,11 @@ export default function ReportsPage() {
           {/* Кнопка: Категория */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap">
-                <Tag className="h-4 w-4" /> Категория
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out">
+                <Tag className="h-4 w-4" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Категория
+                </span>
                 {categoryId && (
                   <span aria-label="Фильтр применён" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 )}
@@ -559,8 +588,11 @@ export default function ReportsPage() {
           {/* Кнопка: Период */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap">
-                <CalendarIcon className="h-4 w-4" /> Период
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out">
+                <CalendarIcon className="h-4 w-4" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Период
+                </span>
                 {(periodPreset !== 'm' || dateFrom || dateTo) && (
                   <span aria-label="Фильтр применён" className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 )}
@@ -616,10 +648,13 @@ export default function ReportsPage() {
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
             <button
               onClick={resetFilters}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out"
               title="Сбросить фильтры"
             >
-              <Filter className="h-4 w-4 rotate-180" /> Сбросить
+              <Filter className="h-4 w-4 rotate-180" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Сбросить
+              </span>
             </button>
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
             <button
@@ -629,14 +664,17 @@ export default function ReportsPage() {
                 try { localStorage.setItem('reports.showHierarchy', next ? '1' : '0') } catch {}
               }}
               className={
-                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border text-[11px] md:text-xs whitespace-nowrap " +
+                "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border text-[11px] md:text-xs whitespace-nowrap transition-all duration-300 ease-in-out " +
                 (showHierarchy
                   ? "border-emerald-300 dark:border-emerald-800 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
                   : "border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800")
               }
               title={showHierarchy ? "Скрыть иерархию" : "Показать иерархию"}
             >
-              <Eye className="h-4 w-4" /> Иерархия
+              <Eye className="h-4 w-4" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Иерархия
+              </span>
             </button>
             <button
               onClick={async () => {
@@ -692,10 +730,13 @@ export default function ReportsPage() {
                 }
               }}
               disabled={exportingCsv}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out"
               title="Выгрузить в CSV"
             >
-              <FileDown className="h-4 w-4" /> {exportingCsv ? 'CSV…' : 'CSV'}
+              <FileDown className="h-4 w-4" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                {exportingCsv ? 'CSV…' : 'CSV'}
+              </span>
             </button>
             <button
               onClick={async () => {

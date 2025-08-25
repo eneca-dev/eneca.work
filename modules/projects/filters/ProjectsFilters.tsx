@@ -174,6 +174,18 @@ export function ProjectsFilters({
               </div>
             )}
           </button>
+          
+          {/* Информация о правах доступа */}
+          {!isCollapsed && (
+            <div className={cn(
+              "text-xs px-2 py-1 rounded-md",
+              theme === 'dark' 
+                ? "bg-slate-700/50 text-slate-400 border border-slate-600/50" 
+                : "bg-slate-100 text-slate-600 border border-slate-200"
+            )}>
+              🔒 Фильтры автоматически настраиваются на основе ваших прав доступа
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -200,57 +212,105 @@ export function ProjectsFilters({
         <div className="space-y-3">
           {/* Проектные фильтры */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <FilterSelect
-              id="manager"
-              label="Руководитель проекта"
-              value={selectedManagerId}
-              onChange={(value) => setFilter('manager', value)}
-              disabled={isLoading}
-              locked={isFilterLocked('manager')}
-              options={managers}
-              placeholder="Выберите руководителя проекта"
-              theme={theme}
-              loading={isLoading}
-            />
+            <div className="space-y-2">
+              <FilterSelect
+                id="manager"
+                label="Руководитель проекта"
+                value={selectedManagerId}
+                onChange={(value) => setFilter('manager', value)}
+                disabled={isLoading}
+                locked={isFilterLocked('manager')}
+                options={managers}
+                placeholder="Выберите руководителя проекта"
+                theme={theme}
+                loading={isLoading}
+              />
+              {isFilterLocked('manager') && (
+                <p className={cn(
+                  "text-xs px-2 py-1 rounded",
+                  theme === 'dark' 
+                    ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                )}>
+                  🔒 Заблокировано: вы можете видеть только свои проекты
+                </p>
+              )}
+            </div>
 
-            <FilterSelect
-              id="project"
-              label="Проект"
-              value={selectedProjectId}
-              onChange={(value) => setFilter('project', value)}
-              disabled={isLoading || isLoadingProjects}
-              locked={isFilterLocked('project')}
-              options={filteredProjects}
-              placeholder="Выберите проект"
-              theme={theme}
-              loading={isLoadingProjects}
-            />
+            <div className="space-y-2">
+              <FilterSelect
+                id="project"
+                label="Проект"
+                value={selectedProjectId}
+                onChange={(value) => setFilter('project', value)}
+                disabled={isLoading || isLoadingProjects}
+                locked={isFilterLocked('project')}
+                options={filteredProjects}
+                placeholder="Выберите проект"
+                theme={theme}
+                loading={isLoadingProjects}
+              />
+              {isFilterLocked('project') && (
+                <p className={cn(
+                  "text-xs px-2 py-1 rounded",
+                  theme === 'dark' 
+                    ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                )}>
+                  🔒 Заблокировано: проект предустановлен на основе ваших прав
+                </p>
+              )}
+            </div>
 
-            <FilterSelect
-              id="stage"
-              label="Стадия"
-              value={selectedStageId}
-              onChange={(value) => setFilter('stage', value)}
-              disabled={!selectedProjectId || isLoadingStages}
-              locked={isFilterLocked('stage')}
-              options={filteredStages}
-              placeholder="Выберите стадию"
-              theme={theme}
-              loading={isLoadingStages}
-            />
+            <div className="space-y-2">
+              <FilterSelect
+                id="stage"
+                label="Стадия"
+                value={selectedStageId}
+                onChange={(value) => setFilter('stage', value)}
+                disabled={!selectedProjectId || isLoadingStages}
+                locked={isFilterLocked('stage')}
+                options={filteredStages}
+                placeholder="Выберите стадию"
+                theme={theme}
+                loading={isLoadingStages}
+              />
+              {isFilterLocked('stage') && (
+                <p className={cn(
+                  "text-xs px-2 py-1 rounded",
+                  theme === 'dark' 
+                    ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                )}>
+                  🔒 Заблокировано: стадия предустановлена на основе выбранного проекта
+                </p>
+              )}
+            </div>
 
-            <FilterSelect
-              id="object"
-              label="Объект"
-              value={selectedObjectId}
-              onChange={(value) => setFilter('object', value)}
-              disabled={!selectedProjectId || isLoadingObjects}
-              locked={isFilterLocked('object')}
-              options={filteredObjects}
-              placeholder="Выберите объект"
-              theme={theme}
-              loading={isLoadingObjects}
-            />
+            <div className="space-y-2">
+              <FilterSelect
+                id="object"
+                label="Объект"
+                value={selectedObjectId}
+                onChange={(value) => setFilter('object', value)}
+                disabled={!selectedProjectId || isLoadingObjects}
+                locked={isFilterLocked('object')}
+                options={filteredObjects}
+                placeholder="Выберите объект"
+                theme={theme}
+                loading={isLoadingObjects}
+              />
+              {isFilterLocked('object') && (
+                <p className={cn(
+                  "text-xs px-2 py-1 rounded",
+                  theme === 'dark' 
+                    ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                )}>
+                  🔒 Заблокировано: объект предустановлен на основе выбранной стадии
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Организационные фильтры */}

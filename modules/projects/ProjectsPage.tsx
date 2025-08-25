@@ -62,6 +62,9 @@ export default function ProjectsPage() {
   // Состояние сайдбара для правильного позиционирования модального окна
   const { collapsed: sidebarCollapsed } = useSidebarState();
 
+  // Состояние для адаптивного отображения текста фильтров
+  const [isCompactMode, setIsCompactMode] = useState(false);
+
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
     setSelectedProjectId(projectId);
@@ -166,60 +169,33 @@ export default function ProjectsPage() {
     loadInitialData()
   }, [loadInitialData])
 
+  // Эффект для определения компактного режима
+  useEffect(() => {
+    const checkCompactMode = () => {
+      // Включаем компактный режим при ширине экрана меньше 1200px
+      setIsCompactMode(window.innerWidth < 1200);
+    };
+
+    checkCompactMode();
+    window.addEventListener('resize', checkCompactMode);
+    
+    return () => window.removeEventListener('resize', checkCompactMode);
+  }, []);
+
   return (
     <div className="px-0 pt-0 pb-0">
       {/* Новый липкий FilterBar. Старые фильтры ProjectsFilters оставляем ниже. */}
       <FilterBar 
         title="Проекты"
         titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg"
-        bottom={
-          <div className="hidden max-[1339px]:flex w-full justify-center">
-            {/* Блок управления — во вторую строку на ширине <1100px */}
-            <div className="flex items-center gap-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-1 py-1 h-12">
-              {/* Группировка по заказчикам */}
-              <button
-                className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30"
-                title="Группировать по заказчикам"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByClient'))
-                  }
-                }}
-              >
-                <Building size={14} />
-              </button>
-              {/* Показать/скрыть руководителей */}
-              <button
-                className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
-                title="Показать/скрыть руководителей"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('projectsTree:toggleShowManagers'))
-                  }
-                }}
-              >
-                <User size={14} />
-              </button>
-              {/* Только разделы — удалено */}
-              {/* Свернуть */}
-              <button
-                className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30"
-                title="Свернуть все"
-                onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
-              >
-                <Minimize size={14} />
-              </button>
-            </div>
-          </div>
-        }
       >
         {/* Инструменты: кнопки управления + поиск по структуре */}
         <div className="flex items-center gap-2 mr-2 text-[11px] md:text-xs">
-          {/* Блок кнопок управления — показываем только при ширине >= 1100px */}
-          <div className="hidden min-[1340px]:flex items-center gap-2">
+          {/* Блок кнопок управления — показываем всегда */}
+          <div className="flex items-center gap-1.5">
             {/* Группировка по заказчикам */}
             <button
-              className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30"
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-indigo-500/15 to-purple-500/15 text-indigo-600 hover:from-indigo-500/25 hover:to-purple-500/25 hover:shadow-sm dark:from-indigo-500/25 dark:to-purple-500/25 dark:text-indigo-400 dark:hover:from-indigo-500/35 dark:hover:to-purple-500/35 transition-all duration-200 rounded-md border border-indigo-200/50 dark:border-indigo-500/30"
               title="Группировать по заказчикам"
               onClick={() => {
                 if (typeof window !== 'undefined') {
@@ -227,11 +203,11 @@ export default function ProjectsPage() {
                 }
               }}
             >
-              <Building size={14} />
+              <Building size={13} />
             </button>
             {/* Показать/скрыть руководителей */}
             <button
-              className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-blue-500/15 to-cyan-500/15 text-blue-600 hover:from-blue-500/25 hover:to-cyan-500/25 hover:shadow-sm dark:from-blue-500/25 dark:to-cyan-500/25 dark:text-blue-400 dark:hover:from-blue-500/35 dark:hover:to-cyan-500/35 transition-all duration-200 rounded-md border border-blue-200/50 dark:border-blue-500/30"
               title="Показать/скрыть руководителей"
               onClick={() => {
                 if (typeof window !== 'undefined') {
@@ -239,16 +215,16 @@ export default function ProjectsPage() {
                 }
               }}
             >
-              <User size={14} />
+              <User size={13} />
             </button>
             {/* Только разделы — удалено */}
             {/* Свернуть */}
             <button
-              className="flex items-center justify-center p-2 rounded-md h-8 w-8 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/30"
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-orange-500/15 to-amber-500/15 text-orange-600 hover:from-orange-500/25 hover:to-amber-500/25 hover:shadow-sm dark:from-orange-500/25 dark:to-amber-500/25 dark:text-orange-400 dark:hover:from-orange-500/35 dark:hover:to-amber-500/35 transition-all duration-200 rounded-md border border-orange-200/50 dark:border-orange-500/30"
               title="Свернуть все"
               onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
             >
-              <Minimize size={14} />
+              <Minimize size={13} />
             </button>
           </div>
           {/* Поиск по структуре — справа от кнопок управления, перед фильтрами */}
@@ -258,15 +234,15 @@ export default function ProjectsPage() {
               value={treeSearch}
               onChange={e => setTreeSearch(e.target.value)}
               placeholder="Поиск по структуре..."
-              className="pl-8 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white w-48 md:w-56"
+              className="pl-7 pr-2 py-1 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white w-40 md:w-48 focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
             />
-            <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors duration-200" />
           </div>
         </div>
         {/* Организация — отдельная логика для модуля Проекты */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md"
               title={(() => {
                 const d = filterStore.selectedDepartmentId ? filterStore.departments.find(d=>d.id===filterStore.selectedDepartmentId)?.name : ''
                 const t = filterStore.selectedTeamId ? filterStore.teams.find(x=>x.id===filterStore.selectedTeamId)?.name : ''
@@ -274,9 +250,12 @@ export default function ProjectsPage() {
                 return [d,t,e].filter(Boolean).join(' › ')
               })()}
             >
-              <Building2 className="h-4 w-4" /> Организация
+              <Building2 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Организация
+              </span>
               {[filterStore.selectedDepartmentId, filterStore.selectedTeamId, filterStore.selectedEmployeeId].some(Boolean) && (
-                <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="ml-1 inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full" />
               )}
             </button>
           </DropdownMenuTrigger>
@@ -288,7 +267,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedDepartmentId || ''}
                   onChange={e => filterStore.setFilter('department', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -303,7 +282,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedTeamId || ''}
                   onChange={e => filterStore.setFilter('team', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -318,7 +297,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedEmployeeId || ''}
                   onChange={e => filterStore.setFilter('employee', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -336,8 +315,11 @@ export default function ProjectsPage() {
         {/* Статусы — дропдаун в том же стиле */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap">
-              <Filter className="h-4 w-4" /> Статусы
+            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
+              <Filter className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Статусы
+              </span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[320px] p-0">
@@ -346,19 +328,19 @@ export default function ProjectsPage() {
               <input
                 type="text"
                 placeholder="Поиск статусов..."
-                className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 value={statusSearch}
                 onChange={(e)=> setStatusSearch(e.target.value)}
               />
               <div className="flex items-center justify-between">
                 <button
-                  className="text-[11px] md:text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="text-[11px] md:text-xs px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
                   onClick={()=> setSelectedStatusIdsLocal([])}
                 >
                   Очистить
                 </button>
                 <button
-                  className="text-[11px] md:text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+                  className="text-[11px] md:text-xs px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 inline-flex items-center gap-1 transition-all duration-200 rounded-md"
                   onClick={()=> {
                     if (typeof window !== 'undefined') {
                       window.dispatchEvent(new CustomEvent('projectsTree:openStatusManagement'))
@@ -371,14 +353,14 @@ export default function ProjectsPage() {
               {/* Список статусов */}
               <div className="max-h-64 overflow-auto space-y-1">
                 {filteredStatuses.map(s => (
-                  <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer">
+                  <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
                     <input
                       type="checkbox"
-                      className="rounded border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                      className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
                       checked={selectedStatusIdsLocal.includes(s.id)}
                       onChange={() => setSelectedStatusIdsLocal(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
                     />
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+                    <div className="w-3 h-3" style={{ backgroundColor: s.color }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium dark:text-white truncate">{s.name}</div>
                       {s.description && <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{s.description}</div>}
@@ -395,7 +377,7 @@ export default function ProjectsPage() {
         {/* Проектная иерархия: Manager → Project → Stage → Object + Поиск по структуре */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md"
               title={(() => {
                 const m = filterStore.selectedManagerId ? filterStore.managers.find(m=>m.id===filterStore.selectedManagerId)?.name : ''
                 const p = filterStore.selectedProjectId ? filterStore.projects.find(p=>p.id===filterStore.selectedProjectId)?.name : ''
@@ -404,9 +386,12 @@ export default function ProjectsPage() {
                 return [m,p,s,o].filter(Boolean).join(' › ')
               })()}
             >
-              <FolderOpen className="h-4 w-4" /> Проект
+              <FolderOpen className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Проект
+              </span>
               {[filterStore.selectedManagerId, filterStore.selectedProjectId, filterStore.selectedStageId, filterStore.selectedObjectId].some(Boolean) && (
-                <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="ml-1 inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full" />
               )}
             </button>
           </DropdownMenuTrigger>
@@ -420,7 +405,7 @@ export default function ProjectsPage() {
                   value={treeSearch}
                   onChange={e => setTreeSearch(e.target.value)}
                   placeholder="Поиск по структуре..."
-                  className="flex-1 px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="flex-1 px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 />
               </div>
 
@@ -430,7 +415,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedManagerId || ''}
                   onChange={e => filterStore.setFilter('manager', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -447,12 +432,12 @@ export default function ProjectsPage() {
                   value={projectSearch}
                   onChange={e => setProjectSearch(e.target.value)}
                   placeholder="Поиск..."
-                  className="mb-2 w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="mb-2 w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 />
                 <select
                   value={filterStore.selectedProjectId || ''}
                   onChange={e => filterStore.setFilter('project', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -470,7 +455,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedStageId || ''}
                   onChange={e => filterStore.setFilter('stage', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -485,7 +470,7 @@ export default function ProjectsPage() {
                 <select
                   value={filterStore.selectedObjectId || ''}
                   onChange={e => filterStore.setFilter('object', e.target.value || null)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
                 >
                   <option value="">Все</option>
@@ -502,9 +487,12 @@ export default function ProjectsPage() {
 
         <button
           onClick={handleResetFilters}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+          className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md"
         >
-          <FilterIcon className="h-4 w-4 rotate-180" /> Сбросить
+          <FilterIcon className="h-3.5 w-3.5 rotate-180 text-slate-600 dark:text-slate-300" />
+          <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+            Сбросить
+          </span>
         </button>
       </FilterBar>
 

@@ -31,10 +31,10 @@ export default function RemoveHeadConfirmModal({
       const supabase = createClient()
 
       if (type === "department") {
-        // Удаляем руководителя отдела
+        // Убираем руководителя отдела через новую систему
         const { error } = await supabase
-          .from("department_heads")
-          .delete()
+          .from("departments")
+          .update({ department_head_id: null })
           .eq("department_id", entityId)
 
         if (error) {
@@ -45,12 +45,11 @@ export default function RemoveHeadConfirmModal({
 
         toast.success("Руководитель отдела убран")
       } else {
-        // Удаляем руководителя команды
+        // Убираем тимлида команды через новую систему
         const { error } = await supabase
-          .from("team_leads")
-          .delete()
+          .from("teams")
+          .update({ team_lead_id: null })
           .eq("team_id", entityId)
-
 
         if (error) {
           console.error("Ошибка при удалении руководителя команды:", error)

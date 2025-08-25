@@ -70,7 +70,7 @@ export function OrganizationFilters({
         )}>
           <Building2 size={20} />
         </div>
-        <div>
+        <div className="flex-1">
           <h3 className={cn(
             "font-semibold text-base",
             theme === 'dark' ? "text-slate-100" : "text-slate-900"
@@ -82,6 +82,12 @@ export function OrganizationFilters({
             theme === 'dark' ? "text-slate-400" : "text-slate-500"
           )}>
             Фильтрация по отделам, командам и сотрудникам
+          </p>
+          <p className={cn(
+            "text-xs mt-1",
+            theme === 'dark' ? "text-slate-500" : "text-slate-400"
+          )}>
+            🔒 Некоторые фильтры могут быть заблокированы на основе ваших прав доступа
           </p>
         </div>
       </div>
@@ -120,6 +126,17 @@ export function OrganizationFilters({
             theme={theme}
             loading={isLoading}
           />
+          
+          {isFilterLocked('department') && (
+            <p className={cn(
+              "text-xs px-3 py-2 rounded-lg",
+              theme === 'dark' 
+                ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            )}>
+              🔒 Фильтр заблокирован на основе ваших прав доступа. Вы можете видеть данные только по своему отделу.
+            </p>
+          )}
         </div>
 
         {/* Стрелка */}
@@ -167,6 +184,17 @@ export function OrganizationFilters({
             theme={theme}
             loading={isLoading}
           />
+          
+          {isFilterLocked('team') && (
+            <p className={cn(
+              "text-xs px-3 py-2 rounded-lg",
+              theme === 'dark' 
+                ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            )}>
+              🔒 Фильтр заблокирован на основе ваших прав доступа. Вы можете видеть данные только по своей команде.
+            </p>
+          )}
           
           {selectedDepartmentId && filteredTeams.length === 0 && !isLoading && (
             <p className={cn(
@@ -223,6 +251,17 @@ export function OrganizationFilters({
             theme={theme}
             loading={isLoading}
           />
+          
+          {isFilterLocked('employee') && (
+            <p className={cn(
+              "text-xs px-3 py-2 rounded-lg",
+              theme === 'dark' 
+                ? "bg-amber-900/20 text-amber-300 border border-amber-700/30" 
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            )}>
+              🔒 Фильтр заблокирован на основе ваших прав доступа. Вы можете видеть данные только по себе.
+            </p>
+          )}
           
           {selectedTeamId && filteredEmployees.length === 0 && !isLoading && (
             <p className={cn(

@@ -156,11 +156,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       icon: List,
     },
     {
-      title: "Задания",
-      href: "/dashboard/task-transfer",
-      icon: ClipboardList,
-    },
-    {
       title: "Отчёты",
       href: "/dashboard/reports",
       icon: BarChart,

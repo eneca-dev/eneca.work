@@ -1,4 +1,4 @@
-import type { User, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
+import type { User, UserWithRoles, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
 import { createClient } from "@/utils/supabase/client"
 import { createAdminClient } from "@/utils/supabase/admin"
 import * as Sentry from "@sentry/nextjs"
@@ -30,7 +30,7 @@ export function mapWorkFormatToDb(format: "office" | "remote" | "hybrid"): WorkF
 }
 
 // Получение всех пользователей с объединением данных из связанных таблиц
-export async function getUsers(): Promise<User[]> {
+export async function getUsers(): Promise<UserWithRoles[]> {
   return Sentry.startSpan(
     {
       op: "db.query",
@@ -74,46 +74,24 @@ export async function getUsers(): Promise<User[]> {
         span.setAttribute("users.count", users?.length || 0)
         console.log("Получено пользователей из представления:", users?.length || 0);
 
-        // Преобразуем данные из представления в формат User
-        const formattedUsers = users?.map((user) => ({
-          id: user.user_id,
-          name: user.full_name || `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-          email: user.email || "",
-          avatar_url: user.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`,
-          position: user.position_name || "",
-          department: user.department_name || "",
-          team: user.team_name || "",
-          category: user.category_name || "",
-          role: user.role_name || "",
-          isActive: user.is_active || true,
-          dateJoined: user.created_at,
-          workLocation: mapWorkFormat(user.work_format),
-          country: user.country_name || "",
-          city: user.city_name || "",
-          employmentRate: user.employment_rate !== null ? user.employment_rate : 1,
-          salary: user.salary !== null ? user.salary : user.is_hourly ? 15 : 1500,
-          isHourly: user.is_hourly !== null ? user.is_hourly : true,
-        })) || []
-
-        span.setAttribute("users.processed", formattedUsers.length)
-        console.log("Обработано пользователей:", formattedUsers.length);
-        return formattedUsers
-
+        // Возвращаем данные напрямую из представления
+        return users || []
       } catch (error) {
-        span.setAttribute("error", true)
-        span.setAttribute("error.message", (error as Error).message)
+        span.setAttribute("db.success", false)
+        span.setAttribute("db.error", error instanceof Error ? error.message : 'Unknown error')
         
         Sentry.captureException(error, {
           tags: {
             module: 'org_data_service',
             action: 'get_users',
-            error_type: 'processing_error'
+            table: 'view_users'
           },
           extra: {
-            error_message: (error as Error).message,
             timestamp: new Date().toISOString()
           }
         })
+        
+        console.error("Ошибка в getUsers:", error)
         return []
       }
     }

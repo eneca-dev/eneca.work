@@ -19,12 +19,16 @@ interface User {
 }
 
 interface Team {
-  team_id: string
-  team_name: string
-  department_id: string | null
-  department_name: string | null
-  head_user_id: string | null
-  head_full_name: string | null
+  id: string
+  name: string
+  departmentId: string
+  departmentName: string
+  team_lead_id: string | null
+  headFirstName: string | null
+  headLastName: string | null
+  headFullName: string | null
+  headEmail: string | null
+  headAvatarUrl: string | null
 }
 
 interface TeamHeadModalProps {
@@ -62,9 +66,10 @@ export default function TeamHeadModal({
           email,
           avatar_url,
           department_name,
-          position_name
+          position_name,
+          team_name
         `)
-
+        .eq("team_name", team.name) // Фильтруем только по нужной команде
         .order("first_name")
       
       if (error) {
@@ -80,7 +85,7 @@ export default function TeamHeadModal({
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [team.name])
 
   // Фильтрация пользователей по поиску
   useEffect(() => {
@@ -112,28 +117,18 @@ export default function TeamHeadModal({
     }
   }, [open, fetchUsers])
 
-  // Назначение руководителя
-  const handleAssignHead = useCallback(async () => {
+  const handleSave = useCallback(async () => {
     if (!selectedUser) return
 
     try {
       setIsSaving(true)
       const supabase = createClient()
       
-      // Удаляем всех текущих руководителей команды
-      await supabase
-        .from("team_leads")
-        .delete()
-        .eq("team_id", team.team_id)
-
-      
-      // Назначаем нового руководителя
+      // Назначаем нового тимлида команды через новую систему
       const { error } = await supabase
-        .from("team_leads")
-        .insert({
-          team_id: team.team_id,
-          user_id: selectedUser.user_id
-        })
+        .from("teams")
+        .update({ team_lead_id: selectedUser.user_id })
+        .eq("team_id", team.id)
       
       if (error) {
         console.error("Ошибка при назначении руководителя:", error)
@@ -141,7 +136,7 @@ export default function TeamHeadModal({
         return
       }
       
-      toast.success(`${selectedUser.first_name} ${selectedUser.last_name} назначен руководителем команды "${team.team_name}"`)
+      toast.success(`${selectedUser.first_name} ${selectedUser.last_name} назначен руководителем команды "${team.name}"`)
       onSuccess()
       onOpenChange(false)
     } catch (error) {
@@ -159,16 +154,16 @@ export default function TeamHeadModal({
   return (
     <Modal isOpen={open} onClose={() => onOpenChange(false)} size="xl">
       <Modal.Header 
-        title={team.head_user_id ? "Сменить руководителя команды" : "Назначить руководителя команды"}
+        title={team.team_lead_id ? "Сменить руководителя команды" : "Назначить руководителя команды"}
         subtitle={
           <>
-            Отдел: <strong>{team.department_name || "Не указан"}</strong>
+            Отдел: <strong>{team.departmentName || "Не указан"}</strong>
             <br />
-            Команда: <strong>{team.team_name}</strong>
-            {team.head_user_id && (
+            Команда: <strong>{team.name}</strong>
+            {team.team_lead_id && (
               <>
                 <br />
-                Текущий руководитель: <strong>{team.head_full_name}</strong>
+                Текущий руководитель: <strong>{team.headFullName}</strong>
               </>
             )}
           </>
@@ -235,7 +230,7 @@ export default function TeamHeadModal({
         </ModalButton>
         <ModalButton 
           variant="success"
-          onClick={handleAssignHead} 
+          onClick={handleSave} 
           disabled={!selectedUser}
           loading={isSaving}
           icon={<UserCheck />}

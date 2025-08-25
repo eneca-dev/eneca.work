@@ -18,6 +18,8 @@ import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { useUserPermissions } from "../hooks/useUserPermissions"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 interface UserDialogProps {
   open: boolean
@@ -53,6 +55,14 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const [countries, setCountries] = useState<{ code: string; name: string }[]>([])
   const [cities, setCities] = useState<{ name: string }[]>([])
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("")
+  
+  // Добавляем состояние для всех ролей пользователя
+  const [userRoles, setUserRoles] = useState<Array<{
+    id: string
+    role_name: string
+    role_description?: string
+    assigned_at: string
+  }>>([])
   
   // Добавляем состояния для поиска
   const [countrySearch, setCountrySearch] = useState("")
@@ -99,23 +109,35 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   useEffect(() => {
     async function loadReferenceData() {
       try {
-        const [depts, allTeams, pos, cats] = await Promise.all([
+        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Promise.all([
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
+          getAvailableRoles()
         ])
-
-        setDepartments(depts)
-        setTeams(allTeams)
-        setPositions(pos)
-        setCategories(cats)
-
-        // Загружаем роли только если пользователь может их редактировать
-        if (canEditRoles) {
-          const availableRoles = await getAvailableRoles(canAddAdminRole)
-          setRoles(availableRoles)
-        }
+        
+        console.log("=== UserDialog: Загружены справочные данные ===")
+        console.log("departments:", departmentsData)
+        console.log("teams:", teamsData)
+        console.log("positions:", positionsData)
+        console.log("categories:", categoriesData)
+        console.log("roles:", rolesData)
+        
+        setDepartments(departmentsData)
+        setTeams(teamsData)
+        setPositions(positionsData)
+        setCategories(categoriesData)
+        setRoles(rolesData)
+        
+        // Загружаем страны
+        const countriesData = Country.getAllCountries().map(c => ({
+          code: c.isoCode,
+          name: c.name
+        }))
+        setCountries(countriesData)
+        setFilteredCountries(countriesData)
+        
       } catch (error) {
         console.error("Ошибка загрузки справочных данных:", error)
         toast({
@@ -125,11 +147,28 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         })
       }
     }
+    
+    loadReferenceData()
+  }, [])
 
-    if (open) {
-      loadReferenceData()
+  // Функция для загрузки ролей пользователя
+  const loadUserRoles = async (userId: string) => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('view_user_roles')
+        .select('*')
+        .eq('user_id', userId)
+        .order('assigned_at', { ascending: true })
+      
+      if (error) throw error
+      
+      console.log("UserDialog: Загружены роли пользователя:", data)
+      setUserRoles(data || [])
+    } catch (error) {
+      console.error("Ошибка загрузки ролей пользователя:", error)
     }
-  }, [open, canEditRoles, canAddAdminRole])
+  }
 
   // Загрузка стран/городов
   useEffect(() => {
@@ -204,82 +243,102 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     }
   }, [citySelectOpen, selectedCountryCode])
 
-  // Изменим установку данных пользователя при открытии диалога
+  // Загрузка данных пользователя при открытии диалога
   useEffect(() => {
-    if (user) {
-      // Разделяем имя на firstName и lastName, если они есть
-      let firstName = ""
-      let lastName = ""
-      if (user.name) {
-        const parts = user.name.split(" ")
-        firstName = parts[0] || ""
-        lastName = parts.slice(1).join(" ") || ""
-      }
-
-      // Получаем ID роли по её имени
-      const roleId = roles.find(r => r.name === user.role)?.id || ""
+    if (open && user) {
+      console.log("=== UserDialog: Загрузка данных пользователя ===")
+      console.log("user:", user)
+      console.log("user.team:", user.team)
+      console.log("user.team type:", typeof user.team)
+      console.log("user.department:", user.department)
+      console.log("user.department type:", typeof user.department)
       
-      // Устанавливаем значение роли для Select (роль как есть, без fallback на "none")
-      const roleValue = user.role || ""
-
-      // Получаем ID команды по её названию
-      const teamId = teams.find(t => t.name === user.team)?.id || ""
-
+      // Загружаем роли пользователя
+      loadUserRoles(user.id)
+      
+      // Устанавливаем данные формы
+      const firstName = user.name?.split(' ')[0] || ""
+      const lastName = user.name?.split(' ').slice(1).join(' ') || ""
+      
       setFormData({
         firstName,
         lastName,
-        email: user.email,
-        position: user.position,
-        department: user.department,
-        team: teamId, // Теперь используем ID команды
-        category: user.category,
-        role: roleValue,
-        roleId,
-        workLocation: user.workLocation,
+        email: user.email || "",
+        position: user.position || "",
+        department: user.department || "",
+        team: user.team || "",
+        category: user.category || "",
+        role: user.role || "",
+        roleId: "",
+        workLocation: user.workLocation || "office",
         country: user.country || "",
         city: user.city || "",
       })
-      // Инициализируем выбранную страну
-      const matchCountry = Country.getAllCountries().find(c => c.name === (user.country || ""))
-      setSelectedCountryCode(matchCountry?.isoCode || "")
       
-      // Сбрасываем поиск
-      setCountrySearch("")
-      setCitySearch("")
-    } else {
-      setFormData({
-        firstName: "",
-        lastName: "",
-        email: "",
-        position: "",
-        department: "",
-        team: "",
-        category: "",
-        role: "",
-        roleId: "",
-        workLocation: "office",
-        country: "",
-        city: "",
-      })
-      setSelectedCountryCode("")
-      setCountrySearch("")
-      setCitySearch("")
+      console.log("=== UserDialog: Установлены данные формы ===")
+      console.log("formData.team:", user.team || "")
+      console.log("formData.department:", user.department || "")
+      
+      // Устанавливаем страну
+      if (user.country) {
+        const foundCountry = countries.find(c => c.name === user.country)
+        if (foundCountry) {
+          setSelectedCountryCode(foundCountry.code)
+          // Загружаем города для выбранной страны
+          const citiesData = City.getCitiesOfCountry(foundCountry.code)?.map(c => ({ name: c.name })) || []
+          setCities(citiesData)
+          setFilteredCities(citiesData)
+        }
+      }
+      
+      // Устанавливаем roleId для редактирования
+      if (canEditRoles) {
+        const roleId = roles.find(r => r.name === user.role)?.id || ""
+        setFormData(prev => ({ ...prev, roleId }))
+      }
+      
+      // Устанавливаем значение роли для Select (роль как есть, без fallback на "none")
+      setFormData(prev => ({ ...prev, role: user.role || "" }))
     }
-  }, [user, open, roles, teams])
+  }, [open, user, countries, roles, canEditRoles])
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
+    console.log("=== UserDialog: Фильтрация команд ===")
+    console.log("formData.department:", formData.department)
+    console.log("formData.team:", formData.team)
+    console.log("departments:", departments)
+    console.log("teams:", teams)
+    
     if (formData.department) {
       const departmentId = departments.find((d) => d.name === formData.department)?.id
-      setFilteredTeams(teams.filter((t) => t.departmentId === departmentId))
+      console.log("Найденный departmentId:", departmentId)
+      
+      const filtered = teams.filter((t) => t.departmentId === departmentId)
+      console.log("Отфильтрованные команды:", filtered)
+      console.log("Команды с их departmentId:")
+      filtered.forEach(team => {
+        console.log(`  ${team.name} -> departmentId: ${team.departmentId}`)
+      })
+      setFilteredTeams(filtered)
 
       // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
       if (formData.team) {
-        const teamExists = filteredTeams.some((t) => t.id === formData.team)
+        console.log("Ищем команду:", formData.team)
+        console.log("В отфильтрованном списке:")
+        filtered.forEach(team => {
+          console.log(`  ${team.name} === ${formData.team}? ${team.name === formData.team}`)
+        })
+        
+        const teamExists = filtered.some((t) => t.name === formData.team)
+        console.log("Команда найдена по имени:", teamExists)
+        
         if (!teamExists) {
+          console.log("Сбрасываем команду, так как она не принадлежит отделу")
           setFormData((prev) => ({ ...prev, team: "" }))
         }
       }
     } else {
+      console.log("Отдел не выбран, показываем все команды")
       setFilteredTeams(teams)
     }
   }, [formData.department, departments, teams])
@@ -492,29 +551,29 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               : "Измените информацию о пользователе и нажмите Сохранить, когда закончите."
           }
         />
-        <Modal.Body>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
           <div className="grid gap-4 py-4">
-            {/* Существующие поля формы */}
+            {/* Имя и Фамилия в одну строку */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="firstName" className="text-right">Имя</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => handleChange("firstName", e.target.value)}
-                className="col-span-3"
-                required
-              />
+              <Label className="text-right">Имя и Фамилия</Label>
+              <div className="col-span-3 grid grid-cols-2 gap-2">
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => handleChange("firstName", e.target.value)}
+                  placeholder="Имя"
+                  required
+                />
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => handleChange("lastName", e.target.value)}
+                  placeholder="Фамилия"
+                  required
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="lastName" className="text-right">Фамилия</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => handleChange("lastName", e.target.value)}
-                className="col-span-3"
-                required
-              />
-            </div>
+            
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="email" className="text-right">
                 Email
@@ -528,89 +587,103 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 required
               />
             </div>
+            
+            {/* Роли */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="department" className="text-right">
-                Отдел
-              </Label>
-              <Select
-                value={formData.department}
-                onValueChange={(value) => handleChange("department", value)}
-                disabled={!canEditOrganizationalFields}
-              >
-                <SelectTrigger id="department" className="col-span-3">
-                  <SelectValue placeholder="Выберите отдел" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((department) => (
-                    <SelectItem key={department.id} value={department.name}>
-                      {department.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-right">Роли</Label>
+              <div className="col-span-3 flex flex-wrap gap-2">
+                {userRoles.map((role) => (
+                  <div key={role.id} className="group relative">
+                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 cursor-help">
+                      {role.role_name}
+                    </span>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                      {role.role_description || 'Описание роли отсутствует'}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+            
+            {/* Отдел и Команда в одну строку */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="team" className="text-right">
-                Команда
-              </Label>
-              <Select
-                value={formData.team}
-                onValueChange={(value) => handleChange("team", value)}
-                disabled={!formData.department || !canEditOrganizationalFields}
-              >
-                <SelectTrigger id="team" className="col-span-3">
-                  <SelectValue placeholder="Выберите команду" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredTeams.map((team) => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-right">Отдел и Команда</Label>
+              <div className="col-span-3 grid grid-cols-2 gap-2">
+                <Select
+                  value={formData.department}
+                  onValueChange={(value) => handleChange("department", value)}
+                  disabled={!canEditOrganizationalFields}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите отдел" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((department) => (
+                      <SelectItem key={department.id} value={department.name}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Select
+                  value={formData.team}
+                  onValueChange={(value) => handleChange("team", value)}
+                  disabled={!canEditOrganizationalFields}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите команду" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredTeams.map((team) => (
+                      <SelectItem key={team.id} value={team.name}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            {/* Должность и Категория в одну строку */}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="position" className="text-right">
-                Должность
-              </Label>
-              <Select
-                value={formData.position}
-                onValueChange={(value) => handleChange("position", value)}
-                disabled={!canEditOrganizationalFields}
-              >
-                <SelectTrigger id="position" className="col-span-3">
-                  <SelectValue placeholder="Выберите должность" />
-                </SelectTrigger>
-                <SelectContent>
-                  {positions.map((position) => (
-                    <SelectItem key={position.id} value={position.name}>
-                      {position.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category" className="text-right">
-                Категория
-              </Label>
-              <Select
-                value={formData.category}
-                onValueChange={(value) => handleChange("category", value)}
-                disabled={!canEditOrganizationalFields}
-              >
-                <SelectTrigger id="category" className="col-span-3">
-                  <SelectValue placeholder="Выберите категорию" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.name}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-right">Должность и Категория</Label>
+              <div className="col-span-3 grid grid-cols-2 gap-2">
+                <Select
+                  value={formData.position}
+                  onValueChange={(value) => handleChange("position", value)}
+                  disabled={!canEditOrganizationalFields}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите должность" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {positions.map((position) => (
+                      <SelectItem key={position.id} value={position.name}>
+                        {position.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => handleChange("category", value)}
+                  disabled={!canEditOrganizationalFields}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите категорию" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
             {canEditRoles && (

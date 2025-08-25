@@ -33,13 +33,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserDialog } from "./user-dialog"
 import { deleteUser } from "@/services/org-data-service"
-import type { User } from "@/types/db"
+import type { User, UserWithRoles } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteUserConfirm } from "./DeleteUserConfirm"
+import { createClient } from "@/utils/supabase/client"
+import { cn } from "@/lib/utils"
 
 interface UsersListProps {
   users: User[]
@@ -50,7 +52,7 @@ interface UsersListProps {
 type GroupBy = "none" | "department" | "nested"
 
 // Функция для получения информации о расположении (восстановлена из оригинала)
-const getWorkLocationInfo = (location: string) => {
+const getWorkLocationInfo = (location: string | null) => {
   switch (location) {
     case "office":
       return { icon: <Building2 className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />, label: "В офисе" }
@@ -59,7 +61,7 @@ const getWorkLocationInfo = (location: string) => {
     case "hybrid":
       return { icon: <Briefcase className="h-4 w-4 mr-2 text-purple-600 dark:text-purple-400" />, label: "Гибридный" }
     default:
-      return { icon: null, label: location }
+      return { icon: null, label: location || "Не указано" }
   }
 }
 
@@ -101,48 +103,43 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
 
   // ОПТИМИЗАЦИЯ: Мемоизируем фильтрацию пользователей (как в оригинале, но оптимизированно)
   const filteredUsers = useMemo(() => {
-    if (!users || users.length === 0) return []
+    let filtered = users
 
-    let result = users
-
-    // Применение поиска
-    if (searchTerm.trim()) {
+    // Применяем поиск
+    if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
-      result = result.filter(user =>
+      filtered = filtered.filter(user =>
         user.name?.toLowerCase().includes(searchLower) ||
         user.email?.toLowerCase().includes(searchLower) ||
         user.department?.toLowerCase().includes(searchLower) ||
         user.team?.toLowerCase().includes(searchLower) ||
-        user.position?.toLowerCase().includes(searchLower)
+        user.position?.toLowerCase().includes(searchLower) ||
+        user.category?.toLowerCase().includes(searchLower) ||
+        user.role?.toLowerCase().includes(searchLower)
       )
     }
 
-    // Применение фильтров
+    // Применяем фильтры
     if (filters.departments.length > 0) {
-      result = result.filter(user => user.department && filters.departments.includes(user.department))
+      filtered = filtered.filter(user => user.department && filters.departments.includes(user.department))
     }
-
     if (filters.teams.length > 0) {
-      result = result.filter(user => user.team && filters.teams.includes(user.team))
+      filtered = filtered.filter(user => user.team && filters.teams.includes(user.team))
     }
-
     if (filters.categories.length > 0) {
-      result = result.filter(user => user.category && filters.categories.includes(user.category))
+      filtered = filtered.filter(user => user.category && filters.categories.includes(user.category))
     }
-
     if (filters.positions.length > 0) {
-      result = result.filter(user => user.position && filters.positions.includes(user.position))
+      filtered = filtered.filter(user => user.position && filters.positions.includes(user.position))
     }
-
     if (filters.workLocations.length > 0) {
-      result = result.filter(user => user.workLocation && filters.workLocations.includes(user.workLocation))
+      filtered = filtered.filter(user => user.workLocation && filters.workLocations.includes(user.workLocation))
     }
-
     if (filters.roles.length > 0) {
-      result = result.filter(user => user.role && filters.roles.includes(user.role))
+      filtered = filtered.filter(user => user.role && filters.roles.includes(user.role))
     }
 
-    return result
+    return filtered
   }, [users, searchTerm, filters])
 
   // ОПТИМИЗАЦИЯ: Мемоизируем пагинированные пользователи
@@ -163,8 +160,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     const usersToGroup = filteredUsers
     
     if (groupBy === "none") {
-      // Для режима "без группировки" применяем пагинацию
-      return { "": showAll ? filteredUsers : paginatedUsers }
+      return { "": filteredUsers }
     }
 
     if (groupBy === "department") {
@@ -179,25 +175,25 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
       return groups
     }
 
-    // Вложенная группировка: отделы -> команды
-    const nestedGroups: Record<string, Record<string, User[]>> = {}
-    usersToGroup.forEach((user) => {
-      const department = user.department || "Без отдела"
-      const team = user.team || "Без команды"
+    if (groupBy === "nested") {
+      const nestedGroups: Record<string, Record<string, User[]>> = {}
+      usersToGroup.forEach((user) => {
+        const department = user.department || "Без отдела"
+        const team = user.team || "Без команды"
 
-      if (!nestedGroups[department]) {
-        nestedGroups[department] = {}
-      }
+        if (!nestedGroups[department]) {
+          nestedGroups[department] = {}
+        }
+        if (!nestedGroups[department][team]) {
+          nestedGroups[department][team] = []
+        }
+        nestedGroups[department][team].push(user)
+      })
+      return nestedGroups
+    }
 
-      if (!nestedGroups[department][team]) {
-        nestedGroups[department][team] = []
-      }
-
-      nestedGroups[department][team].push(user)
-    })
-
-    return nestedGroups
-  }, [filteredUsers, paginatedUsers, groupBy, showAll])
+    return { "": filteredUsers }
+  }, [filteredUsers, groupBy])
 
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчики
   const handleEditUser = useCallback((user: User) => {
@@ -349,318 +345,368 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по отделам */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                 <Building2 className="h-4 w-4 mr-1" />
-                 Отдел
-                 {filters.departments.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.departments.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск отделов..." 
-                   className="h-8 text-xs"
-                   value={searchDepartmentDropdown}
-                   onChange={(e) => setSearchDepartmentDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.department).filter(Boolean))]
-                     .sort()
-                     .filter(dept => dept.toLowerCase().includes(searchDepartmentDropdown.toLowerCase()))
-                     .map(dept => (
-                     <div key={dept} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`dept-${dept}`}
-                         checked={filters.departments.includes(dept)}
-                         onChange={(e) => {
-                           const newDepts = e.target.checked
-                             ? [...filters.departments, dept]
-                             : filters.departments.filter(d => d !== dept)
-                           setFilters({...filters, departments: newDepts})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                       <Building2 className="h-4 w-4" />
+                       {filters.departments.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.departments.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск отделов..." 
+                         className="h-8 text-xs"
+                         value={searchDepartmentDropdown}
+                         onChange={(e) => setSearchDepartmentDropdown(e.target.value)}
                        />
-                       <label htmlFor={`dept-${dept}`} className="text-xs cursor-pointer">
-                         {dept}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.department).filter(Boolean))]
+                           .sort()
+                           .filter(dept => dept.toLowerCase().includes(searchDepartmentDropdown.toLowerCase()))
+                           .map(dept => (
+                           <div key={dept} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`dept-${dept}`}
+                               checked={filters.departments.includes(dept)}
+                               onChange={(e) => {
+                                 const newDepts = e.target.checked
+                                   ? [...filters.departments, dept]
+                                   : filters.departments.filter(d => d !== dept)
+                                 setFilters({...filters, departments: newDepts})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`dept-${dept}`} className="text-xs cursor-pointer">
+                               {dept}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-                 </div>
-               </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по отделам</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по командам */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
-                 <Users className="h-4 w-4 mr-1" />
-                 Команда
-                 {filters.teams.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.teams.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск команд..." 
-                   className="h-8 text-xs"
-                   value={searchTeamDropdown}
-                   onChange={(e) => setSearchTeamDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.team).filter(Boolean))]
-                     .sort()
-                     .filter(team => team.toLowerCase().includes(searchTeamDropdown.toLowerCase()))
-                     .map(team => (
-                     <div key={team} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`team-${team}`}
-                         checked={filters.teams.includes(team)}
-                         onChange={(e) => {
-                           const newTeams = e.target.checked
-                             ? [...filters.teams, team]
-                             : filters.teams.filter(t => t !== team)
-                           setFilters({...filters, teams: newTeams})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                       <Users className="h-4 w-4" />
+                       {filters.teams.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.teams.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск команд..." 
+                         className="h-8 text-xs"
+                         value={searchTeamDropdown}
+                         onChange={(e) => setSearchTeamDropdown(e.target.value)}
                        />
-                       <label htmlFor={`team-${team}`} className="text-xs cursor-pointer">
-                         {team}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.team).filter(Boolean))]
+                           .sort()
+                           .filter(team => team.toLowerCase().includes(searchTeamDropdown.toLowerCase()))
+                           .map(team => (
+                           <div key={team} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`team-${team}`}
+                               checked={filters.teams.includes(team)}
+                               onChange={(e) => {
+                                 const newTeams = e.target.checked
+                                   ? [...filters.teams, team]
+                                   : filters.teams.filter(t => t !== team)
+                                 setFilters({...filters, teams: newTeams})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`team-${team}`} className="text-xs cursor-pointer">
+                               {team}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-                 </div>
-               </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по командам</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по должностям */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden md:inline-flex">
-                 <Briefcase className="h-4 w-4 mr-1" />
-                 Должность
-                 {filters.positions.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.positions.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск должностей..." 
-                   className="h-8 text-xs"
-                   value={searchPositionDropdown}
-                   onChange={(e) => setSearchPositionDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.position).filter(Boolean))]
-                     .sort()
-                     .filter(position => position.toLowerCase().includes(searchPositionDropdown.toLowerCase()))
-                     .map(position => (
-                     <div key={position} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`position-${position}`}
-                         checked={filters.positions.includes(position)}
-                         onChange={(e) => {
-                           const newPositions = e.target.checked
-                             ? [...filters.positions, position]
-                             : filters.positions.filter(p => p !== position)
-                           setFilters({...filters, positions: newPositions})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                       <Briefcase className="h-4 w-4" />
+                       {filters.positions.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.positions.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск должностей..." 
+                         className="h-8 text-xs"
+                         value={searchPositionDropdown}
+                         onChange={(e) => setSearchPositionDropdown(e.target.value)}
                        />
-                       <label htmlFor={`position-${position}`} className="text-xs cursor-pointer">
-                         {position}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.position).filter(Boolean))]
+                           .sort()
+                           .filter(position => position.toLowerCase().includes(searchPositionDropdown.toLowerCase()))
+                           .map(position => (
+                           <div key={position} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`position-${position}`}
+                               checked={filters.positions.includes(position)}
+                               onChange={(e) => {
+                                 const newPositions = e.target.checked
+                                   ? [...filters.positions, position]
+                                   : filters.positions.filter(p => p !== position)
+                                 setFilters({...filters, positions: newPositions})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`position-${position}`} className="text-xs cursor-pointer">
+                               {position}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-                 </div>
-               </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по должностям</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по категориям */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden lg:inline-flex">
-                 <Tag className="h-4 w-4 mr-1" />
-                 Категория
-                 {filters.categories.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.categories.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск категорий..." 
-                   className="h-8 text-xs"
-                   value={searchCategoryDropdown}
-                   onChange={(e) => setSearchCategoryDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.category).filter(Boolean))]
-                     .sort()
-                     .filter(category => category.toLowerCase().includes(searchCategoryDropdown.toLowerCase()))
-                     .map(category => (
-                     <div key={category} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`category-${category}`}
-                         checked={filters.categories.includes(category)}
-                         onChange={(e) => {
-                           const newCategories = e.target.checked
-                             ? [...filters.categories, category]
-                             : filters.categories.filter(c => c !== category)
-                           setFilters({...filters, categories: newCategories})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                       <Tag className="h-4 w-4" />
+                       {filters.categories.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.categories.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск категорий..." 
+                         className="h-8 text-xs"
+                         value={searchCategoryDropdown}
+                         onChange={(e) => setSearchCategoryDropdown(e.target.value)}
                        />
-                       <label htmlFor={`category-${category}`} className="text-xs cursor-pointer">
-                         {category}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.category).filter(Boolean))]
+                           .sort()
+                           .filter(category => category.toLowerCase().includes(searchCategoryDropdown.toLowerCase()))
+                           .map(category => (
+                           <div key={category} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`category-${category}`}
+                               checked={filters.categories.includes(category)}
+                               onChange={(e) => {
+                                 const newCategories = e.target.checked
+                                   ? [...filters.categories, category]
+                                   : filters.categories.filter(c => c !== category)
+                                 setFilters({...filters, categories: newCategories})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`category-${category}`} className="text-xs cursor-pointer">
+                               {category}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-                 </div>
-              </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по категориям</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по ролям */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden xl:inline-flex">
-                <Users className="h-4 w-4 mr-1" />
-                 Роль
-                 {filters.roles.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.roles.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск ролей..." 
-                   className="h-8 text-xs"
-                   value={searchRoleDropdown}
-                   onChange={(e) => setSearchRoleDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.role).filter(Boolean))]
-                     .sort()
-                     .filter(role => role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
-                     .map(role => (
-                     <div key={role} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`role-${role}`}
-                         checked={filters.roles.includes(role as string)}
-                         onChange={(e) => {
-                           const newRoles = e.target.checked
-                             ? [...filters.roles, role as string]
-                             : filters.roles.filter(r => r !== role)
-                           setFilters({...filters, roles: newRoles})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                      <Users className="h-4 w-4" />
+                       {filters.roles.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.roles.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск ролей..." 
+                         className="h-8 text-xs"
+                         value={searchRoleDropdown}
+                         onChange={(e) => setSearchRoleDropdown(e.target.value)}
                        />
-                       <label htmlFor={`role-${role}`} className="text-xs cursor-pointer">
-                         {role}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.role).filter(Boolean))]
+                           .sort()
+                           .filter(role => role && role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
+                           .map(role => (
+                           <div key={role} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`role-${role}`}
+                               checked={filters.roles.includes(role as string)}
+                               onChange={(e) => {
+                                 const newRoles = e.target.checked
+                                   ? [...filters.roles, role as string]
+                                   : filters.roles.filter(r => r !== role)
+                                 setFilters({...filters, roles: newRoles})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`role-${role}`} className="text-xs cursor-pointer">
+                               {role}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-                 </div>
-               </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по ролям</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
            {/* Фильтр по расположению */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-1 text-xs hidden xl:inline-flex">
-                 <Home className="h-4 w-4 mr-1" />
-                 Расположение
-                 {filters.workLocations.length > 0 && (
-                   <span className="ml-2 text-xs text-blue-600">({filters.workLocations.length})</span>
-                 )}
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start" className="w-64">
-               <div className="p-2 space-y-2">
-                 <Input 
-                   placeholder="Поиск расположений..." 
-                   className="h-8 text-xs"
-                   value={searchLocationDropdown}
-                   onChange={(e) => setSearchLocationDropdown(e.target.value)}
-                 />
-                 <div className="max-h-32 overflow-y-auto space-y-1">
-                   {[...new Set(users.map(u => u.workLocation).filter(Boolean))]
-                     .sort()
-                     .filter(location => {
-                       const { label } = getWorkLocationInfo(location)
-                       return label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
-                              location.toLowerCase().includes(searchLocationDropdown.toLowerCase())
-                     })
-                     .map(location => (
-                     <div key={location} className="flex items-center space-x-2">
-                       <input
-                         type="checkbox"
-                         id={`location-${location}`}
-                         checked={filters.workLocations.includes(location)}
-                         onChange={(e) => {
-                           const newLocations = e.target.checked
-                             ? [...filters.workLocations, location]
-                             : filters.workLocations.filter(l => l !== location)
-                           setFilters({...filters, workLocations: newLocations})
-                         }}
-                         className="rounded"
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <Button variant="ghost" size="sm" className="h-7 px-1 text-xs">
+                       <Home className="h-4 w-4" />
+                       {filters.workLocations.length > 0 && (
+                         <span className="ml-1 text-xs text-blue-600">({filters.workLocations.length})</span>
+                       )}
+                     </Button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="start" className="w-64">
+                     <div className="p-2 space-y-2">
+                       <Input 
+                         placeholder="Поиск расположений..." 
+                         className="h-8 text-xs"
+                         value={searchLocationDropdown}
+                         onChange={(e) => setSearchLocationDropdown(e.target.value)}
                        />
-                       <label htmlFor={`location-${location}`} className="text-xs cursor-pointer">
-                         {getWorkLocationInfo(location).label}
-                       </label>
+                       <div className="max-h-32 overflow-y-auto space-y-1">
+                         {[...new Set(users.map(u => u.workLocation).filter(Boolean))]
+                           .sort()
+                           .filter(location => {
+                             const { label } = getWorkLocationInfo(location)
+                             return label.toLowerCase().includes(searchLocationDropdown.toLowerCase()) ||
+                                    location.toLowerCase().includes(searchLocationDropdown.toLowerCase())
+                           })
+                           .map(location => (
+                           <div key={location} className="flex items-center space-x-2">
+                             <input
+                               type="checkbox"
+                               id={`location-${location}`}
+                               checked={filters.workLocations.includes(location)}
+                               onChange={(e) => {
+                                 const newLocations = e.target.checked
+                                   ? [...filters.workLocations, location]
+                                   : filters.workLocations.filter(l => l !== location)
+                                 setFilters({...filters, workLocations: newLocations})
+                               }}
+                               className="rounded"
+                             />
+                             <label htmlFor={`location-${location}`} className="text-xs cursor-pointer">
+                               {getWorkLocationInfo(location).label}
+                             </label>
+                           </div>
+                         ))}
+                       </div>
                      </div>
-                   ))}
-              </div>
-            </div>
-             </DropdownMenuContent>
-           </DropdownMenu>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Фильтр по расположению</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            {/* Кнопка сброса фильтров */}
-           <Tooltip>
-             <TooltipTrigger asChild>
-               <Button
-                 variant="ghost"
-                 size="sm"
-                 className="h-7 w-7 p-0 text-xs"
-                 onClick={handleResetFilters}
-                 disabled={!hasActiveFilters}
-               >
-                 <RotateCcw className="h-4 w-4" />
-               </Button>
-             </TooltipTrigger>
-             <TooltipContent>
-               <p>Сброс фильтров</p>
-             </TooltipContent>
-           </Tooltip>
+           <TooltipProvider>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button
+                   variant="ghost"
+                   size="sm"
+                   className="h-7 w-7 p-0 text-xs"
+                   onClick={handleResetFilters}
+                   disabled={!hasActiveFilters}
+                 >
+                   <RotateCcw className="h-4 w-4" />
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Сброс фильтров</p>
+               </TooltipContent>
+             </Tooltip>
+           </TooltipProvider>
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
@@ -747,14 +793,37 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
             <Table className="table-auto w-full">
                 <TableHeader>
                   <TableRow>
-                  <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Пользователь</TableHead>
-                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Отдел</TableHead>
-                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">Команда</TableHead>
-                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">Должность</TableHead>
-                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">Категория</TableHead>
-                                         <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Роль</TableHead>
-                    <TableHead className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">Расположение</TableHead>
-                    {canEditAllUsers && <TableHead className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">Действия</TableHead>}
+                  <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
+                  <div className="flex items-center space-x-1">
+                    <Users className="h-3 w-3" />
+                    <span>Пользователь</span>
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-40">
+                  <div className="flex items-center space-x-1">
+                    <Building2 className="h-3 w-3" />
+                    <span>Отдел и Команда</span>
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-40">
+                  <div className="flex items-center space-x-1">
+                    <Briefcase className="h-3 w-3" />
+                    <span>Должность и Категория</span>
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell min-w-24">
+                  <div className="flex items-center space-x-1">
+                    <Tag className="h-3 w-3" />
+                    <span>Роли</span>
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
+                  <div className="flex items-center space-x-1">
+                    <Home className="h-3 w-3" />
+                    <span>Расположение</span>
+                  </div>
+                </TableHead>
+                {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -764,7 +833,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                       <React.Fragment key={groupName}>
                         {groupBy === "department" && groupName && (
                           <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                            <TableCell colSpan={canEditAllUsers ? 8 : 7} className="py-2">
+                            <TableCell colSpan={canEditAllUsers ? 6 : 5} className="py-2">
                               <div
                                 className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(groupName)}
@@ -783,7 +852,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
 
                         {(groupBy === "none" || expandedGroups[groupName]) &&
                           getPaginatedUsersFromGroup(groupUsers).map((user) => {
-                            const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
+                            const workLocationInfo = getWorkLocationInfo(user.workLocation)
                             
                             return (
                               <TableRow key={user.id} className="h-16">
@@ -806,51 +875,65 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <span className="block sm:truncate sm:max-w-16 md:max-w-24 lg:max-w-32 xl:max-w-40 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
+                                  <div className="flex flex-col space-y-1">
+                                    <span className="block text-xs sm:text-sm font-medium">
+                                      {user.department || '—'}
+                                    </span>
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                      {user.team || '—'}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                  <div className="flex flex-col space-y-1">
+                                    <span className="block text-xs sm:text-sm font-medium">
+                                      {user.position || '—'}
+                                    </span>
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                      {user.category || '—'}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
+                                  <div className="flex flex-wrap gap-1">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {user.role || '—'}
+                                    </Badge>
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
-                                </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                  <span className="block lg:truncate lg:max-w-20 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
-                                </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                  <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
-                                </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
-                                  <span className="block xl:truncate xl:max-w-16 2xl:max-w-none text-xs sm:text-sm">{user.role || '—'}</span>
-                                </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
                                   <div className="flex items-center space-x-1">
                                     {workLocationInfo.icon}
-                                    <span className="block xl:truncate xl:max-w-16 2xl:max-w-none text-xs sm:text-sm">{workLocationInfo.label}</span>
+                                    <span className="block text-xs">{workLocationInfo.label}</span>
                                   </div>
                                 </TableCell>
                                 {canEditAllUsers && (
-                                  <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon">
-                                          <MoreHorizontal className="h-4 w-4" />
-                                          <span className="sr-only">Меню</span>
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                                          <Edit className="mr-2 h-4 w-4" />
-                                          Редактировать
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          className="text-red-600 dark:text-red-400"
-                                          onClick={() => openDeleteDialog(user)}
-                                          disabled={isDeleting === user.id}
-                                        >
-                                          <Trash className="mr-2 h-4 w-4" />
-                                          {isDeleting === user.id ? "Удаление..." : "Удалить"}
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
+                                  <TableCell className="w-12 px-1">
+                                    <div className="flex justify-end">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                            <span className="sr-only">Меню</span>
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Редактировать
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            className="text-red-600 dark:text-red-400"
+                                            onClick={() => openDeleteDialog(user)}
+                                            disabled={isDeleting === user.id}
+                                          >
+                                            <Trash className="mr-2 h-4 w-4" />
+                                            {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
                                   </TableCell>
                                 )}
                               </TableRow>
@@ -895,7 +978,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
 
                                 {/* Пользователи команды */}
                                 {getPaginatedUsersFromGroup(teamUsers).map((user) => {
-                                  const workLocationInfo = getWorkLocationInfo(user.workLocation || 'office')
+                                  const workLocationInfo = getWorkLocationInfo(user.workLocation)
                                   
                                   return (
                                     <TableRow key={user.id} className="pl-12 h-16">
@@ -930,7 +1013,11 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                         <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                       </TableCell>
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
-                                        <span className="block xl:truncate xl:max-w-14 2xl:max-w-none text-xs sm:text-sm">{user.role || '—'}</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          <Badge variant="secondary" className="text-xs">
+                                            {user.role || '—'}
+                                          </Badge>
+                                        </div>
                                       </TableCell>
                                         <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden xl:table-cell">
                                         <div className="flex items-center space-x-1">

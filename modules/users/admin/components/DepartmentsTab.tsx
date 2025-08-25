@@ -19,7 +19,7 @@ import { toast } from "sonner"
 interface Department {
   department_id: string
   department_name: string
-  head_user_id: string | null
+  department_head_id: string | null
   head_first_name: string | null
   head_last_name: string | null
   head_full_name: string | null
@@ -55,6 +55,9 @@ export default function DepartmentsTab() {
         return
       }
       
+      console.log("📊 Данные из view_departments_with_heads:", data)
+      console.log("📊 Количество записей:", data?.length)
+      
       // Дедупликация данных на уровне состояния
       const uniqueData = (data || []).reduce((acc: Department[], dept: Department) => {
         if (!acc.find((d: Department) => d.department_id === dept.department_id)) {
@@ -63,6 +66,7 @@ export default function DepartmentsTab() {
         return acc
       }, [] as Department[])
       
+      console.log("📊 Уникальные отделы:", uniqueData)
       setDepartments(uniqueData)
     } catch (error) {
       console.error("Ошибка при загрузке отделов:", error)
@@ -209,7 +213,7 @@ export default function DepartmentsTab() {
                       {department.department_name}
                     </TableCell>
                     <TableCell className="text-base">
-                      {department.head_user_id ? (
+                      {department.department_head_id ? (
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={department.head_avatar_url || undefined} />

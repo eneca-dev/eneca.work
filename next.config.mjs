@@ -28,6 +28,36 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  webpack: (config, { dev, isServer }) => {
+    // Отключаем проблемное кэширование в dev режиме или по переменной окружения
+    if (dev || process.env.NEXT_WEBPACK_CACHE === 'false') {
+      config.cache = false;
+    }
+    
+    // Настройки для решения проблем с PackFileCacheStrategy
+    if (config.cache && typeof config.cache === 'object') {
+      config.cache.type = 'filesystem';
+      config.cache.buildDependencies = {
+        config: [__filename],
+      };
+      config.cache.cacheDirectory = '.next/cache';
+      config.cache.maxMemoryGenerations = 1;
+      config.cache.compression = 'gzip';
+      config.cache.hashAlgorithm = 'md4';
+    }
+    
+    // Дополнительные оптимизации для dev режима
+    if (dev) {
+      config.optimization = {
+        ...config.optimization,
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
+        splitChunks: false,
+      };
+    }
+    
+    return config;
+  },
 }
 
 if (userConfig) {

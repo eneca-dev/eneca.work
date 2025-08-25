@@ -34,7 +34,7 @@ export async function getUserPermissions(userId: string): Promise<{
     // Получаем роли пользователя из view_user_roles
     const { data: userRoles, error: rolesError } = await supabase
       .from('view_user_roles')
-      .select('role_name, is_primary')
+      .select('role_name')
       .eq('user_id', userId)
 
     if (rolesError) {
@@ -43,16 +43,14 @@ export async function getUserPermissions(userId: string): Promise<{
     }
 
     const roles = userRoles?.map(r => r.role_name) || []
-    const primaryRole = userRoles?.find(r => r.is_primary)?.role_name || null
-
+    
     console.log('✅ Загружено разрешений:', permissions?.length || 0)
     console.log('👤 Роли пользователя:', roles)
-    console.log('⭐ Основная роль:', primaryRole)
     
     return {
       permissions: permissions || [],
       roles,
-      primaryRole,
+      primaryRole: null,
       error: null
     }
 
@@ -79,7 +77,7 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
     const { data: rolePermissions, error } = await supabase
       .from('role_permissions')
       .select(`
-        permissions!inner(name)
+        permissions(name)
       `)
       .eq('role_id', roleId)
 
@@ -89,7 +87,7 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
       return []
     }
 
-    return rolePermissions ? rolePermissions.map(rp => rp.permissions.name) : []
+    return rolePermissions ? rolePermissions.map(rp => (rp.permissions as any)?.name).filter(Boolean) : []
   } catch (error) {
     console.error('Ошибка получения разрешений роли:', error)
     Sentry.captureException(error)
@@ -339,17 +337,19 @@ export async function assignRoleToUser(
   const supabase = createClient()
   
   try {
-    const { error } = await supabase
+    const { data: newUserRole, error: insertError } = await supabase
       .from('user_roles')
       .insert({
         user_id: userId,
         role_id: roleId,
-        is_primary: isPrimary,
-        assigned_by: assignedBy
+        assigned_by: assignedBy,
+        assigned_at: new Date().toISOString()
       })
+      .select()
+      .single()
     
-    if (error) {
-      console.error('Ошибка назначения роли пользователю:', error)
+    if (insertError) {
+      console.error('Ошибка назначения роли пользователю:', insertError)
       return false
     }
     
@@ -361,7 +361,7 @@ export async function assignRoleToUser(
 }
 
 /**
- * Отзывает роль у пользователя
+ * Убирает роль у пользователя
  */
 export async function revokeRoleFromUser(userId: string, roleId: string): Promise<boolean> {
   const supabase = createClient()
@@ -374,7 +374,7 @@ export async function revokeRoleFromUser(userId: string, roleId: string): Promis
       .eq('role_id', roleId)
     
     if (error) {
-      console.error('Ошибка отзыва роли у пользователя:', error)
+      console.error('Ошибка удаления роли у пользователя:', error)
       return false
     }
     
@@ -386,45 +386,12 @@ export async function revokeRoleFromUser(userId: string, roleId: string): Promis
 }
 
 /**
- * Устанавливает основную роль пользователя
- */
-export async function setPrimaryRole(userId: string, roleId: string): Promise<boolean> {
-  const supabase = createClient()
-  
-  try {
-    // Сначала убираем primary у всех ролей пользователя
-    await supabase
-      .from('user_roles')
-      .update({ is_primary: false })
-      .eq('user_id', userId)
-    
-    // Затем устанавливаем primary для выбранной роли
-    const { error } = await supabase
-      .from('user_roles')
-      .update({ is_primary: true })
-      .eq('user_id', userId)
-      .eq('role_id', roleId)
-    
-    if (error) {
-      console.error('Ошибка установки основной роли:', error)
-      return false
-    }
-    
-    return true
-  } catch (error) {
-    console.error('Ошибка в setPrimaryRole:', error)
-    return false
-  }
-}
-
-/**
  * Получает все роли пользователя
  */
 export async function getUserRoles(userId: string): Promise<{
   roles: Array<{
     roleId: string
     roleName: string
-    isPrimary: boolean
     assignedAt: string
     assignedByName?: string
   }>
@@ -435,22 +402,27 @@ export async function getUserRoles(userId: string): Promise<{
   try {
     const { data: userRoles, error } = await supabase
       .from('view_user_roles')
-      .select('*')
+      .select(`
+        role_id,
+        role_name,
+        assigned_at,
+        assigned_by_name
+      `)
       .eq('user_id', userId)
-      .order('assigned_at', { ascending: false })
-    
+      .order('assigned_at', { ascending: true })
+
     if (error) {
       console.error('Ошибка получения ролей пользователя:', error)
+      Sentry.captureException(error)
       return {
         roles: [],
         error: error.message
       }
     }
-    
+
     const roles = userRoles?.map(ur => ({
       roleId: ur.role_id,
       roleName: ur.role_name,
-      isPrimary: ur.is_primary,
       assignedAt: ur.assigned_at,
       assignedByName: ur.assigned_by_name
     })) || []

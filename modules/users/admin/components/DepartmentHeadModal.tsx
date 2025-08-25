@@ -21,8 +21,12 @@ interface User {
 interface Department {
   department_id: string
   department_name: string
-  head_user_id: string | null
+  department_head_id: string | null
+  head_first_name: string | null
+  head_last_name: string | null
   head_full_name: string | null
+  head_email: string | null
+  head_avatar_url: string | null
 }
 
 interface DepartmentHeadModalProps {
@@ -62,7 +66,7 @@ export default function DepartmentHeadModal({
           department_name,
           position_name
         `)
-
+        .eq("department_name", department.department_name) // Фильтруем только по нужному отделу
         .order("first_name")
       
       if (error) {
@@ -78,7 +82,7 @@ export default function DepartmentHeadModal({
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [department.department_name])
 
   // Фильтрация пользователей по поиску
   useEffect(() => {
@@ -110,27 +114,18 @@ export default function DepartmentHeadModal({
     }
   }, [open, fetchUsers])
 
-  // Назначение руководителя
-  const handleAssignHead = useCallback(async () => {
+  const handleSave = useCallback(async () => {
     if (!selectedUser) return
 
     try {
       setIsSaving(true)
       const supabase = createClient()
       
-      // Удаляем всех текущих руководителей отдела
-      await supabase
-        .from("department_heads")
-        .delete()
-        .eq("department_id", department.department_id)
-      
-      // Назначаем нового руководителя
+      // Назначаем нового руководителя отдела через новую систему
       const { error } = await supabase
-        .from("department_heads")
-        .insert({
-          department_id: department.department_id,
-          user_id: selectedUser.user_id
-        })
+        .from("departments")
+        .update({ department_head_id: selectedUser.user_id })
+        .eq("department_id", department.department_id)
       
       if (error) {
         console.error("Ошибка при назначении руководителя:", error)
@@ -156,11 +151,11 @@ export default function DepartmentHeadModal({
   return (
     <Modal isOpen={open} onClose={() => onOpenChange(false)} size="xl">
       <Modal.Header 
-        title={`${department.head_user_id ? "Сменить" : "Назначить"} руководителя отдела`}
+        title={`${department.department_head_id ? "Сменить" : "Назначить"} руководителя отдела`}
         subtitle={
           <>
             Отдел: <strong>{department.department_name}</strong>
-            {department.head_user_id && (
+            {department.department_head_id && (
               <>
                 <br />
                 Текущий руководитель: <strong>{department.head_full_name}</strong>
@@ -231,7 +226,7 @@ export default function DepartmentHeadModal({
         </ModalButton>
         <ModalButton 
           variant="success"
-          onClick={handleAssignHead} 
+          onClick={handleSave} 
           disabled={!selectedUser}
           loading={isSaving}
           icon={<UserCheck />}

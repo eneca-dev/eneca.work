@@ -11,14 +11,14 @@ import UserAnalytics from "../components/user-analytics"
 import PaymentList from "../components/payment-list"
 import { PaymentAccessCheck } from "../components/payment-access-check"
 import { getUsers } from "@/services/org-data-service"
-import type { User } from "@/types/db"
+import type { UserWithRoles } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [users, setUsers] = useState<UserWithRoles[]>([])
+  const [currentUser, setCurrentUser] = useState<UserWithRoles | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -49,7 +49,7 @@ export default function UsersPage() {
       // Устанавливаем текущего пользователя (первый в списке для демонстрации)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
-        console.log("UsersPage: Установлен текущий пользователь:", loadedUsers[0].name)
+        console.log("UsersPage: Установлен текущий пользователь:", loadedUsers[0].full_name)
       }
     } catch (error) {
       console.error("UsersPage: Ошибка загрузки пользователей:", error)
@@ -79,24 +79,60 @@ export default function UsersPage() {
 
   // ОПТИМИЗАЦИЯ: Мемоизируем fallback пользователя
   const fallbackUser = useMemo(() => currentUser || {
-    id: "current",
-    name: "Текущий пользователь",
+    user_id: "current",
+    first_name: "Текущий",
+    last_name: "пользователь",
+    full_name: "Текущий пользователь",
     email: "user@eneca.work",
     avatar_url: "/placeholder.svg?height=40&width=40&text=ТП",
-    position: "Сотрудник",
-    department: "Общий",
-    team: "Основная команда",
-    category: "Штатный сотрудник",
-    role: "user",
-    isActive: true,
-    dateJoined: new Date().toISOString(),
-    workLocation: "hybrid" as const,
-    country: "Belarus",
-    city: "Minsk",
-    employmentRate: 1,
-    salary: 1500,
-    isHourly: false,
+    position_name: "Сотрудник",
+    department_name: "Общий",
+    team_name: "Основная команда",
+    category_name: "Штатный сотрудник",
+    role_name: "user",
+    is_active: true,
+    created_at: new Date().toISOString(),
+    work_format: "hybrid",
+    country_name: "Belarus",
+    city_name: "Minsk",
+    employment_rate: "1",
+    salary: "1500",
+    is_hourly: false,
+    // Новые поля для ролей
+    primary_role: "user",
+    roles_display_string: "user (осн.)",
+    roles_count: 1,
+    has_multiple_roles: false,
+    // Остальные поля
+    department_id: null,
+    team_id: null,
+    position_id: null,
+    category_id: null,
+    role_id: null,
+    city_id: null,
+    country_id: null,
+    role_description: null
   }, [currentUser])
+
+  // Преобразуем UserWithRoles в User для совместимости с компонентами
+  const usersAsUserType = useMemo(() => users.map(user => ({
+    id: user.user_id,
+    name: user.full_name,
+    email: user.email,
+    avatar_url: user.avatar_url || undefined,
+    position: user.position_name || "",
+    department: user.department_name || "",
+    team: user.team_name || "",
+    category: user.category_name || "",
+    role: user.role_name || "",
+    dateJoined: user.created_at,
+    workLocation: (user.work_format === "В офисе" ? "office" : user.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
+    country: user.country_name || "",
+    city: user.city_name || "",
+    employmentRate: user.employment_rate ? parseFloat(user.employment_rate) : 1,
+    salary: user.salary ? parseFloat(user.salary) : 1500,
+    isHourly: user.is_hourly || false
+  })), [users])
 
   if (error) {
     return (
@@ -130,10 +166,29 @@ export default function UsersPage() {
         ) : (
           <>
             {/* Карточка текущего пользователя */}
-            <CurrentUserCard 
-              fallbackUser={fallbackUser} 
-              onUserUpdated={handleUserUpdated} 
-            />
+            <div className="mb-6">
+              <CurrentUserCard 
+                fallbackUser={{
+                  id: fallbackUser.user_id,
+                  name: fallbackUser.full_name,
+                  email: fallbackUser.email,
+                  avatar_url: fallbackUser.avatar_url || undefined,
+                  position: fallbackUser.position_name || "",
+                  department: fallbackUser.department_name || "",
+                  team: fallbackUser.team_name || "",
+                  category: fallbackUser.category_name || "",
+                  role: fallbackUser.role_name || "",
+                  dateJoined: fallbackUser.created_at,
+                  workLocation: (fallbackUser.work_format === "В офисе" ? "office" : fallbackUser.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
+                  country: fallbackUser.country_name || "",
+                  city: fallbackUser.city_name || "",
+                  employmentRate: fallbackUser.employment_rate ? parseFloat(fallbackUser.employment_rate) : 1,
+                  salary: fallbackUser.salary ? parseFloat(fallbackUser.salary) : 1500,
+                  isHourly: fallbackUser.is_hourly || false
+                }}
+                onUserUpdated={handleUserUpdated} 
+              />
+            </div>
 
             {/* Вкладки */}
             <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
@@ -149,7 +204,7 @@ export default function UsersPage() {
               
               <TabsContent value="list" className="space-y-4">
                 <UsersList 
-                  users={users} 
+                  users={usersAsUserType}
                   onUserUpdated={handleUserUpdated} 
                 />
               </TabsContent>
@@ -159,19 +214,20 @@ export default function UsersPage() {
               </TabsContent>
               
               <TabsContent value="payment" className="space-y-4">
-                <PaymentAccessCheck>
-                  <PaymentList users={users} filters={{
+                <PaymentList 
+                  users={usersAsUserType}
+                  filters={{
                     departments: [],
                     teams: [],
                     categories: [],
                     positions: [],
                     workLocations: [],
                     roles: []
-                  }} />
-                </PaymentAccessCheck>
+                  }}
+                />
               </TabsContent>
               
-              <TabsContent value="analytics">
+              <TabsContent value="analytics" className="space-y-4">
                 <UserAnalytics />
               </TabsContent>
               
