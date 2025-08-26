@@ -206,13 +206,11 @@ export function ReadOnlyTipTapEditor({ content, commentId, authorId, onUpdate }:
             word-break: break-word !important;
           }
           
-          /* Темная тема для заголовков */
-          @media (prefers-color-scheme: dark) {
-            .readonly-comment h1,
-            .readonly-comment h2,
-            .readonly-comment h3 {
-              color: rgb(241 245 249) !important;
-            }
+          /* Темная тема для заголовков — привязка к .dark, а не к prefers-color-scheme */
+          .dark .readonly-comment h1,
+          .dark .readonly-comment h2,
+          .dark .readonly-comment h3 {
+            color: rgb(241 245 249) !important;
           }
           
           /* Стили текста */

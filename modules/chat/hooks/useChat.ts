@@ -3,6 +3,7 @@ import { ChatMessage } from '../types/chat'
 import { sendChatMessage } from '../api/chat'
 import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
+import { useSidebarState } from '@/hooks/useSidebarState'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -16,6 +17,7 @@ export function useChat() {
 
   const userStore = useUserStore()
   const userId = userStore.id
+  const { collapsed } = useSidebarState()
 
   // Загружаем историю только при наличии авторизованного пользователя
   useEffect(() => {
@@ -59,11 +61,17 @@ export function useChat() {
     const deltaX = resizeRef.current.startX - e.clientX // Инвертируем для левого края
     const deltaY = resizeRef.current.startY - e.clientY // Инвертируем для верхнего края
     
-    const newWidth = Math.max(280, Math.min(window.innerWidth * 0.9, resizeRef.current.startWidth + deltaX))
+    // Максимальная ширина: не заходить на левый сайдбар
+    const sidebarWidth = collapsed ? 80 : 256
+    const rightMargin = 16 // соответствует right-4
+    const safeGap = 8 // небольшой отступ от сайдбара
+    const maxAllowedWidth = Math.max(280, window.innerWidth - sidebarWidth - rightMargin - safeGap)
+
+    const newWidth = Math.max(280, Math.min(maxAllowedWidth, resizeRef.current.startWidth + deltaX))
     const newHeight = Math.max(400, Math.min(window.innerHeight * 0.9, resizeRef.current.startHeight + deltaY))
     
     setChatSize({ width: newWidth, height: newHeight })
-  }, [isResizing, isFullscreen])
+  }, [isResizing, isFullscreen, collapsed])
 
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false)
