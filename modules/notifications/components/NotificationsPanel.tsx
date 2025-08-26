@@ -22,6 +22,7 @@ import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
 import { toast } from "@/components/ui/use-toast"
+import { getNotificationTypeCounts } from "@/modules/notifications/api/notifications"
 
 interface NotificationsPanelProps {
   // Переименовано для соответствия правилу сериализуемых пропсов в Next.js
@@ -32,7 +33,7 @@ interface NotificationsPanelProps {
 // Доступные типы уведомлений
 const NOTIFICATION_TYPES = [
   { value: 'announcement', label: 'Объявления', color: 'bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-200' },
-  { value: 'assignments', label: 'Передача заданий', color: 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200' },
+  { value: 'assignment', label: 'Передача заданий', color: 'bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200' },
   { value: 'section_comment', label: 'Комментарии', color: 'bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200' },
   { value: 'task', label: 'Задачи', color: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-200' },
 ]
@@ -48,8 +49,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
+  const currentUserId = useNotificationsStore((s) => s.currentUserId)
   const allFilteredRef = useRef(0)
   const isMountedRef = useRef(true)
+
+  // Серверные счетчики по типам (без архива)
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
+  const [isLoadingTypeCounts, setIsLoadingTypeCounts] = useState(false)
 
   const { 
     notifications, 
@@ -78,6 +84,26 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     () => !isSearchMode && (selectedTypes.size > 0 || readFilter !== 'all'),
     [isSearchMode, selectedTypes, readFilter]
   )
+
+  // Автоподгрузка: когда выбран тип, догружаем страницы, пока отфильтрованное количество
+  // не достигнет ожидаемого серверного counts для этих типов (или пока не закончатся страницы)
+  useEffect(() => {
+    if (!isClientFilterMode) return
+    if (isLoading || isLoadingMore) return
+    // Вычисляем ожидаемое количество по выбранным типам
+    const expected = Array.from(selectedTypes).reduce((sum, t) => {
+      const key = t === 'assignments' ? 'assignment' : t
+      return sum + (typeCounts[key] || 0)
+    }, 0)
+    // Если ожидаемое неизвестно (поповер не открыт/не загружено) — не спамим загрузкой
+    if (expected === 0) return
+
+    const currentCount = notifications.filter(n => selectedTypes.has(n.entityType || '') && !(n as any).isArchived).length
+    if (currentCount < expected && hasMore) {
+      // Стартуем фоновую догрузку одной страницы
+      loadMoreNotifications()
+    }
+  }, [isClientFilterMode, selectedTypes, typeCounts, notifications, hasMore, isLoading, isLoadingMore, loadMoreNotifications])
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
@@ -157,12 +183,25 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }
   }, [isSearchMode, isPreloadingAll])
 
-  // При открытии поповера типов — предзагружаем все уведомления для корректных счетчиков
+  // При открытии поповера типов — загружаем серверные счетчики (исключая архив)
   useEffect(() => {
-    if (isTypeFilterOpen && !isSearchMode) {
-      ensureAllNotificationsLoaded()
+    if (!isTypeFilterOpen) return
+    if (!currentUserId) return
+    let cancelled = false
+    const loadCounts = async () => {
+      try {
+        setIsLoadingTypeCounts(true)
+        const counts = await getNotificationTypeCounts(currentUserId, { includeArchived: false })
+        if (!cancelled) setTypeCounts(counts)
+      } catch (e) {
+        console.error('Ошибка загрузки счетчиков типов уведомлений:', e)
+      } finally {
+        if (!cancelled) setIsLoadingTypeCounts(false)
+      }
     }
-  }, [isTypeFilterOpen, isSearchMode, ensureAllNotificationsLoaded])
+    loadCounts()
+    return () => { cancelled = true }
+  }, [isTypeFilterOpen, currentUserId])
 
   // Обработка изменения фильтра по типам
   const handleTypeFilterChange = useCallback((type: string, checked: boolean) => {
@@ -176,8 +215,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       return newSet
     })
     setVisibleFilteredCount(10)
-    ensureAllNotificationsLoaded()
-  }, [ensureAllNotificationsLoaded])
+  }, [])
 
   // Сброс всех фильтров
   const handleClearFilters = useCallback(() => {
@@ -383,13 +421,12 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     return allFiltered
   }, [notifications, localSearchQuery, selectedTypes, readFilter, isSearchMode, isClientFilterMode, visibleFilteredCount])
 
-  // При входе в режим клиентских фильтров загружаем все уведомления и сбрасываем лимит
+  // При входе в режим клиентских фильтров просто сбрасываем лимит (без принудительной полной предзагрузки)
   useEffect(() => {
     if (isClientFilterMode) {
       setVisibleFilteredCount(10)
-      ensureAllNotificationsLoaded()
     }
-  }, [isClientFilterMode, ensureAllNotificationsLoaded])
+  }, [isClientFilterMode])
 
   // Обновление уведомлений
   const handleRefresh = async () => {
@@ -623,9 +660,10 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                           variant="secondary" 
                           className={cn("text-xs", type.color)}
                         >
-                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
-                          {/* Счётчик по всем-всем уведомлениям (после предзагрузки) */}
-                          {notifications.filter(n => n.entityType === type.value).length}                        </Badge>
+                          {isLoadingTypeCounts
+                            ? '...'
+                            : (typeCounts[type.value === 'assignments' ? 'assignment' : type.value] || 0)}
+                        </Badge>
                       </div>
                     ))}
                   </div>

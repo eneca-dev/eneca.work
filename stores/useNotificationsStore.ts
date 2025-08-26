@@ -136,7 +136,8 @@ interface NotificationsState {
 // Вспомогательная функция для преобразования данных из API в UI формат
 const transformNotificationData = (un: UserNotificationWithNotification): Notification => {
   const notification = un.notifications
-  const entityType = notification?.entity_types?.entity_name || 'unknown'
+  const rawType = notification?.entity_types?.entity_name || 'unknown'
+  const entityType = rawType === 'assignments' ? 'assignment' : rawType
   
   // Извлекаем данные из payload
   const payload = notification?.payload || {}
