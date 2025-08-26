@@ -184,20 +184,22 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       <div className="flex flex-col h-full">
         {/* Logo */}
         <div className={cn("p-4", collapsed ? "flex flex-col items-center space-y-3" : "flex items-center")}>
-          <div className={cn("flex items-center", collapsed ? "justify-center" : "")}>
-            <Image
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image__10_-removebg-preview-DH3poORK5SwnmDnICGNszX6XADuVhH.png"
-              alt="eneca.work Logo"
-              width={32}
-              height={32}
-              className="h-8 w-8"
-            />
-            {!collapsed && (
-              <h1 className="text-xl font-mono ml-3">
-                <span className="text-primary">eneca</span>
-                <span className="dark:text-gray-200">.work</span>
-              </h1>
-            )}
+          <div className={cn("flex items-center", collapsed ? "justify-center" : "")}> 
+            <Link href="/dashboard" className="flex items-center group" aria-label="На главную">
+              <Image
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image__10_-removebg-preview-DH3poORK5SwnmDnICGNszX6XADuVhH.png"
+                alt="eneca.work Logo"
+                width={32}
+                height={32}
+                className="h-8 w-8"
+              />
+              {!collapsed && (
+                <h1 className="text-xl font-mono ml-3">
+                  <span className="text-primary">eneca</span>
+                  <span className="dark:text-gray-200">.work</span>
+                </h1>
+              )}
+            </Link>
             {!collapsed && (
               <div className="ml-auto mr-2">
                 <NotificationBell collapsed={collapsed} />

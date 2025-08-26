@@ -9,6 +9,7 @@ import Underline from '@tiptap/extension-underline'
 import TextStyle from '@tiptap/extension-text-style'
 import Highlight from '@tiptap/extension-highlight'
 import Link from '@tiptap/extension-link'
+import Mention from '@tiptap/extension-mention'
 import { useUserStore } from '@/stores/useUserStore'
 
 interface ReadOnlyTipTapEditorProps {
@@ -58,6 +59,26 @@ export function ReadOnlyTipTapEditor({ content, commentId, authorId, onUpdate }:
         HTMLAttributes: {
           class: 'text-blue-600 underline cursor-pointer hover:text-blue-800'
         }
+      }),
+
+      // Mention — чтобы подсвечивать @упоминания в read-only
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'mention bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded text-sm font-medium',
+          'data-type': 'mention',
+        },
+        renderHTML({ node }) {
+          return [
+            'span',
+            {
+              class: 'mention bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded text-sm font-medium',
+              'data-type': 'mention',
+              'data-id': node.attrs.id,
+              'data-label': node.attrs.label,
+            },
+            '@' + node.attrs.label,
+          ]
+        },
       }),
       
       // TaskList как в заметках - простая конфигурация
@@ -304,6 +325,28 @@ export function ReadOnlyTipTapEditor({ content, commentId, authorId, onUpdate }:
             line-height: 1.5 !important;
             word-break: break-all !important;
             max-width: 100% !important;
+          }
+
+          /* Подсветка @упоминаний */
+          .readonly-comment .mention {
+            background-color: rgb(219 234 254) !important;
+            color: rgb(30 64 175) !important;
+            padding: 0.125rem 0.25rem !important;
+            border-radius: 0.25rem !important;
+            font-size: 0.875rem !important;
+            font-weight: 500 !important;
+            text-decoration: none !important;
+            cursor: pointer !important;
+          }
+          .dark .readonly-comment .mention {
+            background-color: rgb(30 58 138) !important;
+            color: rgb(191 219 254) !important;
+          }
+          .readonly-comment .mention:hover {
+            background-color: rgb(191 219 254) !important;
+          }
+          .dark .readonly-comment .mention:hover {
+            background-color: rgb(30 64 175) !important;
           }
         `
       }} />

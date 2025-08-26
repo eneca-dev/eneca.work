@@ -318,6 +318,10 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       if (target && target.closest('[data-notifications-bell]')) {
         return
       }
+      // Игнорируем клики по переключателю темы
+      if (target && (target.closest('[data-theme-toggle]') || (target as HTMLElement).hasAttribute('data-theme-toggle'))) {
+        return
+      }
       // Игнорируем клики по элементам фильтра (Popover)
       if (target && target.closest('[data-radix-popper-content-wrapper]')) {
         return
