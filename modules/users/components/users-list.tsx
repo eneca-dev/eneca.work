@@ -28,6 +28,7 @@ import {
   Users,
   Tag,
   RotateCcw,
+  DollarSign,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -119,7 +120,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
         user.team?.toLowerCase().includes(searchLower) ||
         user.position?.toLowerCase().includes(searchLower) ||
         user.category?.toLowerCase().includes(searchLower) ||
-        user.role?.toLowerCase().includes(searchLower)
+        user.role?.toLowerCase().includes(searchLower) ||
+        (user.salary && user.salary.toString().includes(searchLower))
       )
     }
 
@@ -142,6 +144,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     if (filters.roles.length > 0) {
       filtered = filtered.filter(user => user.role && filters.roles.includes(user.role))
     }
+
 
     return filtered
   }, [users, searchTerm, filters])
@@ -633,6 +636,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
 
            <Separator orientation="vertical" className="h-3 opacity-40" />
 
+           
+
            {/* Фильтр по расположению */}
            <TooltipProvider>
              <Tooltip>
@@ -804,30 +809,31 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                     <span>Пользователь</span>
                   </div>
                 </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-40">
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-36">
                   <div className="flex items-center space-x-1">
                     <Building2 className="h-3 w-3" />
-                    <span>Отдел и Команда</span>
+                    <span>Отдел</span>
                   </div>
                 </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-40">
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-36">
                   <div className="flex items-center space-x-1">
                     <Briefcase className="h-3 w-3" />
-                    <span>Должность и Категория</span>
+                    <span>Должность</span>
                   </div>
                 </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden min-w-24">
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
+                  <div className="flex items-center space-x-1">
+                    <span>Ставка</span>
+                  </div>
+                </TableHead>
+
+                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
                   <div className="flex items-center space-x-1">
                     <Tag className="h-3 w-3" />
-                    <span>Роли</span>
+                    <span>Роль</span>
                   </div>
                 </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
-                  <div className="flex items-center space-x-1">
-                    <Tag className="h-3 w-3" />
-                    <span>Роль и Расположение</span>
-                  </div>
-                </TableHead>
+
                 {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -838,7 +844,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                       <React.Fragment key={groupName}>
                         {groupBy === "department" && groupName && (
                                                       <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-2">
+                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-1">
                               <div
                                 className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(groupName)}
@@ -860,10 +866,10 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                             const workLocationInfo = getWorkLocationInfo(user.workLocation)
                             
                             return (
-                              <TableRow key={user.id} className="h-16">
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3">
-                                    <Avatar className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8">
+                              <TableRow key={user.id} className="h-12">
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                  <div className="flex items-center space-x-1">
+                                    <Avatar className="h-8 w-8">
                                       <AvatarImage src={user.avatar_url || ""} alt={user.name} />
                                       <AvatarFallback className="text-xs">
                                         {getInitials(user.name)}
@@ -873,14 +879,14 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                       <div className="font-medium text-xs sm:text-sm">
                                         <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.name}</span>
                                       </div>
-                                      <div className="text-xs text-gray-500 hidden sm:block">
-                                        <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none">{user.email}</span>
+                                      <div className="text-xs text-gray-400 hidden sm:block">
+                                        <span className="block sm:truncate sm:max-w-24 md:max-w-32 lg:max-w-40 xl:max-w-48 2xl:max-w-none text-[10px]">{user.email}</span>
                                       </div>
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <div className="flex flex-col space-y-1">
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                  <div className="flex flex-col space-y-0.5">
                                     <span className="block text-xs sm:text-sm font-medium">
                                       {user.department || '—'}
                                     </span>
@@ -889,8 +895,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
-                                  <div className="flex flex-col space-y-1">
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                  <div className="flex flex-col space-y-0.5">
                                     <span className="block text-xs sm:text-sm font-medium">
                                       {user.position || '—'}
                                     </span>
@@ -899,48 +905,51 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden">
-                                  <div className="flex flex-wrap gap-1">
-                                    <Badge variant="secondary" className="text-xs">
-                                      {user.role || '—'}
-                                    </Badge>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                  <div className="text-center">
+                                    <span className="text-xs sm:text-sm font-medium">
+                                      {user.salary ? (
+                                        <>
+                                          <span>{user.salary}</span>
+                                          <span className="text-[10px] text-gray-500 ml-1">BYN</span>
+                                        </>
+                                      ) : '—'}
+                                    </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                  <div className="flex flex-col space-y-1">
-                                    {/* Роли всегда видны */}
-                                    <div className="flex flex-wrap gap-1">
-                                      {user.role ? (
-                                        // Если есть несколько ролей (разделены запятыми), показываем их отдельными чипами
-                                        user.role.includes(',') ? (
-                                          user.role.split(',').map((role, index) => (
-                                            <Badge key={index} variant="secondary" className="text-xs">
-                                              {role.trim()}
-                                            </Badge>
-                                          ))
-                                        ) : (
-                                          // Если одна роль, показываем как обычно
-                                          <Badge variant="secondary" className="text-xs">
-                                            {user.role}
+
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                  <div className="flex flex-col items-start space-y-0.5">
+                                    {user.role ? (
+                                      // Если есть несколько ролей (разделены запятыми), показываем их отдельными чипами
+                                      user.role.includes(',') ? (
+                                        user.role.split(',').map((role: string, index: number) => (
+                                          <Badge key={index} variant="secondary" className="text-xs">
+                                            {role.trim()}
                                           </Badge>
-                                        )
+                                        ))
                                       ) : (
+                                        // Если одна роль, показываем как обычно
                                         <Badge variant="secondary" className="text-xs">
-                                          —
+                                          {user.role}
                                         </Badge>
-                                      )}
-                                    </div>
-                                    {/* Расположение показываем на средних и широких экранах как чип */}
-                                    <div className="hidden md:flex items-center space-x-1">
-                                      <Badge variant="outline" className="text-xs">
-                                        {workLocationInfo?.icon}
-                                        <span className="ml-1">{workLocationInfo?.label || user.workLocation || "Не указано"}</span>
+                                      )
+                                    ) : (
+                                      <Badge variant="secondary" className="text-xs">
+                                        —
                                       </Badge>
-                                    </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
+                                  <div className="flex justify-center">
+                                    {workLocationInfo?.icon || (
+                                      <span className="text-gray-400 text-xs">—</span>
+                                    )}
                                   </div>
                                 </TableCell>
                                 {canEditAllUsers && (
-                                  <TableCell className="w-12 px-1">
+                                  <TableCell className="w-12 px-1 py-1">
                                     <div className="flex justify-end">
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
@@ -979,7 +988,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
                           <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-2 border-l-4 border-gray-200 dark:border-gray-700">
+                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1 border-l-4 border-gray-200 dark:border-gray-700">
                                 <div
                                 className="flex items-center cursor-pointer font-medium"
                                   onClick={() => toggleGroup(department)}
@@ -1000,7 +1009,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
                                 <TableRow className="bg-gray-25 dark:bg-gray-900/25">
-                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1.5 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
+                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
                                     <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300">
                                       <Users className="h-3 w-3 mr-2" />
                                       {team} ({teamUsers.length})
@@ -1013,10 +1022,10 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                   const workLocationInfo = getWorkLocationInfo(user.workLocation)
                                   
                                   return (
-                                    <TableRow key={user.id} className="pl-12 h-16">
-                                      <TableCell className="pl-3 sm:pl-6 lg:pl-12 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                        <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3">
-                                          <Avatar className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8">
+                                    <TableRow key={user.id} className="pl-12 h-12">
+                                      <TableCell className="pl-3 sm:pl-6 lg:pl-12 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                        <div className="flex items-center space-x-1">
+                                          <Avatar className="h-8 w-8">
                                             <AvatarImage src={user.avatar_url || ""} alt={user.name} />
                                             <AvatarFallback className="text-xs">
                                               {getInitials(user.name)}
@@ -1026,57 +1035,60 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                               <div className="font-medium text-xs sm:text-sm">
                                                 <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
                                               </div>
-                                            <div className="text-xs text-gray-500 hidden sm:block">
-                                              <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.email}</span>
+                                            <div className="text-xs text-gray-400 hidden sm:block">
+                                              <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
                                               </div>
                                             </div>
                                           </div>
                                         </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
                                       </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <span className="block sm:truncate sm:max-w-12 md:max-w-18 lg:max-w-24 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
                                       </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                         <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
                                       </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell">
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                         <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                       </TableCell>
-                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden">
-                                        <div className="flex flex-wrap gap-1">
-                                          <Badge variant="secondary" className="text-xs">
-                                            {user.role || '—'}
-                                          </Badge>
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                        <div className="text-center">
+                                          <span className="text-xs sm:text-sm font-medium">
+                                            {user.salary ? (
+                                              <>
+                                                <span>{user.salary}</span>
+                                                <span className="text-[10px] text-gray-500 ml-1">BYN</span>
+                                              </>
+                                            ) : '—'}
+                                          </span>
                                         </div>
                                       </TableCell>
-                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4">
-                                        <div className="flex flex-col space-y-1">
-                                          {/* Роли всегда видны */}
-                                          <div className="flex flex-wrap gap-1">
-                                            {user.role ? (
-                                              // Если есть роль, показываем её
-                                              <Badge variant="secondary" className="text-xs">
-                                                {user.role}
-                                              </Badge>
-                                            ) : (
-                                              <Badge variant="secondary" className="text-xs">
-                                                —
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          {/* Расположение показываем на средних и широких экранах как чип */}
-                                          <div className="hidden md:flex items-center space-x-1">
-                                            <Badge variant="outline" className="text-xs">
-                                              {workLocationInfo?.icon}
-                                              <span className="ml-1">{workLocationInfo?.label || user.workLocation || "Не указано"}</span>
+
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                        <div className="flex flex-col items-start space-y-0.5">
+                                          {user.role ? (
+                                            // Если есть роль, показываем её
+                                            <Badge variant="secondary" className="text-xs">
+                                              {user.role}
                                             </Badge>
-                                            </div>
+                                          ) : (
+                                            <Badge variant="secondary" className="text-xs">
+                                              —
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
+                                        <div className="flex justify-center">
+                                          {workLocationInfo?.icon || (
+                                            <span className="text-gray-400 text-xs">—</span>
+                                          )}
                                         </div>
                                         </TableCell>
                                         {canEditAllUsers && (
-                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell">
+                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell py-1">
                                             <DropdownMenu>
                                               <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" size="icon">

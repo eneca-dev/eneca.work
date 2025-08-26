@@ -73,6 +73,18 @@ export async function getUsers(): Promise<UserWithRoles[]> {
         span.setAttribute("db.success", true)
         span.setAttribute("users.count", users?.length || 0)
         console.log("Получено пользователей из представления:", users?.length || 0);
+        
+        // ДИАГНОСТИКА: Проверяем структуру данных для Вадима Тихомирова
+        if (users && users.length > 0) {
+          const vadim = users.find(u => u.email === 'ghgjob123@gmail.com');
+          if (vadim) {
+            console.log("=== ДАННЫЕ ВАДИМА ТИХОМИРОВА ===");
+            console.log("Полный объект:", vadim);
+            console.log("roles_display_string:", vadim.roles_display_string);
+            console.log("role_name (старое поле):", vadim.role_name);
+            console.log("Все поля:", Object.keys(vadim));
+          }
+        }
 
         // Возвращаем данные напрямую из представления
         return users || []

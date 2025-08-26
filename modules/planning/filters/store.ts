@@ -113,8 +113,7 @@ export const useFilterStore = create<FilterStore>()(
         
         // Сброс фильтров
         resetFilters: () => {
-          const state = get()
-          const updates: any = {
+          set({
             selectedManagerId: null,
             selectedProjectId: null,
             selectedStageId: null,
@@ -125,41 +124,10 @@ export const useFilterStore = create<FilterStore>()(
             projects: [],
             stages: [],
             objects: []
-          }
-          
-          // Применяем только незаблокированные сбросы
-          Object.keys(updates).forEach(key => {
-            const filterType = key.replace('selected', '').replace('Id', '').toLowerCase()
-            if (state.isFilterLocked(filterType)) {
-              delete updates[key]
-            }
           })
-          
-          set(updates)
         },
         
-        // Проверка блокировки фильтра (обновлено для новой системы permissions)
-        isFilterLocked: (type: string) => {
-          // Импортируем новую систему permissions динамически
-          const { usePermissionsStore } = require('@/modules/permissions')
-          const permissionsState = usePermissionsStore.getState()
-          const { permissions } = permissionsState
-          
-          if (!permissions || permissions.length === 0) return false
-          
-          // Проверяем hierarchy permissions для блокировки фильтров
-          if (permissions.includes('hierarchy.is_project_manager')) {
-            return type === 'manager' // Блокируем фильтр менеджера для project manager
-          }
-          if (permissions.includes('hierarchy.is_department_head')) {
-            return type === 'department' // Блокируем фильтр отдела для department head
-          }
-          if (permissions.includes('hierarchy.is_team_lead')) {
-            return type === 'department' || type === 'team' // Блокируем отдел и команду для team lead
-          }
-          
-          return false
-        },
+
         
         // Фильтрованные данные
         getFilteredProjects: () => {
@@ -193,6 +161,12 @@ export const useFilterStore = create<FilterStore>()(
           }
           
           return filtered
+        },
+
+        getFilteredTeams: () => {
+          const state = get()
+          if (!state.selectedDepartmentId) return state.teams
+          return state.teams.filter(t => t.departmentId === state.selectedDepartmentId)
         },
         
         // Методы загрузки данных
