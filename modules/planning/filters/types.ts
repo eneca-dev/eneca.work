@@ -33,26 +33,16 @@ export interface LoadingState {
 }
 
 export type FilterType = 'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'
-export type PermissionType = 'is_top_manager' | 'is_project_manager' | 'is_head_of_department' | 'is_teamlead'
 
 export interface FilterConfig {
   id: string
   label: string
   dependencies?: string[] // какие фильтры должны быть выбраны перед этим
-  permission?: string[]   // какие роли могут использовать этот фильтр
   fetchFunction?: string  // название функции для загрузки данных
-}
-
-export interface PermissionConfig {
-  [key: string]: {
-    locked: FilterType[]
-    defaultValues?: Partial<FilterState>
-  }
 }
 
 export interface ModuleConfig {
   filters: FilterConfig[]
-  permissions: PermissionConfig
 }
 
 export interface FilterConfigs {
@@ -91,11 +81,11 @@ export interface FilterStore {
   initialize: (config: FilterConfigs) => void
   setFilter: (type: string, value: string | null) => void
   resetFilters: () => void
-  isFilterLocked: (type: string) => boolean
   getFilteredProjects: () => FilterOption[]
   getFilteredStages: () => FilterOption[]
   getFilteredObjects: () => FilterOption[]
   getFilteredEmployees: () => FilterOption[]
+  getFilteredTeams: () => FilterOption[]
   
   // Приватные методы загрузки
   loadManagers: () => Promise<void>

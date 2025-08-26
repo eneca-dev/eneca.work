@@ -5,10 +5,12 @@ import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings } from 'lucide-react';
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
-import { useFilterStore } from '@/modules/projects/filters/store';
+// Заменяем старый store на новый из planning модуля
+import { useFilterStore } from '@/modules/planning/filters/store';
 import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
-import { ProjectsFilters } from './filters';
+// Убираем импорт старых фильтров
+// import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
 import { useUiStore } from '@/stores/useUiStore';
 import { SyncButton } from '@/components/ui/sync-button';
@@ -17,7 +19,6 @@ import { Modal, ModalButton } from '@/components/modals';
 import { InlineDashboard } from '@/modules/dashboard/InlineDashboard';
 import { useTaskTransferStore } from '@/modules/task-transfer/store';
 import { useSidebarState } from '@/hooks/useSidebarState';
-
 
 import { X } from 'lucide-react';
 
@@ -38,6 +39,9 @@ export default function ProjectsPage() {
   // Читаем параметры из URL для навигации к комментариям (как fallback)
   const urlSectionId = searchParams.get('section');
   const urlTab = searchParams.get('tab') as 'overview' | 'details' | 'comments' | null;
+
+  // Используем новый store фильтров из planning модуля
+  const filterStore = useFilterStore();
 
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
@@ -113,9 +117,6 @@ export default function ProjectsPage() {
     setIsDashboardModalOpen(false);
     setDashboardProject(null);
   };
-
-  // Проектный стор фильтров (независимый от отчётов)
-  const filterStore = useFilterStore();
 
   // Ленивая инициализация данных организации для проектов
   useEffect(() => {
@@ -199,58 +200,75 @@ export default function ProjectsPage() {
               title="Группировать по заказчикам"
               onClick={() => {
                 if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByClient'))
+                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByCustomer'))
                 }
               }}
             >
-              <Building size={13} />
+              <Building2 className="h-3.5 w-3.5" />
             </button>
-            {/* Показать/скрыть руководителей */}
+
+            {/* Группировка по отделам */}
             <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-blue-500/15 to-cyan-500/15 text-blue-600 hover:from-blue-500/25 hover:to-cyan-500/25 hover:shadow-sm dark:from-blue-500/25 dark:to-cyan-500/25 dark:text-blue-400 dark:hover:from-blue-500/35 dark:hover:to-cyan-500/35 transition-all duration-200 rounded-md border border-blue-200/50 dark:border-blue-500/30"
-              title="Показать/скрыть руководителей"
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-emerald-500/15 to-teal-500/15 text-emerald-600 hover:from-emerald-500/25 hover:to-teal-500/25 hover:shadow-sm dark:from-emerald-500/25 dark:to-teal-500/25 dark:text-emerald-400 dark:hover:from-emerald-500/35 dark:hover:to-teal-500/35 transition-all duration-200 rounded-md border border-emerald-200/50 dark:border-emerald-500/30"
+              title="Группировать по отделам"
               onClick={() => {
                 if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleShowManagers'))
+                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByDepartment'))
                 }
               }}
             >
-              <User size={13} />
+              <Building className="h-3.5 w-3.5" />
             </button>
-            {/* Только разделы — удалено */}
-            {/* Свернуть */}
+
+            {/* Группировка по командам */}
             <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-orange-500/15 to-amber-500/15 text-orange-600 hover:from-orange-500/25 hover:to-amber-500/25 hover:shadow-sm dark:from-orange-500/25 dark:to-amber-500/25 dark:text-orange-400 dark:hover:from-orange-500/35 dark:hover:to-amber-500/35 transition-all duration-200 rounded-md border border-orange-200/50 dark:border-orange-500/30"
-              title="Свернуть все"
-              onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-amber-500/15 to-orange-500/15 text-amber-600 hover:from-amber-500/25 hover:to-orange-500/25 hover:shadow-sm dark:from-amber-500/25 dark:to-amber-500/25 dark:text-amber-400 dark:hover:from-amber-500/35 dark:hover:to-orange-500/35 transition-all duration-200 rounded-md border border-amber-200/50 dark:border-amber-500/30"
+              title="Группировать по командам"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByTeam'))
+                }
+              }}
             >
-              <Minimize size={13} />
+              <Users className="h-3.5 w-3.5" />
             </button>
-          </div>
-          {/* Поиск по структуре — справа от кнопок управления, перед фильтрами */}
-          <div className="relative text-[11px] md:text-xs">
-            <input
-              type="text"
-              value={treeSearch}
-              onChange={e => setTreeSearch(e.target.value)}
-              placeholder="Поиск по структуре..."
-              className="pl-7 pr-2 py-1 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white w-40 md:w-48 focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+
+            {/* Группировка по сотрудникам */}
+            <button
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-rose-500/15 to-pink-500/15 text-rose-600 hover:from-rose-500/25 hover:to-pink-500/25 hover:shadow-sm dark:from-rose-500/25 dark:to-pink-500/25 dark:text-rose-400 dark:hover:from-rose-500/35 dark:hover:to-pink-500/35 transition-all duration-200 rounded-md border border-rose-200/50 dark:border-rose-500/30"
+              title="Группировать по сотрудникам"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByEmployee'))
+                }
+              }}
+            >
+              <User className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Синхронизация с Worksection */}
+            <SyncButton 
+              className="h-7 w-7 p-1.5"
+              size="sm"
+              showText={false}
             />
-            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors duration-200" />
           </div>
         </div>
-        {/* Организация — отдельная логика для модуля Проекты */}
+
+        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+        {/* Организация: Department → Team → Employee */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md"
               title={(() => {
                 const d = filterStore.selectedDepartmentId ? filterStore.departments.find(d=>d.id===filterStore.selectedDepartmentId)?.name : ''
-                const t = filterStore.selectedTeamId ? filterStore.teams.find(x=>x.id===filterStore.selectedTeamId)?.name : ''
-                const e = filterStore.selectedEmployeeId ? filterStore.employees.find(x=>x.id===filterStore.selectedEmployeeId)?.name : ''
+                const t = filterStore.selectedTeamId ? filterStore.teams.find(t=>t.id===filterStore.selectedTeamId)?.name : ''
+                const e = filterStore.selectedEmployeeId ? filterStore.employees.find(e=>e.id===filterStore.selectedEmployeeId)?.name : ''
                 return [d,t,e].filter(Boolean).join(' › ')
               })()}
             >
-              <Building2 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <Building className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
               <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
                 Организация
               </span>
@@ -259,7 +277,7 @@ export default function ProjectsPage() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[280px] p-0">
+          <DropdownMenuContent align="start" className="w-[320px] p-0">
             <div className="p-2 space-y-2">
               {/* Отдел */}
               <div>
@@ -286,7 +304,7 @@ export default function ProjectsPage() {
                   size={6}
                 >
                   <option value="">Все</option>
-                  {filterStore.teams.filter(t => !filterStore.selectedDepartmentId || t.departmentId === filterStore.selectedDepartmentId).map(t => (
+                  {filterStore.getFilteredTeams().map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
@@ -398,20 +416,37 @@ export default function ProjectsPage() {
           <DropdownMenuContent align="start" className="w-[340px] p-0">
             <div className="p-2 space-y-2">
               {/* Панель инструментов: синхронизация + поиск по структуре */}
-              <div className="flex items-center gap-2">
-                <SyncButton size="md" showText={false} theme="dark" />
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] text-slate-500">Проектная иерархия</div>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="text-[10px] px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('projectsTree:openProjectManagement'))
+                      }
+                    }}
+                  >
+                    <Settings className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Поиск по структуре */}
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <input
                   type="text"
-                  value={treeSearch}
-                  onChange={e => setTreeSearch(e.target.value)}
                   placeholder="Поиск по структуре..."
-                  className="flex-1 px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  className="w-full pl-7 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 />
               </div>
 
               {/* Менеджер */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Руководитель проекта</div>
+                <div className="text-[10px] text-slate-500 mb-1">Менеджер</div>
                 <select
                   value={filterStore.selectedManagerId || ''}
                   onChange={e => filterStore.setFilter('manager', e.target.value || null)}
@@ -427,13 +462,6 @@ export default function ProjectsPage() {
               {/* Проект */}
               <div>
                 <div className="text-[10px] text-slate-500 mb-1">Проект</div>
-                <input
-                  type="text"
-                  value={projectSearch}
-                  onChange={e => setProjectSearch(e.target.value)}
-                  placeholder="Поиск..."
-                  className="mb-2 w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
-                />
                 <select
                   value={filterStore.selectedProjectId || ''}
                   onChange={e => filterStore.setFilter('project', e.target.value || null)}
@@ -441,10 +469,7 @@ export default function ProjectsPage() {
                   size={6}
                 >
                   <option value="">Все</option>
-                  {filterStore
-                    .getFilteredProjects()
-                    .filter(p => !projectSearch || p.name.toLowerCase().includes(projectSearch.toLowerCase()))
-                    .map(p => (
+                  {filterStore.getFilteredProjects().map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
