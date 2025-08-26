@@ -75,8 +75,7 @@ export const InlineDashboard: React.FC<InlineDashboardProps> = ({
             title="Вернуться к проектам"
           >
             <div 
-              className="p-1 rounded shadow-sm group-hover:opacity-80 transition-all duration-200"
-              style={{ backgroundColor: '#2b3544' }}
+              className="p-1 rounded shadow-sm group-hover:opacity-90 transition-all duration-200 bg-emerald-500 hover:bg-emerald-600 dark:bg-[#2b3544]"
             >
               <ChevronLeft className="h-4 w-4 text-white group-hover:text-gray-100 transition-colors duration-200" />
             </div>
