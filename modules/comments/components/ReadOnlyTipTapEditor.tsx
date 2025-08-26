@@ -351,7 +351,7 @@ export function ReadOnlyTipTapEditor({ content, commentId, authorId, onUpdate }:
         `
       }} />
       <div 
-        className={`readonly-comment text-sm text-slate-700 dark:text-slate-300 ${!isAuthor ? 'non-author' : ''}`}
+        className={`readonly-comment select-text text-sm text-slate-700 dark:text-slate-300 ${!isAuthor ? 'non-author' : ''}`}
       >
         <EditorContent editor={editor} />
       </div>

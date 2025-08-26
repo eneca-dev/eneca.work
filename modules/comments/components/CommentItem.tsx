@@ -82,7 +82,7 @@ function CommentItemComponent({ comment }: CommentItemProps) {
         </div>
         
         {needsCollapse && !isExpanded ? (
-          <div className="readonly-comment text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
+          <div className="readonly-comment select-text text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
             {previewText}…
           </div>
         ) : (

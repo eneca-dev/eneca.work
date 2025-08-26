@@ -141,20 +141,21 @@ export function NotesBlock() {
     // Проверяем, пустая ли заметка (нет ни заголовка, ни контента)
     const trimmedContent = content.trim()
     if (!trimmedContent) {
-      // Если контент пустой, просто закрываем редактор без сохранения
+      // Для новой заметки при автосохранении с пустым контентом — ничего не делаем
       if (isCreatingNewNote) {
-        setIsCreatingNewNote(false)
+        return
       }
-      setFullViewNotion(null)
+      // Для существующей заметки — просто не сохраняем и не закрываем
       return
     }
     
     if (isCreatingNewNote) {
       // Создаем новую заметку
       try {
-        await createNotion({ notion_content: content })
+        const created = await createNotion({ notion_content: content })
+        // Остаемся в редакторе и переключаемся на созданную заметку
         setIsCreatingNewNote(false)
-        setFullViewNotion(null)
+        setFullViewNotion(created)
       } catch (error) {
         console.error('Ошибка при создании заметки:', error)
       }

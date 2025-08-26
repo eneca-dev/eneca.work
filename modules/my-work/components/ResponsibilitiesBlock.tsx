@@ -1,6 +1,8 @@
 "use client"
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
+import { useProjectsStore } from '@/modules/projects/store'
 import { User } from 'lucide-react'
 import type { ResponsibilityInfo } from '../types'
 import { ScrollableContainer } from './ScrollableContainer'
@@ -20,6 +22,8 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
   responsibilities,
   isCompact = false
 }) => {
+  const router = useRouter()
+  const { focusSection } = useProjectsStore()
   // Группируем ответственности по типам
   const groupResponsibilities = (): ResponsibilityGroup[] => {
     const groups: ResponsibilityGroup[] = [
@@ -85,9 +89,25 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                 <div className={`text-xs font-medium text-gray-900 dark:text-white ${isCompact ? 'mb-0.5' : 'mb-1'}`}>{group.title}</div>
                 <div className={`${isCompact ? 'space-y-0.5' : 'space-y-1'}`}>
                   {group.items.map((item, index) => (
-                    <div key={index} className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-full" title={item.entity_name}>
-                      {item.entity_name}
-                    </div>
+                    item.type === 'section_responsible' ? (
+                      <a
+                        key={index}
+                        href="/dashboard/projects"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          focusSection(item.entity_id)
+                          router.push('/dashboard/projects')
+                        }}
+                        className="text-xs text-emerald-700 hover:text-emerald-800 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300 truncate max-w-full cursor-pointer"
+                        title={item.entity_name}
+                      >
+                        {item.entity_name}
+                      </a>
+                    ) : (
+                      <div key={index} className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-full" title={item.entity_name}>
+                        {item.entity_name}
+                      </div>
+                    )
                   ))}
                 </div>
               </div>
