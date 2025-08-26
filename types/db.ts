@@ -39,9 +39,7 @@ export type UserWithRoles = {
   position_name: string | null
   category_id: string | null
   category_name: string | null
-  role_id: string | null
-  role_name: string | null
-  role_description: string | null
+  // Старые поля ролей удалены - используем новую систему
   city_id: string | null
   city_name: string | null
   country_id: string | null
