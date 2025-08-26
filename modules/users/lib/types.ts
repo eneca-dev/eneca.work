@@ -1,7 +1,9 @@
 export interface User {
   id: string
   email: string
-  role: string
+  // role: string - удалено, используем новую систему ролей
+  role?: string
+  roles_display_string?: string
   first_name?: string
   last_name?: string
   avatar_url?: string

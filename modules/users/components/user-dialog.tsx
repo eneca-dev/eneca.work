@@ -379,69 +379,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     })
   }
 
-  // Функции для управления ролями
-  const handleRoleToggle = async (roleId: string, isSelected: boolean) => {
-    if (!user?.id) return
-    
-    try {
-      if (isSelected) {
-        // Убираем роль
-        const success = await revokeRoleFromUser(user.id, roleId)
-        if (success) {
-          setUserRoles(prev => prev.filter(r => r.roleId !== roleId))
-          setSelectedRoles(prev => prev.filter(id => id !== roleId))
-          toast({
-            title: "Роль убрана",
-            description: "Роль успешно убрана у пользователя",
-          })
-        } else {
-          toast({
-            title: "Ошибка",
-            description: "Не удалось убрать роль",
-            variant: "destructive",
-          })
-        }
-      } else {
-        // Добавляем роль
-        const success = await assignRoleToUser(user.id, roleId, currentUserId || undefined)
-        if (success) {
-          const role = roles.find(r => r.id === roleId)
-          if (role) {
-            const newUserRole = {
-              roleId: role.id,
-              roleName: role.name,
-              assignedAt: new Date().toISOString(),
-              assignedByName: undefined
-            }
-            setUserRoles(prev => [...prev, newUserRole])
-            setSelectedRoles(prev => [...prev, roleId])
-            toast({
-              title: "Роль назначена",
-              description: "Роль успешно назначена пользователю",
-            })
-          }
-        } else {
-          toast({
-            title: "Ошибка",
-            description: "Не удалось назначить роль",
-            variant: "destructive",
-          })
-        }
-        
-        // Закрываем модальное окно после успешного добавления роли
-        if (success && !isSelected) {
-          setIsRolesModalOpen(false)
-        }
-      }
-    } catch (error) {
-      console.error("Ошибка управления ролями:", error)
-      toast({
-        title: "Ошибка",
-        description: "Произошла ошибка при управлении ролями",
-        variant: "destructive",
-      })
-    }
-  }
+  // Управление ролями теперь только через модальное окно
 
   // Функция для сохранения изменений ролей
   const handleSaveRoles = async () => {
@@ -457,6 +395,17 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       
       // Роли для удаления
       const rolesToRemove = currentRoleIds.filter(roleId => !tempSelectedRoles.includes(roleId))
+      
+      // Проверяем что после удаления у пользователя останется хотя бы одна роль
+      if (rolesToRemove.length > 0 && tempSelectedRoles.length === 0) {
+        toast({
+          title: "Невозможно удалить все роли",
+          description: "У пользователя должна быть хотя бы одна роль",
+          variant: "destructive",
+        })
+        setIsSavingRoles(false)
+        return
+      }
       
       console.log("=== handleSaveRoles ===")
       console.log("currentRoleIds:", currentRoleIds)
@@ -559,7 +508,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           if (formData.category) updateData.category = formData.category
         }
         
-        // Роли теперь управляются отдельно через handleRoleToggle
+        // Роли управляются через модальное окно
         
         console.log("Итоговые данные для updateUser:", updateData);
         
@@ -600,7 +549,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 employmentRate: freshProfile.employment_rate,
                 country: freshProfile.country_name,
                 city: freshProfile.city_name,
-                // Роли теперь управляются отдельно через handleRoleToggle
+                // Роли управляются через модальное окно
                 avatar_url: freshProfile.avatar_url,
               },
             })
@@ -710,8 +659,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     <Modal isOpen={open} onClose={() => {
       onOpenChange(false)
       resetSearch()
-    }} size="xl">
-      <form onSubmit={handleSubmit}>
+    }} size="xl" className="max-h-[95vh] flex flex-col">
+      <form onSubmit={handleSubmit} className="flex flex-col h-full">
         <Modal.Header 
           title={isSelfEdit ? "Настройки профиля" : "Редактирование пользователя"}
           subtitle={
@@ -720,11 +669,11 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               : "Измените информацию о пользователе и нажмите Сохранить, когда закончите."
           }
         />
-        <Modal.Body className="max-h-[70vh] overflow-y-auto">
-          <div className="grid gap-4 py-4">
+        <Modal.Body className="flex-1 min-h-0 overflow-y-auto">
+          <div className="grid gap-3 py-3">
             {/* Имя и Фамилия в одну строку */}
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label className="text-right md:col-span-1 col-span-full">Имя и Фамилия</Label>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Имя и Фамилия</Label>
               <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Input
                   id="firstName"
@@ -732,6 +681,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   onChange={(e) => handleChange("firstName", e.target.value)}
                   placeholder="Имя"
                   required
+                  className="h-9"
                 />
                 <Input
                   id="lastName"
@@ -739,12 +689,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   onChange={(e) => handleChange("lastName", e.target.value)}
                   placeholder="Фамилия"
                   required
+                  className="h-9"
                 />
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right md:col-span-1 col-span-full">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label htmlFor="email" className="text-right md:col-span-1 col-span-full pt-2">
                 Email
               </Label>
               <Input
@@ -752,31 +703,24 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
-                className="md:col-span-3 col-span-full"
+                className="md:col-span-3 col-span-full h-9"
                 required
               />
             </div>
             
             {/* Роли пользователя */}
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label className="text-right md:col-span-1 col-span-full">Роли пользователя</Label>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Роли пользователя</Label>
               <div className="md:col-span-3 col-span-full">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  {/* Текущие роли */}
+                  {/* Текущие роли - только отображение, без возможности удаления */}
                   <div className="flex flex-wrap gap-2 flex-1 min-w-0">
                     {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
                       <div key={role.roleId} className="group relative">
                         <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
                           <span className="truncate">{role.roleName}</span>
-                          <button
-                            onClick={() => handleRoleToggle(role.roleId, true)}
-                            className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 flex-shrink-0"
-                            title="Убрать роль"
-                          >
-                            ×
-                          </button>
                         </span>
-                        {/* Tooltip */}
+                        {/* Tooltip с информацией о роли */}
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                           Назначена: {new Date(role.assignedAt).toLocaleDateString()}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
@@ -808,8 +752,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
             </div>
             
             {/* Отдел и Команда в одну строку */}
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label className="text-right md:col-span-1 col-span-full flex items-center gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full flex items-center gap-2 pt-2">
                 <Building2 className="h-4 w-4" />
                 Отдел и Команда
               </Label>
@@ -886,8 +830,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               </div>
             </div>
             {/* Должность и Категория в одну строку */}
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label className="text-right md:col-span-1 col-span-full">Должность и Категория</Label>
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Должность и Категория</Label>
               <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Select
                   value={formData.position}
@@ -931,8 +875,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
             
 
             
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label htmlFor="workLocation" className="text-right md:col-span-1 col-span-full">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label htmlFor="workLocation" className="text-right md:col-span-1 col-span-full pt-2">
                 Расположение
               </Label>
               <Select
@@ -949,8 +893,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label htmlFor="country" className="text-right md:col-span-1 col-span-full">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label htmlFor="country" className="text-right md:col-span-1 col-span-full pt-2">
                 Страна
               </Label>
               <Select
@@ -1004,8 +948,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-              <Label htmlFor="city" className="text-right md:col-span-1 col-span-full">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label htmlFor="city" className="text-right md:col-span-1 col-span-full pt-2">
                 Город
               </Label>
               <Select
@@ -1063,8 +1007,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           </div>
         </Modal.Body>
         
-        <Modal.Footer>
-          <div className="flex flex-col sm:flex-row justify-between w-full gap-4">
+        <Modal.Footer className="flex-shrink-0">
+          <div className="flex flex-col sm:flex-row justify-between w-full gap-3">
             {/* Кнопка удаления профиля слева (только для самостоятельного редактирования) */}
             {isSelfEdit ? (
               <ModalButton 
@@ -1110,13 +1054,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       </form>
 
       {/* Модальное окно управления ролями */}
-      <Modal isOpen={isRolesModalOpen} onClose={() => setIsRolesModalOpen(false)} size="xl">
+      <Modal isOpen={isRolesModalOpen} onClose={() => setIsRolesModalOpen(false)} size="xl" className="max-h-[90vh] flex flex-col">
         <Modal.Header 
           title="Управление ролями пользователя"
           subtitle={`Назначение ролей для ${user?.name || 'пользователя'}`}
         />
-        <Modal.Body>
-          <div className="space-y-4">
+        <Modal.Body className="flex-1 min-h-0 overflow-y-auto">
+          <div className="space-y-3">
             {/* Текущие роли */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Текущие роли:</Label>
@@ -1124,13 +1068,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 {userRoles && userRoles.length > 0 ? userRoles.map((role) => (
                   <div key={role.roleId} className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 max-w-full">
                     <span className="truncate">{role.roleName}</span>
-                    <button
-                      onClick={() => handleRoleToggle(role.roleId, true)}
-                      className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 flex-shrink-0"
-                      title="Убрать роль"
-                    >
-                      ×
-                    </button>
                   </div>
                 )) : (
                   <span className="text-sm text-gray-500">Роли не назначены</span>
@@ -1144,12 +1081,15 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto border rounded-md p-3">
                 {roles && roles.length > 0 ? roles.map((role) => {
                   const isSelected = tempSelectedRoles.includes(role.id)
+                  // Отключаем чекбокс если это последняя роль пользователя
+                  const isLastRole = isSelected && tempSelectedRoles.length === 1
                   return (
-                    <div key={role.id} className="flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0">
+                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${isLastRole ? 'opacity-50' : ''}`}>
                       <input
                         type="checkbox"
                         id={`modal-role-${role.id}`}
                         checked={isSelected}
+                        disabled={isLastRole}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setTempSelectedRoles(prev => [...prev, role.id])
@@ -1159,10 +1099,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                         }}
                         className="mt-1 rounded flex-shrink-0"
                       />
-                      <label htmlFor={`modal-role-${role.id}`} className="text-sm cursor-pointer flex-1 min-w-0">
+                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${isLastRole ? 'cursor-not-allowed' : ''}`}>
                         <span className="font-medium block truncate">{role.name}</span>
                         {role.description && (
                           <span className="text-xs text-gray-500 block mt-1 overflow-hidden text-ellipsis line-clamp-2">{role.description}</span>
+                        )}
+                        {isLastRole && (
+                          <span className="text-xs text-orange-600 block mt-1">Нельзя удалить последнюю роль</span>
                         )}
                       </label>
                     </div>
@@ -1175,7 +1118,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           </div>
         </Modal.Body>
         
-        <Modal.Footer>
+        <Modal.Footer className="flex-shrink-0">
           <div className="flex flex-col sm:flex-row gap-2 w-full">
             <ModalButton 
               type="button" 
@@ -1247,7 +1190,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           </div>
         </Modal.Body>
         
-        <Modal.Footer>
+        <Modal.Footer className="flex-shrink-0">
           <div className="flex flex-col sm:flex-row gap-2 w-full">
             <ModalButton 
               type="button" 

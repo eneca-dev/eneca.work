@@ -115,24 +115,40 @@ export default function UsersPage() {
   }, [currentUser])
 
   // Преобразуем UserWithRoles в User для совместимости с компонентами
-  const usersAsUserType = useMemo(() => users.map(user => ({
-    id: user.user_id,
-    name: user.full_name,
-    email: user.email,
-    avatar_url: user.avatar_url || undefined,
-    position: user.position_name || "",
-    department: user.department_name || "",
-    team: user.team_name || "",
-    category: user.category_name || "",
-    role: user.has_multiple_roles && user.roles_display_string ? user.roles_display_string : (user.role_name || ""),
-    dateJoined: user.created_at,
-    workLocation: (user.work_format === "В офисе" ? "office" : user.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
-    country: user.country_name || "",
-    city: user.city_name || "",
-    employmentRate: user.employment_rate ? parseFloat(user.employment_rate) : 1,
-    salary: user.salary ? parseFloat(user.salary) : 1500,
-    isHourly: user.is_hourly || false
-  })), [users])
+  const usersAsUserType = useMemo(() => {
+    const transformed = users.map(user => ({
+      id: user.user_id,
+      name: user.full_name,
+      email: user.email,
+      avatar_url: user.avatar_url || undefined,
+      position: user.position_name || "",
+      department: user.department_name || "",
+      team: user.team_name || "",
+      category: user.category_name || "",
+      role: user.roles_display_string || "",
+      roles_display_string: user.roles_display_string || "", // Добавляем явно
+      dateJoined: user.created_at,
+      workLocation: (user.work_format === "В офисе" ? "office" : user.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
+      country: user.country_name || "",
+      city: user.city_name || "",
+      employmentRate: user.employment_rate ? parseFloat(user.employment_rate) : 1,
+      salary: user.salary ? parseFloat(user.salary) : 1500,
+      isHourly: user.is_hourly || false
+    }))
+    
+    // ДИАГНОСТИКА: Проверяем что передается в UsersList
+    if (transformed.length > 0) {
+      const vadim = transformed.find(u => u.email === 'ghgjob123@gmail.com');
+      if (vadim) {
+        console.log("=== USERS PAGE: ДАННЫЕ ДЛЯ USERSLIST ===");
+        console.log("Вадим в usersAsUserType:", vadim);
+        console.log("role:", vadim.role);
+        console.log("roles_display_string:", vadim.roles_display_string);
+      }
+    }
+    
+    return transformed
+  }, [users])
 
   if (error) {
     return (
@@ -177,7 +193,7 @@ export default function UsersPage() {
                   department: fallbackUser.department_name || "",
                   team: fallbackUser.team_name || "",
                   category: fallbackUser.category_name || "",
-                  role: fallbackUser.role_name || "",
+                  role: fallbackUser.roles_display_string || "",
                   dateJoined: fallbackUser.created_at,
                   workLocation: (fallbackUser.work_format === "В офисе" ? "office" : fallbackUser.work_format === "Удаленно" ? "remote" : "hybrid") as "office" | "remote" | "hybrid",
                   country: fallbackUser.country_name || "",
