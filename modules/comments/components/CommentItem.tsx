@@ -13,73 +13,10 @@ interface CommentItemProps {
   comment: SectionComment
 }
 
-// Функция для умного обрезания HTML контента
-function truncateHtmlContent(htmlContent: string, maxChars: number): string {
-  if (typeof document === 'undefined') return htmlContent
-  
-  // Создаем временный элемент для получения текста без тегов
-  const tempDiv = document.createElement('div')
-  tempDiv.innerHTML = htmlContent
-  const textContent = tempDiv.textContent || tempDiv.innerText || ''
-  
-  // Если текст короткий - возвращаем как есть
-  if (textContent.length <= maxChars) {
-    return htmlContent
-  }
-  
-  // Если текст длинный - нужно обрезать умно
-  let charCount = 0
-  let truncatedHtml = ''
-  const walker = document.createTreeWalker(
-    tempDiv,
-    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-    null
-  )
-  
-  let node: Node | null
-  const elementsStack: string[] = []
-  
-  while ((node = walker.nextNode()) && charCount < maxChars) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || ''
-      const remainingChars = maxChars - charCount
-      
-      if (text.length <= remainingChars) {
-        truncatedHtml += text
-        charCount += text.length
-      } else {
-        // Обрезаем текст по словам для красоты
-        const truncatedText = text.slice(0, remainingChars)
-        const lastSpaceIndex = truncatedText.lastIndexOf(' ')
-        const finalText = lastSpaceIndex > 0 ? truncatedText.slice(0, lastSpaceIndex) : truncatedText
-        truncatedHtml += finalText
-        charCount += finalText.length
-        break
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const element = node as Element
-      const tagName = element.tagName.toLowerCase()
-      
-      // Добавляем открывающий тег
-      truncatedHtml += `<${tagName}`
-      
-      // Добавляем атрибуты
-      Array.from(element.attributes).forEach(attr => {
-        truncatedHtml += ` ${attr.name}="${attr.value}"`
-      })
-      
-      truncatedHtml += '>'
-      elementsStack.push(tagName)
-    }
-  }
-  
-  // Закрываем все открытые теги
-  while (elementsStack.length > 0) {
-    const tagName = elementsStack.pop()
-    truncatedHtml += `</${tagName}>`
-  }
-  
-  return truncatedHtml
+// Обрезка для предпросмотра: первые 300 символов чистого текста
+const getPreviewText = (text: string, maxChars: number) => {
+  if (text.length <= maxChars) return text
+  return text.slice(0, maxChars)
 }
 
 function CommentItemComponent({ comment }: CommentItemProps) {
@@ -97,21 +34,18 @@ function CommentItemComponent({ comment }: CommentItemProps) {
     .toUpperCase()
 
   // Заменяем DOM операции на кешированный парсинг
-  const { textLength, needsCollapse, displayContent } = useMemo(() => {
+  const { textLength, needsCollapse, previewText } = useMemo(() => {
     const parsed = parseHtml(comment.content)
     const needsCollapse = parsed.textLength > 300
     
-    let content = comment.content
-    if (needsCollapse && !isExpanded) {
-      content = truncateHtmlContent(comment.content, 300)
-    }
+    const preview = getPreviewText(parsed.textContent, 300)
     
     return { 
       textLength: parsed.textLength, 
       needsCollapse, 
-      displayContent: content 
+      previewText: preview 
     }
-  }, [comment.content, isExpanded, parseHtml])
+  }, [comment.content, parseHtml])
 
   // Единственный callback для автосохранения через TipTap
   const handleContentUpdate = useCallback(async (newContent: string) => {
@@ -147,12 +81,18 @@ function CommentItemComponent({ comment }: CommentItemProps) {
           </span>
         </div>
         
-        <ReadOnlyTipTapEditor 
-          content={displayContent}
-          commentId={comment.comment_id}
-          authorId={comment.author_id} // Передаем ID автора для проверки прав
-          onUpdate={handleContentUpdate}
-        />
+        {needsCollapse && !isExpanded ? (
+          <div className="readonly-comment text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
+            {previewText}…
+          </div>
+        ) : (
+          <ReadOnlyTipTapEditor 
+            content={comment.content}
+            commentId={comment.comment_id}
+            authorId={comment.author_id} // Передаем ID автора для проверки прав
+            onUpdate={handleContentUpdate}
+          />
+        )}
         
         {needsCollapse && (
           <div className="mt-2">

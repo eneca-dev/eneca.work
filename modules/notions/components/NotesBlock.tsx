@@ -168,7 +168,14 @@ export function NotesBlock() {
   useEffect(() => {
     if (isSwitchingRef.current || !fullViewNotion) return
     const updatedNotion = notions.find(n => n.notion_id === fullViewNotion.notion_id)
-    if (!updatedNotion) return
+    if (!updatedNotion) {
+      // Если это новая незасохраненная заметка — не закрываем редактор
+      if (fullViewNotion.notion_id === 'new' || isCreatingNewNote) return
+      // Текущая заметка была удалена — закрываем редактор
+      setIsCreatingNewNote(false)
+      setFullViewNotion(null)
+      return
+    }
     // Обновляем только если данные реально изменились (по updated_at или контенту)
     if (
       updatedNotion.notion_updated_at !== fullViewNotion.notion_updated_at ||
