@@ -300,7 +300,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   };
 
   return (
-    <div className="group/row select-none">
+    <div className="group/row select-none" data-tree-node-id={node.id}>
       <div
         className={cn(
           "flex items-center transition-colors border-b",
@@ -806,6 +806,8 @@ export function ProjectsTree({
     toggleNode: toggleNodeInStore,
     highlightedSectionId,
     clearHighlight,
+    focusSectionId,
+    clearFocus,
     showManagers,
     toggleShowManagers,
     groupByClient,
@@ -1032,6 +1034,44 @@ export function ProjectsTree({
       }
     }
   }, [loading, highlightedSectionId, treeData, clearHighlight])
+
+  // Обработка фокусировки раздела в дереве (без открытия панели)
+  useEffect(() => {
+    if (!loading && focusSectionId && treeData.length > 0) {
+      console.log('🎯 Фокусируем раздел в дереве:', focusSectionId)
+      const section = findSectionById(focusSectionId)
+      if (section) {
+        // Развернём путь к разделу
+        const expandPath = (nodes: ProjectNode[], targetId: string, path: string[] = []): string[] | null => {
+          for (const node of nodes) {
+            const newPath = [...path, node.id]
+            if (node.type === 'section' && node.id === targetId) return newPath
+            if (node.children) {
+              const found = expandPath(node.children, targetId, newPath)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const path = expandPath(treeData, focusSectionId) || []
+        // Развернём все узлы по пути кроме самого раздела
+        path.slice(0, -1).forEach(nodeId => {
+          if (!expandedNodes.has(nodeId)) {
+            toggleNodeInStore(nodeId)
+          }
+        })
+        // Прокрутим к элементу, если он в DOM
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${focusSectionId}"]`)
+          if (el && 'scrollIntoView' in el) {
+            (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' })
+          }
+        })
+        // Сбросим фокус
+        setTimeout(() => clearFocus(), 500)
+      }
+    }
+  }, [loading, focusSectionId, treeData, expandedNodes, toggleNodeInStore, clearFocus])
 
   // Обработка URL параметров для прямой навигации к разделу (fallback)
   useEffect(() => {
