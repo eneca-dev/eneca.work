@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -46,6 +46,8 @@ export function EditObjectModal({
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
   const { setNotification } = useUiStore()
 
   // Загрузка данных объекта
@@ -134,6 +136,25 @@ export function EditObjectModal({
     profile.email.toLowerCase().includes(searchResponsible.toLowerCase())
   )
 
+  const updateDropdownPosition = () => {
+    if (!inputWrapperRef.current) return
+    const rect = inputWrapperRef.current.getBoundingClientRect()
+    const viewportSpaceBelow = window.innerHeight - rect.bottom
+    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
+    setDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
+  }
+
+  useEffect(() => {
+    if (!showResponsibleDropdown) return
+    updateDropdownPosition()
+    const handlers = [
+      ['scroll', updateDropdownPosition, true],
+      ['resize', updateDropdownPosition, false],
+    ] as const
+    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
+    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
+  }, [showResponsibleDropdown])
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <Modal.Header 
@@ -187,7 +208,7 @@ export function EditObjectModal({
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">
                 Ответственный
               </label>
-              <div className="relative">
+              <div className="relative" ref={inputWrapperRef}>
                 <input
                   type="text"
                   value={showResponsibleDropdown ? searchResponsible : getSelectedResponsibleName()}
@@ -205,46 +226,67 @@ export function EditObjectModal({
                   placeholder={getSelectedResponsibleName() || "Поиск ответственного..."}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                 />
-                {showResponsibleDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {/* Опция "Не назначен" */}
-                    <div
-                      onClick={() => {
-                        setObjectData({
-                          ...objectData,
-                          object_responsible: null
-                        })
-                        setSearchResponsible('')
-                        setShowResponsibleDropdown(false)
-                      }}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600"
-                    >
-                      <div className="font-medium text-gray-500 dark:text-slate-400">
-                        Не назначен
-                      </div>
-                    </div>
-                    {filteredResponsible.map((profile) => (
+                {showResponsibleDropdown && dropdownPosition && typeof document !== 'undefined' && (
+                  (typeof window !== 'undefined') && (
+                    require('react-dom').createPortal(
                       <div
-                        key={profile.user_id}
-                        onClick={() => {
-                          setObjectData({
-                            ...objectData,
-                            object_responsible: profile.user_id
-                          })
-                          setSearchResponsible('')
-                          setShowResponsibleDropdown(false)
+                        style={{
+                          position: 'fixed',
+                          left: dropdownPosition.left,
+                          top: dropdownPosition.top,
+                          width: dropdownPosition.width,
+                          transform: dropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
                         }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                        className="z-50"
+                        onMouseDown={(e) => e.preventDefault()}
                       >
-                        <div className="font-medium dark:text-white">
-                          {getProfileName(profile)}
+                        <div className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
+                          <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Ответственный
+                          </div>
+                          <div className="max-h-80 overflow-y-auto overscroll-contain">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setObjectData({
+                                  ...objectData!,
+                                  object_responsible: null
+                                })
+                                setSearchResponsible('')
+                                setShowResponsibleDropdown(false)
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600 text-slate-600 dark:text-slate-300"
+                            >
+                              Не назначен
+                            </button>
+                            {filteredResponsible.map((profile) => (
+                              <button
+                                type="button"
+                                key={profile.user_id}
+                                onClick={() => {
+                                  setObjectData({
+                                    ...objectData!,
+                                    object_responsible: profile.user_id
+                                  })
+                                  setSearchResponsible('')
+                                  setShowResponsibleDropdown(false)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
+                              >
+                                <div className="font-medium dark:text-white truncate">
+                                  {getProfileName(profile)}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                                  {profile.email}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-slate-400">
-                          {profile.email}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      </div>,
+                      document.body
+                    )
+                  )
                 )}
               </div>
             </div>
