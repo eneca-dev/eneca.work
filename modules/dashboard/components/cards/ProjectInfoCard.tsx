@@ -6,7 +6,7 @@ import { useDashboardStore } from '../../stores/useDashboardStore';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createClient } from '@/utils/supabase/client';
-import { ProjectInfo, Task } from '../../types';
+import { ProjectInfo } from '../../types';
 import { LoadingCard, ErrorCard } from '../ui/CardStates';
 
 interface HierarchyStats {
@@ -15,14 +15,20 @@ interface HierarchyStats {
   sections: number;
 }
 
+interface ProjectDashboardStats {
+  decomposition_count: number;
+  hours_planned_total: number;
+  hours_actual_total: number;
+  assignments_total: number;
+}
+
 interface SectionStats {
   tasks: {
-    total: number;
-    totalHours: number;
-    completed: number;
-    completedHours: number;
-    inProgress: number;
-    inProgressHours: number;
+    count: number;
+  };
+  hours: {
+    planned: number;
+    actual: number;
   };
   assignments: {
     total: number;
@@ -75,7 +81,8 @@ export const ProjectInfoCard: React.FC = () => {
   const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
   const [hierarchyStats, setHierarchyStats] = useState({ stages: 0, objects: 0, sections: 0 });
   const [sectionStats, setSectionStats] = useState<SectionStats>({
-    tasks: { total: 0, totalHours: 0, completed: 0, completedHours: 0, inProgress: 0, inProgressHours: 0 },
+    tasks: { count: 0 },
+    hours: { planned: 0, actual: 0 },
     assignments: { total: 0 }
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -218,118 +225,60 @@ export const ProjectInfoCard: React.FC = () => {
     try {
       const supabase = createClient();
 
-      // Сначала получаем разделы проекта
-      const { data: sections } = await supabase
-        .from('sections')
-        .select('section_id')
-        .eq('section_project_id', projectId);
-
-      const sectionIds = sections?.map(s => s.section_id) || [];
-
-      if (sectionIds.length === 0) {
-        // Нет разделов - нет задач
-        if (!abortSignal?.aborted) {
-          setSectionStats({
-            tasks: { total: 0, totalHours: 0, completed: 0, completedHours: 0, inProgress: 0, inProgressHours: 0 },
-            assignments: { total: 0 }
-          });
-        }
-        return;
-      }
-
-      // Параллельные запросы для статистики по разделам
-      const [tasksResult, assignmentsResult] = await Promise.allSettled([
-        // Задачи: получаем все задачи проекта через разделы
+      // Получаем данные из view_project_dashboard 
+      const [dashboardResult, assignmentsResult] = await Promise.allSettled([
+        // Данные из view_project_dashboard
         supabase
-          .from('tasks')
-          .select(`
-            task_id,
-            task_status,
-            task_completed,
-            task_parent_section,
-            loadings!loadings_loading_task_fkey(
-              loading_start,
-              loading_finish,
-              loading_rate,
-              loading_status
-            )
-          `)
-          .in('task_parent_section', sectionIds),
+          .from('view_project_dashboard')
+          .select('decomposition_count, hours_planned_total, hours_actual_total')
+          .eq('project_id', projectId)
+          .single(),
 
-        // Задания: простой подсчет по проекту
+        // Количество заданий по проекту
         supabase
           .from('assignments')
           .select('assignment_id', { count: 'exact' })
           .eq('project_id', projectId)
       ]);
 
-      let taskStats = {
-        total: 0,
-        totalHours: 0,
-        completed: 0,
-        completedHours: 0,
-        inProgress: 0,
-        inProgressHours: 0
+      let dashboardStats: ProjectDashboardStats = {
+        decomposition_count: 0,
+        hours_planned_total: 0,
+        hours_actual_total: 0,
+        assignments_total: 0
       };
 
-      let assignmentStats = { total: 0 };
-
-      // Обработка результатов задач
-      if (tasksResult.status === 'fulfilled' && tasksResult.value.data) {
-        const tasks = tasksResult.value.data;
-        taskStats.total = tasks.length;
-
-        tasks.forEach((task: Task) => {
-          const isCompleted = task.task_completed !== null;
-          const isActive = task.task_status === 'active' && !isCompleted;
-
-          // Подсчет часов из загрузок
-          let taskHours = 0;
-          if (task.loadings && Array.isArray(task.loadings)) {
-            taskHours = task.loadings
-              .filter((loading) => loading.loading_status === 'active')
-              .reduce((sum: number, loading) => {
-                if (loading.loading_start && loading.loading_finish) {
-                  const start = new Date(loading.loading_start);
-                  const finish = new Date(loading.loading_finish);
-                  const diffMs = finish.getTime() - start.getTime();
-                  const days = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
-                  const rate = loading.loading_rate || 1;
-                  return sum + (days * 8 * rate); // 8 часов в день * коэффициент
-                }
-                return sum;
-              }, 0);
-          }
-
-          taskStats.totalHours += taskHours;
-
-          if (isCompleted) {
-            taskStats.completed++;
-            taskStats.completedHours += taskHours;
-          } else if (isActive) {
-            taskStats.inProgress++;
-            taskStats.inProgressHours += taskHours;
-          }
-        });
+      // Обработка данных из view_project_dashboard
+      if (dashboardResult.status === 'fulfilled' && dashboardResult.value.data) {
+        dashboardStats = {
+          decomposition_count: dashboardResult.value.data.decomposition_count || 0,
+          hours_planned_total: Number(dashboardResult.value.data.hours_planned_total) || 0,
+          hours_actual_total: Number(dashboardResult.value.data.hours_actual_total) || 0,
+          assignments_total: 0
+        };
       }
 
-      // Обработка результатов заданий
+      // Обработка количества заданий
       if (assignmentsResult.status === 'fulfilled') {
-        assignmentStats.total = assignmentsResult.value.count || 0;
+        dashboardStats.assignments_total = assignmentsResult.value.count || 0;
       }
 
       // Проверяем отмену перед установкой данных
       if (!abortSignal?.aborted) {
         setSectionStats({
-          tasks: taskStats,
-          assignments: assignmentStats
+          tasks: { count: dashboardStats.decomposition_count },
+          hours: {
+            planned: dashboardStats.hours_planned_total,
+            actual: dashboardStats.hours_actual_total
+          },
+          assignments: { total: dashboardStats.assignments_total }
         });
       }
 
     } catch (err) {
       // Игнорируем ошибки отмены
       if ((err instanceof Error && err.name === 'AbortError') || abortSignal?.aborted) return;
-      
+
       // Логируем только в development режиме
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching section stats:', err);
@@ -343,7 +292,8 @@ export const ProjectInfoCard: React.FC = () => {
     setProjectInfo(null);
     setHierarchyStats({ stages: 0, objects: 0, sections: 0 });
     setSectionStats({
-      tasks: { total: 0, totalHours: 0, completed: 0, completedHours: 0, inProgress: 0, inProgressHours: 0 },
+      tasks: { count: 0 },
+      hours: { planned: 0, actual: 0 },
       assignments: { total: 0 }
     });
     setIsLoading(true);
@@ -382,7 +332,7 @@ export const ProjectInfoCard: React.FC = () => {
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 h-full overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
       {projectInfo && (
-        <div className="space-y-1">
+        <div className="space-y-1 pt-7">
           {/* Название проекта */}
           <div className="bg-gray-100/50 dark:bg-gray-700/50 p-1.5 rounded">
             <p className="text-muted-foreground text-sm mb-1">Название проекта</p>
@@ -478,21 +428,15 @@ export const ProjectInfoCard: React.FC = () => {
             <div className="space-y-1">
               <div className="flex justify-between">
                 <span className="text-card-foreground text-sm">- Задачи</span>
-                <span className="text-card-foreground font-medium text-sm">
-                  {sectionStats.tasks.total} - {sectionStats.tasks.totalHours}ч
-                </span>
+                <span className="text-card-foreground font-medium text-sm">{sectionStats.tasks.count}</span>
               </div>
               <div className="flex justify-between ml-4">
-                <span className="text-card-foreground text-sm">- выполненные</span>
-                <span className="text-card-foreground font-medium text-sm">
-                  {sectionStats.tasks.completed} - {sectionStats.tasks.completedHours}ч
-                </span>
+                <span className="text-card-foreground text-sm">- план</span>
+                <span className="text-card-foreground font-medium text-sm">{sectionStats.hours.planned}ч</span>
               </div>
               <div className="flex justify-between ml-4">
-                <span className="text-card-foreground text-sm">- в работе</span>
-                <span className="text-card-foreground font-medium text-sm">
-                  {sectionStats.tasks.inProgress} - {sectionStats.tasks.inProgressHours}ч
-                </span>
+                <span className="text-card-foreground text-sm">- факт</span>
+                <span className="text-card-foreground font-medium text-sm">{sectionStats.hours.actual}ч</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-card-foreground text-sm">- Задания</span>
