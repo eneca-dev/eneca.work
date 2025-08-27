@@ -65,6 +65,9 @@ export interface FilterStore {
   teams: FilterOption[]
   employees: FilterOption[]
   
+  // Заблокированные фильтры по правам (храним как массив строк для совместимости с persist)
+  lockedFilters?: FilterType[]
+  
   // Выбранные значения
   selectedManagerId: string | null
   selectedProjectId: string | null
@@ -81,6 +84,8 @@ export interface FilterStore {
   initialize: (config: FilterConfigs) => void
   setFilter: (type: string, value: string | null) => void
   resetFilters: () => void
+  applyPermissionDefaults: (ctx: { permissions: string[]; departmentId?: string | null; teamId?: string | null }) => void
+  isFilterLocked: (type: FilterType) => boolean
   getFilteredProjects: () => FilterOption[]
   getFilteredStages: () => FilterOption[]
   getFilteredObjects: () => FilterOption[]

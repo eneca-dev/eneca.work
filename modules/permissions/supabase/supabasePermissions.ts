@@ -100,18 +100,23 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
  */
 export async function updateUserRole(userId: string, roleId: string): Promise<boolean> {
   const supabase = createClient()
-  
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role_id: roleId })
+    // Назначаем (upsert) роль в user_roles: снимем прежние и добавим новую как единственную
+    const { error: delErr } = await supabase
+      .from('user_roles')
+      .delete()
       .eq('user_id', userId)
-    
-    if (error) {
-      console.error('Ошибка обновления роли пользователя:', error)
+    if (delErr) {
+      console.error('Ошибка очистки ролей пользователя:', delErr)
       return false
     }
-    
+    const { error } = await supabase
+      .from('user_roles')
+      .insert({ user_id: userId, role_id: roleId })
+    if (error) {
+      console.error('Ошибка назначения роли пользователю:', error)
+      return false
+    }
     return true
   } catch (error) {
     console.error('Ошибка в updateUserRole:', error)

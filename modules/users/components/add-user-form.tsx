@@ -181,7 +181,7 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     
-    // Если изменяется роль, обновляем roleId
+    // Если изменяется роль, обновляем roleId (используется для назначения в user_roles)
     if (field === "role") {
       const selectedRole = roles.find(r => r.name === value)
       setFormData((prev) => ({ ...prev, roleId: selectedRole?.id || "" }))

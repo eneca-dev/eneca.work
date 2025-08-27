@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils"
 import { TimelineGrid } from "./timeline-grid"
 // Заменяем FiltersPanel на TimelineFilters
 import { TimelineFilters } from "../filters/TimelineFilters"
+import { getFiltersPermissionContextAsync } from "@/modules/permissions/integration/filters-permission-context"
+import * as Sentry from "@sentry/nextjs"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
 import { useTheme } from "next-themes"
 import { useSettingsStore } from "@/stores/useSettingsStore"
@@ -83,6 +85,18 @@ useEffect(() => {
     setStartDate(new Date())
    }
 }, []) // Run only on mount
+
+  // Применяем ограничения по правам при монтировании
+  useEffect(() => {
+    getFiltersPermissionContextAsync()
+      .then((ctx) => {
+        useFilterStore.getState().applyPermissionDefaults(ctx)
+      })
+      .catch((err) => {
+        Sentry.captureException(err)
+        console.error('Failed to init filter permissions context', err)
+      })
+  }, [])
 
   // TODO: Заменить на новую систему permissions из @/modules/permissions
   // const { permissions } = useUserStore() // Удалено - permissions больше нет в userStore

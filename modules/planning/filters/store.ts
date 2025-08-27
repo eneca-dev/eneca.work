@@ -24,6 +24,9 @@ export const useFilterStore = create<FilterStore>()(
         teams: [],
         employees: [],
         
+        // Заблокированные фильтры по ролям
+        lockedFilters: [],
+        
         // Выбранные значения
         selectedManagerId: null,
         selectedProjectId: null,
@@ -63,10 +66,50 @@ export const useFilterStore = create<FilterStore>()(
           }
         },
         
+        // Применение ограничений и дефолтов по правам
+        applyPermissionDefaults: (ctx: { permissions: string[]; departmentId?: string | null; teamId?: string | null }) => {
+          const { permissions, departmentId, teamId } = ctx || { permissions: [] }
+          const locks = new Set<string>()
+          if (permissions?.includes('hierarchy.is_department_head')) {
+            locks.add('department')
+          }
+          if (permissions?.includes('hierarchy.is_team_lead') || permissions?.includes('hierarchy.is_user')) {
+            locks.add('department')
+            locks.add('team')
+          }
+          // admin — без блокировок
+          if (permissions?.includes('hierarchy.is_admin')) {
+            locks.clear()
+          }
+          const updates: any = { lockedFilters: Array.from(locks) }
+          if (locks.has('department')) {
+            updates.selectedDepartmentId = departmentId ?? null
+            // При смене отдела сбрасываем подчинённые, но команда может быть задана ниже
+            updates.selectedTeamId = null
+            updates.selectedEmployeeId = null
+          }
+          if (locks.has('team')) {
+            updates.selectedTeamId = teamId ?? null
+            updates.selectedEmployeeId = null
+          }
+          set(updates)
+        },
+
+        // Проверка блокировки фильтра
+        isFilterLocked: (type: any) => {
+          const state = get()
+          return Boolean(state.lockedFilters && state.lockedFilters.includes(type))
+        },
+
         // Универсальный метод установки фильтра
         setFilter: (type: string, value: string | null) => {
           console.log(`🔄 setFilter: ${type} = ${value}`)
           const state = get()
+          // Уважение блокировок
+          if (state.lockedFilters && state.lockedFilters.includes(type)) {
+            console.warn(`🔒 Фильтр ${type} заблокирован по правам, изменение отклонено`)
+            return
+          }
           const updates: any = {}
           
           // Устанавливаем значение
@@ -113,13 +156,15 @@ export const useFilterStore = create<FilterStore>()(
         
         // Сброс фильтров
         resetFilters: () => {
+          const state = get()
+          const isLocked = (t: string) => Boolean(state.lockedFilters && state.lockedFilters.includes(t))
           set({
             selectedManagerId: null,
             selectedProjectId: null,
             selectedStageId: null,
             selectedObjectId: null,
-            selectedDepartmentId: null,
-            selectedTeamId: null,
+            selectedDepartmentId: isLocked('department') ? state.selectedDepartmentId : null,
+            selectedTeamId: isLocked('team') ? state.selectedTeamId : null,
             selectedEmployeeId: null,
             projects: [],
             stages: [],
