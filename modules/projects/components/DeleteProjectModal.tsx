@@ -5,6 +5,7 @@ import * as Sentry from "@sentry/nextjs"
 import { AlertTriangle, Trash2, Loader2, Info, CheckCircle, XCircle } from 'lucide-react'
 import { Modal, ModalButton, useModalState } from '@/components/modals'
 import { createClient } from '@/utils/supabase/client'
+import { usePermissionsStore } from '@/modules/permissions/store/usePermissionsStore'
 
 interface ProjectStats {
   stages_count: number
@@ -39,6 +40,8 @@ export function DeleteProjectModal({
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteResult, setDeleteResult] = useState<{success: boolean, message: string, deletedCounts?: any} | null>(null)
+  const hasPermission = usePermissionsStore(s => s.hasPermission)
+  const canDeleteProject = hasPermission('projects.delete')
 
   // Загружаем статистику при открытии модального окна
   useEffect(() => {
@@ -376,14 +379,16 @@ export function DeleteProjectModal({
         <ModalButton variant="cancel" onClick={onClose} disabled={isDeleting}>
           Отмена
         </ModalButton>
-        <ModalButton 
-          variant="danger" 
-          onClick={handleDelete} 
-          disabled={isDeleting || isLoadingStats || !!error}
-          icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 />}
-        >
-          {isDeleting ? 'Удаление...' : 'Удалить проект'}
-        </ModalButton>
+        {canDeleteProject && (
+          <ModalButton 
+            variant="danger" 
+            onClick={handleDelete} 
+            disabled={isDeleting || isLoadingStats || !!error}
+            icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 />}
+          >
+            {isDeleting ? 'Удаление...' : 'Удалить проект'}
+          </ModalButton>
+        )}
       </Modal.Footer>
     </Modal>
   )

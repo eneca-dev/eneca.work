@@ -20,6 +20,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { useUserPermissions } from "../hooks/useUserPermissions"
+import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -93,6 +94,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
   const { canEditAllUsers, canEditStructures } = useUserPermissions()
+  // Возможность перезагрузить permissions-store после изменения ролей
+  const { reloadPermissions } = usePermissionsLoader()
 
   // Определяем, может ли пользователь редактировать роли
   const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole)
@@ -451,6 +454,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           title: "Успешно",
           description: `Роли обновлены: добавлено ${addedCount}, удалено ${removedCount}`,
         })
+        // Перезагружаем permissions-store для текущего пользователя,
+        // чтобы страница debug и гварды сразу увидели актуальные права
+        reloadPermissions()
         
         // Закрываем модальное окно
         setIsRolesModalOpen(false)

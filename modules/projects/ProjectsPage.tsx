@@ -15,6 +15,7 @@ import { useProjectsStore } from './store';
 // Убираем импорт старых фильтров
 // import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
+import { CreateProjectModal } from './components';
 import { useUiStore } from '@/stores/useUiStore';
 import { SyncButton } from '@/components/ui/sync-button';
 import { Search } from 'lucide-react';
@@ -31,7 +32,8 @@ export default function ProjectsPage() {
     filters, 
     clearFilters,
     selectedSectionId,
-    isDetailsPanelOpen 
+    isDetailsPanelOpen,
+    showManagers
   } = useProjectsStore();
   
   // Загружаем данные для task-transfer store (нужно для создания заданий)
@@ -65,6 +67,7 @@ export default function ProjectsPage() {
   // Состояние для модального окна дашборда проекта
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
   const [dashboardProject, setDashboardProject] = useState<{id: string, name: string} | null>(null);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   
   // Состояние сайдбара для правильного позиционирования модального окна
   const { collapsed: sidebarCollapsed } = useSidebarState();
@@ -201,69 +204,57 @@ export default function ProjectsPage() {
       <FilterBar 
         title="Проекты"
         titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg"
+        right={(
+          <div className="ml-auto">
+            <button
+              className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs bg-gradient-to-r from-emerald-500/15 to-teal-500/15 text-emerald-700 dark:text-emerald-300 hover:from-emerald-500/25 hover:to-teal-500/25 transition-all duration-200 rounded-md border-emerald-200/60 dark:border-emerald-500/40"
+              onClick={() => setIsCreateProjectOpen(true)}
+              title="Создать проект"
+            >
+              <span className="hidden sm:inline">Создать проект</span>
+            </button>
+          </div>
+        )}
       >
         {/* Инструменты: кнопки управления + поиск по структуре */}
         <div className="flex items-center gap-2 mr-2 text-[11px] md:text-xs">
-          {/* Блок кнопок управления — показываем всегда */}
+          {/* Блок кнопок управления — свернуть всё + синхронизация */}
           <div className="flex items-center gap-1.5">
-            {/* Группировка по заказчикам */}
+            {/* Переключить группировку по руководителям */}
             <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-indigo-500/15 to-purple-500/15 text-indigo-600 hover:from-indigo-500/25 hover:to-purple-500/25 hover:shadow-sm dark:from-indigo-500/25 dark:to-purple-500/25 dark:text-indigo-400 dark:hover:from-indigo-500/35 dark:hover:to-purple-500/35 transition-all duration-200 rounded-md border border-indigo-200/50 dark:border-indigo-500/30"
-              title="Группировать по заказчикам"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByCustomer'))
-                }
-              }}
-            >
-              <Building2 className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Группировка по отделам */}
-            <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-emerald-500/15 to-teal-500/15 text-emerald-600 hover:from-emerald-500/25 hover:to-teal-500/25 hover:shadow-sm dark:from-emerald-500/25 dark:to-teal-500/25 dark:text-emerald-400 dark:hover:from-emerald-500/35 dark:hover:to-teal-500/35 transition-all duration-200 rounded-md border border-emerald-200/50 dark:border-emerald-500/30"
-              title="Группировать по отделам"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByDepartment'))
-                }
-              }}
-            >
-              <Building className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Группировка по командам */}
-            <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-amber-500/15 to-orange-500/15 text-amber-600 hover:from-amber-500/25 hover:to-orange-500/25 hover:shadow-sm dark:from-amber-500/25 dark:to-amber-500/25 dark:text-amber-400 dark:hover:from-amber-500/35 dark:hover:to-orange-500/35 transition-all duration-200 rounded-md border border-amber-200/50 dark:border-amber-500/30"
-              title="Группировать по командам"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByTeam'))
-                }
-              }}
+              className={`flex items-center justify-center p-1.5 h-7 w-7 transition-all duration-200 rounded-md border ${
+                showManagers
+                  ? 'bg-gradient-to-br from-blue-500/25 to-cyan-500/25 text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-500/40'
+                  : 'bg-gradient-to-br from-blue-500/15 to-cyan-500/15 text-blue-600 dark:text-blue-400 hover:from-blue-500/25 hover:to-cyan-500/25 hover:shadow-sm border-blue-200/50 dark:border-blue-500/30'
+              }`}
+              title="Переключить группировку по руководителям"
+              onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:toggleShowManagers')) }}
             >
               <Users className="h-3.5 w-3.5" />
             </button>
 
-            {/* Группировка по сотрудникам */}
+            {/* Свернуть всё */}
             <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-rose-500/15 to-pink-500/15 text-rose-600 hover:from-rose-500/25 hover:to-pink-500/25 hover:shadow-sm dark:from-rose-500/25 dark:to-pink-500/25 dark:text-rose-400 dark:hover:from-rose-500/35 dark:hover:to-pink-500/35 transition-all duration-200 rounded-md border border-rose-200/50 dark:border-rose-500/30"
-              title="Группировать по сотрудникам"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('projectsTree:toggleGroupByEmployee'))
-                }
-              }}
+              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-orange-500/15 to-amber-500/15 text-orange-600 hover:from-orange-500/25 hover:to-amber-500/25 hover:shadow-sm dark:from-orange-500/25 dark:to-amber-500/25 dark:text-orange-400 dark:hover:from-orange-500/35 dark:hover:to-amber-500/35 transition-all duration-200 rounded-md border border-orange-200/50 dark:border-orange-500/30"
+              title="Свернуть всё"
+              onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
             >
-              <User className="h-3.5 w-3.5" />
+              <Minimize className="h-3.5 w-3.5" />
             </button>
 
-            {/* Синхронизация с Worksection */}
-            <SyncButton 
-              className="h-7 w-7 p-1.5"
-              size="sm"
-              showText={false}
+            {/* Синхронизация с Worksection — перенесена в выпадающий список "Проект" */}
+          </div>
+
+          {/* Поиск по структуре — рядом с кнопками */}
+          <div className="relative text-[11px] md:text-xs">
+            <input
+              type="text"
+              value={treeSearch}
+              onChange={e => setTreeSearch(e.target.value)}
+              placeholder="Поиск по структуре..."
+              className="pl-7 pr-2 py-1 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white w-40 md:w-48 focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
             />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           </div>
         </div>
 
@@ -433,6 +424,12 @@ export default function ProjectsPage() {
               <div className="flex items-center justify-between">
                 <div className="text-[10px] text-slate-500">Проектная иерархия</div>
                 <div className="flex items-center gap-1">
+                  {/* Синхронизация с Worksection */}
+                  <SyncButton 
+                    className="h-6 px-2 py-1"
+                    size="sm"
+                    showText={false}
+                  />
                   <button
                     className="text-[10px] px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
                     onClick={() => {
@@ -581,6 +578,19 @@ export default function ProjectsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Модальное окно создания проекта */}
+      {isCreateProjectOpen && (
+        <CreateProjectModal
+          isOpen={isCreateProjectOpen}
+          onClose={() => setIsCreateProjectOpen(false)}
+          onSuccess={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+            }
+          }}
+        />
       )}
     </div>
   );

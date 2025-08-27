@@ -823,6 +823,44 @@ export async function updateProject(
   }
 }
 
+// Функция для создания проекта
+export async function createProject(newProject: {
+  project_name: string
+  project_description?: string | null
+  project_manager?: string | null
+  project_lead_engineer?: string | null
+  project_status: 'active' | 'archive' | 'paused' | 'canceled'
+  client_id?: string | null
+}): Promise<{ success: boolean; error?: string; projectId?: string }> {
+  try {
+    console.log('createProject: создание проекта', newProject)
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        project_name: newProject.project_name,
+        project_description: newProject.project_description ?? null,
+        project_manager: newProject.project_manager ?? null,
+        project_lead_engineer: newProject.project_lead_engineer ?? null,
+        project_status: newProject.project_status,
+        client_id: newProject.client_id ?? null,
+        project_created: new Date().toISOString(),
+        project_updated: new Date().toISOString(),
+      })
+      .select('project_id')
+      .single()
+
+    if (error) {
+      console.error('createProject: ошибка при создании', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, projectId: data.project_id }
+  } catch (error) {
+    console.error('createProject: неожиданная ошибка', error)
+    return { success: false, error: 'Произошла неожиданная ошибка' }
+  }
+}
+
 // Функция для получения объектов проекта
 export async function fetchProjectObjects(
   projectId: string,
