@@ -324,7 +324,7 @@ export function TimelineFilters({
             label="Отдел"
             value={selectedDepartmentId}
             onChange={(value) => setFilter('department', value)}
-            disabled={isLoading}
+            disabled={isLoading || isFilterLocked('department')}
             locked={isFilterLocked('department')}
             options={departments}
             placeholder="Выберите отдел"
@@ -337,7 +337,7 @@ export function TimelineFilters({
             label="Команда"
             value={selectedTeamId}
             onChange={(value) => setFilter('team', value)}
-            disabled={isLoading || !selectedDepartmentId}
+            disabled={isLoading || !selectedDepartmentId || isFilterLocked('team')}
             locked={isFilterLocked('team')}
             options={filteredTeams}
             placeholder="Выберите команду"

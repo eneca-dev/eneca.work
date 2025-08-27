@@ -181,7 +181,7 @@ export type Database = {
           is_hourly: boolean | null
           last_name: string
           position_id: string
-          role_id: string
+          -- legacy removed: role_id
           salary: number | null
           team_id: string | null
           user_id: string
@@ -200,7 +200,7 @@ export type Database = {
           is_hourly?: boolean | null
           last_name: string
           position_id: string
-          role_id: string
+          -- legacy removed: role_id
           salary?: number | null
           team_id?: string | null
           user_id: string
@@ -219,7 +219,7 @@ export type Database = {
           is_hourly?: boolean | null
           last_name?: string
           position_id?: string
-          role_id?: string
+          -- legacy removed: role_id
           salary?: number | null
           team_id?: string | null
           user_id?: string
@@ -247,13 +247,7 @@ export type Database = {
             referencedRelation: "positions"
             referencedColumns: ["position_id"]
           },
-          {
-            foreignKeyName: "profiles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
+          -- profiles_role_id_fkey removed
           {
             foreignKeyName: "profiles_team_id_fkey"
             columns: ["team_id"]
