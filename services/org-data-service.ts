@@ -700,11 +700,7 @@ export async function updateUser(
 
 
 
-  // Обновляем роль пользователя прямо в profiles, если она была передана
-  if (userData.roleId !== undefined) {
-    updates.role_id = userData.roleId || null
-    console.log("Добавлено: role_id =", userData.roleId);
-  }
+  // Роль больше не хранится в profiles.role_id — управление только через user_roles
 
   console.log("Итоговые обновления для БД:", updates);
 
@@ -935,20 +931,7 @@ export async function createUser(userData: {
           }
         }
 
-        if (userData.roleId) {
-          profileData.role_id = userData.roleId
-        } else {
-          // Назначаем роль "user" по умолчанию
-          const defaultRole = await supabase
-            .from("roles")
-            .select("id")
-            .eq("name", "user")
-            .single()
-          
-          if (defaultRole.data) {
-            profileData.role_id = defaultRole.data.id
-          }
-        }
+        // Роль не записываем в profiles.role_id — назначение выполняется через user_roles отдельно
 
         // Если какие-то обязательные поля не заполнены, используем значения по умолчанию
         if (!profileData.department_id) {

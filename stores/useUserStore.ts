@@ -100,7 +100,7 @@ export const useUserStore = create<UserState>()(
               employmentRate: user.profile.employmentRate ?? user.profile.employment_rate,
               country: user.profile.country,
               city: user.profile.city,
-              roleId: user.profile.roleId || user.profile.role_id,
+              // legacy role removed, роль теперь только через user_roles
               avatar_url: user.profile.avatar_url
             };
             // Формируем имя из profile только если не передано готовое имя

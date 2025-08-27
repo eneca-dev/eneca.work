@@ -37,8 +37,24 @@ export const usePermissionsStore = create<PermissionsState>()(
       
       // Базовые сеттеры
       setPermissions: (permissions: string[]) => {
+        // Нормализуем hierarchy.*: оставляем только наивысший уровень
+        const setHier = new Set(permissions)
+        const hasAdmin = setHier.has('hierarchy.is_admin')
+        const hasDeptHead = setHier.has('hierarchy.is_department_head')
+        const hasTeamLead = setHier.has('hierarchy.is_team_lead')
+        const hasUser = setHier.has('hierarchy.is_user')
+
+        let normalized = permissions
+        if (hasAdmin) {
+          normalized = permissions.filter(p => p !== 'hierarchy.is_department_head' && p !== 'hierarchy.is_team_lead' && p !== 'hierarchy.is_user')
+        } else if (hasDeptHead) {
+          normalized = permissions.filter(p => p !== 'hierarchy.is_team_lead' && p !== 'hierarchy.is_user')
+        } else if (hasTeamLead) {
+          normalized = permissions.filter(p => p !== 'hierarchy.is_user')
+        }
+
         set({ 
-          permissions, 
+          permissions: normalized, 
           lastUpdated: new Date(),
           error: null 
         })
