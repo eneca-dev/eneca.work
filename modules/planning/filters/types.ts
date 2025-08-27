@@ -84,6 +84,7 @@ export interface FilterStore {
   initialize: (config: FilterConfigs) => void
   setFilter: (type: string, value: string | null) => void
   resetFilters: () => void
+
   applyPermissionDefaults: (ctx: { permissions: string[]; departmentId?: string | null; teamId?: string | null }) => void
   isFilterLocked: (type: FilterType) => boolean
   getFilteredProjects: () => FilterOption[]

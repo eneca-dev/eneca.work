@@ -24,6 +24,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       size="icon"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       className={`w-9 h-9 ${className}`}
+      data-theme-toggle
       aria-label="Переключить тему"
     >
       {resolvedTheme === "dark" ? <Sun className="h-4 w-4 text-yellow-300" /> : <Moon className="h-4 w-4" />}

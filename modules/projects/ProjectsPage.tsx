@@ -7,6 +7,7 @@ import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, U
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 // Заменяем старый store на новый из planning модуля
 import { useFilterStore } from '@/modules/planning/filters/store';
+
 import { getFiltersPermissionContextAsync } from '@/modules/permissions/integration/filters-permission-context'
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';

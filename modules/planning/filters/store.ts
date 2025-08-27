@@ -156,8 +156,10 @@ export const useFilterStore = create<FilterStore>()(
         
         // Сброс фильтров
         resetFilters: () => {
+
           const state = get()
           const isLocked = (t: string) => Boolean(state.lockedFilters && state.lockedFilters.includes(t))
+
           set({
             selectedManagerId: null,
             selectedProjectId: null,
