@@ -12,7 +12,8 @@ import {
 import { LastCommentsCard } from './components/cards/LastCommentsCard';
 import { DataCompletenessNewCard } from './components/cards/DataCompletenessNewCard';
 import { useDashboardStore } from './stores/useDashboardStore';
-import { Layers, BarChart3, ChevronLeft } from 'lucide-react';
+import { Layers, BarChart3, ChevronLeft, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface InlineDashboardProps {
   projectId: string;
@@ -69,19 +70,18 @@ export const InlineDashboard: React.FC<InlineDashboardProps> = ({
       >
         {/* Кнопка "назад" внутри дашборда */}
         {onClose && (
-          <div 
-            className="absolute top-8 left-0 z-10 cursor-pointer group"
-            onClick={onClose}
-            title="Вернуться к проектам"
-          >
-            <div 
-              className="p-1 rounded shadow-sm group-hover:opacity-90 transition-all duration-200 bg-emerald-500 hover:bg-emerald-600 dark:bg-[#2b3544]"
+          <div className="absolute top-[28px] left-[28px] z-20">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="h-6 w-[197px] bg-[#F9F9FA] dark:bg-[#2B3544] border-gray-200 dark:border-gray-700 hover:bg-[#F0F0F1] dark:hover:bg-[#232A36] shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center relative"
             >
-              <ChevronLeft className="h-4 w-4 text-white group-hover:text-gray-100 transition-colors duration-200" />
-            </div>
+              <ArrowLeft className="absolute left-2 h-3 w-3" />
+              <span className="ml-4">Назад к проектам</span>
+            </Button>
           </div>
         )}
-
+       
         {/* CSS стили для красивого скролла в WebKit браузерах */}
         <style jsx>{`
           .dashboard-scroll::-webkit-scrollbar {
