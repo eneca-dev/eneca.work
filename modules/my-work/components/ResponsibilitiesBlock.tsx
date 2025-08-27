@@ -59,6 +59,18 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
       }
     })
 
+    // Дедупликация проектов по entity_id, если пользователь имеет несколько ролей (ПМ и ГИ)
+    const dedupeById = (items: ResponsibilityInfo[]) => {
+      const seen = new Set<string>()
+      return items.filter(item => {
+        if (seen.has(item.entity_id)) return false
+        seen.add(item.entity_id)
+        return true
+      })
+    }
+
+    groups[0].items = dedupeById(groups[0].items)
+
     return groups.filter(group => group.items.length > 0)
   }
 

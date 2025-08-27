@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Calendar, User } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
@@ -39,9 +39,12 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
   const [actualProjectId, setActualProjectId] = useState<string | null>(null)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
   
   const { setNotification } = useUiStore()
   const { statuses } = useSectionStatuses()
+  const noop = () => {}
 
   useEffect(() => {
     if (isOpen) {
@@ -125,6 +128,26 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     getProfileName(profile).toLowerCase().includes(searchResponsible.toLowerCase()) ||
     profile.email.toLowerCase().includes(searchResponsible.toLowerCase())
   )
+
+  const updateDropdownPosition = () => {
+    if (!inputWrapperRef.current) return
+    const rect = inputWrapperRef.current.getBoundingClientRect()
+    const viewportSpaceBelow = window.innerHeight - rect.bottom
+    const desired = 320 // px, desired max height
+    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
+    setDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
+  }
+
+  useEffect(() => {
+    if (!showResponsibleDropdown) return
+    updateDropdownPosition()
+    const handlers = [
+      ['scroll', updateDropdownPosition, true],
+      ['resize', updateDropdownPosition, false],
+    ] as const
+    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
+    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
+  }, [showResponsibleDropdown])
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -342,18 +365,19 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
             </label>
             <StatusSelector
               value={sectionStatusId}
-              onChange={setSectionStatusId}
-              disabled={loading}
+              onChange={noop}
+              disabled={true}
               required={true}
               placeholder="Выберите статус раздела..."
             />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">При создании раздела статус всегда «План». Изменить можно позже.</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
               Ответственный
             </label>
-            <div className="relative">
+            <div className="relative" ref={inputWrapperRef}>
               <input
                 type="text"
                 value={showResponsibleDropdown ? searchResponsible : getSelectedResponsibleName()}
@@ -373,39 +397,62 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
                 disabled={loading}
               />
               <User className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              {showResponsibleDropdown && (
-                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  <div
-                    onClick={() => {
-                      setSectionResponsible('')
-                      setSearchResponsible('')
-                      setShowResponsibleDropdown(false)
-                    }}
-                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600"
-                  >
-                    <div className="font-medium text-gray-500 dark:text-slate-400">
-                      Не назначен
-                    </div>
-                  </div>
-                  {filteredResponsible.map((profile) => (
+              {showResponsibleDropdown && dropdownPosition && typeof document !== 'undefined' && (
+                (typeof window !== 'undefined') && (
+                  // Render to body to avoid clipping inside modal scroll container
+                  require('react-dom').createPortal(
                     <div
-                      key={profile.user_id}
-                      onClick={() => {
-                        setSectionResponsible(profile.user_id)
-                        setSearchResponsible('')
-                        setShowResponsibleDropdown(false)
+                      style={{
+                        position: 'fixed',
+                        left: dropdownPosition.left,
+                        top: dropdownPosition.top,
+                        width: dropdownPosition.width,
+                        transform: dropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
                       }}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                      className="z-50"
+                      onMouseDown={(e) => e.preventDefault()}
                     >
-                      <div className="font-medium dark:text-white">
-                        {getProfileName(profile)}
+                      <div className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
+                        <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Ответственный
+                        </div>
+                        <div className="max-h-80 overflow-y-auto overscroll-contain">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSectionResponsible('')
+                              setSearchResponsible('')
+                              setShowResponsibleDropdown(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600 text-slate-600 dark:text-slate-300"
+                          >
+                            Не назначен
+                          </button>
+                          {filteredResponsible.map((profile) => (
+                            <button
+                              type="button"
+                              key={profile.user_id}
+                              onClick={() => {
+                                setSectionResponsible(profile.user_id)
+                                setSearchResponsible('')
+                                setShowResponsibleDropdown(false)
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
+                            >
+                              <div className="font-medium dark:text-white truncate">
+                                {getProfileName(profile)}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                                {profile.email}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-slate-400">
-                        {profile.email}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    </div>,
+                    document.body
+                  )
+                )
               )}
             </div>
           </div>
