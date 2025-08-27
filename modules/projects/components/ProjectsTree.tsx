@@ -10,6 +10,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
+import { usePermissionsStore } from '@/modules/permissions/store/usePermissionsStore'
 import { EditProjectModal } from './EditProjectModal'
 import { EditStageModal } from './EditStageModal'
 import { CreateStageModal } from './CreateStageModal'
@@ -132,6 +133,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [mobileTab, setMobileTab] = useState<'content' | 'comments'>('content')
   const [sectionTotals, setSectionTotals] = useState<{ planned: number; actual: number } | null>(null)
   const [sectionDue, setSectionDue] = useState<string | null>(null)
+  const hasPermission = usePermissionsStore(state => state.hasPermission)
+  const canDeleteProject = hasPermission('projects.delete')
 
   const loadMiniDecomposition = async () => {
     try {
@@ -240,6 +243,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     } catch (error) {
       return "-"
     }
+  }
+
+  // Развернуть текущий узел и все дочерние
+  const expandAllFromNode = (target: ProjectNode) => {
+    const expandRecursively = (n: ProjectNode) => {
+      if (n.children && n.children.length > 0) {
+        if (!expandedNodes.has(n.id)) {
+          onToggleNode(n.id)
+        }
+        n.children.forEach(child => expandRecursively(child))
+      }
+    }
+    expandRecursively(target)
   }
 
   const updateSectionStatus = async (statusId: string | null) => {
@@ -519,6 +535,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             {/* Кнопки редактирования для проектов */}
             {node.type === 'project' && (
               <div className="flex items-center ml-2">
+                {/* Развернуть весь проект */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); expandAllFromNode(node) }}
+                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded transition-all mr-1"
+                  title="Развернуть всю структуру проекта"
+                >
+                  <Expand className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                </button>
                 <button
                   onClick={(e) => onCreateStage(node, e)}
                   className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-all mr-1"
@@ -533,13 +557,15 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <Edit className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 </button>
-                <button
-                  onClick={(e) => onDeleteProject(node, e)}
-                  className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all ml-1"
-                  title="Удалить проект"
-                >
-                  <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
-                </button>
+                {canDeleteProject && (
+                  <button
+                    onClick={(e) => onDeleteProject(node, e)}
+                    className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-all ml-1"
+                    title="Удалить проект"
+                  >
+                    <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
+                  </button>
+                )}
               </div>
             )}
 
@@ -648,110 +674,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
       {(node.type === 'section' && isExpanded) && (
         <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
-          {/* Компактный режим: вкладки Контент / Комментарии (до 2xl) */}
-          <div className="2xl:hidden mb-3">
-            <div className="inline-flex h-9 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-700 p-1 text-slate-600 dark:text-slate-200">
-              {[
-                { key: 'content', label: 'Контент' },
-                { key: 'comments', label: 'Комментарии' },
-              ].map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setMobileTab(t.key as 'content' | 'comments')}
-                  className={cn('px-3 py-1.5 text-xs rounded-sm', mobileTab === t.key ? 'bg-white dark:bg-slate-900 shadow-sm' : 'hover:text-slate-900 dark:hover:text-slate-100')}
-                >
-                  {t.label}
-                </button>
-              ))}
+          {/* Заглушка аналитики раздела */}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Аналитика по разделу</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Здесь будет аналитика по разделу (заглушка).
             </div>
-          </div>
-
-          {/* Компактный режим: показываем выбранную вкладку */}
-          {mobileTab === 'content' && (
-            <div className="2xl:hidden flex flex-col gap-4 h-[80vh] max-h-[80vh] overflow-hidden">
-              {/* Описание сверху, естественная высота + аналитика */}
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                    <SectionDescriptionCompact sectionId={node.id} />
-                  </div>
-                  {/* Аналитические показатели */}
-                  <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
-                    {sectionDue && (
-                      <div className="inline-flex items-center gap-2">
-                        <span className="whitespace-nowrap">Дней до завершения:</span>
-                        <span className="font-semibold tabular-nums">
-                          {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
-                        </span>
-                      </div>
-                    )}
-                    {sectionTotals && (
-                      <div className="inline-flex items-center gap-2">
-                        <span className="whitespace-nowrap">План/Факт, ч:</span>
-                        <span className="font-semibold tabular-nums">
-                          {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/* Блоки ниже: высота по содержимому */}
-              <div className="flex flex-col gap-4">
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <SectionDecompositionTab sectionId={node.id} compact />
-                </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                  <SectionTasksPreview sectionId={node.id} />
-                </div>
-              </div>
-            </div>
-          )}
-          {mobileTab === 'comments' && (
-            <div className="2xl:hidden h-[80vh] max-h-[80vh] overflow-hidden">
-              <div className="h-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex flex-col">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Комментарии</div>
-                <div className="flex-1 min-h-0">
-                  <CommentsPanel sectionId={node.id} autoScrollOnMount={true} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Полная версия (>=2xl): описание + вкладки на всю ширину */}
-          <div className="hidden 2xl:block">
-            {/* Описание раздела */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 mb-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Описание</div>
-                  <SectionDescriptionCompact sectionId={node.id} />
-                </div>
-                {/* Аналитические показатели */}
-                <div className="flex flex-col items-end gap-1 text-xs text-slate-600 dark:text-slate-300">
-                  {sectionDue && (
-                    <div className="inline-flex items-center gap-2">
-                      <span className="whitespace-nowrap">Дней до завершения:</span>
-                      <span className="font-semibold tabular-nums">
-                        {Math.max(0, Math.ceil((new Date(sectionDue).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
-                      </span>
-                    </div>
-                  )}
-                  {sectionTotals && (
-                    <div className="inline-flex items-center gap-2">
-                      <span className="whitespace-nowrap">План/Факт, ч:</span>
-                      <span className="font-semibold tabular-nums">
-                        {sectionTotals.planned.toFixed(1)} / {sectionTotals.actual.toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Панели с вкладками на полную ширину */}
-            <SectionDetailTabs sectionId={node.id} />
           </div>
         </div>
       )}
@@ -873,6 +801,13 @@ export function ProjectsTree({
   useEffect(() => {
     loadTreeData()
   }, [selectedManagerId, selectedProjectId, selectedStageId, selectedObjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, showManagers, groupByClient])
+
+  // Глобальное событие для принудительной перезагрузки дерева (после создания проекта и т.п.)
+  useEffect(() => {
+    const reload = () => loadTreeData()
+    window.addEventListener('projectsTree:reload', reload as EventListener)
+    return () => window.removeEventListener('projectsTree:reload', reload as EventListener)
+  }, [])
 
   // Если приходит внешний поиск из верхней панели — используем его как источник правды
   useEffect(() => {

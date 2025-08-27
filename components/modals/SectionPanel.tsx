@@ -2,12 +2,15 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
+import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
+import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -53,7 +56,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'comments' | 'decomposition'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports'>(initialTab === 'details' ? 'overview' : initialTab as any)
   const initializedRef = useRef(false)
   
   // Состояние для inline редактирования отдельных полей
@@ -88,7 +91,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   // Устанавливаем активную вкладку только при первой инициализации
   useEffect(() => {
     if (isOpen && !initializedRef.current) {
-      setActiveTab(initialTab)
+      setActiveTab((initialTab === 'details' ? 'overview' : initialTab) as any)
       initializedRef.current = true
     }
   }, [isOpen, initialTab])
@@ -128,16 +131,19 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       if (sectionError) throw sectionError
 
       // Загружаем информацию об ответственном если он назначен
-      let responsibleName = null
+      let responsibleName: string | null = null
+      let responsibleAvatar: string | null = null
       if (sectionData.section_responsible) {
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('first_name, last_name, email')
+          .select('first_name, last_name, email, avatar_url')
           .eq('user_id', sectionData.section_responsible)
           .single()
 
         if (!profileError && profileData) {
           responsibleName = `${profileData.first_name} ${profileData.last_name}`.trim() || profileData.email
+          // @ts-ignore
+          responsibleAvatar = (profileData as any).avatar_url || null
         }
       }
 
@@ -274,7 +280,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         project_name: hierarchyData?.project_name || null,
         manager_name: hierarchyData?.manager_name || null,
         status_name: sectionData.section_statuses?.name || null,
-        status_color: sectionData.section_statuses?.color || null
+        status_color: sectionData.section_statuses?.color || null,
+        responsible_avatar: responsibleAvatar
       }
 
       console.log('Итоговые данные раздела:', formattedData)
@@ -660,20 +667,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           padding: '0px'
         }}
       />
-      
-      <div 
-        className="fixed right-0 h-screen w-[900px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
-        style={{ 
-          position: 'fixed',
-          top: '0px',
-          right: '0px',
-          margin: '0px',
-          padding: '0px'
-        }}
+
+      {/* Центрированное модальное окно, шире прежнего */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ position: 'fixed', top: '0px', left: '0px', right: '0px', bottom: '0px', margin: '0px', padding: '16px' }}
       >
+        <div className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden">
         {/* Заголовок прилегает к верху */}
         <div 
-          className="flex items-start justify-between px-6 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
+          className="flex items-start justify-between px-6 pt-5 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
           style={{ 
             paddingTop: '16px',
             margin: '0px'
@@ -722,7 +725,12 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                 {/* Ответственный */}
                 {sectionData.responsible_name && (
                   <div className="mt-2 flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={sectionData.responsible_avatar || undefined} alt={sectionData.responsible_name || undefined} />
+                      <AvatarFallback>
+                        {sectionData.responsible_name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="text-slate-600 dark:text-slate-400">Ответственный:</span>
                     <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.responsible_name}</span>
                   </div>
@@ -765,16 +773,6 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               Общее
             </button>
             <button
-              onClick={() => setActiveTab('details')}
-              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-                activeTab === 'details'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-            >
-              Детали
-            </button>
-            <button
               onClick={() => setActiveTab('decomposition')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
                 activeTab === 'decomposition'
@@ -785,6 +783,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               Декомпозиция
             </button>
             <button
+              onClick={() => setActiveTab('tasks')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'tasks'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Задания
+            </button>
+            <button
               onClick={() => setActiveTab('comments')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
                 activeTab === 'comments'
@@ -793,6 +801,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               }`}
             >
               Комментарии
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'reports'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Отчёты
             </button>
           </div>
         </div>
@@ -806,266 +824,191 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             <div className="p-6 space-y-8">
               {activeTab === 'overview' && (
                 <>
-                  {renderEditableField('section_name', 'Название раздела', sectionData.section_name, 'text')}
-                  
-                  {/* Компактный статус раздела */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-                      Статус раздела
-                    </label>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                        disabled={updatingStatus}
-                        className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                        onBlur={(e) => {
-                          // Проверяем, перемещается ли фокус внутри выпадающего списка
-                          const relatedTarget = e.relatedTarget as HTMLElement
-                          const currentTarget = e.currentTarget
-                          const dropdownContainer = currentTarget.parentElement
-                          
-                          // Закрываем dropdown только если фокус перемещается за пределы контейнера
-                          if (!relatedTarget || !dropdownContainer?.contains(relatedTarget)) {
-                            setShowStatusDropdown(false)
-                          }
-                        }}
-                      >
-                        {updatingStatus ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                        ) : sectionData.status_name ? (
-                          <>
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
-                            />
-                            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
-                              {sectionData.status_name}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-500 dark:text-slate-400">
-                              Без статуса
-                            </span>
-                          </>
-                        )}
-                        <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
-                      </button>
+                  {renderEditableField('section_name', 'Название', sectionData.section_name, 'text')}
 
-                      {showStatusDropdown && !updatingStatus && (
-                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                          <button
-                            type="button"
-                            onClick={() => updateSectionStatus(null)}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
-                          >
-                            <AlertTriangle className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-500 dark:text-slate-400">
-                              Убрать статус
-                            </span>
-                          </button>
-                          {statuses.map((status) => (
-                            <button
-                              key={status.id}
-                              type="button"
-                              onClick={() => updateSectionStatus(status.id)}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
-                            >
+                  {/* Компактная сетка метаданных */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Статус */}
+                    <div>
+                      <label className="block text-xs font-medium mb-1 dark:text-slate-300 text-slate-700">
+                        Статус
+                      </label>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                          disabled={updatingStatus}
+                          className="flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 w-full"
+                          onBlur={(e) => {
+                            const relatedTarget = e.relatedTarget as HTMLElement
+                            const currentTarget = e.currentTarget
+                            const dropdownContainer = currentTarget.parentElement
+                            if (!relatedTarget || !dropdownContainer?.contains(relatedTarget)) {
+                              setShowStatusDropdown(false)
+                            }
+                          }}
+                        >
+                          {updatingStatus ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                          ) : sectionData.status_name ? (
+                            <>
                               <div 
                                 className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: status.color }}
+                                style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
                               />
-                              <div>
-                                <div className="text-sm font-medium dark:text-white">
-                                  {status.name}
-                                </div>
-                                {status.description && (
-                                  <div className="text-xs text-gray-500 dark:text-slate-400">
-                                    {status.description}
-                                  </div>
-                                )}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {renderEditableField('section_description', 'Описание', sectionData.section_description, 'textarea')}
-                  
-                  {/* Блок ответственного */}
-                  <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
-                    <div className="flex items-center gap-2 mb-4">
-                      <User className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                      <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">
-                        Ответственный за раздел
-                      </h3>
-                    </div>
-                    {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
-                  </div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                {sectionData.status_name}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-500 dark:text-slate-400">
+                                Без статуса
+                              </span>
+                            </>
+                          )}
+                          <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
+                        </button>
 
-                  {/* Блок дат разработки */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                        Сроки разработки
-                      </h3>
+                        {showStatusDropdown && !updatingStatus && (
+                          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            <button
+                              type="button"
+                              onClick={() => updateSectionStatus(null)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                            >
+                              <AlertTriangle className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-500 dark:text-slate-400">
+                                Убрать статус
+                              </span>
+                            </button>
+                            {statuses.map((status) => (
+                              <button
+                                key={status.id}
+                                type="button"
+                                onClick={() => updateSectionStatus(status.id)}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                              >
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: status.color }}
+                                />
+                                <div>
+                                  <div className="text-sm font-medium dark:text-white">
+                                    {status.name}
+                                  </div>
+                                  {status.description && (
+                                    <div className="text-xs text-gray-500 dark:text-slate-400">
+                                      {status.description}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+
+                    {/* Ответственный */}
+                    <div>
+                      {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
+                    </div>
+
+                    {/* Даты */}
+                    <div>
                       {renderEditableField('section_start_date', 'Дата начала', sectionData.section_start_date, 'date')}
+                    </div>
+                    <div>
                       {renderEditableField('section_end_date', 'Дата окончания', sectionData.section_end_date, 'date')}
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-3 dark:text-slate-300 text-slate-700">
-                      Иерархия проекта
-                    </label>
-                    <div className="space-y-2">
-                      {sectionData.manager_name && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <User className="h-4 w-4 text-blue-500" />
-                          <span className="text-slate-500">Руководитель проекта:</span>
-                          <span className="dark:text-slate-300 text-slate-700">{sectionData.manager_name}</span>
+                  {/* Компактное описание */}
+                  {(() => {
+                    const isEditing = editingField === 'section_description'
+                    const isSaving = savingField === 'section_description'
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium dark:text-slate-300 text-slate-700">
+                            Описание
+                          </label>
+                          {!isEditing && (
+                            <button
+                              onClick={() => {
+                                setEditingField('section_description')
+                                setEditValues({ ...editValues, section_description: sectionData.section_description || '' })
+                              }}
+                              className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                            >
+                              Изменить
+                            </button>
+                          )}
                         </div>
-                      )}
-                      {sectionData.project_name && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Building className="h-4 w-4 text-green-500" />
-                          <span className="text-slate-500">Проект:</span>
-                          <span className="dark:text-slate-300 text-slate-700">{sectionData.project_name}</span>
-                        </div>
-                      )}
-                      {sectionData.stage_name && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Package className="h-4 w-4 text-purple-500" />
-                          <span className="text-slate-500">Стадия:</span>
-                          <span className="dark:text-slate-300 text-slate-700">{sectionData.stage_name}</span>
-                        </div>
-                      )}
-                      {sectionData.object_name && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Package className="h-4 w-4 text-orange-500" />
-                          <span className="text-slate-500">Объект:</span>
-                          <span className="dark:text-slate-300 text-slate-700">{sectionData.object_name}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={(editValues as any).section_description || ''}
+                              onChange={(e) => setEditValues({ ...editValues, section_description: e.target.value })}
+                              className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows={3}
+                              placeholder="Кратко опишите раздел"
+                              disabled={isSaving}
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleFieldSave('section_description')}
+                                disabled={isSaving}
+                                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                Сохранить
+                              </button>
+                              <button
+                                onClick={handleFieldCancel}
+                                disabled={isSaving}
+                                className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-3">
+                            {sectionData.section_description ? (
+                              <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-3">
+                                {sectionData.section_description}
+                              </p>
+                            ) : (
+                              <p className="text-sm italic text-slate-500 dark:text-slate-400">
+                                Описание не указано
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </>
               )}
 
-              {activeTab === 'details' && sectionData && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-3 dark:text-slate-300 text-slate-700">
-                      Метаданные
-                    </label>
-                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">ID раздела:</span>
-                        <span className="text-sm font-mono dark:text-slate-300 text-slate-700">{sectionData.section_id}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Создан:</span>
-                        <span className="text-sm dark:text-slate-300 text-slate-700">
-                          {new Date(sectionData.section_created).toLocaleDateString('ru-RU', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Обновлен:</span>
-                        <span className="text-sm dark:text-slate-300 text-slate-700">
-                          {new Date(sectionData.section_updated).toLocaleDateString('ru-RU', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-3 dark:text-slate-300 text-slate-700">
-                      Связанные данные
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Задачи</span>
-                        </div>
-                        <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">-</p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">Загрузка...</p>
-                      </div>
-                      <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Package className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <span className="text-sm font-medium text-green-800 dark:text-green-200">Загрузки</span>
-                        </div>
-                        <p className="text-2xl font-bold text-green-900 dark:text-green-100">-</p>
-                        <p className="text-xs text-green-600 dark:text-green-400">Загрузка...</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-3 dark:text-slate-300 text-slate-700">
-                      Статус выполнения
-                    </label>
-                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">Прогресс:</span>
-                        <span className="text-sm font-medium dark:text-slate-300 text-slate-700">0%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                        <div className="bg-teal-500 h-2 rounded-full" style={{ width: '0%' }}></div>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                        Прогресс рассчитывается на основе выполненных задач
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Опасная зона */}
-                  <div className="border-t border-red-200 dark:border-red-900 pt-6">
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                        <span className="text-sm font-medium text-red-800 dark:text-red-200">Опасная зона</span>
-                      </div>
-                      <p className="text-xs text-red-600 dark:text-red-400 mb-3">
-                        Удаление раздела необратимо. Все связанные данные будут потеряны.
-                      </p>
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Удалить раздел
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+              
 
               {activeTab === 'comments' && (
                 <CommentsPanel sectionId={sectionId} />
               )}
               {activeTab === 'decomposition' && (
-                <SectionDecompositionTab sectionId={sectionId} />
+                <SectionDecompositionTab sectionId={sectionId} compact />
+              )}
+              {activeTab === 'tasks' && (
+                <div>
+                  <SectionTasksPreview sectionId={sectionId} />
+                </div>
+              )}
+              {activeTab === 'reports' && (
+                <SectionReportsTab sectionId={sectionId} />
               )}
             </div>
           ) : (
@@ -1132,6 +1075,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
             </div>
           </div>
         )}
+      </div>
       </div>
     </>
   )

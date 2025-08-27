@@ -65,6 +65,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [categories, setCategories] = useState<WorkCategory[]>([])
   const [items, setItems] = useState<DecompositionItemRow[]>([])
   const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({})
+  const [logsCountByItemId, setLogsCountByItemId] = useState<Record<string, number>>({})
   const [sectionTotals, setSectionTotals] = useState<{ planned_hours: number; actual_hours: number; actual_amount: number } | null>(null)
 
   const [newDescription, setNewDescription] = useState("")
@@ -209,6 +210,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     const loadActuals = async () => {
       if (!items || items.length === 0) {
         setActualByItemId({})
+        setLogsCountByItemId({})
         return
       }
       const ids = items.map(i => i.decomposition_item_id)
@@ -219,15 +221,33 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
       if (error) {
         console.error('Ошибка загрузки факта из view:', error)
-        return
+      } else {
+        const agg: Record<string, number> = {}
+        for (const row of (data as any[]) || []) {
+          const key = row.decomposition_item_id as string
+          const hours = Number(row.actual_hours || 0)
+          agg[key] = hours
+        }
+        setActualByItemId(agg)
       }
-      const agg: Record<string, number> = {}
-      for (const row of (data as any[]) || []) {
-        const key = row.decomposition_item_id as string
-        const hours = Number(row.actual_hours || 0)
-        agg[key] = hours
+
+      // Загружаем количество отчётов по этим же строкам
+      try {
+        const { data: logs, error: logsErr } = await supabase
+          .from('view_work_logs_enriched')
+          .select('decomposition_item_id, work_log_id')
+          .in('decomposition_item_id', ids)
+        if (logsErr) throw logsErr
+        const counts: Record<string, number> = {}
+        for (const row of (logs as any[]) || []) {
+          const key = row.decomposition_item_id as string
+          counts[key] = (counts[key] || 0) + 1
+        }
+        setLogsCountByItemId(counts)
+      } catch (e) {
+        console.error('Ошибка загрузки количества отчётов:', e)
+        setLogsCountByItemId({})
       }
-      setActualByItemId(agg)
     }
     loadActuals()
   }, [items])
@@ -237,6 +257,35 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     categories.forEach(c => map.set(c.work_category_id, c.work_category_name))
     return map
   }, [categories])
+
+  // Агрегаты для нижней панели итогов
+  const plannedTotal = useMemo(() => {
+    return items.reduce((sum, i) => sum + Number(i.decomposition_item_planned_hours || 0), 0)
+  }, [items])
+
+  const actualTotal = useMemo(() => {
+    return Number(sectionTotals?.actual_hours || 0)
+  }, [sectionTotals])
+
+  const completionPercent = useMemo(() => {
+    if (plannedTotal <= 0) return 0
+    const pct = (actualTotal / plannedTotal) * 100
+    return Math.max(0, Math.min(100, Math.round(pct)))
+  }, [plannedTotal, actualTotal])
+
+  const dateRange = useMemo(() => {
+    const dates = items
+      .map(i => i.decomposition_item_planned_due_date)
+      .filter((d): d is string => Boolean(d))
+      .map(d => new Date(d as string).getTime())
+    if (dates.length === 0) return null
+    const min = new Date(Math.min(...dates))
+    const max = new Date(Math.max(...dates))
+    return {
+      minText: min.toLocaleDateString('ru-RU'),
+      maxText: max.toLocaleDateString('ru-RU')
+    }
+  }, [items])
 
   // Utility функции для работы с профилями
   const getProfileName = (profile: Profile) => {
@@ -482,7 +531,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   // Единая сетка колонок для идеального выравнивания
   // [шаблон/лог/плюс, описание (растяжение), категория, ответственный, статус, процент, план, факт, срок]
   // Первая колонка max-content: вмещает кнопку "Шаблон" в шапке и иконку лога в строках
-  const rowGridClass = "grid grid-cols-[max-content_1fr_200px_180px_120px_80px_96px_96px_160px]"
+  const rowGridClass = compact
+    ? "grid grid-cols-[max-content_1fr_160px_150px_100px_64px_72px_88px_136px]"
+    : "grid grid-cols-[max-content_1fr_200px_180px_120px_80px_96px_96px_160px]"
 
   if (loading) {
     return (
@@ -493,25 +544,34 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   }
 
   return (
-    <div className={compact ? "space-y-3" : "space-y-6"}>
+    <div className={compact ? "h-full flex flex-col" : "h-full flex flex-col"}>
       {/* Статистика по декомпозиции */}
       {!compact && (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div className="rounded-lg border dark:border-slate-700 p-3">
           <div className="text-xs text-slate-500 dark:text-slate-400">Строк</div>
           <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{items.length}</div>
         </div>
         <div className="rounded-lg border dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">План (ч)</div>
-          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{items.reduce((s, i) => s + Number(i.decomposition_item_planned_hours || 0), 0).toFixed(2)}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">Выполнение плана</div>
+          <div className="flex items-center gap-3 mt-1">
+            <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${Math.max(0, Math.min(100, plannedTotal > 0 ? (actualTotal / plannedTotal) * 100 : 0))}%` }}
+              />
+            </div>
+            <div className="text-sm font-medium dark:text-slate-100 tabular-nums min-w-[52px] text-right">
+              {Math.max(0, Math.min(100, plannedTotal > 0 ? Math.round((actualTotal / plannedTotal) * 100) : 0))}%
+            </div>
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+            {actualTotal.toFixed(2)} / {plannedTotal.toFixed(2)} ч
+          </div>
         </div>
         <div className="rounded-lg border dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Факт (ч)</div>
-          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_hours ?? 0).toFixed(2)}</div>
-        </div>
-        <div className="rounded-lg border dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">Затраты (₽)</div>
-          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_amount ?? 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 })}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">Затраты (BYN)</div>
+          <div className="text-base xl:text-lg font-semibold dark:text-slate-100">{(sectionTotals?.actual_amount ?? 0).toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
         </div>
       </div>
       )}
@@ -538,19 +598,19 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       )}
 
       <div className="overflow-x-auto">
-        <div className={(compact ? "text-xs " : "text-sm ") + "w-full min-w-[1340px] border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden"}>
+        <div className={(compact ? "text-[11px] " : "text-sm ") + "w-full min-w-[1120px] border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"}>
           {/* Шапка */}
-          <div className={(compact ? "text-[12px] " : "text-[12px] xl:text-[13px] ") + `sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 ${rowGridClass} items-center px-3 py-2 border-b border-slate-200 dark:border-slate-700`}>
+          <div className={(compact ? "text-[11px] " : "text-[12px] xl:text-[13px] ") + `sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 ${rowGridClass} items-center ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} border-b border-slate-200 dark:border-slate-700`}>
             <div className="flex items-center">
-              <button onClick={() => setIsTemplatesOpen(true)} className="inline-flex items-center gap-2 h-7 px-2 rounded-md bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100 text-[12px]" title="Открыть шаблоны">
-                <LayoutTemplate className="h-4 w-4" />
+              <button onClick={() => setIsTemplatesOpen(true)} className={`inline-flex items-center ${compact ? 'gap-1.5 h-6 text-[11px]' : 'gap-2 h-7 text-[12px]'} px-2 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100`} title="Открыть шаблоны">
+                <LayoutTemplate className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
                 Шаблон
               </button>
             </div>
-            <div className="px-2 flex items-center font-medium">Описание работ</div>
-            <div className="px-2 flex items-center font-medium">Категория</div>
-            <div className="px-2 flex items-center font-medium">Ответственный</div>
-            <div className="px-2 flex items-center font-medium">Статус</div>
+            <div className="px-2 flex items-center font-medium">{compact ? 'Описание' : 'Описание работ'}</div>
+            <div className="px-2 flex items-center font-medium">{compact ? 'Кат.' : 'Категория'}</div>
+            <div className="px-2 flex items-center font-medium">{compact ? 'Отв.' : 'Ответственный'}</div>
+            <div className="px-2 flex items-center font-medium">{compact ? 'Стат.' : 'Статус'}</div>
             <div className="px-2 text-center flex items-center justify-center font-medium">%</div>
             <div className="px-2 text-center flex items-center justify-center font-medium">План</div>
             <div className="px-2 text-center flex items-center justify-center font-medium">Факт</div>
@@ -560,13 +620,18 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           {/* Строки */}
           <div className="divide-y divide-slate-200 dark:divide-slate-700">
             {items.map(item => (
-              <div key={item.decomposition_item_id} className={`${rowGridClass} items-center px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors`}>
-                <div className="flex items-center justify-center">
+              <div key={item.decomposition_item_id} className={`${rowGridClass} items-center ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors`}>
+                <div className="flex items-center justify-center relative">
                   <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчёт" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
-                    <Clock className="h-4 w-4 text-emerald-600" />
+                    <Clock className={compact ? 'h-3.5 w-3.5 text-emerald-600' : 'h-4 w-4 text-emerald-600'} />
                   </button>
+                  {logsCountByItemId[item.decomposition_item_id] ? (
+                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-emerald-600 text-white text-[10px] leading-none px-[4px]">
+                      {Math.min(99, logsCountByItemId[item.decomposition_item_id])}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[12px] xl:text-[14px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[12px]' : 'text-[12px] xl:text-[14px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <textarea autoFocus value={editDraft?.decomposition_item_description || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_description: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} maxLength={MAX_DESC_CHARS} rows={3} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white resize-y min-h-[2.5rem] max-h-40" />
                   ) : (
@@ -575,7 +640,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </div>
                   )}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <select value={editDraft?.decomposition_item_work_category_id || ""} onChange={e => { const v = e.target.value; setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: v } as DecompositionItemRow : prev); updateItemFields(item.decomposition_item_id, { decomposition_item_work_category_id: v }); }} onKeyDown={handleEditKey} className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white">
                       {categories.map(c => (
@@ -587,7 +652,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   )}
                 </div>
                 {/* Колонка ответственного с поиском (Command) */}
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="relative">
                       <input
@@ -650,7 +715,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                               </div>
                 
                 {/* Колонка процента готовности */}
-                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 text-center tabular-nums ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="flex items-center justify-center">
                       <input 
@@ -666,7 +731,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                         <div
                           className="h-full rounded-full bg-emerald-500"
                           style={{ width: `${Math.min(100, Math.max(0, Number(item.decomposition_item_progress || 0)))}%` }}
@@ -677,9 +742,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   )}
                 </div>
 
-                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 text-center tabular-nums ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
-                    <input type="number" step="0.25" min={0} value={editDraft?.decomposition_item_planned_hours ?? 0} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-16 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white" />
+                    <input type="number" step="0.25" min={0} value={editDraft?.decomposition_item_planned_hours ?? 0} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-14 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white" />
                   ) : (
                     Number(item.decomposition_item_planned_hours).toFixed(2)
                   )}
@@ -700,7 +765,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     )
                   })()}
                 </div>
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] whitespace-nowrap hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
+                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} whitespace-nowrap hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
                       <input 
@@ -854,10 +919,40 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         </div>
       </div>
       {!compact && (
-        <div className="flex items-center justify-start">
+        <div className="mt-2 flex items-center justify-start">
           <div className="text-xs text-slate-500 dark:text-slate-400">Подсказка: кликните по любому полю для редактирования. Enter — сохранить изменения.</div>
         </div>
       )}
+
+      {/* Нижняя фиксированная панель итогов */}
+      <div className="mt-3 sticky bottom-0 z-[1] bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-slate-900/80 border-t border-slate-200 dark:border-slate-700">
+        <div className="px-3 py-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="rounded-md border dark:border-slate-700 p-2">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Всего строк</div>
+              <div className="text-sm font-semibold dark:text-slate-100">{items.length}</div>
+            </div>
+            <div className="rounded-md border dark:border-slate-700 p-2">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">План/Факт</div>
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${completionPercent}%` }} />
+                </div>
+                <div className="text-sm font-medium dark:text-slate-100 tabular-nums">{actualTotal.toFixed(2)} / {plannedTotal.toFixed(2)} ч</div>
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{completionPercent}% выполнено</div>
+            </div>
+            <div className="rounded-md border dark:border-slate-700 p-2">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Сроки</div>
+              <div className="text-sm font-semibold dark:text-slate-100">{dateRange ? `${dateRange.minText} — ${dateRange.maxText}` : 'не указаны'}</div>
+            </div>
+            <div className="rounded-md border dark:border-slate-700 p-2">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Бюджет, BYN</div>
+              <div className="text-sm font-semibold dark:text-slate-100">{(sectionTotals?.actual_amount ?? 0).toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <AddWorkLogModal
         isOpen={isLogModalOpen}
