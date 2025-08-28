@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Check, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { parseNotionContent, markdownToHtml } from '@/modules/notions/utils'
+import { parseNotionContent, markdownToTipTapHTML } from '@/modules/notions'
 import { SingleDeleteConfirm } from '@/modules/notions/components/SingleDeleteConfirm'
 import type { Notion } from '@/modules/notions/types'
 
@@ -126,14 +126,24 @@ export function NoteCard({
                       >
                         <div 
                           className="prose prose-sm max-w-none dark:prose-invert
-                                   [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
-                                   [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
-                                   [&_.checkbox-line_input[type='checkbox']:checked]:accent-primary dark:[&_.checkbox-line_input[type='checkbox']:checked]:accent-primary
+                                   [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2
+                                   [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2
+                                   [&_li]:my-1 [&_li]:leading-relaxed
+                                   [&_ul_ul]:list-[circle] [&_ul_ul]:ml-4
+                                   [&_ul_ul_ul]:list-[square] [&_ul_ul_ul]:ml-4
+                                   [&_ol_ol]:list-[lower-alpha] [&_ol_ol]:ml-4
+                                   [&_ol_ol_ol]:list-[lower-roman] [&_ol_ol_ol]:ml-4
+                                   [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-700 dark:[&_blockquote]:text-gray-300
+                                   [&_code]:bg-gray-100 dark:[&_code]:bg-gray-700 [&_code]:px-1 [&_code]:rounded [&_code]:font-mono [&_code]:text-sm [&_code]:text-gray-800 dark:[&_code]:text-gray-200
+                                   [&_pre]:bg-gray-100 dark:[&_pre]:bg-gray-700 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:text-gray-800 dark:[&_pre]:text-gray-200
+                                   [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100 [&_mark_s]:!text-gray-500 dark:[&_mark_s]:!text-gray-400
+                                   [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']_li]:flex [&_ul[data-type='taskList']_li]:items-start [&_ul[data-type='taskList']_li]:gap-1 [&_ul[data-type='taskList']_li_>_label]:flex [&_ul[data-type='taskList']_li_>_label]:items-center [&_ul[data-type='taskList']_li_>_label]:gap-1 [&_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_ul[data-type='taskList']_li_>_div]:flex-1 [&_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_ul[data-type='taskList']_li_>_div]:min-w-0 [&_ul[data-type='taskList']_li_>_div]:break-words [&_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 dark:[&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400 [&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 dark:[&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-400 [&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                                   [&_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4 [&_ul[data-type='taskList']_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4
                                    [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-61
                                    [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100
                                    [&_em]:text-gray-700 dark:[&_em]:text-gray-300
                                    [&_u]:text-gray-700 dark:[&_u]:text-gray-300
-                                   [&_table]:border-collapse [&_table]:table [&_table]:max-w-full [&_table]:min-w-[200px] [&_table]:border [&_table]:border-gray-300 dark:[&_table]:border-gray-600 [&_table]:relative
+                                   [&_table]:border-collapse [&_table]:table [&_table]:max-w-full [&_table]:min-w-[200px] [&_table]:border [&_table]:border-gray-300 dark:[&_table]:border-gray-600 [&_table]:relative [&_table]:my-4
                                    [&_td]:border [&_td]:border-gray-300 dark:[&_td]:border-gray-600 [&_td]:p-2 [&_td]:min-w-[50px] [&_td]:relative [&_td]:transition-all [&_td]:duration-200 [&_td]:bg-white dark:[&_td]:bg-gray-800 [&_td]:text-gray-900 dark:[&_td]:text-gray-100
                                    [&_th]:border [&_th]:border-gray-300 dark:[&_th]:border-gray-600 [&_th]:p-2 [&_th]:bg-gray-50 dark:[&_th]:bg-gray-700 [&_th]:font-semibold [&_th]:min-w-[50px] [&_th]:relative [&_th]:transition-all [&_th]:duration-200 [&_th]:text-gray-900 dark:[&_th]:text-gray-100
                                    [&_table_tr:first-child_td]:bg-gray-50 dark:[&_table_tr:first-child_td]:bg-gray-700 [&_table_tr:first-child_td]:font-semibold [&_table_tr:first-child_td]:text-center [&_table_tr:first-child_td]:text-gray-900 dark:[&_table_tr:first-child_td]:text-gray-100
@@ -142,7 +152,7 @@ export function NoteCard({
                                    [&_table_tr:not(:first-child)_td]:bg-white dark:[&_table_tr:not(:first-child)_td]:font-normal [&_table_tr:not(:first-child)_td]:text-left [&_table_tr:not(:first-child)_td]:text-gray-900 dark:[&_table_tr:not(:first-child)_td]:text-gray-100
                                    [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100"
                           dangerouslySetInnerHTML={{ 
-                            __html: markdownToHtml(parsed.content)
+                            __html: markdownToTipTapHTML(parsed.content)
                           }} 
                         />
                       </div>
