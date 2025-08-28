@@ -66,13 +66,14 @@ export const useFilterStore = create<FilterStore>()(
           }
         },
         
-        // Применение ограничений и дефолтов по правам — временно выключено (универсальная реализация будет подключена позже)
-        applyPermissionDefaults: () => {
-          // no-op
-        },
+        // Применение ограничений и дефолтов по правам — не используется напрямую (см. integration/applyPlanningLocks)
+        applyPermissionDefaults: () => {},
 
         // Проверка блокировки фильтра
-        isFilterLocked: () => false,
+        isFilterLocked: (type: FilterType) => {
+          const state = get()
+          return Boolean(state.lockedFilters && state.lockedFilters.includes(type))
+        },
 
         // Универсальный метод установки фильтра
         setFilter: (type: FilterType, value: string | null) => {

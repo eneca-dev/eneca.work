@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, RotateCcw } from 'lucide-react'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, RotateCcw, Lock } from 'lucide-react'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
 import { usePlanningStore } from '@/modules/planning/stores/usePlanningStore'
 import { Button } from '@/components/ui/button'
+import { applyPlanningLocks } from '@/modules/planning/integration/apply-planning-locks'
 
 export default function PlanningTopFilters() {
   const filterStore = useFilterStore()
@@ -39,6 +40,48 @@ export default function PlanningTopFilters() {
     () => (statuses || []).filter(s => !statusSearch.trim() || s.name.toLowerCase().includes(statusSearch.toLowerCase()) || (s.description && s.description.toLowerCase().includes(statusSearch.toLowerCase()))),
     [statuses, statusSearch]
   )
+
+  // Базовая инициализация справочников фильтров (если пусто)
+  useEffect(() => {
+    // Применяем блокировки по permissions (hierarchy)
+    applyPlanningLocks().catch(console.error)
+
+    if (filterStore.managers.length === 0) {
+      filterStore.loadManagers()
+    }
+    if (filterStore.departments.length === 0) {
+      filterStore.loadDepartments()
+    }
+    if (filterStore.employees.length === 0) {
+      filterStore.loadEmployees()
+    }
+    if (filterStore.projects.length === 0) {
+      filterStore.loadProjects(filterStore.selectedManagerId || null)
+    }
+  }, [
+    filterStore.managers.length,
+    filterStore.departments.length,
+    filterStore.employees.length,
+    filterStore.projects.length,
+    filterStore.selectedManagerId,
+    filterStore.loadManagers,
+    filterStore.loadDepartments,
+    filterStore.loadEmployees,
+    filterStore.loadProjects,
+  ])
+
+  // Каскадная подзагрузка при выборе проекта/стадии
+  useEffect(() => {
+    if (filterStore.selectedProjectId && filterStore.stages.length === 0) {
+      filterStore.loadStages(filterStore.selectedProjectId)
+    }
+  }, [filterStore.selectedProjectId, filterStore.stages.length, filterStore.loadStages])
+
+  useEffect(() => {
+    if (filterStore.selectedStageId && filterStore.objects.length === 0) {
+      filterStore.loadObjects(filterStore.selectedStageId)
+    }
+  }, [filterStore.selectedStageId, filterStore.objects.length, filterStore.loadObjects])
 
   const rangeChip = useMemo(() => {
     const start = new Date(startDate)
@@ -85,10 +128,7 @@ export default function PlanningTopFilters() {
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={collapseAllDepartments} title="Свернуть все">
           <ChevronsUp className="h-4 w-4" />
         </Button>
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => filterStore.resetFilters()} title="Сбросить фильтры">
-          <RotateCcw className="h-4 w-4" />
-        </Button>
+        {/* Кнопка сброса перенесена в блок фильтров слева */}
       </div>
     )}>
       {/* Организация */}
@@ -108,12 +148,16 @@ export default function PlanningTopFilters() {
           <div className="p-2 space-y-2">
             {/* Отдел */}
             <div>
-              <div className="text-[10px] text-slate-500 mb-1">Отдел</div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                <span>Отдел</span>
+                {filterStore.isFilterLocked('department') && <Lock className="h-3 w-3 text-slate-400" />}
+              </div>
               <select
                 value={filterStore.selectedDepartmentId || ''}
                 onChange={e => filterStore.setFilter('department', e.target.value || null)}
                 className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 size={6}
+                disabled={filterStore.isFilterLocked('department')}
               >
                 <option value="">Все</option>
                 {filterStore.departments.map(d => (
@@ -123,12 +167,16 @@ export default function PlanningTopFilters() {
             </div>
             {/* Команда */}
             <div>
-              <div className="text-[10px] text-slate-500 mb-1">Команда</div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                <span>Команда</span>
+                {filterStore.isFilterLocked('team') && <Lock className="h-3 w-3 text-slate-400" />}
+              </div>
               <select
                 value={filterStore.selectedTeamId || ''}
                 onChange={e => filterStore.setFilter('team', e.target.value || null)}
                 className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 size={6}
+                disabled={filterStore.isFilterLocked('team')}
               >
                 <option value="">Все</option>
                 {filterStore.getFilteredTeams().map(t => (
@@ -237,12 +285,16 @@ export default function PlanningTopFilters() {
 
             {/* Менеджер */}
             <div>
-              <div className="text-[10px] text-slate-500 mb-1">Менеджер</div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                <span>Менеджер</span>
+                {filterStore.isFilterLocked('manager') && <Lock className="h-3 w-3 text-slate-400" />}
+              </div>
               <select
                 value={filterStore.selectedManagerId || ''}
                 onChange={e => filterStore.setFilter('manager', e.target.value || null)}
                 className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                 size={6}
+                disabled={filterStore.isFilterLocked('manager')}
               >
                 <option value="">Все</option>
                 {filterStore.managers.map(m => (
@@ -300,6 +352,12 @@ export default function PlanningTopFilters() {
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Сброс фильтров — кнопка рядом с блоком фильтров */}
+      <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => filterStore.resetFilters()} title="Сбросить фильтры">
+        <RotateCcw className="h-4 w-4" />
+      </Button>
     </FilterBar>
   )
 }

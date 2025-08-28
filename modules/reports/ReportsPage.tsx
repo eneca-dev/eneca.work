@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye } from "lucide-react"
+import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye, Search, RotateCcw } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts"
 import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import FilterBar from "@/components/filter-bar/FilterBar"
+import { applyReportsLocks } from "@/modules/reports/integration/apply-reports-locks"
 import { createClient } from "@/utils/supabase/client"
 import { useReportsOrgFiltersStore } from "./filters/store"
 import { useReportsProjectFiltersStore } from "./filters/projectStore"
@@ -338,6 +340,11 @@ export default function ReportsPage() {
     initProjectFilters()
   }, [initProjectFilters])
 
+  // Применение блокировок по permissions (hierarchy)
+  useEffect(() => {
+    applyReportsLocks().catch(console.error)
+  }, [])
+
   // Убраны глобальные изменения overscroll для html/body
 
   // Загрузка авторов для фильтра
@@ -391,7 +398,7 @@ export default function ReportsPage() {
 
   return (
     <div className="px-0 pt-0 pb-0 h-screen overflow-y-auto overscroll-y-none">
-      <FilterBar title="Отчёты">
+      <FilterBar title="Отчёты" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg">
           {/* Кнопка: Автор */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -447,41 +454,56 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[280px] p-0">
+            <DropdownMenuContent align="start" className="w-[320px] p-0">
               <div className="p-2 space-y-2">
-                <select
-                  value={selectedDepartmentId || ""}
-                  onChange={e=>{ clearAuthorFilter(); setDepartment(e.target.value || null) }}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
-                  disabled={orgLoading}
-                >
-                  <option value="">Отдел</option>
-                  {departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={selectedTeamId || ""}
-                  onChange={e=>{ clearAuthorFilter(); setTeam(e.target.value || null) }}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
-                  disabled={orgLoading}
-                >
-                  <option value="">Команда</option>
-                  {getTeamsForSelectedDepartment().map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={selectedEmployeeId || ""}
-                  onChange={e=>{ clearAuthorFilter(); setEmployee(e.target.value || null) }}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
-                  disabled={orgLoading}
-                >
-                  <option value="">Сотрудник</option>
-                  {getEmployeesFiltered().map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                  ))}
-                </select>
+                {/* Отдел */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Отдел</div>
+                  <select
+                    value={selectedDepartmentId || ""}
+                    onChange={e=>{ clearAuthorFilter(); setDepartment(e.target.value || null) }}
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={orgLoading || (useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('department')}
+                  >
+                    <option value="">Все</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Команда */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Команда</div>
+                  <select
+                    value={selectedTeamId || ""}
+                    onChange={e=>{ clearAuthorFilter(); setTeam(e.target.value || null) }}
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={orgLoading || (useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('team')}
+                  >
+                    <option value="">Все</option>
+                    {getTeamsForSelectedDepartment().map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Сотрудник */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Сотрудник</div>
+                  <select
+                    value={selectedEmployeeId || ""}
+                    onChange={e=>{ clearAuthorFilter(); setEmployee(e.target.value || null) }}
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={orgLoading}
+                  >
+                    <option value="">Все</option>
+                    {getEmployeesFiltered().map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -501,38 +523,89 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[320px] p-0">
+            <DropdownMenuContent align="start" className="w-[340px] p-0">
               <div className="p-2 space-y-2">
-                <input
-                  type="text"
-                  value={projectSearch}
-                  onChange={e => setProjectSearch(e.target.value)}
-                  placeholder="Поиск проекта..."
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
-                />
-                <select value={projectId || ""} onChange={e=>setProject(e.target.value || null)} className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" disabled={isLoadingProjects}>
-                  <option value="">Проект</option>
-                  {projects
-                    .filter(p => p.name.toLowerCase().includes(projectSearch.trim().toLowerCase()))
-                    .map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <div className="grid grid-cols-3 gap-2">
-                  <select value={stageId || ""} onChange={e=>setStage(e.target.value || null)} className="px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" disabled={isLoadingStages || !projectId}>
-                    <option value="">Стадия</option>
+                {/* Заголовок панели */}
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-slate-500">Проектная иерархия</div>
+                </div>
+
+                {/* Поиск по структуре */}
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Поиск по структуре..."
+                    value={projectSearch}
+                    onChange={e => setProjectSearch(e.target.value)}
+                    className="w-full pl-7 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                  />
+                </div>
+
+                {/* Проект */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Проект</div>
+                  <select 
+                    value={projectId || ""} 
+                    onChange={e=>setProject(e.target.value || null)} 
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={isLoadingProjects}
+                  >
+                    <option value="">Все</option>
+                    {projects
+                      .filter(p => p.name.toLowerCase().includes(projectSearch.trim().toLowerCase()))
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Стадия */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Стадия</div>
+                  <select 
+                    value={stageId || ""} 
+                    onChange={e=>setStage(e.target.value || null)} 
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={isLoadingStages || !projectId}
+                  >
+                    <option value="">Все</option>
                     {stages.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
-                  <select value={objectId || ""} onChange={e=>setObject(e.target.value || null)} className="px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" disabled={isLoadingObjects || !stageId}>
-                    <option value="">Объект</option>
+                </div>
+
+                {/* Объект */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Объект</div>
+                  <select 
+                    value={objectId || ""} 
+                    onChange={e=>setObject(e.target.value || null)} 
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={isLoadingObjects || !stageId}
+                  >
+                    <option value="">Все</option>
                     {objects.map(o => (
                       <option key={o.id} value={o.id}>{o.name}</option>
                     ))}
                   </select>
-                  <select value={sectionIdFilter || ""} onChange={e=>setSection(e.target.value || null)} className="px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" disabled={isLoadingSections || !objectId}>
-                    <option value="">Раздел</option>
+                </div>
+
+                {/* Раздел */}
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1">Раздел</div>
+                  <select 
+                    value={sectionIdFilter || ""} 
+                    onChange={e=>setSection(e.target.value || null)} 
+                    className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                    size={6}
+                    disabled={isLoadingSections || !objectId}
+                  >
+                    <option value="">Все</option>
                     {sections.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -644,18 +717,11 @@ export default function ReportsPage() {
               )}
             </span>
           )}
-            {/* Кнопка сброса внутри блока */}
+            {/* Кнопка сброса в стиле планирования */}
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-            <button
-              onClick={resetFilters}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out"
-              title="Сбросить фильтры"
-            >
-              <Filter className="h-4 w-4 rotate-180" />
-              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                Сбросить
-              </span>
-            </button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetFilters} title="Сбросить фильтры">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
             <button
               onClick={() => {
@@ -816,7 +882,7 @@ export default function ReportsPage() {
             >
             </button>
       </FilterBar>
-      <div className="relative overflow-x-auto overflow-y-auto border-b border-x-0 rounded-none dark:border-slate-700 flex flex-col" style={{ height: 'calc(100vh - 69px)' }}>
+      <div className="relative overflow-x-auto overflow-y-auto border-b border-x-0 rounded-none dark:border-slate-700 flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
         <table className="min-w-[1160px] lg:min-w-full w-full table-fixed border-separate border-spacing-0 text-[9px] sm:text-[10px] md:text-[11px] lg:text-xs leading-tight">
           <colgroup>
             {[
