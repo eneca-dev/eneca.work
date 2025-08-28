@@ -270,7 +270,7 @@ export function TimelineFilters({
             value={selectedManagerId}
             onChange={(value) => setFilter('manager', value)}
             disabled={isLoading}
-            locked={isFilterLocked('manager')}
+            locked={false}
             options={managers}
             placeholder="Выберите руководителя проекта"
             theme={theme}
@@ -283,7 +283,7 @@ export function TimelineFilters({
             value={selectedProjectId}
             onChange={(value) => setFilter('project', value)}
             disabled={isLoading || isLoadingProjects}
-            locked={isFilterLocked('project')}
+            locked={false}
             options={filteredProjects}
             placeholder="Выберите проект"
             theme={theme}
@@ -296,7 +296,7 @@ export function TimelineFilters({
             value={selectedStageId}
             onChange={(value) => setFilter('stage', value)}
             disabled={!selectedProjectId || isLoadingStages}
-            locked={isFilterLocked('stage')}
+            locked={false}
             options={filteredStages}
             placeholder="Выберите стадию"
             theme={theme}
@@ -324,8 +324,8 @@ export function TimelineFilters({
             label="Отдел"
             value={selectedDepartmentId}
             onChange={(value) => setFilter('department', value)}
-            disabled={isLoading || isFilterLocked('department')}
-            locked={isFilterLocked('department')}
+            disabled={isLoading}
+            locked={false}
             options={departments}
             placeholder="Выберите отдел"
             theme={theme}
@@ -337,8 +337,8 @@ export function TimelineFilters({
             label="Команда"
             value={selectedTeamId}
             onChange={(value) => setFilter('team', value)}
-            disabled={isLoading || !selectedDepartmentId || isFilterLocked('team')}
-            locked={isFilterLocked('team')}
+            disabled={isLoading || !selectedDepartmentId}
+            locked={false}
             options={filteredTeams}
             placeholder="Выберите команду"
             theme={theme}
@@ -351,7 +351,7 @@ export function TimelineFilters({
             value={selectedEmployeeId}
             onChange={(value) => setFilter('employee', value)}
             disabled={isLoading || !selectedTeamId}
-            locked={isFilterLocked('employee')}
+            locked={false}
             options={filteredEmployees}
             placeholder={!selectedTeamId ? "Сначала выберите команду" : "Выберите сотрудника"}
             theme={theme}

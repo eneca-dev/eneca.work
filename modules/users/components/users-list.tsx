@@ -36,7 +36,7 @@ import { UserDialog } from "./user-dialog"
 import { deleteUser } from "@/services/org-data-service"
 import type { User, UserWithRoles } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -102,6 +102,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   const [searchLocationDropdown, setSearchLocationDropdown] = useState("")
   
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   // Получаем разрешения пользователя
   const { canEditAllUsers } = useUserPermissions()
@@ -278,6 +280,123 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   useEffect(() => {
     setCurrentPage(1)
   }, [filters, searchTerm])
+
+  // Восстановление состояния из URL и localStorage при монтировании
+  useEffect(() => {
+    try {
+      // 1) Пытаемся восстановить из URL параметров
+      const urlSearch = searchParams?.get('search') || ''
+      const urlGroup = (searchParams?.get('group') as GroupBy) || 'none'
+      const urlDepts = searchParams ? searchParams.getAll('depts') : []
+      const urlTeams = searchParams ? searchParams.getAll('teams') : []
+      const urlCats = searchParams ? searchParams.getAll('cats') : []
+      const urlPos = searchParams ? searchParams.getAll('pos') : []
+      const urlRoles = searchParams ? searchParams.getAll('roles') : []
+      const urlLocs = searchParams ? searchParams.getAll('locs') : []
+
+      const hasAnyUrlState = Boolean(
+        urlSearch ||
+        (urlGroup && urlGroup !== 'none') ||
+        urlDepts.length || urlTeams.length || urlCats.length || urlPos.length || urlRoles.length || urlLocs.length
+      )
+
+      if (hasAnyUrlState) {
+        setSearchTerm(urlSearch)
+        if (urlGroup === 'none' || urlGroup === 'department' || urlGroup === 'nested') {
+          setGroupBy(urlGroup)
+        }
+        setFilters({
+          departments: urlDepts,
+          teams: urlTeams,
+          categories: urlCats,
+          positions: urlPos,
+          roles: urlRoles,
+          workLocations: urlLocs,
+        })
+        return
+      }
+
+      // 2) Если в URL нет — пробуем из localStorage
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('users_list_state_v1') : null
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed) {
+          if (typeof parsed.search === 'string') setSearchTerm(parsed.search)
+          if (parsed.groupBy === 'none' || parsed.groupBy === 'department' || parsed.groupBy === 'nested') {
+            setGroupBy(parsed.groupBy as GroupBy)
+          }
+          if (parsed.filters && typeof parsed.filters === 'object') {
+            setFilters({
+              departments: Array.isArray(parsed.filters.departments) ? parsed.filters.departments : [],
+              teams: Array.isArray(parsed.filters.teams) ? parsed.filters.teams : [],
+              categories: Array.isArray(parsed.filters.categories) ? parsed.filters.categories : [],
+              positions: Array.isArray(parsed.filters.positions) ? parsed.filters.positions : [],
+              roles: Array.isArray(parsed.filters.roles) ? parsed.filters.roles : [],
+              workLocations: Array.isArray(parsed.filters.workLocations) ? parsed.filters.workLocations : [],
+            })
+          }
+        }
+      }
+    } catch (e) {
+      // Игнорируем ошибки восстановления состояния
+      console.warn('Не удалось восстановить состояние списка пользователей:', e)
+    }
+    // Выполняем только на монтировании
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Сохранение состояния в URL и localStorage при изменениях
+  useEffect(() => {
+    try {
+      // Обновляем URLSearchParams на основе текущих searchParams, сохраняя посторонние параметры (например, tab)
+      const params = new URLSearchParams(searchParams?.toString() || '')
+
+      // Поиск
+      if (searchTerm && searchTerm.trim()) {
+        params.set('search', searchTerm.trim())
+      } else {
+        params.delete('search')
+      }
+
+      // Группировка
+      if (groupBy && groupBy !== 'none') {
+        params.set('group', groupBy)
+      } else {
+        params.delete('group')
+      }
+
+      // Хэлпер для многозначных параметров
+      const setMulti = (key: string, values: string[]) => {
+        params.delete(key)
+        for (const v of values) {
+          if (v && v.trim()) params.append(key, v)
+        }
+      }
+
+      setMulti('depts', filters.departments)
+      setMulti('teams', filters.teams)
+      setMulti('cats', filters.categories)
+      setMulti('pos', filters.positions)
+      setMulti('roles', filters.roles)
+      setMulti('locs', filters.workLocations)
+
+      const newQuery = params.toString()
+      const currentQuery = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : ''
+      if (newQuery !== currentQuery) {
+        router.replace(`${pathname}${newQuery ? `?${newQuery}` : ''}`)
+      }
+
+      // Дублируем в localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          'users_list_state_v1',
+          JSON.stringify({ search: searchTerm, groupBy, filters })
+        )
+      }
+    } catch (e) {
+      console.warn('Не удалось сохранить состояние списка пользователей:', e)
+    }
+  }, [searchTerm, groupBy, filters, router, pathname, searchParams])
 
   // Функция сброса всех фильтров
   const handleResetFilters = useCallback(() => {
