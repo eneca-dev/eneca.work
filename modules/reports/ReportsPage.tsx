@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye, Search, RotateCcw } from "lucide-react"
+import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye, Search, RotateCcw, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts"
 import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
@@ -458,7 +458,10 @@ export default function ReportsPage() {
               <div className="p-2 space-y-2">
                 {/* Отдел */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Отдел</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Отдел</span>
+                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select
                     value={selectedDepartmentId || ""}
                     onChange={e=>{ clearAuthorFilter(); setDepartment(e.target.value || null) }}
@@ -474,7 +477,10 @@ export default function ReportsPage() {
                 </div>
                 {/* Команда */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Команда</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Команда</span>
+                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select
                     value={selectedTeamId || ""}
                     onChange={e=>{ clearAuthorFilter(); setTeam(e.target.value || null) }}
@@ -544,7 +550,10 @@ export default function ReportsPage() {
 
                 {/* Проект */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Проект</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Проект</span>
+                    {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('project') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select 
                     value={projectId || ""} 
                     onChange={e=>setProject(e.target.value || null)} 
@@ -563,7 +572,10 @@ export default function ReportsPage() {
 
                 {/* Стадия */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Стадия</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Стадия</span>
+                    {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('stage') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select 
                     value={stageId || ""} 
                     onChange={e=>setStage(e.target.value || null)} 
@@ -580,7 +592,10 @@ export default function ReportsPage() {
 
                 {/* Объект */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Объект</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Объект</span>
+                    {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('object') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select 
                     value={objectId || ""} 
                     onChange={e=>setObject(e.target.value || null)} 
@@ -597,7 +612,10 @@ export default function ReportsPage() {
 
                 {/* Раздел */}
                 <div>
-                  <div className="text-[10px] text-slate-500 mb-1">Раздел</div>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                    <span>Раздел</span>
+                    {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('section') && <Lock className="h-3 w-3 text-slate-400" />}
+                  </div>
                   <select 
                     value={sectionIdFilter || ""} 
                     onChange={e=>setSection(e.target.value || null)} 
