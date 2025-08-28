@@ -181,7 +181,7 @@ export function NoteCard({
               size="sm"
               onClick={() => onToggleDone(notion.notion_id)}
               className="h-8 w-8 p-0"
-              title={notion.notion_done ? "Отметить как невыполненное" : "Отметить как выполненное"}
+              title={notion.notion_done ? "Разархивировать" : "Архивировать"}
             >
               <Check className={cn(
                 "h-4 w-4",

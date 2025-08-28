@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { NoteCard } from '@/modules/notions/components/NoteCard'
 import { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
+import { ToggleDoneButton } from '@/modules/notions/components/ToggleDoneButton'
 import { TipTapEditor } from '@/modules/text-editor/components/client'
 import type { EditorRef } from '@/modules/text-editor'
 import { useNotionsStore } from '@/modules/notions/store'
@@ -177,10 +178,11 @@ export function NotesBlock() {
       setFullViewNotion(null)
       return
     }
-    // Обновляем только если данные реально изменились (по updated_at или контенту)
+    // Обновляем только если данные реально изменились (по updated_at, контенту или статусу)
     if (
       updatedNotion.notion_updated_at !== fullViewNotion.notion_updated_at ||
-      updatedNotion.notion_content !== fullViewNotion.notion_content
+      updatedNotion.notion_content !== fullViewNotion.notion_content ||
+      updatedNotion.notion_done !== fullViewNotion.notion_done
     ) {
       setFullViewNotion(updatedNotion)
     }
@@ -389,22 +391,13 @@ export function NotesBlock() {
           {!isCreatingNewNote && (
             <div className="flex items-center gap-2">
               {/* Кнопка отметки выполнения */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
+              <ToggleDoneButton
+                notion={fullViewNotion}
+                onToggle={async () => {
                   await toggleNotionDone(fullViewNotion.notion_id)
-                  // Обновляем локальное состояние fullViewNotion
-                  setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
+                  // Убираем локальное обновление - пусть useEffect сам обновит
                 }}
-                className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <Check className={cn(
-                  "h-4 w-4",
-                  fullViewNotion.notion_done ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
-                )} />
-                {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
-              </Button>
+              />
             </div>
           )}
         </div>
@@ -492,7 +485,7 @@ export function NotesBlock() {
                   className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <Check className="h-4 w-4" />
-                  {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
+                  {shouldShowMarkAsUndone ? 'Разархивировать' : 'Архивировать'}
                 </Button>
                 <Button
                   variant="destructive"
@@ -561,24 +554,16 @@ export function NotesBlock() {
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-gray-500 dark:text-gray-400">Редактор</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          await toggleNotionDone(fullViewNotion.notion_id)
-                          setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
-                        }}
-                        className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <Check className={cn(
-                          'h-4 w-4',
-                          fullViewNotion.notion_done ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                        )} />
-                        {fullViewNotion.notion_done ? 'Выполнено' : 'Отметить выполненным'}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
-                    </div>
+                                          <div className="flex items-center gap-2">
+                        <ToggleDoneButton
+                          notion={fullViewNotion}
+                          onToggle={async () => {
+                            await toggleNotionDone(fullViewNotion.notion_id)
+                            // Убираем локальное обновление - пусть useEffect сам обновит
+                          }}
+                        />
+                        <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
+                      </div>
                   </div>
                   <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">
                     <TipTapEditor
