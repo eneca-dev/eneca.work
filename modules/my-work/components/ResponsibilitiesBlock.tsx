@@ -104,6 +104,7 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                     item.type === 'section_responsible' ? (
                       <a
                         key={index}
+                        data-keep-notifications-open
                         href="/dashboard/projects"
                         onClick={(e) => {
                           e.preventDefault()

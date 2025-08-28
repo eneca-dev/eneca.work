@@ -462,6 +462,7 @@ export default function ReportsPage() {
                     <span>Отдел</span>
                     {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('department') && <Lock className="h-3 w-3 text-slate-400" />}
                   </div>
+
                   <select
                     value={selectedDepartmentId || ""}
                     onChange={e=>{ clearAuthorFilter(); setDepartment(e.target.value || null) }}
@@ -550,6 +551,7 @@ export default function ReportsPage() {
 
                 {/* Проект */}
                 <div>
+
                   <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                     <span>Проект</span>
                     {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('project') && <Lock className="h-3 w-3 text-slate-400" />}
@@ -572,6 +574,7 @@ export default function ReportsPage() {
 
                 {/* Стадия */}
                 <div>
+
                   <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                     <span>Стадия</span>
                     {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('stage') && <Lock className="h-3 w-3 text-slate-400" />}
@@ -612,6 +615,7 @@ export default function ReportsPage() {
 
                 {/* Раздел */}
                 <div>
+
                   <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                     <span>Раздел</span>
                     {(useReportsProjectFiltersStore.getState() as any).lockedFilters?.includes('section') && <Lock className="h-3 w-3 text-slate-400" />}

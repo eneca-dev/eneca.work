@@ -203,6 +203,10 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
+    // Для объявлений клики по карточке отключены полностью
+    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+      return
+    }
     Sentry.startSpan(
       {
         op: "ui.click",
@@ -215,41 +219,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           span.setAttribute("notification.is_read", notification.isRead)
           span.setAttribute("notification.type", notification.type || "info")
           
-          // Если это уведомление об объявлении, переходим к нему
-          if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
-            const announcementId = notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId
-            
-            span.setAttribute("announcement.id", announcementId || "not_found")
-            span.setAttribute("navigation.target", "dashboard")
-            
-            if (announcementId) {
-              // Выделяем объявление в store
-              highlightAnnouncement(announcementId)
-              
-              // Переходим на страницу dashboard
-              router.push('/dashboard')
-              
-              span.setAttribute("click.success", true)
-              
-              Sentry.addBreadcrumb({
-                message: 'Navigated to announcement from notification',
-                category: 'notifications',
-                level: 'info',
-                data: {
-                  notification_id: notification.id,
-                  announcement_id: announcementId,
-                  entity_type: notification.entityType
-                }
-              })
-            } else {
-              span.setAttribute("click.success", false)
-              span.setAttribute("click.error", "announcement_id_not_found")
-              console.warn('Не найден ID объявления в уведомлении:', notification)
-            }
-          } else {
-            span.setAttribute("click.skipped", true)
-            span.setAttribute("click.skip_reason", "unsupported_entity_type")
-          }
+          span.setAttribute("click.skipped", true)
+          span.setAttribute("click.skip_reason", "unsupported_entity_type_or_disabled")
         } catch (error) {
           span.setAttribute("click.success", false)
           span.recordException(error as Error)
@@ -291,7 +262,11 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       data-notification-id={notification.id}
       onClick={handleClick}
       className={cn(
-        "relative p-4 rounded-lg border transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
+        "relative p-4 rounded-lg border transition-colors",
+        // Ховер и курсор только если это не объявление
+        (notification.entityType === 'announcement' || notification.entityType === 'announcements')
+          ? "cursor-default"
+          : "hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
         "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700",
         // Зеленая окантовка и подсветка для непрочитанных уведомлений
         !notification.isRead && "border-green-500 bg-green-50/30 dark:bg-green-900/10"

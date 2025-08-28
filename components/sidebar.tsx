@@ -183,9 +183,9 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
     >
       <div className="flex flex-col h-full">
         {/* Logo */}
-        <div className={cn("p-4", collapsed ? "flex flex-col items-center space-y-3" : "flex items-center")}>
-          <div className={cn("flex items-center", collapsed ? "justify-center" : "")}> 
-            <Link href="/dashboard" className="flex items-center group" aria-label="На главную">
+        <div className={cn("p-4", collapsed ? "flex flex-col items-center space-y-3 w-full px-2" : "flex items-center")}>
+          <div className={cn("flex items-center w-full justify-between gap-3", collapsed ? "justify-between" : "")}> 
+            <Link href="/dashboard" className="flex items-center group pr-2" aria-label="На главную">
               <Image
                 src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image__10_-removebg-preview-DH3poORK5SwnmDnICGNszX6XADuVhH.png"
                 alt="eneca.work Logo"
@@ -201,14 +201,14 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               )}
             </Link>
             {!collapsed && (
-              <div className="ml-auto mr-2">
+              <div className="ml-6 mr-2 flex-shrink-0">
                 <NotificationBell collapsed={collapsed} />
               </div>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", collapsed ? "ml-2" : "", collapsed && "rotate-180")}
+              className={cn("h-8 w-8", collapsed ? "" : "", collapsed && "rotate-180")}
               onClick={onToggle}
             >
               <ChevronLeft className="h-4 w-4" />
