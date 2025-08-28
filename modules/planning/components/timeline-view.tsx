@@ -10,8 +10,6 @@ import { useUiStore } from "@/stores/useUiStore"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { TimelineGrid } from "./timeline-grid"
-// Заменяем FiltersPanel на TimelineFilters
-import { TimelineFilters } from "../filters/TimelineFilters"
 import { getFiltersPermissionContextAsync } from "@/modules/permissions/integration/filters-permission-context"
 import * as Sentry from "@sentry/nextjs"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
@@ -327,12 +325,12 @@ useEffect(() => {
   return (
     <div
       className={cn(
-        "font-sans overflow-x-hidden px-4 md:px-0",
+        "font-sans overflow-x-hidden px-0",
       )}
       ref={containerRef}
     >
       {/* Header with improved styling */}
-      <header className="flex justify-between items-center mb-6">
+      <header className="flex justify-between items-center">
         <TimelineHeaderTabs
           theme={theme}
           activeTab={activeTab}
@@ -341,37 +339,16 @@ useEffect(() => {
         />
       </header>
 
-      {/* Панель фильтров всегда отображается */}
-      <div className="mb-6" id="filters-container">
-        <TimelineFilters
-          onProjectChange={handleProjectChange}
-          onDepartmentChange={handleDepartmentChange}
-          onTeamChange={handleTeamChange}
-          onEmployeeChange={handleEmployeeChange}
-          onManagerChange={handleManagerChange}
-          onStageChange={handleStageChange}
-          onObjectChange={handleObjectChange}
-          onResetFilters={handleResetFilters}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          onScrollBackward={scrollBackward}
-          onScrollForward={scrollForward}
-          startDate={startDate}
-          daysToShow={daysToShow}
-          onTodayClick={handleTodayPeriod}
-          onShowGuide={handleShowGuide}
-        />
-      </div>
+      {/* Старая панель фильтров удалена — фильтры перенесены в верхний бар */}
 
       {/* Main content area with improved styling - new approach with fixed columns */}
       <div
         className={cn(
-          "w-full border overflow-hidden relative overflow-y-auto rounded-lg",
-          theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200",
+          "w-full overflow-hidden relative overflow-y-auto",
+          theme === "dark" ? "bg-slate-900" : "bg-white",
         )}
         style={{ 
-          height: "calc(100vh - 180px)", 
+          height: "calc(100vh - (var(--topbar-height,60px)))",
           borderCollapse: "collapse" 
         }}
       >

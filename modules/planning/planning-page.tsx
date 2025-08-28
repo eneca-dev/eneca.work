@@ -23,9 +23,11 @@ export default function PlanningPage() {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-screen overflow-hidden">
       <PlanningTopFilters />
-      <TimelineView />
+      <div className="flex-1 overflow-hidden">
+        <TimelineView />
+      </div>
     </div>
   )
 }
