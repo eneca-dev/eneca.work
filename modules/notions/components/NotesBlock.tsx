@@ -153,10 +153,10 @@ export function NotesBlock() {
     if (isCreatingNewNote) {
       // Создаем новую заметку
       try {
-        const created = await createNotion({ notion_content: content })
-        // Закрываем редактор после создания заметки
+        await createNotion({ notion_content: content })
+        // После создания заметки НЕ меняем fullViewNotion - редактор остается с текущей заметкой
         setIsCreatingNewNote(false)
-        setFullViewNotion(null)
+        // НЕ вызываем setFullViewNotion(created) - оставляем текущую заметку в редакторе
       } catch (error) {
         console.error('Ошибка при создании заметки:', error)
       }
