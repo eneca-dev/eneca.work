@@ -110,7 +110,7 @@ export function NotesBlock() {
 
   const handleOpenFullView = async (notion: Notion) => {
     // Сохраняем текущую открытую заметку перед переключением
-    if (fullViewNotion && editorRef.current) {
+    if (fullViewNotion && editorRef.current && fullViewNotion.notion_id !== 'new') {
       try {
         isSwitchingRef.current = true
         await editorRef.current.save()
