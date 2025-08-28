@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock } from 'lucide-react';
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 // Используем изолированный store фильтров для модуля projects
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
@@ -277,7 +277,10 @@ export default function ProjectsPage() {
             <div className="p-2 space-y-2">
               {/* Отдел */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Отдел</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Отдел</span>
+                  {filterStore.isFilterLocked('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedDepartmentId || ''}
                   onChange={e => filterStore.setFilter('department', e.target.value || null)}
@@ -293,7 +296,10 @@ export default function ProjectsPage() {
               </div>
               {/* Команда */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Команда</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Команда</span>
+                  {filterStore.isFilterLocked('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedTeamId || ''}
                   onChange={e => filterStore.setFilter('team', e.target.value || null)}
@@ -450,7 +456,10 @@ export default function ProjectsPage() {
 
               {/* Менеджер */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Менеджер</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Менеджер</span>
+                  {filterStore.isFilterLocked('manager') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedManagerId || ''}
                   onChange={e => filterStore.setFilter('manager', e.target.value || null)}
