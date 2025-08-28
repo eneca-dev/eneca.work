@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "@/modules/task-transfer/store"
 import type { CreateAssignmentData } from "@/modules/task-transfer/types"
 import * as Sentry from "@sentry/nextjs"
+import { createClient } from "@/utils/supabase/client"
 
 interface CreateObjectAssignmentModalProps {
   isOpen: boolean
@@ -41,37 +42,78 @@ export function CreateObjectAssignmentModal({
   const [dueDate, setDueDate] = useState<string>("")
   const [link, setLink] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
+  const [fallbackSections, setFallbackSections] = useState<{ id: string; name: string }[]>([])
+  const [treeSections, setTreeSections] = useState<{ id: string; name: string }[]>([])
   
-  const { sectionHierarchy, createNewAssignment } = useTaskTransferStore()
+  const { createNewAssignment } = useTaskTransferStore()
   const { toast } = useToast()
+  const supabase = createClient()
 
-  // Получаем разделы для выбранного объекта
-  const availableSections = useMemo(() => {
-    console.log('🔍 Фильтрация разделов для объекта:', {
-      objectId,
-      projectId,
-      sectionHierarchyLength: sectionHierarchy.length,
-      sampleHierarchy: sectionHierarchy.slice(0, 3)
-    })
-    
-    const filtered = sectionHierarchy
-      .filter(item => 
-        item.project_id === projectId && 
-        item.object_id === objectId && 
-        item.section_id && 
-        item.section_name
-      )
-      .map(item => ({
-        id: item.section_id!,
-        name: item.section_name!
-      }))
-      .filter((section, index, self) => 
-        index === self.findIndex(s => s.id === section.id)
-      )
-    
-    console.log('📋 Доступные разделы для объекта:', filtered)
-    return filtered
-  }, [projectId, objectId, sectionHierarchy])
+  // Разделы из view_project_tree загружаются ниже в эффекте
+
+  // Фолбэк: если в вьюхе пусто, подгружаем разделы напрямую из таблицы sections по objectId
+  useEffect(() => {
+    ;(async () => {
+      try {
+        if (!isOpen || !objectId) return
+        if (treeSections.length > 0) {
+          if (fallbackSections.length > 0) setFallbackSections([])
+          return
+        }
+        const { data, error } = await supabase
+          .from('sections')
+          .select('section_id, section_name')
+          .eq('section_object_id', objectId)
+          .order('section_name')
+        if (error) {
+          console.error('Ошибка фолбэка загрузки разделов по объекту:', error)
+          return
+        }
+        const mapped = (data || [])
+          .filter(s => s.section_id && s.section_name)
+          .map(s => ({ id: s.section_id as string, name: s.section_name as string }))
+        setFallbackSections(mapped)
+        console.log('📥 Фолбэк-разделы из таблицы sections:', mapped)
+      } catch (e) {
+        console.error('Не удалось выполнить фолбэк загрузки разделов:', e)
+      }
+    })()
+  }, [isOpen, objectId, treeSections.length])
+
+  // Основной источник: грузим разделы из view_project_tree по проекту и объекту
+  useEffect(() => {
+    ;(async () => {
+      try {
+        if (!isOpen || !projectId || !objectId) {
+          setTreeSections([])
+          return
+        }
+        const { data, error } = await supabase
+          .from('view_project_tree')
+          .select('section_id, section_name, project_id, object_id')
+          .eq('project_id', projectId)
+          .eq('object_id', objectId)
+          .order('section_name')
+
+        if (error) {
+          console.error('Ошибка загрузки разделов из view_project_tree:', error)
+          setTreeSections([])
+          return
+        }
+
+        const mapped = (data || [])
+          .filter(row => row.section_id && row.section_name)
+          .map(row => ({ id: row.section_id as string, name: row.section_name as string }))
+          .filter((section, index, self) => index === self.findIndex(s => s.id === section.id))
+
+        setTreeSections(mapped)
+        console.log('🌳 Разделы из view_project_tree:', mapped)
+      } catch (e) {
+        console.error('Не удалось загрузить разделы из view_project_tree:', e)
+        setTreeSections([])
+      }
+    })()
+  }, [isOpen, projectId, objectId])
 
   // Сброс формы при открытии
   useEffect(() => {
@@ -219,8 +261,9 @@ export function CreateObjectAssignmentModal({
   }
 
   // Получаем доступные разделы в зависимости от направления
-  const fromSections = availableSections.filter(s => s.id !== toSectionId)
-  const toSections = availableSections.filter(s => s.id !== fromSectionId)
+  const sourceSections = (treeSections.length > 0 ? treeSections : fallbackSections)
+  const fromSections = sourceSections.filter(s => s.id !== toSectionId)
+  const toSections = sourceSections.filter(s => s.id !== fromSectionId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
