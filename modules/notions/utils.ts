@@ -1091,7 +1091,7 @@ export function markdownToTipTapHTML(markdown: string): string {
 
   const adjustListStack = (targetDepth: number, newType: 'ul' | 'ol' | 'taskList') => {
     // Закрываем списки глубже чем нужно
-    while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
       const list = listStack.pop()!
       if (list.type === 'taskList') {
         htmlParts.push('</ul>')
@@ -1099,6 +1099,29 @@ export function markdownToTipTapHTML(markdown: string): string {
         htmlParts.push('</ul>')
       } else if (list.type === 'ol') {
         htmlParts.push('</ol>')
+      }
+    }
+
+    // Проверяем, есть ли уже список на нужной глубине
+    const existingList = listStack.find(list => list.depth === targetDepth)
+    
+    if (existingList) {
+      // Если на этой глубине уже есть список
+      if (existingList.type === newType) {
+        // Тот же тип - продолжаем существующий список
+        return
+      } else {
+        // Разный тип - закрываем старый и открываем новый
+        while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
+          const list = listStack.pop()!
+          if (list.type === 'taskList') {
+            htmlParts.push('</ul>')
+          } else if (list.type === 'ul') {
+            htmlParts.push('</ul>')
+          } else if (list.type === 'ol') {
+            htmlParts.push('</ol>')
+          }
+        }
       }
     }
 
