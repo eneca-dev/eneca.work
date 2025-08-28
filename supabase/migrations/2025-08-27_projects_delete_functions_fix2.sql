@@ -223,3 +223,4 @@ grant execute on function public.safe_delete_project(uuid) to anon, authenticate
 commit;
 
 
+

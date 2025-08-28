@@ -89,8 +89,8 @@ useEffect(() => {
   // Применяем ограничения по правам при монтировании
   useEffect(() => {
     getFiltersPermissionContextAsync()
-      .then((ctx) => {
-        useFilterStore.getState().applyPermissionDefaults(ctx)
+      .then(() => {
+        // блокировки временно отключены
       })
       .catch((err) => {
         Sentry.captureException(err)

@@ -78,6 +78,13 @@ export function TimelineHeader({
   // Получаем видимость столбцов из стора
   const { columnVisibility, toggleColumnVisibility } = usePlanningColumnsStore()
 
+  // Слушаем глобальное событие от верхней панели для переключения колонки "Проект"
+  useEffect(() => {
+    const handler = () => toggleColumnVisibility('project')
+    window.addEventListener('planning:toggleProjectColumn', handler)
+    return () => window.removeEventListener('planning:toggleProjectColumn', handler)
+  }, [toggleColumnVisibility])
+
   // Заменяем сложные расчеты ширины на фиксированные значения
   // Заменяем эти строки:
   // const sectionWidth = columnWidth + 80

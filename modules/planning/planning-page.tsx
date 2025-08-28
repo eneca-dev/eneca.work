@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { TimelineView } from "./components/timeline-view"
 import { PlanningGuide } from "./components/PlanningGuide"
+import PlanningTopFilters from './components/PlanningTopFilters'
 
 export default function PlanningPage() {
   const [showGuide, setShowGuide] = useState(false)
@@ -21,5 +22,10 @@ export default function PlanningPage() {
     return <PlanningGuide onClose={() => setShowGuide(false)} />
   }
 
-  return <TimelineView />
+  return (
+    <div className="flex flex-col">
+      <PlanningTopFilters />
+      <TimelineView />
+    </div>
+  )
 }

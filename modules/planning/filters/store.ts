@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase-client'
 import { useUserStore } from '@/stores/useUserStore'
-import type { FilterStore, FilterOption, FilterConfigs } from './types'
+import type { FilterStore, FilterOption, FilterConfigs, FilterType } from './types'
 import type { Department, Team, Employee } from '../types'
 
 export const useFilterStore = create<FilterStore>()(
@@ -66,43 +66,16 @@ export const useFilterStore = create<FilterStore>()(
           }
         },
         
-        // Применение ограничений и дефолтов по правам
-        applyPermissionDefaults: (ctx: { permissions: string[]; departmentId?: string | null; teamId?: string | null }) => {
-          const { permissions, departmentId, teamId } = ctx || { permissions: [] }
-          const locks = new Set<string>()
-          if (permissions?.includes('hierarchy.is_department_head')) {
-            locks.add('department')
-          }
-          if (permissions?.includes('hierarchy.is_team_lead') || permissions?.includes('hierarchy.is_user')) {
-            locks.add('department')
-            locks.add('team')
-          }
-          // admin — без блокировок
-          if (permissions?.includes('hierarchy.is_admin')) {
-            locks.clear()
-          }
-          const updates: any = { lockedFilters: Array.from(locks) }
-          if (locks.has('department')) {
-            updates.selectedDepartmentId = departmentId ?? null
-            // При смене отдела сбрасываем подчинённые, но команда может быть задана ниже
-            updates.selectedTeamId = null
-            updates.selectedEmployeeId = null
-          }
-          if (locks.has('team')) {
-            updates.selectedTeamId = teamId ?? null
-            updates.selectedEmployeeId = null
-          }
-          set(updates)
+        // Применение ограничений и дефолтов по правам — временно выключено (универсальная реализация будет подключена позже)
+        applyPermissionDefaults: () => {
+          // no-op
         },
 
         // Проверка блокировки фильтра
-        isFilterLocked: (type: any) => {
-          const state = get()
-          return Boolean(state.lockedFilters && state.lockedFilters.includes(type))
-        },
+        isFilterLocked: () => false,
 
         // Универсальный метод установки фильтра
-        setFilter: (type: string, value: string | null) => {
+        setFilter: (type: FilterType, value: string | null) => {
           console.log(`🔄 setFilter: ${type} = ${value}`)
           const state = get()
           // Уважение блокировок
@@ -158,10 +131,10 @@ export const useFilterStore = create<FilterStore>()(
         resetFilters: () => {
 
           const state = get()
-          const isLocked = (t: string) => Boolean(state.lockedFilters && state.lockedFilters.includes(t))
+          const isLocked = (t: FilterType) => Boolean(state.lockedFilters && state.lockedFilters.includes(t))
 
           set({
-            selectedManagerId: null,
+            selectedManagerId: isLocked('manager') ? state.selectedManagerId : null,
             selectedProjectId: null,
             selectedStageId: null,
             selectedObjectId: null,
