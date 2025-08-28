@@ -387,8 +387,8 @@ export function markdownToHtml(text: string): string {
     }
     
     if (!line.trim()) {
-      // Пустая строка - НЕ добавляем <br/>, оставляем как есть
-      htmlLines.push('')
+      // Пустая строка - добавляем пустой параграф для создания отступа между блоками
+      htmlLines.push('<p></p>')
     } else if (/^### (.+)$/.test(line.trim())) {
       // Заголовок 3
       const text = line.trim().replace(/^### /, '')
@@ -501,17 +501,17 @@ export function markdownToHtml(text: string): string {
         } else {
           // Если это не таблица, обрабатываем как обычный текст
           let formattedLine = applyMarkdownFormatting(line.trim())
-          htmlLines.push(formattedLine)
+          htmlLines.push(`<p>${formattedLine}</p>`)
         }
       } else {
         // Если только одна строка с |, обрабатываем как обычный текст
         let formattedLine = applyMarkdownFormatting(line.trim())
-        htmlLines.push(formattedLine)
+        htmlLines.push(`<p>${formattedLine}</p>`)
       }
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
       let formattedLine = applyMarkdownFormatting(line.trim())
-      htmlLines.push(formattedLine)
+      htmlLines.push(`<p>${formattedLine}</p>`)
     }
   }
   
