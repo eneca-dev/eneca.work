@@ -154,9 +154,9 @@ export function NotesBlock() {
       // Создаем новую заметку
       try {
         const created = await createNotion({ notion_content: content })
-        // Остаемся в редакторе и переключаемся на созданную заметку
+        // Закрываем редактор после создания заметки
         setIsCreatingNewNote(false)
-        setFullViewNotion(created)
+        setFullViewNotion(null)
       } catch (error) {
         console.error('Ошибка при создании заметки:', error)
       }
