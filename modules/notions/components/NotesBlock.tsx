@@ -12,7 +12,7 @@ import { ToggleDoneButton } from '@/modules/notions/components/ToggleDoneButton'
 import { TipTapEditor } from '@/modules/text-editor/components/client'
 import type { EditorRef } from '@/modules/text-editor'
 import { useNotionsStore } from '@/modules/notions/store'
-import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
+import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseNotionContent } from '@/modules/notions/utils'
 import type { Notion } from '@/modules/notions/types'
@@ -464,8 +464,17 @@ export function NotesBlock() {
                 placeholder="Поиск по заметкам..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                className="pl-10 pr-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  type="button"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
             {selectedNotions.length > 0 && (
               <>
