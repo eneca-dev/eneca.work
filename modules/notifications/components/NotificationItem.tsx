@@ -91,7 +91,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const { markAsRead, markAsUnread, markAsReadInDB, markAsUnreadInDB, setArchivedInDB, setNotificationArchived } = useNotificationsStore()
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
-  const { canCreate: canEditAnnouncements } = useAnnouncementsPermissions()
+  const { canManage: canEditAnnouncements } = useAnnouncementsPermissions()
 
   // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)

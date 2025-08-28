@@ -107,7 +107,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
-  const { canCreate: canCreateAnnouncements } = useAnnouncementsPermissions()
+  const { canManage: canCreateAnnouncements } = useAnnouncementsPermissions()
   const { announcements } = useAnnouncementsStore()
 
   // Debounced поиск

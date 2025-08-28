@@ -122,20 +122,7 @@ export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: Ann
           />
         </div>
 
-        <div className="flex justify-between">
-          <div>
-            {editingAnnouncement && onDelete && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={isSubmitting}
-              >
-                <TrashIcon className="h-4 w-4 mr-2" />
-                Удалить
-              </Button>
-            )}
-          </div>
+        <div className="flex justify-end">
           
           <div className="flex space-x-2">
             <Button type="button" variant="outline" onClick={onClose}>

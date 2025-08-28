@@ -177,17 +177,16 @@ export const useAnnouncementsPermissions = () => {
   
   return {
     canView: hasPermission('announcements.view'),
-    canCreate: hasPermission('announcements.create'),
-    canEditAll: hasPermission('announcements.edit.all'),
-    canEditOwn: hasPermission('announcements.edit.own'),
-    canDeleteAll: hasPermission('announcements.delete.all'),
-    canDeleteOwn: hasPermission('announcements.delete.own'),
-    canAdmin: hasPermission('announcements.admin'),
+    canCreate: hasPermission('announcements.manage'),
+    canEditAll: hasPermission('announcements.manage'),
+    canEditOwn: hasPermission('announcements.manage'),
+    canDeleteAll: hasPermission('announcements.manage'),
+    canDeleteOwn: hasPermission('announcements.manage'),
+    canAdmin: hasPermission('announcements.manage'),
     
     // Логические комбинации
-    canEditAnnouncements: hasPermission('announcements.edit.all') ||
-                          hasPermission('announcements.edit.own'),
-    canDeleteAnnouncements: hasPermission('announcements.delete.all') ||
-                            hasPermission('announcements.delete.own')
+    canEditAnnouncements: hasPermission('announcements.manage'),
+    canDeleteAnnouncements: hasPermission('announcements.manage'),
+    canManage: hasPermission('announcements.manage')
   }
 } 
