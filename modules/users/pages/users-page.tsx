@@ -8,8 +8,6 @@ import { AdminPanel } from "@/modules/users/admin"
 import { AdminAccessCheck } from "../components/admin-access-check"
 import { AddUserForm } from "../components/add-user-form"
 import UserAnalytics from "../components/user-analytics"
-import PaymentList from "../components/payment-list"
-import { PaymentAccessCheck } from "../components/payment-access-check"
 import { getUsers } from "@/services/org-data-service"
 import type { UserWithRoles } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -29,7 +27,7 @@ export default function UsersPage() {
   
   // Set initial tab value based on URL
   const [adminTab, setAdminTab] = useState(
-    tabFromUrl && ["list", "add-user", "payment", "analytics", "admin"].includes(tabFromUrl)
+    tabFromUrl && ["list", "add-user", "analytics", "admin"].includes(tabFromUrl)
       ? tabFromUrl
       : "list"
   )
@@ -123,7 +121,9 @@ export default function UsersPage() {
       avatar_url: user.avatar_url || undefined,
       position: user.position_name || "",
       department: user.department_name || "",
+      departmentId: user.department_id || undefined,
       team: user.team_name || "",
+      teamId: user.team_id || undefined,
       category: user.category_name || "",
       role: user.roles_display_string || "",
       roles_display_string: user.roles_display_string || "", // Добавляем явно
@@ -211,7 +211,6 @@ export default function UsersPage() {
               <TabsList className="flex-wrap h-auto items-start py-2 gap-y-1">
                 <TabsTrigger value="list">Список пользователей</TabsTrigger>
                 <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
-                <TabsTrigger value="payment">Оплата</TabsTrigger>
                 <TabsTrigger value="analytics">Аналитика</TabsTrigger>
                 <PermissionGuard permission="users.admin_panel">
                   <TabsTrigger value="admin">Администратор</TabsTrigger>
@@ -229,19 +228,6 @@ export default function UsersPage() {
                 <AddUserForm onUserAdded={handleUserUpdated} />
               </TabsContent>
               
-              <TabsContent value="payment" className="space-y-4">
-                <PaymentList 
-                  users={usersAsUserType}
-                  filters={{
-                    departments: [],
-                    teams: [],
-                    categories: [],
-                    positions: [],
-                    workLocations: [],
-                    roles: []
-                  }}
-                />
-              </TabsContent>
               
               <TabsContent value="analytics" className="space-y-4">
                 <UserAnalytics />

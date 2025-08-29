@@ -38,6 +38,7 @@ import type { User, UserWithRoles } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useUserPermissions } from "../hooks/useUserPermissions"
+import { useUserStore } from "@/stores/useUserStore"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteUserConfirm } from "./DeleteUserConfirm"
@@ -106,7 +107,37 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   const searchParams = useSearchParams()
 
   // Получаем разрешения пользователя
-  const { canEditAllUsers } = useUserPermissions()
+  const { profile, id: viewerId } = useUserStore()
+  const {
+    canEditAllUsers,
+    canEditSelf,
+    canEditTeam,
+    canEditDepartment,
+    canViewRateSelf,
+    canViewRateTeam,
+    canViewRateDepartment,
+    canViewRateAll,
+  } = useUserPermissions()
+
+  const viewerDeptId = profile?.departmentId || profile?.department_id || null
+  const viewerTeamId = profile?.teamId || profile?.team_id || null
+
+  const canEditUser = (u: User) => {
+    if (canEditAllUsers) return true
+    // self по id email не всегда надёжен: ожидаем, что users-page передал id = profiles.user_id
+    if (canEditSelf && u.id === viewerId) return true
+    if (canEditTeam && viewerTeamId && (u as any).teamId && (u as any).teamId === viewerTeamId) return true
+    if (canEditDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true
+    return false
+  }
+
+  const canViewRate = (u: User) => {
+    if (canViewRateAll) return true
+    if (canViewRateSelf && u.id === viewerId) return true
+    if (canViewRateTeam && viewerTeamId && (u as any).teamId && (u as any).teamId === viewerTeamId) return true
+    if (canViewRateDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true
+    return false
+  }
 
   // ОПТИМИЗАЦИЯ: Мемоизируем фильтрацию пользователей (как в оригинале, но оптимизированно)
   const filteredUsers = useMemo(() => {
@@ -837,73 +868,71 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
              </Tooltip>
            </TooltipProvider>
 
-           <Separator orientation="vertical" className="h-3 opacity-40" />
+          {/* Группировка */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                {groupBy === "none" ? "Без группировки" : 
+                 groupBy === "department" ? "По отделам" : 
+                 "Отделы → Команды"}
+                <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => setGroupBy("none")}>
+                Без группировки
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("department")}>
+                По отделам
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("nested")}>
+                Отделы → Команды
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-           {/* Группировка */}
-           <DropdownMenu>
-             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                 {groupBy === "none" ? "Без группировки" : 
-                  groupBy === "department" ? "По отделам" : 
-                  "Отделы → Команды"}
-                 <ChevronDown className="h-3 w-3 ml-1" />
-               </Button>
-             </DropdownMenuTrigger>
-             <DropdownMenuContent align="start">
-               <DropdownMenuItem onClick={() => setGroupBy("none")}>
-                 Без группировки
-               </DropdownMenuItem>
-               <DropdownMenuItem onClick={() => setGroupBy("department")}>
-                 По отделам
-               </DropdownMenuItem>
-               <DropdownMenuItem onClick={() => setGroupBy("nested")}>
-                 Отделы → Команды
-               </DropdownMenuItem>
-             </DropdownMenuContent>
-           </DropdownMenu>
+          {/* Кнопка показать всех - скрываем при группировке */}
+          {groupBy === "none" && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
+              onClick={handleToggleShowAll}
+            >
+              {showAll ? "Пагинация" : "Показать всех"}
+            </Button>
+          )}
 
-           {/* Кнопка показать всех - скрываем при группировке */}
-           {groupBy === "none" && (
-             <Button 
-               variant="ghost" 
-               size="sm" 
-               className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
-               onClick={handleToggleShowAll}
-             >
-               {showAll ? "Пагинация" : "Показать всех"}
-             </Button>
-           )}
-
-           {/* Навигация по страницам - скрываем при группировке */}
-           {groupBy === "none" && !showAll && totalPages > 1 && (
-             <>
-               <div className="flex items-center gap-0.5 text-xs text-gray-500">
-                 <Button
-                   variant="ghost"
-                   size="sm"
-                   className="h-6 w-6 p-0"
-                   onClick={handlePrevPage}
-                   disabled={currentPage === 1}
-                 >
-                   <ChevronLeft className="h-3 w-3" />
-                 </Button>
-                 
-                 <span className="whitespace-nowrap">
-                   {currentPage} из {totalPages}
-                 </span>
-                 
-                 <Button
-                   variant="ghost"
-                   size="sm"
-                   className="h-6 w-6 p-0"
-                   onClick={handleNextPage}
-                   disabled={currentPage === totalPages}
-                 >
-                   <ChevronRight className="h-3 w-3" />
-                 </Button>
-              </div>
-             </>
-           )}
+          {/* Навигация по страницам - скрываем при группировке */}
+          {groupBy === "none" && !showAll && totalPages > 1 && (
+            <>
+              <div className="flex items-center gap-0.5 text-xs text-gray-500">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={handlePrevPage}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+                
+                <span className="whitespace-nowrap">
+                  {currentPage} из {totalPages}
+                </span>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+             </div>
+            </>
+          )}
           </div>
        </CardHeader>
       
@@ -962,19 +991,20 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                       Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
                       <React.Fragment key={groupName}>
                         {groupBy === "department" && groupName && (
-                                                      <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-1">
+                                                      <TableRow className="bg-slate-50/70 dark:bg-slate-800/50">
+                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-2">
                               <div
-                                className="flex items-center cursor-pointer font-medium"
+                                className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
                                   onClick={() => toggleGroup(groupName)}
                                 >
                                   {expandedGroups[groupName] ? (
-                                  <ChevronDown className="h-4 w-4 mr-1" />
+                                  <ChevronDown className="h-4 w-4 mr-2" />
                                 ) : (
-                                  <ChevronRight className="h-4 w-4 mr-1" />
+                                  <ChevronRight className="h-4 w-4 mr-2" />
                                 )}
-                                <Building2 className="h-4 w-4 mr-1" />
-                                {groupName} ({groupUsers.length})
+                                <Building2 className="h-4 w-4 mr-2 text-slate-500" />
+                                <span className="text-sm">{groupName}</span>
+                                <span className="ml-2 text-[11px] text-slate-500">{groupUsers.length}</span>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1027,7 +1057,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                   <div className="text-center">
                                     <span className="text-xs sm:text-sm font-medium">
-                                      {user.salary ? (
+                                      {canViewRate(user) && user.salary ? (
                                         <>
                                           <span>{user.salary}</span>
                                           <span className="text-[10px] text-gray-500 ml-1">BYN</span>
@@ -1067,7 +1097,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                     )}
                                   </div>
                                 </TableCell>
-                                {canEditAllUsers && (
+                                {(canEditAllUsers || canEditUser(user)) && (
                                   <TableCell className="w-12 px-1 py-1">
                                     <div className="flex justify-end">
                                       <DropdownMenu>
@@ -1106,19 +1136,20 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                         ([department, teams]) => (
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
-                          <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1 border-l-4 border-gray-200 dark:border-gray-700">
+                          <TableRow className="bg-slate-50/70 dark:bg-slate-800/50">
+                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-2">
                                 <div
-                                className="flex items-center cursor-pointer font-medium"
+                                className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
                                   onClick={() => toggleGroup(department)}
                                 >
                                   {expandedGroups[department] ? (
-                                  <ChevronDown className="h-4 w-4 mr-1" />
+                                  <ChevronDown className="h-4 w-4 mr-2" />
                                 ) : (
-                                  <ChevronRight className="h-4 w-4 mr-1" />
+                                  <ChevronRight className="h-4 w-4 mr-2" />
                                 )}
-                                <Building2 className="h-4 w-4 mr-1" />
-                                {department} ({Object.values(teams).reduce((sum, teamUsers) => sum + teamUsers.length, 0)})
+                                <Building2 className="h-4 w-4 mr-2 text-slate-500" />
+                                <span className="text-sm">{department}</span>
+                                <span className="ml-2 text-[11px] text-slate-500">{Object.values(teams).reduce((sum, teamUsers) => sum + teamUsers.length, 0)}</span>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1127,11 +1158,12 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                             Object.entries(teams).map(([team, teamUsers]) => (
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
-                                <TableRow className="bg-gray-25 dark:bg-gray-900/25">
-                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1 pl-8 border-l-4 border-blue-200 dark:border-blue-800">
-                                    <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300">
-                                      <Users className="h-3 w-3 mr-2" />
-                                      {team} ({teamUsers.length})
+                                <TableRow className="bg-white dark:bg-slate-900/40">
+                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1.5 pl-8">
+                                    <div className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                                      <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
+                                      <span>{team}</span>
+                                      <span className="ml-2 text-[11px] text-slate-400">{teamUsers.length}</span>
                                       </div>
                                     </TableCell>
                                   </TableRow>
