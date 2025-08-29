@@ -7,7 +7,9 @@ export type User = {
   avatar_url?: string
   position: string
   department: string
+  departmentId?: string
   team: string
+  teamId?: string
   category: string
   role?: string
   dateJoined: string
