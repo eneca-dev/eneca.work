@@ -199,14 +199,14 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               </h1>
             )}
             {!collapsed && (
-              <div className="ml-6 mr-2 flex-shrink-0">
+              <div className="ml-auto mr-2">
                 <NotificationBell collapsed={collapsed} />
               </div>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", collapsed ? "" : "", collapsed && "rotate-180")}
+              className={cn("h-8 w-8", collapsed ? "ml-2" : "", collapsed && "rotate-180")}
               onClick={onToggle}
             >
               <ChevronLeft className="h-4 w-4" />
