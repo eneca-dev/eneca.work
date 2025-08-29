@@ -160,11 +160,6 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       href: "/dashboard/reports",
       icon: BarChart,
     },
-    {
-      title: "Документация",
-      href: "/dashboard/user-docs",
-      icon: FileText ,
-    },
 
   ]
 
@@ -249,6 +244,23 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             ))}
           </ul>
         </nav>
+
+        {/* Документация */}
+        <div className="px-2 mt-2">
+          <Link
+            href="/dashboard/user-docs"
+            className={cn(
+              "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+              pathname === "/dashboard/user-docs"
+                ? "bg-primary/10 text-primary"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <FileText className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+            {!collapsed && <span>Документация</span>}
+          </Link>
+        </div>
 
         {/* Сообщить о проблеме */}
         <div className="px-2 mt-2">

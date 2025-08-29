@@ -26,13 +26,6 @@ const mockDocumentationStructure: DocumentationFile[] = [
     { name: 'Пользователи', path: 'planirovanie/polzovateli.md', type: 'file' },
     { name: 'Руководители', path: 'planirovanie/rukovoditeli.md', type: 'file' },
   ]},
-  { name: 'Роли и права', path: 'roles', type: 'folder', children: [
-    { name: 'Администратор', path: 'roles/admin.md', type: 'file' },
-    { name: 'Руководитель отдела', path: 'roles/department_head.md', type: 'file' },
-    { name: 'Руководитель проекта', path: 'roles/project_manager.md', type: 'file' },
-    { name: 'Тимлид', path: 'roles/team_lead.md', type: 'file' },
-    { name: 'Пользователь', path: 'roles/user.md', type: 'file' },
-  ]},
 ]
 
 export function useDocumentationFiles() {
