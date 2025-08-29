@@ -107,7 +107,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
-  const { canManage: canCreateAnnouncements } = useAnnouncementsPermissions()
+  const { canManage: canManageAnnouncements } = useAnnouncementsPermissions()
   const { announcements } = useAnnouncementsStore()
 
   // Debounced поиск
@@ -500,7 +500,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           </h3>
           <div className="flex items-center gap-2">
             {/* Кнопка создания объявлений */}
-            {canCreateAnnouncements && (
+            {canManageAnnouncements && (
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -797,7 +797,6 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
             <AnnouncementForm 
               onClose={handleCloseAnnouncementForm}
               editingAnnouncement={editingAnnouncement}
-              onDelete={removeAnnouncement}
             />
           </div>
         </Modal.Body>

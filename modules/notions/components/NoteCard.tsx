@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { parseNotionContent, markdownToTipTapHTML } from '@/modules/notions'
 import { SingleDeleteConfirm } from '@/modules/notions/components/SingleDeleteConfirm'
 import type { Notion } from '@/modules/notions/types'
+import DOMPurify from 'isomorphic-dompurify'
 
 interface NoteCardProps {
   notion: Notion
@@ -22,6 +23,13 @@ interface NoteCardProps {
   onOpenFullView: (notion: Notion) => void
 
   showSelection?: boolean
+}
+
+// Хелпер для безопасной санитизации HTML
+const sanitizeHTML = (html: string): string => {
+  return DOMPurify.sanitize(html, {
+    ADD_ATTR: ['target', 'rel', 'data-type', 'data-checked']
+  })
 }
 
 export function NoteCard({
@@ -115,7 +123,7 @@ export function NoteCard({
                     </h1>
                   )}
 
-                  {/* Содержимое markdown с ограничением высоты */}
+                  {/* Содержимое markdown только для чтения */}
                   {parsed.content && (
                     <div className="relative">
                       <div className={cn(
@@ -125,13 +133,13 @@ export function NoteCard({
                       )}
                       >
                         <div 
-                          className="prose prose-sm max-w-none dark:prose-invert
+                          className="prose prose-sm max-w-none dark:prose-invert pointer-events-none
                                    [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2
                                    [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2
                                    [&_li]:my-1 [&_li]:leading-relaxed
                                    [&_ul_ul]:list-[circle] [&_ul_ul]:ml-4
                                    [&_ul_ul_ul]:list-[square] [&_ul_ul_ul]:ml-4
-                                   [&_ol_ol]:list-[lower-alpha] [&_ol_ol]:ml-4
+                                   [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-[0.61]
                                    [&_ol_ol_ol]:list-[lower-roman] [&_ol_ol_ol]:ml-4
                                    [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-700 dark:[&_blockquote]:text-gray-300
                                    [&_code]:bg-gray-100 dark:[&_code]:bg-gray-700 [&_code]:px-1 [&_code]:rounded [&_code]:font-mono [&_code]:text-sm [&_code]:text-gray-800 dark:[&_code]:text-gray-200
@@ -152,11 +160,10 @@ export function NoteCard({
                                    [&_table_tr:not(:first-child)_td]:bg-white dark:[&_table_tr:not(:first-child)_td]:font-normal [&_table_tr:not(:first-child)_td]:text-left [&_table_tr:not(:first-child)_td]:text-gray-900 dark:[&_table_tr:not(:first-child)_td]:text-gray-100
                                    [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100"
                           dangerouslySetInnerHTML={{ 
-                            __html: markdownToTipTapHTML(parsed.content)
+                            __html: sanitizeHTML(markdownToTipTapHTML(parsed.content))
                           }} 
                         />
                       </div>
-
                     </div>
                   )}
 

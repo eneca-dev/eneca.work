@@ -91,7 +91,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const { markAsRead, markAsUnread, markAsReadInDB, markAsUnreadInDB, setArchivedInDB, setNotificationArchived } = useNotificationsStore()
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
-  const { canManage: canEditAnnouncements } = useAnnouncementsPermissions()
+  // canManage permission allows full management of announcements (create, edit, delete, etc.)
+  const { canManage: canManageAnnouncements } = useAnnouncementsPermissions()
 
   // Определяем, нужно ли показывать конкретное время (если прошло более 24 часов)
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
@@ -362,7 +363,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
 
               {/* Кнопка редактирования для объявлений */}
               {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
-               canEditAnnouncements && 
+               canManageAnnouncements && 
                onEditAnnouncement && 
                announcementId && (
                 <Button

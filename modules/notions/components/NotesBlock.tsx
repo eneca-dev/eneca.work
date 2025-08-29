@@ -41,6 +41,7 @@ export function NotesBlock() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
   const [isCreatingNewNote, setIsCreatingNewNote] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   const editorRef = useRef<EditorRef>(null)
   const isSwitchingRef = useRef(false)
@@ -162,7 +163,16 @@ export function NotesBlock() {
       }
     } else {
       // Обновляем существующую заметку
-      handleUpdateNote(fullViewNotion.notion_id, content)
+      await handleUpdateNote(fullViewNotion.notion_id, content)
+    }
+  }
+
+  const handleToggleDone = async (notionId: string) => {
+    setIsToggling(true)
+    try {
+      await toggleNotionDone(notionId)
+    } finally {
+      setIsToggling(false)
     }
   }
 
@@ -393,10 +403,9 @@ export function NotesBlock() {
               {/* Кнопка отметки выполнения */}
               <ToggleDoneButton
                 notion={fullViewNotion}
-                onToggle={async () => {
-                  await toggleNotionDone(fullViewNotion.notion_id)
-                  // Убираем локальное обновление - пусть useEffect сам обновит
-                }}
+                onToggle={() => handleToggleDone(fullViewNotion.notion_id)}
+                disabled={isToggling}
+                loading={isToggling}
               />
             </div>
           )}
@@ -471,6 +480,8 @@ export function NotesBlock() {
                   onClick={() => setSearchQuery('')}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   type="button"
+                  aria-label="Очистить поиск"
+                  title="Очистить поиск"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -566,10 +577,9 @@ export function NotesBlock() {
                                           <div className="flex items-center gap-2">
                         <ToggleDoneButton
                           notion={fullViewNotion}
-                          onToggle={async () => {
-                            await toggleNotionDone(fullViewNotion.notion_id)
-                            // Убираем локальное обновление - пусть useEffect сам обновит
-                          }}
+                          onToggle={() => handleToggleDone(fullViewNotion.notion_id)}
+                          disabled={isToggling}
+                          loading={isToggling}
                         />
                         <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
                       </div>

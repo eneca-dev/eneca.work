@@ -175,18 +175,20 @@ export const useCalendarPermissions = () => {
 export const useAnnouncementsPermissions = () => {
   const { hasPermission } = usePermissions()
   
+  // Локальные булевы переменные для избежания повторных вызовов
+  const canManage = hasPermission('announcements.manage')
+  
   return {
     canView: hasPermission('announcements.view'),
-    canCreate: hasPermission('announcements.manage'),
-    canEditAll: hasPermission('announcements.manage'),
-    canEditOwn: hasPermission('announcements.manage'),
-    canDeleteAll: hasPermission('announcements.manage'),
-    canDeleteOwn: hasPermission('announcements.manage'),
-    canAdmin: hasPermission('announcements.manage'),
+    canCreate: canManage,
+    canEditAll: canManage,
+    canEditOwn: canManage,
+    canDeleteAll: canManage,
+    canDeleteOwn: canManage,
     
     // Логические комбинации
-    canEditAnnouncements: hasPermission('announcements.manage'),
-    canDeleteAnnouncements: hasPermission('announcements.manage'),
-    canManage: hasPermission('announcements.manage')
+    canEditAnnouncements: canManage,
+    canDeleteAnnouncements: canManage,
+    canManage: canManage
   }
 } 

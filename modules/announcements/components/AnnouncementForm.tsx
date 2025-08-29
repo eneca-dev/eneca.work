@@ -6,39 +6,24 @@ import { Input } from "@/modules/calendar/components/ui/input"
 import { Label } from "@/modules/calendar/components/ui/label"
 
 import { RichTextEditor } from "./RichTextEditor"
-
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/modules/calendar/components/ui/alert-dialog"
 import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements"
 import { useUserStore } from "@/stores/useUserStore"
 import { Announcement } from "@/modules/announcements/types"
-import { TrashIcon } from "lucide-react"
 
 interface AnnouncementFormProps {
   onClose: () => void
   editingAnnouncement?: Announcement | null
-  onDelete?: (id: string) => Promise<void>
 }
 
-export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: AnnouncementFormProps) {
+export function AnnouncementForm({ onClose, editingAnnouncement }: AnnouncementFormProps) {
   const { createAnnouncement, editAnnouncement } = useAnnouncements()
   const userStore = useUserStore()
   const currentUserId = userStore.id
-  const currentUserName = userStore.name || 'Неизвестный пользователь'
   const isAuthenticated = userStore.isAuthenticated
 
   const [header, setHeader] = useState("")
   const [text, setText] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Заполняем форму данными для редактирования
   useEffect(() => {
@@ -72,22 +57,6 @@ export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: Ann
       // Ошибка уже обрабатывается в хуке
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  const handleDelete = () => {
-    setDeleteDialogOpen(true)
-  }
-
-  const confirmDelete = async () => {
-    if (editingAnnouncement && onDelete) {
-      try {
-        await onDelete(editingAnnouncement.id)
-        setDeleteDialogOpen(false)
-        onClose()
-      } catch (error) {
-        // Ошибка уже обрабатывается в хуке
-      }
     }
   }
 
@@ -137,24 +106,6 @@ export function AnnouncementForm({ onClose, editingAnnouncement, onDelete }: Ann
           </div>
         </div>
       </form>
-
-      {/* Диалог подтверждения удаления */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить объявление?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Это действие нельзя отменить. Объявление "{editingAnnouncement?.header}" будет удалено навсегда.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>
-              Удалить
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 } 
