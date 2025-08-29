@@ -179,7 +179,7 @@ export const useAnnouncementsPermissions = () => {
   const canManage = hasPermission('announcements.manage')
   
   return {
-    canView: hasPermission('announcements.view'),
+    canView: true,
     canCreate: canManage,
     canEditAll: canManage,
     canEditOwn: canManage,

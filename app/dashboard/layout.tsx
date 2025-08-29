@@ -216,7 +216,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева и динамическим отступом слева под панель уведомлений (панель раскрывается справа от сайдбара) */}
-      <div className={`flex-1 ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'px-0' : 'px-0 md:px-6'} ${pathname?.startsWith('/dashboard/reports') || pathname?.startsWith('/dashboard/notions') || pathname?.startsWith('/dashboard/projects') ? 'py-0' : 'py-6'} transition-all duration-300`}
+      <div className={`flex-1 px-0 py-0 transition-all duration-300`}
         style={{ marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0) }}>
         <UserPermissionsSyncProvider>
           <PermissionsManager>

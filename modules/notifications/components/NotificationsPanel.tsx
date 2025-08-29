@@ -330,6 +330,10 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       if (target && target.closest('[role="dialog"]')) {
         return
       }
+      // Игнорируем клики по элементам, которые намеренно не должны закрывать панель (навигация с главной)
+      if (target && target.closest('[data-keep-notifications-open]')) {
+        return
+      }
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         console.log('🖱️ Клик вне панели - закрываем')
         handleClose()
