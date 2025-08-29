@@ -4,6 +4,15 @@ export interface UserPermissions {
   canEditAllUsers: boolean
   canDeleteUsers: boolean
   canEditStructures: boolean
+  // Новые детальные права редактирования
+  canEditSelf: boolean
+  canEditTeam: boolean
+  canEditDepartment: boolean
+  // Права на просмотр ставок
+  canViewRateSelf: boolean
+  canViewRateTeam: boolean
+  canViewRateDepartment: boolean
+  canViewRateAll: boolean
   // Hierarchy статусы
   isAdmin: boolean
   isDepartmentHead: boolean
@@ -19,6 +28,16 @@ export function useUserPermissions(): UserPermissions {
     canEditAllUsers: hasPermission('users.edit.all'),
     canDeleteUsers: hasPermission('users.delete'),
     canEditStructures: hasPermission('users.edit.structure'),
+
+    canEditSelf: hasPermission('users.edit.self'),
+    canEditTeam: hasPermission('users.edit.team'),
+    canEditDepartment: hasPermission('users.edit.department'),
+
+    canViewRateSelf: hasPermission('users.rates.view.self'),
+    canViewRateTeam: hasPermission('users.rates.view.team'),
+    canViewRateDepartment: hasPermission('users.rates.view.department'),
+    canViewRateAll: hasPermission('users.rates.view.all'),
+
     // Hierarchy статусы
     isAdmin: hasPermission('hierarchy.is_admin'),
     isDepartmentHead: hasPermission('hierarchy.is_department_head'),

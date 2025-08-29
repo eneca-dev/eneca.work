@@ -37,6 +37,8 @@ export const useReportsOrgFiltersStore = create<OrgFiltersState>()(
     persist(
       (set, get) => ({
         isLoading: false,
+        // @ts-ignore runtime flag for UI disables
+        lockedFilters: [],
         departments: [],
         teams: [],
         employees: [],

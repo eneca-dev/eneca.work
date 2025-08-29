@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List, FileText } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
@@ -199,14 +199,14 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
               </h1>
             )}
             {!collapsed && (
-              <div className="ml-auto mr-2">
+              <div className="ml-6 mr-2 flex-shrink-0">
                 <NotificationBell collapsed={collapsed} />
               </div>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", collapsed ? "ml-2" : "", collapsed && "rotate-180")}
+              className={cn("h-8 w-8", collapsed ? "" : "", collapsed && "rotate-180")}
               onClick={onToggle}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -242,6 +242,23 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             ))}
           </ul>
         </nav>
+
+        {/* Документация */}
+        <div className="px-2 mt-2">
+          <Link
+            href="/dashboard/user-docs"
+            className={cn(
+              "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+              pathname === "/dashboard/user-docs"
+                ? "bg-primary/10 text-primary"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <FileText className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+            {!collapsed && <span>Документация</span>}
+          </Link>
+        </div>
 
         {/* Сообщить о проблеме */}
         <div className="px-2 mt-2">
