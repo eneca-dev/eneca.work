@@ -446,9 +446,10 @@ export async function updateUser(
     console.log("Добавлено: last_name =", userData.lastName);
   }
 
+  // Блокировка изменения email: игнорируем любые попытки обновить email
   if (userData.email) {
-    updates.email = userData.email
-    console.log("Добавлено: email =", userData.email);
+    console.warn('Изменение email заблокировано на уровне сервиса. Поле email будет проигнорировано.')
+    // Не обновляем auth.users и не зеркалим в profiles
   }
 
   // Найдем ID для связанных сущностей, если они изменились

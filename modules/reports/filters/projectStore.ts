@@ -14,6 +14,8 @@ interface ProjectFiltersState {
   isLoadingStages: boolean
   isLoadingObjects: boolean
   isLoadingSections: boolean
+  // @ts-ignore runtime: для дизейблов и индикаторов
+  lockedFilters?: Array<'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'>
 
   projects: SimpleOption[]
   stages: SimpleOption[]
@@ -42,6 +44,7 @@ export const useReportsProjectFiltersStore = create<ProjectFiltersState>()(
         isLoadingStages: false,
         isLoadingObjects: false,
         isLoadingSections: false,
+        lockedFilters: [],
 
         projects: [],
         stages: [],

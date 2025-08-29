@@ -496,10 +496,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         const updateData: any = {
           firstName: formData.firstName,
           lastName: formData.lastName,
-          email: formData.email,
           country: formData.country,
           city: formData.city,
           workLocation: formData.workLocation,
+        }
+
+        // Обновляем email только если он действительно изменился
+        const trimmedEmail = (formData.email || "").trim()
+        const currentEmail = (user.email || "").trim()
+        if (trimmedEmail && trimmedEmail !== currentEmail) {
+          updateData.email = trimmedEmail
         }
         
         // Добавляем организационные поля только если пользователь может их редактировать
@@ -710,7 +716,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 className="md:col-span-3 col-span-full h-9"
-                required
+                disabled
+                readOnly
+                title="Изменение email временно заблокировано"
               />
             </div>
             

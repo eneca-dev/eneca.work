@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock } from 'lucide-react';
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
-// Заменяем старый store на новый из planning модуля
-import { useFilterStore } from '@/modules/planning/filters/store';
+// Используем изолированный store фильтров для модуля projects
+import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
 import { getFiltersPermissionContextAsync } from '@/modules/permissions/integration/filters-permission-context'
+import { applyProjectLocks } from '@/modules/projects/integration/project-filter-locks'
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
@@ -45,8 +46,8 @@ export default function ProjectsPage() {
   const urlSectionId = searchParams.get('section');
   const urlTab = searchParams.get('tab') as 'overview' | 'details' | 'comments' | null;
 
-  // Используем новый store фильтров из planning модуля
-  const filterStore = useFilterStore();
+  // Локальный стор фильтров модуля projects
+  const filterStore = useProjectFilterStore();
 
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
@@ -127,15 +128,14 @@ export default function ProjectsPage() {
   // Ленивая инициализация данных организации для проектов
   useEffect(() => {
     if (typeof window === 'undefined') return
-    // Применяем ограничения по правам (перезагрузим permissions при отсутствии)
-    getFiltersPermissionContextAsync()
-      .then((ctx) => {
-        filterStore.applyPermissionDefaults(ctx)
-      })
-      .catch((err) => {
-        Sentry.captureException(err)
-        console.error('Failed to init filter permissions context', err)
-      })
+    // Инициализация блокировок и справочников
+    applyProjectLocks().then(({ locked }) => {
+      console.log('projects_filter_lock:on_mount_locked', Array.from(locked))
+      console.log('projects_filter_lock:on_mount_selectedManagerId', useProjectFilterStore.getState().selectedManagerId)
+    }).catch(err => {
+      Sentry.captureException(err)
+      console.error('Failed to apply project locks', err)
+    })
     if (filterStore.managers.length === 0) {
       filterStore.loadManagers()
     }
@@ -144,9 +144,6 @@ export default function ProjectsPage() {
     }
     if (filterStore.employees.length === 0) {
       filterStore.loadEmployees()
-    }
-    if (filterStore.projects.length === 0) {
-      filterStore.loadProjects(filterStore.selectedManagerId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStore.managers.length, filterStore.departments.length, filterStore.employees.length, filterStore.projects.length, filterStore.selectedManagerId])
@@ -205,13 +202,13 @@ export default function ProjectsPage() {
         title="Проекты"
         titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg"
         right={(
-          <div className="ml-auto">
+          <div className="flex items-center gap-1">
             <button
-              className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs bg-gradient-to-r from-emerald-500/15 to-teal-500/15 text-emerald-700 dark:text-emerald-300 hover:from-emerald-500/25 hover:to-teal-500/25 transition-all duration-200 rounded-md border-emerald-200/60 dark:border-emerald-500/40"
+              className="inline-flex items-center justify-center h-7 w-7 text-[11px] md:text-xs rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
               onClick={() => setIsCreateProjectOpen(true)}
               title="Создать проект"
             >
-              <span className="hidden sm:inline">Создать проект</span>
+              <Plus className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -222,24 +219,20 @@ export default function ProjectsPage() {
           <div className="flex items-center gap-1.5">
             {/* Переключить группировку по руководителям */}
             <button
-              className={`flex items-center justify-center p-1.5 h-7 w-7 transition-all duration-200 rounded-md border ${
-                showManagers
-                  ? 'bg-gradient-to-br from-blue-500/25 to-cyan-500/25 text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-500/40'
-                  : 'bg-gradient-to-br from-blue-500/15 to-cyan-500/15 text-blue-600 dark:text-blue-400 hover:from-blue-500/25 hover:to-cyan-500/25 hover:shadow-sm border-blue-200/50 dark:border-blue-500/30'
-              }`}
+              className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Переключить группировку по руководителям"
               onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:toggleShowManagers')) }}
             >
-              <Users className="h-3.5 w-3.5" />
+              <Users className="h-4 w-4" />
             </button>
 
             {/* Свернуть всё */}
             <button
-              className="flex items-center justify-center p-1.5 h-7 w-7 bg-gradient-to-br from-orange-500/15 to-amber-500/15 text-orange-600 hover:from-orange-500/25 hover:to-amber-500/25 hover:shadow-sm dark:from-orange-500/25 dark:to-amber-500/25 dark:text-orange-400 dark:hover:from-orange-500/35 dark:hover:to-amber-500/35 transition-all duration-200 rounded-md border border-orange-200/50 dark:border-orange-500/30"
+              className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Свернуть всё"
               onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
             >
-              <Minimize className="h-3.5 w-3.5" />
+              <Minimize className="h-4 w-4" />
             </button>
 
             {/* Синхронизация с Worksection — перенесена в выпадающий список "Проект" */}
@@ -284,13 +277,16 @@ export default function ProjectsPage() {
             <div className="p-2 space-y-2">
               {/* Отдел */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Отдел</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Отдел</span>
+                  {filterStore.isFilterLocked('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedDepartmentId || ''}
                   onChange={e => filterStore.setFilter('department', e.target.value || null)}
                   className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
-                  disabled={filterStore.isFilterLocked('department')}
+                  
                 >
                   <option value="">Все</option>
                   {filterStore.departments.map(d => (
@@ -300,13 +296,16 @@ export default function ProjectsPage() {
               </div>
               {/* Команда */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Команда</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Команда</span>
+                  {filterStore.isFilterLocked('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedTeamId || ''}
                   onChange={e => filterStore.setFilter('team', e.target.value || null)}
                   className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
-                  disabled={filterStore.isFilterLocked('team')}
+                  
                 >
                   <option value="">Все</option>
                   {filterStore.getFilteredTeams().map(t => (
@@ -457,12 +456,16 @@ export default function ProjectsPage() {
 
               {/* Менеджер */}
               <div>
-                <div className="text-[10px] text-slate-500 mb-1">Менеджер</div>
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                  <span>Менеджер</span>
+                  {filterStore.isFilterLocked('manager') && <Lock className="h-3 w-3 text-slate-400" />}
+                </div>
                 <select
                   value={filterStore.selectedManagerId || ''}
                   onChange={e => filterStore.setFilter('manager', e.target.value || null)}
                   className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
+                  disabled={Array.isArray((filterStore as any).lockedFilters) && (filterStore as any).lockedFilters.includes('manager')}
                 >
                   <option value="">Все</option>
                   {filterStore.managers.map(m => (

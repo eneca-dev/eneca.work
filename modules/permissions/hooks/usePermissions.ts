@@ -176,18 +176,18 @@ export const useAnnouncementsPermissions = () => {
   const { hasPermission } = usePermissions()
   
   return {
-    canView: hasPermission('announcements.view'),
-    canCreate: hasPermission('announcements.create'),
-    canEditAll: hasPermission('announcements.edit.all'),
-    canEditOwn: hasPermission('announcements.edit.own'),
-    canDeleteAll: hasPermission('announcements.delete.all'),
-    canDeleteOwn: hasPermission('announcements.delete.own'),
-    canAdmin: hasPermission('announcements.admin'),
+    // Просмотр объявлений доступен всем (без прав)
+    canView: true,
+    // Все действия завязаны на одном агрегированном праве
+    canCreate: hasPermission('announcements_can_create_and_edit'),
+    canEditAll: hasPermission('announcements_can_create_and_edit'),
+    canEditOwn: hasPermission('announcements_can_create_and_edit'),
+    canDeleteAll: hasPermission('announcements_can_create_and_edit'),
+    canDeleteOwn: hasPermission('announcements_can_create_and_edit'),
+    canAdmin: hasPermission('announcements_can_create_and_edit'),
     
-    // Логические комбинации
-    canEditAnnouncements: hasPermission('announcements.edit.all') ||
-                          hasPermission('announcements.edit.own'),
-    canDeleteAnnouncements: hasPermission('announcements.delete.all') ||
-                            hasPermission('announcements.delete.own')
+    // Логические комбинации (также завязаны на агрегированном праве)
+    canEditAnnouncements: hasPermission('announcements_can_create_and_edit'),
+    canDeleteAnnouncements: hasPermission('announcements_can_create_and_edit')
   }
 } 

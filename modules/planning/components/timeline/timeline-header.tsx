@@ -78,6 +78,13 @@ export function TimelineHeader({
   // Получаем видимость столбцов из стора
   const { columnVisibility, toggleColumnVisibility } = usePlanningColumnsStore()
 
+  // Слушаем глобальное событие от верхней панели для переключения колонки "Проект"
+  useEffect(() => {
+    const handler = () => toggleColumnVisibility('project')
+    window.addEventListener('planning:toggleProjectColumn', handler)
+    return () => window.removeEventListener('planning:toggleProjectColumn', handler)
+  }, [toggleColumnVisibility])
+
   // Заменяем сложные расчеты ширины на фиксированные значения
   // Заменяем эти строки:
   // const sectionWidth = columnWidth + 80
@@ -138,84 +145,7 @@ export function TimelineHeader({
               <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
                 Раздел
               </div>
-              {/* Кнопки управления */}
-              <div className="flex gap-1">
-                {/* Кнопки переключения видимости */}
-                <button
-                  onClick={toggleShowSections}
-                  title={showSections ? 'Скрыть разделы' : 'Показать разделы'}
-                  className={cn(
-                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
-                    showSections
-                      ? theme === "dark" 
-                        ? "text-teal-400 hover:text-teal-300" 
-                        : "text-teal-600 hover:text-teal-700"
-                      : theme === "dark" 
-                        ? "text-gray-400 hover:text-gray-300" 
-                        : "text-gray-600 hover:text-gray-700"
-                  )}
-                >
-                  {showSections ? <Eye size={12} /> : <EyeOff size={12} />}
-                  <span>Разделы</span>
-                </button>
-
-                <button
-                  onClick={toggleShowDepartments}
-                  title={showDepartments ? 'Скрыть отделы' : 'Показать отделы'}
-                  className={cn(
-                    "px-2 py-1 rounded hover:bg-opacity-80 transition-colors text-xs flex items-center gap-1",
-                    showDepartments
-                      ? theme === "dark" 
-                        ? "text-teal-400 hover:text-teal-300" 
-                        : "text-teal-600 hover:text-teal-700"
-                      : theme === "dark" 
-                        ? "text-gray-400 hover:text-gray-300" 
-                        : "text-gray-600 hover:text-gray-700"
-                  )}
-                >
-                  {showDepartments ? <Eye size={12} /> : <EyeOff size={12} />}
-                  <span>Отделы</span>
-                </button>
-
-                <button
-                  onClick={() => toggleColumnVisibility('project')}
-                  title={columnVisibility.project ? 'Скрыть колонку "Проект"' : 'Показать колонку "Проект"'}
-                  className={cn(
-                    "p-1 rounded hover:bg-opacity-80 transition-colors",
-                    theme === "dark" 
-                      ? "hover:bg-slate-700 text-blue-400 hover:text-blue-300" 
-                      : "hover:bg-slate-100 text-blue-600 hover:text-blue-700"
-                  )}
-                >
-                  <Columns3 size={14} />
-                </button>
-
-                <button
-                  onClick={expandAllDepartments}
-                  title="Развернуть все отделы"
-                  className={cn(
-                    "p-1 rounded hover:bg-opacity-80 transition-colors",
-                    theme === "dark" 
-                      ? "hover:bg-slate-700 text-emerald-400 hover:text-emerald-300" 
-                      : "hover:bg-slate-100 text-emerald-600 hover:text-emerald-700"
-                  )}
-                >
-                  <Expand size={14} />
-                </button>
-
-                <button
-                  onClick={collapseAllDepartments}
-                  title="Свернуть все отделы"
-                  className={cn(
-                    "p-1 rounded hover:bg-opacity-80 transition-colors",
-                    theme === "dark" 
-                      ? "hover:bg-slate-700 text-orange-400 hover:text-orange-300" 
-                      : "hover:bg-slate-100 text-orange-600 hover:text-orange-700"
-                  )}
-                >
-                  <Minimize size={14} />
-                </button>
-              </div>
+              {/* Кнопки управления перенесены в верхнюю панель */}
             </div>
           </div>
 
