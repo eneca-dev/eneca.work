@@ -267,10 +267,23 @@ export function preprocessMarkdownTables(markdown: string): string {
 }
 
 /**
+ * Escapes HTML characters to prevent XSS attacks
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
  * Применяет все markdown форматирования к тексту
  */
 function applyMarkdownFormatting(text: string): string {
-  return text
+  const escaped = escapeHtml(text)
+  return escaped
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/__(.*?)__/g, '<u>$1</u>')
@@ -284,7 +297,8 @@ function applyMarkdownFormatting(text: string): string {
  * Применяет markdown форматирования для TipTap редактора (упрощенная версия)
  */
 function applyMarkdownFormattingForTipTap(text: string): string {
-  return text
+  const escaped = escapeHtml(text)
+  return escaped
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/~~(.*?)~~/g, '<s>$1</s>')
     .replace(/__(.*?)__/g, '<u>$1</u>')
@@ -387,20 +401,20 @@ export function markdownToHtml(text: string): string {
     }
     
     if (!line.trim()) {
-      // Пустая строка - НЕ добавляем <br/>, оставляем как есть
-      htmlLines.push('')
+      // Пустая строка - добавляем пустой параграф для создания отступа между блоками
+      htmlLines.push('<p></p>')
     } else if (/^### (.+)$/.test(line.trim())) {
       // Заголовок 3
       const text = line.trim().replace(/^### /, '')
-      htmlLines.push(`<h3 class="text-lg font-bold mt-4 mb-2 header-placeholder">${text}</h3>`)
+      htmlLines.push(`<h3 class="text-lg font-bold mt-4 mb-2 header-placeholder">${escapeHtml(text)}</h3>`)
     } else if (/^## (.+)$/.test(line.trim())) {
       // Заголовок 2
       const text = line.trim().replace(/^## /, '')
-      htmlLines.push(`<h2 class="text-xl font-bold mt-4 mb-2 header-placeholder">${text}</h2>`)
+      htmlLines.push(`<h2 class="text-xl font-bold mt-4 mb-2 header-placeholder">${escapeHtml(text)}</h2>`)
     } else if (/^# (.+)$/.test(line.trim())) {
       // Заголовок 1
       const text = line.trim().replace(/^# /, '')
-      htmlLines.push(`<h1 class="text-2xl font-bold mt-4 mb-2 header-placeholder">${text}</h1>`)
+      htmlLines.push(`<h1 class="text-2xl font-bold mt-4 mb-2 header-placeholder">${escapeHtml(text)}</h1>`)
     } else if (/^- \[ \] (.+)$/.test(line.trim())) {
       // Пустой чекбокс
       const text = line.trim().replace(/^- \[ \] /, '')
@@ -423,7 +437,7 @@ export function markdownToHtml(text: string): string {
         const number = match[1]
         const text = match[2]
         const formattedText = applyMarkdownFormatting(text)
-        htmlLines.push(`<div class="numbered-line">${number}. ${formattedText}</div>`)
+        htmlLines.push(`<div class="numbered-line">${escapeHtml(number)}. ${formattedText}</div>`)
       }
     } else if (/^> (.+)$/.test(line.trim())) {
       // Цитата
@@ -501,17 +515,17 @@ export function markdownToHtml(text: string): string {
         } else {
           // Если это не таблица, обрабатываем как обычный текст
           let formattedLine = applyMarkdownFormatting(line.trim())
-          htmlLines.push(formattedLine)
+          htmlLines.push(`<p>${formattedLine}</p>`)
         }
       } else {
         // Если только одна строка с |, обрабатываем как обычный текст
         let formattedLine = applyMarkdownFormatting(line.trim())
-        htmlLines.push(formattedLine)
+        htmlLines.push(`<p>${formattedLine}</p>`)
       }
     } else if (line.trim()) {
       // Обычный текст с форматированием (только если не пустая строка)
       let formattedLine = applyMarkdownFormatting(line.trim())
-      htmlLines.push(formattedLine)
+      htmlLines.push(`<p>${formattedLine}</p>`)
     }
   }
   
@@ -1091,7 +1105,7 @@ export function markdownToTipTapHTML(markdown: string): string {
 
   const adjustListStack = (targetDepth: number, newType: 'ul' | 'ol' | 'taskList') => {
     // Закрываем списки глубже чем нужно
-    while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
       const list = listStack.pop()!
       if (list.type === 'taskList') {
         htmlParts.push('</ul>')
@@ -1099,6 +1113,29 @@ export function markdownToTipTapHTML(markdown: string): string {
         htmlParts.push('</ul>')
       } else if (list.type === 'ol') {
         htmlParts.push('</ol>')
+      }
+    }
+
+    // Проверяем, есть ли уже список на нужной глубине
+    const existingList = listStack.find(list => list.depth === targetDepth)
+    
+    if (existingList) {
+      // Если на этой глубине уже есть список
+      if (existingList.type === newType) {
+        // Тот же тип - продолжаем существующий список
+        return
+      } else {
+        // Разный тип - закрываем старый и открываем новый
+        while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
+          const list = listStack.pop()!
+          if (list.type === 'taskList') {
+            htmlParts.push('</ul>')
+          } else if (list.type === 'ul') {
+            htmlParts.push('</ul>')
+          } else if (list.type === 'ol') {
+            htmlParts.push('</ol>')
+          }
+        }
       }
     }
 
@@ -1160,17 +1197,17 @@ export function markdownToTipTapHTML(markdown: string): string {
       flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^### /, '')
-      htmlParts.push(`<h3>${text}</h3>`)
+      htmlParts.push(`<h3>${escapeHtml(text)}</h3>`)
     } else if (/^## (.+)$/.test(line.trim())) {
       flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^## /, '')
-      htmlParts.push(`<h2>${text}</h2>`)
+      htmlParts.push(`<h2>${escapeHtml(text)}</h2>`)
     } else if (/^# (.+)$/.test(line.trim())) {
       flushListStack()
       flushCurrentBlockquote()
       const text = line.trim().replace(/^# /, '')
-      htmlParts.push(`<h1>${text}</h1>`)
+      htmlParts.push(`<h1>${escapeHtml(text)}</h1>`)
     } else if (/^\s*- \[ \] (.+)$/.test(line)) {
       const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- \[ \] /, '')
