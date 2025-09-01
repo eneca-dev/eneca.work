@@ -550,7 +550,6 @@ export function CommentEditor({
               display: flex !important;
               align-items: center !important;
               gap: 8px !important;
-              margin: 2px 0 !important;
             }
             .editor-comment ul[data-type="taskList"] li label {
               display: flex !important;
@@ -560,13 +559,13 @@ export function CommentEditor({
             }
             .editor-comment ul[data-type="taskList"] li input[type="checkbox"] {
               margin: 0 !important;
-              accent-color: #1e7260 !important;
+              accent-color: hsl(var(--primary)) !important;
+              width: 16px !important;
+              height: 16px !important;
             }
             .editor-comment ul[data-type="taskList"] li > div {
               flex: 1 !important;
-              display: flex !important;
-              align-items: center !important;
-              max-width: calc(100% - 32px) !important;
+              min-width: 0 !important;
               word-wrap: break-word !important;
               overflow-wrap: break-word !important;
             }

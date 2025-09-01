@@ -677,15 +677,11 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
           if (liChild.nodeType === Node.ELEMENT_NODE) {
             const childElement = liChild as Element
             if (childElement.tagName.toLowerCase() === 'ul') {
-              // Вложенный маркированный список
-              if (childElement.getAttribute('data-type') === 'taskList') {
-                nestedLists += '\n' + processTaskList(childElement, depth + 1)
-              } else {
-                nestedLists += '\n' + processListItems(childElement, '-', depth + 1)
-              }
+              // Игнорируем вложенные списки (включая taskList) для упрощения
+              // Вложенные списки больше не поддерживаются
             } else if (childElement.tagName.toLowerCase() === 'ol') {
-              // Вложенный нумерованный список
-              nestedLists += '\n' + processListItems(childElement, '1.', depth + 1)
+              // Игнорируем вложенные списки для упрощения
+              // Вложенные списки больше не поддерживаются
             } else {
               // Обычное содержимое
               itemContent += processNode(liChild)
@@ -755,19 +751,17 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
     return content
   }
 
-  // Обрабатываем task list с учетом вложенности
-  function processTaskList(listElement: Element, depth: number = 0): string {
+  // Обрабатываем task list без вложенности
+  function processTaskList(listElement: Element): string {
     const items: string[] = []
-    const indent = ' '.repeat(depth * INDENT_SPACES_PER_LEVEL) // Configurable spaces per indent level
-    
+
     for (const child of Array.from(listElement.childNodes)) {
       if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'li') {
         const liElement = child as Element
         const isChecked = liElement.getAttribute('data-checked') === 'true'
         let itemContent = ''
-        let nestedLists = ''
-        
-        // Сначала получаем основной контент из div, исключая вложенные списки
+
+        // Получаем контент из div, исключая любые вложенные списки
         const divElement = liElement.querySelector('div')
         if (divElement) {
           // Клонируем div и удаляем из него все вложенные ul/ol
@@ -776,28 +770,18 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
           nestedListsInDiv.forEach(list => list.remove())
           itemContent = processNode(clonedDiv)
         }
-        
-        // Затем обрабатываем вложенные списки отдельно
+
+        // Игнорируем любые вложенные списки в чекбоксах
         const nestedUls = liElement.querySelectorAll(':scope > div > ul, :scope > div > ol')
-        for (const nestedList of Array.from(nestedUls)) {
-          if (nestedList.tagName.toLowerCase() === 'ul') {
-            if (nestedList.getAttribute('data-type') === 'taskList') {
-              nestedLists += '\n' + processTaskList(nestedList, depth + 1)
-            } else {
-              nestedLists += '\n' + processListItems(nestedList, '-', depth + 1)
-            }
-          } else if (nestedList.tagName.toLowerCase() === 'ol') {
-            nestedLists += '\n' + processListItems(nestedList, '1.', depth + 1)
-          }
-        }
-        
-        if (itemContent.trim() || nestedLists) {
+        nestedUls.forEach(list => list.remove())
+
+        if (itemContent.trim()) {
           const checkboxMarker = isChecked ? '[x]' : '[ ]'
-          items.push(`${indent}- ${checkboxMarker} ${itemContent.trim()}${nestedLists}`)
+          items.push(`- ${checkboxMarker} ${itemContent.trim()}`)
         }
       }
     }
-    
+
     return items.join('\n')
   }
 
@@ -1104,8 +1088,13 @@ export function markdownToTipTapHTML(markdown: string): string {
   }
 
   const adjustListStack = (targetDepth: number, newType: 'ul' | 'ol' | 'taskList') => {
-    // Закрываем списки глубже чем нужно
-    while (listStack.length > 0 && listStack[listStack.length - 1].depth > targetDepth) {
+    // Для чекбоксов всегда используем только верхний уровень (без вложенности)
+    if (newType === 'taskList' && targetDepth > 0) {
+      return // Игнорируем вложенные чекбоксы
+    }
+
+    // Закрываем все открытые списки
+    while (listStack.length > 0) {
       const list = listStack.pop()!
       if (list.type === 'taskList') {
         htmlParts.push('</ul>')
@@ -1116,37 +1105,27 @@ export function markdownToTipTapHTML(markdown: string): string {
       }
     }
 
-    // Проверяем, есть ли уже список на нужной глубине
-    const existingList = listStack.find(list => list.depth === targetDepth)
-    
-    if (existingList) {
-      // Если на этой глубине уже есть список
-      if (existingList.type === newType) {
-        // Тот же тип - продолжаем существующий список
-        return
-      } else {
-        // Разный тип - закрываем старый и открываем новый
-        while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
-          const list = listStack.pop()!
-          if (list.type === 'taskList') {
-            htmlParts.push('</ul>')
-          } else if (list.type === 'ul') {
-            htmlParts.push('</ul>')
-          } else if (list.type === 'ol') {
-            htmlParts.push('</ol>')
-          }
+    // Для обычных списков поддерживаем вложенность, для чекбоксов - только верхний уровень
+    if (newType !== 'taskList' && targetDepth > 0) {
+      // Восстанавливаем вложенность для обычных списков
+      while (listStack.length < targetDepth) {
+        const currentDepth = listStack.length
+        listStack.push({ type: newType, depth: currentDepth })
+
+        if (newType === 'ul') {
+          htmlParts.push('<ul>')
+        } else if (newType === 'ol') {
+          htmlParts.push('<ol>')
         }
       }
-    }
-
-    // Открываем новые списки до нужной глубины
-    while (listStack.length === 0 || listStack[listStack.length - 1].depth < targetDepth) {
-      const currentDepth = listStack.length === 0 ? 0 : listStack[listStack.length - 1].depth + 1
-      listStack.push({ type: newType, depth: currentDepth })
-      
-      if (newType === 'taskList') {
-        htmlParts.push('<ul data-type="taskList">')
-      } else if (newType === 'ul') {
+    } else if (newType === 'taskList') {
+      // Для чекбоксов всегда только один уровень
+      listStack.push({ type: 'taskList', depth: 0 })
+      htmlParts.push('<ul data-type="taskList">')
+    } else {
+      // Для обычных списков на верхнем уровне
+      listStack.push({ type: newType, depth: 0 })
+      if (newType === 'ul') {
         htmlParts.push('<ul>')
       } else if (newType === 'ol') {
         htmlParts.push('<ol>')
@@ -1209,22 +1188,20 @@ export function markdownToTipTapHTML(markdown: string): string {
       const text = line.trim().replace(/^# /, '')
       htmlParts.push(`<h1>${escapeHtml(text)}</h1>`)
     } else if (/^\s*- \[ \] (.+)$/.test(line)) {
-      const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- \[ \] /, '')
       // Обрабатываем форматирование в тексте чекбокса
       const formattedText = applyMarkdownFormattingForTipTap(text)
-      
+
       flushCurrentBlockquote()
-      adjustListStack(indentLevel, 'taskList')
+      adjustListStack(0, 'taskList') // Всегда используем верхний уровень для чекбоксов
       htmlParts.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>${formattedText}</p></div></li>`)
     } else if (/^\s*- \[x\] (.+)$/.test(line)) {
-      const indentLevel = getIndentLevel(line)
       const text = line.replace(/^\s*- \[x\] /, '')
       // Обрабатываем форматирование в тексте чекбокса
       const formattedText = applyMarkdownFormattingForTipTap(text)
-      
+
       flushCurrentBlockquote()
-      adjustListStack(indentLevel, 'taskList')
+      adjustListStack(0, 'taskList') // Всегда используем верхний уровень для чекбоксов
       htmlParts.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>${formattedText}</p></div></li>`)
     } else if (/^\s*- (?!\[[ x]\])(.+)$/.test(line)) {
       const indentLevel = getIndentLevel(line)
