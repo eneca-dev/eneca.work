@@ -74,10 +74,17 @@ export const InlineDashboard: React.FC<InlineDashboardProps> = ({
             <Button
               variant="outline"
               onClick={onClose}
-              className="h-6 w-[197px] bg-[#F9F9FA] dark:bg-[#2B3544] border-gray-200 dark:border-gray-700 hover:bg-[#F0F0F1] dark:hover:bg-[#232A36] shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center relative"
+              className="h-6 w-auto bg-[#F9F9FA] dark:bg-[#2B3544] border-gray-200 dark:border-gray-700 hover:bg-[#F0F0F1] dark:hover:bg-[#232A36] shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 px-3"
             >
-              <ArrowLeft className="absolute left-2 h-3 w-3" />
-              <span className="ml-4">Назад к проектам</span>
+              <ArrowLeft className="h-3 w-3 flex-shrink-0" />
+              {/* ≥1350px: полный текст, нормальный размер */}
+              <span className="hidden min-[1350px]:inline text-sm font-medium whitespace-nowrap leading-none">
+                Назад к проектам
+              </span>
+              {/* <1350px: только "Назад" */}
+              <span className="inline min-[1350px]:hidden text-xs font-medium whitespace-nowrap leading-none">
+                Назад
+              </span>
             </Button>
           </div>
         )}

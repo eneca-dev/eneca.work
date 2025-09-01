@@ -105,8 +105,8 @@ const getActionText = (type: string, data?: {
     case 'comment_added': return 'добавил комментарий к разделу';
     case 'object_created': return ''; // Убираем текст для объектов
     case 'responsible_updated':
-      // Показываем имя ответственного
-      return data?.responsible_name || 'Новый ответственный';
+      // Показываем имя ответственного; если удалён — явно указываем отсутствие
+      return data?.responsible_name || 'без ответственного';
     case 'status_updated':
       // Показываем название статуса
       return data?.status_name ? `"${data.status_name}"` : 'Новый статус';
@@ -155,19 +155,20 @@ export const LastActivityCard: React.FC = () => {
       const [
         sectionsResult,
         objectsResult,
-        updatesResult,
+        responsibleUpdatesResult,
+        statusUpdatesResult,
         assignmentsResult
       ] = await Promise.allSettled([
-        // 1. Создание новых разделов - ПОСЛЕДНИЕ 5 для проекта
+        // 1. Создание новых разделов - ПОСЛЕДНИЕ 3 для проекта
         supabase
           .from('sections')
           .select('section_id, section_name, section_created')
           .eq('section_project_id', projectId)
           .gte('section_created', cutoffDate.toISOString())
           .order('section_created', { ascending: false })
-          .limit(5), // ✅ Последние 5
+          .limit(3),
 
-        // 2. Создание новых объектов - ИСПРАВЛЕННЫЙ запрос с учетом стадий
+        // 2. Создание новых объектов - ИСПРАВЛЕННЫЙ запрос с учетом стадий (ПОСЛЕДНИЕ 3)
         (async () => {
           let query = supabase
             .from('objects')
@@ -187,46 +188,47 @@ export const LastActivityCard: React.FC = () => {
 
           return await query
             .order('object_created', { ascending: false })
-            .limit(5); // ✅ Последние 5
+            .limit(3); 
         })(),
 
-        // 3. Обновления разделов - РАСШИРЕННЫЙ запрос с данными о статусе и ответственном
+        // 3. Обновления ответственных — по last_responsible_updated
         (async () => {
-          // Получаем все обновленные разделы проекта за последние 30 дней
           const { data, error } = await supabase
             .from('sections')
             .select(`
-              section_id, 
-              section_name, 
-              section_updated, 
-              section_created,
+              section_id,
+              section_name,
+              last_responsible_updated,
               section_responsible,
+              responsible_profile:section_responsible(first_name, last_name)
+            `)
+            .eq('section_project_id', projectId)
+            .not('last_responsible_updated', 'is', null)
+            .gte('last_responsible_updated', cutoffDate.toISOString())
+            .order('last_responsible_updated', { ascending: false })
+            .limit(5);
+
+          return { data, error };
+        })(),
+
+        // 4. Обновления статусов — по last_status_updated
+        (async () => {
+          const { data, error } = await supabase
+            .from('sections')
+            .select(`
+              section_id,
+              section_name,
+              last_status_updated,
               section_status_id,
-              responsible_profile:section_responsible(first_name, last_name),
               status:section_status_id(name)
             `)
             .eq('section_project_id', projectId)
-            .gte('section_updated', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Увеличено до 30 дней
-            .order('section_updated', { ascending: false });
+            .not('last_status_updated', 'is', null)
+            .gte('last_status_updated', cutoffDate.toISOString())
+            .order('last_status_updated', { ascending: false })
+            .limit(5);
 
-          if (error || !data) return { data: null, error };
-
-          // Фильтруем на стороне клиента: исключаем разделы где время создания = времени обновления
-          const updatedSections = data.filter(section => {
-            const created = new Date(section.section_created).getTime();
-            const updated = new Date(section.section_updated).getTime();
-            // TODO: Заменить ненадежное сравнение timestamp на более надежный подход:
-            // - Отдельный флаг 'is_modified' в таблице
-            // - Audit log/event tracking
-            // - Version/revision counter
-            // Текущий подход может давать ложные результаты при быстрых операциях
-            return (updated - created) > 1000;
-          });
-
-          return { 
-            data: updatedSections.length > 0 ? updatedSections.slice(0, 5) : null, 
-            error: null 
-          };
+          return { data, error };
         })(),
 
         // 4. Создание новых заданий - РАСШИРЕННЫЙ запрос с разделами
@@ -315,60 +317,45 @@ export const LastActivityCard: React.FC = () => {
         }));
       }
 
-      // 3. Разделяем обновления на ответственных и статусы
-      if (updatesResult.status === 'fulfilled' && updatesResult.value.data && updatesResult.value.data.length > 0) {
-        const sections = updatesResult.value.data;
-        
-        // Фильтруем разделы с ответственными
-        const responsibleUpdates = sections.filter((section: Record<string, any>) => {
+      // 3. Обновления ответственного (по last_responsible_updated)
+      if (responsibleUpdatesResult.status === 'fulfilled' && responsibleUpdatesResult.value.data && responsibleUpdatesResult.value.data.length > 0) {
+        const sections = responsibleUpdatesResult.value.data;
+        activityTypesData[2].hasData = true;
+        activityTypesData[2].data = sections.map((section: Record<string, any>) => {
           const responsibleProfile = extractRelatedValue(section.responsible_profile);
-          return responsibleProfile && responsibleProfile.first_name && responsibleProfile.last_name;
+          const responsibleName = responsibleProfile 
+            ? `${responsibleProfile.first_name} ${responsibleProfile.last_name}`
+            : null;
+
+          return {
+            user_name: null,
+            item_name: section.section_name,
+            timestamp: section.last_responsible_updated,
+            relative_time: getRelativeTime(section.last_responsible_updated),
+            extra_data: {
+              responsible_name: responsibleName
+            }
+          };
         });
-        
-        // Фильтруем разделы со статусами
-        const statusUpdates = sections.filter((section: Record<string, any>) => {
+      }
+
+      // 4. Обновления статусов (по last_status_updated)
+      if (statusUpdatesResult.status === 'fulfilled' && statusUpdatesResult.value.data && statusUpdatesResult.value.data.length > 0) {
+        const sections = statusUpdatesResult.value.data;
+        activityTypesData[3].hasData = true;
+        activityTypesData[3].data = sections.map((section: Record<string, any>) => {
           const statusName = extractRelatedValue(section.status, 'name');
-          return statusName;
+
+          return {
+            user_name: null,
+            item_name: section.section_name,
+            timestamp: section.last_status_updated,
+            relative_time: getRelativeTime(section.last_status_updated),
+            extra_data: {
+              status_name: statusName
+            }
+          };
         });
-
-        // 3. Обновления ответственного
-        if (responsibleUpdates.length > 0) {
-          activityTypesData[2].hasData = true;
-          activityTypesData[2].data = responsibleUpdates.slice(0, 5).map((section: Record<string, any>) => {
-            const responsibleProfile = extractRelatedValue(section.responsible_profile);
-            const responsibleName = responsibleProfile 
-              ? `${responsibleProfile.first_name} ${responsibleProfile.last_name}`
-              : null;
-
-            return {
-              user_name: null,
-              item_name: section.section_name,
-              timestamp: section.section_updated,
-              relative_time: getRelativeTime(section.section_updated),
-              extra_data: {
-                responsible_name: responsibleName
-              }
-            };
-          });
-        }
-
-        // 4. Обновления статусов
-        if (statusUpdates.length > 0) {
-          activityTypesData[3].hasData = true;
-          activityTypesData[3].data = statusUpdates.slice(0, 5).map((section: Record<string, any>) => {
-            const statusName = extractRelatedValue(section.status, 'name');
-
-            return {
-              user_name: null,
-              item_name: section.section_name,
-              timestamp: section.section_updated,
-              relative_time: getRelativeTime(section.section_updated),
-              extra_data: {
-                status_name: statusName
-              }
-            };
-          });
-        }
       }
 
       // 5. Создание заданий - ОБРАБОТКА с данными о разделах
