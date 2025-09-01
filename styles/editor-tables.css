@@ -52,6 +52,24 @@
   max-width: 100%;
 }
 
+/* Override for preview mode - no horizontal scrolling */
+.table-preview-mode .ProseMirror .tableWrapper {
+  overflow-x: hidden;
+}
+
+.table-preview-mode .ProseMirror table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.table-preview-mode .ProseMirror td,
+.table-preview-mode .ProseMirror th {
+  word-wrap: break-word !important;
+  overflow: hidden !important;
+  max-width: 0;
+  width: auto;
+}
+
 /* Table cell styles */
 .ProseMirror td {
   border: 1px solid #d1d5db;

@@ -299,6 +299,10 @@ function applyMarkdownFormatting(text: string): string {
 function applyMarkdownFormattingForTipTap(text: string): string {
   const escaped = escapeHtml(text)
   return escaped
+    // Преобразуем заголовки в обычный текст (убираем # и делаем жирным)
+    .replace(/^###\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^##\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^#\s+(.+)$/gm, '<strong>$1</strong>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/~~(.*?)~~/g, '<s>$1</s>')
     .replace(/__(.*?)__/g, '<u>$1</u>')
@@ -786,26 +790,30 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
   }
 
   // Рекурсивно обрабатываем элементы
-  function processNode(node: Node): string {
+  function processNode(node: Node, insideBlockquote: boolean = false): string {
     if (node.nodeType === Node.TEXT_NODE) {
       return node.textContent || ''
     }
-    
+
     if (node.nodeType === Node.ELEMENT_NODE) {
       const element = node as Element
       const tagName = element.tagName.toLowerCase()
       let content = ''
-      
+
       // Обрабатываем дочерние узлы
       for (const child of Array.from(node.childNodes)) {
-        content += processNode(child)
+        content += processNode(child, insideBlockquote || tagName === 'blockquote')
       }
-      
+
       switch (tagName) {
         case 'h1':
           // Пропускаем пустые заголовки с плейсхолдерами
           if (!content.trim()) {
             return ''
+          }
+          // Если заголовок внутри цитаты, конвертируем в обычный жирный текст
+          if (insideBlockquote) {
+            return `**${content}**`
           }
           return `# ${content}`
         case 'h2':
@@ -813,11 +821,19 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
           if (!content.trim()) {
             return ''
           }
+          // Если заголовок внутри цитаты, конвертируем в обычный жирный текст
+          if (insideBlockquote) {
+            return `**${content}**`
+          }
           return `## ${content}`
         case 'h3':
           // Пропускаем пустые заголовки с плейсхолдерами
           if (!content.trim()) {
             return ''
+          }
+          // Если заголовок внутри цитаты, конвертируем в обычный жирный текст
+          if (insideBlockquote) {
+            return `**${content}**`
           }
           return `### ${content}`
         case 'strong':
@@ -891,13 +907,33 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
         case 'span':
           return content
         case 'blockquote':
-          // Цитата - обрабатываем каждый дочерний элемент отдельно
+          // Цитата - обрабатываем каждый дочерний элемент отдельно, но удаляем списки
           const quoteLines: string[] = []
           for (const child of Array.from(element.childNodes)) {
-            if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'p') {
-              const pContent = processNode(child).trim()
-              if (pContent) {
-                quoteLines.push(`> ${pContent}`)
+            if (child.nodeType === Node.ELEMENT_NODE) {
+              const childElement = child as Element
+              const tagName = childElement.tagName.toLowerCase()
+
+              if (tagName === 'ul' || tagName === 'ol') {
+                // Пропускаем списки в цитате - они будут удалены
+                continue
+              } else if (tagName === 'p') {
+                const pContent = processNode(child, true).trim()
+                if (pContent) {
+                  quoteLines.push(`> ${pContent}`)
+                }
+              } else if (tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
+                // Обрабатываем заголовки в цитате - конвертируем в обычный текст
+                const headerContent = processNode(child, true).trim()
+                if (headerContent) {
+                  quoteLines.push(`> ${headerContent}`)
+                }
+              } else if (tagName === 'div' || tagName === 'span') {
+                // Обрабатываем другие элементы в цитате
+                const elementContent = processNode(child, true).trim()
+                if (elementContent) {
+                  quoteLines.push(`> ${elementContent}`)
+                }
               }
             } else if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim()) {
               // Обрабатываем прямой текст в blockquote
@@ -1011,13 +1047,28 @@ export function htmlToMarkdown(html: string, options?: { normalize?: boolean }):
   const parts: string[] = []
   for (const child of Array.from(tempDiv.childNodes)) {
     const result = processNode(child)
-    
-    // Добавляем результат только если он не пустой
-    if (result.trim()) {
-      parts.push(result.trim())
+
+    // Добавляем результат, сохраняя пустые параграфы для разделения блоков
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const element = child as Element
+      if (element.tagName.toLowerCase() === 'p') {
+        // Для параграфов всегда добавляем результат, даже если он пустой
+        // Это важно для сохранения пустых строк между списками и другими блоками
+        parts.push(result)
+      } else {
+        // Для других элементов добавляем только непустые результаты
+        if (result.trim()) {
+          parts.push(result.trim())
+        }
+      }
+    } else {
+      // Для текстовых узлов и других типов
+      if (result.trim()) {
+        parts.push(result.trim())
+      }
     }
   }
-  
+
   // Соединяем части с одним переносом строки между ними
   const markdown = parts.join('\n')
 
@@ -1093,8 +1144,16 @@ export function markdownToTipTapHTML(markdown: string): string {
       return // Игнорируем вложенные чекбоксы
     }
 
-    // Закрываем все открытые списки
-    while (listStack.length > 0) {
+    // Проверяем, можем ли мы продолжить существующий список
+    const currentListAtDepth = listStack.find(list => list.depth === targetDepth)
+
+    if (currentListAtDepth && currentListAtDepth.type === newType) {
+      // Список того же типа на том же уровне уже открыт, продолжаем его
+      return
+    }
+
+    // Закрываем списки, которые находятся на более глубоких уровнях или имеют другой тип
+    while (listStack.length > 0 && listStack[listStack.length - 1].depth >= targetDepth) {
       const list = listStack.pop()!
       if (list.type === 'taskList') {
         htmlParts.push('</ul>')

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react'
+import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import { Transaction } from '@tiptap/pm/state'
@@ -26,7 +26,6 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import { TableWithFirstRowHeader } from '@/modules/text-editor/extensions/table-with-first-row-header'
 import { TableWithResizeButtons } from '@/modules/text-editor/extensions/table-with-resize-buttons'
-import { InputRule } from '@tiptap/core'
 import '@/styles/editor-tables.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -160,12 +159,101 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     }, 3000)
   }, [])
 
+  // Функция для показа предупреждения о списках в цитате
+  const showBlockquoteListWarningTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Списки внутри цитаты удаляются после закрытия заметки. Вы можете потерять данные. Постарайтесь избегать списков внутри цитат',
+      duration: 5000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 5000)
+  }, [])
+
+  // Функция для показа предупреждения о заголовках в цитате
+  const showBlockquoteHeaderWarningTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Заголовки внутри цитаты будут преобразованы в обычный текст после закрытия заметки',
+      duration: 4000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 4000)
+  }, [])
+
   // Отслеживание изменений состояния подсказки
   useEffect(() => {
   }, [tooltipState])
 
   // Флаг набора через IME/композицию
   const [isComposing, setIsComposing] = useState(false)
+
+  // Отслеживание предыдущего состояния списков для цитаты
+  const prevListState = useRef({ bulletList: false, orderedList: false })
+
+  // Отслеживание предыдущего состояния заголовков для цитаты
+  const prevHeaderState = useRef({ h1: false, h2: false, h3: false })
+
+  // Функция для вставки блока кода с выделенным текстом
+  const handleCodeBlockInsertion = useCallback((editor: any) => {
+    const { selection } = editor.state
+    const { $from, $to } = selection
+
+    // Если нет выделения, просто создаем пустой блок кода
+    if ($from.pos === $to.pos) {
+      editor.chain().focus().setCodeBlock().run()
+      return
+    }
+
+    // Получаем выделенный текст с сохранением переносов строк
+    const slice = editor.state.doc.slice($from.pos, $to.pos)
+    let selectedText = ''
+
+    // Проходим по всем узлам в выделенном фрагменте и собираем текст с переносами строк
+    slice.content.forEach((node: any, index: number) => {
+      if (node.isText) {
+        selectedText += node.text
+      } else if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+        // Для параграфов и заголовков добавляем их текстовое содержимое
+        if (node.content && node.content.size > 0) {
+          node.content.forEach((childNode: any) => {
+            if (childNode.isText) {
+              selectedText += childNode.text
+            }
+          })
+        }
+        // Добавляем перенос строки после параграфа/заголовка (кроме последнего)
+        if (index < slice.content.size - 1) {
+          selectedText += '\n'
+        }
+      } else if (node.type.name === 'hardBreak') {
+        selectedText += '\n'
+      } else {
+        // Для других типов узлов пытаемся получить их текстовое содержимое
+        if (node.textContent) {
+          selectedText += node.textContent
+        }
+      }
+    })
+
+    // Очищаем текст от лишних переносов строк в конце
+    selectedText = selectedText.replace(/\n+$/, '')
+
+    // Если текст пустой, создаем пустой блок кода
+    if (!selectedText.trim()) {
+      editor.chain().focus().setCodeBlock().run()
+      return
+    }
+
+    // Удаляем выделенный текст и вставляем блок кода с этим текстом
+    editor.chain()
+      .deleteSelection()
+      .setCodeBlock()
+      .insertContent(selectedText)
+      .run()
+  }, [])
 
   // Комбинирование заголовка и содержимого
   const combineContent = (titleValue: string, editorContent: string) => {
@@ -234,80 +322,14 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         bulletList: false, // Отключаем встроенный bulletList
         orderedList: false // Отключаем встроенный orderedList
       }),
-      // Добавляем собственные расширения списков без input rules внутри цитат
+      // Добавляем собственные расширения списков без input rules (обработка в onUpdate)
       BulletList.configure({
         keepMarks: true,
         keepAttributes: true
-      }).extend({
-        addInputRules() {
-          return [
-            new InputRule({
-              find: /^\s*-\s$/,
-              handler: ({ state, range, match }) => {
-                // Проверяем, не находимся ли мы внутри цитаты
-                const { $anchor } = state.selection
-                let inBlockquote = false
-                for (let depth = $anchor.depth; depth > 0; depth--) {
-                  const node = $anchor.node(depth)
-                  if (node.type.name === 'blockquote') {
-                    inBlockquote = true
-                    break
-                  }
-                }
-
-                // Если внутри цитаты, не создаем список
-                if (inBlockquote) {
-                  return
-                }
-
-                // Создаем список обычным способом
-                const { tr } = state
-                const start = range.from
-                const end = range.to
-
-                tr.replaceWith(start, end, this.type.create())
-                tr.setSelection(TextSelection.near(tr.doc.resolve(start + 1)))
-              }
-            })
-          ]
-        }
       }),
       OrderedList.configure({
         keepMarks: true,
         keepAttributes: true
-      }).extend({
-        addInputRules() {
-          return [
-            new InputRule({
-              find: /^\s*\d+\.\s$/,
-              handler: ({ state, range, match }) => {
-                // Проверяем, не находимся ли мы внутри цитаты
-                const { $anchor } = state.selection
-                let inBlockquote = false
-                for (let depth = $anchor.depth; depth > 0; depth--) {
-                  const node = $anchor.node(depth)
-                  if (node.type.name === 'blockquote') {
-                    inBlockquote = true
-                    break
-                  }
-                }
-
-                // Если внутри цитаты, не создаем список
-                if (inBlockquote) {
-                  return
-                }
-
-                // Создаем список обычным способом
-                const { tr } = state
-                const start = range.from
-                const end = range.to
-
-                tr.replaceWith(start, end, this.type.create())
-                tr.setSelection(TextSelection.near(tr.doc.resolve(start + 1)))
-              }
-            })
-          ]
-        }
       }),
       Underline,
       TextStyle,
@@ -372,13 +394,58 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           return false
         },
         input: () => {
-          // Input rules теперь обрабатываются в расширениях списков
-          return false
+          // Разрешаем работу input rules
+          return true
         }
       }
     },
     onUpdate: ({ editor, transaction }) => {
       if (isComposing) return
+
+      // Проверяем активацию списков через кнопки в цитате
+      if (transaction?.docChanged) {
+        const { selection } = editor.state
+        const { $anchor } = selection
+        let inBlockquote = false
+
+        // Проверяем все уровни вверх от текущей позиции
+        for (let depth = $anchor.depth; depth > 0; depth--) {
+          const node = $anchor.node(depth)
+          if (node.type.name === 'blockquote') {
+            inBlockquote = true
+            break
+          }
+        }
+
+        if (inBlockquote) {
+          const isBulletListNow = editor.isActive('bulletList')
+          const isOrderedListNow = editor.isActive('orderedList')
+
+          // Если список был активирован в цитате (переход из не-списка в список), показываем предупреждение
+          if ((isBulletListNow && !prevListState.current.bulletList) || (isOrderedListNow && !prevListState.current.orderedList)) {
+            showBlockquoteListWarningTooltip()
+          }
+
+          // Обновляем предыдущее состояние
+          prevListState.current = { bulletList: isBulletListNow, orderedList: isOrderedListNow }
+
+          // Проверяем активацию заголовков в цитате
+          const isH1Now = editor.isActive('heading', { level: 1 })
+          const isH2Now = editor.isActive('heading', { level: 2 })
+          const isH3Now = editor.isActive('heading', { level: 3 })
+
+          // Если заголовок был активирован в цитате (переход из не-заголовка в заголовок), показываем предупреждение
+          if ((isH1Now && !prevHeaderState.current.h1) ||
+              (isH2Now && !prevHeaderState.current.h2) ||
+              (isH3Now && !prevHeaderState.current.h3)) {
+            showBlockquoteHeaderWarningTooltip()
+          }
+
+          // Обновляем предыдущее состояние заголовков
+          prevHeaderState.current = { h1: isH1Now, h2: isH2Now, h3: isH3Now }
+        }
+      }
+
       setHasChanges(true)
 
       // Проверяем, не пытается ли пользователь создать чекбокс внутри цитаты через markdown синтаксис
@@ -401,7 +468,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           const currentContent = editor.getText()
           const contentLines = currentContent.split('\n')
 
-          // Ищем строки, которые могут содержать чекбоксы или списки
+          // Ищем строки, которые могут содержать чекбоксы
           for (let i = 0; i < contentLines.length; i++) {
             const line = contentLines[i]
             if (/^\s*- \[ \]/.test(line) || /^\s*- \[x\]/.test(line)) {
@@ -415,27 +482,132 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               editor.chain().deleteRange({ from, to }).insertContentAt(from, line.replace(/^\s*- \[[ x]\] /, '- ')).run()
 
               break
-            } else if (/^\s*- (?!\[[ x]\])/.test(line)) {
-              // Нашли буллет-лист внутри цитаты - показываем предупреждение
-              showBlockquoteListBlockedTooltip()
+            }
+          }
+                  // Если не в цитате, обрабатываем создание списков и заголовков через markdown синтаксис
+        if (transaction?.docChanged) {
+          const currentContent = editor.getText()
+          const contentLines = currentContent.split('\n')
 
-              // Удаляем только что введенный список
+          // Ищем строки с markdown синтаксисом списков и заголовков
+          for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i]
+
+            // Проверяем на заголовки
+            const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/)
+            if (headerMatch) {
+              const hashSymbols = headerMatch[1]
+              const headerText = headerMatch[2]
+              const level = hashSymbols.length
+
               const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
               const from = textBeforeLine.length
               const to = from + line.length
-              editor.chain().deleteRange({ from, to }).insertContentAt(from, line.replace(/^\s*- /, '')).run()
 
+              // Создаем заголовок
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, headerText)
+                .command(({ commands }) => commands.setHeading({ level: level as 1 | 2 | 3 }))
+                .run()
               break
-            } else if (/^\s*\d+\. /.test(line)) {
-              // Нашли нумерованный список внутри цитаты - показываем предупреждение
-              showBlockquoteListBlockedTooltip()
+            }
 
-              // Удаляем только что введенный список
+            // Проверяем на буллет-лист
+            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
               const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
               const from = textBeforeLine.length
               const to = from + line.length
-              editor.chain().deleteRange({ from, to }).insertContentAt(from, line.replace(/^\s*\d+\. /, '')).run()
 
+              // Создаем буллет-лист
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleBulletList())
+                .run()
+              break
+            }
+
+            // Проверяем на нумерованный список
+            const numberedMatch = line.match(/^\s*(\d+)\. $/)
+            if (numberedMatch) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем нумерованный список
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleOrderedList())
+                .run()
+              break
+            }
+          }
+        }
+        }
+
+        // Обрабатываем создание списков и заголовков в цитате с предупреждением
+        if (inBlockquote && transaction?.docChanged) {
+          const currentContent = editor.getText()
+          const contentLines = currentContent.split('\n')
+
+          // Ищем строки с markdown синтаксисом списков и заголовков в цитате
+          for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i]
+
+            // Проверяем на заголовки в цитате
+            const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/)
+            if (headerMatch) {
+              const hashSymbols = headerMatch[1]
+              const headerText = headerMatch[2]
+
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Конвертируем заголовок в обычный текст и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, headerText)
+                .run()
+
+              showBlockquoteHeaderWarningTooltip()
+              break
+            }
+
+            // Проверяем на буллет-лист в цитате
+            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем буллет-лист и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleBulletList())
+                .run()
+
+              showBlockquoteListWarningTooltip()
+              break
+            }
+
+            // Проверяем на нумерованный список в цитате
+            const numberedMatch = line.match(/^\s*(\d+)\. $/)
+            if (numberedMatch) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем нумерованный список и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleOrderedList())
+                .run()
+
+              showBlockquoteListWarningTooltip()
               break
             }
           }
@@ -479,6 +651,10 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     const nextContent = parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>'
     editor.commands.setContent(nextContent, false)
     setHasChanges(false)
+
+    // Сбрасываем состояние списков и заголовков при загрузке нового контента
+    prevListState.current = { bulletList: false, orderedList: false }
+    prevHeaderState.current = { h1: false, h2: false, h3: false }
   }, [notionId])
 
   useImperativeHandle(ref, () => ({
@@ -632,6 +808,17 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         }
       }
 
+      // Проверяем горячие клавиши для заголовков
+      // Обычно это Ctrl+1, Ctrl+2, Ctrl+3 для заголовков разных уровней
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        // Проверяем, не находимся ли мы внутри цитаты
+        if (isInsideBlockquote(editor)) {
+          e.preventDefault()
+          showBlockquoteHeaderWarningTooltip()
+          return
+        }
+      }
+
       // Проверяем горячие клавиши для списков
       // Обычно это Ctrl+Shift+8 для буллет-листа или Ctrl+Shift+1 для нумерованного списка
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '8' || e.key === '1')) {
@@ -642,11 +829,20 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           return
         }
       }
+
+      // Проверяем горячие клавиши для блока кода
+      // Обычно это Ctrl+Shift+C или Ctrl+Alt+C
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') ||
+          ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'C')) {
+        e.preventDefault()
+        handleCodeBlockInsertion(editor)
+        return
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onCancel, editor, isInsideBlockquote, showBlockquoteTaskBlockedTooltip, showBlockquoteListBlockedTooltip])
+  }, [onCancel, editor, isInsideBlockquote, showBlockquoteTaskBlockedTooltip, showBlockquoteListBlockedTooltip, showBlockquoteHeaderWarningTooltip, handleCodeBlockInsertion])
 
   // Обработчик клавиш для отступов в списках
   useListIndentation(editor)
@@ -763,7 +959,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               }
             }}
             placeholder={titlePlaceholder}
-            className="text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 focus:border-primary focus:ring-0 text-foreground dark:text-gray-100 !text-2xl bg-transparent"
+            className="!text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 focus:border-primary focus:ring-0 text-foreground dark:text-gray-100 bg-transparent"
             autoFocus={autoFocus}
           />
         </div>
@@ -1001,11 +1197,11 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            onClick={() => handleCodeBlockInsertion(editor)}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('codeBlock') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              editor.isActive('codeBlock')
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-600'
             )}
             title="Блок кода"
