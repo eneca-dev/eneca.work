@@ -183,6 +183,13 @@ export function NotesBlock() {
     if (!updatedNotion) {
       // Если это новая незасохраненная заметка — не закрываем редактор
       if (fullViewNotion.notion_id === 'new' || isCreatingNewNote) return
+
+      // Если активен поиск — не закрываем заметку, даже если она не в результатах поиска
+      if (searchQuery.trim()) {
+        console.log('🔍 Поиск активен, не закрываем заметку несмотря на отсутствие в результатах:', fullViewNotion.notion_id)
+        return
+      }
+
       // Текущая заметка была удалена — закрываем редактор
       setIsCreatingNewNote(false)
       setFullViewNotion(null)
@@ -196,7 +203,7 @@ export function NotesBlock() {
     ) {
       setFullViewNotion(updatedNotion)
     }
-  }, [notions, fullViewNotion])
+  }, [notions, fullViewNotion, searchQuery])
 
   // Автосохранение при изменении маршрута или закрытии приложения
   useEffect(() => {
