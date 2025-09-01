@@ -32,6 +32,7 @@ import {
   fetchAssignmentHistory,
   createAuditRecords
 } from "./api/task-transfer"
+import { deleteAssignment as apiDeleteAssignment } from "./api/task-transfer"
 
 interface TaskTransferStore {
   // Data
@@ -61,6 +62,7 @@ interface TaskTransferStore {
   refreshData: () => Promise<void>
   createNewAssignment: (assignmentData: CreateAssignmentData) => Promise<{ success: boolean; error?: any }>
   updateAssignment: (assignmentId: string, updateData: UpdateAssignmentData) => Promise<{ success: boolean; data?: Assignment; error?: any }>
+  deleteAssignment: (assignmentId: string) => Promise<{ success: boolean; error?: any }>
   advanceStatus: (assignmentId: string, currentStatus: any) => Promise<{ success: boolean; error?: any }>
   advanceStatusWithDuration: (assignmentId: string, currentStatus: any, duration?: number) => Promise<{ success: boolean; error?: any }>
   revertStatus: (assignmentId: string, currentStatus: any) => Promise<{ success: boolean; error?: any }>
@@ -482,6 +484,48 @@ export const useTaskTransferStore = create<TaskTransferStore>()(
           }
         }
       );
+      },
+
+      // Удаление задания
+      deleteAssignment: async (assignmentId: string) => {
+        return Sentry.startSpan(
+          {
+            op: "db.delete",
+            name: "Удаление задания task-transfer",
+          },
+          async (span) => {
+            try {
+              span.setAttribute("module", "task-transfer")
+              span.setAttribute("action", "delete_assignment")
+              span.setAttribute("assignment_id", assignmentId)
+
+              const result = await apiDeleteAssignment(assignmentId)
+              if (result.success) {
+                set((state) => ({
+                  assignments: state.assignments.filter(a => a.assignment_id !== assignmentId)
+                }))
+                return { success: true }
+              } else {
+                span.setAttribute("db.success", false)
+                return { success: false, error: result.error }
+              }
+            } catch (error) {
+              span.setAttribute("db.success", false)
+              Sentry.captureException(error, {
+                tags: {
+                  module: "task-transfer",
+                  action: "delete_assignment",
+                  severity: "high"
+                },
+                extra: {
+                  assignment_id: assignmentId,
+                  error_message: error instanceof Error ? error.message : String(error)
+                }
+              })
+              return { success: false, error }
+            }
+          }
+        );
       },
 
       // Обновление статуса задания

@@ -1253,6 +1253,73 @@ export async function fetchAssignmentHistory(assignmentId: string): Promise<Assi
   )
 }
 
+// Удаление задания (с предварительной очисткой аудита)
+export async function deleteAssignment(assignmentId: string) {
+  return Sentry.startSpan(
+    {
+      op: "db.delete",
+      name: "Удаление задания",
+    },
+    async (span) => {
+      try {
+        span.setAttribute("table", "assignments")
+        span.setAttribute("operation", "delete_assignment")
+        span.setAttribute("assignment_id", assignmentId)
+
+        // Сначала удаляем связанные записи аудита (если нет ON DELETE CASCADE)
+        await supabase
+          .from('assignment_audit')
+          .delete()
+          .eq('assignment_id', assignmentId)
+
+        const { error } = await supabase
+          .from('assignments')
+          .delete()
+          .eq('assignment_id', assignmentId)
+
+        if (error) {
+          span.setAttribute("db.success", false)
+          span.setAttribute("db.error", error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'task_transfer',
+              action: 'delete_assignment',
+              table: 'assignments',
+              assignment_id: assignmentId
+            },
+            extra: {
+              assignment_id: assignmentId,
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return { success: false, error }
+        }
+
+        span.setAttribute("db.success", true)
+        return { success: true }
+      } catch (error: any) {
+        span.setAttribute("error", true)
+        span.setAttribute("error.message", error.message)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'task_transfer',
+            action: 'delete_assignment',
+            assignment_id: assignmentId
+          },
+          extra: {
+            assignment_id: assignmentId,
+            error_message: error.message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return { success: false, error }
+      }
+    }
+  )
+}
+
 // Функция для создания записей аудита
 export async function createAuditRecords(
   assignmentId: string,
