@@ -213,6 +213,18 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     }, 3000)
   }, [])
 
+  // Функция для показа подсказки о невозможности табуляции в чекбоксах
+  const showTaskListTabBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать отступ в чекбоксе. Используйте клавиши со стрелками для навигации',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
   // Отслеживание изменений состояния подсказки
   useEffect(() => {
   }, [tooltipState])
@@ -658,13 +670,20 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     },
     onBlur: ({ editor }) => {
       // Принудительно сохраняем при потере фокуса
-      if (enableAutoSave && notionId && hasChanges) {
+      if (hasChanges) {
         try {
           const editorHTML = editor.getHTML()
           const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
           const combinedContent = combineContent(title, editorMarkdown)
-          // Используем forceSave для немедленного сохранения без debounce
-          forceSave(combinedContent)
+
+          // Для существующих заметок используем автосохранение
+          if (enableAutoSave && notionId) {
+            // Используем forceSave для немедленного сохранения без debounce
+            forceSave(combinedContent)
+          } else {
+            // Для новых заметок или когда автосохранение отключено - вызываем onSave
+            onSave(combinedContent)
+          }
         } catch (error) {
           console.error('Ошибка при сохранении на blur:', error)
         }
@@ -827,6 +846,16 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         return
       }
 
+      // Проверяем нажатие Tab в чекбоксах
+      if (e.key === 'Tab' && editor) {
+        // Проверяем, находимся ли мы внутри чекбокса (taskItem)
+        if (editor.isActive('taskItem')) {
+          e.preventDefault()
+          showTaskListTabBlockedTooltip()
+          return
+        }
+      }
+
       // Проверяем горячие клавиши для чекбоксов
       // Обычно это Ctrl+Shift+7 или Ctrl+Shift+9
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '7' || e.key === '9')) {
@@ -884,7 +913,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onCancel, editor, isInsideBlockquote, isInsideCodeBlock, showBlockquoteTaskBlockedTooltip, showBlockquoteListBlockedTooltip, showBlockquoteHeaderWarningTooltip, showCodeBlockListBlockedTooltip, handleCodeBlockInsertion])
+  }, [onCancel, editor, isInsideBlockquote, isInsideCodeBlock, showBlockquoteTaskBlockedTooltip, showBlockquoteListBlockedTooltip, showBlockquoteHeaderWarningTooltip, showCodeBlockListBlockedTooltip, showTaskListTabBlockedTooltip, handleCodeBlockInsertion])
 
   // Обработчик клавиш для отступов в списках
   useListIndentation(editor)

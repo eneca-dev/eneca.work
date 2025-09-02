@@ -72,6 +72,8 @@ export function NotesBlock() {
 
 
   const handleUpdateNote = async (id: string, content: string) => {
+    // Не обновляем новые заметки, которые еще не сохранены в БД
+    if (id === 'new') return
     await updateNotion(id, { notion_content: content })
   }
 
@@ -114,7 +116,7 @@ export function NotesBlock() {
     if (fullViewNotion && editorRef.current && fullViewNotion.notion_id !== 'new') {
       try {
         isSwitchingRef.current = true
-        await editorRef.current.save()
+        await handleSaveFullView('')
       } catch (error) {
         console.warn('Failed to save previous note before switching:', error)
       }
@@ -127,9 +129,9 @@ export function NotesBlock() {
   }
 
   const handleCloseFullView = () => {
-    // Сохраняем перед закрытием
+    // Сохраняем перед закрытием (включая новые заметки)
     if (editorRef.current) {
-      editorRef.current.save()
+      handleSaveFullView('')
     }
     if (isCreatingNewNote) {
       setIsCreatingNewNote(false)
@@ -139,7 +141,7 @@ export function NotesBlock() {
 
   const handleSaveFullView = async (content: string) => {
     if (!fullViewNotion) return
-    
+
     // Проверяем, пустая ли заметка (нет ни заголовка, ни контента)
     const trimmedContent = content.trim()
     if (!trimmedContent) {
@@ -150,14 +152,16 @@ export function NotesBlock() {
       // Для существующей заметки — просто не сохраняем и не закрываем
       return
     }
-    
+
     if (isCreatingNewNote) {
-      // Создаем новую заметку
+      // Создаем новую заметку только если есть реальный контент
       try {
-        await createNotion({ notion_content: content })
+        const created = await createNotion({ notion_content: content })
         // После создания заметки НЕ меняем fullViewNotion - редактор остается с текущей заметкой
         setIsCreatingNewNote(false)
         // НЕ вызываем setFullViewNotion(created) - оставляем текущую заметку в редакторе
+        // Но обновляем notionId, чтобы автосохранение заработало для этой заметки
+        // setFullViewNotion(prev => prev ? { ...prev, notion_id: created.notion_id } : null)
       } catch (error) {
         console.error('Ошибка при создании заметки:', error)
       }
@@ -166,6 +170,8 @@ export function NotesBlock() {
       await handleUpdateNote(fullViewNotion.notion_id, content)
     }
   }
+
+
 
   const handleToggleDone = async (notionId: string) => {
     setIsToggling(true)
@@ -213,20 +219,20 @@ export function NotesBlock() {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
     // Отслеживание изменения URL для автосохранения при навигации
     const handlePopState = () => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
@@ -243,7 +249,7 @@ export function NotesBlock() {
         const href = link.getAttribute('href')
         if (href && (href.startsWith('/') || href.startsWith('#'))) {
           isNavigating = true
-          editorRef.current.save()
+          handleSaveFullView('')
           
           // Сбрасываем флаг через небольшое время
           setTimeout(() => {
@@ -305,7 +311,7 @@ export function NotesBlock() {
         
         // Синхронное сохранение для критических переходов
         try {
-          editorRef.current.save()
+          handleSaveFullView('')
         } catch (error) {
           console.warn('Failed to save note during navigation:', error)
         }
@@ -354,7 +360,7 @@ export function NotesBlock() {
   useEffect(() => {
     if (fullViewNotion && pathname !== previousPathnameRef.current) {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
       previousPathnameRef.current = pathname
     }
@@ -366,7 +372,7 @@ export function NotesBlock() {
 
     const intervalId = setInterval(() => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }, 30000) // каждые 30 секунд
 
