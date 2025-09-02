@@ -147,6 +147,19 @@ interface StructuredError {
   details?: any
 }
 
+// Тип для дефицитных загрузок (агрегированные данные)
+export interface ShortageLoadingRow {
+  loading_id: string
+  loading_start: string
+  loading_finish: string
+  loading_rate: number
+  loading_section: string | null
+  shortage_department_id: string | null
+  shortage_team_id: string | null
+  shortage_description: string | null
+  loading_status: "active" | "archived"
+}
+
 // Функция для получения разделов из представления view_section_hierarchy
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
@@ -410,6 +423,89 @@ export async function fetchSectionsWithLoadings(
       error: "Произошла неожиданная ошибка при загрузке данных разделов с загрузками",
       details: error
     }
+  }
+}
+
+// Создание дефицитной загрузки (без ответственного сотрудника)
+export async function createShortageLoading(params: {
+  startDate: string
+  endDate: string
+  rate: number
+  departmentId?: string | null
+  teamId?: string | null
+  sectionId: string
+  description?: string | null
+}): Promise<{ success: boolean; error?: string; loadingId?: string }> {
+  try {
+    const payload: any = {
+      is_shortage: true,
+      loading_responsible: null,
+      loading_start: params.startDate,
+      loading_finish: params.endDate,
+      loading_rate: params.rate,
+      loading_status: "active",
+      loading_created: new Date().toISOString(),
+      loading_updated: new Date().toISOString(),
+      shortage_department_id: params.departmentId || null,
+      shortage_team_id: params.teamId || null,
+      shortage_description: params.description || null,
+      loading_section: params.sectionId,
+    }
+
+    const { data, error } = await supabase
+      .from("loadings")
+      .insert(payload)
+      .select("loading_id")
+      .single()
+
+    if (error) {
+      console.error("Ошибка при создании дефицитной загрузки:", error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, loadingId: data?.loading_id }
+  } catch (error) {
+    console.error("Неожиданная ошибка при создании дефицитной загрузки:", error)
+    return { success: false, error: "Произошла неожиданная ошибка" }
+  }
+}
+
+// Загрузка дефицитных загрузок по отделу/команде и диапазону дат
+export async function fetchShortageLoadings(params: {
+  startDate: string
+  endDate: string
+  departmentId?: string | null
+  teamId?: string | null
+}): Promise<ShortageLoadingRow[] | StructuredError> {
+  try {
+    let query = supabase
+      .from("loadings")
+      .select(
+        `loading_id, loading_start, loading_finish, loading_rate, loading_status, loading_section, shortage_department_id, shortage_team_id, shortage_description`
+      )
+      .eq("is_shortage", true)
+      .eq("loading_status", "active")
+      // Пересечение периодов: начало <= конец периода и конец >= начало периода
+      .lte("loading_start", params.endDate)
+      .gte("loading_finish", params.startDate)
+
+    if (params.teamId) {
+      query = query.eq("shortage_team_id", params.teamId)
+    } else if (params.departmentId) {
+      query = query.eq("shortage_department_id", params.departmentId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Ошибка при загрузке дефицитных загрузок:", error)
+      return { success: false, error: "Не удалось загрузить дефицитные загрузки", details: error }
+    }
+
+    return (data || []) as ShortageLoadingRow[]
+  } catch (error) {
+    console.error("Неожиданная ошибка при загрузке дефицитных загрузок:", error)
+    return { success: false, error: "Произошла неожиданная ошибка при загрузке дефицитных загрузок", details: error }
   }
 }
 

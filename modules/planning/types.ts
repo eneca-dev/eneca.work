@@ -59,6 +59,9 @@ export interface Employee {
   loadings?: Loading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
+  // Фантомный сотрудник "Дефицит ..."
+  isShortage?: boolean
+  shortageDescription?: string | null
 }
 
 export interface Section {
