@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "../store"
 import { getFilteredAssignments, getSectionName, getStatusColor, formatDate, groupAssignmentsBySection } from "../utils"
 import { ChevronDown, ChevronRight, ExternalLink, User, Calendar, Clock, ChevronUp, ChevronDown as ChevronDownIcon, ArrowRight, RotateCcw, Edit3, Trash2 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { EditAssignmentModal } from "./EditAssignmentModal"
@@ -33,6 +33,7 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const { toast } = useToast()
+  const dialogContentRef = useRef<HTMLDivElement | null>(null)
 
   // Получаем отфильтрованные задания
   const filteredAssignments = getFilteredAssignments(filters)
@@ -46,6 +47,13 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
       }
     }
   }, [assignments, selectedAssignment])
+
+  // Прокрутка контента модалки к верху при смене вкладки/открытии задания
+  useEffect(() => {
+    if (dialogContentRef.current) {
+      dialogContentRef.current.scrollTop = 0
+    }
+  }, [activeTab, selectedAssignment])
 
   const toggleSection = (sectionName: string) => {
     setExpandedSections((prev) => {
@@ -392,7 +400,7 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
           setActiveTab("details")
         }}
       >
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] h-[80vh] overflow-y-auto items-start content-start">
           <DialogHeader>
             <DialogTitle className="sr-only">Детали задания</DialogTitle>
             <div className="flex items-center justify-between border-b mt-2">
@@ -476,7 +484,7 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
 
       {/* Диалог для указания продолжительности */}
       <Dialog open={showDurationDialog} onOpenChange={setShowDurationDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md h-[60vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Укажите плановую продолжительность</DialogTitle>
           </DialogHeader>

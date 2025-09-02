@@ -61,9 +61,21 @@ export function CompactTaskSchedule({ sectionId }: CompactTaskScheduleProps) {
     .map((assignment) => {
       const createdDate = new Date(assignment.created_at)
       const transmittedDate = assignment.actual_transmitted_date ? new Date(assignment.actual_transmitted_date) : null
+      // Плановая продолжительность: считаем по рабочим дням (без выходных)
+      const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6
+      const addBusinessDays = (start: Date, days: number) => {
+        if (!days || days <= 0) return new Date(start)
+        const date = new Date(start)
+        let added = 0
+        while (added < days) {
+          date.setDate(date.getDate() + 1)
+          if (!isWeekend(date)) added++
+        }
+        return date
+      }
       const plannedEndDate = assignment.planned_duration && transmittedDate ? 
-        new Date(transmittedDate.getTime() + assignment.planned_duration * 24 * 60 * 60 * 1000) : 
-        (assignment.planned_duration ? new Date(createdDate.getTime() + assignment.planned_duration * 24 * 60 * 60 * 1000) : null)
+        addBusinessDays(transmittedDate, assignment.planned_duration) : 
+        (assignment.planned_duration ? addBusinessDays(createdDate, assignment.planned_duration) : null)
       const dueDate = assignment.due_date ? new Date(assignment.due_date) : null
 
       // Проверяем, попадает ли задание в текущий месяц
@@ -108,11 +120,11 @@ export function CompactTaskSchedule({ sectionId }: CompactTaskScheduleProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Компактная легенда */}
+      {/* Компактная легенда (без планового периода) */}
       <div className="flex flex-wrap gap-2 p-3 border-b text-xs">
         <div className="flex items-center gap-1">
-          <div className="w-3 h-2 border border-primary/30 bg-primary/10 rounded-sm"></div>
-          <span>Плановый период</span>
+          <div className="w-2 h-2 bg-amber-500 rotate-45"></div>
+          <span>Плановая передача</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="w-2 h-2 bg-orange-500 rotate-45"></div>
@@ -130,10 +142,7 @@ export function CompactTaskSchedule({ sectionId }: CompactTaskScheduleProps) {
           <div className="w-2 h-2 bg-purple-500 rotate-45"></div>
           <span>Согласовано</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-destructive rotate-45"></div>
-          <span>Дедлайн</span>
-        </div>
+        {/* Дедлайн скрыт по требованиям */}
       </div>
 
       {/* Навигация по месяцам - компактная */}
@@ -236,20 +245,27 @@ export function CompactTaskSchedule({ sectionId }: CompactTaskScheduleProps) {
                     const currentDay = dayIndex + 1
                     const currentDate = new Date(year, month, currentDay)
 
-                    // Проверяем, попадает ли день в плановый период
+                    // Проверяем, попадает ли день в плановый период (выходные исключаем)
+                    const isWeekendCell = currentDate.getDay() === 0 || currentDate.getDay() === 6
                     const isInPlannedPeriod = row.plannedEndDay > 0 && 
-                      currentDay >= row.plannedStartDay && currentDay <= row.plannedEndDay
+                      currentDay >= row.plannedStartDay && currentDay <= row.plannedEndDay && !isWeekendCell
 
                     // Проверяем статусы в этот день
                     const statusMarkers = []
 
-                    // Дедлайн
-                    if (row.dueDate && 
-                        row.dueDate.getDate() === currentDay && 
-                        row.dueDate.getMonth() === month && 
-                        row.dueDate.getFullYear() === year) {
-                      statusMarkers.push({ color: "bg-destructive", label: "Дедлайн" })
+                    // Плановая дата передачи
+                    if (row.assignment.planned_transmitted_date) {
+                      const ptd = new Date(row.assignment.planned_transmitted_date)
+                      if (
+                        ptd.getDate() === currentDay &&
+                        ptd.getMonth() === month &&
+                        ptd.getFullYear() === year
+                      ) {
+                        statusMarkers.push({ color: "bg-amber-500", label: "Плановая передача" })
+                      }
                     }
+
+                    // Дедлайн скрыт по требованиям
 
                     // Фактические даты статусов
                     if (row.actualDates.transmitted && 
@@ -282,10 +298,7 @@ export function CompactTaskSchedule({ sectionId }: CompactTaskScheduleProps) {
 
                     return (
                       <div key={dayIndex} className="relative h-6 flex items-center justify-center">
-                        {/* Плановый период */}
-                        {isInPlannedPeriod && (
-                          <div className="absolute inset-x-0 h-4 border border-primary/30 bg-primary/10 rounded-sm" />
-                        )}
+                        {/* Плановый период скрыт по требованиям */}
 
                         {/* Маркеры статусов (компактные ромбики) */}
                         {statusMarkers.map((marker, markerIndex) => (

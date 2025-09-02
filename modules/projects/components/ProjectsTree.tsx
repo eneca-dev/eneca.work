@@ -599,19 +599,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 >
                   <PlusCircle className="h-3 w-3 text-teal-600 dark:text-teal-400" />
                 </button>
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={(e) => onCreateAssignment(node, e)}
-                      className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-all mr-1"
-                    >
-                      <SquareStack className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Создать задание</p>
-                  </TooltipContent>
-                </UiTooltip>
                 <button
                   onClick={(e) => onEditObject(node, e)}
                   className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded transition-all"
