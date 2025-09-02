@@ -414,7 +414,15 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
       const newQuery = params.toString()
       const currentQuery = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : ''
       if (newQuery !== currentQuery) {
-        router.replace(`${pathname}${newQuery ? `?${newQuery}` : ''}`)
+        // В проде смена searchParams через router.replace вызывает ремоунт всей страницы (RSC навигация)
+        // Нам нужна только синхронизация URL без навигации. Используем history.replaceState.
+        if (typeof window !== 'undefined') {
+          const newUrl = `${pathname}${newQuery ? `?${newQuery}` : ''}`
+          const currentUrl = `${window.location.pathname}${window.location.search}`
+          if (newUrl !== currentUrl) {
+            window.history.replaceState(null, '', newUrl)
+          }
+        }
       }
 
       // Дублируем в localStorage
