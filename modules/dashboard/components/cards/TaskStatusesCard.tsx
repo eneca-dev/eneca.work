@@ -116,8 +116,19 @@ export const TaskStatusesCard: React.FC = () => {
       <h3 className="text-muted-foreground text-sm mb-4">Статусы заданий</h3>
       
       {totalTasks === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          Нет данных по заданиям
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm space-y-2">
+          <div className="relative w-28 h-28">
+            <svg className="w-full h-full" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="40" fill="none" stroke="#374151" strokeWidth="8" strokeDasharray="4 4" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-xl font-bold text-muted-foreground">0</div>
+                <div className="text-sm text-muted-foreground">заданий</div>
+              </div>
+            </div>
+          </div>
+          <p className="text-center">Нет данных по заданиям</p>
         </div>
       ) : (
         <>
@@ -164,8 +175,20 @@ export const TaskStatusesCard: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-1.5 w-full">
-              {taskData.slice(0, 4).map((task, index) => (
+            <div 
+              className="space-y-1.5 w-full overflow-y-auto pr-1" 
+              style={{ 
+                maxHeight: '84px',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}
+            >
+              <style jsx>{`
+                div::-webkit-scrollbar {
+                  display: none;
+                }
+              `}</style>
+              {taskData.map((task, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.color }}></div>

@@ -336,7 +336,10 @@ export const ProjectInfoCard: React.FC = () => {
           {/* Название проекта */}
           <div className="bg-gray-100/50 dark:bg-gray-700/50 p-1.5 rounded">
             <p className="text-muted-foreground text-sm mb-1">Название проекта</p>
-            <p className="text-primary font-medium text-sm">
+            <p
+              className="text-primary font-medium text-sm overflow-hidden text-ellipsis"
+              style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'}}
+            >
               {projectInfo.project_name}
             </p>
           </div>

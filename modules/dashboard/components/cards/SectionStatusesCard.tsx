@@ -178,7 +178,7 @@ export const SectionStatusesCard: React.FC = () => {
             <div 
               className="space-y-1.5 w-full overflow-y-auto pr-1" 
               style={{ 
-                maxHeight: '72px', // Уменьшаем высоту чтобы поместиться в карточку
+                maxHeight: '84px', 
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none'
               }}
@@ -192,9 +192,9 @@ export const SectionStatusesCard: React.FC = () => {
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }}></div>
-                    <span className="text-card-foreground text-sm">{status.name}</span>
+                    <span className="text-card-foreground text-xs leading-tight truncate">{status.name}</span>
                   </div>
-                  <span className="text-muted-foreground text-sm">{status.value}</span>
+                  <span className="text-muted-foreground text-xs flex-shrink-0">{status.value}</span>
                 </div>
               ))}
             </div>
