@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "../store"
 import { getFilteredAssignments, getSectionName, getStatusColor, formatDate, groupAssignmentsBySection } from "../utils"
-import { ChevronDown, ChevronRight, ExternalLink, User, Calendar, Clock, ChevronUp, ChevronDown as ChevronDownIcon, ArrowRight, RotateCcw, Edit3 } from "lucide-react"
+import { ChevronDown, ChevronRight, ExternalLink, User, Calendar, Clock, ChevronUp, ChevronDown as ChevronDownIcon, ArrowRight, RotateCcw, Edit3, Trash2 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { EditAssignmentModal } from "./EditAssignmentModal"
 import { AssignmentAuditHistory } from "./AssignmentAuditHistory"
 import type { Assignment, TaskFilters, AssignmentDirection, AssignmentStatus } from "../types"
@@ -30,6 +31,7 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
   const [showDurationDialog, setShowDurationDialog] = useState(false)
   const [durationDays, setDurationDays] = useState<string>("7")
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const { toast } = useToast()
 
   // Получаем отфильтрованные задания
@@ -214,6 +216,21 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
     }
   }
 
+  const handleDelete = async () => {
+    if (!selectedAssignment) return
+    try {
+      const result = await useTaskTransferStore.getState().deleteAssignment(selectedAssignment.assignment_id)
+      if (result.success) {
+        setSelectedAssignment(null)
+        toast({ title: "Удалено", description: "Задание удалено" })
+      } else {
+        toast({ title: "Ошибка", description: "Не удалось удалить задание", variant: "destructive" })
+      }
+    } catch (e) {
+      toast({ title: "Ошибка", description: "Не удалось удалить задание", variant: "destructive" })
+    }
+  }
+
   // Определяем возможность изменения статуса
   const canAdvanceStatus = (status: AssignmentStatus): boolean => {
     return status !== 'Согласовано'
@@ -377,50 +394,69 @@ export function TaskList({ filters = {}, direction, currentUserSectionId }: Task
       >
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Детали задания</DialogTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center gap-2 text-sm"
-              >
-                <Edit3 className="h-4 w-4" />
-                Редактировать
-              </Button>
-            </div>
-            {/* Tab switcher */}
-            <div className="flex border-b mt-4">
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "details"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("details")}
-              >
-                Детали задания
-              </button>
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "history"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("history")}
-              >
-                История статусов
-              </button>
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "audit"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("audit")}
-              >
-                История изменений
-              </button>
+            <DialogTitle className="sr-only">Детали задания</DialogTitle>
+            <div className="flex items-center justify-between border-b mt-2">
+              <div className="flex">
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "details"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("details")}
+                >
+                  Детали задания
+                </button>
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "history"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("history")}
+                >
+                  История статусов
+                </button>
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "audit"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("audit")}
+                >
+                  История изменений
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowEditModal(true)}
+                  className="h-8 w-8"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+                <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon" className="h-8 w-8">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Удалить задание?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Это действие необратимо. Задание и история изменений будут удалены.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Отмена</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete}>Удалить</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           </DialogHeader>
           

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Calendar, Clock, ExternalLink, User, Edit3, ArrowRight, RotateCcw } from "lucide-react"
+import { Calendar, Clock, ExternalLink, User, Edit3, ArrowRight, RotateCcw, Trash2 } from "lucide-react"
 import { getStatusColor, formatDate } from "@/modules/task-transfer/utils"
 import type { AssignmentStatus, Assignment } from "@/modules/task-transfer/types"
 import { useEffect, useMemo, useState } from "react"
@@ -14,6 +14,7 @@ import { EditAssignmentModal } from "@/modules/task-transfer/components/EditAssi
 import { AssignmentAuditHistory } from "@/modules/task-transfer/components/AssignmentAuditHistory"
 import { CompactTaskSchedule } from "./CompactTaskSchedule"
 import { useToast } from "@/hooks/use-toast"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 
 type TaskPreviewType = "incoming" | "outgoing"
@@ -94,6 +95,7 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
   const [showDurationDialog, setShowDurationDialog] = useState(false)
   const [durationDays, setDurationDays] = useState<string>("7")
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   
   // Состояние для переключения между заданиями и графиком
   const [currentView, setCurrentView] = useState<"tasks" | "schedule">("tasks")
@@ -255,6 +257,21 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
     }
   }
 
+  const handleDelete = async () => {
+    if (!selectedAssignment) return
+    try {
+      const result = await useTaskTransferStore.getState().deleteAssignment(selectedAssignment.assignment_id)
+      if (result.success) {
+        setSelectedAssignment(null)
+        toast({ title: "Удалено", description: "Задание удалено" })
+      } else {
+        toast({ title: "Ошибка", description: "Не удалось удалить задание", variant: "destructive" })
+      }
+    } catch (e) {
+      toast({ title: "Ошибка", description: "Не удалось удалить задание", variant: "destructive" })
+    }
+  }
+
   // Функции проверки возможности изменения статуса
   const canAdvanceStatus = (status: AssignmentStatus): boolean => {
     return status !== 'Согласовано'
@@ -364,50 +381,69 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
       >
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Детали задания</DialogTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center gap-2 text-sm"
-              >
-                <Edit3 className="h-4 w-4" />
-                Редактировать
-              </Button>
-            </div>
-            {/* Переключатель вкладок */}
-            <div className="flex border-b mt-4">
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "details"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("details")}
-              >
-                Детали задания
-              </button>
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "history"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("history")}
-              >
-                История статусов
-              </button>
-              <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "audit"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-                onClick={() => setActiveTab("audit")}
-              >
-                История изменений
-              </button>
+            <DialogTitle className="sr-only">Детали задания</DialogTitle>
+            <div className="flex items-center justify-between border-b mt-2">
+              <div className="flex">
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "details"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("details")}
+                >
+                  Детали задания
+                </button>
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "history"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("history")}
+                >
+                  История статусов
+                </button>
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "audit"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("audit")}
+                >
+                  История изменений
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowEditModal(true)}
+                  className="h-8 w-8"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+                <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon" className="h-8 w-8">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Удалить задание?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Это действие необратимо. Задание и история изменений будут удалены.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Отмена</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete}>Удалить</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           </DialogHeader>
           
