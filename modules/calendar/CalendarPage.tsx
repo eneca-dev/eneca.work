@@ -84,7 +84,7 @@ export default function CalendarPage() {
     // Проверяем права на создание глобальных событий (календарь) - ОПТИМИЗИРОВАННО
   const { hasPermission } = usePermissions()
   const canCreateGlobalEvents = useMemo(() => {
-    const result = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
+    const result = hasPermission("calendar.manage_global_events") || hasPermission("calendar.manage_global_events")
     
     return result
   }, [hasPermission])

@@ -148,24 +148,33 @@ export const usePlanningPermissions = () => {
  */
 export const useCalendarPermissions = () => {
   const { hasPermission } = usePermissions()
-  
+
+  // Локальные переменные для оптимизации
+  const canManageGlobal = hasPermission('calendar.manage_global_events')
+
   return {
-    canView: hasPermission('calendar.view'),
-    canCreatePersonal: hasPermission('calendar.create.personal'),
-    canCreateGlobal: hasPermission('calendar.create.global'),
-    canEditPersonal: hasPermission('calendar.edit.personal'),
-    canEditGlobal: hasPermission('calendar.edit.global'),
-    canDeletePersonal: hasPermission('calendar.delete.personal'),
-    canDeleteGlobal: hasPermission('calendar.delete.global'),
-    canManageWorkSchedule: hasPermission('calendar.manage.work_schedule'),
-    canAdmin: hasPermission('calendar.admin'),
-    
+    // Просмотр календаря доступен всем авторизованным пользователям
+    canView: true,
+
+    // Личные события - любой авторизованный пользователь
+    canCreatePersonal: true,
+    canEditPersonal: true,
+    canDeletePersonal: true,
+
+    // Глобальные события - только пользователи с соответствующим разрешением
+    canCreateGlobal: canManageGlobal,
+    canEditGlobal: canManageGlobal,
+    canDeleteGlobal: canManageGlobal,
+
+    // Управление рабочим графиком (переносы, праздники)
+    canManageWorkSchedule: canManageGlobal,
+
+    // Админ доступ к календарю
+    canAdmin: canManageGlobal,
+
     // Логические комбинации
-    canCreateEvents: hasPermission('calendar.create.personal') ||
-                     hasPermission('calendar.create.global'),
-    canManageGlobalEvents: hasPermission('calendar.create.global') ||
-                          hasPermission('calendar.edit.global') ||
-                          hasPermission('calendar.delete.global')
+    canCreateEvents: true, // Любой пользователь может создавать личные события
+    canManageGlobalEvents: canManageGlobal
   }
 }
 

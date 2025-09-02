@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Label } from "@/modules/calendar/components/ui/label"
@@ -24,7 +24,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { isWeekend } from "@/modules/calendar/utils"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
-import { usePermissionsHook as usePermissions } from "@/modules/permissions"
+import { useCalendarPermissions } from "@/modules/permissions"
 
 interface UnifiedWorkScheduleFormProps {
   onClose: () => void
@@ -38,14 +38,12 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-  // Проверяем права - ОПТИМИЗИРОВАННО  
-  const { hasPermission } = usePermissions()
-  const permissions = useMemo(() => {
-    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
-    const hasWorkSchedule = hasPermission("calendar.admin") || hasPermission("calendar.edit.work_schedule")
-    
-    return { hasGlobalEvents, hasWorkSchedule }
-  }, [hasPermission])
+  // Проверяем права на управление глобальными событиями
+  // Пользователь с разрешением calendar.manage_global_events может:
+  // - Создавать переносы рабочих дней
+  // - Создавать праздничные дни
+  // - Вносить изменения в общий график работы
+  const { canManageGlobalEvents } = useCalendarPermissions()
 
   const [activeTab, setActiveTab] = useState("dayoff")
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
@@ -73,7 +71,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
     e.preventDefault()
 
     // Для глобальных изменений (переносы и праздники) требуется подтверждение
-    if ((activeTab === "transfer" || activeTab === "holiday") && permissions.hasGlobalEvents) {
+    if ((activeTab === "transfer" || activeTab === "holiday") && canManageGlobalEvents) {
       setShowConfirmation(true)
     } else {
       await submitEvent()
@@ -171,14 +169,14 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
         try {
           span.setAttribute("user.id", currentUserId)
           span.setAttribute("form.tab", activeTab)
-          span.setAttribute("user.has_global_permissions", permissions.hasGlobalEvents)
-          span.setAttribute("user.has_schedule_permissions", permissions.hasWorkSchedule)
+          span.setAttribute("user.has_global_permissions", canManageGlobalEvents)
+          span.setAttribute("user.has_schedule_permissions", canManageGlobalEvents)
 
           // Определяем тип события и вызываем соответствующую функцию
-          if (activeTab === "transfer" && permissions.hasGlobalEvents) {
+          if (activeTab === "transfer" && canManageGlobalEvents) {
             span.setAttribute("event.type", "transfer")
             await submitTransferEvent()
-          } else if (activeTab === "holiday" && permissions.hasGlobalEvents) {
+          } else if (activeTab === "holiday" && canManageGlobalEvents) {
             span.setAttribute("event.type", "holiday")
             await submitHolidayEvent()
           } else {
@@ -197,7 +195,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
               component: 'UnifiedWorkScheduleForm',
               user_id: currentUserId,
               tab: activeTab,
-              has_global_permissions: permissions.hasGlobalEvents
+              has_global_permissions: canManageGlobalEvents
             }
           })
 
@@ -215,8 +213,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             extra: {
               user_id: currentUserId,
               tab: activeTab,
-              has_global_permissions: permissions.hasGlobalEvents,
-              has_schedule_permissions: permissions.hasWorkSchedule,
+              has_global_permissions: canManageGlobalEvents,
+              has_schedule_permissions: canManageGlobalEvents,
               timestamp: new Date().toISOString()
             }
           })
@@ -259,8 +257,8 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             <TabsTrigger value="dayoff">Отгул</TabsTrigger>
             <TabsTrigger value="vacation">Отпуск</TabsTrigger>
             <TabsTrigger value="sick">Больничный</TabsTrigger>
-            {permissions.hasGlobalEvents && <TabsTrigger value="transfer">Перенос</TabsTrigger>}
-            {permissions.hasGlobalEvents && <TabsTrigger value="holiday">Праздник</TabsTrigger>}
+            {canManageGlobalEvents && <TabsTrigger value="transfer">Перенос</TabsTrigger>}
+            {canManageGlobalEvents && <TabsTrigger value="holiday">Праздник</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="dayoff" className="space-y-4 pt-4">
@@ -338,7 +336,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
             </div>
           </TabsContent>
 
-          {permissions.hasGlobalEvents && (
+          {canManageGlobalEvents && (
             <>
               <TabsContent value="transfer" className="space-y-4 pt-4">
                 <div className="bg-muted text-muted-foreground dark:bg-gray-800/50 dark:text-gray-300 p-3 rounded-md mb-4">
@@ -346,7 +344,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="workday-date">Выберите рабочий день для переноса</Label>
+                  <Label htmlFor="workday-date">Выберите текущий рабочий день для переноса - он станет выходным</Label>
                   <DatePicker
                     value={workdayDate}
                     onChange={setWorkdayDate}
@@ -358,7 +356,7 @@ export function UnifiedWorkScheduleForm(props: UnifiedWorkScheduleFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="weekend-date">Выберите выходной день для переноса</Label>
+                  <Label htmlFor="weekend-date">Выберите текущий выходной день для переноса - он станет рабочим</Label>
                   <DatePicker
                     value={weekendDate}
                     onChange={setWeekendDate}
