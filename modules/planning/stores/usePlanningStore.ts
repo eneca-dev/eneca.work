@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import * as Sentry from "@sentry/nextjs"
-import type { Section, Loading, Department, Team } from "../types"
+import type { Section, Loading, Department, Team, Employee } from "../types"
 // Обновляем импорты, добавляя новые функции
 import {
   fetchLoadings,
@@ -23,6 +23,7 @@ interface PlanningState {
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
+  expandedTeams: Record<string, boolean> // Отслеживание раскрытых команд
   showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
 
@@ -103,6 +104,7 @@ interface PlanningState {
   fetchArchivedLoadings: (sectionId?: string, employeeId?: string) => Promise<Loading[]>
   toggleSectionExpanded: (sectionId: string) => void
   toggleDepartmentExpanded: (departmentId: string) => void
+  toggleTeamExpanded: (teamId: string) => void
   expandAllSections: () => Promise<void>
   collapseAllSections: () => void
   expandAllDepartments: () => void
@@ -188,6 +190,7 @@ export const usePlanningStore = create<PlanningState>()(
         isLoadingDepartments: false,
         expandedSections: {},
         expandedDepartments: {},
+        expandedTeams: {},
         showSections: true, // По умолчанию разделы показываются
         showDepartments: false,
         currentPage: 1,
@@ -624,6 +627,134 @@ export const usePlanningStore = create<PlanningState>()(
                 })
               }
             })
+
+            // Добавляем синтетическую строку "Дефицит ..." для каждой команды на основании дефицитных загрузок
+            try {
+              const shortageParams = {
+                startDate: vacationsPeriodStart.toISOString().split("T")[0],
+                endDate: vacationsPeriodEnd.toISOString().split("T")[0],
+                departmentId: selectedDepartmentId || null,
+                teamId: selectedTeamId || null,
+              }
+              const { fetchShortageLoadings } = await import("@/lib/supabase-client")
+              const shortageRows = await fetchShortageLoadings(shortageParams)
+
+              if (Array.isArray(shortageRows) && shortageRows.length > 0) {
+                // Строим по днейным ключам нагрузки дефицита на команду и список записей дефицита
+                const teamShortageDaily: Map<string, Record<string, number>> = new Map()
+                const teamShortageLoadings: Map<string, Loading[]> = new Map()
+                // Собираем section_id для последующего маппинга имен
+                const shortageSectionIds: string[] = []
+
+                shortageRows.forEach((row) => {
+                  const teamId = (row as any).shortage_team_id as string | null
+                  const departmentId = (row as any).shortage_department_id as string | null
+                  // Привязываем к команде, если есть, иначе к отделу — здесь учитываем только команды
+                  if (!teamId) return
+
+                  const teamKey = teamId
+                  if (!teamShortageDaily.has(teamKey)) {
+                    teamShortageDaily.set(teamKey, {})
+                  }
+                  const daily = teamShortageDaily.get(teamKey)!
+
+                  // Разворачиваем период в дни
+                  const start = new Date(row.loading_start as string)
+                  const finish = new Date(row.loading_finish as string)
+                  const cur = new Date(start)
+                  while (cur <= finish) {
+                    const dateKey = cur.toISOString().split("T")[0]
+                    daily[dateKey] = (daily[dateKey] || 0) + (Number(row.loading_rate) || 0)
+                    cur.setDate(cur.getDate() + 1)
+                  }
+
+                  // Сохраняем саму запись дефицита как Loading
+                  if ((row as any).loading_section) {
+                    shortageSectionIds.push((row as any).loading_section as string)
+                  }
+                  const loadingItem: Loading = {
+                    id: (row as any).loading_id,
+                    sectionId: (row as any).loading_section,
+                    startDate: new Date(row.loading_start as string),
+                    endDate: new Date(row.loading_finish as string),
+                    rate: Number(row.loading_rate) || 0,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    responsibleName: "Дефицит",
+                    projectName: undefined,
+                    sectionName: undefined,
+                  }
+                  if (!teamShortageLoadings.has(teamKey)) teamShortageLoadings.set(teamKey, [])
+                  teamShortageLoadings.get(teamKey)!.push(loadingItem)
+                })
+
+                // Маппинг имен проекта/раздела по section_id
+                try {
+                  const uniqueSectionIds = Array.from(new Set(shortageSectionIds))
+                  if (uniqueSectionIds.length > 0) {
+                    const { data: sectionInfos } = await supabase
+                      .from("view_section_hierarchy")
+                      .select("section_id, section_name, project_name")
+                      .in("section_id", uniqueSectionIds)
+                    const sectionMap = new Map<string, { section_name: string; project_name: string }>()
+                    ;(sectionInfos || []).forEach((s: any) => {
+                      if (s.section_id) sectionMap.set(s.section_id, { section_name: s.section_name, project_name: s.project_name })
+                    })
+                    // Проставляем названия во все записи дефицита
+                    teamShortageLoadings.forEach((arr) => {
+                      arr.forEach((l) => {
+                        if (l.sectionId && sectionMap.has(l.sectionId)) {
+                          const info = sectionMap.get(l.sectionId)!
+                          l.sectionName = info.section_name
+                          l.projectName = info.project_name
+                        }
+                      })
+                    })
+                  }
+                } catch (e) {
+                  console.warn("Не удалось сопоставить имена проекта/раздела для дефицита:", e)
+                }
+
+                // Для каждой команды с дефицитом добавляем "фантомного" сотрудника
+                teamsMap.forEach((team) => {
+                  const teamKey = team.id
+                  const daily = teamShortageDaily.get(teamKey)
+                  if (daily && Object.keys(daily).length > 0) {
+                    const shortageEmployee: Employee = {
+                      id: `shortage:${team.id}`,
+                      name: `Дефицит ${team.departmentName || "Отдел"} ${team.name}`,
+                      fullName: `Дефицит ${team.departmentName || "Отдел"} ${team.name}`,
+                      teamId: team.id,
+                      teamName: team.name,
+                      departmentId: team.departmentId,
+                      departmentName: team.departmentName,
+                      position: "",
+                      avatarUrl: undefined,
+                      workload: 0,
+                      employmentRate: 1,
+                      hasLoadings: true,
+                      loadingsCount: (teamShortageLoadings.get(team.id) || []).length,
+                      dailyWorkloads: daily,
+                      vacationsDaily: {},
+                      loadings: teamShortageLoadings.get(team.id) || [],
+                      isShortage: true,
+                      shortageDescription: null,
+                    }
+
+                    // Вставляем в начало списка сотрудников команды
+                    team.employees = [shortageEmployee, ...team.employees]
+
+                    // Добавляем дефицит к суммарной загрузке команды
+                    if (!team.dailyWorkloads) team.dailyWorkloads = {}
+                    Object.keys(daily).forEach((dateKey) => {
+                      team.dailyWorkloads![dateKey] = (team.dailyWorkloads![dateKey] || 0) + (daily as any)[dateKey]
+                    })
+                  }
+                })
+              }
+            } catch (e) {
+              console.warn("Не удалось загрузить дефицитные загрузки:", e)
+            }
 
             // Распределяем команды по отделам
             teamsMap.forEach((team) => {
@@ -1544,6 +1675,22 @@ export const usePlanningStore = create<PlanningState>()(
             departments: state.departments.map((d) =>
               d.id === departmentId ? { ...d, isExpanded: !state.expandedDepartments[departmentId] } : d,
             ),
+          }))
+        },
+
+        // Переключение состояния раскрытия команды (запоминаем глобально)
+        toggleTeamExpanded: (teamId: string) => {
+          set((state) => ({
+            expandedTeams: {
+              ...state.expandedTeams,
+              [teamId]: !state.expandedTeams[teamId],
+            },
+            departments: state.departments.map((dept) => ({
+              ...dept,
+              teams: dept.teams.map((team) => (
+                team.id === teamId ? ({ ...team, isExpanded: !state.expandedTeams[teamId] } as any) : team
+              )),
+            })),
           }))
         },
 

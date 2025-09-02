@@ -50,3 +50,6 @@ for each row execute function public.propagate_auth_email_to_profile();
 
 
 
+
+
+

@@ -11,6 +11,7 @@ import { useState } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { EditLoadingModal } from "./edit-loading-modal"
 import { AddLoadingModal } from "./add-loading-modal"
+import { AddShortageModal } from "./AddShortageModal"
 
 interface DepartmentRowProps {
   department: Department
@@ -57,8 +58,9 @@ export function DepartmentRow({
   // Проверяем, раскрыт ли отдел
   const isDepartmentExpanded = expandedDepartments[department.id] || false
 
-  // Состояния для модальных окон и раскрытых сотрудников
+  // Состояния для модальных окон и раскрытых сотрудников/команд
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
+  const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({})
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
@@ -92,8 +94,15 @@ export function DepartmentRow({
     }))
   }
 
-  // Получаем всех сотрудников отдела из всех команд
-  const allEmployees = department.teams.flatMap((team) => team.employees)
+  const toggleTeamExpanded = (teamId: string) => {
+    setExpandedTeams((prev) => ({
+      ...prev,
+      [teamId]: !prev[teamId],
+    }))
+  }
+
+  // Получаем всех сотрудников отдела из всех команд (исключая строку дефицита)
+  const allEmployees = department.teams.flatMap((team) => team.employees.filter((e) => !(e as any).isShortage))
 
   // Рассчитываем общую емкость отдела (сумма ставок всех сотрудников)
   const totalDepartmentCapacity = allEmployees.reduce((sum, employee) => {
@@ -290,12 +299,13 @@ export function DepartmentRow({
                         <div
                           className={cn(
                             "absolute bottom-0 left-0 right-0 transition-all duration-200",
-                            // Цветовая индикация загрузки отдела
-                            departmentLoadPercentage <= 50 
-                              ? theme === "dark" ? "bg-red-400" : "bg-red-500"        // Красный: низкая загрузка (0-50%)
-                              : departmentLoadPercentage <= 85 
-                                ? theme === "dark" ? "bg-amber-400" : "bg-amber-500"  // Желтый: средняя загрузка (50-85%)
-                                : theme === "dark" ? "bg-emerald-400" : "bg-emerald-500" // Зеленый: высокая загрузка (85-100%+)
+                            departmentLoadPercentage > 100
+                              ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
+                              : departmentLoadPercentage <= 50 
+                                ? (theme === "dark" ? "bg-blue-400" : "bg-blue-500")
+                                : departmentLoadPercentage <= 85 
+                                  ? (theme === "dark" ? "bg-amber-400" : "bg-amber-500")
+                                  : (theme === "dark" ? "bg-emerald-400" : "bg-emerald-500")
                           )}
                           style={{
                             height: `${Math.max(
@@ -318,29 +328,42 @@ export function DepartmentRow({
         </div>
       </div>
 
-      {/* Отображаем сотрудников, если отдел раскрыт */}
+      {/* Отображаем команды и их сотрудников, если отдел раскрыт */}
       {isDepartmentExpanded && (
         <>
-          {department.teams.map((team) =>
-            team.employees.map((employee, employeeIndex) => (
-              <EmployeeRow
-                key={employee.id}
-                employee={employee}
-                departmentPosition={departmentIndex}
-                employeeIndex={employeeIndex}
+          {department.teams.map((team, teamIndex) => (
+            <div key={team.id}>
+              <TeamRow
+                team={team}
                 timeUnits={timeUnits}
                 theme={theme}
                 rowHeight={rowHeight}
                 padding={padding}
-                leftOffset={leftOffset}
                 cellWidth={cellWidth}
-                stickyColumnShadow={stickyColumnShadow}
                 totalFixedWidth={totalFixedWidth}
-                isExpanded={expandedEmployees[employee.id] || false}
-                onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
+                isExpanded={expandedTeams[team.id] || false}
+                onToggleExpand={() => toggleTeamExpanded(team.id)}
               />
-            )),
-          )}
+              {(expandedTeams[team.id] || false) && team.employees.map((employee, employeeIndex) => (
+                <EmployeeRow
+                  key={employee.id}
+                  employee={employee}
+                  departmentPosition={departmentIndex}
+                  employeeIndex={employeeIndex}
+                  timeUnits={timeUnits}
+                  theme={theme}
+                  rowHeight={rowHeight}
+                  padding={padding}
+                  leftOffset={leftOffset}
+                  cellWidth={cellWidth}
+                  stickyColumnShadow={stickyColumnShadow}
+                  totalFixedWidth={totalFixedWidth}
+                  isExpanded={expandedEmployees[employee.id] || false}
+                  onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
+                />
+              ))}
+            </div>
+          ))}
         </>
       )}
     </>
@@ -348,6 +371,171 @@ export function DepartmentRow({
 }
 
 // Теперь полностью заменим компонент EmployeeRow на новую версию с поддержкой раскрытия:
+
+// Компонент строки команды внутри отдела
+interface TeamRowProps {
+  team: Department["teams"][number]
+  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  theme: string
+  rowHeight: number
+  padding: number
+  cellWidth: number
+  totalFixedWidth: number
+  isExpanded: boolean
+  onToggleExpand: () => void
+}
+
+function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalFixedWidth, isExpanded, onToggleExpand }: TeamRowProps) {
+  const reducedRowHeight = Math.floor(rowHeight * 0.75)
+  // Емкость команды: только реальные сотрудники, без строки дефицита
+  const totalTeamCapacity = (team.employees || [])
+    .filter((e) => !(e as any).isShortage)
+    .reduce((sum, e) => sum + (e.employmentRate || 1), 0)
+  const [showAddShortage, setShowAddShortage] = useState(false)
+
+  return (
+    <div className={cn("group/row w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}
+    >
+      <div
+        className={cn(
+          "flex transition-colors cursor-pointer w-full border-b",
+          theme === "dark" ? "border-slate-700" : "border-slate-200",
+        )}
+        style={{ height: `${rowHeight}px` }}
+        onClick={onToggleExpand}
+      >
+        {/* Фиксированные столбцы */}
+        <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${rowHeight}px`, width: `${totalFixedWidth}px` }}>
+          <div
+            className={cn(
+              "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]",
+              theme === "dark" ? "border-slate-700 bg-slate-900 group-hover/row:bg-slate-800" : "border-slate-200 bg-slate-50 group-hover/row:bg-white",
+            )}
+            style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${padding}px` }}
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                {isExpanded ? (
+                  <ChevronDown className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                ) : (
+                  <ChevronRight className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                )}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className={cn("font-medium truncate whitespace-nowrap overflow-hidden max-w-[300px]", theme === "dark" ? "text-slate-200" : "text-slate-800")}>{team.name}</span>
+                {team.teamLeadName && (
+                  <span className={cn("text-[10px] truncate", theme === "dark" ? "text-slate-400" : "text-slate-500")}>Лид: {team.teamLeadName}</span>
+                )}
+              </div>
+            </div>
+            {/* Кнопка добавления дефицита для команды */}
+            <div className="flex items-center gap-2">
+              <button
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center transition-opacity",
+                  theme === "dark"
+                    ? "bg-slate-800 text-slate-500 hover:text-red-400 hover:bg-slate-700"
+                    : "bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-slate-200",
+                )}
+                title="Добавить дефицит"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowAddShortage(true)
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Ячейки периода */}
+        <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
+          {timeUnits.map((unit, i) => {
+            const isWeekendDay = unit.isWeekend
+            const isTodayDate = isToday(unit.date)
+            const dateKey = unit.date.toISOString().split("T")[0]
+            const workload = (team.dailyWorkloads || {})[dateKey] || 0
+            const loadPct = totalTeamCapacity > 0 ? Math.round((workload / totalTeamCapacity) * 100) : 0
+
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "border-r relative transition-colors border-b",
+                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                  isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
+                  isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                  isFirstDayOfMonth(unit.date)
+                    ? theme === "dark"
+                      ? "border-l border-l-slate-600"
+                      : "border-l border-l-slate-300"
+                    : "",
+                  i === timeUnits.length - 1 ? "border-r-0" : "",
+                )}
+                style={{
+                  height: `${rowHeight}px`,
+                  width: `${cellWidth}px`,
+                  minWidth: `${cellWidth}px`,
+                  flexShrink: 0,
+                  borderRight: "1px solid",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                }}
+              >
+                {loadPct > 0 && (
+                  <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
+                    <div
+                      className={cn(
+                        "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
+                        theme === "dark" ? "border-slate-500" : "border-slate-400"
+                      )}
+                      style={{
+                        width: `${Math.max(cellWidth - 6, 3)}px`,
+                        height: `${rowHeight - 10}px`,
+                        opacity: 0.9
+                      }}
+                      title={`Загрузка команды: ${loadPct}%`}
+                    >
+                      <div
+                        className={cn(
+                          "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                          // Если превышена емкость (более 100%), всегда красный
+                          loadPct > 100
+                            ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
+                            : loadPct <= 50
+                              ? (theme === "dark" ? "bg-blue-400" : "bg-blue-500")
+                              : loadPct <= 85
+                                ? (theme === "dark" ? "bg-amber-400" : "bg-amber-500")
+                                : (theme === "dark" ? "bg-emerald-400" : "bg-emerald-500")
+                        )}
+                        style={{
+                          height: `${Math.max(Math.min((loadPct / 100) * (rowHeight - 14), rowHeight - 14), 2)}px`,
+                          opacity: theme === "dark" ? 0.8 : 0.7
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {showAddShortage && (
+        <AddShortageModal
+          teamId={team.id}
+          teamName={team.name}
+          departmentId={team.departmentId}
+          departmentName={team.departmentName}
+          theme={theme}
+          onClose={() => setShowAddShortage(false)}
+        />
+      )}
+    </div>
+  )
+}
 
 // Компонент для отображения строки сотрудника
 interface EmployeeRowProps {
@@ -450,6 +638,7 @@ function EmployeeRow({
 
   // Добавить после строки с editingLoading
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showAddShortage, setShowAddShortage] = useState(false)
 
   return (
     <>
@@ -522,9 +711,9 @@ function EmployeeRow({
                       >
                         {employee.fullName || "Не указан"}
                       </div>
-                      {/* Должность сотрудника */}
+                      {/* Должность сотрудника или пометка дефицита */}
                       <div className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                        {employee.position || "Без должности"}
+                        {employee.isShortage ? "Строка дефицита команды" : (employee.position || "Без должности")}
                       </div>
                     </div>
                   </div>
@@ -555,10 +744,14 @@ function EmployeeRow({
                         : "bg-slate-100 text-slate-400 hover:text-teal-500 hover:bg-slate-200",
                       "opacity-0 group-hover/employee:opacity-100",
                     )}
-                    title="Добавить загрузку"
+                    title={employee.isShortage ? "Добавить дефицит" : "Добавить загрузку"}
                     onClick={(e) => {
                       e.stopPropagation() // Предотвращаем раскрытие строки
-                      setShowAddModal(true)
+                      if (employee.isShortage) {
+                        setShowAddShortage(true)
+                      } else {
+                        setShowAddModal(true)
+                      }
                     }}
                   >
                     <svg
@@ -575,15 +768,17 @@ function EmployeeRow({
                     </svg>
                   </button>
 
-                  {/* Ставка сотрудника */}
-                  <span
-                    className={cn(
-                      "text-xs font-medium px-2 py-0.5 rounded",
-                      theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
-                    )}
-                  >
-                    {employee.employmentRate || 1} ставка
-                  </span>
+                  {/* Ставка сотрудника (не показываем для строки дефицита) */}
+                  {!employee.isShortage && (
+                    <span
+                      className={cn(
+                        "text-xs font-medium px-2 py-0.5 rounded",
+                        theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
+                      )}
+                    >
+                      {employee.employmentRate || 1} ставка
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -641,28 +836,20 @@ function EmployeeRow({
                       : "transparent",
                   }}
                 >
-                  {/* Отображение загрузки и отпуска */}
-                  {(workloadRate > 0 || isVacationDay) && (
+                  {/* Отображение загрузки и отпуска (для строки дефицита отпуск не применяется) */}
+                  {(workloadRate > 0 || (isVacationDay && !employee.isShortage)) && (
                     <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
-                      {/* Если есть и загрузка, и отпуск - показываем разделённый столбик */}
-                      {isVacationDay && workloadRate > 0 ? (
+                      {/* Если есть и загрузка, и отпуск - показываем разделённый столбик (не для дефицита) */}
+                      {!employee.isShortage && isVacationDay && workloadRate > 0 ? (
                         <div className="flex w-full h-full items-end justify-center gap-0.5">
                           {/* Левая половина - загрузка */}
                           <div
                             className={cn(
                               "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
-                              (() => {
-                                const employmentRate = employee.employmentRate || 1
-                                const loadPercentage = (workloadRate / employmentRate) * 100
-                                if (loadPercentage > 100) {
-                                  return theme === "dark" 
-                                    ? "bg-red-400/30 border-red-400" 
-                                    : "bg-red-500/30 border-red-500"
-                                }
-                                return theme === "dark" 
-                                  ? "bg-blue-400/30 border-blue-400" 
-                                  : "bg-blue-500/30 border-blue-500"
-                              })()
+                              // Пересечение загрузки с отпуском — всегда жёлтый
+                              theme === "dark" 
+                                ? "bg-amber-400/30 border-amber-400" 
+                                : "bg-amber-500/30 border-amber-500"
                             )}
                             style={{
                               width: `${Math.max((cellWidth - 12) / 2, 1)}px`, // Половина ширины минус gap
@@ -683,7 +870,7 @@ function EmployeeRow({
                               const employmentRate = employee.employmentRate || 1
                               const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
                               const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
-                              return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
+                              return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) — пересечение с отпуском — ${dateStr}`
                             })()}`}
                           />
                           {/* Правая половина - отпуск */}
@@ -702,7 +889,7 @@ function EmployeeRow({
                             title={`Отпуск (1 ставка) — ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
                           />
                         </div>
-                      ) : isVacationDay ? (
+                      ) : (!employee.isShortage && isVacationDay) ? (
                         /* Только отпуск */
                         <div
                           className={cn(
@@ -724,8 +911,17 @@ function EmployeeRow({
                           className={cn(
                             "rounded-sm transition-all duration-200 border-2 pointer-events-auto",
                             (() => {
+                              if (employee.isShortage) {
+                                return theme === "dark" 
+                                  ? "bg-red-500/30 border-red-500" 
+                                  : "bg-red-500/30 border-red-500"
+                              }
                               const employmentRate = employee.employmentRate || 1
                               const loadPercentage = (workloadRate / employmentRate) * 100
+                              // Если день отпуска и есть загрузка — жёлтый
+                              if (!employee.isShortage && (employee as any).vacationsDaily?.[dateKey]) {
+                                return theme === "dark" ? "bg-amber-400/30 border-amber-400" : "bg-amber-500/30 border-amber-500"
+                              }
                               if (loadPercentage > 100) {
                                 return theme === "dark" 
                                   ? "bg-red-400/30 border-red-400" 
@@ -739,6 +935,16 @@ function EmployeeRow({
                           style={{
                             width: `${Math.max(cellWidth - 10, 2)}px`,
                             height: `${(() => {
+                              if (employee.isShortage) {
+                                const loadPercentage = Math.min(100, Math.max(10, Math.round(workloadRate * 100)))
+                                return Math.max(
+                                  Math.min(
+                                    (loadPercentage / 100) * (reducedRowHeight - 10),
+                                    reducedRowHeight - 4
+                                  ),
+                                  3
+                                )
+                              }
                               const employmentRate = employee.employmentRate || 1
                               const loadPercentage = (workloadRate / employmentRate) * 100
                               return Math.max(
@@ -751,12 +957,15 @@ function EmployeeRow({
                             })()}px`,
                             opacity: 0.9
                           }}
-                          title={`Загрузка сотрудника: ${(() => {
+                          title={(() => {
+                            const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
+                            if (employee.isShortage) {
+                              return `Дефицит: ${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} ставки на ${dateStr}`
+                            }
                             const employmentRate = employee.employmentRate || 1
                             const loadPercentage = Math.round((workloadRate / employmentRate) * 100)
-                            const dateStr = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)
-                            return `${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
-                          })()}`}
+                            return `Загрузка сотрудника: ${loadPercentage}% (${workloadRate === 1 ? "1" : workloadRate.toFixed(1)} из ${employmentRate} ставки) на ${dateStr}`
+                          })()}
                         />
                       )}
                     </div>
@@ -808,7 +1017,7 @@ function EmployeeRow({
                     {/* Левая часть с информацией о проекте и разделе */}
                     <div className="flex items-center">
                       <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                        {/* Кнопка удаления загрузки - появляется при наведении */}
+                        {/* Кнопка удаления/архивирования */}
                         <button
                           className={cn(
                             "w-5 h-5 rounded-full flex items-center justify-center transition-opacity",
@@ -817,23 +1026,20 @@ function EmployeeRow({
                               : "bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-slate-200",
                             "opacity-70 group-hover:opacity-100",
                           )}
-                          title="Архивировать"
-                          onClick={(e) => {
+                          title={loading.responsibleName === "Дефицит" ? "Удалить дефицит" : "Архивировать"}
+                          onClick={async (e) => {
                             e.stopPropagation()
-                            setLoadingToArchive(loading) // Устанавливаем конкретную загрузку
-                            setShowArchiveConfirm(true)
+                            if (loading.responsibleName === "Дефицит") {
+                              // Удаляем запись дефицита
+                              const { deleteLoading: deleteLoadingFromStore } = usePlanningStore.getState()
+                              await deleteLoadingFromStore(loading.id)
+                            } else {
+                              setLoadingToArchive(loading)
+                              setShowArchiveConfirm(true)
+                            }
                           }}
                         >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="21,8 21,21 3,21 3,8"></polyline>
                             <rect x="1" y="3" width="22" height="5"></rect>
                             <line x1="10" y1="12" x2="14" y2="12"></line>
@@ -844,7 +1050,7 @@ function EmployeeRow({
                         {/* Название проекта */}
                         <div
                           className={cn(
-                            "text-xs font-medium truncate whitespace-nowrap overflow-hidden max-w-[220px]",
+                            "text-[11px] font-medium truncate whitespace-nowrap overflow-hidden max-w-[220px]",
                             theme === "dark" ? "text-slate-300" : "text-slate-800",
                           )}
                           title={loading.projectName || "Проект не указан"}
@@ -865,7 +1071,7 @@ function EmployeeRow({
 
                       {/* Период загрузки */}
                       <div className="ml-4 flex items-center">
-                        <span className={cn("text-xs", theme === "dark" ? "text-slate-400" : "text-slate-600")}>
+                        <span className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-600")}>
                           {formatShortDate(new Date(loading.startDate))} — {formatShortDate(new Date(loading.endDate))}
                         </span>
                       </div>
@@ -904,11 +1110,15 @@ function EmployeeRow({
 
                       <span
                         className={cn(
-                          "text-xs font-medium px-2 py-0.5 rounded",
+                          "text-[10px] font-medium px-1.5 py-0 rounded",
                           theme === "dark" ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700",
                         )}
+                        title="Ставка"
                       >
-                        {loading.rate} ставка
+                        {(() => {
+                          const v = Number(loading.rate || 0)
+                          return Number.isInteger(v) ? v : v.toFixed(2).replace(/\.00$/, "").replace(/0$/, "")
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -1122,6 +1332,16 @@ function EmployeeRow({
       )}
       {/* Модальное окно добавления загрузки */}
       {showAddModal && <AddLoadingModal employee={employee} setShowAddModal={setShowAddModal} theme={theme} />}
+      {showAddShortage && (
+        <AddShortageModal
+          teamId={employee.teamId}
+          teamName={employee.teamName || "Команда"}
+          departmentId={employee.departmentId}
+          departmentName={employee.departmentName}
+          theme={theme}
+          onClose={() => setShowAddShortage(false)}
+        />
+      )}
       {editingLoading && (
         <EditLoadingModal loading={editingLoading} setEditingLoading={setEditingLoading} theme={theme} />
       )}
