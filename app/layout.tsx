@@ -4,6 +4,8 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import ClientProviders from "./ClientProviders"
 
+
+
 const inter = Inter({ subsets: ["latin", "cyrillic"] })
 
 export const metadata: Metadata = {

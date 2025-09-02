@@ -1073,7 +1073,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                       // Если есть несколько ролей (разделены запятыми), показываем их отдельными чипами
                                       user.role.includes(',') ? (
                                         user.role.split(',').map((role: string, index: number) => (
-                                          <Badge key={index} variant="secondary" className="text-xs">
+                                          <Badge key={`${user.id}-role-${role.trim()}-${index}`} variant="secondary" className="text-xs">
                                             {role.trim()}
                                           </Badge>
                                         ))
