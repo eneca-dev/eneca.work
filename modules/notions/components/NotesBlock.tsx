@@ -8,10 +8,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { NoteCard } from '@/modules/notions/components/NoteCard'
 import { BulkDeleteConfirm } from '@/modules/notions/components/BulkDeleteConfirm'
+import { ToggleDoneButton } from '@/modules/notions/components/ToggleDoneButton'
 import { TipTapEditor } from '@/modules/text-editor/components/client'
 import type { EditorRef } from '@/modules/text-editor'
 import { useNotionsStore } from '@/modules/notions/store'
-import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft } from 'lucide-react'
+import { Plus, Search, Trash2, Loader2, CheckSquare, Square, Check, ArrowLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseNotionContent } from '@/modules/notions/utils'
 import type { Notion } from '@/modules/notions/types'
@@ -40,6 +41,7 @@ export function NotesBlock() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [fullViewNotion, setFullViewNotion] = useState<Notion | null>(null)
   const [isCreatingNewNote, setIsCreatingNewNote] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
 
   const editorRef = useRef<EditorRef>(null)
   const isSwitchingRef = useRef(false)
@@ -70,6 +72,8 @@ export function NotesBlock() {
 
 
   const handleUpdateNote = async (id: string, content: string) => {
+    // Не обновляем новые заметки, которые еще не сохранены в БД
+    if (id === 'new') return
     await updateNotion(id, { notion_content: content })
   }
 
@@ -109,10 +113,10 @@ export function NotesBlock() {
 
   const handleOpenFullView = async (notion: Notion) => {
     // Сохраняем текущую открытую заметку перед переключением
-    if (fullViewNotion && editorRef.current) {
+    if (fullViewNotion && editorRef.current && fullViewNotion.notion_id !== 'new') {
       try {
         isSwitchingRef.current = true
-        await editorRef.current.save()
+        await handleSaveFullView('')
       } catch (error) {
         console.warn('Failed to save previous note before switching:', error)
       }
@@ -125,9 +129,9 @@ export function NotesBlock() {
   }
 
   const handleCloseFullView = () => {
-    // Сохраняем перед закрытием
+    // Сохраняем перед закрытием (включая новые заметки)
     if (editorRef.current) {
-      editorRef.current.save()
+      handleSaveFullView('')
     }
     if (isCreatingNewNote) {
       setIsCreatingNewNote(false)
@@ -137,7 +141,7 @@ export function NotesBlock() {
 
   const handleSaveFullView = async (content: string) => {
     if (!fullViewNotion) return
-    
+
     // Проверяем, пустая ли заметка (нет ни заголовка, ни контента)
     const trimmedContent = content.trim()
     if (!trimmedContent) {
@@ -148,20 +152,33 @@ export function NotesBlock() {
       // Для существующей заметки — просто не сохраняем и не закрываем
       return
     }
-    
+
     if (isCreatingNewNote) {
-      // Создаем новую заметку
+      // Создаем новую заметку только если есть реальный контент
       try {
         const created = await createNotion({ notion_content: content })
-        // Остаемся в редакторе и переключаемся на созданную заметку
+        // После создания заметки НЕ меняем fullViewNotion - редактор остается с текущей заметкой
         setIsCreatingNewNote(false)
-        setFullViewNotion(created)
+        // НЕ вызываем setFullViewNotion(created) - оставляем текущую заметку в редакторе
+        // Но обновляем notionId, чтобы автосохранение заработало для этой заметки
+        // setFullViewNotion(prev => prev ? { ...prev, notion_id: created.notion_id } : null)
       } catch (error) {
         console.error('Ошибка при создании заметки:', error)
       }
     } else {
       // Обновляем существующую заметку
-      handleUpdateNote(fullViewNotion.notion_id, content)
+      await handleUpdateNote(fullViewNotion.notion_id, content)
+    }
+  }
+
+
+
+  const handleToggleDone = async (notionId: string) => {
+    setIsToggling(true)
+    try {
+      await toggleNotionDone(notionId)
+    } finally {
+      setIsToggling(false)
     }
   }
 
@@ -172,19 +189,27 @@ export function NotesBlock() {
     if (!updatedNotion) {
       // Если это новая незасохраненная заметка — не закрываем редактор
       if (fullViewNotion.notion_id === 'new' || isCreatingNewNote) return
+
+      // Если активен поиск — не закрываем заметку, даже если она не в результатах поиска
+      if (searchQuery.trim()) {
+        console.log('🔍 Поиск активен, не закрываем заметку несмотря на отсутствие в результатах:', fullViewNotion.notion_id)
+        return
+      }
+
       // Текущая заметка была удалена — закрываем редактор
       setIsCreatingNewNote(false)
       setFullViewNotion(null)
       return
     }
-    // Обновляем только если данные реально изменились (по updated_at или контенту)
+    // Обновляем только если данные реально изменились (по updated_at, контенту или статусу)
     if (
       updatedNotion.notion_updated_at !== fullViewNotion.notion_updated_at ||
-      updatedNotion.notion_content !== fullViewNotion.notion_content
+      updatedNotion.notion_content !== fullViewNotion.notion_content ||
+      updatedNotion.notion_done !== fullViewNotion.notion_done
     ) {
       setFullViewNotion(updatedNotion)
     }
-  }, [notions, fullViewNotion])
+  }, [notions, fullViewNotion, searchQuery])
 
   // Автосохранение при изменении маршрута или закрытии приложения
   useEffect(() => {
@@ -194,20 +219,20 @@ export function NotesBlock() {
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
     // Отслеживание изменения URL для автосохранения при навигации
     const handlePopState = () => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }
 
@@ -224,7 +249,7 @@ export function NotesBlock() {
         const href = link.getAttribute('href')
         if (href && (href.startsWith('/') || href.startsWith('#'))) {
           isNavigating = true
-          editorRef.current.save()
+          handleSaveFullView('')
           
           // Сбрасываем флаг через небольшое время
           setTimeout(() => {
@@ -286,7 +311,7 @@ export function NotesBlock() {
         
         // Синхронное сохранение для критических переходов
         try {
-          editorRef.current.save()
+          handleSaveFullView('')
         } catch (error) {
           console.warn('Failed to save note during navigation:', error)
         }
@@ -335,7 +360,7 @@ export function NotesBlock() {
   useEffect(() => {
     if (fullViewNotion && pathname !== previousPathnameRef.current) {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
       previousPathnameRef.current = pathname
     }
@@ -347,7 +372,7 @@ export function NotesBlock() {
 
     const intervalId = setInterval(() => {
       if (editorRef.current) {
-        editorRef.current.save()
+        handleSaveFullView('')
       }
     }, 30000) // каждые 30 секунд
 
@@ -389,22 +414,12 @@ export function NotesBlock() {
           {!isCreatingNewNote && (
             <div className="flex items-center gap-2">
               {/* Кнопка отметки выполнения */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  await toggleNotionDone(fullViewNotion.notion_id)
-                  // Обновляем локальное состояние fullViewNotion
-                  setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
-                }}
-                className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <Check className={cn(
-                  "h-4 w-4",
-                  fullViewNotion.notion_done ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
-                )} />
-                {fullViewNotion.notion_done ? "Выполнено" : "Отметить выполненным"}
-              </Button>
+              <ToggleDoneButton
+                notion={fullViewNotion}
+                onToggle={() => handleToggleDone(fullViewNotion.notion_id)}
+                disabled={isToggling}
+                loading={isToggling}
+              />
             </div>
           )}
         </div>
@@ -471,8 +486,19 @@ export function NotesBlock() {
                 placeholder="Поиск по заметкам..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                className="pl-10 pr-10 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  type="button"
+                  aria-label="Очистить поиск"
+                  title="Очистить поиск"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
             {selectedNotions.length > 0 && (
               <>
@@ -492,7 +518,7 @@ export function NotesBlock() {
                   className="gap-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <Check className="h-4 w-4" />
-                  {shouldShowMarkAsUndone ? 'Отметить невыполненным' : 'Отметить выполненным'}
+                  {shouldShowMarkAsUndone ? 'Разархивировать' : 'Архивировать'}
                 </Button>
                 <Button
                   variant="destructive"
@@ -561,24 +587,15 @@ export function NotesBlock() {
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-gray-500 dark:text-gray-400">Редактор</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          await toggleNotionDone(fullViewNotion.notion_id)
-                          setFullViewNotion(prev => prev ? { ...prev, notion_done: !prev.notion_done } : null)
-                        }}
-                        className="gap-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-                      >
-                        <Check className={cn(
-                          'h-4 w-4',
-                          fullViewNotion.notion_done ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                        )} />
-                        {fullViewNotion.notion_done ? 'Выполнено' : 'Отметить выполненным'}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
-                    </div>
+                                          <div className="flex items-center gap-2">
+                        <ToggleDoneButton
+                          notion={fullViewNotion}
+                          onToggle={() => handleToggleDone(fullViewNotion.notion_id)}
+                          disabled={isToggling}
+                          loading={isToggling}
+                        />
+                        <Button variant="ghost" size="sm" onClick={handleCloseFullView} className="hover:bg-gray-100 dark:hover:bg-gray-700">Закрыть</Button>
+                      </div>
                   </div>
                   <div className="flex-1 overflow-hidden min-h-0 pb-[10px]">
                     <TipTapEditor

@@ -217,14 +217,22 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       return
     }
     const loaded = City.getCitiesOfCountry(selectedCountryCode) || []
-    // Дедупликация по названию города (в некоторых странах повторяются)
-    const cityMap = new Map<string, { name: string }>()
+    // Дедупликация по названию города с дополнительной проверкой
+    const seenNames = new Set<string>()
+    const unique: { name: string }[] = []
+
     for (const c of loaded) {
-      if (!cityMap.has(c.name)) {
-        cityMap.set(c.name, { name: c.name })
+      // Проверяем и нормализуем название города
+      const normalizedName = c.name.trim()
+      if (normalizedName && !seenNames.has(normalizedName)) {
+        seenNames.add(normalizedName)
+        unique.push({ name: normalizedName })
       }
     }
-    const unique = Array.from(cityMap.values())
+
+    // Сортируем для консистентности
+    unique.sort((a, b) => a.name.localeCompare(b.name))
+
     setCities(unique)
     setFilteredCities(unique)
   }, [selectedCountryCode])
@@ -1007,7 +1015,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                     />
                   </div>
                   {filteredCities && filteredCities.length > 0 ? filteredCities.map((c) => (
-                    <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
+                    <SelectItem key={`city-${c.name}`} value={c.name}>{c.name}</SelectItem>
                   )) : (
                     <SelectItem value="loading-cities" disabled>Загрузка городов...</SelectItem>
                   )}

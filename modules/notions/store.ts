@@ -33,16 +33,18 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   // Actions
   fetchNotions: async (filter?: NotionsFilter) => {
     set({ isLoading: true, error: null })
-    
+
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       let query = supabase
         .from('notions')
@@ -77,13 +79,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   createNotion: async (input: NotionInput) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -118,13 +122,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   createNotionSilent: async (input: NotionInput) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -153,13 +159,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   updateNotion: async (id: string, update: NotionUpdate) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -195,13 +203,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   updateNotionSilent: async (id: string, update: NotionUpdate) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -236,13 +246,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   deleteNotion: async (id: string) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -273,13 +285,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   deleteNotions: async (ids: string[]) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -353,13 +367,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   markNotionsAsDone: async (ids: string[]) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')
@@ -401,13 +417,15 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
   markNotionsAsUndone: async (ids: string[]) => {
     try {
       const supabase = createClient()
-      
-      // Получаем текущего пользователя
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+
+      // Проверяем сессию (более надежно чем getUser)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !session?.user) {
         throw new Error('Пользователь не авторизован')
       }
+
+      const user = session.user
       
       const { data, error } = await supabase
         .from('notions')

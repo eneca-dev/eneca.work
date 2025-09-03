@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { Search, ArrowUpDown, Trash2 } from "lucide-react"
 import { Button } from "@/modules/calendar/components/ui/button"
@@ -33,7 +33,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { formatDate, getEventColor } from "@/modules/calendar/utils"
 import { parseDateFromString } from "@/modules/calendar/utils"
 import { cn } from "@/lib/utils"
-import { usePermissionsHook as usePermissions } from "@/modules/permissions"
+import { useCalendarPermissions } from "@/modules/permissions"
 
 interface UnifiedEventsListProps {
   isOpen: boolean
@@ -53,14 +53,8 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-    // Проверяем права - ОПТИМИЗИРОВАННО  
-  const { hasPermission } = usePermissions()
-  const permissions = useMemo(() => {
-    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
-    const hasWorkSchedule = hasPermission("calendar.admin") || hasPermission("calendar.edit.work_schedule")
-    
-    return { hasGlobalEvents, hasWorkSchedule }
-  }, [hasPermission])
+  // Проверяем права на управление глобальными событиями
+  const { canManageGlobalEvents } = useCalendarPermissions()
 
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -136,7 +130,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
         try {
           span.setAttribute("user.id", currentUserId)
           span.setAttribute("event.id", eventToDelete)
-          span.setAttribute("user.has_global_permissions", permissions.hasGlobalEvents)
+          span.setAttribute("user.has_global_permissions", canManageGlobalEvents)
 
           await removeEvent(eventToDelete, currentUserId)
           
@@ -150,7 +144,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
               component: 'UnifiedEventsList',
               user_id: currentUserId,
               event_id: eventToDelete,
-              has_global_permissions: permissions.hasGlobalEvents
+              has_global_permissions: canManageGlobalEvents
             }
           })
 
@@ -168,7 +162,7 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
             extra: {
               user_id: currentUserId,
               event_id: eventToDelete,
-              has_global_permissions: permissions.hasGlobalEvents,
+              has_global_permissions: canManageGlobalEvents,
               timestamp: new Date().toISOString()
             }
           })
@@ -220,9 +214,11 @@ export function UnifiedEventsList(props: UnifiedEventsListProps) {
   }
 
   // Check if user can delete an event
+  // Пользователь с разрешением calendar.manage_global_events может удалять любые события
+  // Обычный пользователь может удалять только свои собственные события
   const canDeleteEvent = (event: CalendarEvent) => {
     // User with global events permission can delete any event
-    if (permissions.hasGlobalEvents) return true
+    if (canManageGlobalEvents) return true
 
     // Regular user can only delete their own events
     return event.calendar_event_created_by === currentUserId

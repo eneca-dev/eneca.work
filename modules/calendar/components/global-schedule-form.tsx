@@ -206,7 +206,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
           <TabsContent value="transfer" className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Выберите рабочий день для переноса</Label>
+                <Label>Выберите текущий рабочий день для переноса - он станет выходным</Label>
                 <DatePicker
                   value={workdayRange}
                   onChange={setWorkdayRange}
@@ -222,7 +222,7 @@ export function GlobalScheduleForm(props: GlobalScheduleFormProps) {
               </div>
 
               <div className="space-y-2">
-                <Label>Выберите выходной день для переноса</Label>
+                <Label>Выберите текущий выходной день для переноса - он станет рабочим</Label>
                 <DatePicker
                   value={weekendRange}
                   onChange={setWeekendRange}
