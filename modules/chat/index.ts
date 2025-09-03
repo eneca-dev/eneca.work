@@ -2,6 +2,7 @@
 export { ChatInterface } from './components/ChatInterface'
 export { MessageList } from './components/MessageList'
 export { MessageInput } from './components/MessageInput'
+export { MarkdownRenderer } from './components/MarkdownRenderer'
 
 // Экспорт хуков
 export { useChat } from './hooks/useChat'
