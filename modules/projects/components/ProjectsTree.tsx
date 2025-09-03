@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from '@sentry/nextjs'
+import { useUserStore } from '@/stores/useUserStore'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useTaskTransferStore } from '@/modules/task-transfer/store'
@@ -1179,9 +1180,50 @@ export function ProjectsTree({
             if (offset > 20000) break
           }
 
-          const data = aggregated
+          let data = aggregated
 
           console.log('📊 Данные из view_project_tree с фильтрацией:', data)
+
+          // Дополнительно включаем проекты текущего менеджера без разделов, если активны орг-фильтры
+          try {
+            const currentUserId = useUserStore.getState().id || null
+            const orgFiltersActive = Boolean(selectedDepartmentId || selectedTeamId || selectedEmployeeId)
+            const managerFilterAllowsSelf = !selectedManagerId || selectedManagerId === currentUserId
+            if (currentUserId && orgFiltersActive && managerFilterAllowsSelf) {
+              const { data: ownProjectsNoSections, error: extraErr } = await supabase
+                .from('view_project_tree')
+                .select('*')
+                .eq('manager_id', currentUserId)
+                .is('section_id', null)
+
+              if (!extraErr && ownProjectsNoSections && ownProjectsNoSections.length > 0) {
+                const seen = new Set((data || []).map((r: any) => `${r.project_id}:${r.section_id || 'null'}`))
+                ownProjectsNoSections.forEach((r: any) => {
+                  const key = `${r.project_id}:${r.section_id || 'null'}`
+                  if (!seen.has(key)) {
+                    data.push(r)
+                    seen.add(key)
+                  }
+                })
+                console.log('[DEBUG:PROJECTS] tree:merged_with_own_projects_without_sections', { added: ownProjectsNoSections.length })
+              }
+            }
+          } catch (e) {
+            console.warn('[DEBUG:PROJECTS] tree:merge own projects failed', e)
+          }
+
+      // [DEBUG:PROJECTS] итоги сырого ответа
+      const uniqueProjects = new Set<string>()
+      const uniqueManagers = new Set<string>()
+      ;(data || []).forEach((r: any) => {
+        if (r.project_id) uniqueProjects.add(r.project_id)
+        if (r.manager_id) uniqueManagers.add(r.manager_id)
+      })
+      console.log('[DEBUG:PROJECTS] tree:raw', {
+        rows: (data || []).length,
+        uniqueProjects: Array.from(uniqueProjects),
+        uniqueManagers: Array.from(uniqueManagers),
+      })
 
       // [DEBUG:PROJECTS] итоги сырого ответа
       const uniqueProjects = new Set<string>()
