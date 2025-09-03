@@ -43,8 +43,8 @@ export function CreateObjectAssignmentModal({
   const [plannedDuration, setPlannedDuration] = useState<string>("7")
   const [link, setLink] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
-  const [fallbackSections, setFallbackSections] = useState<{ id: string; name: string }[]>([])
-  const [treeSections, setTreeSections] = useState<{ id: string; name: string }[]>([])
+  const [fallbackSections, setFallbackSections] = useState<{ id: string; name: string; projectId?: string }[]>([])
+  const [treeSections, setTreeSections] = useState<{ id: string; name: string; projectId?: string }[]>([])
   const [effectiveObjectId, setEffectiveObjectId] = useState<string>(objectId || "")
   const [plannedTransmittedDate, setPlannedTransmittedDate] = useState<string | undefined>(undefined)
   
@@ -90,7 +90,7 @@ export function CreateObjectAssignmentModal({
         }
         const { data, error } = await supabase
           .from('sections')
-          .select('section_id, section_name')
+          .select('section_id, section_name, section_project_id')
           .eq('section_object_id', effectiveObjectId)
           .order('section_name')
         if (error) {
@@ -99,7 +99,7 @@ export function CreateObjectAssignmentModal({
         }
         const mapped = (data || [])
           .filter(s => s.section_id && s.section_name)
-          .map(s => ({ id: s.section_id as string, name: s.section_name as string }))
+          .map(s => ({ id: s.section_id as string, name: s.section_name as string, projectId: (s as any).section_project_id as string | undefined }))
         setFallbackSections(mapped)
         console.log('📥 Фолбэк-разделы из таблицы sections:', mapped)
       } catch (e) {
@@ -131,7 +131,7 @@ export function CreateObjectAssignmentModal({
 
         const mapped = (data || [])
           .filter(row => row.section_id && row.section_name)
-          .map(row => ({ id: row.section_id as string, name: row.section_name as string }))
+          .map(row => ({ id: row.section_id as string, name: row.section_name as string, projectId: row.project_id as string | undefined }))
           .filter((section, index, self) => index === self.findIndex(s => s.id === section.id))
 
         setTreeSections(mapped)
@@ -221,7 +221,7 @@ export function CreateObjectAssignmentModal({
           span.setAttribute("to_section", toSectionId)
           
           const assignmentData: CreateAssignmentData = {
-            project_id: projectId,
+            project_id: derivedProjectId,
             from_section_id: fromSectionId,
             to_section_id: toSectionId,
             title: title.trim(),
@@ -242,9 +242,11 @@ export function CreateObjectAssignmentModal({
             onClose()
           } else {
             span.setAttribute("creation.success", false)
+            const errMsg = (result as any)?.error?.message || (result as any)?.error?.details || "Не удалось создать задание"
+            console.error('Ошибка создания задания:', (result as any)?.error)
             toast({
               title: "Ошибка",
-              description: "Не удалось создать задание",
+              description: errMsg,
               variant: "destructive",
             })
           }
@@ -301,6 +303,16 @@ export function CreateObjectAssignmentModal({
     }
   }, [isOpen, sectionId, sourceSections, fromSectionId])
 
+  // Вычисляем проект из выбранного раздела (приоритет: from → to), иначе из пропсов
+  const derivedProjectId = useMemo(() => {
+    const src = (treeSections.length > 0 ? treeSections : fallbackSections)
+    const from = src.find(s => s.id === fromSectionId)
+    if (from?.projectId) return from.projectId
+    const to = src.find(s => s.id === toSectionId)
+    if (to?.projectId) return to.projectId
+    return projectId || ""
+  }, [treeSections, fallbackSections, fromSectionId, toSectionId, projectId])
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px]">
@@ -313,6 +325,9 @@ export function CreateObjectAssignmentModal({
             Объект: <span className="font-medium">{objectName}</span> | 
             Проект: <span className="font-medium">{projectName}</span>
           </p>
+          {(!derivedProjectId || derivedProjectId === "") && (
+            <p className="text-xs text-destructive mt-1">Не удалось определить project_id из выбранных разделов. Выберите корректные разделы этого проекта.</p>
+          )}
         </DialogHeader>
         
         <div className="space-y-6 py-4">

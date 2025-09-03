@@ -582,6 +582,23 @@ export async function createAssignment(assignmentData: CreateAssignmentData) {
         if (error) {
           span.setAttribute("db.success", false)
           span.setAttribute("db.error", error.message)
+          console.error('❌ Ошибка вставки в assignments:', {
+            message: error.message,
+            code: (error as any)?.code,
+            details: (error as any)?.details,
+            hint: (error as any)?.hint,
+            payload: {
+              project_id: assignmentData.project_id,
+              from_section_id: assignmentData.from_section_id,
+              to_section_id: assignmentData.to_section_id,
+              title: assignmentData.title,
+              description: assignmentData.description,
+              due_date: assignmentData.due_date,
+              link: assignmentData.link,
+              planned_transmitted_date: assignmentData.planned_transmitted_date,
+              planned_duration: assignmentData.planned_duration,
+            }
+          })
           
           Sentry.captureException(error, {
             tags: {
