@@ -1213,16 +1213,16 @@ export function ProjectsTree({
           }
 
       // [DEBUG:PROJECTS] итоги сырого ответа
-      const uniqueProjects = new Set<string>()
-      const uniqueManagers = new Set<string>()
+      const dbgUniqueProjects = new Set<string>()
+      const dbgUniqueManagers = new Set<string>()
       ;(data || []).forEach((r: any) => {
-        if (r.project_id) uniqueProjects.add(r.project_id)
-        if (r.manager_id) uniqueManagers.add(r.manager_id)
+        if (r.project_id) dbgUniqueProjects.add(r.project_id)
+        if (r.manager_id) dbgUniqueManagers.add(r.manager_id)
       })
       console.log('[DEBUG:PROJECTS] tree:raw', {
         rows: (data || []).length,
-        uniqueProjects: Array.from(uniqueProjects),
-        uniqueManagers: Array.from(uniqueManagers),
+        uniqueProjects: Array.from(dbgUniqueProjects),
+        uniqueManagers: Array.from(dbgUniqueManagers),
       })
 
       // [DEBUG:PROJECTS] итоги сырого ответа
