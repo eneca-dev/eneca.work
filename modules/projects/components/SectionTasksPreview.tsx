@@ -45,6 +45,12 @@ function TaskPreviewCard({ type, status, fromSection, toSection, dueDate, hasLin
       <div className="flex items-center justify-between mb-2">
         <Badge className={`${getStatusColor(status)} whitespace-nowrap text-[10px] h-5 px-2 py-0`}>{status}</Badge>
         <div className="flex items-center gap-3 flex-shrink-0 ml-3 text-[11px] text-muted-foreground">
+          {assignment.planned_transmitted_date && (
+            <span className="inline-flex items-center gap-1 text-foreground font-semibold">
+              <Calendar className="h-3 w-3" />
+              <span className="truncate max-w-[140px]">{formatDate(assignment.planned_transmitted_date)}</span>
+            </span>
+          )}
           {dueDate && (
             <span className="inline-flex items-center gap-1">
               <Calendar className="h-3 w-3" />

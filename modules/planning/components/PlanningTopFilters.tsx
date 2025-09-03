@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, RotateCcw, Lock } from 'lucide-react'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, RotateCcw, Lock, Network, Layers } from 'lucide-react'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
@@ -113,11 +113,13 @@ export default function PlanningTopFilters() {
           <CalendarIcon className="h-4 w-4" />
         </Button>
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+        {/* Отделы */}
         <Button variant="ghost" size="icon" className={`h-7 w-7 ${showDepartments ? 'text-teal-600 dark:text-teal-400' : ''}`} onClick={toggleShowDepartments} title={showDepartments ? 'Скрыть отделы' : 'Показать отделы'}>
-          {showDepartments ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {showDepartments ? <Network className="h-4 w-4" /> : <Network className="h-4 w-4 opacity-50" />}
         </Button>
+        {/* Разделы */}
         <Button variant="ghost" size="icon" className={`h-7 w-7 ${showSections ? 'text-teal-600 dark:text-teal-400' : ''}`} onClick={toggleShowSections} title={showSections ? 'Скрыть разделы' : 'Показать разделы'}>
-          {showSections ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {showSections ? <Layers className="h-4 w-4" /> : <Layers className="h-4 w-4 opacity-50" />}
         </Button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.dispatchEvent(new CustomEvent('planning:toggleProjectColumn'))} title="Показать/скрыть колонку Проект">
           <Columns3 className="h-4 w-4" />
