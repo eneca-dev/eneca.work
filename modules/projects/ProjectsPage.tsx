@@ -9,6 +9,7 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
 import { getFiltersPermissionContextAsync } from '@/modules/permissions/integration/filters-permission-context'
+import { usePermissionsLoader } from '@/modules/permissions'
 import { applyProjectLocks } from '@/modules/projects/integration/project-filter-locks'
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
@@ -48,6 +49,9 @@ export default function ProjectsPage() {
 
   // Локальный стор фильтров модуля projects
   const filterStore = useProjectFilterStore();
+  // Состояние готовности прав (инициализация перед загрузкой дерева)
+  const { isLoading: permLoading, error: permError } = usePermissionsLoader()
+  const [locksApplied, setLocksApplied] = useState(false)
 
   // Состояние фильтров для передачи в дерево
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
@@ -106,10 +110,46 @@ export default function ProjectsPage() {
   };
 
   const handleResetFilters = () => {
+    // [DEBUG:PROJECTS] Лог состояния перед сбросом
+    console.log('[DEBUG:PROJECTS] reset:before', {
+      selectedManagerId: filterStore.selectedManagerId,
+      selectedProjectId: filterStore.selectedProjectId,
+      selectedStageId: filterStore.selectedStageId,
+      selectedObjectId: filterStore.selectedObjectId,
+      selectedDepartmentId: filterStore.selectedDepartmentId,
+      selectedTeamId: filterStore.selectedTeamId,
+      selectedEmployeeId: filterStore.selectedEmployeeId,
+      treeSearch,
+      projectSearch,
+      selectedStatusIdsLocal,
+    })
+
     // Сбрасываем фильтры проекта (менеджер/проект/стадия/объект + организация)
     filterStore.resetFilters()
-    // Очищаем локальный поиск по проектам
+
+    // Очищаем локальные состояния поиска/статусов дерева
     setProjectSearch('')
+    setTreeSearch('')
+    setSelectedStatusIdsLocal([])
+
+    // [DEBUG:PROJECTS] Лог состояния после сброса
+    console.log('[DEBUG:PROJECTS] reset:after', {
+      selectedManagerId: useProjectFilterStore.getState().selectedManagerId,
+      selectedProjectId: useProjectFilterStore.getState().selectedProjectId,
+      selectedStageId: useProjectFilterStore.getState().selectedStageId,
+      selectedObjectId: useProjectFilterStore.getState().selectedObjectId,
+      selectedDepartmentId: useProjectFilterStore.getState().selectedDepartmentId,
+      selectedTeamId: useProjectFilterStore.getState().selectedTeamId,
+      selectedEmployeeId: useProjectFilterStore.getState().selectedEmployeeId,
+      treeSearch: '',
+      projectSearch: '',
+      selectedStatusIdsLocal: [],
+    })
+
+    // Принудительная перезагрузка дерева, чтобы не зависеть от эффектов синхронизации
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+    }
   };
 
   // Обработчик открытия дашборда проекта
@@ -125,28 +165,32 @@ export default function ProjectsPage() {
     setDashboardProject(null);
   };
 
-  // Ленивая инициализация данных организации для проектов
+  // Ленивая инициализация данных организации для проектов (после инициализации прав)
   useEffect(() => {
     if (typeof window === 'undefined') return
-    // Инициализация блокировок и справочников
-    applyProjectLocks().then(({ locked }) => {
-      console.log('projects_filter_lock:on_mount_locked', Array.from(locked))
-      console.log('projects_filter_lock:on_mount_selectedManagerId', useProjectFilterStore.getState().selectedManagerId)
-    }).catch(err => {
-      Sentry.captureException(err)
-      console.error('Failed to apply project locks', err)
-    })
-    if (filterStore.managers.length === 0) {
-      filterStore.loadManagers()
-    }
-    if (filterStore.departments.length === 0) {
-      filterStore.loadDepartments()
-    }
-    if (filterStore.employees.length === 0) {
-      filterStore.loadEmployees()
-    }
+    if (permLoading || permError) return
+    if (locksApplied) return
+    // Инициализация блокировок и справочников строго один раз после загрузки прав
+    (async () => {
+      try {
+        await applyProjectLocks()
+        setLocksApplied(true)
+        if (filterStore.managers.length === 0) {
+          filterStore.loadManagers()
+        }
+        if (filterStore.departments.length === 0) {
+          filterStore.loadDepartments()
+        }
+        if (filterStore.employees.length === 0) {
+          filterStore.loadEmployees()
+        }
+      } catch (err) {
+        Sentry.captureException(err)
+        console.error('Failed to apply project locks', err)
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterStore.managers.length, filterStore.departments.length, filterStore.employees.length, filterStore.projects.length, filterStore.selectedManagerId])
+  }, [permLoading, permError, locksApplied, filterStore.managers.length, filterStore.departments.length, filterStore.employees.length])
 
   // Синхронизация локальных значений с проектным стором (для совместимости со старыми фильтрами ниже)
   useEffect(() => {
@@ -538,7 +582,15 @@ export default function ProjectsPage() {
       {/* Нижняя панель инструментов удалена — инструменты перенесены в верхний дропдаун */}
 
       <div className="p-0">
-        <ProjectsTree
+        {!locksApplied ? (
+          <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
+              <p className="text-sm dark:text-slate-400 text-slate-500 mt-3">Подготовка фильтров доступа...</p>
+            </div>
+          </div>
+        ) : (
+          <ProjectsTree
           selectedManagerId={filterStore.selectedManagerId}
           selectedProjectId={filterStore.selectedProjectId}
           selectedStageId={filterStore.selectedStageId}
@@ -552,6 +604,7 @@ export default function ProjectsPage() {
           urlTab={urlTab || 'overview'}
           onOpenProjectDashboard={handleOpenProjectDashboard}
         />
+        )}
       </div>
 
       {/* Модальное окно с дашбордом проекта */}

@@ -163,7 +163,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
           span.setAttribute("object.has_responsible", !!objectResponsible)
           span.setAttribute("object.has_dates", !!(objectStartDate && objectEndDate))
 
-          const { error } = await supabase
+          const { data: created, error } = await supabase
             .from('objects')
             .insert({
               object_name: objectName.trim(),
@@ -173,6 +173,8 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               object_end_date: objectEndDate || null,
               object_stage_id: stageId
             })
+            .select('object_id, object_name, object_stage_id')
+            .single()
 
           if (error) {
             span.setAttribute("create.success", false)
@@ -210,6 +212,14 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
           })
 
           setNotification(`Объект "${objectName}" успешно создан`)
+          // Немедленно обновляем дерево и фокусируемся на созданном объекте
+          try {
+            if (typeof window !== 'undefined' && created?.object_id) {
+              const detail = { entity: 'object', id: created.object_id as string }
+              window.dispatchEvent(new CustomEvent('projectsTree:created', { detail }))
+              window.dispatchEvent(new CustomEvent('projectsTree:focusNode', { detail }))
+            }
+          } catch (_) {}
           onSuccess()
           handleClose()
         } catch (error) {

@@ -1014,7 +1014,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       />
 
       <Dialog open={isTemplatesOpen} onOpenChange={setIsTemplatesOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="w-[96vw] max-w-[1400px]">
           <DialogHeader>
             <DialogTitle>Шаблоны декомпозиции</DialogTitle>
           </DialogHeader>

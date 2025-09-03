@@ -24,23 +24,31 @@ export async function applyProjectLocks(): Promise<{ locked: Set<FilterType> }> 
   })
   console.log('projects_filter_lock:computed', { lockedFilters, defaults })
 
-  // Применяем дефолты ДО фиксации lockedFilters
+  // Применяем дефолты ДО фиксации lockedFilters, НЕ затирая уже выбранные пользователем значения
+  const current = useProjectFilterStore.getState()
   const updates: any = {}
 
-  if (Object.prototype.hasOwnProperty.call(defaults, 'department')) {
+  if (Object.prototype.hasOwnProperty.call(defaults, 'department') && !current.selectedDepartmentId) {
     updates.selectedDepartmentId = defaults.department ?? null
-    updates.selectedTeamId = null
-    updates.selectedEmployeeId = null
+    // дочерние только если мы действительно меняем department
+    if (updates.selectedDepartmentId) {
+      updates.selectedTeamId = null
+      updates.selectedEmployeeId = null
+    }
   }
-  if (Object.prototype.hasOwnProperty.call(defaults, 'team')) {
+  if (Object.prototype.hasOwnProperty.call(defaults, 'team') && !current.selectedTeamId) {
     updates.selectedTeamId = defaults.team ?? null
-    updates.selectedEmployeeId = null
+    if (updates.selectedTeamId) {
+      updates.selectedEmployeeId = null
+    }
   }
-  if (Object.prototype.hasOwnProperty.call(defaults, 'manager')) {
+  if (Object.prototype.hasOwnProperty.call(defaults, 'manager') && !current.selectedManagerId) {
     updates.selectedManagerId = defaults.manager ?? null
-    updates.selectedProjectId = null
-    updates.selectedStageId = null
-    updates.selectedObjectId = null
+    if (updates.selectedManagerId) {
+      updates.selectedProjectId = null
+      updates.selectedStageId = null
+      updates.selectedObjectId = null
+    }
   }
 
   // Применяем изменения состояния
@@ -49,13 +57,13 @@ export async function applyProjectLocks(): Promise<{ locked: Set<FilterType> }> 
     useProjectFilterStore.setState(updates)
   }
 
-  // Догружаем проекты в зависимости от результата
-  if (defaults.manager) {
+  // Догружаем проекты только при первом выставлении менеджера
+  if (!current.selectedManagerId && defaults.manager) {
     console.log('projects_filter_lock:load_projects_for_manager', { managerId: defaults.manager })
     await useProjectFilterStore.getState().loadProjects(defaults.manager)
   } else {
-    console.log('projects_filter_lock:load_all_projects_admin_or_no_pm_lock')
-    await useProjectFilterStore.getState().loadProjects(null)
+    // если менеджер уже выбран, не трогаем текущие проекты/фильтры
+    console.log('projects_filter_lock:keep_existing_projects_selection')
   }
 
   // Фиксируем набор заблокированных фильтров в сторе (для совместимости)
