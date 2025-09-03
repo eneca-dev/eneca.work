@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Briefcase, Loader2, Calendar, BarChart3 } from 'lucide-react'
+import { Briefcase, Loader2, Calendar } from 'lucide-react'
 import { UserLoadingsList } from './UserLoadingsList'
 import { ResponsibilitiesBlock } from './ResponsibilitiesBlock'
 import { WorkTasksChart } from './WorkTasksChart'
@@ -187,8 +187,8 @@ export const MyWorkWidget: React.FC = () => {
             />
           )}
 
-          {/* Адаптивный двухколоночный layout */}
-          <div className={`grid gap-6 ${selectedLoading ? 'grid-cols-[1fr_1fr]' : 'grid-cols-[2fr_1fr]'}`}>
+          {/* Адаптивный layout: 1 колонка на мобильных, 2 на md+, с 2fr/1fr на lg при отсутствии выбранной загрузки */}
+          <div className={`grid gap-6 grid-cols-1 md:grid-cols-2 ${!selectedLoading ? 'lg:grid-cols-[2fr_1fr]' : 'lg:grid-cols-2'}`}>
             {/* Левая колонка - Заголовок и список загрузок */}
             <div className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
@@ -289,43 +289,6 @@ export const MyWorkWidget: React.FC = () => {
 
                               {/* Дедлайны без заголовка */}
                 <DeadlinesBlock loadings={data.loadings} isCompact={!!selectedLoading} hideHeader={true} />
-
-                                 {/* Аналитика под дедлайнами */}
-                 <div className={`mt-auto flex-shrink-0 ${selectedLoading ? 'mr-2' : 'mr-5'}`}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <BarChart3 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <h3 className="text-sm text-emerald-600 dark:text-emerald-400">Аналитика</h3>
-                  </div>
-                                     <div className={`grid gap-1 ${selectedLoading ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                    {/* Первый ряд */}
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Комментарии</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.comments_count}</div>
-                    </div>
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Упоминания</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.mentions_count}</div>
-                    </div>
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Активные</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.active_loadings_count}</div>
-                    </div>
-                    
-                    {/* Второй ряд */}
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Архивные</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.archived_loadings_count}</div>
-                    </div>
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Часы за сегодня</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.today_hours}</div>
-                    </div>
-                    <div className={`bg-gray-50 dark:bg-slate-600/20 rounded-lg border border-gray-100 dark:border-slate-500/20 hover:bg-gray-100 dark:hover:bg-slate-600/30 transition-colors text-center flex flex-col justify-center ${selectedLoading ? 'p-1 h-8' : 'p-1.5 h-10'}`}>
-                      <div className={`text-gray-600 dark:text-gray-400 max-xl:hidden ${selectedLoading ? 'text-xs' : 'text-xs'}`}>Часы за неделю</div>
-                      <div className={`font-bold text-gray-900 dark:text-white ${selectedLoading ? 'text-xs' : 'text-sm'}`}>{data.analytics.week_hours}</div>
-                    </div>
-                  </div>
-                </div>
             </div>
           </div>
         </div>

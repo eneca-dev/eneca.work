@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, KeyboardEvent } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { Modal, ModalButton } from "@/components/modals"
 import { Loader2 } from "lucide-react"
+import { useHasPermission } from "@/modules/permissions"
 
 interface AddWorkLogModalProps {
   isOpen: boolean
@@ -40,6 +41,9 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
   const [description, setDescription] = useState<string>("")
   const [search, setSearch] = useState<string>("")
 
+  // Проверка разрешения на редактирование ставки
+  const canEditRate = useHasPermission('work_logs.rate.edit')
+
   useEffect(() => {
     if (!isOpen) return
     const load = async () => {
@@ -73,10 +77,25 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
         }
         if (!catsRes.error && catsRes.data) setCategories(catsRes.data as WorkCategory[])
 
-        if (!lastLogRes.error && lastLogRes.data && lastLogRes.data[0]) {
-          const lastRate = lastLogRes.data[0].work_log_hourly_rate
-          if (lastRate != null) setRate(String(lastRate))
-        }
+        // Подставляем ставку из профиля пользователя; если нет, используем последнюю из work_logs
+        try {
+          const { data: authData } = await supabase.auth.getUser()
+          const userId = authData?.user?.id
+          if (userId) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('salary, is_hourly')
+              .eq('user_id', userId)
+              .single()
+
+            if (profileData && profileData.salary != null) {
+              setRate(String(profileData.salary))
+            } else if (!lastLogRes.error && lastLogRes.data && lastLogRes.data[0]) {
+              const lastRate = lastLogRes.data[0].work_log_hourly_rate
+              if (lastRate != null) setRate(String(lastRate))
+            }
+          }
+        } catch {}
       } finally {
         setLoading(false)
       }
@@ -223,7 +242,9 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   value={rate}
                   onChange={e => setRate(e.target.value)}
                   placeholder="0"
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white"
+                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white disabled:opacity-60"
+                  disabled={!canEditRate}
+                  title={canEditRate ? undefined : 'Недостаточно прав для изменения ставки'}
                 />
               </div>
             </div>

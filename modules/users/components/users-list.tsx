@@ -1068,7 +1068,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                       {canViewRate(user) && user.salary ? (
                                         <>
                                           <span>{user.salary}</span>
-                                          <span className="text-[10px] text-gray-500 ml-1">BYN</span>
+                                          <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
                                         </>
                                       ) : '—'}
                                     </span>
@@ -1218,7 +1218,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                             {user.salary ? (
                                               <>
                                                 <span>{user.salary}</span>
-                                                <span className="text-[10px] text-gray-500 ml-1">BYN</span>
+                                                <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
                                               </>
                                             ) : '—'}
                                           </span>

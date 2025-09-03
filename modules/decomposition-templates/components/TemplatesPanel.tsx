@@ -273,85 +273,85 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
           </div>
 
           {/* Список позиций */}
-          <div className="space-y-2 max-h-72 overflow-auto pr-1">
+          <div className="space-y-2 max-h-[70vh] overflow-auto pr-1">
             {useTemplatesStore.getState().templateItems.length === 0 && (
               <div className="text-sm text-muted-foreground">Пока нет позиций</div>
             )}
             {useTemplatesStore.getState().templateItems.map((it) => (
-              <div key={it.id} className="grid grid-cols-16 gap-2 items-center">
+              <div key={it.id} className="">
                 {isEditing ? (
                   <>
-                    <Input className="col-span-5" value={it.description} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { description: e.target.value })} />
-                    <Select value={it.work_category_id} onValueChange={(v) => { useTemplatesStore.getState().updateItemLocal(it.id, { work_category_id: v }) }}>
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Категория" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" step="0.25" className="col-span-2" value={it.planned_hours} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { planned_hours: Number(e.target.value) })} />
-                    <Input type="number" className="col-span-1" placeholder="±дн" value={it.due_offset_days ?? ''} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { due_offset_days: e.target.value === '' ? null : Number(e.target.value) })} />
-                    <div className="col-span-3">
-                      <input
-                        list={`tpl-profiles-${it.id}`}
-                        className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
-                        placeholder="Ответственный"
-                        value={respSearchById[it.id] ?? ''}
-                        onChange={(e) => setRespSearchById((prev) => ({ ...prev, [it.id]: e.target.value }))}
-                        onKeyDown={async (e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[1120px] flex flex-nowrap items-center gap-2 text-[10px]">
+                        <Input className="h-8 px-2 py-1 text-[10px] w-[320px]" value={it.description} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { description: e.target.value })} />
+                        <Select value={it.work_category_id} onValueChange={(v) => { useTemplatesStore.getState().updateItemLocal(it.id, { work_category_id: v }) }}>
+                          <SelectTrigger className="h-8 px-2 text-[10px] w-[160px]"><SelectValue placeholder="Категория" /></SelectTrigger>
+                          <SelectContent>{categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
+                        </Select>
+                        <Input type="number" step="0.25" className="h-8 px-2 py-1 text-[10px] w-[90px]" value={it.planned_hours} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { planned_hours: Number(e.target.value) })} />
+                        <Input type="number" className="h-8 px-2 py-1 text-[10px] w-[70px]" placeholder="±дн" value={it.due_offset_days ?? ''} onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { due_offset_days: e.target.value === '' ? null : Number(e.target.value) })} />
+                        <input
+                          list={`tpl-profiles-${it.id}`}
+                          className="h-8 px-2 py-1 text-[10px] w-[220px] border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
+                          placeholder="Ответственный"
+                          value={respSearchById[it.id] ?? ''}
+                          onChange={(e) => setRespSearchById((prev) => ({ ...prev, [it.id]: e.target.value }))}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              const text = (respSearchById[it.id] || '').trim().toLowerCase()
+                              const match = profiles.find(p => p.name.toLowerCase() === text) ||
+                                            profiles.find(p => p.name.toLowerCase().startsWith(text)) ||
+                                            profiles.find(p => p.name.toLowerCase().includes(text))
+                              const selectedId = match ? match.id : null
+                              useTemplatesStore.getState().updateItemLocal(it.id, { responsible_id: selectedId } as any)
+                              await useTemplatesStore.getState().updateItem(it.id, { responsible_id: selectedId } as any)
+                              setRespSearchById((prev) => ({ ...prev, [it.id]: match?.name || '' }))
+                            }
+                          }}
+                          onBlur={async (e) => {
                             const text = (respSearchById[it.id] || '').trim().toLowerCase()
-                            const match = profiles.find(p => p.name.toLowerCase() === text) ||
-                                          profiles.find(p => p.name.toLowerCase().startsWith(text)) ||
-                                          profiles.find(p => p.name.toLowerCase().includes(text))
-                            const selectedId = match ? match.id : null
-                            useTemplatesStore.getState().updateItemLocal(it.id, { responsible_id: selectedId } as any)
-                            await useTemplatesStore.getState().updateItem(it.id, { responsible_id: selectedId } as any)
-                            setRespSearchById((prev) => ({ ...prev, [it.id]: match?.name || '' }))
-                          }
-                        }}
-                      />
-                      <datalist id={`tpl-profiles-${it.id}`}>
-                        <option value="" />
-                        {profiles.map(p => (<option key={p.id} value={p.name} />))}
-                      </datalist>
+                            const match = profiles.find(p => p.name.toLowerCase() === text)
+                            if (!match) {
+                              useTemplatesStore.getState().updateItemLocal(it.id, { responsible_id: null } as any)
+                              await useTemplatesStore.getState().updateItem(it.id, { responsible_id: null } as any)
+                              setRespSearchById((prev) => ({ ...prev, [it.id]: '' }))
+                            }
+                          }}
+                        />
+                        <datalist id={`tpl-profiles-${it.id}`}>
+                          <option value="" />
+                          {profiles.map(p => (<option key={p.id} value={p.name} />))}
+                        </datalist>
+                        <Select value={(it as any).status_id || ''} onValueChange={(v) => { const val = (v && v.trim().length > 0) ? v : null; useTemplatesStore.getState().updateItemLocal(it.id, { status_id: val } as any) }}>
+                          <SelectTrigger className="h-8 px-2 text-[10px] w-[140px]"><SelectValue placeholder="Статус" /></SelectTrigger>
+                          <SelectContent>{statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                        </Select>
+                        <Input type="number" min="0" max="100" className="h-8 px-2 py-1 text-[10px] w-[64px]" placeholder="%" value={(it as any).progress ?? ''} onChange={(e) => {
+                          const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)))
+                          useTemplatesStore.getState().updateItemLocal(it.id, { progress: v } as any)
+                        }} />
+                        <Button variant="ghost" className="h-8 w-[36px] px-0" onClick={() => useTemplatesStore.getState().deleteItem(it.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <Select value={(it as any).status_id || ''} onValueChange={(v) => { const val = v || null; useTemplatesStore.getState().updateItemLocal(it.id, { status_id: val } as any) }}>
-                      <SelectTrigger className="col-span-2">
-                        <SelectValue placeholder="Статус" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" min="0" max="100" className="col-span-1" placeholder="%" value={(it as any).progress ?? ''} onChange={(e) => {
-                      const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)))
-                      useTemplatesStore.getState().updateItemLocal(it.id, { progress: v } as any)
-                    }} />
-                    <Button variant="ghost" className="col-span-1" onClick={() => useTemplatesStore.getState().deleteItem(it.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </>
                 ) : (
-                  <div className="col-span-16">
-                    <div className="grid grid-cols-12 gap-y-1 items-center">
-                      {/* Описание */}
-                      <div className="col-span-12 font-medium truncate">{it.description}</div>
-                      {/* Категория / План */}
-                      <div className="col-span-6 truncate text-muted-foreground">{categories.find(c => c.id === it.work_category_id)?.name || '—'}</div>
-                      <div className="col-span-6 text-right tabular-nums">{Number(it.planned_hours || 0).toFixed(2)}</div>
-                      {/* ±дн / Ответственный */}
-                      <div className="col-span-6 text-muted-foreground">{it.due_offset_days != null ? `±${it.due_offset_days} дн` : '—'}</div>
-                      <div className="col-span-6 text-right truncate">{profiles.find(p => p.id === (it as any).responsible_id)?.name || '—'}</div>
-                      {/* Статус / % */}
-                      <div className="col-span-6">
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[1120px] flex flex-nowrap items-center gap-2 text-[11px]">
+                      <div className="w-[320px] truncate font-medium">{it.description}</div>
+                      <div className="w-[160px] truncate text-muted-foreground">{categories.find(c => c.id === it.work_category_id)?.name || '—'}</div>
+                      <div className="w-[90px] text-right tabular-nums">{Number(it.planned_hours || 0).toFixed(2)}</div>
+                      <div className="w-[70px] text-muted-foreground">{it.due_offset_days != null ? `±${it.due_offset_days}` : '—'}</div>
+                      {/* Ответственный не отображается в шаблоне */}
+                      <div className="w-[220px] truncate text-right">—</div>
+                      <div className="w-[140px]">
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
                           {statuses.find(s => s.id === (it as any).status_id)?.name || '—'}
                         </span>
                       </div>
-                      <div className="col-span-6 text-right">{(it as any).progress ?? 0}%</div>
+                      <div className="w-[64px] text-right">{(it as any).progress ?? 0}%</div>
                     </div>
                   </div>
                 )}
@@ -360,64 +360,77 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
           </div>
 
           {isEditing && (
-            <div className="grid grid-cols-16 gap-2 items-center">
-              <Input className="col-span-5" placeholder="Описание работ" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
-              <Select value={newCat} onValueChange={setNewCat}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Категория" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Input type="number" step="0.25" className="col-span-2" placeholder="План, ч" value={newHours} onChange={(e) => setNewHours(e.target.value)} />
-              <Input type="number" className="col-span-1" placeholder="±дн" value={newOffset} onChange={(e) => setNewOffset(e.target.value)} />
-              <div className="col-span-3">
-                <input
-                  list="tpl-new-profiles"
-                  className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
-                  placeholder="Ответственный"
-                  value={(() => {
-                    const prof = profiles.find(p => p.id === newResponsible)
-                    return prof?.name || ''
-                  })()}
-                  onChange={(e) => {
-                    const val = e.target.value.toLowerCase()
-                    const match = profiles.find(p => p.name.toLowerCase() === val)
-                    setNewResponsible(match ? match.id : '')
-                  }}
+            <div className="overflow-x-auto">
+              <div className="min-w-[1120px] flex flex-nowrap items-center gap-2 text-[10px]">
+                <Input
+                  className="h-8 px-2 py-1 text-[10px] w-[320px] shrink-0"
+                  placeholder="Описание работ (обязательно)"
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
                 />
-                <datalist id="tpl-new-profiles">
-                  <option value="" />
-                  {profiles.map(p => (<option key={p.id} value={p.name} />))}
-                </datalist>
+                <Select value={newCat} onValueChange={setNewCat}>
+                  <SelectTrigger className="h-8 px-2 text-[10px] w-[160px] shrink-0">
+                    <SelectValue placeholder="Категория" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  step="0.25"
+                  className="h-8 px-2 py-1 text-[10px] w-[90px] shrink-0"
+                  placeholder="План, ч"
+                  value={newHours}
+                  onChange={(e) => setNewHours(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  className="h-8 px-2 py-1 text-[10px] w-[70px] shrink-0"
+                  placeholder="±дн"
+                  value={newOffset}
+                  onChange={(e) => setNewOffset(e.target.value)}
+                />
+                {/* Поле ответственного удалено из шаблона по требованию */}
+                <Select value={newStatusId} onValueChange={setNewStatusId}>
+                  <SelectTrigger className="h-8 px-2 text-[10px] w-[140px] shrink-0">
+                    <SelectValue placeholder="Статус" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="h-8 px-2 py-1 text-[10px] w-[64px] shrink-0"
+                  placeholder="%"
+                  value={newProgress}
+                  onChange={(e) => setNewProgress(e.target.value)}
+                />
+                <Button
+                  className="h-8 px-2 text-[10px] w-[36px] shrink-0 flex items-center justify-center"
+                  disabled={!canAdd}
+                  onClick={async () => {
+                    if (!selectedTemplate) return
+                    await useTemplatesStore.getState().createItem({
+                      template_id: selectedTemplate.id,
+                      description: newDesc.trim(),
+                      work_category_id: newCat,
+                      planned_hours: Number(newHours) || 0,
+                      due_offset_days: newOffset === '' ? null : Number(newOffset),
+                      order: useTemplatesStore.getState().templateItems.length + 1,
+                      responsible_id: newResponsible && newResponsible.trim().length > 0 ? newResponsible : null,
+                      status_id: newStatusId && newStatusId.trim().length > 0 ? newStatusId : null,
+                      progress: newProgress === '' ? null : Math.max(0, Math.min(100, Number(newProgress))),
+                    })
+                    setNewDesc(''); setNewCat(''); setNewHours(''); setNewOffset(''); setNewResponsible(''); setNewProgress('')
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
               </div>
-              <Select value={newStatusId} onValueChange={setNewStatusId}>
-                <SelectTrigger className="col-span-2">
-                  <SelectValue placeholder="Статус" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Input type="number" min="0" max="100" className="col-span-1" placeholder="%" value={newProgress} onChange={(e) => setNewProgress(e.target.value)} />
-              <Button className="col-span-1" disabled={!canAdd} onClick={async () => {
-                if (!selectedTemplate) return
-                await useTemplatesStore.getState().createItem({
-                  template_id: selectedTemplate.id,
-                  description: newDesc.trim(),
-                  work_category_id: newCat,
-                  planned_hours: Number(newHours) || 0,
-                  due_offset_days: newOffset === '' ? null : Number(newOffset),
-                  order: useTemplatesStore.getState().templateItems.length + 1,
-                  responsible_id: newResponsible === 'none' ? null : newResponsible,
-                  status_id: newStatusId || null,
-                  progress: newProgress === '' ? null : Math.max(0, Math.min(100, Number(newProgress))),
-                })
-                setNewDesc(''); setNewCat(''); setNewHours(''); setNewOffset(''); setNewResponsible(''); setNewProgress('')
-              }}>
-                <Check className="h-4 w-4" />
-              </Button>
             </div>
           )}
         </div>
@@ -428,14 +441,18 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
       </div>
 
       <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md w-[92vw] max-w-lg">
           <DialogHeader>
             <DialogTitle>Новый шаблон</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <Label>Название</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название шаблона" />
-            <Button onClick={onCreateTemplate} disabled={!name.trim() || !(depInStore || departmentId)}>Создать</Button>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-1 block">Название</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название шаблона" />
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={onCreateTemplate} disabled={!name.trim() || !(depInStore || departmentId)}>Создать</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

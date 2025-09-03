@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from '@sentry/nextjs'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -729,6 +729,7 @@ export function ProjectsTree({
   onOpenProjectDashboard
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
+  const latestTreeRef = useRef<ProjectNode[]>([])
   const { 
     expandedNodes, 
     toggleNode: toggleNodeInStore,
@@ -770,6 +771,11 @@ export function ProjectsTree({
   const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false)
   const [selectedObjectForAssignment, setSelectedObjectForAssignment] = useState<ProjectNode | null>(null)
   
+  // Храним актуальные данные дерева для синхронного доступа в обработчиках событий
+  useEffect(() => {
+    latestTreeRef.current = treeData
+  }, [treeData])
+
 
   // (Убрано) локальный выпадающий фильтр статусов перемещён в верхнее меню
 
@@ -805,8 +811,66 @@ export function ProjectsTree({
   // Глобальное событие для принудительной перезагрузки дерева (после создания проекта и т.п.)
   useEffect(() => {
     const reload = () => loadTreeData()
+    const handleCreated = async (e: any) => {
+      // После создания сразу перезагружаем дерево и фокусируемся на созданном узле
+      const prevExpanded = new Set(expandedNodes)
+      await loadTreeData()
+      try {
+        const detail = e?.detail
+        if (!detail?.id) return
+        // Найдём путь к узлу и развернём все родительские узлы
+        const findPath = (nodes: ProjectNode[], targetId: string, path: string[] = []): string[] | null => {
+          for (const node of nodes) {
+            const newPath = [...path, node.id]
+            if (node.id === targetId) return newPath
+            if (node.children && node.children.length > 0) {
+              const found = findPath(node.children, targetId, newPath)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const path = findPath(latestTreeRef.current || [], detail.id) || []
+        if (path.length > 0) {
+          // Разворачиваем все узлы на пути, кроме самого целевого узла
+          path.slice(0, -1).forEach((id) => {
+            if (!expandedNodes.has(id)) {
+              toggleNodeInStore(id)
+            }
+          })
+        }
+        // Сохраняем разворот родителя/ветки при возможности
+        // Ничего не сворачиваем — пользовательский контекст должен сохраниться
+        // Разворачиваем путь к созданному узлу и скроллим к нему
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${detail.id}"]`)
+          if (el && 'scrollIntoView' in el) {
+            (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' })
+          }
+        })
+      } catch (_) {}
+    }
+    const handleFocusNode = (e: any) => {
+      try {
+        const detail = e?.detail
+        if (!detail?.id) return
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${detail.id}"]`)
+          if (el && 'scrollIntoView' in el) {
+            (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' })
+          }
+        })
+      } catch (_) {}
+    }
+
     window.addEventListener('projectsTree:reload', reload as EventListener)
-    return () => window.removeEventListener('projectsTree:reload', reload as EventListener)
+    window.addEventListener('projectsTree:created', handleCreated as EventListener)
+    window.addEventListener('projectsTree:focusNode', handleFocusNode as EventListener)
+    return () => {
+      window.removeEventListener('projectsTree:reload', reload as EventListener)
+      window.removeEventListener('projectsTree:created', handleCreated as EventListener)
+      window.removeEventListener('projectsTree:focusNode', handleFocusNode as EventListener)
+    }
   }, [])
 
   // Если приходит внешний поиск из верхней панели — используем его как источник правды
@@ -1051,73 +1115,104 @@ export function ProjectsTree({
         span.setAttribute("filters.employee_id", selectedEmployeeId || "none")
         
         setLoading(true)
+        // [DEBUG:PROJECTS] входные фильтры загрузки дерева
+        console.log('[DEBUG:PROJECTS] tree:load:inputs', {
+          selectedManagerId,
+          selectedProjectId,
+          selectedStageId,
+          selectedObjectId,
+          selectedDepartmentId,
+          selectedTeamId,
+          selectedEmployeeId,
+          externalSearchQuery,
+          selectedStatusIds,
+        })
         try {
-          // Используем новое представление view_project_tree
-          let query = supabase
-            .from('view_project_tree')
-            .select('*')
+          // Функция построения базового запроса с фильтрами
+          const buildQuery = () => {
+            let q = supabase
+              .from('view_project_tree')
+              .select('*')
+            if (selectedManagerId && selectedManagerId !== 'no-manager') {
+              q = q.eq('manager_id', selectedManagerId)
+            } else if (selectedManagerId === 'no-manager') {
+              q = q.is('manager_id', null)
+            }
+            if (selectedProjectId) {
+              q = q.eq('project_id', selectedProjectId)
+            }
+            if (selectedStageId) {
+              q = q.eq('stage_id', selectedStageId)
+            }
+            if (selectedObjectId) {
+              q = q.eq('object_id', selectedObjectId)
+            }
+            if (selectedDepartmentId) {
+              q = q.eq('responsible_department_id', selectedDepartmentId)
+            }
+            if (selectedTeamId) {
+              q = q.eq('responsible_team_id', selectedTeamId)
+            }
+            if (selectedEmployeeId) {
+              q = q.eq('section_responsible_id', selectedEmployeeId)
+            }
+            return q
+          }
 
-          // Применяем фильтры по проектной иерархии
-          if (selectedManagerId && selectedManagerId !== 'no-manager') {
-            query = query.eq('manager_id', selectedManagerId)
-          } else if (selectedManagerId === 'no-manager') {
-            query = query.is('manager_id', null)
-          }
-          if (selectedProjectId) {
-            query = query.eq('project_id', selectedProjectId)
-          }
-          if (selectedStageId) {
-            query = query.eq('stage_id', selectedStageId)
-          }
-          if (selectedObjectId) {
-            query = query.eq('object_id', selectedObjectId)
+          // [DEBUG:PROJECTS] перед выполнением запроса фиксируем активные where-флаги
+          console.log('[DEBUG:PROJECTS] tree:query:where', {
+            manager:
+              selectedManagerId && selectedManagerId !== 'no-manager'
+                ? { op: 'eq', value: selectedManagerId }
+                : selectedManagerId === 'no-manager'
+                ? { op: 'is', value: null }
+                : null,
+            project: selectedProjectId ? { op: 'eq', value: selectedProjectId } : null,
+            stage: selectedStageId ? { op: 'eq', value: selectedStageId } : null,
+            object: selectedObjectId ? { op: 'eq', value: selectedObjectId } : null,
+            dept: selectedDepartmentId ? { op: 'eq', value: selectedDepartmentId } : null,
+            team: selectedTeamId ? { op: 'eq', value: selectedTeamId } : null,
+            employee: selectedEmployeeId ? { op: 'eq', value: selectedEmployeeId } : null,
+          })
+
+          // Постраничная загрузка (лимит Supabase ~1000 строк)
+          const pageSize = 1000
+          let offset = 0
+          let aggregated: any[] = []
+          while (true) {
+            const { data: page, error: pageError } = await buildQuery().range(offset, offset + pageSize - 1)
+            if (pageError) {
+              throw pageError
+            }
+            aggregated = aggregated.concat(page || [])
+            console.log('[DEBUG:PROJECTS] tree:paginate', { offset, fetched: (page || []).length, total: aggregated.length })
+            if (!page || page.length < pageSize) break
+            offset += pageSize
+            // На всякий случай ограничим до 20000
+            if (offset > 20000) break
           }
 
-          // Применяем фильтры по ответственным (отделы, команды, сотрудники)
-          if (selectedDepartmentId) {
-            query = query.eq('responsible_department_id', selectedDepartmentId)
-          }
-          if (selectedTeamId) {
-            query = query.eq('responsible_team_id', selectedTeamId)
-          }
-          if (selectedEmployeeId) {
-            query = query.eq('section_responsible_id', selectedEmployeeId)
-          }
-
-          const { data, error } = await query
-
-          if (error) {
-            span.setAttribute("load.success", false)
-            span.setAttribute("load.error", error.message)
-            Sentry.captureException(error, {
-              tags: { 
-                module: 'projects', 
-                action: 'load_tree_data',
-                error_type: 'db_error'
-              },
-              extra: { 
-                component: 'ProjectsTree',
-                filters: {
-                  manager_id: selectedManagerId,
-                  project_id: selectedProjectId,
-                  stage_id: selectedStageId,
-                  object_id: selectedObjectId,
-                  department_id: selectedDepartmentId,
-                  team_id: selectedTeamId,
-                  employee_id: selectedEmployeeId
-                },
-                timestamp: new Date().toISOString()
-              }
-            })
-            console.error('❌ Error loading tree data:', error)
-            return
-          }
+          const data = aggregated
 
           console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
+      // [DEBUG:PROJECTS] итоги сырого ответа
+      const uniqueProjects = new Set<string>()
+      const uniqueManagers = new Set<string>()
+      ;(data || []).forEach((r: any) => {
+        if (r.project_id) uniqueProjects.add(r.project_id)
+        if (r.manager_id) uniqueManagers.add(r.manager_id)
+      })
+      console.log('[DEBUG:PROJECTS] tree:raw', {
+        rows: (data || []).length,
+        uniqueProjects: Array.from(uniqueProjects),
+        uniqueManagers: Array.from(uniqueManagers),
+      })
+
       // Преобразуем данные в иерархическую структуру
       const tree = buildTreeStructureFromProjectTree(data || [], showManagers, groupByClient)
-      console.log('🌳 Построенное дерево:', tree)
+      // [DEBUG:PROJECTS] размер дерева после сборки
+      console.log('[DEBUG:PROJECTS] tree:built', { nodes: (tree || []).length })
       setTreeData(tree)
     } catch (error) {
       console.error('❌ Error:', error)
@@ -1473,6 +1568,13 @@ export function ProjectsTree({
   // Фильтрация данных для отображения только разделов и применение поиска
   const getFilteredTreeData = (): ProjectNode[] => {
     let data = treeData
+    // [DEBUG:PROJECTS] фильтрация: старт
+    console.log('[DEBUG:PROJECTS] tree:filter:start', {
+      treeNodes: treeData.length,
+      statusFilter: selectedStatusIds,
+      showOnlySections,
+      searchQuery,
+    })
 
     // Сначала применяем фильтр по статусам
     data = filterNodesByStatus(data, selectedStatusIds)
@@ -1497,7 +1599,10 @@ export function ProjectsTree({
     }
 
     // Затем применяем поиск
-    return filterNodesBySearch(data, searchQuery)
+    const result = filterNodesBySearch(data, searchQuery)
+    // [DEBUG:PROJECTS] фильтрация: результат
+    console.log('[DEBUG:PROJECTS] tree:filter:result', { nodes: result.length })
+    return result
   }
 
   const handleAssignResponsible = (section: ProjectNode, e: React.MouseEvent) => {

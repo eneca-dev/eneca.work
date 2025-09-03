@@ -47,13 +47,15 @@ export function CreateStageModal({ isOpen, onClose, projectId, projectName, onSu
           span.setAttribute("project.name", projectName)
           span.setAttribute("stage.has_description", !!stageDescription.trim())
 
-          const { error } = await supabase
+          const { data: created, error } = await supabase
             .from('stages')
             .insert({
               stage_name: stageName.trim(),
               stage_description: stageDescription.trim() || null,
               stage_project_id: projectId
             })
+            .select('stage_id, stage_name, stage_project_id')
+            .single()
 
           if (error) {
             span.setAttribute("create.success", false)
@@ -90,6 +92,14 @@ export function CreateStageModal({ isOpen, onClose, projectId, projectName, onSu
           })
 
           setNotification(`Стадия "${stageName}" успешно создана`)
+          // Немедленно обновляем дерево и фокусируемся на созданной стадии
+          try {
+            if (typeof window !== 'undefined' && created?.stage_id) {
+              const detail = { entity: 'stage', id: created.stage_id as string }
+              window.dispatchEvent(new CustomEvent('projectsTree:created', { detail }))
+              window.dispatchEvent(new CustomEvent('projectsTree:focusNode', { detail }))
+            }
+          } catch (_) {}
           onSuccess()
           handleClose()
         } catch (error) {

@@ -132,7 +132,8 @@ export default function UsersPage() {
       country: user.country_name || "",
       city: user.city_name || "",
       employmentRate: user.employment_rate ? parseFloat(user.employment_rate) : 1,
-      salary: user.salary ? parseFloat(user.salary) : 1500,
+      // Не подменяем: если salary отсутствует, оставляем как 0, а UI покажет "—"
+      salary: user.salary ? parseFloat(user.salary) : 0,
       isHourly: user.is_hourly || false
     }))
     

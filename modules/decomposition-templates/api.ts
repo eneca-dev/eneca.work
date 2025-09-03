@@ -107,7 +107,8 @@ export async function getTemplate(id: string): Promise<{ template: Decomposition
     planned_hours: Number(r.decomposition_template_item_planned_hours ?? 0),
     due_offset_days: r.decomposition_template_item_due_offset_days,
     order: Number(r.decomposition_template_item_order ?? 0),
-    responsible_id: r.decomposition_template_item_responsible ?? null,
+    // Ответственный в шаблоне больше не используется
+    responsible_id: null,
     status_id: r.decomposition_template_item_status_id ?? null,
     progress: r.decomposition_template_item_progress ?? null,
   }))
@@ -194,6 +195,14 @@ export async function deleteTemplate(id: string): Promise<void> {
 }
 
 export async function createTemplateItem(payload: CreateTemplateItemPayload): Promise<DecompositionTemplateItem> {
+  const normalizeUuid = (val: unknown) => {
+    if (val === null || val === undefined) return null
+    if (typeof val === 'string') {
+      const t = val.trim()
+      return t.length === 0 ? null : t
+    }
+    return val as any
+  }
   const insertPayload: Record<string, unknown> = {
     decomposition_template_item_template_id: payload.template_id,
     decomposition_template_item_description: payload.description,
@@ -201,8 +210,9 @@ export async function createTemplateItem(payload: CreateTemplateItemPayload): Pr
     decomposition_template_item_planned_hours: payload.planned_hours ?? 0,
     decomposition_template_item_due_offset_days: payload.due_offset_days ?? null,
     decomposition_template_item_order: payload.order ?? 0,
-    decomposition_template_item_responsible: payload.responsible_id ?? null,
-    decomposition_template_item_status_id: payload.status_id ?? null,
+    // Ответственный в шаблоне отключён
+    decomposition_template_item_responsible: null,
+    decomposition_template_item_status_id: normalizeUuid(payload.status_id),
     decomposition_template_item_progress: payload.progress ?? null,
   }
   const { data, error } = await supabase
@@ -247,7 +257,8 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
   if (payload.planned_hours !== undefined) updatePayload['decomposition_template_item_planned_hours'] = payload.planned_hours
   if (payload.due_offset_days !== undefined) updatePayload['decomposition_template_item_due_offset_days'] = payload.due_offset_days
   if (payload.order !== undefined) updatePayload['decomposition_template_item_order'] = payload.order
-  if (payload.responsible_id !== undefined) updatePayload['decomposition_template_item_responsible'] = payload.responsible_id
+  // Ответственный в шаблоне отключён — всегда храним NULL
+  if (payload.responsible_id !== undefined) updatePayload['decomposition_template_item_responsible'] = null
   if (payload.status_id !== undefined) updatePayload['decomposition_template_item_status_id'] = payload.status_id
   if (payload.progress !== undefined) updatePayload['decomposition_template_item_progress'] = payload.progress
 
@@ -299,7 +310,8 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
       planned_hours: Number((refetch as any).decomposition_template_item_planned_hours ?? 0),
       due_offset_days: (refetch as any).decomposition_template_item_due_offset_days,
       order: Number((refetch as any).decomposition_template_item_order ?? 0),
-      responsible_id: (refetch as any).decomposition_template_item_responsible ?? null,
+      // Ответственный в шаблоне больше не используется
+      responsible_id: null,
       status_id: (refetch as any).decomposition_template_item_status_id ?? null,
       progress: (refetch as any).decomposition_template_item_progress ?? null,
     }
@@ -312,7 +324,8 @@ export async function updateTemplateItem(id: string, payload: UpdateTemplateItem
     planned_hours: Number((data as any).decomposition_template_item_planned_hours ?? 0),
     due_offset_days: (data as any).decomposition_template_item_due_offset_days,
     order: Number((data as any).decomposition_template_item_order ?? 0),
-    responsible_id: (data as any).decomposition_template_item_responsible ?? null,
+    // Ответственный в шаблоне больше не используется
+    responsible_id: null,
     status_id: (data as any).decomposition_template_item_status_id ?? null,
     progress: (data as any).decomposition_template_item_progress ?? null,
   }
@@ -368,7 +381,8 @@ export async function applyTemplateAppend(params: ApplyTemplateParams): Promise<
     planned_hours: Number(r.decomposition_template_item_planned_hours ?? 0),
     due_offset_days: r.decomposition_template_item_due_offset_days,
     order: Number(r.decomposition_template_item_order ?? 0),
-    responsible_id: r.decomposition_template_item_responsible ?? null,
+    // Ответственный в шаблоне больше не используется
+    responsible_id: null,
     status_id: r.decomposition_template_item_status_id ?? null,
     progress: r.decomposition_template_item_progress ?? null,
   }))
@@ -394,7 +408,8 @@ export async function applyTemplateAppend(params: ApplyTemplateParams): Promise<
       decomposition_item_planned_due_date: null, // даты больше не переносим из шаблонов
       decomposition_item_order: startOrder + idx,
       decomposition_item_created_by: userId,
-      decomposition_item_responsible: ti.responsible_id ?? null,
+      // Ответственного из шаблона не переносим
+      decomposition_item_responsible: null,
       decomposition_item_status_id: ti.status_id ?? null,
       decomposition_item_progress: ti.progress ?? 0,
     }

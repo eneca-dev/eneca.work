@@ -23,27 +23,19 @@ interface PaymentDialogProps {
 }
 
 export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialogProps) {
-  const [formData, setFormData] = useState<Partial<User>>({
-    employmentRate: 1,
-    salary: 0,
-    isHourly: true,
-  })
+  const [formData, setFormData] = useState<Partial<User>>({})
   const [isLoading, setIsLoading] = useState(false)
 
   // Установка данных пользователя при открытии диалога
   useEffect(() => {
     if (user) {
       setFormData({
-        employmentRate: user.employmentRate || 1,
-        salary: user.salary || (user.isHourly ? 15 : 1500), // Разумные значения по умолчанию в BYN
-        isHourly: user.isHourly !== null ? user.isHourly : true,
+        employmentRate: user.employmentRate,
+        salary: user.salary,
+        isHourly: user.isHourly,
       })
     } else {
-      setFormData({
-        employmentRate: 1,
-        salary: 1500, // Значение по умолчанию для нового пользователя в BYN
-        isHourly: true,
-      })
+      setFormData({})
     }
   }, [user, open])
 
@@ -120,7 +112,7 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
                   Занятость
                 </Label>
                 <Select
-                  value={formData.employmentRate?.toString()}
+                  value={formData.employmentRate !== undefined ? String(formData.employmentRate) : undefined}
                   onValueChange={(value) => handleChange("employmentRate", Number.parseFloat(value))}
                 >
                   <SelectTrigger id="employmentRate" className="col-span-3">
@@ -144,7 +136,7 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
                 <div className="flex items-center space-x-2 col-span-3">
                   <Switch
                     id="isHourly"
-                    checked={formData.isHourly}
+                    checked={!!formData.isHourly}
                     onCheckedChange={(checked) => handleChange("isHourly", checked)}
                   />
                   <Label htmlFor="isHourly" className="flex items-center">
@@ -185,7 +177,7 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
                   <Input
                     id="salary"
                     type="number"
-                    value={formData.salary || 0}
+                    value={formData.salary ?? ''}
                     onChange={(e) => handleChange("salary", Number.parseFloat(e.target.value))}
                     className="pl-8"
                     min={0}
@@ -198,15 +190,15 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
               <div className="grid grid-cols-4 items-center gap-4">
                 <div className="text-right text-sm text-gray-500">Текущая ставка:</div>
                 <div className="col-span-3 text-sm font-medium">
-                  {formatSalary(formData.salary || 0, formData.isHourly || false)}
+                  {formData.salary === undefined || formData.salary === null ? '—' : formatSalary(formData.salary, !!formData.isHourly)}
                 </div>
               </div>
 
-              {formData.isHourly && (
+              {formData.isHourly && formData.salary !== undefined && formData.salary !== null && (
                 <div className="grid grid-cols-4 items-center gap-4">
                   <div className="text-right text-sm text-gray-500">Примерно в месяц:</div>
                   <div className="col-span-3 text-sm">
-                    {formatSalary((formData.salary || 0) * 168 * (formData.employmentRate || 1), false)}
+                    {formatSalary((formData.salary) * 168 * (formData.employmentRate ?? 1), false)}
                     <span className="text-xs text-gray-500 ml-1">(при 168 часах)</span>
                   </div>
                 </div>

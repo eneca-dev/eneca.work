@@ -215,7 +215,8 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
           const { data, error } = await supabase
             .from('sections')
             .insert(sectionData)
-            .select()
+            .select('section_id, section_name, section_object_id, section_project_id')
+            .single()
 
           console.log('Результат создания раздела:', { data, error })
 
@@ -257,6 +258,14 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
           })
 
           setNotification(`Раздел "${sectionName}" успешно создан`)
+          // Немедленно обновляем дерево и фокусируемся на созданном разделе
+          try {
+            if (typeof window !== 'undefined' && data?.section_id) {
+              const detail = { entity: 'section', id: data.section_id as string }
+              window.dispatchEvent(new CustomEvent('projectsTree:created', { detail }))
+              window.dispatchEvent(new CustomEvent('projectsTree:focusNode', { detail }))
+            }
+          } catch (_) {}
           onSuccess()
           handleClose()
         } catch (error) {
