@@ -227,23 +227,7 @@ export function EditAssignmentModal({ assignment, isOpen, onClose, onUpdate }: E
             </p>
           </div>
 
-          {/* Дедлайн */}
-          <div className="space-y-2">
-            <Label htmlFor="edit-due-date" className="text-sm font-medium">
-              Дедлайн задания
-            </Label>
-            <div className="relative">
-              <Input 
-                id="edit-due-date" 
-                type="date" 
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                disabled={isUpdating}
-                className="w-full pr-10" 
-              />
-              <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            </div>
-          </div>
+          {/* Удалён блок "Дедлайн задания" по требованиям */}
 
           {/* Ссылка */}
           <div className="space-y-2">

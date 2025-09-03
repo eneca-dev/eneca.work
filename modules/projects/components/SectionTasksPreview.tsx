@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Calendar, Clock, ExternalLink, User, Edit3, ArrowRight, RotateCcw, Trash2 } from "lucide-react"
+import { Calendar, Clock, ExternalLink, User, Edit3, ArrowRight, RotateCcw, Trash2, SquareStack } from "lucide-react"
 import { getStatusColor, formatDate } from "@/modules/task-transfer/utils"
 import type { AssignmentStatus, Assignment } from "@/modules/task-transfer/types"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useTaskTransferStore } from "@/modules/task-transfer/store"
 import { EditAssignmentModal } from "@/modules/task-transfer/components/EditAssignmentModal"
 import { AssignmentAuditHistory } from "@/modules/task-transfer/components/AssignmentAuditHistory"
 import { CompactTaskSchedule } from "./CompactTaskSchedule"
+import { CreateObjectAssignmentModal } from "./CreateObjectAssignmentModal"
 import { useToast } from "@/hooks/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { TaskTransferGuide } from "./TaskTransferGuide"
 
 
 type TaskPreviewType = "incoming" | "outgoing"
@@ -99,6 +101,7 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
   
   // Состояние для переключения между заданиями и графиком
   const [currentView, setCurrentView] = useState<"tasks" | "schedule">("tasks")
+  const [showCreateAssignmentModal, setShowCreateAssignmentModal] = useState(false)
   
   const { toast } = useToast()
 
@@ -118,7 +121,10 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
     return {
       sectionName: section?.section_name || 'Неизвестный раздел',
       projectId: section?.project_id || '',
-      projectName: section?.project_name || 'Неизвестный проект'
+      projectName: section?.project_name || 'Неизвестный проект',
+      objectId: section?.object_id || '',
+      objectName: section?.object_name || 'Неизвестный объект',
+      stageId: section?.stage_id || ''
     }
   }, [sectionHierarchy, sectionId])
 
@@ -272,6 +278,14 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
     }
   }
 
+  // При переключении вкладок/открытии модалки прокручиваем содержимое к верху
+  const dialogContentRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (dialogContentRef.current) {
+      dialogContentRef.current.scrollTop = 0
+    }
+  }, [activeTab, selectedAssignment])
+
   // Функции проверки возможности изменения статуса
   const canAdvanceStatus = (status: AssignmentStatus): boolean => {
     return status !== 'Согласовано'
@@ -285,27 +299,42 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
     <div className="flex-1 min-h-0 overflow-auto">
       {/* Переключатель между заданиями и графиком */}
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-border py-2 mb-2">
-        <div className="flex bg-muted rounded-lg p-1 w-fit mb-2">
-          <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              currentView === "tasks" 
-                ? "bg-card text-foreground shadow-sm border border-border" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            onClick={() => setCurrentView("tasks")}
-          >
-            Задания
-          </button>
-          <button
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              currentView === "schedule" 
-                ? "bg-card text-foreground shadow-sm border border-border" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            }`}
-            onClick={() => setCurrentView("schedule")}
-          >
-            График передачи
-          </button>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex bg-muted rounded-lg p-1 w-fit">
+            <button
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                currentView === "tasks" 
+                  ? "bg-card text-foreground shadow-sm border border-border" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setCurrentView("tasks")}
+            >
+              Задания
+            </button>
+            <button
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                currentView === "schedule" 
+                  ? "bg-card text-foreground shadow-sm border border-border" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setCurrentView("schedule")}
+            >
+              График передачи
+            </button>
+          </div>
+          {currentView === "tasks" && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setShowCreateAssignmentModal(true)}
+                className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                <SquareStack className="h-4 w-4" />
+                Создать задание
+              </Button>
+              <TaskTransferGuide />
+            </div>
+          )}
         </div>
         
         {/* Заголовки колонок только для вида заданий */}
@@ -379,7 +408,7 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
           setActiveTab("details")
         }}
       >
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] h-[80vh] overflow-y-auto items-start content-start">
           <DialogHeader>
             <DialogTitle className="sr-only">Детали задания</DialogTitle>
             <div className="flex items-center justify-between border-b mt-2">
@@ -460,6 +489,20 @@ export default function SectionTasksPreview({ sectionId }: SectionTasksPreviewPr
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Модальное окно создания задания для текущего раздела */}
+      {showCreateAssignmentModal && (
+        <CreateObjectAssignmentModal
+          isOpen={showCreateAssignmentModal}
+          onClose={() => setShowCreateAssignmentModal(false)}
+          objectId={sectionInfo.objectId}
+          objectName={sectionInfo.objectName}
+          projectId={sectionInfo.projectId}
+          projectName={sectionInfo.projectName}
+          stageId={sectionInfo.stageId}
+          sectionId={sectionId}
+        />
+      )}
 
       {/* Модальное окно редактирования */}
       <EditAssignmentModal
@@ -595,6 +638,12 @@ function AssignmentDetails({
               <p className="text-xs text-muted-foreground mb-1">Дата создания</p>
               <p className="text-sm font-medium text-foreground">{formatDate(assignment.created_at)}</p>
             </div>
+            {assignment.planned_transmitted_date && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Плановая дата передачи</p>
+                <p className="text-sm font-medium text-foreground">{formatDate(assignment.planned_transmitted_date)}</p>
+              </div>
+            )}
             {assignment.due_date && (
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Срок выполнения</p>

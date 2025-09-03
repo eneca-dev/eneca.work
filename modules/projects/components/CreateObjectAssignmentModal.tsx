@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Info, SquareStack } from "lucide-react"
+import { Info, SquareStack, Calendar as CalendarIcon } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "@/modules/task-transfer/store"
 import type { CreateAssignmentData } from "@/modules/task-transfer/types"
@@ -22,6 +22,7 @@ interface CreateObjectAssignmentModalProps {
   projectId: string
   projectName: string
   stageId: string
+  sectionId?: string
 }
 
 export function CreateObjectAssignmentModal({ 
@@ -31,7 +32,8 @@ export function CreateObjectAssignmentModal({
   objectName, 
   projectId,
   projectName,
-  stageId
+  stageId,
+  sectionId
 }: CreateObjectAssignmentModalProps) {
   const [direction, setDirection] = useState<'outgoing' | 'incoming'>('outgoing')
   const [fromSectionId, setFromSectionId] = useState<string>("")
@@ -39,11 +41,12 @@ export function CreateObjectAssignmentModal({
   const [title, setTitle] = useState<string>("")
   const [description, setDescription] = useState<string>("")
   const [plannedDuration, setPlannedDuration] = useState<string>("7")
-  const [dueDate, setDueDate] = useState<string>("")
   const [link, setLink] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
   const [fallbackSections, setFallbackSections] = useState<{ id: string; name: string }[]>([])
   const [treeSections, setTreeSections] = useState<{ id: string; name: string }[]>([])
+  const [effectiveObjectId, setEffectiveObjectId] = useState<string>(objectId || "")
+  const [plannedTransmittedDate, setPlannedTransmittedDate] = useState<string | undefined>(undefined)
   
   const { createNewAssignment } = useTaskTransferStore()
   const { toast } = useToast()
@@ -51,11 +54,36 @@ export function CreateObjectAssignmentModal({
 
   // Разделы из view_project_tree загружаются ниже в эффекте
 
-  // Фолбэк: если в вьюхе пусто, подгружаем разделы напрямую из таблицы sections по objectId
+  // Если objectId не передали (например, запуск из панели раздела),
+  // пробуем получить его по sectionId
   useEffect(() => {
     ;(async () => {
       try {
-        if (!isOpen || !objectId) return
+        if (!isOpen) return
+        if (objectId) { setEffectiveObjectId(objectId); return }
+        if (!objectId && sectionId) {
+          const { data, error } = await supabase
+            .from('sections')
+            .select('section_object_id')
+            .eq('section_id', sectionId)
+            .single()
+          if (!error && data?.section_object_id) {
+            setEffectiveObjectId(data.section_object_id as string)
+          } else {
+            setEffectiveObjectId("")
+          }
+        }
+      } catch (e) {
+        setEffectiveObjectId("")
+      }
+    })()
+  }, [isOpen, objectId, sectionId])
+
+  // Фолбэк: если в вьюхе пусто, подгружаем разделы напрямую из таблицы sections по effectiveObjectId
+  useEffect(() => {
+    ;(async () => {
+      try {
+        if (!isOpen || !effectiveObjectId) return
         if (treeSections.length > 0) {
           if (fallbackSections.length > 0) setFallbackSections([])
           return
@@ -63,7 +91,7 @@ export function CreateObjectAssignmentModal({
         const { data, error } = await supabase
           .from('sections')
           .select('section_id, section_name')
-          .eq('section_object_id', objectId)
+          .eq('section_object_id', effectiveObjectId)
           .order('section_name')
         if (error) {
           console.error('Ошибка фолбэка загрузки разделов по объекту:', error)
@@ -78,13 +106,13 @@ export function CreateObjectAssignmentModal({
         console.error('Не удалось выполнить фолбэк загрузки разделов:', e)
       }
     })()
-  }, [isOpen, objectId, treeSections.length])
+  }, [isOpen, effectiveObjectId, treeSections.length])
 
   // Основной источник: грузим разделы из view_project_tree по проекту и объекту
   useEffect(() => {
     ;(async () => {
       try {
-        if (!isOpen || !projectId || !objectId) {
+        if (!isOpen || !projectId || !effectiveObjectId) {
           setTreeSections([])
           return
         }
@@ -92,7 +120,7 @@ export function CreateObjectAssignmentModal({
           .from('view_project_tree')
           .select('section_id, section_name, project_id, object_id')
           .eq('project_id', projectId)
-          .eq('object_id', objectId)
+          .eq('object_id', effectiveObjectId)
           .order('section_name')
 
         if (error) {
@@ -113,7 +141,7 @@ export function CreateObjectAssignmentModal({
         setTreeSections([])
       }
     })()
-  }, [isOpen, projectId, objectId])
+  }, [isOpen, projectId, effectiveObjectId])
 
   // Сброс формы при открытии
   useEffect(() => {
@@ -124,8 +152,8 @@ export function CreateObjectAssignmentModal({
       setTitle("")
       setDescription("")
       setPlannedDuration("7")
-      setDueDate("")
       setLink("")
+      setPlannedTransmittedDate("")
     }
   }, [isOpen])
 
@@ -167,7 +195,7 @@ export function CreateObjectAssignmentModal({
       return
     }
 
-    const duration = parseInt(plannedDuration)
+    const duration = 7
     if (isNaN(duration) || duration <= 0 || duration > 365) {
       toast({
         title: "Ошибка",
@@ -198,10 +226,9 @@ export function CreateObjectAssignmentModal({
             to_section_id: toSectionId,
             title: title.trim(),
             description: description.trim(),
-            due_date: dueDate || undefined,
             link: link.trim() || undefined,
             planned_duration: duration,
-            planned_transmitted_date: undefined
+            planned_transmitted_date: plannedTransmittedDate || undefined
           }
 
           const result = await createNewAssignment(assignmentData)
@@ -264,6 +291,15 @@ export function CreateObjectAssignmentModal({
   const sourceSections = (treeSections.length > 0 ? treeSections : fallbackSections)
   const fromSections = sourceSections.filter(s => s.id !== toSectionId)
   const toSections = sourceSections.filter(s => s.id !== fromSectionId)
+  const isFromLocked = !!sectionId && sourceSections.some(s => s.id === sectionId)
+
+  // Автоподстановка "Из раздела" текущего раздела, если модалка открыта из панели раздела
+  useEffect(() => {
+    if (!isOpen) return
+    if (sectionId && !fromSectionId && sourceSections.some(s => s.id === sectionId)) {
+      setFromSectionId(sectionId)
+    }
+  }, [isOpen, sectionId, sourceSections, fromSectionId])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -286,7 +322,7 @@ export function CreateObjectAssignmentModal({
               <Label htmlFor="from-section" className="text-sm font-medium">
                 Из раздела <span className="text-destructive">*</span>
               </Label>
-              <Select value={fromSectionId} onValueChange={setFromSectionId}>
+              <Select value={fromSectionId} onValueChange={setFromSectionId} disabled={isFromLocked}>
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите раздел" />
                 </SelectTrigger>
@@ -349,24 +385,19 @@ export function CreateObjectAssignmentModal({
             />
           </div>
 
-          {/* Плановая продолжительность */}
+          {/* Плановая продолжительность: фиксировано 7 дней при создании */}
           <div className="space-y-2">
             <div className="flex items-center gap-1">
-              <Label htmlFor="duration" className="text-sm font-medium">
+              <Label className="text-sm font-medium">
                 Плановая продолжительность
               </Label>
               <Info className="h-4 w-4 text-gray-400" />
             </div>
             <div className="relative">
               <Input 
-                id="duration" 
-                type="number" 
-                min="1"
-                max="365"
-                value={plannedDuration}
-                onChange={(e) => setPlannedDuration(e.target.value)}
-                placeholder="Количество дней"
-                disabled={isCreating}
+                value={"7"}
+                readOnly
+                disabled
                 className="w-full" 
               />
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">
@@ -374,27 +405,11 @@ export function CreateObjectAssignmentModal({
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              По умолчанию: 7 дней
+              Фиксировано: 7 дней при создании. Изменение возможно после создания в «Редактировать».
             </p>
           </div>
 
-          {/* Дедлайн */}
-          <div className="space-y-2">
-            <Label htmlFor="due-date" className="text-sm font-medium">
-              Дедлайн задания
-            </Label>
-            <div className="relative">
-              <Input 
-                id="due-date" 
-                type="date" 
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                disabled={isCreating}
-                className="w-full pr-10" 
-              />
-              <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            </div>
-          </div>
+          {/* Удалён блок "Дедлайн задания" по требованиям */}
 
           {/* Ссылка */}
           <div className="space-y-2">
@@ -408,6 +423,22 @@ export function CreateObjectAssignmentModal({
               placeholder="https://..."
               disabled={isCreating}
               className="w-full" 
+            />
+          </div>
+
+          {/* Плановый срок передачи */}
+          <div className="space-y-2">
+            <Label htmlFor="planned-transmitted-date" className="text-sm font-medium">
+              Плановая дата передачи <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="planned-transmitted-date"
+              type="date"
+              value={plannedTransmittedDate || ""}
+              onChange={(e) => setPlannedTransmittedDate(e.target.value || undefined)}
+              placeholder="Выберите дату"
+              disabled={isCreating}
+              className="w-full"
             />
           </div>
         </div>

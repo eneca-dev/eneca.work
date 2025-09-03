@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Check, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { parseNotionContent, markdownToHtml } from '@/modules/notions/utils'
+import { parseNotionContent, markdownToTipTapHTML } from '@/modules/notions'
 import { SingleDeleteConfirm } from '@/modules/notions/components/SingleDeleteConfirm'
 import type { Notion } from '@/modules/notions/types'
+import DOMPurify from 'isomorphic-dompurify'
 
 interface NoteCardProps {
   notion: Notion
@@ -22,6 +23,13 @@ interface NoteCardProps {
   onOpenFullView: (notion: Notion) => void
 
   showSelection?: boolean
+}
+
+// Хелпер для безопасной санитизации HTML
+const sanitizeHTML = (html: string): string => {
+  return DOMPurify.sanitize(html, {
+    ADD_ATTR: ['target', 'rel', 'data-type', 'data-checked']
+  })
 }
 
 export function NoteCard({
@@ -38,6 +46,8 @@ export function NoteCard({
 }: NoteCardProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [needsExpansion, setNeedsExpansion] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const handleDelete = () => {
     setShowDeleteModal(true)
@@ -72,6 +82,22 @@ export function NoteCard({
     e.stopPropagation()
     setIsExpanded(!isExpanded)
   }
+
+  // Проверяем, нужно ли показывать кнопку разворачивания
+  useEffect(() => {
+    const checkContentOverflow = () => {
+      if (contentRef.current) {
+        const element = contentRef.current
+        const isOverflowing = element.scrollHeight > element.clientHeight
+        setNeedsExpansion(isOverflowing)
+      }
+    }
+
+    // Небольшая задержка для корректной работы после рендеринга
+    const timeoutId = setTimeout(checkContentOverflow, 50)
+
+    return () => clearTimeout(timeoutId)
+  }, [notion])
 
 
 
@@ -115,38 +141,24 @@ export function NoteCard({
                     </h1>
                   )}
 
-                  {/* Содержимое markdown с ограничением высоты */}
+                  {/* Содержимое markdown только для чтения */}
                   {parsed.content && (
                     <div className="relative">
-                      <div className={cn(
-                        "max-w-none text-sm leading-relaxed relative text-gray-700 dark:text-gray-300",
-                        !isExpanded && (parsed.title ? "line-clamp-3" : "line-clamp-4"),
-                        notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
-                      )}
+                      <div
+                        ref={contentRef}
+                        className={cn(
+                          "max-w-none text-sm leading-relaxed relative text-gray-700 dark:text-gray-300 overflow-hidden",
+                          !isExpanded && (parsed.title ? "line-clamp-3" : "line-clamp-4"),
+                          notion.notion_done && "line-through text-gray-500 dark:text-gray-400"
+                        )}
                       >
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert
-                                   [&_.bullet-line]:flex [&_.bullet-line]:items-start [&_.bullet-line]:gap-2 [&_.bullet-line]:my-1
-                                   [&_.checkbox-line]:flex [&_.checkbox-line]:items-start [&_.checkbox-line]:gap-2 [&_.checkbox-line]:my-1
-                                   [&_.checkbox-line_input[type='checkbox']:checked]:accent-primary dark:[&_.checkbox-line_input[type='checkbox']:checked]:accent-primary
-                                   [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-61
-                                   [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100
-                                   [&_em]:text-gray-700 dark:[&_em]:text-gray-300
-                                   [&_u]:text-gray-700 dark:[&_u]:text-gray-300
-                                   [&_table]:border-collapse [&_table]:table [&_table]:max-w-full [&_table]:min-w-[200px] [&_table]:border [&_table]:border-gray-300 dark:[&_table]:border-gray-600 [&_table]:relative
-                                   [&_td]:border [&_td]:border-gray-300 dark:[&_td]:border-gray-600 [&_td]:p-2 [&_td]:min-w-[50px] [&_td]:relative [&_td]:transition-all [&_td]:duration-200 [&_td]:bg-white dark:[&_td]:bg-gray-800 [&_td]:text-gray-900 dark:[&_td]:text-gray-100
-                                   [&_th]:border [&_th]:border-gray-300 dark:[&_th]:border-gray-600 [&_th]:p-2 [&_th]:bg-gray-50 dark:[&_th]:bg-gray-700 [&_th]:font-semibold [&_th]:min-w-[50px] [&_th]:relative [&_th]:transition-all [&_th]:duration-200 [&_th]:text-gray-900 dark:[&_th]:text-gray-100
-                                   [&_table_tr:first-child_td]:bg-gray-50 dark:[&_table_tr:first-child_td]:bg-gray-700 [&_table_tr:first-child_td]:font-semibold [&_table_tr:first-child_td]:text-center [&_table_tr:first-child_td]:text-gray-900 dark:[&_table_tr:first-child_td]:text-gray-100
-                                   [&_table_tr:first-child_th]:bg-gray-50 dark:[&_table_tr:first-child_th]:bg-gray-700 [&_table_tr:first-child_th]:font-semibold [&_table_tr:first-child_th]:text-center [&_table_tr:first-child_th]:text-gray-900 dark:[&_table_tr:first-child_th]:text-gray-100
-                                   [&_table_tr:not(:first-child)_th]:bg-white dark:[&_table_tr:not(:first-child)_th]:bg-gray-800 [&_table_tr:not(:first-child)_th]:font-normal [&_table_tr:not(:first-child)_th]:text-left [&_table_tr:not(:first-child)_th]:text-gray-900 dark:[&_table_tr:not(:first-child)_th]:text-gray-100
-                                   [&_table_tr:not(:first-child)_td]:bg-white dark:[&_table_tr:not(:first-child)_td]:font-normal [&_table_tr:not(:first-child)_td]:text-left [&_table_tr:not(:first-child)_td]:text-gray-900 dark:[&_table_tr:not(:first-child)_td]:text-gray-100
-                                   [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100"
+                        <div
+                          className="prose prose-sm max-w-none dark:prose-invert pointer-events-none table-preview-mode [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2 [&_ul]:text-gray-900 dark:[&_ul]:text-gray-100 [&_ul_::marker]:text-gray-900 dark:[&_ul_::marker]:text-gray-100 [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2 [&_ol]:text-gray-900 dark:[&_ol]:text-gray-100 [&_ol_::marker]:text-gray-900 dark:[&_ol_::marker]:text-gray-100 [&_li]:my-1 [&_li]:leading-relaxed [&_ul_ul]:list-[circle] [&_ul_ul]:ml-4 [&_ul_ul_ul]:list-[square] [&_ul_ul_ul]:ml-4 [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-[0.61] [&_ol_ol_ol]:list-[lower-roman] [&_ol_ol_ol]:ml-4 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-gray-700 dark:[&_blockquote]:text-gray-300 [&_blockquote_::before]:content-none [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:mt-6 [&_h1]:text-gray-900 dark:[&_h1]:text-gray-100 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-3 [&_h2]:mt-5 [&_h2]:text-gray-900 dark:[&_h2]:text-gray-100 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-gray-900 dark:[&_h3]:text-gray-100 [&_code]:bg-gray-100 dark:[&_code]:bg-gray-700 [&_code]:px-1 [&_code]:rounded [&_code]:font-mono [&_code]:text-sm [&_code]:text-gray-800 dark:[&_code]:text-gray-200 [&_pre]:bg-gray-100 dark:[&_pre]:bg-gray-700 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:font-mono [&_pre]:text-sm [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre]:text-gray-800 dark:[&_pre]:text-gray-200 [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100 [&_mark_s]:!text-gray-500 dark:[&_mark_s]:!text-gray-400 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']_li]:flex [&_ul[data-type='taskList']_li]:items-center [&_ul[data-type='taskList']_li]:gap-2 [&_ul[data-type='taskList']_li_>_label]:flex [&_ul[data-type='taskList']_li_>_label]:items-center [&_ul[data-type='taskList']_li_>_label]:gap-1 [&_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:w-4 [&_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:h-4 [&_ul[data-type='taskList']_li_>_div]:flex-1 [&_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_ul[data-type='taskList']_li_>_div]:min-w-0 [&_ul[data-type='taskList']_li_>_div]:break-words [&_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 dark:[&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400 [&_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 dark:[&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-400 [&_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through [&_s]:line-through [&_s]:text-gray-500 dark:[&_s]:text-gray-400 [&_s]:opacity-61 [&_strong]:text-gray-900 dark:[&_strong]:text-gray-100 [&_em]:text-gray-700 dark:[&_em]:text-gray-300 [&_u]:text-gray-700 dark:[&_u]:text-gray-300 [&_table]:border-collapse [&_table]:table [&_table]:max-w-full [&_table]:min-w-[200px] [&_table]:border [&_table]:border-gray-300 dark:[&_table]:border-gray-600 [&_table]:relative [&_table]:my-4 [&_table]:table-auto [&_table]:w-full [&_td]:border [&_td]:border-gray-300 dark:[&_td]:border-gray-600 [&_td]:p-2 [&_td]:min-w-0 [&_td]:relative [&_td]:transition-all [&_td]:duration-200 [&_td]:bg-white dark:[&_td]:bg-gray-800 [&_td]:text-gray-900 dark:[&_td]:text-gray-100 [&_td]:break-words [&_td]:overflow-hidden [&_th]:border [&_th]:border-gray-300 dark:[&_th]:border-gray-600 [&_th]:p-2 [&_th]:bg-gray-50 dark:[&_th]:bg-gray-700 [&_th]:font-semibold [&_th]:min-w-0 [&_th]:relative [&_th]:transition-all [&_th]:duration-200 [&_th]:text-gray-900 dark:[&_th]:text-gray-100 [&_th]:break-words [&_th]:overflow-hidden [&_table_tr:first-child_td]:bg-white dark:[&_table_tr:first-child_td]:bg-gray-800 [&_table_tr:first-child_td]:font-normal [&_table_tr:first-child_td]:text-left [&_table_tr:first-child_td]:text-gray-900 dark:[&_table_tr:first-child_td]:text-gray-100 [&_table_tr:first-child_th]:bg-gray-50 dark:[&_table_tr:first-child_th]:bg-gray-700 [&_table_tr:first-child_th]:font-semibold [&_table_tr:first-child_th]:text-center [&_table_tr:first-child_th]:text-gray-900 dark:[&_table_tr:first-child_th]:text-gray-100 [&_table_tr:not(:first-child)_th]:bg-gray-50 dark:[&_table_tr:not(:first-child)_th]:bg-gray-700 [&_table_tr:not(:first-child)_th]:font-normal [&_table_tr:not(:first-child)_th]:text-left [&_table_tr:not(:first-child)_th]:text-gray-900 dark:[&_table_tr:not(:first-child)_th]:text-gray-100 [&_table_tr:not(:first-child)_td]:bg-white dark:[&_table_tr:not(:first-child)_td]:bg-gray-800 [&_table_tr:not(:first-child)_td]:font-normal [&_table_tr:not(:first-child)_td]:text-left [&_table_tr:not(:first-child)_td]:text-gray-900 dark:[&_table_tr:not(:first-child)_td]:text-gray-100 [&_mark]:bg-yellow-200 dark:[&_mark]:bg-yellow-700/75 dark:[&_mark]:text-gray-100"
                           dangerouslySetInnerHTML={{ 
-                            __html: markdownToHtml(parsed.content)
+                            __html: sanitizeHTML(markdownToTipTapHTML(parsed.content))
                           }} 
                         />
                       </div>
-
                     </div>
                   )}
 
@@ -161,19 +173,21 @@ export function NoteCard({
 
           {/* Действия */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            {/* Кнопка разворачивания/сворачивания */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleExpand}
-              className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-600"
-              title={isExpanded ? "Свернуть заметку" : "Развернуть заметку"}
-            >
-              <ChevronDown className={cn(
-                "h-4 w-4 text-gray-600 dark:text-gray-400 transition-transform duration-300",
-                isExpanded && "rotate-180"
-              )} />
-            </Button>
+            {/* Кнопка разворачивания/сворачивания - показывается только если есть что разворачивать */}
+            {needsExpansion && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleExpand}
+                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-600"
+                title={isExpanded ? "Свернуть заметку" : "Развернуть заметку"}
+              >
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-gray-600 dark:text-gray-400 transition-transform duration-300",
+                  isExpanded && "rotate-180"
+                )} />
+              </Button>
+            )}
 
             {/* Кнопка отметки выполнения */}
             <Button
@@ -181,7 +195,7 @@ export function NoteCard({
               size="sm"
               onClick={() => onToggleDone(notion.notion_id)}
               className="h-8 w-8 p-0"
-              title={notion.notion_done ? "Отметить как невыполненное" : "Отметить как выполненное"}
+              title={notion.notion_done ? "Разархивировать" : "Архивировать"}
             >
               <Check className={cn(
                 "h-4 w-4",

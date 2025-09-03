@@ -150,10 +150,6 @@ export function TaskSchedule({ filters = {}, direction, currentUserSectionId }: 
           <div className="w-3 h-3 bg-purple-500 rotate-45"></div>
           <span className="text-foreground">Согласовано</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-destructive rotate-45"></div>
-          <span className="text-foreground">Дедлайн</span>
-        </div>
       </div>
 
       {/* Schedule */}
@@ -255,13 +251,7 @@ export function TaskSchedule({ filters = {}, direction, currentUserSectionId }: 
                   // Проверяем статусы в этот день
                   const statusMarkers = []
 
-                  // Дедлайн
-                  if (row.dueDate && 
-                      row.dueDate.getDate() === currentDay && 
-                      row.dueDate.getMonth() === month && 
-                      row.dueDate.getFullYear() === year) {
-                    statusMarkers.push({ color: "bg-destructive", label: "Дедлайн" })
-                  }
+                  // Дедлайн скрыт по требованиям
 
                   // Фактические даты статусов
                   if (row.actualDates.transmitted && 

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/modules/calendar/components/ui/button"
 import { Input } from "@/modules/calendar/components/ui/input"
@@ -22,7 +22,7 @@ import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
 import { useUserStore } from "@/stores/useUserStore"
 import { DatePicker } from "@/modules/calendar/components/mini-calendar"
 import { formatDateToString } from "@/modules/calendar/utils"
-import { usePermissionsHook as usePermissions } from "@/modules/permissions"
+import { useCalendarPermissions } from "@/modules/permissions"
 
 interface UnifiedEventFormProps {
   onClose: () => void
@@ -36,13 +36,8 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const currentUserId = userStore.id
   const isAuthenticated = userStore.isAuthenticated
   
-    // Проверяем права - ОПТИМИЗИРОВАННО  
-  const { hasPermission } = usePermissions()
-  const permissions = useMemo(() => {
-    const hasGlobalEvents = hasPermission("calendar.create.global") || hasPermission("calendar.edit.global")
-    
-    return { hasGlobalEvents }
-  }, [hasPermission])
+  // Проверяем права на управление глобальными событиями
+  const { canCreateGlobal, canManageGlobalEvents } = useCalendarPermissions()
 
   const [dateRange, setDateRange] = useState<{ from: Date | null; to: Date | null }>({
     from: null,
@@ -56,7 +51,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (isGlobal && permissions.hasGlobalEvents) {
+    if (isGlobal && canManageGlobalEvents) {
       setShowConfirmation(true)
     } else {
       await submitEvent()
@@ -76,17 +71,17 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
 
         try {
           span.setAttribute("user.id", currentUserId)
-          span.setAttribute("event.is_global", permissions.hasGlobalEvents ? isGlobal : false)
+          span.setAttribute("event.is_global", canManageGlobalEvents ? isGlobal : false)
           span.setAttribute("event.has_end_date", !!dateRange.to)
           span.setAttribute("event.comment_length", comment.length)
 
           await createEvent({
             calendar_event_type: "Событие",
             calendar_event_comment: comment,
-            calendar_event_is_global: permissions.hasGlobalEvents ? isGlobal : false,
+            calendar_event_is_global: canManageGlobalEvents ? isGlobal : false,
             calendar_event_is_weekday: null,
             calendar_event_created_by: currentUserId,
-            calendar_event_date_start: formatDateToString(dateRange.from),
+            calendar_event_date_start: dateRange.from ? formatDateToString(dateRange.from) : '',
             calendar_event_date_end: dateRange.to ? formatDateToString(dateRange.to) : undefined,
           }, currentUserId)
 
@@ -99,7 +94,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
             data: {
               component: 'UnifiedEventForm',
               user_id: currentUserId,
-              is_global: permissions.hasGlobalEvents ? isGlobal : false,
+              is_global: canManageGlobalEvents ? isGlobal : false,
               has_end_date: !!dateRange.to
             }
           })
@@ -117,7 +112,7 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
             },
             extra: {
               user_id: currentUserId,
-              is_global: permissions.hasGlobalEvents ? isGlobal : false,
+              is_global: canManageGlobalEvents ? isGlobal : false,
               comment_length: comment.length,
               has_end_date: !!dateRange.to,
               timestamp: new Date().toISOString()
@@ -170,12 +165,12 @@ export function UnifiedEventForm(props: UnifiedEventFormProps) {
           />
         </div>
 
-        {permissions.hasGlobalEvents && (
+        {canManageGlobalEvents && (
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="is-global" 
-              checked={isGlobal} 
-              onCheckedChange={(checked) => setIsGlobal(!!checked)} 
+            <Checkbox
+              id="is-global"
+              checked={isGlobal}
+              onCheckedChange={(checked) => setIsGlobal(!!checked)}
               className="border-gray-400 bg-gray-100 dark:border-gray-600 dark:bg-gray-700 data-[state=checked]:!bg-[hsl(162_58%_28%)] data-[state=checked]:!border-[hsl(162_58%_28%)] data-[state=checked]:!text-white"
             />
             <Label htmlFor="is-global">Сделать событие общим</Label>

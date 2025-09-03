@@ -148,24 +148,33 @@ export const usePlanningPermissions = () => {
  */
 export const useCalendarPermissions = () => {
   const { hasPermission } = usePermissions()
-  
+
+  // Локальные переменные для оптимизации
+  const canManageGlobal = hasPermission('calendar.manage_global_events')
+
   return {
-    canView: hasPermission('calendar.view'),
-    canCreatePersonal: hasPermission('calendar.create.personal'),
-    canCreateGlobal: hasPermission('calendar.create.global'),
-    canEditPersonal: hasPermission('calendar.edit.personal'),
-    canEditGlobal: hasPermission('calendar.edit.global'),
-    canDeletePersonal: hasPermission('calendar.delete.personal'),
-    canDeleteGlobal: hasPermission('calendar.delete.global'),
-    canManageWorkSchedule: hasPermission('calendar.manage.work_schedule'),
-    canAdmin: hasPermission('calendar.admin'),
-    
+    // Просмотр календаря доступен всем авторизованным пользователям
+    canView: true,
+
+    // Личные события - любой авторизованный пользователь
+    canCreatePersonal: true,
+    canEditPersonal: true,
+    canDeletePersonal: true,
+
+    // Глобальные события - только пользователи с соответствующим разрешением
+    canCreateGlobal: canManageGlobal,
+    canEditGlobal: canManageGlobal,
+    canDeleteGlobal: canManageGlobal,
+
+    // Управление рабочим графиком (переносы, праздники)
+    canManageWorkSchedule: canManageGlobal,
+
+    // Админ доступ к календарю
+    canAdmin: canManageGlobal,
+
     // Логические комбинации
-    canCreateEvents: hasPermission('calendar.create.personal') ||
-                     hasPermission('calendar.create.global'),
-    canManageGlobalEvents: hasPermission('calendar.create.global') ||
-                          hasPermission('calendar.edit.global') ||
-                          hasPermission('calendar.delete.global')
+    canCreateEvents: true, // Любой пользователь может создавать личные события
+    canManageGlobalEvents: canManageGlobal
   }
 }
 
@@ -175,19 +184,20 @@ export const useCalendarPermissions = () => {
 export const useAnnouncementsPermissions = () => {
   const { hasPermission } = usePermissions()
   
+  // Локальные булевы переменные для избежания повторных вызовов
+  const canManage = hasPermission('announcements.manage')
+  
   return {
-    // Просмотр объявлений доступен всем (без прав)
     canView: true,
-    // Все действия завязаны на одном агрегированном праве
-    canCreate: hasPermission('announcements_can_create_and_edit'),
-    canEditAll: hasPermission('announcements_can_create_and_edit'),
-    canEditOwn: hasPermission('announcements_can_create_and_edit'),
-    canDeleteAll: hasPermission('announcements_can_create_and_edit'),
-    canDeleteOwn: hasPermission('announcements_can_create_and_edit'),
-    canAdmin: hasPermission('announcements_can_create_and_edit'),
+    canCreate: canManage,
+    canEditAll: canManage,
+    canEditOwn: canManage,
+    canDeleteAll: canManage,
+    canDeleteOwn: canManage,
     
-    // Логические комбинации (также завязаны на агрегированном праве)
-    canEditAnnouncements: hasPermission('announcements_can_create_and_edit'),
-    canDeleteAnnouncements: hasPermission('announcements_can_create_and_edit')
+    // Логические комбинации
+    canEditAnnouncements: canManage,
+    canDeleteAnnouncements: canManage,
+    canManage: canManage
   }
 } 

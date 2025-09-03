@@ -1,12 +1,14 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback } from 'react'
+import React, { forwardRef, useImperativeHandle, useEffect, useState, useCallback, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import { Transaction } from '@tiptap/pm/state'
 import { EditorState } from '@tiptap/pm/state'
 import { ChainedCommands } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import BulletList from '@tiptap/extension-bullet-list'
+import OrderedList from '@tiptap/extension-ordered-list'
 import Underline from '@tiptap/extension-underline'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -115,12 +117,185 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     }, 5000)
   }, [])
 
+  // Функция для проверки, находится ли курсор внутри цитаты
+  const isInsideBlockquote = useCallback((editor: any) => {
+    if (!editor) return false
+
+    const { selection } = editor.state
+    const { $anchor } = selection
+
+    // Проверяем все уровни вверх от текущей позиции
+    for (let depth = $anchor.depth; depth > 0; depth--) {
+      const node = $anchor.node(depth)
+      if (node.type.name === 'blockquote') {
+        return true
+      }
+    }
+
+    return false
+  }, [])
+
+  // Функция для проверки, находится ли курсор внутри блока кода
+  const isInsideCodeBlock = useCallback((editor: any) => {
+    if (!editor) return false
+
+    const { selection } = editor.state
+    const { $anchor } = selection
+
+    // Проверяем все уровни вверх от текущей позиции
+    for (let depth = $anchor.depth; depth > 0; depth--) {
+      const node = $anchor.node(depth)
+      if (node.type.name === 'codeBlock') {
+        return true
+      }
+    }
+
+    return false
+  }, [])
+
+  // Функция для показа подсказки о невозможности создания чекбокса в цитате
+  const showBlockquoteTaskBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать чекбокс внутри цитаты',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
+  // Функция для показа подсказки о невозможности создания списков в цитате
+  const showBlockquoteListBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать список внутри цитаты',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
+  // Функция для показа предупреждения о списках в цитате
+  const showBlockquoteListWarningTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Списки внутри цитаты удаляются после закрытия заметки. Вы можете потерять данные. Постарайтесь избегать списков внутри цитат',
+      duration: 5000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 5000)
+  }, [])
+
+  // Функция для показа предупреждения о заголовках в цитате
+  const showBlockquoteHeaderWarningTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Заголовки внутри цитаты будут преобразованы в обычный текст после закрытия заметки',
+      duration: 4000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 4000)
+  }, [])
+
+  // Функция для показа подсказки о невозможности создания списков в блоке кода
+  const showCodeBlockListBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать список внутри блока кода',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
+  // Функция для показа подсказки о невозможности табуляции в чекбоксах
+  const showTaskListTabBlockedTooltip = useCallback(() => {
+    setTooltipState({
+      show: true,
+      message: 'Невозможно создать отступ в чекбоксе. Используйте клавиши со стрелками для навигации',
+      duration: 3000
+    })
+    setTimeout(() => {
+      setTooltipState(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }, [])
+
   // Отслеживание изменений состояния подсказки
   useEffect(() => {
   }, [tooltipState])
 
   // Флаг набора через IME/композицию
   const [isComposing, setIsComposing] = useState(false)
+
+  // Отслеживание предыдущего состояния списков для цитаты
+  const prevListState = useRef({ bulletList: false, orderedList: false })
+
+  // Отслеживание предыдущего состояния заголовков для цитаты
+  const prevHeaderState = useRef({ h1: false, h2: false, h3: false })
+
+  // Функция для вставки блока кода с выделенным текстом
+  const handleCodeBlockInsertion = useCallback((editor: any) => {
+    const { selection } = editor.state
+    const { $from, $to } = selection
+
+    // Если нет выделения, просто создаем пустой блок кода
+    if ($from.pos === $to.pos) {
+      editor.chain().focus().setCodeBlock().run()
+      return
+    }
+
+    // Получаем выделенный текст с сохранением переносов строк
+    const slice = editor.state.doc.slice($from.pos, $to.pos)
+    let selectedText = ''
+
+    // Проходим по всем узлам в выделенном фрагменте и собираем текст с переносами строк
+    slice.content.forEach((node: any, index: number) => {
+      if (node.isText) {
+        selectedText += node.text
+      } else if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+        // Для параграфов и заголовков добавляем их текстовое содержимое
+        if (node.content && node.content.size > 0) {
+          node.content.forEach((childNode: any) => {
+            if (childNode.isText) {
+              selectedText += childNode.text
+            }
+          })
+        }
+        // Добавляем перенос строки после параграфа/заголовка (кроме последнего)
+        if (index < slice.content.size - 1) {
+          selectedText += '\n'
+        }
+      } else if (node.type.name === 'hardBreak') {
+        selectedText += '\n'
+      } else {
+        // Для других типов узлов пытаемся получить их текстовое содержимое
+        if (node.textContent) {
+          selectedText += node.textContent
+        }
+      }
+    })
+
+    // Очищаем текст от лишних переносов строк в конце
+    selectedText = selectedText.replace(/\n+$/, '')
+
+    // Если текст пустой, создаем пустой блок кода
+    if (!selectedText.trim()) {
+      editor.chain().focus().setCodeBlock().run()
+      return
+    }
+
+    // Удаляем выделенный текст и вставляем блок кода с этим текстом
+    editor.chain()
+      .deleteSelection()
+      .setCodeBlock()
+      .insertContent(selectedText)
+      .run()
+  }, [])
 
   // Комбинирование заголовка и содержимого
   const combineContent = (titleValue: string, editorContent: string) => {
@@ -186,14 +361,17 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         heading: {
           levels: [1, 2, 3]
         },
-        bulletList: {
-          keepMarks: true,
-          keepAttributes: true
-        },
-        orderedList: {
-          keepMarks: true,
-          keepAttributes: true
-        }
+        bulletList: false, // Отключаем встроенный bulletList
+        orderedList: false // Отключаем встроенный orderedList
+      }),
+      // Добавляем собственные расширения списков без input rules (обработка в onUpdate)
+      BulletList.configure({
+        keepMarks: true,
+        keepAttributes: true
+      }),
+      OrderedList.configure({
+        keepMarks: true,
+        keepAttributes: true
       }),
       Underline,
       TextStyle,
@@ -214,9 +392,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         }
       }),
       TaskList,
-      TaskItem.configure({
-        nested: true
-      }),
+      TaskItem,
       Placeholder.configure({
         placeholder: 'Начните писать свою заметку...'
       }),
@@ -258,13 +434,228 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
         compositionend: () => {
           setIsComposing(false)
           return false
+        },
+        input: () => {
+          // Разрешаем работу input rules
+          return true
         }
       }
     },
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
       if (isComposing) return
+
+      // Проверяем активацию списков через кнопки в цитате
+      if (transaction?.docChanged) {
+        const { selection } = editor.state
+        const { $anchor } = selection
+        let inBlockquote = false
+
+        // Проверяем все уровни вверх от текущей позиции
+        for (let depth = $anchor.depth; depth > 0; depth--) {
+          const node = $anchor.node(depth)
+          if (node.type.name === 'blockquote') {
+            inBlockquote = true
+            break
+          }
+        }
+
+        if (inBlockquote) {
+          const isBulletListNow = editor.isActive('bulletList')
+          const isOrderedListNow = editor.isActive('orderedList')
+
+          // Если список был активирован в цитате (переход из не-списка в список), показываем предупреждение
+          if ((isBulletListNow && !prevListState.current.bulletList) || (isOrderedListNow && !prevListState.current.orderedList)) {
+            showBlockquoteListWarningTooltip()
+          }
+
+          // Обновляем предыдущее состояние
+          prevListState.current = { bulletList: isBulletListNow, orderedList: isOrderedListNow }
+
+          // Проверяем активацию заголовков в цитате
+          const isH1Now = editor.isActive('heading', { level: 1 })
+          const isH2Now = editor.isActive('heading', { level: 2 })
+          const isH3Now = editor.isActive('heading', { level: 3 })
+
+          // Если заголовок был активирован в цитате (переход из не-заголовка в заголовок), показываем предупреждение
+          if ((isH1Now && !prevHeaderState.current.h1) ||
+              (isH2Now && !prevHeaderState.current.h2) ||
+              (isH3Now && !prevHeaderState.current.h3)) {
+            showBlockquoteHeaderWarningTooltip()
+          }
+
+          // Обновляем предыдущее состояние заголовков
+          prevHeaderState.current = { h1: isH1Now, h2: isH2Now, h3: isH3Now }
+        }
+      }
+
       setHasChanges(true)
-      
+
+      // Проверяем, не пытается ли пользователь создать чекбокс внутри цитаты через markdown синтаксис
+      if (transaction?.docChanged) {
+        const { selection } = editor.state
+        const { $anchor } = selection
+
+        // Проверяем, не находимся ли мы внутри цитаты
+        let inBlockquote = false
+        for (let depth = $anchor.depth; depth > 0; depth--) {
+          const node = $anchor.node(depth)
+          if (node.type.name === 'blockquote') {
+            inBlockquote = true
+            break
+          }
+        }
+
+        if (inBlockquote) {
+          // Получаем текущий контент и проверяем на наличие паттернов чекбоксов
+          const currentContent = editor.getText()
+          const contentLines = currentContent.split('\n')
+
+          // Ищем строки, которые могут содержать чекбоксы
+          for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i]
+            if (/^\s*- \[ \]/.test(line) || /^\s*- \[x\]/.test(line)) {
+              // Нашли чекбокс внутри цитаты - показываем предупреждение
+              showBlockquoteTaskBlockedTooltip()
+
+              // Удаляем только что введенный чекбокс
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+              editor.chain().deleteRange({ from, to }).insertContentAt(from, line.replace(/^\s*- \[[ x]\] /, '- ')).run()
+
+              break
+            }
+          }
+                  // Если не в цитате, обрабатываем создание списков и заголовков через markdown синтаксис
+        if (transaction?.docChanged) {
+          const currentContent = editor.getText()
+          const contentLines = currentContent.split('\n')
+
+          // Ищем строки с markdown синтаксисом списков и заголовков
+          for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i]
+
+            // Проверяем на заголовки
+            const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/)
+            if (headerMatch) {
+              const hashSymbols = headerMatch[1]
+              const headerText = headerMatch[2]
+              const level = hashSymbols.length
+
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем заголовок
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, headerText)
+                .command(({ commands }) => commands.setHeading({ level: level as 1 | 2 | 3 }))
+                .run()
+              break
+            }
+
+            // Проверяем на буллет-лист
+            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем буллет-лист
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleBulletList())
+                .run()
+              break
+            }
+
+            // Проверяем на нумерованный список
+            const numberedMatch = line.match(/^\s*(\d+)\. $/)
+            if (numberedMatch) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем нумерованный список
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleOrderedList())
+                .run()
+              break
+            }
+          }
+        }
+        }
+
+        // Обрабатываем создание списков и заголовков в цитате с предупреждением
+        if (inBlockquote && transaction?.docChanged) {
+          const currentContent = editor.getText()
+          const contentLines = currentContent.split('\n')
+
+          // Ищем строки с markdown синтаксисом списков и заголовков в цитате
+          for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i]
+
+            // Проверяем на заголовки в цитате
+            const headerMatch = line.match(/^\s*(#{1,3})\s+(.+)$/)
+            if (headerMatch) {
+              const hashSymbols = headerMatch[1]
+              const headerText = headerMatch[2]
+
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Конвертируем заголовок в обычный текст и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, headerText)
+                .run()
+
+              showBlockquoteHeaderWarningTooltip()
+              break
+            }
+
+            // Проверяем на буллет-лист в цитате
+            if (/^\s*- $/.test(line) && !/^\s*- \[/.test(line)) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем буллет-лист и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleBulletList())
+                .run()
+
+              showBlockquoteListWarningTooltip()
+              break
+            }
+
+            // Проверяем на нумерованный список в цитате
+            const numberedMatch = line.match(/^\s*(\d+)\. $/)
+            if (numberedMatch) {
+              const textBeforeLine = contentLines.slice(0, i).join('\n') + (i > 0 ? '\n' : '')
+              const from = textBeforeLine.length
+              const to = from + line.length
+
+              // Создаем нумерованный список и показываем предупреждение
+              editor.chain()
+                .deleteRange({ from, to })
+                .insertContentAt(from, '')
+                .command(({ commands }) => commands.toggleOrderedList())
+                .run()
+
+              showBlockquoteListWarningTooltip()
+              break
+            }
+          }
+        }
+      }
+
       // Автосохранение при изменении контента
       if (enableAutoSave && notionId) {
         try {
@@ -279,13 +670,20 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     },
     onBlur: ({ editor }) => {
       // Принудительно сохраняем при потере фокуса
-      if (enableAutoSave && notionId && hasChanges) {
+      if (hasChanges) {
         try {
           const editorHTML = editor.getHTML()
           const editorMarkdown = htmlToMarkdown(editorHTML, { normalize: true })
           const combinedContent = combineContent(title, editorMarkdown)
-          // Используем forceSave для немедленного сохранения без debounce
-          forceSave(combinedContent)
+
+          // Для существующих заметок используем автосохранение
+          if (enableAutoSave && notionId) {
+            // Используем forceSave для немедленного сохранения без debounce
+            forceSave(combinedContent)
+          } else {
+            // Для новых заметок или когда автосохранение отключено - вызываем onSave
+            onSave(combinedContent)
+          }
         } catch (error) {
           console.error('Ошибка при сохранении на blur:', error)
         }
@@ -302,6 +700,10 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
     const nextContent = parsedContent ? markdownToTipTapHTML(parsedContent) : '<p></p>'
     editor.commands.setContent(nextContent, false)
     setHasChanges(false)
+
+    // Сбрасываем состояние списков и заголовков при загрузке нового контента
+    prevListState.current = { bulletList: false, orderedList: false }
+    prevHeaderState.current = { h1: false, h2: false, h3: false }
   }, [notionId])
 
   useImperativeHandle(ref, () => ({
@@ -441,12 +843,77 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
       if (e.key === 'Escape') {
         e.preventDefault()
         onCancel()
+        return
+      }
+
+      // Проверяем нажатие Tab в чекбоксах
+      if (e.key === 'Tab' && editor) {
+        // Проверяем, находимся ли мы внутри чекбокса (taskItem)
+        if (editor.isActive('taskItem')) {
+          e.preventDefault()
+          showTaskListTabBlockedTooltip()
+          return
+        }
+      }
+
+      // Проверяем горячие клавиши для чекбоксов
+      // Обычно это Ctrl+Shift+7 или Ctrl+Shift+9
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '7' || e.key === '9')) {
+        // Проверяем, не находимся ли мы внутри цитаты
+        if (isInsideBlockquote(editor)) {
+          e.preventDefault()
+          showBlockquoteTaskBlockedTooltip()
+          return
+        }
+        // Проверяем, не находимся ли мы внутри блока кода
+        if (isInsideCodeBlock(editor)) {
+          e.preventDefault()
+          showCodeBlockListBlockedTooltip()
+          return
+        }
+      }
+
+      // Проверяем горячие клавиши для заголовков
+      // Обычно это Ctrl+1, Ctrl+2, Ctrl+3 для заголовков разных уровней
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        // Проверяем, не находимся ли мы внутри цитаты
+        if (isInsideBlockquote(editor)) {
+          e.preventDefault()
+          showBlockquoteHeaderWarningTooltip()
+          return
+        }
+      }
+
+      // Проверяем горячие клавиши для списков
+      // Обычно это Ctrl+Shift+8 для буллет-листа или Ctrl+Shift+1 для нумерованного списка
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '8' || e.key === '1')) {
+        // Проверяем, не находимся ли мы внутри цитаты
+        if (isInsideBlockquote(editor)) {
+          e.preventDefault()
+          showBlockquoteListBlockedTooltip()
+          return
+        }
+        // Проверяем, не находимся ли мы внутри блока кода
+        if (isInsideCodeBlock(editor)) {
+          e.preventDefault()
+          showCodeBlockListBlockedTooltip()
+          return
+        }
+      }
+
+      // Проверяем горячие клавиши для блока кода
+      // Обычно это Ctrl+Shift+C или Ctrl+Alt+C
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') ||
+          ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'C')) {
+        e.preventDefault()
+        handleCodeBlockInsertion(editor)
+        return
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onCancel])
+  }, [onCancel, editor, isInsideBlockquote, isInsideCodeBlock, showBlockquoteTaskBlockedTooltip, showBlockquoteListBlockedTooltip, showBlockquoteHeaderWarningTooltip, showCodeBlockListBlockedTooltip, showTaskListTabBlockedTooltip, handleCodeBlockInsertion])
 
   // Обработчик клавиш для отступов в списках
   useListIndentation(editor)
@@ -563,7 +1030,7 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
               }
             }}
             placeholder={titlePlaceholder}
-            className="text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 focus:border-primary focus:ring-0 text-foreground dark:text-gray-100 !text-2xl bg-transparent"
+            className="!text-2xl font-bold mb-4 mt-6 border-0 border-b-2 border-gray-200 dark:border-gray-700 rounded-none px-0 focus:border-primary focus:ring-0 text-foreground dark:text-gray-100 bg-transparent"
             autoFocus={autoFocus}
           />
         </div>
@@ -702,11 +1169,23 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            onClick={() => {
+              // Проверяем, не находимся ли мы внутри цитаты
+              if (isInsideBlockquote(editor)) {
+                showBlockquoteListBlockedTooltip()
+                return
+              }
+              // Проверяем, не находимся ли мы внутри блока кода
+              if (isInsideCodeBlock(editor)) {
+                showCodeBlockListBlockedTooltip()
+                return
+              }
+              editor.chain().focus().toggleBulletList().run()
+            }}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('bulletList') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              editor.isActive('bulletList')
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-600'
             )}
             title="Маркированный список (- )"
@@ -716,11 +1195,23 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            onClick={() => {
+              // Проверяем, не находимся ли мы внутри цитаты
+              if (isInsideBlockquote(editor)) {
+                showBlockquoteListBlockedTooltip()
+                return
+              }
+              // Проверяем, не находимся ли мы внутри блока кода
+              if (isInsideCodeBlock(editor)) {
+                showCodeBlockListBlockedTooltip()
+                return
+              }
+              editor.chain().focus().toggleOrderedList().run()
+            }}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('orderedList') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              editor.isActive('orderedList')
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-600'
             )}
             title="Нумерованный список"
@@ -730,11 +1221,23 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            onClick={() => {
+              // Проверяем, не находимся ли мы внутри цитаты
+              if (isInsideBlockquote(editor)) {
+                showBlockquoteTaskBlockedTooltip()
+                return
+              }
+              // Проверяем, не находимся ли мы внутри блока кода
+              if (isInsideCodeBlock(editor)) {
+                showCodeBlockListBlockedTooltip()
+                return
+              }
+              editor.chain().focus().toggleTaskList().run()
+            }}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('taskList') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              editor.isActive('taskList')
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-600'
             )}
             title="Список задач"
@@ -780,11 +1283,11 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            onClick={() => handleCodeBlockInsertion(editor)}
             className={cn(
               'h-8 w-8 p-0',
-              editor.isActive('codeBlock') 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/80' 
+              editor.isActive('codeBlock')
+                ? 'bg-primary text-primary-foreground hover:bg-primary/80'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-600'
             )}
             title="Блок кода"
@@ -849,18 +1352,18 @@ export const TipTapEditor = forwardRef<TipTapEditorRef, TipTapEditorProps>(({
                      [&_.ProseMirror_h2]:text-xl [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mb-3 [&_.ProseMirror_h2]:mt-5 [&_.ProseMirror_h2]:text-gray-900 dark:[&_.ProseMirror_h2]:text-gray-100
                      [&_.ProseMirror_h3]:text-lg [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mb-2 [&_.ProseMirror_h3]:mt-4 [&_.ProseMirror_h3]:text-gray-900 dark:[&_.ProseMirror_h3]:text-gray-100
                      [&_.ProseMirror_strong]:font-bold [&_.ProseMirror_em]:italic [&_.ProseMirror_u]:underline [&_.ProseMirror_s]:line-through [&_.ProseMirror_s]:text-gray-500 dark:[&_.ProseMirror_s]:text-gray-400
-                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2
-                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2
+                     [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ml-6 [&_.ProseMirror_ul]:my-2 [&_.ProseMirror_ul]:text-gray-900 dark:[&_.ProseMirror_ul]:text-gray-100 [&_.ProseMirror_ul_::marker]:text-gray-900 dark:[&_.ProseMirror_ul_::marker]:text-gray-100
+                     [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ml-6 [&_.ProseMirror_ol]:my-2 [&_.ProseMirror_ol]:text-gray-900 dark:[&_.ProseMirror_ol]:text-gray-100 [&_.ProseMirror_ol_::marker]:text-gray-900 dark:[&_.ProseMirror_ol_::marker]:text-gray-100
                      [&_.ProseMirror_li]:my-1 [&_.ProseMirror_li]:leading-relaxed
                      [&_.ProseMirror_ul_ul]:list-[circle] [&_.ProseMirror_ul_ul]:ml-4
                      [&_.ProseMirror_ul_ul_ul]:list-[square] [&_.ProseMirror_ul_ul_ul]:ml-4
                      [&_.ProseMirror_ol_ol]:list-[lower-alpha] [&_.ProseMirror_ol_ol]:ml-4
                      [&_.ProseMirror_ol_ol_ol]:list-[lower-roman] [&_.ProseMirror_ol_ol_ol]:ml-4
-                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 dark:[&_.ProseMirror_blockquote]:border-gray-600 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-gray-700 dark:[&_.ProseMirror_blockquote]:text-gray-300
-                     [&_.ProseMirror_code]:bg-gray-100 dark:[&_.ProseMirror_code]:bg-gray-700 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-gray-800 dark:[&_.ProseMirror_code]:text-gray-200
+                     [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-gray-300 dark:[&_.ProseMirror_blockquote]:border-gray-600 [&_.ProseMirror_blockquote]:pl-4 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-gray-700 dark:[&_.ProseMirror_blockquote]:text-gray-300 [&_.ProseMirror_blockquote_::before]:content-none
+                     [&_.ProseMirror_code]:bg-gray-100 dark:[&_.ProseMirror_code]:bg-gray-700 [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-sm [&_.ProseMirror_code]:text-gray-800 dark:[&_.ProseMirror_code]:text-gray-200 [&_.ProseMirror_code_::before]:content-[``]!important [&_.ProseMirror_code_::after]:content-['']!important
                      [&_.ProseMirror_pre]:bg-gray-100 dark:[&_.ProseMirror_pre]:bg-gray-700 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:rounded-lg [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm [&_.ProseMirror_pre]:my-2 [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre]:text-gray-800 dark:[&_.ProseMirror_pre]:text-gray-200
                      [&_.ProseMirror_mark]:bg-yellow-200 dark:[&_.ProseMirror_mark]:bg-yellow-700/75 dark:[&_.ProseMirror_mark]:text-gray-100 [&_.ProseMirror_mark_s]:!text-gray-500 dark:[&_.ProseMirror_mark_s]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_[&_.ProseMirror_mark]]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_[&_.ProseMirror_mark]]:!text-gray-400
-                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:mt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
+                     [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']_li]:flex [&_.ProseMirror_ul[data-type='taskList']_li]:items-start [&_.ProseMirror_ul[data-type='taskList']_li]:gap-2 [&_.ProseMirror_ul[data-type='taskList']_li]:pt-[0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:items-center [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:gap-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:cursor-pointer [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:min-h-[1.5rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:flex-shrink-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label]:mt-[0.25rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:m-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:accent-primary [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:w-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_label_>_input[type='checkbox']]:h-4 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:flex-1 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:min-w-0 [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div]:mt-[-0.125rem] [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:break-words [&_.ProseMirror_ul[data-type='taskList']_li_>_div_>_p]:leading-relaxed [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div]:!line-through [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-500 dark:[&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!text-gray-400 [&_.ProseMirror_ul[data-type='taskList']_li[data-checked='true']_>_div_>_p]:!line-through
                      [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4 [&_.ProseMirror_ul[data-type='taskList']_ul[data-type='taskList']_ul[data-type='taskList']]:ml-4"
         />
       </div>
