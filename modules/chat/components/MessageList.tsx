@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { ChatMessage } from '../types/chat'
 import { formatMessageTime } from '../utils/formatTime'
+import { MarkdownRenderer } from './MarkdownRenderer'
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -40,22 +41,40 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
           className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
         >
           <div
-            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm relative break-words overflow-wrap-anywhere ${
+            className={`px-4 py-2 rounded-lg shadow-sm break-words ${
               message.role === 'user'
-                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'
-                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
+                ? 'max-w-[80%] bg-gradient-to-r from-emerald-500 to-emerald-600 text-white relative'
+                : 'max-w-[100%] bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
             }`}
+            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
           >
-            <p className="text-sm leading-snug pr-12">
-              {message.content}
-            </p>
-            <span className={`absolute bottom-2 right-3 text-xs ${
-              message.role === 'user' 
-                ? 'text-emerald-100' 
-                : 'text-gray-500 dark:text-gray-400'
-            }`}>
-              {formatMessageTime(message.timestamp)}
-            </span>
+            {message.role === 'user' ? (
+              // Структура для сообщений пользователя - время справа от текста
+              <>
+                <div className="pr-12">
+                  <MarkdownRenderer 
+                    content={message.content}
+                    isUserMessage={true}
+                  />
+                </div>
+                <span className="absolute bottom-2 right-3 text-xs text-emerald-100">
+                  {formatMessageTime(message.timestamp)}
+                </span>
+              </>
+            ) : (
+              // Структура для сообщений агента - время под текстом
+              <>
+                <div className="mb-1">
+                  <MarkdownRenderer 
+                    content={message.content}
+                    isUserMessage={false}
+                  />
+                </div>
+                <div className="text-xs mt-1 text-gray-500 dark:text-gray-400 text-right">
+                  {formatMessageTime(message.timestamp)}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ))}
