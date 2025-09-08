@@ -339,7 +339,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
                         <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Ответственный
                         </div>
-                        <div className="max-h-80 overflow-y-auto overscroll-contain">
+                        <div className="max-h-64 overflow-y-auto overscroll-contain">
                           <button
                             type="button"
                             onClick={() => {
