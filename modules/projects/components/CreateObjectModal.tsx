@@ -276,7 +276,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               type="text"
               value={objectName}
               onChange={(e) => setObjectName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите название объекта"
               disabled={loading}
               autoFocus
@@ -291,7 +291,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               value={objectDescription}
               onChange={(e) => setObjectDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               placeholder="Введите описание объекта (необязательно)"
               disabled={loading}
             />
@@ -317,7 +317,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
                   setTimeout(() => setShowResponsibleDropdown(false), 200)
                 }}
                 placeholder={getSelectedResponsibleName() || "Поиск ответственного..."}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
                 disabled={loading}
               />
               <User className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -390,7 +390,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
                   type="date"
                   value={objectStartDate}
                   onChange={(e) => setObjectStartDate(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
                   disabled={loading}
                 />
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
@@ -405,7 +405,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
                   type="date"
                   value={objectEndDate}
                   onChange={(e) => setObjectEndDate(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
                   disabled={loading}
                 />
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
