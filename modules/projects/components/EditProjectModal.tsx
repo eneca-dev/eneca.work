@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import * as Sentry from "@sentry/nextjs"
+import ReactDOM from 'react-dom'
 import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -39,6 +40,10 @@ interface Client {
 }
 
 const supabase = createClient()
+import { useDropdownPosition, useDropdownPositionEffect } from '@/hooks/useDropdownPosition'
+
+// Dropdown header styling constant
+export const DROPDOWN_HEADER_CLASS = "sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400"
 
 export function EditProjectModal({ 
   isOpen, 
@@ -58,13 +63,20 @@ export function EditProjectModal({
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [managerDropdownPosition, setManagerDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const [engineerDropdownPosition, setEngineerDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const [clientDropdownPosition, setClientDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const managerInputRef = useRef<HTMLDivElement>(null)
-  const engineerInputRef = useRef<HTMLDivElement>(null)
-  const clientInputRef = useRef<HTMLDivElement>(null)
+  const [focusedManagerIndex, setFocusedManagerIndex] = useState(0)
+  const [focusedEngineerIndex, setFocusedEngineerIndex] = useState(0)
+  const [focusedClientIndex, setFocusedClientIndex] = useState(0)
+  const managerDropdown = useDropdownPosition()
+  const engineerDropdown = useDropdownPosition()
+  const clientDropdown = useDropdownPosition()
+  const managerInputRef = managerDropdown.ref
+  const engineerInputRef = engineerDropdown.ref
+  const clientInputRef = clientDropdown.ref
+  const managerItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const engineerItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const clientItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const { setNotification } = useUiStore()
+  const canRenderPortal = typeof window !== 'undefined' && typeof document !== 'undefined'
 
   // Загрузка данных проекта
   useEffect(() => {
@@ -74,6 +86,15 @@ export function EditProjectModal({
       loadClients()
     }
   }, [isOpen, projectId])
+
+  // Очистка refs при размонтировании компонента
+  useEffect(() => {
+    return () => {
+      managerItemRefs.current = []
+      engineerItemRefs.current = []
+      clientItemRefs.current = []
+    }
+  }, [])
 
   const loadProjectData = async () => {
     setLoading(true)
@@ -248,65 +269,163 @@ export function EditProjectModal({
     client.client_name.toLowerCase().includes(searchClient.toLowerCase())
   )
 
-  const updateManagerDropdownPosition = () => {
-    if (!managerInputRef.current) return
-    const rect = managerInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setManagerDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
+  const updateManagerDropdownPosition = managerDropdown.updatePosition
+  const updateEngineerDropdownPosition = engineerDropdown.updatePosition
+  const updateClientDropdownPosition = clientDropdown.updatePosition
 
-  const updateEngineerDropdownPosition = () => {
-    if (!engineerInputRef.current) return
-    const rect = engineerInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setEngineerDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
+  // Обработчики клавиатуры для dropdown'ов
+  const handleManagerKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const itemsCount = filteredManagers.length + 1 // +1 для опции "Не назначен"
 
-  const updateClientDropdownPosition = () => {
-    if (!clientInputRef.current) return
-    const rect = clientInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setClientDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setFocusedManagerIndex(prev => (prev + 1) % itemsCount)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocusedManagerIndex(prev => prev === 0 ? itemsCount - 1 : prev - 1)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (focusedManagerIndex === 0) {
+        // "Не назначен"
+        setProjectData(prev => prev ? { ...prev, project_manager: null } : null)
+        setSearchManager('')
+        setShowManagerDropdown(false)
+      } else {
+        // Выбор менеджера
+        const selectedProfile = filteredManagers[focusedManagerIndex - 1]
+        if (selectedProfile) {
+          setProjectData(prev => prev ? { ...prev, project_manager: selectedProfile.user_id } : null)
+          setSearchManager('')
+          setShowManagerDropdown(false)
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowManagerDropdown(false)
+      setSearchManager('')
+      setFocusedManagerIndex(0)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setFocusedManagerIndex(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setFocusedManagerIndex(itemsCount - 1)
+    }
+  }, [filteredManagers, focusedManagerIndex, projectData])
+
+  const handleEngineerKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const itemsCount = filteredEngineers.length + 1 // +1 для опции "Не назначен"
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setFocusedEngineerIndex(prev => (prev + 1) % itemsCount)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocusedEngineerIndex(prev => prev === 0 ? itemsCount - 1 : prev - 1)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (focusedEngineerIndex === 0) {
+        // "Не назначен"
+        setProjectData(prev => prev ? { ...prev, project_lead_engineer: null } : null)
+        setSearchEngineer('')
+        setShowEngineerDropdown(false)
+      } else {
+        // Выбор инженера
+        const selectedProfile = filteredEngineers[focusedEngineerIndex - 1]
+        if (selectedProfile) {
+          setProjectData(prev => prev ? { ...prev, project_lead_engineer: selectedProfile.user_id } : null)
+          setSearchEngineer('')
+          setShowEngineerDropdown(false)
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowEngineerDropdown(false)
+      setSearchEngineer('')
+      setFocusedEngineerIndex(0)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setFocusedEngineerIndex(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setFocusedEngineerIndex(itemsCount - 1)
+    }
+  }, [filteredEngineers, focusedEngineerIndex, projectData])
+
+  const handleClientKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const itemsCount = filteredClients.length + 1 // +1 для опции "Не назначен"
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setFocusedClientIndex(prev => (prev + 1) % itemsCount)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocusedClientIndex(prev => prev === 0 ? itemsCount - 1 : prev - 1)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (focusedClientIndex === 0) {
+        // "Не назначен"
+        setProjectData(prev => prev ? { ...prev, client_id: null } : null)
+        setSearchClient('')
+        setShowClientDropdown(false)
+      } else {
+        // Выбор клиента
+        const selectedClient = filteredClients[focusedClientIndex - 1]
+        if (selectedClient) {
+          setProjectData(prev => prev ? { ...prev, client_id: selectedClient.client_id } : null)
+          setSearchClient('')
+          setShowClientDropdown(false)
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowClientDropdown(false)
+      setSearchClient('')
+      setFocusedClientIndex(0)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setFocusedClientIndex(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setFocusedClientIndex(itemsCount - 1)
+    }
+  }, [filteredClients, focusedClientIndex, projectData])
+
+  useDropdownPositionEffect(showManagerDropdown, updateManagerDropdownPosition)
+  useDropdownPositionEffect(showEngineerDropdown, updateEngineerDropdownPosition)
+  useDropdownPositionEffect(showClientDropdown, updateClientDropdownPosition)
+
+  // Управление фокусом на элементах списка
+  useEffect(() => {
+    if (showManagerDropdown && managerItemRefs.current[focusedManagerIndex]) {
+      managerItemRefs.current[focusedManagerIndex]?.focus()
+    }
+  }, [focusedManagerIndex, showManagerDropdown])
 
   useEffect(() => {
-    if (!showManagerDropdown) return
-    updateManagerDropdownPosition()
-    const handlers = [
-      ['scroll', updateManagerDropdownPosition, true],
-      ['resize', updateManagerDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showManagerDropdown])
+    if (showEngineerDropdown && engineerItemRefs.current[focusedEngineerIndex]) {
+      engineerItemRefs.current[focusedEngineerIndex]?.focus()
+    }
+  }, [focusedEngineerIndex, showEngineerDropdown])
 
   useEffect(() => {
-    if (!showEngineerDropdown) return
-    updateEngineerDropdownPosition()
-    const handlers = [
-      ['scroll', updateEngineerDropdownPosition, true],
-      ['resize', updateEngineerDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showEngineerDropdown])
+    if (showClientDropdown && clientItemRefs.current[focusedClientIndex]) {
+      clientItemRefs.current[focusedClientIndex]?.focus()
+    }
+  }, [focusedClientIndex, showClientDropdown])
+
+  // Сброс focusedIndex при изменении фильтров
+  useEffect(() => {
+    setFocusedManagerIndex(0)
+  }, [searchManager])
 
   useEffect(() => {
-    if (!showClientDropdown) return
-    updateClientDropdownPosition()
-    const handlers = [
-      ['scroll', updateClientDropdownPosition, true],
-      ['resize', updateClientDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showClientDropdown])
+    setFocusedEngineerIndex(0)
+  }, [searchEngineer])
+
+  useEffect(() => {
+    setFocusedClientIndex(0)
+  }, [searchClient])
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
@@ -412,53 +531,58 @@ export function EditProjectModal({
                     placeholder={getSelectedManagerName() || "Поиск руководителя проекта..."}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                   />
-                  {showManagerDropdown && managerDropdownPosition && typeof document !== 'undefined' && (
-                    (typeof window !== 'undefined') && (
-                      // Render to body to avoid clipping inside modal scroll container
-                      require('react-dom').createPortal(
+                  {showManagerDropdown && managerDropdown.position && canRenderPortal && (
+                    ReactDOM.createPortal(
                         <div
                           style={{
                             position: 'fixed',
-                            left: managerDropdownPosition.left,
-                            top: managerDropdownPosition.top,
-                            width: managerDropdownPosition.width,
-                            transform: managerDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
+                            left: managerDropdown.position.left,
+                            top: managerDropdown.position.top,
+                            width: managerDropdown.position.width,
+                            transform: managerDropdown.position.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
                           }}
                           className="z-50"
                           onMouseDown={(e) => e.preventDefault()}
+                          onKeyDown={handleManagerKeyDown}
                         >
                           <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                            <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <div className={DROPDOWN_HEADER_CLASS}>
                               Руководитель проекта
                             </div>
                             <div className="max-h-64 overflow-y-auto overscroll-contain">
                               <div
+                                ref={(el) => { managerItemRefs.current[0] = el }}
+                                tabIndex={-1}
                                 onClick={() => {
-                                  setProjectData({
-                                    ...projectData,
-                                    project_manager: null
-                                  })
+                                  setProjectData(prev => prev ? { ...prev, project_manager: null } : null)
                                   setSearchManager('')
                                   setShowManagerDropdown(false)
                                 }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
+                                className={`px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-slate-600 ${
+                                  focusedManagerIndex === 0
+                                    ? 'bg-blue-50 dark:bg-blue-900/50'
+                                    : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                }`}
                               >
                                 <div className="font-medium text-gray-500 dark:text-slate-400">
                                   Не назначен
                                 </div>
                               </div>
-                              {filteredManagers.map((profile) => (
+                              {filteredManagers.map((profile, index) => (
                                 <div
                                   key={profile.user_id}
+                                  ref={(el) => { managerItemRefs.current[index + 1] = el }}
+                                  tabIndex={-1}
                                   onClick={() => {
-                                    setProjectData({
-                                      ...projectData,
-                                      project_manager: profile.user_id
-                                    })
+                                    setProjectData(prev => prev ? { ...prev, project_manager: profile.user_id } : null)
                                     setSearchManager('')
                                     setShowManagerDropdown(false)
                                   }}
-                                  className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
+                                  className={`px-3 py-2 cursor-pointer ${
+                                    focusedManagerIndex === index + 1
+                                      ? 'bg-blue-50 dark:bg-blue-900/50'
+                                      : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                  }`}
                                 >
                                   <div className="font-medium dark:text-white">
                                     {getProfileName(profile)}
@@ -472,7 +596,6 @@ export function EditProjectModal({
                           </div>
                         </div>,
                         document.body
-                      )
                     )
                   )}
                 </div>
@@ -501,53 +624,58 @@ export function EditProjectModal({
                     placeholder={getSelectedEngineerName() || "Поиск инженера..."}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                   />
-                  {showEngineerDropdown && engineerDropdownPosition && typeof document !== 'undefined' && (
-                    (typeof window !== 'undefined') && (
-                      // Render to body to avoid clipping inside modal scroll container
-                      require('react-dom').createPortal(
+                  {showEngineerDropdown && engineerDropdown.position && canRenderPortal && (
+                    ReactDOM.createPortal(
                         <div
                           style={{
                             position: 'fixed',
-                            left: engineerDropdownPosition.left,
-                            top: engineerDropdownPosition.top,
-                            width: engineerDropdownPosition.width,
-                            transform: engineerDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
+                            left: engineerDropdown.position.left,
+                            top: engineerDropdown.position.top,
+                            width: engineerDropdown.position.width,
+                            transform: engineerDropdown.position.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
                           }}
                           className="z-50"
                           onMouseDown={(e) => e.preventDefault()}
+                          onKeyDown={handleEngineerKeyDown}
                         >
                           <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                            <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <div className={DROPDOWN_HEADER_CLASS}>
                               Главный инженер
                             </div>
                             <div className="max-h-64 overflow-y-auto overscroll-contain">
                               <div
+                                ref={(el) => { engineerItemRefs.current[0] = el }}
+                                tabIndex={-1}
                                 onClick={() => {
-                                  setProjectData({
-                                    ...projectData,
-                                    project_lead_engineer: null
-                                  })
+                                  setProjectData(prev => prev ? { ...prev, project_lead_engineer: null } : null)
                                   setSearchEngineer('')
                                   setShowEngineerDropdown(false)
                                 }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
+                                className={`px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-slate-600 ${
+                                  focusedEngineerIndex === 0
+                                    ? 'bg-blue-50 dark:bg-blue-900/50'
+                                    : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                }`}
                               >
                                 <div className="font-medium text-gray-500 dark:text-slate-400">
                                   Не назначен
                                 </div>
                               </div>
-                              {filteredEngineers.map((profile) => (
+                              {filteredEngineers.map((profile, index) => (
                                 <div
                                   key={profile.user_id}
+                                  ref={(el) => { engineerItemRefs.current[index + 1] = el }}
+                                  tabIndex={-1}
                                   onClick={() => {
-                                    setProjectData({
-                                      ...projectData,
-                                      project_lead_engineer: profile.user_id
-                                    })
+                                    setProjectData(prev => prev ? { ...prev, project_lead_engineer: profile.user_id } : null)
                                     setSearchEngineer('')
                                     setShowEngineerDropdown(false)
                                   }}
-                                  className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
+                                  className={`px-3 py-2 cursor-pointer ${
+                                    focusedEngineerIndex === index + 1
+                                      ? 'bg-blue-50 dark:bg-blue-900/50'
+                                      : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                  }`}
                                 >
                                   <div className="font-medium dark:text-white">
                                     {getProfileName(profile)}
@@ -561,7 +689,6 @@ export function EditProjectModal({
                           </div>
                         </div>,
                         document.body
-                      )
                     )
                   )}
                 </div>
@@ -590,53 +717,58 @@ export function EditProjectModal({
                     placeholder={getSelectedClientName() || "Поиск клиента..."}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                   />
-                  {showClientDropdown && clientDropdownPosition && typeof document !== 'undefined' && (
-                    (typeof window !== 'undefined') && (
-                      // Render to body to avoid clipping inside modal scroll container
-                      require('react-dom').createPortal(
+                  {showClientDropdown && clientDropdown.position && canRenderPortal && (
+                    ReactDOM.createPortal(
                         <div
                           style={{
                             position: 'fixed',
-                            left: clientDropdownPosition.left,
-                            top: clientDropdownPosition.top,
-                            width: clientDropdownPosition.width,
-                            transform: clientDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
+                            left: clientDropdown.position.left,
+                            top: clientDropdown.position.top,
+                            width: clientDropdown.position.width,
+                            transform: clientDropdown.position.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
                           }}
                           className="z-50"
                           onMouseDown={(e) => e.preventDefault()}
+                          onKeyDown={handleClientKeyDown}
                         >
                           <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                            <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <div className={DROPDOWN_HEADER_CLASS}>
                               Клиент
                             </div>
                             <div className="max-h-64 overflow-y-auto overscroll-contain">
                               <div
+                                ref={(el) => { clientItemRefs.current[0] = el }}
+                                tabIndex={-1}
                                 onClick={() => {
-                                  setProjectData({
-                                    ...projectData,
-                                    client_id: null
-                                  })
+                                  setProjectData(prev => prev ? { ...prev, client_id: null } : null)
                                   setSearchClient('')
                                   setShowClientDropdown(false)
                                 }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
+                                className={`px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-slate-600 ${
+                                  focusedClientIndex === 0
+                                    ? 'bg-blue-50 dark:bg-blue-900/50'
+                                    : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                }`}
                               >
                                 <div className="font-medium text-gray-500 dark:text-slate-400">
                                   Не назначен
                                 </div>
                               </div>
-                              {filteredClients.map((client) => (
+                              {filteredClients.map((client, index) => (
                                 <div
                                   key={client.client_id}
+                                  ref={(el) => { clientItemRefs.current[index + 1] = el }}
+                                  tabIndex={-1}
                                   onClick={() => {
-                                    setProjectData({
-                                      ...projectData,
-                                      client_id: client.client_id
-                                    })
+                                    setProjectData(prev => prev ? { ...prev, client_id: client.client_id } : null)
                                     setSearchClient('')
                                     setShowClientDropdown(false)
                                   }}
-                                  className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
+                                  className={`px-3 py-2 cursor-pointer ${
+                                    focusedClientIndex === index + 1
+                                      ? 'bg-blue-50 dark:bg-blue-900/50'
+                                      : 'hover:bg-gray-50 dark:hover:bg-slate-600/70'
+                                  }`}
                                 >
                                   <div className="font-medium dark:text-white">
                                     {client.client_name}
@@ -647,7 +779,6 @@ export function EditProjectModal({
                           </div>
                         </div>,
                         document.body
-                      )
                     )
                   )}
                 </div>

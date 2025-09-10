@@ -1,12 +1,15 @@
 "use client"
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as Sentry from '@sentry/nextjs'
 import { Save, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { Modal, ModalButton } from '@/components/modals'
 import { useUiStore } from '@/stores/useUiStore'
 import { createProject } from '@/lib/supabase-client'
+import { PortalDropdown } from './PortalDropdown'
+import { useDropdownPosition, useDropdownPositionEffect } from '@/hooks/useDropdownPosition'
 
 interface CreateProjectModalProps {
   isOpen: boolean
@@ -29,6 +32,7 @@ interface Client {
 type ProjectStatus = 'active' | 'archive' | 'paused' | 'canceled'
 
 const supabase = createClient()
+ 
 
 export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
   const [projectName, setProjectName] = useState('')
@@ -49,12 +53,9 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
-  const [managerDropdownPosition, setManagerDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const [engineerDropdownPosition, setEngineerDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const [clientDropdownPosition, setClientDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
-  const managerInputRef = useRef<HTMLDivElement>(null)
-  const engineerInputRef = useRef<HTMLDivElement>(null)
-  const clientInputRef = useRef<HTMLDivElement>(null)
+  const managerDropdown = useDropdownPosition()
+  const engineerDropdown = useDropdownPosition()
+  const clientDropdown = useDropdownPosition()
 
   const { setNotification } = useUiStore()
 
@@ -103,65 +104,13 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
   const filteredClients = clients.filter(c => c.client_name.toLowerCase().includes(searchClient.toLowerCase()))
 
-  const updateManagerDropdownPosition = () => {
-    if (!managerInputRef.current) return
-    const rect = managerInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setManagerDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
+  const updateManagerDropdownPosition = managerDropdown.updatePosition
+  const updateEngineerDropdownPosition = engineerDropdown.updatePosition
+  const updateClientDropdownPosition = clientDropdown.updatePosition
 
-  const updateEngineerDropdownPosition = () => {
-    if (!engineerInputRef.current) return
-    const rect = engineerInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setEngineerDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
-
-  const updateClientDropdownPosition = () => {
-    if (!clientInputRef.current) return
-    const rect = clientInputRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setClientDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
-  }
-
-  useEffect(() => {
-    if (!showManagerDropdown) return
-    updateManagerDropdownPosition()
-    const handlers = [
-      ['scroll', updateManagerDropdownPosition, true],
-      ['resize', updateManagerDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showManagerDropdown])
-
-  useEffect(() => {
-    if (!showEngineerDropdown) return
-    updateEngineerDropdownPosition()
-    const handlers = [
-      ['scroll', updateEngineerDropdownPosition, true],
-      ['resize', updateEngineerDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showEngineerDropdown])
-
-  useEffect(() => {
-    if (!showClientDropdown) return
-    updateClientDropdownPosition()
-    const handlers = [
-      ['scroll', updateClientDropdownPosition, true],
-      ['resize', updateClientDropdownPosition, false],
-    ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
-  }, [showClientDropdown])
+  useDropdownPositionEffect(showManagerDropdown, updateManagerDropdownPosition)
+  useDropdownPositionEffect(showEngineerDropdown, updateEngineerDropdownPosition)
+  useDropdownPositionEffect(showClientDropdown, updateClientDropdownPosition)
 
   const handleCreate = async () => {
     if (!projectName.trim()) return
@@ -261,7 +210,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
             {/* Руководитель проекта */}
             <div>
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">Руководитель проекта</label>
-              <div className="relative" ref={managerInputRef}>
+              <div className="relative" ref={managerDropdown.ref}>
                 <input
                   type="text"
                   value={showManagerDropdown ? searchManager : selectedManagerName()}
@@ -271,45 +220,17 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
                   placeholder={selectedManagerName() || 'Поиск руководителя проекта...'}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                 />
-                {showManagerDropdown && managerDropdownPosition && typeof document !== 'undefined' && (
+                {showManagerDropdown && managerDropdown.position && typeof document !== 'undefined' && (
                   (typeof window !== 'undefined') && (
                     // Render to body to avoid clipping inside modal scroll container
-                    require('react-dom').createPortal(
-                      <div
-                        style={{
-                          position: 'fixed',
-                          left: managerDropdownPosition.left,
-                          top: managerDropdownPosition.top,
-                          width: managerDropdownPosition.width,
-                          transform: managerDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
-                        }}
-                        className="z-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                          <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Руководитель проекта
-                          </div>
-                          <div className="max-h-64 overflow-y-auto overscroll-contain">
-                            <div
-                              onClick={() => { setProjectManager(null); setSearchManager(''); setShowManagerDropdown(false) }}
-                              className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
-                            >
-                              <div className="font-medium text-gray-500 dark:text-slate-400">Не назначен</div>
-                            </div>
-                            {filteredManagers.map((p) => (
-                              <div
-                                key={p.user_id}
-                                onClick={() => { setProjectManager(p.user_id); setSearchManager(''); setShowManagerDropdown(false) }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
-                              >
-                                <div className="font-medium dark:text-white">{getProfileName(p)}</div>
-                                <div className="text-sm text-gray-500 dark:text-slate-400">{p.email}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>,
+                    createPortal(
+                      <PortalDropdown
+                        position={managerDropdown.position!}
+                        title="Руководитель проекта"
+                        items={filteredManagers.map((p) => ({ id: p.user_id, label: getProfileName(p), subtitle: p.email }))}
+                        onSelect={(id) => { setProjectManager(id); setSearchManager('') }}
+                        onClose={() => { setShowManagerDropdown(false) }}
+                      />,
                       document.body
                     )
                   )
@@ -320,7 +241,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
             {/* Главный инженер */}
             <div>
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">Главный инженер</label>
-              <div className="relative" ref={engineerInputRef}>
+              <div className="relative" ref={engineerDropdown.ref}>
                 <input
                   type="text"
                   value={showEngineerDropdown ? searchEngineer : selectedEngineerName()}
@@ -330,45 +251,17 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
                   placeholder={selectedEngineerName() || 'Поиск инженера...'}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                 />
-                {showEngineerDropdown && engineerDropdownPosition && typeof document !== 'undefined' && (
+                {showEngineerDropdown && engineerDropdown.position && typeof document !== 'undefined' && (
                   (typeof window !== 'undefined') && (
                     // Render to body to avoid clipping inside modal scroll container
-                    require('react-dom').createPortal(
-                      <div
-                        style={{
-                          position: 'fixed',
-                          left: engineerDropdownPosition.left,
-                          top: engineerDropdownPosition.top,
-                          width: engineerDropdownPosition.width,
-                          transform: engineerDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
-                        }}
-                        className="z-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                          <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Главный инженер
-                          </div>
-                          <div className="max-h-64 overflow-y-auto overscroll-contain">
-                            <div
-                              onClick={() => { setProjectLeadEngineer(null); setSearchEngineer(''); setShowEngineerDropdown(false) }}
-                              className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
-                            >
-                              <div className="font-medium text-gray-500 dark:text-slate-400">Не назначен</div>
-                            </div>
-                            {filteredEngineers.map((p) => (
-                              <div
-                                key={p.user_id}
-                                onClick={() => { setProjectLeadEngineer(p.user_id); setSearchEngineer(''); setShowEngineerDropdown(false) }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
-                              >
-                                <div className="font-medium dark:text-white">{getProfileName(p)}</div>
-                                <div className="text-sm text-gray-500 dark:text-slate-400">{p.email}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>,
+                    createPortal(
+                      <PortalDropdown
+                        position={engineerDropdown.position!}
+                        title="Главный инженер"
+                        items={filteredEngineers.map((p) => ({ id: p.user_id, label: getProfileName(p), subtitle: p.email }))}
+                        onSelect={(id) => { setProjectLeadEngineer(id); setSearchEngineer('') }}
+                        onClose={() => { setShowEngineerDropdown(false) }}
+                      />,
                       document.body
                     )
                   )
@@ -379,7 +272,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
             {/* Клиент */}
             <div>
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">Клиент</label>
-              <div className="relative" ref={clientInputRef}>
+              <div className="relative" ref={clientDropdown.ref}>
                 <input
                   type="text"
                   value={showClientDropdown ? searchClient : selectedClientName()}
@@ -389,44 +282,17 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
                   placeholder={selectedClientName() || 'Поиск клиента...'}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                 />
-                {showClientDropdown && clientDropdownPosition && typeof document !== 'undefined' && (
+                {showClientDropdown && clientDropdown.position && typeof document !== 'undefined' && (
                   (typeof window !== 'undefined') && (
                     // Render to body to avoid clipping inside modal scroll container
-                    require('react-dom').createPortal(
-                      <div
-                        style={{
-                          position: 'fixed',
-                          left: clientDropdownPosition.left,
-                          top: clientDropdownPosition.top,
-                          width: clientDropdownPosition.width,
-                          transform: clientDropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
-                        }}
-                        className="z-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <div className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                          <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Клиент
-                          </div>
-                          <div className="max-h-64 overflow-y-auto overscroll-contain">
-                            <div
-                              onClick={() => { setClientId(null); setSearchClient(''); setShowClientDropdown(false) }}
-                              className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600"
-                            >
-                              <div className="font-medium text-gray-500 dark:text-slate-400">Не назначен</div>
-                            </div>
-                            {filteredClients.map((c) => (
-                              <div
-                                key={c.client_id}
-                                onClick={() => { setClientId(c.client_id); setSearchClient(''); setShowClientDropdown(false) }}
-                                className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
-                              >
-                                <div className="font-medium dark:text-white">{c.client_name}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>,
+                    createPortal(
+                      <PortalDropdown
+                        position={clientDropdown.position!}
+                        title="Клиент"
+                        items={filteredClients.map((c) => ({ id: c.client_id, label: c.client_name }))}
+                        onSelect={(id) => { setClientId(id); setSearchClient('') }}
+                        onClose={() => { setShowClientDropdown(false) }}
+                      />,
                       document.body
                     )
                   )
