@@ -151,10 +151,10 @@ export default function TeamsTab() {
   const extraFields = useMemo(() => {
     // Добавляем опцию "Не назначен" для команд без отдела
     const departmentOptions = [
-      { value: "", label: "Не назначен" },
+      { value: "none", label: "Не назначен" },
       ...departments.map(dep => ({ value: dep.id, label: dep.name }))
     ]
-    
+
     return [
       {
         name: "department_id",
@@ -169,11 +169,11 @@ export default function TeamsTab() {
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
     if (!selectedTeam) return undefined
-    
+
     return {
       team_id: selectedTeam.id,
       team_name: selectedTeam.name,
-      department_id: selectedTeam.departmentId || "" // Пустая строка для "Не назначен"
+      department_id: selectedTeam.departmentId || "none" // "none" для "Не назначен"
     }
   }, [selectedTeam])
 
