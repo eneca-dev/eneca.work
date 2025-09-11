@@ -96,7 +96,13 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
       console.log("📊 Уникальные отделы:", uniqueData)
       // Применяем скоуп
       const scoped = scope === 'department'
-        ? uniqueData.filter((d: Department) => d.department_id === departmentId!)
+        ? (departmentId
+            ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+            : (() => {
+                console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
+                return []
+              })()
+          )
         : uniqueData
       setDepartments(scoped)
     } catch (error) {

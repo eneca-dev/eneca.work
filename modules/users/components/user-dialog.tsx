@@ -538,8 +538,54 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
         } else if (canEditOnlyTeam) {
-          // Для пользователей с users.edit.team сохраняем только команду
-          updateData.team = formData.team && formData.team !== "" ? formData.team : null
+          // Для пользователей с users.edit.team сохраняем только команду с валидацией департамента
+          if (formData.team && formData.team !== "") {
+            // Находим команду в списке доступных команд
+            const selectedTeam = teams.find(team => team.name === formData.team)
+
+            if (!selectedTeam) {
+              console.error("UserDialog: Выбранная команда не найдена в списке команд")
+              toast({
+                title: "Ошибка валидации",
+                description: "Выбранная команда не существует или недоступна",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Находим департамент пользователя
+            const userDepartment = departments.find(dept => dept.name === user.department)
+
+            if (!userDepartment) {
+              console.error("UserDialog: Департамент пользователя не найден")
+              toast({
+                title: "Ошибка валидации",
+                description: "Не удалось определить департамент пользователя",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Проверяем, что команда принадлежит тому же департаменту, что и пользователь
+            if (selectedTeam.departmentId !== userDepartment.id) {
+              console.error("UserDialog: Попытка кросс-департаментного назначения команды")
+              toast({
+                title: "Ошибка валидации",
+                description: "Команда должна принадлежать тому же департаменту, что и пользователь",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Если все проверки пройдены, устанавливаем команду
+            updateData.team = formData.team
+          } else {
+            // Пустая команда - это допустимо
+            updateData.team = null
+          }
         }
         
         // Роли управляются через модальное окно

@@ -13,7 +13,7 @@ import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { useUserStore } from "@/stores/useUserStore"
 
 // Определяем типы для вкладок
-type TabKey = keyof typeof TAB_LABELS
+type TabKey = "departments" | "teams" | "positions" | "categories" | "roles"
 type VisibleTabs = Record<TabKey, boolean>
 
 const TAB_LABELS = {
@@ -65,12 +65,29 @@ export default function AdminPanel() {
       setActiveTab(firstVisibleTab)
     }
   }, [visibleTabs, activeTab, firstVisibleTab])
-  
+
+  // Если нет доступных вкладок, показываем пустое состояние
+  if (!firstVisibleTab) {
+    return (
+      <NotificationProvider>
+        <Toaster
+          richColors
+          position="top-right"
+          theme="system"
+          className="toaster-with-shadow"
+        />
+        <div className="flex items-center justify-center h-64 text-muted-foreground">
+          <p>Нет доступных разделов</p>
+        </div>
+      </NotificationProvider>
+    )
+  }
+
   return (
     <NotificationProvider>
-      <Toaster 
-        richColors 
-        position="top-right" 
+      <Toaster
+        richColors
+        position="top-right"
         theme="system"
         className="toaster-with-shadow"
       />
