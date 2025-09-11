@@ -25,8 +25,8 @@ interface Department {
 interface Team {
   id: string;
   name: string;
-  departmentId: string;
-  departmentName: string;
+  departmentId: string | null;
+  departmentName: string | null;
   team_lead_id: string | null;
   headFirstName: string | null;
   headLastName: string | null;
@@ -94,8 +94,8 @@ export default function TeamsTab() {
           uniqueTeamsMap.set(team.team_id, {
             id: team.team_id,
             name: team.team_name,
-            departmentId: team.department_id,
-            departmentName: team.department_name,
+            departmentId: team.department_id || null,
+            departmentName: team.department_name || null,
             team_lead_id: team.team_lead_id,
             headFirstName: team.team_lead_first_name,
             headLastName: team.team_lead_last_name,
@@ -134,9 +134,15 @@ export default function TeamsTab() {
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
     return teams.filter(team => {
-      // Фильтрация по отделу: если выбран конкретный отдел, показываем команды этого отдела
-      // Если выбрано "Все отделы" (activeDept === null), показываем все команды
-      const matchesDept = !activeDept || team.departmentId === activeDept
+      // Фильтрация по отделу: три-состояние
+      // activeDept === null: "Все отделы" - показываем все команды
+      // activeDept === "": "Без отдела" - показываем команды без отдела
+      // activeDept === deptId: показываем команды конкретного отдела
+      const matchesDept =
+        activeDept === null ||
+        (activeDept === "" && (!team.departmentId || team.departmentId === "")) ||
+        team.departmentId === activeDept
+
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
@@ -180,12 +186,12 @@ export default function TeamsTab() {
   // Мемоизируем данные команды для TeamHeadModal
   const teamHeadData = useMemo(() => {
     if (!selectedTeam) return undefined
-    
+
     return {
       id: selectedTeam.id,
       name: selectedTeam.name,
-      departmentId: selectedTeam.departmentId,
-      departmentName: selectedTeam.departmentName,
+      departmentId: selectedTeam.departmentId || "",
+      departmentName: selectedTeam.departmentName || "",
       team_lead_id: selectedTeam.team_lead_id,
       headFirstName: selectedTeam.headFirstName,
       headLastName: selectedTeam.headLastName,
@@ -309,10 +315,10 @@ export default function TeamsTab() {
               >
                 Все отделы
               </Button>
-              <Button 
-                size="sm" 
-                variant={activeDept === "" ? "default" : "outline"} 
-                onClick={() => setActiveDept("")} 
+              <Button
+                size="sm"
+                variant={activeDept === "none" ? "default" : "outline"}
+                onClick={() => setActiveDept("none")}
                 className="h-7 text-xs rounded font-normal"
               >
                 Без отдела
