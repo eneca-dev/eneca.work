@@ -54,9 +54,11 @@ export function EditProjectModal({
   const [searchManager, setSearchManager] = useState('')
   const [searchEngineer, setSearchEngineer] = useState('')
   const [searchClient, setSearchClient] = useState('')
+  const [searchStatus, setSearchStatus] = useState('')
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const { setNotification } = useUiStore()
 
@@ -230,16 +232,37 @@ export function EditProjectModal({
     return client ? client.client_name : ''
   }
 
-  const filteredManagers = profiles.filter(profile => 
+  const getStatusName = (status: ProjectData['project_status']) => {
+    const statusNames = {
+      active: 'Активный',
+      paused: 'Приостановлен',
+      archive: 'Архив',
+      canceled: 'Отменен'
+    }
+    return statusNames[status]
+  }
+
+  const getSelectedStatusName = () => {
+    if (!projectData?.project_status) return ''
+    return getStatusName(projectData.project_status)
+  }
+
+  const statusOptions: ProjectData['project_status'][] = ['active', 'paused', 'archive', 'canceled']
+
+  const filteredManagers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchManager.toLowerCase())
   )
 
-  const filteredEngineers = profiles.filter(profile => 
+  const filteredEngineers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchEngineer.toLowerCase())
   )
 
-  const filteredClients = clients.filter(client => 
+  const filteredClients = clients.filter(client =>
     client.client_name.toLowerCase().includes(searchClient.toLowerCase())
+  )
+
+  const filteredStatuses = statusOptions.filter(status =>
+    getStatusName(status).toLowerCase().includes(searchStatus.toLowerCase())
   )
 
   return (
@@ -295,19 +318,47 @@ export function EditProjectModal({
                 <label className="block text-sm font-medium mb-2 dark:text-slate-300">
                   Статус проекта
                 </label>
-                <select
-                  value={projectData.project_status}
-                  onChange={(e) => setProjectData({
-                    ...projectData,
-                    project_status: e.target.value as ProjectData['project_status']
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                >
-                  <option value="active">Активный</option>
-                  <option value="paused">Приостановлен</option>
-                  <option value="archive">Архив</option>
-                  <option value="canceled">Отменен</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={showStatusDropdown ? searchStatus : getSelectedStatusName()}
+                    onChange={(e) => {
+                      setSearchStatus(e.target.value)
+                      setShowStatusDropdown(true)
+                    }}
+                    onFocus={() => {
+                      setSearchStatus('')
+                      setShowStatusDropdown(true)
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowStatusDropdown(false), 200)
+                    }}
+                    placeholder={getSelectedStatusName() || "Выберите статус проекта..."}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                  />
+                  {showStatusDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredStatuses.map((status) => (
+                        <div
+                          key={status}
+                          onClick={() => {
+                            setProjectData({
+                              ...projectData,
+                              project_status: status
+                            })
+                            setSearchStatus('')
+                            setShowStatusDropdown(false)
+                          }}
+                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                        >
+                          <div className="font-medium dark:text-white">
+                            {getStatusName(status)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Руководитель проекта */}

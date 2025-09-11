@@ -46,9 +46,11 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
   const [searchManager, setSearchManager] = useState('')
   const [searchEngineer, setSearchEngineer] = useState('')
   const [searchClient, setSearchClient] = useState('')
+  const [searchStatus, setSearchStatus] = useState('')
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
   const { setNotification } = useUiStore()
 
@@ -93,9 +95,26 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     return c ? c.client_name : ''
   }
 
+  const getStatusName = (status: ProjectStatus) => {
+    const statusNames = {
+      active: 'Активный',
+      paused: 'Приостановлен',
+      archive: 'Архив',
+      canceled: 'Отменен'
+    }
+    return statusNames[status]
+  }
+
+  const selectedStatusName = () => {
+    return getStatusName(projectStatus)
+  }
+
+  const statusOptions: ProjectStatus[] = ['active', 'paused', 'archive', 'canceled']
+
   const filteredManagers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchManager.toLowerCase()))
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
   const filteredClients = clients.filter(c => c.client_name.toLowerCase().includes(searchClient.toLowerCase()))
+  const filteredStatuses = statusOptions.filter(status => getStatusName(status).toLowerCase().includes(searchStatus.toLowerCase()))
 
   const handleCreate = async () => {
     if (!projectName.trim()) return
@@ -167,16 +186,30 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
             {/* Статус */}
             <div>
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">Статус</label>
-              <select
-                value={projectStatus}
-                onChange={(e) => setProjectStatus(e.target.value as ProjectStatus)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-              >
-                <option value="active">Активный</option>
-                <option value="paused">Приостановлен</option>
-                <option value="archive">Архив</option>
-                <option value="canceled">Отменен</option>
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={showStatusDropdown ? searchStatus : selectedStatusName()}
+                  onChange={(e) => { setSearchStatus(e.target.value); setShowStatusDropdown(true) }}
+                  onFocus={() => { setSearchStatus(''); setShowStatusDropdown(true) }}
+                  onBlur={() => { setTimeout(() => setShowStatusDropdown(false), 200) }}
+                  placeholder={selectedStatusName() || 'Выберите статус проекта...'}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                />
+                {showStatusDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredStatuses.map((status) => (
+                      <div
+                        key={status}
+                        onClick={() => { setProjectStatus(status); setSearchStatus(''); setShowStatusDropdown(false) }}
+                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                      >
+                        <div className="font-medium dark:text-white">{getStatusName(status)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Руководитель проекта */}
