@@ -37,18 +37,17 @@ interface Team {
 }
 
 // Пропсы для ограничения видимости данных
-interface TeamsTabProps {
-  // scope = 'all' — показывать все отделы/команды
-  // scope = 'department' — показывать только команды указанного отдела
-  scope?: 'all' | 'department'
-  departmentId?: string | null
-}
+type TeamsTabProps =
+  | { scope?: 'all' }
+  | { scope: 'department'; departmentId: string }
 
-export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTabProps) {
+export default function TeamsTab(props: TeamsTabProps) {
+  const scope = props.scope ?? 'all'
+  const departmentId = 'departmentId' in props ? props.departmentId : null
   const [teams, setTeams] = useState<Team[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
-  const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? (departmentId || null) : null)
+  const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? departmentId : null)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [headModalOpen, setHeadModalOpen] = useState(false)
@@ -61,8 +60,10 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
 
   // Определяем, должны ли быть видны элементы управления
   const canManageAllTeams = perms.canManageTeams
+  const canEditTeams = perms.canEditTeam
   const isTeamScoped = scope === 'department'
   const showManagementControls = canManageAllTeams && !isTeamScoped
+  const canViewTeams = canManageAllTeams || canEditTeams
 
   const fetchData = useCallback(async () => {
     try {
@@ -124,15 +125,15 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
       
       // Устанавливаем данные команд с учетом скоупа
       const preparedTeams = Array.from(uniqueTeamsMap.values())
-      const scopedTeams = scope === 'department' && departmentId
-        ? preparedTeams.filter(t => t.departmentId === departmentId)
+      const scopedTeams = scope === 'department'
+        ? preparedTeams.filter(t => t.departmentId === departmentId!)
         : preparedTeams
       setTeams(scopedTeams)
-      
+
       // Устанавливаем данные отделов с учетом скоупа
       const allDepartments = deptsData ? deptsData.map(dep => ({ id: dep.department_id, name: dep.department_name })) : []
-      const scopedDepartments = scope === 'department' && departmentId
-        ? allDepartments.filter(d => d.id === departmentId)
+      const scopedDepartments = scope === 'department'
+        ? allDepartments.filter(d => d.id === departmentId!)
         : allDepartments
       setDepartments(scopedDepartments)
     } catch (error) {
@@ -152,7 +153,7 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
   const filtered = useMemo(() => {
     return teams.filter(team => {
       // Фильтрация по отделу: если выбран конкретный отдел, показываем команды этого отдела
-      const deptToMatch = scope === 'department' && departmentId ? departmentId : activeDept
+      const deptToMatch = scope === 'department' ? departmentId! : activeDept
       const matchesDept = !deptToMatch || team.departmentId === deptToMatch
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
@@ -185,7 +186,23 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
 
   // Скоуп-версия extraFields (перенесено из JSX, чтобы не нарушать порядок хуков)
   const scopedExtraFields = useMemo(() => {
-    if (scope === 'department' && departmentId) {
+    // Для пользователей с edit.team всегда ограничиваем отдел их собственным
+    if (canEditTeams && !canManageAllTeams && departmentId) {
+      const theOnly = departments
+        .filter(d => d.id === departmentId)
+        .map(d => ({ value: d.id, label: d.name }))
+      return [
+        {
+          name: "department_id",
+          label: "Отдел",
+          type: "select" as const,
+          options: theOnly,
+          required: true
+        }
+      ]
+    }
+    // Для пользователей с manage.teams или без ограничений - обычная логика
+    if (scope === 'department') {
       const theOnly = departments
         .filter(d => d.id === departmentId)
         .map(d => ({ value: d.id, label: d.name }))
@@ -200,7 +217,7 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
       ]
     }
     return extraFields
-  }, [extraFields, scope, departmentId, departments])
+  }, [extraFields, scope, departmentId, departments, canEditTeams, canManageAllTeams])
 
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
@@ -239,15 +256,27 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
   }, [])
 
   const handleEditTeam = useCallback((team: Team) => {
+    // Проверяем права на редактирование
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается редактировать команду из другого отдела
+      return
+    }
+
     setModalMode("edit")
     setSelectedTeam(team)
     setModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleDeleteTeamClick = useCallback((team: Team) => {
+    // Проверяем права на удаление
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается удалить команду из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setDeleteModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleModalOpenChange = useCallback((open: boolean) => {
     setModalOpen(open)
@@ -259,14 +288,26 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
 
   // Обработчики для управления руководителями
   const handleAssignHead = useCallback((team: Team) => {
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setHeadModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleRemoveHeadClick = useCallback((team: Team) => {
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setRemoveHeadModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   // Если данные загружаются, показываем индикатор загрузки
   if (isLoading) {
@@ -333,7 +374,7 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                   className="max-w-xs"
                 />
               )}
-              {showManagementControls && (
+              {canViewTeams && (
                 <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
               )}
             </div>
@@ -365,8 +406,12 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                 <Button
                   key={dep.id}
                   size="sm"
-                  variant={(scope === 'department' ? (departmentId === dep.id) : (activeDept === dep.id)) ? "default" : "outline"}
-                  onClick={() => (scope === 'department' ? undefined : setActiveDept(dep.id))}
+                  variant={(scope === 'department' ? (departmentId! === dep.id) : (activeDept === dep.id)) ? "default" : "outline"}
+                  onClick={() => {
+                    if (scope !== 'department') {
+                      setActiveDept(dep.id);
+                    }
+                  }}
                   className="h-7 text-xs rounded font-normal"
                   disabled={scope === 'department'}
                 >
@@ -410,7 +455,7 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                             <div className="font-medium">{team.headFullName}</div>
                             <div className="text-sm text-muted-foreground">{team.headEmail}</div>
                           </div>
-                          {showManagementControls && (
+                          {canViewTeams && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
@@ -443,7 +488,7 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground">Не назначен</span>
-                          {showManagementControls && (
+                          {canViewTeams && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
@@ -469,23 +514,23 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {showManagementControls && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditTeam(team)}
-                          >
-                            Изменить
-                          </Button>
-                        )}
-                        {showManagementControls && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteTeamClick(team)}
-                          >
-                            Удалить
-                          </Button>
+                        {canViewTeams && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditTeam(team)}
+                            >
+                              Изменить
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteTeamClick(team)}
+                            >
+                              Удалить
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -500,8 +545,8 @@ export default function TeamsTab({ scope = 'all', departmentId = null }: TeamsTa
                           ? "Команды по вашему запросу не найдены"
                           : "Команды не созданы"
                       }
-                      buttonText={showManagementControls ? "Создать первую команду" : undefined}
-                      onButtonClick={showManagementControls ? handleCreateTeam : undefined}
+                      buttonText={canViewTeams ? "Создать первую команду" : undefined}
+                      onButtonClick={canViewTeams ? handleCreateTeam : undefined}
                     />
                   </TableCell>
                 </TableRow>

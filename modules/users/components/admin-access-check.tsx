@@ -73,7 +73,7 @@ export function AdminAccessCheck({
       <Card>
         <CardContent className="p-6 flex justify-center items-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-          <span className="ml-3">Checking access...</span>
+          <span className="ml-3">Проверка доступа...</span>
         </CardContent>
       </Card>
     )
@@ -83,9 +83,9 @@ export function AdminAccessCheck({
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Access Denied</AlertTitle>
+        <AlertTitle>Доступ запрещен</AlertTitle>
         <AlertDescription>
-          You don't have permission to access the admin panel. Please contact your system administrator for access.
+          У вас нет разрешения на доступ к панели администратора. Пожалуйста, обратитесь к системному администратору для получения доступа.
         </AlertDescription>
       </Alert>
     )

@@ -12,29 +12,35 @@ import { NotificationProvider } from "@/lib/notification-context"
 import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { useUserStore } from "@/stores/useUserStore"
 
+// Определяем типы для вкладок
+type TabKey = keyof typeof TAB_LABELS
+type VisibleTabs = Record<TabKey, boolean>
+
 const TAB_LABELS = {
   departments: "Отделы",
-  teams: "Команды", 
+  teams: "Команды",
   positions: "Должности",
   categories: "Категории",
   roles: "Управление ролями"
 } as const
 
-const TAB_COMPONENTS = {
-  departments: DepartmentsTab,
-  teams: TeamsTab,
-  positions: PositionsTab,
-  categories: CategoriesTab,
-  roles: RolesTab
-} as const
+// Порядок вкладок для определения первой доступной
+export const TAB_ORDER: (keyof typeof TAB_LABELS)[] = [
+  "departments",
+  "teams",
+  "positions",
+  "categories",
+  "roles"
+]
+
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<keyof typeof TAB_LABELS>("departments")
+  const [activeTab, setActiveTab] = useState<TabKey>("departments")
   const perms = useAdminPermissions()
   const userProfile = useUserStore(state => state.profile)
 
   // Определяем, какие вкладки показывать
-  const visibleTabs = useMemo(() => {
+  const visibleTabs = useMemo<VisibleTabs>(() => {
     return {
       departments: perms.canManageDepartments || perms.canEditDepartment,
       teams: perms.canManageTeams || perms.canEditTeam,
@@ -45,17 +51,16 @@ export default function AdminPanel() {
   }, [perms])
 
   // Подбираем первый доступный таб
-  const firstVisibleTab = useMemo<keyof typeof TAB_LABELS | null>(() => {
-    const order: (keyof typeof TAB_LABELS)[] = ["departments", "teams", "positions", "categories", "roles"]
-    for (const key of order) {
-      if ((visibleTabs as any)[key]) return key
+  const firstVisibleTab = useMemo<TabKey | null>(() => {
+    for (const key of TAB_ORDER) {
+      if (visibleTabs[key]) return key
     }
     return null
   }, [visibleTabs])
 
   // Если активная вкладка скрыта, переключаемся на первую доступную
   useEffect(() => {
-    const isActiveVisible = (visibleTabs as any)[activeTab]
+    const isActiveVisible = visibleTabs[activeTab]
     if (!isActiveVisible && firstVisibleTab) {
       setActiveTab(firstVisibleTab)
     }
@@ -69,7 +74,7 @@ export default function AdminPanel() {
         theme="system"
         className="toaster-with-shadow"
       />
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as keyof typeof TAB_LABELS)} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabKey)} className="w-full">
         <TabsList className="mb-6">
           {visibleTabs.departments && (
             <TabsTrigger value="departments">{TAB_LABELS.departments}</TabsTrigger>
@@ -90,18 +95,28 @@ export default function AdminPanel() {
 
         {visibleTabs.departments && (
           <TabsContent value="departments">
-            <DepartmentsTab 
-              scope={perms.canManageDepartments ? 'all' : 'department'}
-              departmentId={perms.canManageDepartments ? null : (userProfile?.departmentId || userProfile?.department_id || null)}
+            <DepartmentsTab
+              {...(perms.canManageDepartments
+                ? {}
+                : (() => {
+                    const deptId = userProfile?.departmentId || userProfile?.department_id
+                    return deptId ? { scope: 'department', departmentId: deptId } : {}
+                  })()
+              )}
             />
           </TabsContent>
         )}
 
         {visibleTabs.teams && (
           <TabsContent value="teams">
-            <TeamsTab 
-              scope={perms.canManageTeams ? 'all' : 'department'}
-              departmentId={perms.canManageTeams ? null : (userProfile?.departmentId || userProfile?.department_id || null)}
+            <TeamsTab
+              {...(perms.canManageTeams
+                ? {}
+                : (() => {
+                    const deptId = userProfile?.departmentId || userProfile?.department_id
+                    return deptId ? { scope: 'department', departmentId: deptId } : {}
+                  })()
+              )}
             />
           </TabsContent>
         )}

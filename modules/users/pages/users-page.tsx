@@ -14,6 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
 
+// Отладочный флаг для управления console.log вызовами
+const debug = process.env.NEXT_PUBLIC_DEBUG === "true"
+
 export default function UsersPage() {
   const [users, setUsers] = useState<UserWithRoles[]>([])
   const [currentUser, setCurrentUser] = useState<UserWithRoles | null>(null)
@@ -35,26 +38,26 @@ export default function UsersPage() {
   // ОПТИМИЗАЦИЯ: Мемоизируем функцию загрузки пользователей
   const loadUsers = useCallback(async () => {
     try {
-      console.log("UsersPage: Начинаем загрузку пользователей")
+      debug && console.log("UsersPage: Начинаем загрузку пользователей")
       setIsLoading(true)
       setError(null)
       
       const loadedUsers = await getUsers()
-      
-      console.log("UsersPage: Загружено пользователей:", loadedUsers.length)
+
+      debug && console.log("UsersPage: Загружено пользователей:", loadedUsers.length)
       setUsers(loadedUsers)
 
       // Устанавливаем текущего пользователя (первый в списке для демонстрации)
       if (loadedUsers.length > 0) {
         setCurrentUser(loadedUsers[0])
-        console.log("UsersPage: Установлен текущий пользователь:", loadedUsers[0].full_name)
+        debug && console.log("UsersPage: Установлен текущий пользователь:", loadedUsers[0].full_name)
       }
     } catch (error) {
-      console.error("UsersPage: Ошибка загрузки пользователей:", error)
+      debug && console.error("UsersPage: Ошибка загрузки пользователей:", error)
       setError("Не удалось загрузить пользователей")
     } finally {
       setIsLoading(false)
-      console.log("UsersPage: Загрузка завершена")
+      debug && console.log("UsersPage: Загрузка завершена")
     }
   }, [])
 
@@ -71,7 +74,7 @@ export default function UsersPage() {
 
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчик обновления пользователя
   const handleUserUpdated = useCallback(() => {
-    console.log("UsersPage: Пользователь обновлен, перезагружаем список")
+    debug && console.log("UsersPage: Пользователь обновлен, перезагружаем список")
     loadUsers()
   }, [loadUsers])
 
@@ -141,10 +144,10 @@ export default function UsersPage() {
     if (transformed.length > 0) {
       const vadim = transformed.find(u => u.email === 'ghgjob123@gmail.com');
       if (vadim) {
-        console.log("=== USERS PAGE: ДАННЫЕ ДЛЯ USERSLIST ===");
-        console.log("Вадим в usersAsUserType:", vadim);
-        console.log("role:", vadim.role);
-        console.log("roles_display_string:", vadim.roles_display_string);
+        debug && console.log("=== USERS PAGE: ДАННЫЕ ДЛЯ USERSLIST ===");
+        debug && console.log("Вадим в usersAsUserType:", vadim);
+        debug && console.log("role:", vadim.role);
+        debug && console.log("roles_display_string:", vadim.roles_display_string);
       }
     }
     
@@ -237,7 +240,9 @@ export default function UsersPage() {
               
               <TabsContent value="admin">
                 <AdminAccessCheck>
-                  <AdminPanel />
+                  <PermissionGuard permission="users.admin_panel">
+                    <AdminPanel />
+                  </PermissionGuard>
                 </AdminAccessCheck>
               </TabsContent>
             </Tabs>

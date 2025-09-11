@@ -17,6 +17,18 @@ import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
 
+// Утилитарная функция для обновления данных с задержкой
+const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: number = 300) => {
+  // Небольшая задержка для завершения транзакции
+  await new Promise(resolve => setTimeout(resolve, initialDelay))
+  await fetchFn()
+
+  // Дополнительное обновление через 1 секунду для надежности
+  setTimeout(async () => {
+    await fetchFn()
+  }, 1000)
+}
+
 interface Department {
   department_id: string
   department_name: string
@@ -29,14 +41,13 @@ interface Department {
 }
 
 // Пропсы для ограничения видимости данных
-interface DepartmentsTabProps {
-  // scope = 'all' — показывать все отделы
-  // scope = 'department' — показывать только один отдел по departmentId
-  scope?: 'all' | 'department'
-  departmentId?: string | null
-}
+type DepartmentsTabProps =
+  | { scope?: 'all' }
+  | { scope: 'department'; departmentId: string }
 
-export default function DepartmentsTab({ scope = 'all', departmentId = null }: DepartmentsTabProps) {
+export default function DepartmentsTab(props: DepartmentsTabProps) {
+  const scope = props.scope ?? 'all'
+  const departmentId = 'departmentId' in props ? props.departmentId : null
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -50,9 +61,7 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
   const perms = useAdminPermissions()
 
   // Определяем, должны ли быть видны элементы управления
-  const canManageAllDepartments = perms.canManageDepartments
-  const isDepartmentScoped = scope === 'department'
-  const showManagementControls = canManageAllDepartments && !isDepartmentScoped
+  const showManagementControls = perms.canManageDepartments && scope !== 'department'
 
   // Загрузка отделов из представления
   const fetchDepartments = useCallback(async () => {
@@ -86,23 +95,17 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
       
       console.log("📊 Уникальные отделы:", uniqueData)
       // Применяем скоуп
-      const scoped = scope === 'department' && departmentId
-        ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+      const scoped = scope === 'department'
+        ? uniqueData.filter((d: Department) => d.department_id === departmentId!)
         : uniqueData
       setDepartments(scoped)
-      
-      // Дополнительная проверка: если данные не изменились, принудительно обновляем
-      if (uniqueData.length === departments.length) {
-        console.log("📊 Данные не изменились, принудительно обновляем состояние")
-        setDepartments([...uniqueData])
-      }
     } catch (error) {
       console.error("Ошибка при загрузке отделов:", error)
       toast.error("Произошла ошибка при загрузке данных")
     } finally {
       setIsLoading(false)
     }
-  }, [departments.length, scope, departmentId])
+  }, [scope, departmentId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -421,22 +424,22 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {showManagementControls && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditDepartment(department)}
-                          >
-                            Изменить
-                          </Button>
-                        )}
-                        {showManagementControls && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteDepartment(department)}
-                          >
-                            Удалить
-                          </Button>
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditDepartment(department)}
+                            >
+                              Изменить
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteDepartment(department)}
+                            >
+                              Удалить
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -469,13 +472,7 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
           setModalOpen(open)
           // Если модальное окно закрывается, обновляем данные
           if (!open) {
-            await new Promise(resolve => setTimeout(resolve, 300))
-            await fetchDepartments()
-            
-            // Дополнительное обновление через 1 секунду для надежности
-            setTimeout(async () => {
-              await fetchDepartments()
-            }, 1000)
+            await refreshWithDelay(fetchDepartments, 300)
           }
         }}
         title={modalMode === "create" ? "Создать отдел" : "Редактировать отдел"}
@@ -487,15 +484,8 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
         existingNames={departments.map(d => d.department_name)}
         entityType="department"
         onSuccess={async () => {
-          // Небольшая задержка для завершения транзакции
-          await new Promise(resolve => setTimeout(resolve, 500))
-          await fetchDepartments()
-          
-          // Дополнительное обновление через 1 секунду для надежности
-          setTimeout(async () => {
-            await fetchDepartments()
-          }, 1000)
-          
+          await refreshWithDelay(fetchDepartments, 500)
+
           // Показываем уведомление об успешном создании/редактировании
           if (modalMode === "create") {
             toast.success("Отдел успешно создан и данные обновлены")
@@ -516,14 +506,8 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
           idField="department_id"
           entityId={selectedDepartment.department_id}
           onSuccess={async () => {
-            await new Promise(resolve => setTimeout(resolve, 300))
-            await fetchDepartments()
-            
-            // Дополнительное обновление через 1 секунду для надежности
-            setTimeout(async () => {
-              await fetchDepartments()
-            }, 1000)
-            
+            await refreshWithDelay(fetchDepartments, 300)
+
             // Показываем уведомление об успешном удалении
             toast.success("Отдел успешно удален и данные обновлены")
           }}
@@ -537,14 +521,8 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
           onOpenChange={setHeadModalOpen}
           department={selectedDepartment}
           onSuccess={async () => {
-            await new Promise(resolve => setTimeout(resolve, 300))
-            await fetchDepartments()
-            
-            // Дополнительное обновление через 1 секунду для надежности
-            setTimeout(async () => {
-              await fetchDepartments()
-            }, 1000)
-            
+            await refreshWithDelay(fetchDepartments, 300)
+
             // Показываем уведомление об успешном назначении руководителя
             toast.success("Руководитель отдела успешно назначен и данные обновлены")
           }}
@@ -560,14 +538,8 @@ export default function DepartmentsTab({ scope = 'all', departmentId = null }: D
           entityName={selectedDepartment.department_name}
           entityId={selectedDepartment.department_id}
           onSuccess={async () => {
-            await new Promise(resolve => setTimeout(resolve, 300))
-            await fetchDepartments()
-            
-            // Дополнительное обновление через 1 секунду для надежности
-            setTimeout(async () => {
-              await fetchDepartments()
-            }, 1000)
-            
+            await refreshWithDelay(fetchDepartments, 300)
+
             // Показываем уведомление об успешном удалении руководителя
             toast.success("Руководитель отдела успешно удален и данные обновлены")
           }}
