@@ -15,6 +15,7 @@ import EmptyState from "./EmptyState"
 import DepartmentHeadModal from "./DepartmentHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
+import { useAdminPermissions } from "../hooks/useAdminPermissions"
 
 interface Department {
   department_id: string
@@ -27,7 +28,15 @@ interface Department {
   head_avatar_url: string | null
 }
 
-export default function DepartmentsTab() {
+// Пропсы для ограничения видимости данных
+interface DepartmentsTabProps {
+  // scope = 'all' — показывать все отделы
+  // scope = 'department' — показывать только один отдел по departmentId
+  scope?: 'all' | 'department'
+  departmentId?: string | null
+}
+
+export default function DepartmentsTab({ scope = 'all', departmentId = null }: DepartmentsTabProps) {
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -37,6 +46,13 @@ export default function DepartmentsTab() {
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  const perms = useAdminPermissions()
+
+  // Определяем, должны ли быть видны элементы управления
+  const canManageAllDepartments = perms.canManageDepartments
+  const isDepartmentScoped = scope === 'department'
+  const showManagementControls = canManageAllDepartments && !isDepartmentScoped
 
   // Загрузка отделов из представления
   const fetchDepartments = useCallback(async () => {
@@ -69,7 +85,11 @@ export default function DepartmentsTab() {
       }, [] as Department[])
       
       console.log("📊 Уникальные отделы:", uniqueData)
-      setDepartments(uniqueData)
+      // Применяем скоуп
+      const scoped = scope === 'department' && departmentId
+        ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+        : uniqueData
+      setDepartments(scoped)
       
       // Дополнительная проверка: если данные не изменились, принудительно обновляем
       if (uniqueData.length === departments.length) {
@@ -82,7 +102,7 @@ export default function DepartmentsTab() {
     } finally {
       setIsLoading(false)
     }
-  }, [departments.length])
+  }, [departments.length, scope, departmentId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -202,15 +222,17 @@ export default function DepartmentsTab() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="text-xl font-semibold">Управление отделами</CardTitle>
                           <div className="flex justify-end gap-2">
-              <Input
-                placeholder="Поиск отделов..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="max-w-xs"
-              />
-              <Button 
-                variant="outline" 
-                size="default" 
+              {showManagementControls && (
+                <Input
+                  placeholder="Поиск отделов..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+              )}
+              <Button
+                variant="outline"
+                size="default"
                 onClick={forceRefresh}
                 disabled={isLoading}
                 className="transition-all duration-200 hover:scale-105"
@@ -227,13 +249,15 @@ export default function DepartmentsTab() {
                   </div>
                 )}
               </Button>
-              <Button 
-                size="default" 
-                onClick={handleCreateDepartment}
-                className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
-              >
-                Создать отдел
-              </Button>
+              {showManagementControls && (
+                <Button
+                  size="default"
+                  onClick={handleCreateDepartment}
+                  className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                >
+                  Создать отдел
+                </Button>
+              )}
             </div>
             </div>
           </CardContent>
@@ -266,15 +290,17 @@ export default function DepartmentsTab() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="text-xl font-semibold">Управление отделами</CardTitle>
             <div className="flex justify-end gap-2">
-              <Input
-                placeholder="Поиск отделов..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="max-w-xs"
-              />
-              <Button 
-                variant="outline" 
-                size="default" 
+              {showManagementControls && (
+                <Input
+                  placeholder="Поиск отделов..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+              )}
+              <Button
+                variant="outline"
+                size="default"
                 onClick={forceRefresh}
                 disabled={isLoading}
                 className="transition-all duration-200 hover:scale-105"
@@ -291,13 +317,15 @@ export default function DepartmentsTab() {
                   </div>
                 )}
               </Button>
-              <Button 
-                size="default" 
-                onClick={handleCreateDepartment}
-                className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
-              >
-                Создать отдел
-              </Button>
+              {showManagementControls && (
+                <Button
+                  size="default"
+                  onClick={handleCreateDepartment}
+                  className="transition-all duration-200 hover:scale-105 hover:shadow-lg"
+                >
+                  Создать отдел
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -333,75 +361,83 @@ export default function DepartmentsTab() {
                             <div className="font-medium">{department.head_full_name}</div>
                             <div className="text-sm text-muted-foreground">{department.head_email}</div>
                           </div>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <div className="flex flex-col">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleAssignHead(department)}
-                                  className="justify-start rounded-b-none border-b-0"
-                                >
-                                  Сменить
+                          {showManagementControls && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleRemoveHeadClick(department)}
-                                  className="justify-start rounded-t-none"
-                                >
-                                  Убрать
-                                </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(department)}
+                                    className="justify-start rounded-b-none border-b-0"
+                                  >
+                                    Сменить
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRemoveHeadClick(department)}
+                                    className="justify-start rounded-t-none"
+                                  >
+                                    Убрать
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground">Не назначен</span>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <div className="flex flex-col">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleAssignHead(department)}
-                                  className="justify-start"
-                                >
-                                  Назначить
+                          {showManagementControls && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
                                 </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(department)}
+                                    className="justify-start"
+                                  >
+                                    Назначить
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditDepartment(department)}
-                        >
-                          Изменить
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteDepartment(department)}
-                        >
-                          Удалить
-                        </Button>
+                        {showManagementControls && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditDepartment(department)}
+                          >
+                            Изменить
+                          </Button>
+                        )}
+                        {showManagementControls && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteDepartment(department)}
+                          >
+                            Удалить
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -409,14 +445,14 @@ export default function DepartmentsTab() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={3}>
-                    <EmptyState 
+                    <EmptyState
                       message={
-                        search 
-                          ? "Отделы по вашему запросу не найдены" 
+                        search
+                          ? "Отделы по вашему запросу не найдены"
                           : "Отделы не созданы"
                       }
-                      buttonText="Создать первый отдел"
-                      onButtonClick={handleCreateDepartment}
+                      buttonText={showManagementControls ? "Создать первый отдел" : undefined}
+                      onButtonClick={showManagementControls ? handleCreateDepartment : undefined}
                     />
                   </TableCell>
                 </TableRow>

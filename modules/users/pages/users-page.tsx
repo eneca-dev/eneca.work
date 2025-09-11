@@ -213,6 +213,7 @@ export default function UsersPage() {
                 <TabsTrigger value="list">Список пользователей</TabsTrigger>
                 <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
                 <TabsTrigger value="analytics">Аналитика</TabsTrigger>
+                {/* Показываем кнопку "Администратор" только при users.admin_panel */}
                 <PermissionGuard permission="users.admin_panel">
                   <TabsTrigger value="admin">Администратор</TabsTrigger>
                 </PermissionGuard>
