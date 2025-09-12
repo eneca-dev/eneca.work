@@ -126,7 +126,8 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     if (canEditAllUsers) return true
     // self по id email не всегда надёжен: ожидаем, что users-page передал id = profiles.user_id
     if (canEditSelf && u.id === viewerId) return true
-    if (canEditTeam && viewerTeamId && (u as any).teamId && (u as any).teamId === viewerTeamId) return true
+    // Для users.edit.team: проверяем, что пользователь в том же отделе
+    if (canEditTeam && viewerDeptId && u.departmentId && u.departmentId === viewerDeptId) return true
     if (canEditDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true
     return false
   }

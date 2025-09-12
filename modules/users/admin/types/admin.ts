@@ -7,6 +7,9 @@ export interface AdminPermissions {
   canManageTeams: boolean
   canManagePositions: boolean
   canManageCategories: boolean
+  // Редакторские права уровня отдела/команды
+  canEditDepartment: boolean
+  canEditTeam: boolean
   canChangeRoles: boolean
   canAddAdminRole: boolean
 }

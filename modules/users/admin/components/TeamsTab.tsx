@@ -15,6 +15,7 @@ import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
+import { useAdminPermissions } from "../hooks/useAdminPermissions"
 
 // Типы для сущностей
 interface Department {
@@ -35,11 +36,18 @@ interface Team {
   headAvatarUrl: string | null;
 }
 
-export default function TeamsTab() {
+// Пропсы для ограничения видимости данных
+type TeamsTabProps =
+  | { scope?: 'all' }
+  | { scope: 'department'; departmentId: string }
+
+export default function TeamsTab(props: TeamsTabProps) {
+  const scope = props.scope ?? 'all'
+  const departmentId = 'departmentId' in props ? props.departmentId : null
   const [teams, setTeams] = useState<Team[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
-  const [activeDept, setActiveDept] = useState<string | null>(null)
+  const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? departmentId : null)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [headModalOpen, setHeadModalOpen] = useState(false)
@@ -47,6 +55,15 @@ export default function TeamsTab() {
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  const perms = useAdminPermissions()
+
+  // Определяем, должны ли быть видны элементы управления
+  const canManageAllTeams = perms.canManageTeams
+  const canEditTeams = perms.canEditTeam
+  const isTeamScoped = scope === 'department'
+  const showManagementControls = canManageAllTeams && !isTeamScoped
+  const canViewTeams = canManageAllTeams || canEditTeams
 
   const fetchData = useCallback(async () => {
     try {
@@ -106,25 +123,26 @@ export default function TeamsTab() {
         }
       })
       
-      // Устанавливаем данные команд
-      setTeams(Array.from(uniqueTeamsMap.values()))
-      
-      // Устанавливаем данные отделов
-      setDepartments(
-        deptsData ? 
-        deptsData.map(dep => ({ 
-          id: dep.department_id, 
-          name: dep.department_name 
-        })) : 
-        []
-      )
+      // Устанавливаем данные команд с учетом скоупа
+      const preparedTeams = Array.from(uniqueTeamsMap.values())
+      const scopedTeams = scope === 'department'
+        ? preparedTeams.filter(t => t.departmentId === departmentId!)
+        : preparedTeams
+      setTeams(scopedTeams)
+
+      // Устанавливаем данные отделов с учетом скоупа
+      const allDepartments = deptsData ? deptsData.map(dep => ({ id: dep.department_id, name: dep.department_name })) : []
+      const scopedDepartments = scope === 'department'
+        ? allDepartments.filter(d => d.id === departmentId!)
+        : allDepartments
+      setDepartments(scopedDepartments)
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error)
       toast.error('Произошла ошибка при загрузке данных')
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [scope, departmentId])
 
   // Загружаем данные при монтировании компонента
   useEffect(() => {
@@ -142,11 +160,10 @@ export default function TeamsTab() {
         activeDept === null ||
         (activeDept === "" && (!team.departmentId || team.departmentId === "")) ||
         team.departmentId === activeDept
-
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
-  }, [teams, activeDept, search])
+  }, [teams, activeDept, search, scope, departmentId])
 
   // Мемоизируем функцию получения имени отдела
   const getDepartmentName = useCallback((id: string) => {
@@ -171,6 +188,41 @@ export default function TeamsTab() {
       }
     ]
   }, [departments])
+
+  // Скоуп-версия extraFields (перенесено из JSX, чтобы не нарушать порядок хуков)
+  const scopedExtraFields = useMemo(() => {
+    // Для пользователей с edit.team всегда ограничиваем отдел их собственным
+    if (canEditTeams && !canManageAllTeams && departmentId) {
+      const theOnly = departments
+        .filter(d => d.id === departmentId)
+        .map(d => ({ value: d.id, label: d.name }))
+      return [
+        {
+          name: "department_id",
+          label: "Отдел",
+          type: "select" as const,
+          options: theOnly,
+          required: true
+        }
+      ]
+    }
+    // Для пользователей с manage.teams или без ограничений - обычная логика
+    if (scope === 'department') {
+      const theOnly = departments
+        .filter(d => d.id === departmentId)
+        .map(d => ({ value: d.id, label: d.name }))
+      return [
+        {
+          name: "department_id",
+          label: "Отдел",
+          type: "select" as const,
+          options: theOnly,
+          required: true
+        }
+      ]
+    }
+    return extraFields
+  }, [extraFields, scope, departmentId, departments, canEditTeams, canManageAllTeams])
 
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
@@ -209,15 +261,27 @@ export default function TeamsTab() {
   }, [])
 
   const handleEditTeam = useCallback((team: Team) => {
+    // Проверяем права на редактирование
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается редактировать команду из другого отдела
+      return
+    }
+
     setModalMode("edit")
     setSelectedTeam(team)
     setModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleDeleteTeamClick = useCallback((team: Team) => {
+    // Проверяем права на удаление
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается удалить команду из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setDeleteModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleModalOpenChange = useCallback((open: boolean) => {
     setModalOpen(open)
@@ -229,14 +293,26 @@ export default function TeamsTab() {
 
   // Обработчики для управления руководителями
   const handleAssignHead = useCallback((team: Team) => {
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setHeadModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleRemoveHeadClick = useCallback((team: Team) => {
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setRemoveHeadModalOpen(true)
-  }, [])
+  }, [canEditTeams, canManageAllTeams, departmentId])
 
   // Если данные загружаются, показываем индикатор загрузки
   if (isLoading) {
@@ -295,13 +371,17 @@ export default function TeamsTab() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="text-xl font-semibold">Управление командами</CardTitle>
             <div className="flex justify-end gap-2">
-              <Input
-                placeholder="Поиск команд..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="max-w-xs"
-              />
-              <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+              {showManagementControls && (
+                <Input
+                  placeholder="Поиск команд..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+              )}
+              {canViewTeams && (
+                <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+              )}
             </div>
           </div>
           
@@ -327,9 +407,14 @@ export default function TeamsTab() {
                 <Button
                   key={dep.id}
                   size="sm"
-                  variant={activeDept === dep.id ? "default" : "outline"}
-                  onClick={() => setActiveDept(dep.id)}
+                  variant={(scope === 'department' ? (departmentId! === dep.id) : (activeDept === dep.id)) ? "default" : "outline"}
+                  onClick={() => {
+                    if (scope !== 'department') {
+                      setActiveDept(dep.id);
+                    }
+                  }}
                   className="h-7 text-xs rounded font-normal"
+                  disabled={scope === 'department'}
                 >
                   {dep.name}
                 </Button>
@@ -371,75 +456,83 @@ export default function TeamsTab() {
                             <div className="font-medium">{team.headFullName}</div>
                             <div className="text-sm text-muted-foreground">{team.headEmail}</div>
                           </div>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <div className="flex flex-col">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleAssignHead(team)}
-                                  className="justify-start rounded-b-none border-b-0"
-                                >
-                                  Сменить
+                          {canViewTeams && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleRemoveHeadClick(team)}
-                                  className="justify-start rounded-t-none"
-                                >
-                                  Убрать
-                                </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(team)}
+                                    className="justify-start rounded-b-none border-b-0"
+                                  >
+                                    Сменить
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRemoveHeadClick(team)}
+                                    className="justify-start rounded-t-none"
+                                  >
+                                    Убрать
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground">Не назначен</span>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <div className="flex flex-col">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => handleAssignHead(team)}
-                                  className="justify-start"
-                                >
-                                  Назначить
+                          {canViewTeams && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
                                 </Button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(team)}
+                                    className="justify-start"
+                                  >
+                                    Назначить
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditTeam(team)}
-                        >
-                          Изменить
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteTeamClick(team)}
-                        >
-                          Удалить
-                        </Button>
+                        {canViewTeams && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditTeam(team)}
+                            >
+                              Изменить
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteTeamClick(team)}
+                            >
+                              Удалить
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -447,14 +540,14 @@ export default function TeamsTab() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={4}>
-                    <EmptyState 
+                    <EmptyState
                       message={
                         search || activeDept
-                          ? "Команды по вашему запросу не найдены" 
+                          ? "Команды по вашему запросу не найдены"
                           : "Команды не созданы"
                       }
-                      buttonText="Создать первую команду"
-                      onButtonClick={handleCreateTeam}
+                      buttonText={canViewTeams ? "Создать первую команду" : undefined}
+                      onButtonClick={canViewTeams ? handleCreateTeam : undefined}
                     />
                   </TableCell>
                 </TableRow>
@@ -473,7 +566,7 @@ export default function TeamsTab() {
         idField="team_id"
         nameField="team_name"
         entity={entityData}
-        extraFields={extraFields}
+        extraFields={scopedExtraFields}
         existingNames={teams.map(t => t.name)}
         entityType="team"
         onSuccess={fetchData}
