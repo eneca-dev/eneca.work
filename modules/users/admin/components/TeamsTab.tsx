@@ -26,8 +26,8 @@ interface Department {
 interface Team {
   id: string;
   name: string;
-  departmentId: string;
-  departmentName: string;
+  departmentId: string | null;
+  departmentName: string | null;
   team_lead_id: string | null;
   headFirstName: string | null;
   headLastName: string | null;
@@ -111,8 +111,8 @@ export default function TeamsTab(props: TeamsTabProps) {
           uniqueTeamsMap.set(team.team_id, {
             id: team.team_id,
             name: team.team_name,
-            departmentId: team.department_id,
-            departmentName: team.department_name,
+            departmentId: team.department_id || null,
+            departmentName: team.department_name || null,
             team_lead_id: team.team_lead_id,
             headFirstName: team.team_lead_first_name,
             headLastName: team.team_lead_last_name,
@@ -152,9 +152,14 @@ export default function TeamsTab(props: TeamsTabProps) {
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
     return teams.filter(team => {
-      // Фильтрация по отделу: если выбран конкретный отдел, показываем команды этого отдела
-      const deptToMatch = scope === 'department' ? departmentId! : activeDept
-      const matchesDept = !deptToMatch || team.departmentId === deptToMatch
+      // Фильтрация по отделу: три-состояние
+      // activeDept === null: "Все отделы" - показываем все команды
+      // activeDept === "": "Без отдела" - показываем команды без отдела
+      // activeDept === deptId: показываем команды конкретного отдела
+      const matchesDept =
+        activeDept === null ||
+        (activeDept === "" && (!team.departmentId || team.departmentId === "")) ||
+        team.departmentId === activeDept
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
@@ -169,10 +174,10 @@ export default function TeamsTab(props: TeamsTabProps) {
   const extraFields = useMemo(() => {
     // Добавляем опцию "Не назначен" для команд без отдела
     const departmentOptions = [
-      { value: "", label: "Не назначен" },
+      { value: "none", label: "Не назначен" },
       ...departments.map(dep => ({ value: dep.id, label: dep.name }))
     ]
-    
+
     return [
       {
         name: "department_id",
@@ -222,23 +227,23 @@ export default function TeamsTab(props: TeamsTabProps) {
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
     if (!selectedTeam) return undefined
-    
+
     return {
       team_id: selectedTeam.id,
       team_name: selectedTeam.name,
-      department_id: selectedTeam.departmentId || "" // Пустая строка для "Не назначен"
+      department_id: selectedTeam.departmentId || "none" // "none" для "Не назначен"
     }
   }, [selectedTeam])
 
   // Мемоизируем данные команды для TeamHeadModal
   const teamHeadData = useMemo(() => {
     if (!selectedTeam) return undefined
-    
+
     return {
       id: selectedTeam.id,
       name: selectedTeam.name,
-      departmentId: selectedTeam.departmentId,
-      departmentName: selectedTeam.departmentName,
+      departmentId: selectedTeam.departmentId || "",
+      departmentName: selectedTeam.departmentName || "",
       team_lead_id: selectedTeam.team_lead_id,
       headFirstName: selectedTeam.headFirstName,
       headLastName: selectedTeam.headLastName,
@@ -382,26 +387,22 @@ export default function TeamsTab(props: TeamsTabProps) {
           
           <div className="mt-4">
             <div className="flex flex-wrap gap-2">
-              {scope === 'all' && (
-                <>
-                  <Button 
-                    size="sm" 
-                    variant={activeDept === null ? "default" : "outline"} 
-                    onClick={() => setActiveDept(null)} 
-                    className="h-7 text-xs rounded font-normal"
-                  >
-                    Все отделы
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant={activeDept === "" ? "default" : "outline"} 
-                    onClick={() => setActiveDept("")} 
-                    className="h-7 text-xs rounded font-normal"
-                  >
-                    Без отдела
-                  </Button>
-                </>
-              )}
+              <Button 
+                size="sm" 
+                variant={activeDept === null ? "default" : "outline"} 
+                onClick={() => setActiveDept(null)} 
+                className="h-7 text-xs rounded font-normal"
+              >
+                Все отделы
+              </Button>
+              <Button
+                size="sm"
+                variant={activeDept === "none" ? "default" : "outline"}
+                onClick={() => setActiveDept("none")}
+                className="h-7 text-xs rounded font-normal"
+              >
+                Без отдела
+              </Button>
               {departments.map((dep) => (
                 <Button
                   key={dep.id}
