@@ -39,6 +39,9 @@ interface ProjectNode {
   type: 'client' | 'manager' | 'project' | 'stage' | 'object' | 'section'
   children?: ProjectNode[]
   // Доп. поля
+  type: 'client' | 'manager' | 'project' | 'stage' | 'object' | 'section'
+  children?: ProjectNode[]
+  // Доп. поля
   projectId?: string
   stageId?: string
   objectId?: string
@@ -53,8 +56,6 @@ interface ProjectNode {
   statusColor?: string | null
   managerId?: string | null
   clientId?: string | null
-  // Признак избранного проекта (только для узлов типа 'project')
-  isFavorite?: boolean
 }
 
 interface ProjectsTreeProps {
@@ -1407,15 +1408,7 @@ export function ProjectsTree({
           managerId: managerId,
           clientId: clientId,
           children: [],
-          // Признак избранного приходит из view_project_tree
-          isFavorite: Boolean(row.is_favorite)
         })
-      } else {
-        // Если проект уже есть, но пришёл флаг is_favorite=true — обновим
-        if (row.is_favorite) {
-          const p = projects.get(row.project_id)!
-          if (!p.isFavorite) p.isFavorite = true
-        }
       }
 
       // 4. Стадии
@@ -1425,6 +1418,7 @@ export function ProjectsTree({
           name: row.stage_name,
           type: 'stage',
           projectId: row.project_id,
+          children: [],
           children: [],
         })
       }
@@ -1439,6 +1433,7 @@ export function ProjectsTree({
           projectId: row.project_id,
           projectName: row.project_name,
           stageName: row.stage_name,
+          children: [],
           children: [],
         })
       }
