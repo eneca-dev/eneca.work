@@ -16,6 +16,7 @@ import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import { useAdminPermissions } from "../hooks/useAdminPermissions"
 
 // Типы для сущностей
 interface Department {
@@ -44,9 +45,18 @@ type TeamsTabProps =
 export default function TeamsTab(props: TeamsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
+// Пропсы для ограничения видимости данных
+type TeamsTabProps =
+  | { scope?: 'all' }
+  | { scope: 'department'; departmentId: string }
+
+export default function TeamsTab(props: TeamsTabProps) {
+  const scope = props.scope ?? 'all'
+  const departmentId = 'departmentId' in props ? props.departmentId : null
   const [teams, setTeams] = useState<Team[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
+  const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? departmentId : null)
   const [activeDept, setActiveDept] = useState<string | null>(scope === 'department' ? departmentId : null)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -55,6 +65,15 @@ export default function TeamsTab(props: TeamsTabProps) {
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  const perms = useAdminPermissions()
+
+  // Определяем, должны ли быть видны элементы управления
+  const canManageAllTeams = perms.canManageTeams
+  const canEditTeams = perms.canEditTeam
+  const isTeamScoped = scope === 'department'
+  const showManagementControls = canManageAllTeams && !isTeamScoped
+  const canViewTeams = canManageAllTeams || canEditTeams
 
   const perms = useAdminPermissions()
 
@@ -136,12 +155,26 @@ export default function TeamsTab(props: TeamsTabProps) {
         ? allDepartments.filter(d => d.id === departmentId!)
         : allDepartments
       setDepartments(scopedDepartments)
+      // Устанавливаем данные команд с учетом скоупа
+      const preparedTeams = Array.from(uniqueTeamsMap.values())
+      const scopedTeams = scope === 'department'
+        ? preparedTeams.filter(t => t.departmentId === departmentId!)
+        : preparedTeams
+      setTeams(scopedTeams)
+
+      // Устанавливаем данные отделов с учетом скоупа
+      const allDepartments = deptsData ? deptsData.map(dep => ({ id: dep.department_id, name: dep.department_name })) : []
+      const scopedDepartments = scope === 'department'
+        ? allDepartments.filter(d => d.id === departmentId!)
+        : allDepartments
+      setDepartments(scopedDepartments)
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error)
       toast.error('Произошла ошибка при загрузке данных')
     } finally {
       setIsLoading(false)
     }
+  }, [scope, departmentId])
   }, [scope, departmentId])
 
   // Загружаем данные при монтировании компонента
@@ -152,17 +185,13 @@ export default function TeamsTab(props: TeamsTabProps) {
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
     return teams.filter(team => {
-      // Фильтрация по отделу: три-состояние
-      // activeDept === null: "Все отделы" - показываем все команды
-      // activeDept === "": "Без отдела" - показываем команды без отдела
-      // activeDept === deptId: показываем команды конкретного отдела
-      const matchesDept =
-        activeDept === null ||
-        (activeDept === "" && (!team.departmentId || team.departmentId === "")) ||
-        team.departmentId === activeDept
+      // Фильтрация по отделу: если выбран конкретный отдел, показываем команды этого отдела
+      const deptToMatch = scope === 'department' ? departmentId! : activeDept
+      const matchesDept = !deptToMatch || team.departmentId === deptToMatch
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
+  }, [teams, activeDept, search, scope, departmentId])
   }, [teams, activeDept, search, scope, departmentId])
 
   // Мемоизируем функцию получения имени отдела
@@ -188,6 +217,41 @@ export default function TeamsTab(props: TeamsTabProps) {
       }
     ]
   }, [departments])
+
+  // Скоуп-версия extraFields (перенесено из JSX, чтобы не нарушать порядок хуков)
+  const scopedExtraFields = useMemo(() => {
+    // Для пользователей с edit.team всегда ограничиваем отдел их собственным
+    if (canEditTeams && !canManageAllTeams && departmentId) {
+      const theOnly = departments
+        .filter(d => d.id === departmentId)
+        .map(d => ({ value: d.id, label: d.name }))
+      return [
+        {
+          name: "department_id",
+          label: "Отдел",
+          type: "select" as const,
+          options: theOnly,
+          required: true
+        }
+      ]
+    }
+    // Для пользователей с manage.teams или без ограничений - обычная логика
+    if (scope === 'department') {
+      const theOnly = departments
+        .filter(d => d.id === departmentId)
+        .map(d => ({ value: d.id, label: d.name }))
+      return [
+        {
+          name: "department_id",
+          label: "Отдел",
+          type: "select" as const,
+          options: theOnly,
+          required: true
+        }
+      ]
+    }
+    return extraFields
+  }, [extraFields, scope, departmentId, departments, canEditTeams, canManageAllTeams])
 
   // Скоуп-версия extraFields (перенесено из JSX, чтобы не нарушать порядок хуков)
   const scopedExtraFields = useMemo(() => {
@@ -267,9 +331,16 @@ export default function TeamsTab(props: TeamsTabProps) {
       return
     }
 
+    // Проверяем права на редактирование
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается редактировать команду из другого отдела
+      return
+    }
+
     setModalMode("edit")
     setSelectedTeam(team)
     setModalOpen(true)
+  }, [canEditTeams, canManageAllTeams, departmentId])
   }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleDeleteTeamClick = useCallback((team: Team) => {
@@ -279,8 +350,15 @@ export default function TeamsTab(props: TeamsTabProps) {
       return
     }
 
+    // Проверяем права на удаление
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается удалить команду из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setDeleteModalOpen(true)
+  }, [canEditTeams, canManageAllTeams, departmentId])
   }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleModalOpenChange = useCallback((open: boolean) => {
@@ -299,8 +377,15 @@ export default function TeamsTab(props: TeamsTabProps) {
       return
     }
 
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setHeadModalOpen(true)
+  }, [canEditTeams, canManageAllTeams, departmentId])
   }, [canEditTeams, canManageAllTeams, departmentId])
 
   const handleRemoveHeadClick = useCallback((team: Team) => {
@@ -310,8 +395,15 @@ export default function TeamsTab(props: TeamsTabProps) {
       return
     }
 
+    // Проверяем права на управление руководителем
+    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
+      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+      return
+    }
+
     setSelectedTeam(team)
     setRemoveHeadModalOpen(true)
+  }, [canEditTeams, canManageAllTeams, departmentId])
   }, [canEditTeams, canManageAllTeams, departmentId])
 
   // Если данные загружаются, показываем индикатор загрузки
@@ -382,27 +474,42 @@ export default function TeamsTab(props: TeamsTabProps) {
               {canViewTeams && (
                 <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
               )}
+              {showManagementControls && (
+                <Input
+                  placeholder="Поиск команд..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="max-w-xs"
+                />
+              )}
+              {canViewTeams && (
+                <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+              )}
             </div>
           </div>
           
           <div className="mt-4">
             <div className="flex flex-wrap gap-2">
-              <Button 
-                size="sm" 
-                variant={activeDept === null ? "default" : "outline"} 
-                onClick={() => setActiveDept(null)} 
-                className="h-7 text-xs rounded font-normal"
-              >
-                Все отделы
-              </Button>
-              <Button
-                size="sm"
-                variant={activeDept === "none" ? "default" : "outline"}
-                onClick={() => setActiveDept("none")}
-                className="h-7 text-xs rounded font-normal"
-              >
-                Без отдела
-              </Button>
+              {scope === 'all' && (
+                <>
+                  <Button 
+                    size="sm" 
+                    variant={activeDept === null ? "default" : "outline"} 
+                    onClick={() => setActiveDept(null)} 
+                    className="h-7 text-xs rounded font-normal"
+                  >
+                    Все отделы
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant={activeDept === "" ? "default" : "outline"} 
+                    onClick={() => setActiveDept("")} 
+                    className="h-7 text-xs rounded font-normal"
+                  >
+                    Без отдела
+                  </Button>
+                </>
+              )}
               {departments.map((dep) => (
                 <Button
                   key={dep.id}
@@ -413,7 +520,14 @@ export default function TeamsTab(props: TeamsTabProps) {
                       setActiveDept(dep.id);
                     }
                   }}
+                  variant={(scope === 'department' ? (departmentId! === dep.id) : (activeDept === dep.id)) ? "default" : "outline"}
+                  onClick={() => {
+                    if (scope !== 'department') {
+                      setActiveDept(dep.id);
+                    }
+                  }}
                   className="h-7 text-xs rounded font-normal"
+                  disabled={scope === 'department'}
                   disabled={scope === 'department'}
                 >
                   {dep.name}
@@ -485,10 +599,60 @@ export default function TeamsTab(props: TeamsTabProps) {
                               </PopoverContent>
                             </Popover>
                           )}
+                          {canViewTeams && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(team)}
+                                    className="justify-start rounded-b-none border-b-0"
+                                  >
+                                    Сменить
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRemoveHeadClick(team)}
+                                    className="justify-start rounded-t-none"
+                                  >
+                                    Убрать
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground">Не назначен</span>
+                          {canViewTeams && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <div className="flex flex-col">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAssignHead(team)}
+                                    className="justify-start"
+                                  >
+                                    Назначить
+                                  </Button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                           {canViewTeams && (
                             <Popover>
                               <PopoverTrigger asChild>
@@ -533,6 +697,24 @@ export default function TeamsTab(props: TeamsTabProps) {
                             </Button>
                           </>
                         )}
+                        {canViewTeams && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditTeam(team)}
+                            >
+                              Изменить
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteTeamClick(team)}
+                            >
+                              Удалить
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -541,11 +723,15 @@ export default function TeamsTab(props: TeamsTabProps) {
                 <TableRow>
                   <TableCell colSpan={4}>
                     <EmptyState
+                    <EmptyState
                       message={
                         search || activeDept
                           ? "Команды по вашему запросу не найдены"
+                          ? "Команды по вашему запросу не найдены"
                           : "Команды не созданы"
                       }
+                      buttonText={canViewTeams ? "Создать первую команду" : undefined}
+                      onButtonClick={canViewTeams ? handleCreateTeam : undefined}
                       buttonText={canViewTeams ? "Создать первую команду" : undefined}
                       onButtonClick={canViewTeams ? handleCreateTeam : undefined}
                     />
@@ -566,6 +752,7 @@ export default function TeamsTab(props: TeamsTabProps) {
         idField="team_id"
         nameField="team_name"
         entity={entityData}
+        extraFields={scopedExtraFields}
         extraFields={scopedExtraFields}
         existingNames={teams.map(t => t.name)}
         entityType="team"
