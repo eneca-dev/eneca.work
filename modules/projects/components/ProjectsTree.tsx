@@ -36,27 +36,23 @@ import { SectionDetailTabs } from './SectionDetailTabs'
 interface ProjectNode {
   id: string
   name: string
-  type: 'manager' | 'project' | 'stage' | 'object' | 'section' | 'client'
-  managerId?: string
+  type: 'client' | 'manager' | 'project' | 'stage' | 'object' | 'section'
+  children?: ProjectNode[]
+  // Доп. поля
   projectId?: string
   stageId?: string
   objectId?: string
-  clientId?: string
-  children?: ProjectNode[]
-  dates?: {
-    start?: string
-    end?: string
-  }
-  responsibleName?: string
-  responsibleAvatarUrl?: string
   projectName?: string
   stageName?: string
   departmentName?: string
-  clientName?: string
-  // Поля для статуса секции
-  statusId?: string
-  statusName?: string
-  statusColor?: string
+  dates?: { start?: string | null; end?: string | null }
+  responsibleName?: string
+  responsibleAvatarUrl?: string
+  statusId?: string | null
+  statusName?: string | null
+  statusColor?: string | null
+  managerId?: string | null
+  clientId?: string | null
 }
 
 interface ProjectsTreeProps {
@@ -1311,7 +1307,7 @@ export function ProjectsTree({
           type: 'project',
           managerId: managerId,
           clientId: clientId,
-          children: []
+          children: [],
         })
       }
 
@@ -1322,7 +1318,7 @@ export function ProjectsTree({
           name: row.stage_name,
           type: 'stage',
           projectId: row.project_id,
-          children: []
+          children: [],
         })
       }
 
@@ -1336,7 +1332,7 @@ export function ProjectsTree({
           projectId: row.project_id,
           projectName: row.project_name,
           stageName: row.stage_name,
-          children: []
+          children: [],
         })
       }
 
