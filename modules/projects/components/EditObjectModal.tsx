@@ -47,6 +47,7 @@ export function EditObjectModal({
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
   const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const dropdownContentRef = useRef<HTMLDivElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
   const { setNotification } = useUiStore()
 
@@ -138,21 +139,72 @@ export function EditObjectModal({
 
   const updateDropdownPosition = () => {
     if (!inputWrapperRef.current) return
+
     const rect = inputWrapperRef.current.getBoundingClientRect()
-    const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
-    setDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
+    const viewportHeight = window.innerHeight
+
+    // Динамическое измерение высоты содержимого dropdown
+    let contentHeight = 256 // fallback to max-h-64 (256px)
+    if (dropdownContentRef.current) {
+      try {
+        // Временно снимаем ограничение высоты для измерения
+        const originalMaxHeight = dropdownContentRef.current.style.maxHeight
+        dropdownContentRef.current.style.maxHeight = 'none'
+
+        // Измеряем полную высоту содержимого
+        contentHeight = dropdownContentRef.current.scrollHeight
+
+        // Восстанавливаем ограничение высоты
+        dropdownContentRef.current.style.maxHeight = originalMaxHeight || '16rem' // 256px = 16rem
+
+        // Ограничиваем до максимальной CSS высоты (max-h-64 = 256px)
+        contentHeight = Math.min(contentHeight, 256)
+      } catch (error) {
+        console.warn('Не удалось измерить высоту dropdown, используется значение по умолчанию:', error)
+        contentHeight = 256 // fallback
+      }
+    }
+
+    // Добавляем padding и border для точного расчета
+    const dropdownPadding = 16 // приблизительно 8px сверху + 8px снизу
+    const requiredHeight = contentHeight + dropdownPadding
+
+    // Проверяем доступное пространство
+    const spaceBelow = viewportHeight - rect.bottom
+    const spaceAbove = rect.top
+
+    // Решаем, открывать ли вверх
+    const openUp = spaceBelow < requiredHeight && spaceAbove > spaceBelow
+
+    setDropdownPosition({
+      left: rect.left,
+      top: openUp ? rect.top : rect.bottom,
+      width: rect.width,
+      openUp
+    })
   }
 
   useEffect(() => {
     if (!showResponsibleDropdown) return
     updateDropdownPosition()
+
+    let scrollTimeout: NodeJS.Timeout
+    const throttledUpdatePosition = () => {
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(updateDropdownPosition, 100)
+    }
+
     const handlers = [
-      ['scroll', updateDropdownPosition, true],
-      ['resize', updateDropdownPosition, false],
+      ['scroll', throttledUpdatePosition, { passive: true }],
+      ['resize', updateDropdownPosition, { capture: false }],
     ] as const
-    handlers.forEach(([event, fn, capture]) => window.addEventListener(event, fn as EventListener, capture))
-    return () => handlers.forEach(([event, fn, capture]) => window.removeEventListener(event, fn as EventListener, capture))
+
+    handlers.forEach(([event, fn, options]) => window.addEventListener(event, fn as EventListener, options))
+
+    return () => {
+      clearTimeout(scrollTimeout)
+      handlers.forEach(([event, fn]) => window.removeEventListener(event, fn as EventListener))
+    }
   }, [showResponsibleDropdown])
 
   return (
@@ -244,9 +296,16 @@ export function EditObjectModal({
                           <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Ответственный
                           </div>
-                          <div className="max-h-80 overflow-y-auto overscroll-contain">
+                          <div
+                            ref={dropdownContentRef}
+                            className="max-h-64 overflow-y-auto overscroll-contain"
+                            role="listbox"
+                            aria-label="Выберите ответственного"
+                          >
                             <button
                               type="button"
+                              role="option"
+                              aria-selected={objectData?.object_responsible == null}
                               onClick={() => {
                                 setObjectData({
                                   ...objectData!,
@@ -262,6 +321,8 @@ export function EditObjectModal({
                             {filteredResponsible.map((profile) => (
                               <button
                                 type="button"
+                                role="option"
+                                aria-selected={objectData?.object_responsible === profile.user_id}
                                 key={profile.user_id}
                                 onClick={() => {
                                   setObjectData({
