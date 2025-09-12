@@ -23,7 +23,7 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
   isCompact = false
 }) => {
   const router = useRouter()
-  const { focusSection } = useProjectsStore()
+  const { focusSection, focusProject } = useProjectsStore()
   // Группируем ответственности по типам
   const groupResponsibilities = (): ResponsibilityGroup[] => {
     const groups: ResponsibilityGroup[] = [
@@ -101,14 +101,18 @@ export const ResponsibilitiesBlock: React.FC<ResponsibilitiesBlockProps> = ({
                 <div className={`text-xs font-medium text-gray-900 dark:text-white ${isCompact ? 'mb-0.5' : 'mb-1'}`}>{group.title}</div>
                 <div className={`flex flex-wrap ${isCompact ? 'gap-1' : 'gap-2'}`}>
                   {group.items.map((item, index) => (
-                    item.type === 'section_responsible' ? (
+                    (item.type === 'section_responsible' || item.type === 'project_manager' || item.type === 'lead_engineer') ? (
                       <a
                         key={index}
                         data-keep-notifications-open
                         href="/dashboard/projects"
                         onClick={(e) => {
                           e.preventDefault()
-                          focusSection(item.entity_id)
+                          if (item.type === 'section_responsible') {
+                            focusSection(item.entity_id)
+                          } else {
+                            focusProject(item.entity_id)
+                          }
                           router.push('/dashboard/projects')
                         }}
                         className={`${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'} inline-flex items-center rounded-md border bg-white dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline truncate max-w-full cursor-pointer`}

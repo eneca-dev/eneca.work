@@ -959,6 +959,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         onClose={() => setIsLogModalOpen(false)}
         sectionId={sectionId}
         defaultItemId={selectedForLog}
+        // Ключ заставляет React размонтировать и смонтировать форму заново при каждом новом открытии,
+        // чтобы исключить перенос локального состояния между отчётами
+        key={isLogModalOpen ? `add-log-${selectedForLog || 'none'}` : 'add-log-hidden'}
         onSuccess={async () => {
           // Обновим статистику и список
           const { data, error } = await supabase
