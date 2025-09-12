@@ -47,6 +47,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     rate: loading.rate,
     projectId: loading.projectId || "",
     sectionId: loading.sectionId || "",
+    comment: loading.comment || "",
   })
 
   // Состояния для списков проектов и разделов
@@ -54,6 +55,11 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
   const [sections, setSections] = useState<Section[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
   const [isLoadingSections, setIsLoadingSections] = useState(false)
+  // Новые состояния для стадий и объектов (как в AddLoadingModal)
+  const [stages, setStages] = useState<{ stage_id: string; stage_name: string }[]>([])
+  const [objects, setObjects] = useState<{ object_id: string; object_name: string }[]>([])
+  const [selectedStageId, setSelectedStageId] = useState<string>("")
+  const [selectedObjectId, setSelectedObjectId] = useState<string>("")
 
   // Состояния для поиска проектов - упрощенные
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
@@ -101,8 +107,8 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     }
   }
 
-  // Загрузка разделов для выбранного проекта
-  const fetchSections = async (projectId: string) => {
+  // Загрузка разделов для выбранного проекта (с необязательными фильтрами по стадии и объекту)
+  const fetchSections = async (projectId: string, stageId?: string, objectId?: string) => {
     if (!projectId) {
       setSections([])
       return
@@ -110,11 +116,20 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
     setIsLoadingSections(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("view_section_hierarchy")
-        .select("section_id, section_name, project_id")
+        .select("section_id, section_name, project_id, stage_id, stage_name, object_id, object_name")
         .eq("project_id", projectId)
         .order("section_name")
+
+      if (stageId) {
+        query = query.eq("stage_id", stageId)
+      }
+      if (objectId) {
+        query = query.eq("object_id", objectId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error("Ошибка при загрузке разделов:", error)
@@ -152,7 +167,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       try {
         const { data, error } = await supabase
           .from("view_section_hierarchy")
-          .select("project_id, project_name")
+          .select("project_id, project_name, stage_id, stage_name, object_id, object_name")
           .eq("section_id", loading.sectionId)
           .limit(1)
           .maybeSingle()
@@ -178,6 +193,10 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
           // Подставляем название в поле поиска и подгружаем разделы
           setProjectSearchTerm(data.project_name ?? "")
           fetchSections(data.project_id)
+
+          // Проставляем стадию и объект из раздела
+          if (data.stage_id) setSelectedStageId(data.stage_id)
+          if (data.object_id) setSelectedObjectId(data.object_id)
         }
       } catch (e) {
         console.error("Не удалось восстановить проект по разделу:", e)
@@ -197,6 +216,44 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     }
   }, [loading.projectId, projects])
 
+  // Подгружаем стадии и объекты для выбранного проекта
+  useEffect(() => {
+    const loadStageAndObjects = async () => {
+      try {
+        if (!formData.projectId) {
+          setStages([]); setObjects([])
+          return
+        }
+        // Стадии
+        const { data: stageRows } = await supabase
+          .from("stages")
+          .select("stage_id, stage_name")
+          .eq("stage_project_id", formData.projectId)
+          .order("stage_name")
+        setStages(stageRows || [])
+
+        // Объекты проекта (через представление, с уникализацией)
+        const { data: objectRows } = await supabase
+          .from("view_section_hierarchy")
+          .select("object_id, object_name")
+          .eq("project_id", formData.projectId)
+          .not("object_id", "is", null)
+          .not("object_name", "is", null)
+
+        const map = new Map<string, { object_id: string; object_name: string }>()
+        ;(objectRows || []).forEach((r: any) => {
+          if (r.object_id && r.object_name && !map.has(r.object_id)) {
+            map.set(r.object_id, { object_id: r.object_id, object_name: r.object_name })
+          }
+        })
+        setObjects(Array.from(map.values()).sort((a, b) => a.object_name.localeCompare(b.object_name)))
+      } catch (e) {
+        console.error("Ошибка загрузки стадий/объектов:", e)
+      }
+    }
+    loadStageAndObjects()
+  }, [formData.projectId])
+
   // Простая фильтрация проектов прямо в рендере
   const filteredProjects =
     projectSearchTerm.trim() === ""
@@ -206,17 +263,25 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
           .slice(0, 10)
 
   // Обработчик изменения полей формы
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
 
-    // Если изменился проект, обновляем список разделов и сбрасываем выбранный раздел
+    // Если изменился проект, обновляем списки и сбрасываем выбранные фильтры/раздел
     if (name === "projectId" && value !== formData.projectId) {
+      setSelectedStageId("")
+      setSelectedObjectId("")
       fetchSections(value)
       setFormData((prev) => ({
         ...prev,
         projectId: value,
-        sectionId: "", // Сбрасываем выбранный раздел
+        sectionId: "",
       }))
+    } else if (name === "stageId") {
+      setSelectedStageId(value)
+      fetchSections(formData.projectId, value || undefined, selectedObjectId || undefined)
+    } else if (name === "objectId") {
+      setSelectedObjectId(value)
+      fetchSections(formData.projectId, selectedStageId || undefined, value || undefined)
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -284,6 +349,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
         rate: formData.rate,
+        comment: formData.comment,
       }
 
       // Добавляем проект и раздел только если они были изменены
@@ -489,6 +555,65 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
         ) : (
           <>
             <div className="space-y-4">
+              {/* Стадия и объект */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    className={cn(
+                      "block text-sm font-medium mb-1",
+                      theme === "dark" ? "text-slate-300" : "text-slate-700",
+                    )}
+                  >
+                    Стадия
+                  </label>
+                  <select
+                    name="stageId"
+                    value={selectedStageId}
+                    onChange={handleChange}
+                    disabled={isSaving || !formData.projectId}
+                    className={cn(
+                      "w-full text-sm rounded border px-3 py-2",
+                      theme === "dark"
+                        ? "bg-slate-700 border-slate-600 text-slate-200"
+                        : "bg-white border-slate-300 text-slate-800",
+                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
+                    )}
+                  >
+                    <option value="">Любая</option>
+                    {stages.map((s) => (
+                      <option key={s.stage_id} value={s.stage_id}>{s.stage_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className={cn(
+                      "block text-sm font-medium mb-1",
+                      theme === "dark" ? "text-slate-300" : "text-slate-700",
+                    )}
+                  >
+                    Объект
+                  </label>
+                  <select
+                    name="objectId"
+                    value={selectedObjectId}
+                    onChange={handleChange}
+                    disabled={isSaving || !formData.projectId}
+                    className={cn(
+                      "w-full text-sm rounded border px-3 py-2",
+                      theme === "dark"
+                        ? "bg-slate-700 border-slate-600 text-slate-200"
+                        : "bg-white border-slate-300 text-slate-800",
+                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
+                    )}
+                  >
+                    <option value="">Любой</option>
+                    {objects.map((o) => (
+                      <option key={o.object_id} value={o.object_id}>{o.object_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="project-search-container relative">
                 <label
                   className={cn(
@@ -667,6 +792,33 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
                   )}
                 />
                 {errors.rate && <p className="text-xs text-red-500 mt-1">{errors.rate}</p>}
+              </div>
+
+              {/* Комментарий */}
+              <div>
+                <label
+                  className={cn(
+                    "block text-sm font-medium mb-1",
+                    theme === "dark" ? "text-slate-300" : "text-slate-700",
+                  )}
+                >
+                  Комментарий
+                </label>
+                <textarea
+                  name="comment"
+                  value={formData.comment}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="Комментарий к загрузке"
+                  disabled={isSaving}
+                  className={cn(
+                    "w-full text-sm rounded border px-3 py-2 resize-y min-h-[72px]",
+                    theme === "dark"
+                      ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
+                      : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
+                    isSaving ? "opacity-50 cursor-not-allowed" : "",
+                  )}
+                />
               </div>
             </div>
 

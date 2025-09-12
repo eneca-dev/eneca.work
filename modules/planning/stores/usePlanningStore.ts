@@ -955,6 +955,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
               rate: loadingData.rate,
+              comment: (loadingData as any).comment,
               createdAt: new Date(),
               updatedAt: new Date(),
             }
