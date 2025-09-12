@@ -18,6 +18,8 @@ interface ProjectsState {
   highlightedSectionId: string | null;
   // Фокусировка раздела в дереве (без открытия панели)
   focusSectionId: string | null;
+  // Фокусировка проекта в дереве (без открытия панели)
+  focusProjectId: string | null;
   
   // Уведомления
   notification: string | null;
@@ -45,6 +47,8 @@ interface ProjectsState {
   clearHighlight: () => void;
   focusSection: (sectionId: string) => void;
   clearFocus: () => void;
+  focusProject: (projectId: string) => void;
+  clearProjectFocus: () => void;
   
   // Действия для уведомлений
   setNotification: (message: string) => void;
@@ -81,6 +85,7 @@ export const useProjectsStore = create<ProjectsState>()(
       groupByClient: false, // По умолчанию не группируем по заказчикам
       highlightedSectionId: null,
       focusSectionId: null,
+      focusProjectId: null,
       notification: null,
       projects: [],
       stages: [],
@@ -163,6 +168,16 @@ export const useProjectsStore = create<ProjectsState>()(
       clearFocus: () =>
         set({
           focusSectionId: null,
+        }),
+
+      focusProject: (projectId) =>
+        set({
+          focusProjectId: projectId,
+        }),
+
+      clearProjectFocus: () =>
+        set({
+          focusProjectId: null,
         }),
         
       setProjects: (projects) => set(() => ({ projects })),
