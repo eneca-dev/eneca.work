@@ -475,7 +475,17 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
                 <input
                   type="date"
                   value={sectionStartDate}
-                  onChange={(e) => setSectionStartDate(e.target.value)}
+                  max={sectionEndDate || undefined}
+                  onChange={(e) => {
+                    const newValue = e.target.value
+                    if (sectionEndDate && newValue && newValue > sectionEndDate) {
+                      setNotification('Дата начала не может быть позже даты окончания')
+                      // Возвращаем к максимально допустимому значению
+                      setSectionStartDate(sectionEndDate)
+                      return
+                    }
+                    setSectionStartDate(newValue)
+                  }}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
                   disabled={loading}
                 />
@@ -490,7 +500,17 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
                 <input
                   type="date"
                   value={sectionEndDate}
-                  onChange={(e) => setSectionEndDate(e.target.value)}
+                  min={sectionStartDate || undefined}
+                  onChange={(e) => {
+                    const newValue = e.target.value
+                    if (sectionStartDate && newValue && newValue < sectionStartDate) {
+                      setNotification('Дата окончания не может быть раньше даты начала')
+                      // Возвращаем к минимально допустимому значению
+                      setSectionEndDate(sectionStartDate)
+                      return
+                    }
+                    setSectionEndDate(newValue)
+                  }}
                   className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
                   disabled={loading}
                 />

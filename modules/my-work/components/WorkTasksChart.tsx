@@ -29,6 +29,8 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
   const [hoveredBarData, setHoveredBarData] = useState<WorkTasksChartData | null>(null)
   const [containerWidth, setContainerWidth] = useState<number>(800)
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
+  const [tooltipSide, setTooltipSide] = useState<'left' | 'right'>('right')
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Отслеживание изменений размера контейнера
@@ -263,7 +265,31 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
                   backgroundColor: data.tasksCount === 0 ? 'rgb(219, 234, 254)' : getBarColor(data.tasksCount, data.totalHours),
                   opacity: 0.9
                 }}
-                onMouseEnter={() => {
+                onMouseEnter={(e) => {
+                  // Получаем позицию столбика относительно контейнера
+                  const barRect = e.currentTarget.getBoundingClientRect()
+                  const containerRect = containerRef.current?.getBoundingClientRect()
+                  
+                  if (containerRect) {
+                    const barCenter = barRect.left + barRect.width / 2 - containerRect.left
+                    const containerCenter = containerWidth / 2
+                    const y = barRect.top - containerRect.top
+                    
+                    let x: number
+                    let side: 'left' | 'right'
+                    
+                    if (barCenter < containerCenter) {
+                      x = barRect.right - containerRect.left + 10
+                      side = 'right'
+                    } else {
+                      x = barRect.left - containerRect.left - 10
+                      side = 'left'
+                    }
+                    
+                    setTooltipPosition({ x, y })
+                    setTooltipSide(side)
+                  }
+                  
                   setHoveredBar(index)
                   setHoveredBarData(data)
                 }}
@@ -314,7 +340,14 @@ export const WorkTasksChart: React.FC<WorkTasksChartProps> = ({
 
         {/* Tooltip с детальной информацией */}
         {hoveredBarData && hoveredBarData.tasksCount > 0 && (
-          <div className="absolute top-4 left-4 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm text-gray-900 dark:text-white p-3 rounded-lg shadow-lg border border-gray-200 dark:border-white/20 text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs">
+          <div 
+            className="absolute bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm text-gray-900 dark:text-white p-3 rounded-lg shadow-lg border border-gray-200 dark:border-white/20 text-xs z-20 animate-in fade-in-0 slide-in-from-top-2 duration-200 w-auto max-w-xs pointer-events-none"
+            style={{
+              left: `${tooltipPosition.x}px`,
+              top: `${Math.max(tooltipPosition.y - 10, 10)}px`,
+              transform: tooltipSide === 'left' ? 'translateX(-100%)' : 'translateX(0)'
+            }}
+          >
             {/* Заголовок с датой и общими показателями */}
             <div className="mb-2 pb-2 border-b border-gray-200 dark:border-white/20">
               <div className="font-semibold text-gray-900 dark:text-white mb-1">
