@@ -43,34 +43,46 @@ const getInitials = (firstName?: string, lastName?: string) => {
 };
 
 const getStatusColor = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'active':
-    case 'активный':
+  switch (status) {
+    case 'Draft':
+      return 'text-gray-600';
+    case 'В работе':
       return 'text-primary';
-    case 'paused':
-    case 'приостановлен':
+    case 'Пауза':
       return 'text-yellow-600';
-    case 'completed':
-    case 'завершен':
+    case 'Завершен':
       return 'text-blue-600';
-    case 'cancelled':
-    case 'отменен':
-      return 'text-red-600';
+    case 'В ожидании ИД':
+      return 'text-orange-600';
+    case 'Авторский надзор':
+      return 'text-purple-600';
+    case 'Фактический расчет':
+      return 'text-green-600';
+    case 'Согласование зак.':
+      return 'text-cyan-600';
     default:
       return 'text-gray-600';
   }
 };
 
 const getStatusText = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'active':
-      return 'Активный';
-    case 'paused':
-      return 'Приостановлен';
-    case 'completed':
+  switch (status) {
+    case 'Draft':
+      return 'Draft';
+    case 'В работе':
+      return 'В работе';
+    case 'Пауза':
+      return 'Пауза';
+    case 'Завершен':
       return 'Завершен';
-    case 'cancelled':
-      return 'Отменен';
+    case 'В ожидании ИД':
+      return 'В ожидании ИД';
+    case 'Авторский надзор':
+      return 'Авторский надзор';
+    case 'Фактический расчет':
+      return 'Фактический расчет';
+    case 'Согласование зак.':
+      return 'Согласование зак.';
     default:
       return status || 'Неизвестно';
   }

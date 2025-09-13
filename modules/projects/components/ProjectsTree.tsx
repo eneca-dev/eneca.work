@@ -60,7 +60,7 @@ interface ProjectNode {
   statusName?: string
   statusColor?: string
   // Поле статуса проекта
-  projectStatus?: 'active' | 'paused' | 'archive' | 'canceled'
+  projectStatus?: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
 }
 
 interface ProjectsTreeProps {
@@ -148,24 +148,36 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const getProjectStatusText = (status?: ProjectNode['projectStatus']) => {
     if (!status) return '—'
     switch (status) {
-      case 'active': return 'Активный'
-      case 'paused': return 'Приостановлен'
-      case 'archive': return 'Архив'
-      case 'canceled': return 'Отменен'
+      case 'Draft': return 'Draft'
+      case 'В работе': return 'В работе'
+      case 'Пауза': return 'Пауза'
+      case 'Завершен': return 'Завершен'
+      case 'В ожидании ИД': return 'В ожидании ИД'
+      case 'Авторский надзор': return 'Авторский надзор'
+      case 'Фактический расчет': return 'Фактический расчет'
+      case 'Согласование зак.': return 'Согласование зак.'
       default: return '—'
     }
   }
 
   const getProjectStatusClasses = (status?: ProjectNode['projectStatus']) => {
     switch (status) {
-      case 'active':
+      case 'Draft':
+        return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
+      case 'В работе':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
-      case 'paused':
+      case 'Пауза':
         return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
-      case 'archive':
+      case 'Завершен':
         return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-      case 'canceled':
-        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-700'
+      case 'В ожидании ИД':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
+      case 'Авторский надзор':
+        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700'
+      case 'Фактический расчет':
+        return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700'
+      case 'Согласование зак.':
+        return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
       default:
         return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
     }
@@ -175,7 +187,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     if (node.type !== 'project') return
     setUpdatingProjectStatus(true)
     try {
-      const res = await updateProject(node.id, { project_status: newStatus || 'active' })
+      const res = await updateProject(node.id, { project_status: newStatus || 'В работе' })
       if (!res.success) throw new Error(res.error || 'Не удалось обновить статус проекта')
 
       // Локально обновим узел и оповестим дерево
@@ -611,10 +623,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-40 p-0">
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('active')}>Активный</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('paused')}>Приостановлен</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('archive')}>Архив</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('canceled')}>Отменен</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Draft')}>Draft</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В работе')}>В работе</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Пауза')}>Пауза</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Завершен')}>Завершен</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В ожидании ИД')}>В ожидании ИД</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Авторский надзор')}>Авторский надзор</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Фактический расчет')}>Фактический расчет</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Согласование зак.')}>Согласование зак.</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1424,7 +1440,7 @@ export function ProjectsTree({
           type: 'project',
           managerId: managerId,
           clientId: clientId,
-          projectStatus: row.project_status as 'active' | 'paused' | 'archive' | 'canceled' | undefined,
+          projectStatus: row.project_status as 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.' | undefined,
           children: []
         })
       }

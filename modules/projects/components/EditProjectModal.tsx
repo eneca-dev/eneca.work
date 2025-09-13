@@ -22,7 +22,7 @@ interface ProjectData {
   project_description: string | null
   project_manager: string | null
   project_lead_engineer: string | null
-  project_status: 'active' | 'archive' | 'paused' | 'canceled'
+  project_status: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
   client_id: string | null
 }
 
@@ -234,10 +234,14 @@ export function EditProjectModal({
 
   const getStatusName = (status: ProjectData['project_status']) => {
     const statusNames = {
-      active: 'Активный',
-      paused: 'Приостановлен',
-      archive: 'Архив',
-      canceled: 'Отменен'
+      'Draft': 'Draft',
+      'В работе': 'В работе',
+      'Пауза': 'Пауза',
+      'Завершен': 'Завершен',
+      'В ожидании ИД': 'В ожидании ИД',
+      'Авторский надзор': 'Авторский надзор',
+      'Фактический расчет': 'Фактический расчет',
+      'Согласование зак.': 'Согласование зак.'
     }
     return statusNames[status]
   }
@@ -247,7 +251,7 @@ export function EditProjectModal({
     return getStatusName(projectData.project_status)
   }
 
-  const statusOptions: ProjectData['project_status'][] = ['active', 'paused', 'archive', 'canceled']
+  const statusOptions: ProjectData['project_status'][] = ['Draft', 'В работе', 'Пауза', 'Завершен', 'В ожидании ИД', 'Авторский надзор', 'Фактический расчет', 'Согласование зак.']
 
   const filteredManagers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchManager.toLowerCase())

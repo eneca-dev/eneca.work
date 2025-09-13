@@ -26,14 +26,14 @@ interface Client {
   client_name: string
 }
 
-type ProjectStatus = 'active' | 'archive' | 'paused' | 'canceled'
+type ProjectStatus = 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
 
 const supabase = createClient()
 
 export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
   const [projectName, setProjectName] = useState('')
   const [projectDescription, setProjectDescription] = useState<string | null>('')
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('active')
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('В работе')
   const [projectManager, setProjectManager] = useState<string | null>(null)
   const [projectLeadEngineer, setProjectLeadEngineer] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
@@ -97,10 +97,14 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
 
   const getStatusName = (status: ProjectStatus) => {
     const statusNames = {
-      active: 'Активный',
-      paused: 'Приостановлен',
-      archive: 'Архив',
-      canceled: 'Отменен'
+      'Draft': 'Draft',
+      'В работе': 'В работе',
+      'Пауза': 'Пауза',
+      'Завершен': 'Завершен',
+      'В ожидании ИД': 'В ожидании ИД',
+      'Авторский надзор': 'Авторский надзор',
+      'Фактический расчет': 'Фактический расчет',
+      'Согласование зак.': 'Согласование зак.'
     }
     return statusNames[status]
   }
@@ -109,7 +113,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     return getStatusName(projectStatus)
   }
 
-  const statusOptions: ProjectStatus[] = ['active', 'paused', 'archive', 'canceled']
+  const statusOptions: ProjectStatus[] = ['Draft', 'В работе', 'Пауза', 'Завершен', 'В ожидании ИД', 'Авторский надзор', 'Фактический расчет', 'Согласование зак.']
 
   const filteredManagers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchManager.toLowerCase()))
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
