@@ -199,7 +199,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             })
             set({ managers: Array.from(map.values()) })
           } catch (e) {
-            console.error('Ошибка загрузки менеджеров:', e)
+            console.warn('Ошибка загрузки менеджеров:', (e as any)?.message || e)
           }
         },
 
@@ -217,7 +217,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             const projects = data?.map(p => ({ id: p.project_id, name: p.project_name, managerId: p.project_manager })) || []
             set({ projects, isLoadingProjects: false })
           } catch (e) {
-            console.error('Ошибка загрузки проектов:', e)
+            console.warn('Ошибка загрузки проектов:', (e as any)?.message || e)
             set({ isLoadingProjects: false })
           }
         },
@@ -234,7 +234,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             const stages = data?.map(s => ({ id: s.stage_id, name: s.stage_name })) || []
             set({ stages, isLoadingStages: false })
           } catch (e) {
-            console.error('Ошибка загрузки этапов:', e)
+            console.warn('Ошибка загрузки этапов:', (e as any)?.message || e)
             set({ isLoadingStages: false })
           }
         },
@@ -251,7 +251,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             const objects = data?.map(o => ({ id: o.object_id, name: o.object_name })) || []
             set({ objects, isLoadingObjects: false })
           } catch (e) {
-            console.error('Ошибка загрузки объектов:', e)
+            console.warn('Ошибка загрузки объектов:', (e as any)?.message || e)
             set({ isLoadingObjects: false })
           }
         },
@@ -275,7 +275,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             })
             set({ departments: Array.from(departmentsMap.values()), teams: Array.from(teamsMap.values()) })
           } catch (e) {
-            console.error('Ошибка загрузки отделов:', e)
+            console.warn('Ошибка загрузки отделов:', (e as any)?.message || e)
           }
         },
 
@@ -298,7 +298,7 @@ export const useProjectFilterStore = create<FilterStore>()(
             })
             set({ employees: Array.from(map.values()) })
           } catch (e) {
-            console.error('Ошибка загрузки сотрудников:', e)
+            console.warn('Ошибка загрузки сотрудников:', (e as any)?.message || e)
           }
         },
       }),

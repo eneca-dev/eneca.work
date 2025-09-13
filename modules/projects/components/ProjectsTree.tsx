@@ -140,7 +140,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [sectionDue, setSectionDue] = useState<string | null>(null)
   const hasPermission = usePermissionsStore(state => state.hasPermission)
   const canDeleteProject = hasPermission('projects.delete')
-  const canEditProjectStatus = hasPermission('projects.edit.all') || hasPermission('projects.edit.managed') || hasPermission('projects.edit.own')
+  const canChangeProjectStatus = hasPermission('projects.change_project_statuses')
 
   const [updatingProjectStatus, setUpdatingProjectStatus] = useState(false)
 
@@ -185,6 +185,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
   const handleUpdateProjectStatus = async (newStatus: ProjectNode['projectStatus']) => {
     if (node.type !== 'project') return
+    if (!canChangeProjectStatus) return
     setUpdatingProjectStatus(true)
     try {
       const res = await updateProject(node.id, { project_status: newStatus || 'В работе' })
@@ -604,35 +605,43 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             {node.type === 'project' && (
               <div className="flex items-center ml-2">
                 {/* Статус проекта */}
-                <div className="mr-2" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        className={`px-2 py-0.5 text-[11px] border rounded-md transition-colors ${getProjectStatusClasses(node.projectStatus)}`}
-                        disabled={!canEditProjectStatus || updatingProjectStatus}
-                        title={canEditProjectStatus ? 'Изменить статус проекта' : 'Недостаточно прав для изменения статуса'}
-                      >
-                        {updatingProjectStatus ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Обновление...
-                          </span>
-                        ) : (
-                          getProjectStatusText(node.projectStatus)
-                        )}
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-40 p-0">
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Draft')}>Draft</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В работе')}>В работе</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Пауза')}>Пауза</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Завершен')}>Завершен</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В ожидании ИД')}>В ожидании ИД</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Авторский надзор')}>Авторский надзор</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Фактический расчет')}>Фактический расчет</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Согласование зак.')}>Согласование зак.</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <div className="mr-2">
+                  {canChangeProjectStatus ? (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`px-2 py-0.5 text-[11px] border rounded-md transition-colors ${getProjectStatusClasses(node.projectStatus)}`}
+                            disabled={updatingProjectStatus}
+                            title="Изменить статус проекта"
+                          >
+                            {updatingProjectStatus ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Обновление...
+                              </span>
+                            ) : (
+                              getProjectStatusText(node.projectStatus)
+                            )}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-40 p-0">
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Draft')}>Draft</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В работе')}>В работе</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Пауза')}>Пауза</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Завершен')}>Завершен</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В ожидании ИД')}>В ожидании ИД</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Авторский надзор')}>Авторский надзор</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Фактический расчет')}>Фактический расчет</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Согласование зак.')}>Согласование зак.</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : (
+                    <span className={`px-2 py-0.5 text-[11px] border rounded-md ${getProjectStatusClasses(node.projectStatus)}`}>
+                      {getProjectStatusText(node.projectStatus)}
+                    </span>
+                  )}
                 </div>
                 {/* Развернуть весь проект */}
                 <button
