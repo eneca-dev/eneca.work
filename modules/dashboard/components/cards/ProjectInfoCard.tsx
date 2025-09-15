@@ -42,51 +42,14 @@ const getInitials = (firstName?: string, lastName?: string) => {
   return `${f}${l}`.toUpperCase() || 'NN';
 };
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Draft':
-      return 'text-gray-600';
-    case 'В работе':
-      return 'text-primary';
-    case 'Пауза':
-      return 'text-yellow-600';
-    case 'Завершен':
-      return 'text-blue-600';
-    case 'В ожидании ИД':
-      return 'text-orange-600';
-    case 'Авторский надзор':
-      return 'text-purple-600';
-    case 'Фактический расчет':
-      return 'text-green-600';
-    case 'Согласование зак.':
-      return 'text-cyan-600';
-    default:
-      return 'text-gray-600';
-  }
-};
+import {
+  getProjectStatusTextColor,
+  getProjectStatusLabel,
+} from '@/modules/projects/constants/project-status';
 
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'Draft':
-      return 'Draft';
-    case 'В работе':
-      return 'В работе';
-    case 'Пауза':
-      return 'Пауза';
-    case 'Завершен':
-      return 'Завершен';
-    case 'В ожидании ИД':
-      return 'В ожидании ИД';
-    case 'Авторский надзор':
-      return 'Авторский надзор';
-    case 'Фактический расчет':
-      return 'Фактический расчет';
-    case 'Согласование зак.':
-      return 'Согласование зак.';
-    default:
-      return status || 'Неизвестно';
-  }
-};
+const getStatusColor = (status: string) => getProjectStatusTextColor(status);
+
+const getStatusText = (status: string) => getProjectStatusLabel(status) || (status || 'Неизвестно');
 
 export const ProjectInfoCard: React.FC = () => {
   const projectId = useDashboardStore((state) => state.projectId);

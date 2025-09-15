@@ -32,6 +32,12 @@ import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { updateProject } from '@/lib/supabase-client'
+import {
+  getProjectStatusBadgeClasses,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+  PROJECT_STATUS_OPTIONS,
+} from '../constants/project-status'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
 
@@ -59,8 +65,16 @@ interface ProjectNode {
   statusId?: string
   statusName?: string
   statusColor?: string
-  // Поле статуса проекта
-  projectStatus?: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
+  // Поле статуса проекта (DB value)
+  projectStatus?:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
 }
 
 interface ProjectsTreeProps {
@@ -146,56 +160,27 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
   // Вспомогательные функции отображения статуса проекта
   const getProjectStatusText = (status?: ProjectNode['projectStatus']) => {
-    if (!status) return '—'
-    switch (status) {
-      case 'Draft': return 'Draft'
-      case 'В работе': return 'В работе'
-      case 'Пауза': return 'Пауза'
-      case 'Завершен': return 'Завершен'
-      case 'В ожидании ИД': return 'В ожидании ИД'
-      case 'Авторский надзор': return 'Авторский надзор'
-      case 'Фактический расчет': return 'Фактический расчет'
-      case 'Согласование зак.': return 'Согласование зак.'
-      default: return '—'
-    }
+    return getProjectStatusLabel(status)
   }
 
   const getProjectStatusClasses = (status?: ProjectNode['projectStatus']) => {
-    switch (status) {
-      case 'Draft':
-        return 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
-      case 'В работе':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
-      case 'Пауза':
-        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
-      case 'Завершен':
-        return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-      case 'В ожидании ИД':
-        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
-      case 'Авторский надзор':
-        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700'
-      case 'Фактический расчет':
-        return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700'
-      case 'Согласование зак.':
-        return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
-      default:
-        return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-    }
+    return getProjectStatusBadgeClasses(status)
   }
 
-  const handleUpdateProjectStatus = async (newStatus: ProjectNode['projectStatus']) => {
+  const handleUpdateProjectStatus = async (newStatusInput: ProjectNode['projectStatus']) => {
     if (node.type !== 'project') return
     if (!canChangeProjectStatus) return
     setUpdatingProjectStatus(true)
     try {
-      const res = await updateProject(node.id, { project_status: newStatus || 'В работе' })
+      const normalized = normalizeProjectStatus(newStatusInput) || 'active'
+      const res = await updateProject(node.id, { project_status: normalized })
       if (!res.success) throw new Error(res.error || 'Не удалось обновить статус проекта')
 
       // Локально обновим узел и оповестим дерево
-      node.projectStatus = newStatus
+      node.projectStatus = normalized
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('projectsTree:projectStatusUpdated', {
-          detail: { projectId: node.id, projectStatus: newStatus }
+          detail: { projectId: node.id, projectStatus: normalized }
         }))
       }
     } catch (e) {
@@ -626,14 +611,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-40 p-0">
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Draft')}>Draft</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В работе')}>В работе</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Пауза')}>Пауза</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Завершен')}>Завершен</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('В ожидании ИД')}>В ожидании ИД</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Авторский надзор')}>Авторский надзор</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Фактический расчет')}>Фактический расчет</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleUpdateProjectStatus('Согласование зак.')}>Согласование зак.</DropdownMenuItem>
+                          {PROJECT_STATUS_OPTIONS.map((opt) => (
+                            <DropdownMenuItem key={opt} onClick={() => handleUpdateProjectStatus(opt)}>
+                              {getProjectStatusLabel(opt)}
+                            </DropdownMenuItem>
+                          ))}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -1449,7 +1431,7 @@ export function ProjectsTree({
           type: 'project',
           managerId: managerId,
           clientId: clientId,
-          projectStatus: row.project_status as 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.' | undefined,
+          projectStatus: normalizeProjectStatus(row.project_status),
           children: []
         })
       }

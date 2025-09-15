@@ -7,6 +7,11 @@ import { createClient } from '@/utils/supabase/client'
 import { Modal, ModalButton } from '@/components/modals'
 import { useUiStore } from '@/stores/useUiStore'
 import { createProject } from '@/lib/supabase-client'
+import {
+  PROJECT_STATUS_OPTIONS,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+} from '../constants/project-status'
 
 interface CreateProjectModalProps {
   isOpen: boolean
@@ -26,14 +31,22 @@ interface Client {
   client_name: string
 }
 
-type ProjectStatus = 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
+type ProjectStatus =
+  | 'draft'
+  | 'active'
+  | 'completed'
+  | 'paused'
+  | 'waiting for input data'
+  | 'author supervision'
+  | 'actual calculation'
+  | 'customer approval'
 
 const supabase = createClient()
 
 export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
   const [projectName, setProjectName] = useState('')
   const [projectDescription, setProjectDescription] = useState<string | null>('')
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('В работе')
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('active')
   const [projectManager, setProjectManager] = useState<string | null>(null)
   const [projectLeadEngineer, setProjectLeadEngineer] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
@@ -95,25 +108,13 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     return c ? c.client_name : ''
   }
 
-  const getStatusName = (status: ProjectStatus) => {
-    const statusNames = {
-      'Draft': 'Draft',
-      'В работе': 'В работе',
-      'Пауза': 'Пауза',
-      'Завершен': 'Завершен',
-      'В ожидании ИД': 'В ожидании ИД',
-      'Авторский надзор': 'Авторский надзор',
-      'Фактический расчет': 'Фактический расчет',
-      'Согласование зак.': 'Согласование зак.'
-    }
-    return statusNames[status]
-  }
+  const getStatusName = (status: ProjectStatus) => getProjectStatusLabel(status)
 
   const selectedStatusName = () => {
     return getStatusName(projectStatus)
   }
 
-  const statusOptions: ProjectStatus[] = ['Draft', 'В работе', 'Пауза', 'Завершен', 'В ожидании ИД', 'Авторский надзор', 'Фактический расчет', 'Согласование зак.']
+  const statusOptions: ProjectStatus[] = PROJECT_STATUS_OPTIONS
 
   const filteredManagers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchManager.toLowerCase()))
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
@@ -132,7 +133,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
           const result = await createProject({
             project_name: projectName.trim(),
             project_description: projectDescription || null,
-            project_status: projectStatus,
+            project_status: normalizeProjectStatus(projectStatus) || 'active',
             project_manager: projectManager,
             project_lead_engineer: projectLeadEngineer,
             client_id: clientId,

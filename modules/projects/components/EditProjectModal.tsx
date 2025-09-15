@@ -1,11 +1,16 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { updateProject } from '@/lib/supabase-client'
+import {
+  PROJECT_STATUS_OPTIONS,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+} from '../constants/project-status'
 import { Modal, ModalButton } from '@/components/modals'
 import { DeleteProjectModal } from './DeleteProjectModal'
 
@@ -22,7 +27,15 @@ interface ProjectData {
   project_description: string | null
   project_manager: string | null
   project_lead_engineer: string | null
-  project_status: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
+  project_status:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
   client_id: string | null
 }
 
@@ -60,7 +73,13 @@ export function EditProjectModal({
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [statusHighlightedIndex, setStatusHighlightedIndex] = useState(-1)
   const { setNotification } = useUiStore()
+
+  // Refs for proper focus management
+  const statusInputRef = useRef<HTMLInputElement>(null)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
+  const statusMouseDownRef = useRef(false)
 
   // Загрузка данных проекта
   useEffect(() => {
@@ -70,6 +89,13 @@ export function EditProjectModal({
       loadClients()
     }
   }, [isOpen, projectId])
+
+  // Reset highlighted index when dropdown state changes
+  useEffect(() => {
+    if (showStatusDropdown) {
+      setStatusHighlightedIndex(-1)
+    }
+  }, [showStatusDropdown])
 
   const loadProjectData = async () => {
     setLoading(true)
@@ -141,7 +167,7 @@ export function EditProjectModal({
             project_description: projectData.project_description,
             project_manager: projectData.project_manager,
             project_lead_engineer: projectData.project_lead_engineer,
-            project_status: projectData.project_status,
+            project_status: normalizeProjectStatus(projectData.project_status) || 'active',
             client_id: projectData.client_id
           })
 
@@ -232,26 +258,14 @@ export function EditProjectModal({
     return client ? client.client_name : ''
   }
 
-  const getStatusName = (status: ProjectData['project_status']) => {
-    const statusNames = {
-      'Draft': 'Draft',
-      'В работе': 'В работе',
-      'Пауза': 'Пауза',
-      'Завершен': 'Завершен',
-      'В ожидании ИД': 'В ожидании ИД',
-      'Авторский надзор': 'Авторский надзор',
-      'Фактический расчет': 'Фактический расчет',
-      'Согласование зак.': 'Согласование зак.'
-    }
-    return statusNames[status]
-  }
+  const getStatusName = (status: ProjectData['project_status']) => getProjectStatusLabel(status)
 
   const getSelectedStatusName = () => {
     if (!projectData?.project_status) return ''
     return getStatusName(projectData.project_status)
   }
 
-  const statusOptions: ProjectData['project_status'][] = ['Draft', 'В работе', 'Пауза', 'Завершен', 'В ожидании ИД', 'Авторский надзор', 'Фактический расчет', 'Согласование зак.']
+  const statusOptions: ProjectData['project_status'][] = PROJECT_STATUS_OPTIONS
 
   const filteredManagers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchManager.toLowerCase())
@@ -268,6 +282,50 @@ export function EditProjectModal({
   const filteredStatuses = statusOptions.filter(status =>
     getStatusName(status).toLowerCase().includes(searchStatus.toLowerCase())
   )
+
+  // Keyboard handler for status combobox
+  const handleStatusKeyDown = (e: React.KeyboardEvent) => {
+    if (!showStatusDropdown && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      setShowStatusDropdown(true)
+      return
+    }
+
+    if (!showStatusDropdown) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setStatusHighlightedIndex(prev =>
+          prev < filteredStatuses.length - 1 ? prev + 1 : 0
+        )
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setStatusHighlightedIndex(prev =>
+          prev > 0 ? prev - 1 : filteredStatuses.length - 1
+        )
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (statusHighlightedIndex >= 0 && statusHighlightedIndex < filteredStatuses.length) {
+          const selectedStatus = filteredStatuses[statusHighlightedIndex]
+          setProjectData({
+            ...projectData!,
+            project_status: selectedStatus
+          })
+          setSearchStatus('')
+          setShowStatusDropdown(false)
+          setStatusHighlightedIndex(-1)
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setShowStatusDropdown(false)
+        setStatusHighlightedIndex(-1)
+        setSearchStatus('')
+        break
+    }
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
@@ -324,6 +382,7 @@ export function EditProjectModal({
                 </label>
                 <div className="relative">
                   <input
+                    ref={statusInputRef}
                     type="text"
                     value={showStatusDropdown ? searchStatus : getSelectedStatusName()}
                     onChange={(e) => {
@@ -335,16 +394,42 @@ export function EditProjectModal({
                       setShowStatusDropdown(true)
                     }}
                     onBlur={() => {
-                      setTimeout(() => setShowStatusDropdown(false), 200)
+                      // Don't close immediately - let mouse events be handled first
+                      setTimeout(() => {
+                        if (!statusMouseDownRef.current) {
+                          setShowStatusDropdown(false)
+                          setStatusHighlightedIndex(-1)
+                          setSearchStatus('')
+                        }
+                      }, 150)
                     }}
+                    onKeyDown={handleStatusKeyDown}
                     placeholder={getSelectedStatusName() || "Выберите статус проекта..."}
+                    role="combobox"
+                    aria-expanded={showStatusDropdown}
+                    aria-controls="status-listbox"
+                    aria-activedescendant={showStatusDropdown && statusHighlightedIndex >= 0 ? `status-option-${statusHighlightedIndex}` : undefined}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                   />
                   {showStatusDropdown && (
-                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredStatuses.map((status) => (
+                    <div
+                      ref={statusDropdownRef}
+                      id="status-listbox"
+                      role="listbox"
+                      className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                      onMouseDown={() => {
+                        statusMouseDownRef.current = true
+                      }}
+                      onMouseUp={() => {
+                        statusMouseDownRef.current = false
+                      }}
+                    >
+                      {filteredStatuses.map((status, index) => (
                         <div
                           key={status}
+                          id={`status-option-${index}`}
+                          role="option"
+                          aria-selected={index === statusHighlightedIndex}
                           onClick={() => {
                             setProjectData({
                               ...projectData,
@@ -352,8 +437,13 @@ export function EditProjectModal({
                             })
                             setSearchStatus('')
                             setShowStatusDropdown(false)
+                            setStatusHighlightedIndex(-1)
                           }}
-                          className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                          className={`px-3 py-2 cursor-pointer ${
+                            index === statusHighlightedIndex
+                              ? 'bg-blue-100 dark:bg-blue-900'
+                              : 'hover:bg-gray-100 dark:hover:bg-slate-600'
+                          }`}
                         >
                           <div className="font-medium dark:text-white">
                             {getStatusName(status)}

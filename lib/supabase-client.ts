@@ -875,7 +875,15 @@ export async function updateProject(
     project_description?: string | null
     project_manager?: string | null
     project_lead_engineer?: string | null
-    project_status?: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
+    project_status?:
+      | 'draft'
+      | 'active'
+      | 'completed'
+      | 'paused'
+      | 'waiting for input data'
+      | 'author supervision'
+      | 'actual calculation'
+      | 'customer approval'
     client_id?: string | null
   }
 ): Promise<{ success: boolean; error?: string; data?: any }> {
@@ -925,7 +933,15 @@ export async function createProject(newProject: {
   project_description?: string | null
   project_manager?: string | null
   project_lead_engineer?: string | null
-  project_status: 'Draft' | 'В работе' | 'Завершен' | 'Пауза' | 'В ожидании ИД' | 'Авторский надзор' | 'Фактический расчет' | 'Согласование зак.'
+  project_status:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
   client_id?: string | null
 }): Promise<{ success: boolean; error?: string; projectId?: string }> {
   try {
