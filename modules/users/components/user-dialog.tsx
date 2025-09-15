@@ -93,17 +93,20 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const currentUserId = useUserStore((state) => state.id)
   const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
   const { reloadPermissions } = usePermissionsLoader()
 
   // Определяем, может ли пользователь редактировать роли
-  const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole)
+  const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole || canAssignRoles)
 
   // Определяем, может ли пользователь редактировать организационные поля
   // При самостоятельном редактировании все пользователи могут редактировать все поля своего профиля
   // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей
   const canEditOrganizationalFields = isSelfEdit ? true : canEditAllUsers
+
+  // Определяем, может ли пользователь редактировать только команду (для users.edit.team)
+  const canEditOnlyTeam = !isSelfEdit && canEditTeam && !canEditAllUsers
 
   // Определяем, может ли пользователь редактировать структуры (команды, отделы, должности, категории)
   // Это разрешение позволяет создавать новые структуры в процессе редактирования
@@ -330,8 +333,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       } else {
         setFilteredTeams([])
       }
+
+      // Для пользователей с canEditOnlyTeam блокируем изменение отдела
+      if (canEditOnlyTeam && user.department) {
+        setFormData((prev) => ({
+          ...prev,
+          department: user.department // Фиксируем отдел пользователя
+        }))
+      }
     }
-  }, [open, user, countries, roles, canEditRoles, departments, teams])
+  }, [open, user, countries, roles, canEditRoles, departments, teams, canEditOnlyTeam])
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     console.log("=== UserDialog: Фильтрация команд ===")
@@ -520,12 +531,61 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         if (canEditOrganizationalFields) {
           // Отдел - может быть пустым (null)
           updateData.department = formData.department && formData.department !== "" ? formData.department : null
-          
+
           // Команда - может быть пустой (null) независимо от отдела
           updateData.team = formData.team && formData.team !== "" ? formData.team : null
-          
+
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
+        } else if (canEditOnlyTeam) {
+          // Для пользователей с users.edit.team сохраняем только команду с валидацией департамента
+          if (formData.team && formData.team !== "") {
+            // Находим команду в списке доступных команд
+            const selectedTeam = teams.find(team => team.name === formData.team)
+
+            if (!selectedTeam) {
+              console.error("UserDialog: Выбранная команда не найдена в списке команд")
+              toast({
+                title: "Ошибка валидации",
+                description: "Выбранная команда не существует или недоступна",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Находим департамент пользователя
+            const userDepartment = departments.find(dept => dept.name === user.department)
+
+            if (!userDepartment) {
+              console.error("UserDialog: Департамент пользователя не найден")
+              toast({
+                title: "Ошибка валидации",
+                description: "Не удалось определить департамент пользователя",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Проверяем, что команда принадлежит тому же департаменту, что и пользователь
+            if (selectedTeam.departmentId !== userDepartment.id) {
+              console.error("UserDialog: Попытка кросс-департаментного назначения команды")
+              toast({
+                title: "Ошибка валидации",
+                description: "Команда должна принадлежать тому же департаменту, что и пользователь",
+                variant: "destructive"
+              })
+              setIsLoading(false)
+              return
+            }
+
+            // Если все проверки пройдены, устанавливаем команду
+            updateData.team = formData.team
+          } else {
+            // Пустая команда - это допустимо
+            updateData.team = null
+          }
         }
         
         // Роли управляются через модальное окно
@@ -701,6 +761,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   onChange={(e) => handleChange("firstName", e.target.value)}
                   placeholder="Имя"
                   required
+                  disabled={canEditOnlyTeam}
                   className="h-9"
                 />
                 <Input
@@ -709,6 +770,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   onChange={(e) => handleChange("lastName", e.target.value)}
                   placeholder="Фамилия"
                   required
+                  disabled={canEditOnlyTeam}
                   className="h-9"
                 />
               </div>
@@ -764,8 +826,9 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                       setTempSelectedRoles(currentRoleIds)
                       setIsRolesModalOpen(true)
                     }}
+                    disabled={!canAssignRoles}
                     className="h-8 w-8 p-0 flex-shrink-0 self-start sm:self-center"
-                    title="Добавить роли"
+                    title={!canAssignRoles ? "У вас нет прав на назначение ролей" : "Добавить роли"}
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -783,7 +846,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.department}
                   onValueChange={(value) => handleChange("department", value)}
-                  disabled={!canEditOrganizationalFields}
+                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
                 >
                   <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
@@ -811,7 +874,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.team}
                   onValueChange={(value) => handleChange("team", value)}
-                  disabled={!canEditOrganizationalFields || !formData.department}
+                  disabled={(!canEditOrganizationalFields && !canEditOnlyTeam) || !formData.department}
                 >
                   <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
@@ -858,7 +921,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.position}
                   onValueChange={(value) => handleChange("position", value)}
-                  disabled={!canEditOrganizationalFields}
+                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите должность" />
@@ -877,7 +940,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.category}
                   onValueChange={(value) => handleChange("category", value)}
-                  disabled={!canEditOrganizationalFields}
+                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите категорию" />
@@ -904,6 +967,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
               <Select
                 value={formData.workLocation}
                 onValueChange={(value) => handleChange("workLocation", value as "office" | "remote" | "hybrid")}
+                disabled={canEditOnlyTeam}
               >
                 <SelectTrigger id="workLocation" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите расположение" />
@@ -932,6 +996,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 }}
                 open={countrySelectOpen}
                 onOpenChange={setCountrySelectOpen}
+                disabled={canEditOnlyTeam}
               >
                 <SelectTrigger id="country" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите страну" />
@@ -982,7 +1047,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   setCitySearch("")
                   setCitySelectOpen(false)
                 }}
-                disabled={!selectedCountryCode}
+                disabled={!selectedCountryCode || canEditOnlyTeam}
                 open={citySelectOpen}
                 onOpenChange={setCitySelectOpen}
               >
@@ -1105,13 +1170,18 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                   const isSelected = tempSelectedRoles.includes(role.id)
                   // Отключаем чекбокс если это последняя роль пользователя
                   const isLastRole = isSelected && tempSelectedRoles.length === 1
+                  // Определяем, является ли роль admin ролью (по имени содержит "admin")
+                  const isAdminRole = role.name.toLowerCase().includes('admin')
+                  // Отключаем чекбокс admin роли, если нет разрешения
+                  const isAdminRoleDisabled = isAdminRole && !canAssignAdminRole
+
                   return (
-                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${isLastRole ? 'opacity-50' : ''}`}>
+                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${(isLastRole || isAdminRoleDisabled) ? 'opacity-50' : ''}`}>
                       <input
                         type="checkbox"
                         id={`modal-role-${role.id}`}
                         checked={isSelected}
-                        disabled={isLastRole}
+                        disabled={isLastRole || isAdminRoleDisabled}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setTempSelectedRoles(prev => [...prev, role.id])
@@ -1121,13 +1191,16 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                         }}
                         className="mt-1 rounded flex-shrink-0"
                       />
-                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${isLastRole ? 'cursor-not-allowed' : ''}`}>
+                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${(isLastRole || isAdminRoleDisabled) ? 'cursor-not-allowed' : ''}`}>
                         <span className="font-medium block truncate">{role.name}</span>
                         {role.description && (
                           <span className="text-xs text-gray-500 block mt-1 overflow-hidden text-ellipsis line-clamp-2">{role.description}</span>
                         )}
                         {isLastRole && (
                           <span className="text-xs text-orange-600 block mt-1">Нельзя удалить последнюю роль</span>
+                        )}
+                        {isAdminRoleDisabled && (
+                          <span className="text-xs text-red-600 block mt-1">Нет прав на назначение admin роли</span>
                         )}
                       </label>
                     </div>

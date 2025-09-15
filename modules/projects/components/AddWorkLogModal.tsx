@@ -3,8 +3,11 @@
 import React, { useEffect, useMemo, useState, KeyboardEvent } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { Modal, ModalButton } from "@/components/modals"
-import { Loader2 } from "lucide-react"
+import { Loader2, Search, User } from "lucide-react"
 import { useHasPermission } from "@/modules/permissions"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/modules/projects/components/DatePicker"
 
 interface AddWorkLogModalProps {
   isOpen: boolean
@@ -25,6 +28,15 @@ interface WorkCategory {
   work_category_name: string
 }
 
+interface UserOption {
+  user_id: string
+  first_name: string
+  last_name: string
+  email: string
+  avatar_url?: string
+  full_name: string
+}
+
 const supabase = createClient()
 
 export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = null, onSuccess }: AddWorkLogModalProps) {
@@ -33,16 +45,33 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
 
   const [items, setItems] = useState<ItemOption[]>([])
   const [categories, setCategories] = useState<WorkCategory[]>([])
+  const [users, setUsers] = useState<UserOption[]>([])
 
   const [selectedItemId, setSelectedItemId] = useState<string>(defaultItemId || "")
   const [workDate, setWorkDate] = useState<string>(new Date().toISOString().slice(0, 10))
-  const [hours, setHours] = useState<string>("")
-  const [rate, setRate] = useState<string>("")
-  const [description, setDescription] = useState<string>("")
-  const [search, setSearch] = useState<string>("")
+  const [hours, setHours] = useState<string>("")  
+  const [rate, setRate] = useState<string>("")  
+  const [description, setDescription] = useState<string>("")  
+  const [search, setSearch] = useState<string>("")  
+  const [selectedUserId, setSelectedUserId] = useState<string>("") // ID выбранного исполнителя
+  const [userSearch, setUserSearch] = useState<string>("") // Поиск пользователей
 
-  // Проверка разрешения на редактирование ставки
+  // Проверки разрешений
   const canEditRate = useHasPermission('work_logs.rate.edit')
+  const isAdmin = useHasPermission('users.admin_panel') // Проверка роли администратора
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedItemId(defaultItemId || "")
+      setWorkDate(new Date().toISOString().slice(0, 10))
+      setHours("")
+      setRate("")
+      setDescription("")
+      setSearch("")
+      setSelectedUserId("") // Сбрасываем выбранного исполнителя
+      setUserSearch("") // Сбрасываем поиск пользователей
+    }
+  }, [isOpen, defaultItemId])
 
   useEffect(() => {
     if (!isOpen) return
@@ -96,12 +125,40 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
             }
           }
         } catch {}
+
+        // Загружаем пользователей только для админов
+        if (isAdmin) {
+          const { data: usersData, error: usersError } = await supabase
+            .from("view_users")
+            .select(`
+              user_id,
+              first_name,
+              last_name,
+              email,
+              avatar_url
+            `)
+            .order("first_name")
+
+          if (usersError) {
+            console.error("Ошибка загрузки пользователей:", usersError)
+          } else {
+            const userOptions: UserOption[] = usersData.map(user => ({
+              user_id: user.user_id,
+              first_name: user.first_name || "",
+              last_name: user.last_name || "",
+              email: user.email,
+              avatar_url: user.avatar_url,
+              full_name: `${user.first_name || ""} ${user.last_name || ""}`.trim()
+            }))
+            setUsers(userOptions)
+          }
+        }
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [isOpen, sectionId])
+  }, [isOpen, sectionId, isAdmin])
 
   useEffect(() => {
     // Если пришёл новый defaultItemId — проставим
@@ -120,12 +177,28 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
     return items.filter(i => i.description.toLowerCase().includes(s))
   }, [items, search])
 
+  // Фильтрация пользователей по поиску
+  const filteredUsers = useMemo(() => {
+    if (!userSearch) return users
+    return users.filter(user => 
+      user.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
+      user.email.toLowerCase().includes(userSearch.toLowerCase())
+    )
+  }, [users, userSearch])
+
+  // Получение выбранного пользователя
+  const selectedUser = useMemo(() => {
+    return users.find(user => user.user_id === selectedUserId)
+  }, [users, selectedUserId])
+
   const canSave = useMemo(() => {
     const h = Number(hours)
     const r = Number(rate)
     const descOk = description.trim().length > 0
-    return selectedItemId && Number.isFinite(h) && h > 0 && Number.isFinite(r) && r >= 0 && !!workDate && descOk
-  }, [selectedItemId, hours, rate, workDate, description])
+    const executorOk = !isAdmin || selectedUserId // Для админов нужен выбор исполнителя
+    const rateOk = !isAdmin || (Number.isFinite(r) && r >= 0) // Для админов нужна валидная ставка
+    return selectedItemId && Number.isFinite(h) && h > 0 && !!workDate && descOk && executorOk && rateOk
+  }, [selectedItemId, hours, rate, workDate, description, isAdmin, selectedUserId])
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" && canSave && !saving) save()
@@ -142,10 +215,10 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
       const payload = {
         decomposition_item_id: selectedItemId,
         work_log_description: description || null,
-        work_log_created_by: userId,
+        work_log_created_by: isAdmin ? selectedUserId : userId, // Для админов - выбранный исполнитель, для пользователей - текущий
         work_log_date: workDate,
         work_log_hours: Number(hours),
-        work_log_hourly_rate: Number(rate),
+        work_log_hourly_rate: isAdmin ? Number(rate) : (Number(rate) || 0), // Для обычных пользователей ставка может быть 0
       }
       const { error } = await supabase
         .from("work_logs")
@@ -164,10 +237,17 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
     }
   }
 
+  const formatDateLocal = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} size="sm" className="min-h-[520px]">
       <Modal.Header title="Добавить отчёт" subtitle="Привяжите отчёт к строке декомпозиции" />
-      <Modal.Body>
+      <Modal.Body className="overflow-visible">
         {loading ? (
           <div className="flex items-center justify-center h-20">
             <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
@@ -210,15 +290,82 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
               )}
             </div>
 
+            {/* Выбор исполнителя (только для админов) */}
+            {isAdmin && (
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Исполнитель <span className="text-red-500">*</span>
+                </label>
+                {selectedUser ? (
+                  <div 
+                    className="flex items-center gap-3 p-2.5 border border-slate-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
+                    onClick={() => setSelectedUserId("")}
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={selectedUser.avatar_url || undefined} />
+                      <AvatarFallback className="text-xs">
+                        {selectedUser.first_name?.[0]}{selectedUser.last_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{selectedUser.full_name}</div>
+                      <div className="text-xs text-slate-500">{selectedUser.email}</div>
+                    </div>
+                    <User className="h-4 w-4 text-slate-400" />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Найти пользователя..."
+                        value={userSearch}
+                        onChange={e => setUserSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    {filteredUsers.length > 0 && (
+                      <div className="max-h-32 overflow-y-auto border border-slate-300 dark:border-slate-700 rounded-md">
+                        {filteredUsers.slice(0, 5).map((user) => (
+                          <div
+                            key={user.user_id}
+                            className="flex items-center gap-3 p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                            onClick={() => {
+                              setSelectedUserId(user.user_id)
+                              setUserSearch("")
+                            }}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={user.avatar_url || undefined} />
+                              <AvatarFallback className="text-xs">
+                                {user.first_name?.[0]}{user.last_name?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">{user.full_name}</div>
+                              <div className="text-xs text-slate-500">{user.email}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Дата / Часы / Ставка */}
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className={`grid gap-2.5 grid-cols-3`}>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Дата</label>
-                <input
-                  type="date"
-                  value={workDate}
-                  onChange={e => setWorkDate(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white"
+                <DatePicker
+                  value={workDate ? new Date(workDate) : null}
+                  onChange={(d) => setWorkDate(formatDateLocal(d))}
+                  placeholder="Выберите дату"
+                  calendarWidth="260px"
+                  placement="right"
+                  offsetY={-40}
+                  inputClassName="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>
               <div>
@@ -233,8 +380,9 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white"
                 />
               </div>
+              {/* Ставка — видна всем, редактируема только для админов */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Ставка</label>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Ставка, BYN/ч</label>
                 <input
                   type="number"
                   step="0.01"
@@ -243,8 +391,9 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   onChange={e => setRate(e.target.value)}
                   placeholder="0"
                   className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white disabled:opacity-60"
-                  disabled={!canEditRate}
-                  title={canEditRate ? undefined : 'Недостаточно прав для изменения ставки'}
+                  disabled={!isAdmin || !canEditRate}
+                  readOnly={!isAdmin}
+                  title={!isAdmin ? 'Только просмотр' : (canEditRate ? undefined : 'Недостаточно прав для изменения ставки')}
                 />
               </div>
             </div>
@@ -261,7 +410,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                 rows={3}
                 placeholder="Что было сделано"
                 required
-                className="w-full px-2.5 py-2 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white"
+                className="w-full px-2.5 py-2 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white min-h-[120px]"
               />
             </div>
           </div>

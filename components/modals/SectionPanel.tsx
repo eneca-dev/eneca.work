@@ -12,6 +12,7 @@ import { SectionDecompositionTab } from '@/modules/projects/components/SectionDe
 import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
+import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -454,6 +455,56 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     }
   }
 
+  const formatDateISO = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  // Редактирование диапазона дат (как в отпускном календаре, но без событий)
+  const [isEditingDates, setIsEditingDates] = useState(false)
+  const currentRange: DateRange = {
+    from: sectionData?.section_start_date ? new Date(sectionData.section_start_date) : null,
+    to: sectionData?.section_end_date ? new Date(sectionData.section_end_date) : null,
+  }
+
+  const [pendingRange, setPendingRange] = useState<DateRange | null>(null)
+
+  const handleDatesChange = async (range: DateRange) => {
+    setPendingRange(range)
+
+    // Ничего не выбрано — ничего не делаем
+    if (!range.from && !range.to) return
+
+    setSavingField('section_dates')
+    try {
+      const startStr = range.from ? formatDateISO(range.from) : null
+      const endStr = range.to ? formatDateISO(range.to) : null
+
+      const { error } = await supabase
+        .from('sections')
+        .update({ section_start_date: startStr, section_end_date: endStr })
+        .eq('section_id', sectionId)
+
+      if (error) throw error
+
+      setSectionData(prev => prev ? {
+        ...prev,
+        section_start_date: startStr,
+        section_end_date: endStr,
+      } : null)
+
+      setNotification('Сроки раздела обновлены')
+      setIsEditingDates(false)
+    } catch (err) {
+      console.error('Ошибка сохранения дат раздела:', err)
+      setNotification('Ошибка сохранения сроков')
+    } finally {
+      setSavingField(null)
+    }
+  }
+
   const renderEditableField = (
     fieldName: keyof SectionData,
     label: string,
@@ -477,43 +528,6 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                 className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows={4}
                 placeholder={`Введите ${label.toLowerCase()}`}
-                disabled={isSaving}
-              />
-            ) : type === 'date' ? (
-              <input
-                type="date"
-                value={editValues[fieldName] || ''}
-                onChange={async (e) => {
-                  const newValue = e.target.value;
-                  setEditValues({ ...editValues, [fieldName]: newValue });
-                  
-                  // Автоматически сохраняем изменения для дат
-                  if (fieldName === 'section_start_date' || fieldName === 'section_end_date') {
-                    setSavingField(fieldName);
-                    try {
-                      const { error } = await supabase
-                        .from('sections')
-                        .update({ [fieldName]: newValue })
-                        .eq('section_id', sectionId);
-
-                      if (error) throw error;
-
-                      setSectionData(prev => prev ? {
-                        ...prev,
-                        [fieldName]: newValue
-                      } : null);
-                      
-                      setEditingField(null);
-                      setNotification('Дата успешно обновлена');
-                    } catch (error) {
-                      console.error('Ошибка сохранения:', error);
-                      setNotification('Ошибка сохранения изменений');
-                    } finally {
-                      setSavingField(null);
-                    }
-                  }
-                }}
-                className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isSaving}
               />
             ) : type === 'responsible' ? (
@@ -576,8 +590,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               />
             )}
             
-            {/* Кнопки управления - не показываем для полей дат (они автоматически сохраняются) */}
-            {type !== 'date' && (
+            {/* Кнопки управления */}
+            {type !== 'responsible' && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleFieldSave(fieldName)}
@@ -597,22 +611,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               </div>
             )}
             
-            {/* Индикатор состояния для полей дат */}
-            {type === 'date' && (
-              <div className="flex items-center gap-2 text-sm">
-                {isSaving ? (
-                  <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Сохранение...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                    <Check className="h-3 w-3" />
-                    Дата будет сохранена автоматически
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Индикатор состояния больше не нужен для дат, так как используется DateRangePicker */}
           </div>
         ) : (
           <div 
@@ -841,7 +840,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Статус */}
                     <div>
-                      <label className="block text-xs font-medium mb-1 dark:text-slate-300 text-slate-700">
+                      <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
                         Статус
                       </label>
                       <div className="relative">
@@ -927,12 +926,45 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                       {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
                     </div>
 
-                    {/* Даты */}
-                    <div>
-                      {renderEditableField('section_start_date', 'Дата начала', sectionData.section_start_date, 'date')}
-                    </div>
-                    <div>
-                      {renderEditableField('section_end_date', 'Дата окончания', sectionData.section_end_date, 'date')}
+                    {/* Сроки (единый выбор периода, как в отпускном календаре) */}
+                    <div className="md:col-span-2" style={{ maxWidth: '500px' }}>
+                      <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+                        Сроки
+                      </label>
+                      {isEditingDates ? (
+                        <div className="space-y-2">
+                          <DateRangePicker
+                            value={pendingRange ?? currentRange}
+                            onChange={handleDatesChange}
+                            placeholder="Выберите период"
+                            calendarWidth="500px"
+                          />
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            Выберите начальную и конечную даты. Для одного дня щёлкните по дате дважды.
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="group cursor-pointer p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          onClick={() => {
+                            setPendingRange(currentRange)
+                            setIsEditingDates(true)
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-slate-500" />
+                            <span className="dark:text-slate-300 text-slate-600">
+                              {currentRange.from && currentRange.to
+                                ? `${currentRange.from.toLocaleDateString('ru-RU')} - ${currentRange.to.toLocaleDateString('ru-RU')}`
+                                : currentRange.from
+                                ? `${currentRange.from.toLocaleDateString('ru-RU')} - …`
+                                : currentRange.to
+                                ? `… - ${currentRange.to.toLocaleDateString('ru-RU')}`
+                                : 'Не указаны'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

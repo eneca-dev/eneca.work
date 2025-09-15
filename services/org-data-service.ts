@@ -1199,7 +1199,7 @@ export async function getUsersByTeam() {
     .select(
       `
       team_name,
-      profiles!inner (
+      profiles!profiles_team_membership_fkey!inner (
         user_id
       )
     `,

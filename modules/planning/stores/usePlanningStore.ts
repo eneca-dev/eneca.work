@@ -97,6 +97,7 @@ interface PlanningState {
     responsibleName?: string
     responsibleAvatarUrl?: string | null
     responsibleTeamName?: string | null
+    comment?: string | null
   }) => Promise<{ success: boolean; error?: string; loadingId?: string }>
   refreshSectionLoadings: (sectionId: string) => Promise<{ success: boolean; error?: string }>
   archiveLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>
@@ -955,6 +956,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
               rate: loadingData.rate,
+              comment: (loadingData as any).comment,
               createdAt: new Date(),
               updatedAt: new Date(),
             }

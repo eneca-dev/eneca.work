@@ -135,7 +135,7 @@ export default function EntityModal({
         
         // Обрабатываем пустые значения для полей select
         for (const field of extraFields) {
-          if (field.type === "select" && insertData[field.name] === "") {
+          if (field.type === "select" && (insertData[field.name] === "" || insertData[field.name] === "none")) {
             insertData[field.name] = null
           }
         }
@@ -174,7 +174,7 @@ export default function EntityModal({
         
         // Обрабатываем пустые значения для полей select
         for (const field of extraFields) {
-          if (field.type === "select" && updateData[field.name] === "") {
+          if (field.type === "select" && (updateData[field.name] === "" || updateData[field.name] === "none")) {
             updateData[field.name] = null
           }
         }
@@ -204,8 +204,8 @@ export default function EntityModal({
   }
 
   const handleInputChange = (field: string, value: string) => {
-    // Для полей select с пустым значением (например, "Не назначен") устанавливаем null
-    const processedValue = value === "" ? null : value
+    // Для полей select с пустым значением или "none" (например, "Не назначен") устанавливаем null
+    const processedValue = value === "" || value === "none" ? null : value
     setFormData(prev => ({ ...prev, [field]: processedValue }))
   }
 
@@ -286,7 +286,7 @@ export default function EntityModal({
               {field.type === "select" ? (
                 field.options && field.options.length > 0 ? (
                   <Select
-                    value={formData[field.name]?.toString() || ""}
+                    value={formData[field.name]?.toString() || "none"}
                     onValueChange={(value) => handleInputChange(field.name, value)}
                   >
                     <SelectTrigger>

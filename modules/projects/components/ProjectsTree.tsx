@@ -44,27 +44,23 @@ import { SectionDetailTabs } from './SectionDetailTabs'
 interface ProjectNode {
   id: string
   name: string
-  type: 'manager' | 'project' | 'stage' | 'object' | 'section' | 'client'
-  managerId?: string
+  type: 'client' | 'manager' | 'project' | 'stage' | 'object' | 'section'
+  children?: ProjectNode[]
+  // Доп. поля
   projectId?: string
   stageId?: string
   objectId?: string
-  clientId?: string
-  children?: ProjectNode[]
-  dates?: {
-    start?: string
-    end?: string
-  }
-  responsibleName?: string
-  responsibleAvatarUrl?: string
   projectName?: string
   stageName?: string
   departmentName?: string
-  clientName?: string
-  // Поля для статуса секции
-  statusId?: string
+  dates?: { start?: string; end?: string}
+  responsibleName?: string
+  responsibleAvatarUrl?: string
+  statusId?: string | null
   statusName?: string
-  statusColor?: string
+  statusColor?: string 
+  managerId?: string | null
+  clientId?: string | null
   // Поле статуса проекта (DB value)
   projectStatus?:
     | 'draft'
@@ -134,6 +130,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenStatusManagement,
   statuses
 }) => {
+  const { focusSectionId, highlightedSectionId, focusProjectId } = useProjectsStore()
   const { assignments } = useTaskTransferStore()
   const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
   const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
@@ -373,8 +370,18 @@ const TreeNode: React.FC<TreeNodeProps> = ({
     <div className="group/row select-none" data-tree-node-id={node.id}>
       <div
         className={cn(
-          "flex items-center transition-colors border-b",
+          // Базовая строка
+          "flex items-center border-b transition-colors duration-500",
+          // Базовые границы
           "dark:border-slate-700 border-slate-200",
+          // Подсветка активного раздела
+          node.type === 'section' && (node.id === focusSectionId || node.id === highlightedSectionId)
+            ? "bg-emerald-50 dark:bg-emerald-900/30 border-b-transparent"
+            : undefined,
+          // Подсветка активного проекта при фокусе
+          node.type === 'project' && node.id === focusProjectId
+            ? "bg-emerald-50 dark:bg-emerald-900/30 border-b-transparent"
+            : undefined,
           hasChildren ? "cursor-pointer" : "cursor-default",
           // Hover эффекты как в планировании
           "dark:hover:bg-emerald-900/20 hover:bg-emerald-50"
@@ -814,6 +821,8 @@ export function ProjectsTree({
     clearHighlight,
     focusSectionId,
     clearFocus,
+    focusProjectId,
+    clearProjectFocus,
     showManagers,
     toggleShowManagers,
     groupByClient,
@@ -1174,11 +1183,62 @@ export function ProjectsTree({
             (el as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' })
           }
         })
-        // Сбросим фокус
-        setTimeout(() => clearFocus(), 500)
+        setTimeout(() => clearFocus(), 1200)
       }
     }
   }, [loading, focusSectionId, treeData, expandedNodes, toggleNodeInStore, clearFocus])
+
+  // Обработка фокусировки проекта в дереве (без открытия панели)
+  useEffect(() => {
+    if (!loading && focusProjectId && treeData.length > 0) {
+      console.log(' Фокусируем проект в дереве:', focusProjectId)
+      const findProjectById = (nodes: ProjectNode[], projectId: string): ProjectNode | null => {
+        for (const node of nodes) {
+          if (node.type === 'project' && node.id === projectId) return node
+          if (node.children) {
+            const found = findProjectById(node.children, projectId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      const project = findProjectById(treeData, focusProjectId)
+      if (project) {
+        // Развернём путь к проекту
+        const expandPath = (nodes: ProjectNode[], targetId: string, path: string[] = []): string[] | null => {
+          for (const node of nodes) {
+            const newPath = [...path, node.id]
+            if (node.type === 'project' && node.id === targetId) return newPath
+            if (node.children) {
+              const found = expandPath(node.children, targetId, newPath)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const path = expandPath(treeData, focusProjectId) || []
+        // Развернём все узлы по пути кроме самого проекта
+        path.slice(0, -1).forEach(nodeId => {
+          if (!expandedNodes.has(nodeId)) {
+            toggleNodeInStore(nodeId)
+          }
+        })
+        // Прокрутим к элементу, если он в DOM
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${focusProjectId}"]`) as HTMLElement | null
+          if (el) {
+            const HEADER_OFFSET = 88
+            const rect = el.getBoundingClientRect()
+            const targetTop = Math.max(window.scrollY + rect.top - HEADER_OFFSET, 0)
+            window.scrollTo({ top: targetTop, behavior: 'smooth' })
+          }
+        })
+        // Сбросим фокус
+        setTimeout(() => clearProjectFocus(), 1200)
+      }
+    }
+  }, [loading, focusProjectId, treeData, expandedNodes, toggleNodeInStore, clearProjectFocus])
 
   // Обработка URL параметров для прямой навигации к разделу (fallback)
   useEffect(() => {
@@ -1443,7 +1503,7 @@ export function ProjectsTree({
           name: row.stage_name,
           type: 'stage',
           projectId: row.project_id,
-          children: []
+          children: [],
         })
       }
 
@@ -1457,7 +1517,7 @@ export function ProjectsTree({
           projectId: row.project_id,
           projectName: row.project_name,
           stageName: row.stage_name,
-          children: []
+          children: [],
         })
       }
 

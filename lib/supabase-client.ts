@@ -406,6 +406,7 @@ export async function fetchSectionsWithLoadings(
           startDate: sectionItem.loading_start ? new Date(sectionItem.loading_start) : new Date(),
           endDate: sectionItem.loading_finish ? new Date(sectionItem.loading_finish) : new Date(),
           rate: sectionItem.loading_rate || 1,
+          comment: (sectionItem as any).loading_comment || undefined,
           createdAt: sectionItem.loading_created ? new Date(sectionItem.loading_created) : new Date(),
           updatedAt: sectionItem.loading_updated ? new Date(sectionItem.loading_updated) : new Date(),
         })
@@ -668,28 +669,48 @@ export async function createLoading(loadingData: {
   startDate: string
   endDate: string
   rate: number
+  // Необязательный комментарий (если в БД нет колонки, запрос упадет — обработаем фолбэком)
+  comment?: string
 }): Promise<{ success: boolean; error?: string; loadingId?: string }> {
   try {
     console.log("Создание новой загрузки:", loadingData)
 
-    const { data, error } = await supabase
-      .from("loadings")
-      .insert({
-        loading_responsible: loadingData.responsibleId,
-        loading_section: loadingData.sectionId,
-        loading_start: loadingData.startDate,
-        loading_finish: loadingData.endDate,
-        loading_rate: loadingData.rate,
-        loading_status: "active",
-        loading_created: new Date().toISOString(),
-        loading_updated: new Date().toISOString(),
-      })
-      .select("loading_id")
-      .single()
+    // Первая попытка — с комментарием, если он передан
+    const insertPayloadBase: any = {
+      loading_responsible: loadingData.responsibleId,
+      loading_section: loadingData.sectionId,
+      loading_start: loadingData.startDate,
+      loading_finish: loadingData.endDate,
+      loading_rate: loadingData.rate,
+      loading_status: "active",
+      loading_created: new Date().toISOString(),
+      loading_updated: new Date().toISOString(),
+    }
+
+    const tryInsert = async (withComment: boolean) => {
+      const payload = { ...insertPayloadBase, ...(withComment && loadingData.comment ? { loading_comment: loadingData.comment } : {}) }
+      return await supabase
+        .from("loadings")
+        .insert(payload)
+        .select("loading_id")
+        .single()
+    }
+
+    let data, error
+    ;({ data, error } = await tryInsert(true))
+
+    if (error) {
+      console.warn("createLoading: попытка с полем loading_comment не удалась, пробую без него", error?.message)
+      ;({ data, error } = await tryInsert(false))
+    }
 
     if (error) {
       console.error("Ошибка при создании загрузки:", error)
       return { success: false, error: error.message }
+    }
+    if (!data) {
+      console.error("Ошибка: данные не получены после успешной вставки")
+      return { success: false, error: "Данные не получены" }
     }
 
     console.log("Загрузка успешно создана:", data.loading_id)
