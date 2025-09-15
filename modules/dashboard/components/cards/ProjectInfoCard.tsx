@@ -42,39 +42,14 @@ const getInitials = (firstName?: string, lastName?: string) => {
   return `${f}${l}`.toUpperCase() || 'NN';
 };
 
-const getStatusColor = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'active':
-    case 'активный':
-      return 'text-primary';
-    case 'paused':
-    case 'приостановлен':
-      return 'text-yellow-600';
-    case 'completed':
-    case 'завершен':
-      return 'text-blue-600';
-    case 'cancelled':
-    case 'отменен':
-      return 'text-red-600';
-    default:
-      return 'text-gray-600';
-  }
-};
+import {
+  getProjectStatusTextColor,
+  getProjectStatusLabel,
+} from '@/modules/projects/constants/project-status';
 
-const getStatusText = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'active':
-      return 'Активный';
-    case 'paused':
-      return 'Приостановлен';
-    case 'completed':
-      return 'Завершен';
-    case 'cancelled':
-      return 'Отменен';
-    default:
-      return status || 'Неизвестно';
-  }
-};
+const getStatusColor = (status: string) => getProjectStatusTextColor(status);
+
+const getStatusText = (status: string) => getProjectStatusLabel(status) || (status || 'Неизвестно');
 
 export const ProjectInfoCard: React.FC = () => {
   const projectId = useDashboardStore((state) => state.projectId);

@@ -97,6 +97,7 @@ interface PlanningState {
     responsibleName?: string
     responsibleAvatarUrl?: string | null
     responsibleTeamName?: string | null
+    comment?: string | null
   }) => Promise<{ success: boolean; error?: string; loadingId?: string }>
   refreshSectionLoadings: (sectionId: string) => Promise<{ success: boolean; error?: string }>
   archiveLoading: (loadingId: string) => Promise<{ success: boolean; error?: string }>

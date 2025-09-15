@@ -708,6 +708,10 @@ export async function createLoading(loadingData: {
       console.error("Ошибка при создании загрузки:", error)
       return { success: false, error: error.message }
     }
+    if (!data) {
+      console.error("Ошибка: данные не получены после успешной вставки")
+      return { success: false, error: "Данные не получены" }
+    }
 
     console.log("Загрузка успешно создана:", data.loading_id)
     return { success: true, loadingId: data.loading_id }
@@ -892,7 +896,15 @@ export async function updateProject(
     project_description?: string | null
     project_manager?: string | null
     project_lead_engineer?: string | null
-    project_status?: 'active' | 'archive' | 'paused' | 'canceled'
+    project_status?:
+      | 'draft'
+      | 'active'
+      | 'completed'
+      | 'paused'
+      | 'waiting for input data'
+      | 'author supervision'
+      | 'actual calculation'
+      | 'customer approval'
     client_id?: string | null
   }
 ): Promise<{ success: boolean; error?: string; data?: any }> {
@@ -942,7 +954,15 @@ export async function createProject(newProject: {
   project_description?: string | null
   project_manager?: string | null
   project_lead_engineer?: string | null
-  project_status: 'active' | 'archive' | 'paused' | 'canceled'
+  project_status:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
   client_id?: string | null
 }): Promise<{ success: boolean; error?: string; projectId?: string }> {
   try {
