@@ -56,6 +56,8 @@ interface ProjectNode {
   statusColor?: string | null
   managerId?: string | null
   clientId?: string | null
+  // Признак избранного проекта (только для узлов типа 'project')
+  isFavorite?: boolean
 }
 
 interface ProjectsTreeProps {
@@ -1408,7 +1410,15 @@ export function ProjectsTree({
           managerId: managerId,
           clientId: clientId,
           children: [],
+          // Признак избранного приходит из view_project_tree
+          isFavorite: Boolean(row.is_favorite)
         })
+      } else {
+        // Если проект уже есть, но пришёл флаг is_favorite=true — обновим
+        if (row.is_favorite) {
+          const p = projects.get(row.project_id)!
+          if (!p.isFavorite) p.isFavorite = true
+        }
       }
 
       // 4. Стадии
