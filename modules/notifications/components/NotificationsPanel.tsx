@@ -46,6 +46,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const [isReadFilterOpen, setIsReadFilterOpen] = useState(false)
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
+  const [hasPanelBeenOpened, setHasPanelBeenOpened] = useState(false)
+  const [isRefreshingOnOpen, setIsRefreshingOnOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
@@ -369,6 +371,46 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }
   }, [])
 
+  // Эффект для обновления уведомлений при первом открытии панели
+  useEffect(() => {
+    // Проверяем, что панель открыта (видимая) и мы еще не обновляли уведомления
+    const panelElement = panelRef.current
+    if (!panelElement || hasPanelBeenOpened) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !hasPanelBeenOpened && currentUserId) {
+            console.log('🔄 Панель уведомлений открыта впервые - обновляем уведомления')
+            setHasPanelBeenOpened(true)
+            setIsRefreshingOnOpen(true)
+
+            // Запускаем обновление уведомлений
+            fetchNotifications()
+              .then(() => {
+                console.log('✅ Уведомления успешно обновлены при открытии панели')
+              })
+              .catch((error) => {
+                console.error('❌ Ошибка при обновлении уведомлений при открытии панели:', error)
+              })
+              .finally(() => {
+                if (isMountedRef.current) {
+                  setIsRefreshingOnOpen(false)
+                }
+              })
+          }
+        })
+      },
+      { threshold: 0.1 } // Панель считается видимой, когда 10% её площади видно
+    )
+
+    observer.observe(panelElement)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [hasPanelBeenOpened, currentUserId, fetchNotifications])
+
   // Фильтрация уведомлений
   const filteredNotifications = useMemo(() => {
     // В режиме поиска показываем результаты как есть (поиск уже выполнен на сервере)
@@ -500,7 +542,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         {/* Заголовок */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Уведомления
+            {isRefreshingOnOpen ? "Обновление уведомлений..." : "Уведомления"}
           </h3>
           <div className="flex items-center gap-2">
             {/* Кнопка создания объявлений */}
@@ -515,14 +557,17 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 <Megaphone className="h-4 w-4" />
               </Button>
             )}
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            {(isLoading || isRefreshingOnOpen) && (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleRefresh}
-              disabled={isLoading}
+              disabled={isLoading || isRefreshingOnOpen}
               className="h-6 w-6"
             >
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshingOnOpen) && "animate-spin")} />
             </Button>
             <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
               <X className="h-4 w-4" />

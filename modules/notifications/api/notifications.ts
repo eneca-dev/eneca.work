@@ -1275,24 +1275,6 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     console.error('🔍 DEBUG: ошибка entity_types:', entityError)
   }
   
-  // Проверяем конкретные notification_id из вашей таблицы
-  const testNotificationIds = [
-    '18c5808d-ebd1-4989-8f94-d9db531ca7e7',
-    '1e3ff8c4-ddb6-426c-adc9-3eeb98fbcdf3',
-    '7140d06a-b69e-4ebd-b245-079967dd2e39',
-    'cd960712-8a2f-4fbb-9ded-180b2bff63d3',
-    '4792c6f4-daaf-42f9-8d10-d2af9a417968'
-  ]
-  
-  for (const notifId of testNotificationIds) {
-    const { data: notifData, error: notifError } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('id', notifId)
-      .single()
-      
-    logNotificationDebug(`DEBUG: notification ${notifId}`, notifData || 'НЕ НАЙДЕНО')
-  }
 }
 
 /**

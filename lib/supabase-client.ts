@@ -1,5 +1,8 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/utils/supabase/client"
 import type { Section, Loading } from "@/modules/planning/types"
+
+// Используем единый клиент Supabase вместо создания нового
+export const supabase = createClient()
 
 // Обновляем интерфейс SectionHierarchy, добавляя поля аватаров
 export interface SectionHierarchy {
@@ -136,9 +139,7 @@ function validateEnvironmentVariables() {
   return { supabaseUrl, supabaseAnonKey }
 }
 
-// Создаем клиент Supabase с валидацией переменных окружения
-const { supabaseUrl, supabaseAnonKey } = validateEnvironmentVariables()
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Клиент Supabase уже создан выше в начале файла
 
 // Интерфейс для структурированной ошибки
 interface StructuredError {

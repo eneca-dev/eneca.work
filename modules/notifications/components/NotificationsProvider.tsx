@@ -230,21 +230,16 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     const initializeProvider = async () => {
       if (currentUserId) {
         console.log('🚀 NotificationsProvider: Инициализация для пользователя:', currentUserId)
-        
-        // Загружаем существующие уведомления
-        console.log('📥 NotificationsProvider: Загрузка уведомлений...')
-        
+
         // Отладочная проверка базы данных
         const { debugUserNotifications, createTestNotification } = await import('../api/notifications')
         await debugUserNotifications(currentUserId)
-        
+
         // Временно: создаем тестовое уведомление для диагностики
         // Раскомментируйте следующую строку если нужно создать тестовое уведомление:
         // await createTestNotification(currentUserId)
-        
-        fetchNotifications()
-        
-        // Инициализируем Realtime подписку
+
+        // Загрузка уведомлений уже происходит в setCurrentUserId, поэтому здесь только инициализируем Realtime
         console.log('📡 NotificationsProvider: Инициализация Realtime...')
         initializeRealtime()
       } else {
@@ -255,7 +250,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     }
 
     initializeProvider()
-  }, [currentUserId, fetchNotifications, initializeRealtime, unsubscribeFromNotifications, mounted])
+  }, [currentUserId, initializeRealtime, unsubscribeFromNotifications, mounted])
 
   return <>{children}</>
 }
