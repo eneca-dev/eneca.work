@@ -265,7 +265,7 @@ export function EditProjectModal({
     return getStatusName(projectData.project_status)
   }
 
-  const statusOptions: ProjectData['project_status'][] = PROJECT_STATUS_OPTIONS
+  const statusOptions: readonly ProjectData['project_status'][] = PROJECT_STATUS_OPTIONS
 
   const filteredManagers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchManager.toLowerCase())
