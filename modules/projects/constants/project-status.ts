@@ -10,7 +10,7 @@ export type ProjectStatusDb =
   | 'actual calculation'
   | 'customer approval'
 
-export const PROJECT_STATUS_OPTIONS: ProjectStatusDb[] = [
+export const PROJECT_STATUS_OPTIONS = [
   'draft',
   'active',
   'paused',
@@ -19,7 +19,7 @@ export const PROJECT_STATUS_OPTIONS: ProjectStatusDb[] = [
   'author supervision',
   'actual calculation',
   'customer approval',
-]
+] as const
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatusDb, string> = {
   draft: 'Draft',
@@ -100,7 +100,8 @@ export function normalizeProjectStatus(status?: string): ProjectStatusDb | undef
     case 'Согласование зак.':
       return 'customer approval'
     case 'Draft':
-        case 'draft':
+    case 'draft':
+      return 'draft'
   }
   // If already an English DB value we support, return it as-is
   const candidates: ProjectStatusDb[] = [

@@ -108,13 +108,13 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     return c ? c.client_name : ''
   }
 
-  const getStatusName = (status: ProjectStatus) => getProjectStatusLabel(status)
+  const getStatusName = getProjectStatusLabel
 
   const selectedStatusName = () => {
     return getStatusName(projectStatus)
   }
 
-  const statusOptions: ProjectStatus[] = PROJECT_STATUS_OPTIONS
+  const statusOptions = PROJECT_STATUS_OPTIONS as readonly ProjectStatus[]
 
   const filteredManagers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchManager.toLowerCase()))
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
