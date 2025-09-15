@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Project, Stage, Object, Section, ProjectFilters } from './types';
+import type { Project, Stage, ProjectObject, Section, ProjectFilters } from './types';
 
 interface ProjectsState {
   // Фильтры
@@ -27,7 +27,7 @@ interface ProjectsState {
   // Данные
   projects: Project[];
   stages: Stage[];
-  objects: Object[];
+  objects: ProjectObject[];
   sections: Section[];
   
   // Действия для фильтров
@@ -61,7 +61,7 @@ interface ProjectsState {
   // CRUD операции (заглушки пока)
   setProjects: (projects: Project[]) => void;
   setStages: (stages: Stage[]) => void;
-  setObjects: (objects: Object[]) => void;
+  setObjects: (objects: ProjectObject[]) => void;
   setSections: (sections: Section[]) => void;
 }
 

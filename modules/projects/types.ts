@@ -4,7 +4,15 @@ export interface Project {
   project_description?: string;
   project_manager: string;
   project_lead_engineer?: string;
-  project_status: 'active' | 'archive' | 'paused' | 'canceled';
+  project_status:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval';
   project_created: string;
   project_updated: string;
   client_id: string;
@@ -16,7 +24,7 @@ export interface Stage {
   stage_description?: string;
 }
 
-export interface Object {
+export interface ProjectObject {
   object_id: string;
   object_name: string;
   object_description?: string;
