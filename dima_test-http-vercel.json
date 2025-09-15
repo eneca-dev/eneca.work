@@ -1,0 +1,69 @@
+{
+  "name": "dima/test-http-vercel",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [272, 304]
+    },
+    {
+      "parameters": {
+        "url": "https://eneca-work-git-planning-fix-development-depts-projects.vercel.app",
+        "options": {}
+      },
+      "id": "2",
+      "name": "GET Vercel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [528, 304]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://eneca-work-git-planning-fix-development-depts-projects.vercel.app/api/chat/thinking",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Accept", "value": "application/json" },
+            { "name": "X-N8N-Secret", "value": "={{$env.N8N_THINKING_SECRET}}" },
+            { "name": "X-Run-Id", "value": "={{$executionId}}" }
+          ]
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "jsonBody": {
+          "conversationId": "REPLACE_CONV_ID",
+          "userId": "REPLACE_USER_ID",
+          "runId": "={{$executionId}}",
+          "stepIndex": 1,
+          "kind": "thinking",
+          "content": "n8n test step",
+          "isFinal": false
+        },
+        "options": {}
+      },
+      "id": "3",
+      "name": "POST Thinking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [784, 304]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "GET Vercel", "type": "main", "index": 0 }]]
+    },
+    "GET Vercel": {
+      "main": [[{ "node": "POST Thinking", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  }
+}
