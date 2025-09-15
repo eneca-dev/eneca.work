@@ -1,15 +1,5 @@
 // Shared project status types and mappings (DB ↔ UI)
 
-export type ProjectStatusDb =
-  | 'draft' // tolerate legacy/variation
-  | 'active'
-  | 'completed'
-  | 'paused'
-  | 'waiting for input data'
-  | 'author supervision'
-  | 'actual calculation'
-  | 'customer approval'
-
 export const PROJECT_STATUS_OPTIONS = [
   'draft',
   'active',
@@ -20,6 +10,8 @@ export const PROJECT_STATUS_OPTIONS = [
   'actual calculation',
   'customer approval',
 ] as const
+
+export type ProjectStatusDb = typeof PROJECT_STATUS_OPTIONS[number]
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatusDb, string> = {
   draft: 'Draft',
@@ -104,17 +96,5 @@ export function normalizeProjectStatus(status?: string): ProjectStatusDb | undef
       return 'draft'
   }
   // If already an English DB value we support, return it as-is
-  const candidates: ProjectStatusDb[] = [
-    'draft',
-    'active',
-    'completed',
-    'paused',
-    'waiting for input data',
-    'author supervision',
-    'actual calculation',
-    'customer approval',
-  ]
-  return candidates.includes(status as ProjectStatusDb) ? (status as ProjectStatusDb) : undefined
+  return PROJECT_STATUS_OPTIONS.includes(status as ProjectStatusDb) ? (status as ProjectStatusDb) : undefined
 }
-
-
