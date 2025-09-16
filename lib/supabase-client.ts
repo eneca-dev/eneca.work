@@ -119,25 +119,6 @@ interface LoadingUpdateData {
   loading_section?: string
 }
 
-// Валидация переменных окружения
-function validateEnvironmentVariables() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL не установлена. Пожалуйста, добавьте переменную окружения в файл .env.local"
-    )
-  }
-
-  if (!supabaseAnonKey) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY не установлена. Пожалуйста, добавьте переменную окружения в файл .env.local"
-    )
-  }
-
-  return { supabaseUrl, supabaseAnonKey }
-}
 
 // Клиент Supabase уже создан выше в начале файла
 
@@ -261,8 +242,6 @@ export async function fetchSectionsWithLoadings(
   objectId: string | null = null,
 ): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> } | StructuredError> {
   try {
-    validateEnvironmentVariables()
-
     console.log("🔍 Фильтры для fetchSectionsWithLoadings:", {
       projectId,
       departmentId,

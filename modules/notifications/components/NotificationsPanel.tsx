@@ -50,6 +50,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const [isRefreshingOnOpen, setIsRefreshingOnOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Трекинг позиции указателя внутри панели для устойчивого hover
+  const setPointerPosition = useNotificationsStore((s) => s.setPointerPosition)
+  const clearPointerPosition = useNotificationsStore((s) => s.clearPointerPosition)
   const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
   const currentUserId = useNotificationsStore((s) => s.currentUserId)
   const allFilteredRef = useRef(0)
@@ -373,42 +376,26 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Эффект для обновления уведомлений при первом открытии панели
   useEffect(() => {
-    // Проверяем, что панель открыта (видимая) и мы еще не обновляли уведомления
-    const panelElement = panelRef.current
-    if (!panelElement || hasPanelBeenOpened) return
+    // Проверяем условия для обновления уведомлений
+    if (hasPanelBeenOpened || !currentUserId) return
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !hasPanelBeenOpened && currentUserId) {
-            console.log('🔄 Панель уведомлений открыта впервые - обновляем уведомления')
-            setHasPanelBeenOpened(true)
-            setIsRefreshingOnOpen(true)
+    console.log('🔄 Панель уведомлений открыта впервые - обновляем уведомления')
+    setHasPanelBeenOpened(true)
+    setIsRefreshingOnOpen(true)
 
-            // Запускаем обновление уведомлений
-            fetchNotifications()
-              .then(() => {
-                console.log('✅ Уведомления успешно обновлены при открытии панели')
-              })
-              .catch((error) => {
-                console.error('❌ Ошибка при обновлении уведомлений при открытии панели:', error)
-              })
-              .finally(() => {
-                if (isMountedRef.current) {
-                  setIsRefreshingOnOpen(false)
-                }
-              })
-          }
-        })
-      },
-      { threshold: 0.1 } // Панель считается видимой, когда 10% её площади видно
-    )
-
-    observer.observe(panelElement)
-
-    return () => {
-      observer.disconnect()
-    }
+    // Запускаем обновление уведомлений
+    fetchNotifications()
+      .then(() => {
+        console.log('✅ Уведомления успешно обновлены при открытии панели')
+      })
+      .catch((error) => {
+        console.error('❌ Ошибка при обновлении уведомлений при открытии панели:', error)
+      })
+      .finally(() => {
+        if (isMountedRef.current) {
+          setIsRefreshingOnOpen(false)
+        }
+      })
   }, [hasPanelBeenOpened, currentUserId, fetchNotifications])
 
   // Фильтрация уведомлений
@@ -458,7 +445,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       }
       
       return matchesSearch && matchesType && matchesRead
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    }).sort((a, b) => {
+      // Стабильная сортировка: сначала по дате, затем по id для детерминизма
+      const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      if (diff !== 0) return diff
+      if (a.id === b.id) return 0
+      return a.id < b.id ? -1 : 1
+    })
 
     // Обновляем общее количество отфильтрованных
     allFilteredRef.current = allFiltered.length
@@ -536,6 +529,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
       )}
       style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
+      onMouseMove={(e) => setPointerPosition({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => clearPointerPosition()}
     >
       {/* Контент панели: header + scrollable list, full height */}
       <div className="flex h-full flex-col">

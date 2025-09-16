@@ -67,6 +67,10 @@ interface NotificationsState {
   // Состояние UI панели уведомлений
   isPanelOpen: boolean
   panelWidthPx: number
+  // Наведение на уведомление (устойчивое к ремоунтам)
+  hoveredNotificationId: string | null
+  // Последняя позиция указателя внутри панели (для восстановления hover при ререндере)
+  lastPointerPosition: { x: number, y: number } | null
   
   // Пагинация
   hasMore: boolean
@@ -100,6 +104,11 @@ interface NotificationsState {
   setError: (error: string | null) => void
   setCurrentUserId: (userId: string | null) => void
   setModuleUpdateCallback: (callback: ((entityType: string) => void) | null) => void
+  // Управление наведением
+  setHoveredNotification: (id: string) => void
+  clearHoveredNotification: () => void
+  setPointerPosition: (pos: { x: number, y: number }) => void
+  clearPointerPosition: () => void
   
   // Методы управления панелью уведомлений
   openPanel: () => void
@@ -231,6 +240,8 @@ export const useNotificationsStore = create<NotificationsState>()(
       onModuleUpdate: null, // Инициализируем колбэк
       isPanelOpen: false,
       panelWidthPx: 420,
+      hoveredNotificationId: null,
+      lastPointerPosition: null,
       
       // Пагинация
       hasMore: true,
@@ -574,6 +585,12 @@ export const useNotificationsStore = create<NotificationsState>()(
       closePanel: () => set({ isPanelOpen: false }),
       togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
       setPanelWidth: (widthPx) => set({ panelWidthPx: Math.max(320, Math.min(720, Math.round(widthPx))) }),
+
+      // Управление наведением
+      setHoveredNotification: (id) => set({ hoveredNotificationId: id }),
+      clearHoveredNotification: () => set({ hoveredNotificationId: null }),
+      setPointerPosition: (pos) => set({ lastPointerPosition: pos }),
+      clearPointerPosition: () => set({ lastPointerPosition: null }),
 
       // Методы для Realtime
       initializeRealtime: () => {
