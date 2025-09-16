@@ -8,6 +8,11 @@ import { createClient } from '@/utils/supabase/client'
 import { Modal, ModalButton } from '@/components/modals'
 import { useUiStore } from '@/stores/useUiStore'
 import { createProject } from '@/lib/supabase-client'
+import {
+  PROJECT_STATUS_OPTIONS,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+} from '../constants/project-status'
 import { PortalDropdown } from './PortalDropdown'
 import { useDropdownPosition, useDropdownPositionEffect } from '@/hooks/useDropdownPosition'
 
@@ -29,7 +34,15 @@ interface Client {
   client_name: string
 }
 
-type ProjectStatus = 'active' | 'archive' | 'paused' | 'canceled'
+type ProjectStatus =
+  | 'draft'
+  | 'active'
+  | 'completed'
+  | 'paused'
+  | 'waiting for input data'
+  | 'author supervision'
+  | 'actual calculation'
+  | 'customer approval'
 
 const supabase = createClient()
  
@@ -50,9 +63,11 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
   const [searchManager, setSearchManager] = useState('')
   const [searchEngineer, setSearchEngineer] = useState('')
   const [searchClient, setSearchClient] = useState('')
+  const [searchStatus, setSearchStatus] = useState('')
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const managerDropdown = useDropdownPosition()
   const engineerDropdown = useDropdownPosition()
   const clientDropdown = useDropdownPosition()
@@ -100,9 +115,26 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
     return c ? c.client_name : ''
   }
 
+  const getStatusName = getProjectStatusLabel
+
+  const selectedStatusName = () => {
+    return getStatusName(projectStatus)
+  }
+
+  const statusOptions: readonly ProjectStatus[] = PROJECT_STATUS_OPTIONS
+
   const filteredManagers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchManager.toLowerCase()))
   const filteredEngineers = profiles.filter(p => getProfileName(p).toLowerCase().includes(searchEngineer.toLowerCase()))
   const filteredClients = clients.filter(c => c.client_name.toLowerCase().includes(searchClient.toLowerCase()))
+  const filteredStatuses = statusOptions.filter(status => getStatusName(status).toLowerCase().includes(searchStatus.toLowerCase()))
+
+  const updateManagerDropdownPosition = managerDropdown.updatePosition
+  const updateEngineerDropdownPosition = engineerDropdown.updatePosition
+  const updateClientDropdownPosition = clientDropdown.updatePosition
+
+  useDropdownPositionEffect(showManagerDropdown, updateManagerDropdownPosition)
+  useDropdownPositionEffect(showEngineerDropdown, updateEngineerDropdownPosition)
+  useDropdownPositionEffect(showClientDropdown, updateClientDropdownPosition)
 
   const updateManagerDropdownPosition = managerDropdown.updatePosition
   const updateEngineerDropdownPosition = engineerDropdown.updatePosition
@@ -124,7 +156,7 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
           const result = await createProject({
             project_name: projectName.trim(),
             project_description: projectDescription || null,
-            project_status: projectStatus,
+            project_status: normalizeProjectStatus(projectStatus) || 'active',
             project_manager: projectManager,
             project_lead_engineer: projectLeadEngineer,
             client_id: clientId,
@@ -183,27 +215,28 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
             <div>
               <label className="block text-sm font-medium mb-2 dark:text-slate-300">Статус</label>
               <div className="relative">
-                <select
-                  value={projectStatus}
-                  onChange={(e) => setProjectStatus(e.target.value as ProjectStatus)}
-                  className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white appearance-none"
-                >
-                  <option value="active">Активный</option>
-                  <option value="paused">Приостановлен</option>
-                  <option value="archive">Архив</option>
-                  <option value="canceled">Отменен</option>
-                </select>
-                <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-                  <svg
-                    className="h-4 w-4 text-gray-400 dark:text-slate-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                <input
+                  type="text"
+                  value={showStatusDropdown ? searchStatus : selectedStatusName()}
+                  onChange={(e) => { setSearchStatus(e.target.value); setShowStatusDropdown(true) }}
+                  onFocus={() => { setSearchStatus(''); setShowStatusDropdown(true) }}
+                  onBlur={() => { setTimeout(() => setShowStatusDropdown(false), 200) }}
+                  placeholder={selectedStatusName() || 'Выберите статус проекта...'}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                />
+                {showStatusDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredStatuses.map((status) => (
+                      <div
+                        key={status}
+                        onClick={() => { setProjectStatus(status); setSearchStatus(''); setShowStatusDropdown(false) }}
+                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
+                      >
+                        <div className="font-medium dark:text-white">{getStatusName(status)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

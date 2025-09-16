@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from '@sentry/nextjs'
 import { useUserStore } from '@/stores/useUserStore'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
@@ -30,6 +31,13 @@ import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+import { updateProject } from '@/lib/supabase-client'
+import {
+  getProjectStatusBadgeClasses,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+  PROJECT_STATUS_OPTIONS,
+} from '../constants/project-status'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
 
@@ -45,14 +53,24 @@ interface ProjectNode {
   projectName?: string
   stageName?: string
   departmentName?: string
-  dates?: { start?: string | null; end?: string | null }
+  dates?: { start?: string; end?: string}
   responsibleName?: string
   responsibleAvatarUrl?: string
   statusId?: string | null
-  statusName?: string | null
-  statusColor?: string | null
+  statusName?: string
+  statusColor?: string 
   managerId?: string | null
   clientId?: string | null
+  // Поле статуса проекта (DB value)
+  projectStatus?:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
   // Признак избранного проекта (только для узлов типа 'project')
   isFavorite?: boolean
 }
@@ -137,6 +155,41 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [sectionDue, setSectionDue] = useState<string | null>(null)
   const hasPermission = usePermissionsStore(state => state.hasPermission)
   const canDeleteProject = hasPermission('projects.delete')
+  const canChangeProjectStatus = hasPermission('projects.change_project_statuses')
+
+  const [updatingProjectStatus, setUpdatingProjectStatus] = useState(false)
+
+  // Вспомогательные функции отображения статуса проекта
+  const getProjectStatusText = (status?: ProjectNode['projectStatus']) => {
+    return getProjectStatusLabel(status)
+  }
+
+  const getProjectStatusClasses = (status?: ProjectNode['projectStatus']) => {
+    return getProjectStatusBadgeClasses(status)
+  }
+
+  const handleUpdateProjectStatus = async (newStatusInput: ProjectNode['projectStatus']) => {
+    if (node.type !== 'project') return
+    if (!canChangeProjectStatus) return
+    setUpdatingProjectStatus(true)
+    try {
+      const normalized = normalizeProjectStatus(newStatusInput) || 'active'
+      const res = await updateProject(node.id, { project_status: normalized })
+      if (!res.success) throw new Error(res.error || 'Не удалось обновить статус проекта')
+
+      // Локально обновим узел и оповестим дерево
+      node.projectStatus = normalized
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('projectsTree:projectStatusUpdated', {
+          detail: { projectId: node.id, projectStatus: normalized }
+        }))
+      }
+    } catch (e) {
+      console.error('Ошибка смены статуса проекта:', e)
+    } finally {
+      setUpdatingProjectStatus(false)
+    }
+  }
 
   const loadMiniDecomposition = async () => {
     try {
@@ -569,6 +622,42 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             {/* Кнопки редактирования для проектов */}
             {node.type === 'project' && (
               <div className="flex items-center ml-2">
+                {/* Статус проекта */}
+                <div className="mr-2">
+                  {canChangeProjectStatus ? (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`px-2 py-0.5 text-[11px] border rounded-md transition-colors ${getProjectStatusClasses(node.projectStatus)}`}
+                            disabled={updatingProjectStatus}
+                            title="Изменить статус проекта"
+                          >
+                            {updatingProjectStatus ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Обновление...
+                              </span>
+                            ) : (
+                              getProjectStatusText(node.projectStatus)
+                            )}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-40 p-0">
+                          {PROJECT_STATUS_OPTIONS.map((opt) => (
+                            <DropdownMenuItem key={opt} onClick={() => handleUpdateProjectStatus(opt)}>
+                              {getProjectStatusLabel(opt)}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : (
+                    <span className={`px-2 py-0.5 text-[11px] border rounded-md ${getProjectStatusClasses(node.projectStatus)}`}>
+                      {getProjectStatusText(node.projectStatus)}
+                    </span>
+                  )}
+                </div>
                 {/* Развернуть весь проект */}
                 <button
                   onClick={(e) => { e.stopPropagation(); expandAllFromNode(node) }}
@@ -1045,6 +1134,37 @@ export function ProjectsTree({
     }
   }, [])
 
+  // Слушаем обновление статуса проекта (локальное обновление дерева)
+  useEffect(() => {
+    const handleProjectStatusUpdated = (event: CustomEvent) => {
+      const { projectId, projectStatus } = event.detail || {}
+      if (!projectId) return
+
+      const updateProjectStatusInNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            return { ...node, projectStatus }
+          }
+          if (node.children) {
+            return { ...node, children: updateProjectStatusInNodes(node.children) }
+          }
+          return node
+        })
+      }
+
+      setTreeData(current => updateProjectStatusInNodes(current))
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('projectsTree:projectStatusUpdated', handleProjectStatusUpdated as EventListener)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('projectsTree:projectStatusUpdated', handleProjectStatusUpdated as EventListener)
+      }
+    }
+  }, [])
+
   // Обработка подсвеченного раздела для навигации к комментариям
   useEffect(() => {
     if (!loading && highlightedSectionId && treeData.length > 0) {
@@ -1406,6 +1526,7 @@ export function ProjectsTree({
           type: 'project',
           managerId: managerId,
           clientId: clientId,
+          projectStatus: normalizeProjectStatus(row.project_status),
           children: [],
           // Признак избранного приходит из view_project_tree
           isFavorite: Boolean(row.is_favorite)
