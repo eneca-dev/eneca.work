@@ -23,16 +23,19 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       : []
     
     // Идём через наш гейт /api/chat (full switch)
+    const payload = {
+      message: request.message,
+      conversationHistory: conversationHistory,
+      conversationId: request.conversationId
+    }
+    console.debug('sendChatMessage payload → /api/chat', payload)
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({
-        message: request.message,
-        conversationHistory: conversationHistory
-      })
+      body: JSON.stringify(payload)
     })
 
     if (!response.ok) {
