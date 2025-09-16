@@ -92,7 +92,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
   const setHoveredNotification = useNotificationsStore((s) => s.setHoveredNotification)
   const clearHoveredNotification = useNotificationsStore((s) => s.clearHoveredNotification)
-  const lastPointerPosition = useNotificationsStore((s) => s.lastPointerPosition)
+  // Больше не подписываемся на координаты курсора из стора, чтобы не вызывать лишние ререндеры
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
   // canManage permission allows full management of announcements (create, edit, delete, etc.)
@@ -143,7 +143,15 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   // Реф и вычисление: есть ли обрезка (только для анонсов)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  // Рефы для кнопок управления (прочитано/редактировать/архив)
+  const readBtnRef = useRef<HTMLButtonElement | null>(null)
+  const editBtnRef = useRef<HTMLButtonElement | null>(null)
+  const archiveBtnRef = useRef<HTMLButtonElement | null>(null)
   const [isExpandableAnnouncement, setIsExpandableAnnouncement] = useState(false)
+  // Локальные флаги для устойчивого hover кнопок, чтобы не зависеть от :hover при ремоунтах
+  const [isReadButtonHovered, setIsReadButtonHovered] = useState(false)
+  const [isEditButtonHovered, setIsEditButtonHovered] = useState(false)
+  const [isArchiveButtonHovered, setIsArchiveButtonHovered] = useState(false)
 
   useEffect(() => {
     if (!(notification.entityType === 'announcement' || notification.entityType === 'announcements')) {
@@ -210,14 +218,30 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   // Восстанавливаем hover, если курсор неподвижен внутри карточки, но произошел ререндер/пересоздание DOM
   useEffect(() => {
     const el = rootRef.current
-    const pos = lastPointerPosition
+    const pos = useNotificationsStore.getState().lastPointerPosition
     if (!el || !pos) return
     const rect = el.getBoundingClientRect()
     const inside = pos.x >= rect.left && pos.x <= rect.right && pos.y >= rect.top && pos.y <= rect.bottom
     if (inside) {
       setHoveredNotification(notification.id)
     }
-  }, [lastPointerPosition, notification.id, setHoveredNotification])
+  }, [notification.id, setHoveredNotification])
+
+  // Восстанавливаем hover для кнопок, если курсор неподвижен поверх них
+  useEffect(() => {
+    const pos = useNotificationsStore.getState().lastPointerPosition
+    if (!pos) return
+    const applyFromPos = (ref: React.RefObject<HTMLElement>, setter: (v: boolean) => void) => {
+      const el = ref.current
+      if (!el) { setter(false); return }
+      const rect = el.getBoundingClientRect()
+      const inside = pos.x >= rect.left && pos.x <= rect.right && pos.y >= rect.top && pos.y <= rect.bottom
+      setter(inside)
+    }
+    applyFromPos(readBtnRef as unknown as React.RefObject<HTMLElement>, setIsReadButtonHovered)
+    applyFromPos(editBtnRef as unknown as React.RefObject<HTMLElement>, setIsEditButtonHovered)
+    applyFromPos(archiveBtnRef as unknown as React.RefObject<HTMLElement>, setIsArchiveButtonHovered)
+  }, [hoveredNotificationId, notification.id, notification.isArchived])
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
@@ -281,6 +305,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       data-notification-id={notification.id}
       onClick={handleClick}
       onMouseEnter={() => setHoveredNotification(notification.id)}
+      onMouseMove={() => setHoveredNotification(notification.id)}
       onMouseLeave={(e) => {
         const root = rootRef.current
         if (!root) {
@@ -303,6 +328,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           ? "cursor-default"
           : "cursor-pointer",
         "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-500",
+        // Мгновенная реакция на hover через CSS, плюс устойчивый hover через стор
+        "hover:bg-gray-100 dark:hover:bg-gray-700/40",
         hoveredNotificationId === notification.id && "bg-gray-100 dark:bg-gray-700/40"
       )}
     >
@@ -326,16 +353,23 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       )}
 
       <div className={cn(
-        "absolute top-2 right-2 z-20 transition-opacity pointer-events-none",
-        hoveredNotificationId === notification.id ? "opacity-100" : "opacity-0"
+        // Мгновенное появление при hover без задержки за счет CSS
+        "absolute top-2 right-2 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-0",
+        // Дополнительно держим панель видимой, если hover зафиксирован в сторе
+        hoveredNotificationId === notification.id && "opacity-100"
       )}>
-        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-1 py-0.5">
+        <div
+          className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-1 py-0.5 pointer-events-auto"
+          onMouseEnter={() => setHoveredNotification(notification.id)}
+          onMouseMove={() => setHoveredNotification(notification.id)}
+        >
           {!notification.isArchived ? (
             <>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                ref={readBtnRef}
                 onClick={async (e) => {
                   e.stopPropagation()
                   try {
@@ -377,7 +411,23 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                className={cn("h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto")}
+                onMouseEnter={() => setIsReadButtonHovered(true)}
+                onMouseMove={() => setIsReadButtonHovered(true)}
+                onMouseLeave={(e) => {
+                  const el = readBtnRef.current
+                  if (!el) { setIsReadButtonHovered(false); return }
+                  const rect = el.getBoundingClientRect()
+                  const x = e.clientX
+                  const y = e.clientY
+                  const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                  if (inside) return
+                  setIsReadButtonHovered(false)
+                }}
+                className={cn(
+                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                  // Реплика состояния :hover у ghost-кнопки, чтобы не пропадало при статичном курсоре
+                  isReadButtonHovered && "bg-accent text-accent-foreground"
+                )}
                 aria-label={notification.isRead ? "Прочитано" : "Отметить прочитанным"}
                 title={notification.isRead ? "Сделать непрочитанным" : "Отметить прочитанным"}
               >
@@ -399,11 +449,28 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   type="button"
                   variant="ghost"
                   size="icon"
+                  ref={editBtnRef}
                   onClick={(e) => {
                     e.stopPropagation()
                     onEditAnnouncement(announcementId)
                   }}
-                  className="h-7 w-7 text-gray-500 hover:text-blue-600 pointer-events-auto"
+                  onMouseEnter={() => setIsEditButtonHovered(true)}
+                  onMouseMove={() => setIsEditButtonHovered(true)}
+                  onMouseLeave={(e) => {
+                    const el = editBtnRef.current
+                    if (!el) { setIsEditButtonHovered(false); return }
+                    const rect = el.getBoundingClientRect()
+                    const x = e.clientX
+                    const y = e.clientY
+                    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                    if (inside) return
+                    setIsEditButtonHovered(false)
+                  }}
+                  className={cn(
+                    "h-7 w-7 text-gray-500 hover:text-blue-600 pointer-events-auto",
+                    // Реплика состояния :hover у ghost-кнопки + фирменный цвет текста
+                    isEditButtonHovered && "bg-accent text-blue-600"
+                  )}
                   aria-label="Редактировать объявление"
                   title="Редактировать объявление"
                 >
@@ -415,6 +482,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 type="button"
                 variant="ghost"
                 size="icon"
+                ref={archiveBtnRef}
                 onClick={async (e) => {
                   e.stopPropagation()
                   try {
@@ -444,7 +512,23 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                className="h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto"
+                onMouseEnter={() => setIsArchiveButtonHovered(true)}
+                onMouseMove={() => setIsArchiveButtonHovered(true)}
+                onMouseLeave={(e) => {
+                  const el = archiveBtnRef.current
+                  if (!el) { setIsArchiveButtonHovered(false); return }
+                  const rect = el.getBoundingClientRect()
+                  const x = e.clientX
+                  const y = e.clientY
+                  const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                  if (inside) return
+                  setIsArchiveButtonHovered(false)
+                }}
+                className={cn(
+                  "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
+                  // Реплика состояния :hover у ghost-кнопки
+                  isArchiveButtonHovered && "bg-accent text-accent-foreground"
+                )}
                 aria-label="В архив"
                 title="В архив"
               >
@@ -456,6 +540,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
               type="button"
               variant="ghost"
               size="icon"
+              ref={archiveBtnRef}
               onClick={async (e) => {
                 e.stopPropagation()
                 try {
@@ -481,7 +566,23 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   })
                 }
               }}
-              className="h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto"
+              onMouseEnter={() => setIsArchiveButtonHovered(true)}
+              onMouseMove={() => setIsArchiveButtonHovered(true)}
+              onMouseLeave={(e) => {
+                const el = archiveBtnRef.current
+                if (!el) { setIsArchiveButtonHovered(false); return }
+                const rect = el.getBoundingClientRect()
+                const x = e.clientX
+                const y = e.clientY
+                const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                if (inside) return
+                setIsArchiveButtonHovered(false)
+              }}
+              className={cn(
+                "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
+                // Реплика состояния :hover у ghost-кнопки
+                isArchiveButtonHovered && "bg-accent text-accent-foreground"
+              )}
               aria-label="Вернуть из архива"
               title="Вернуть из архива"
             >
