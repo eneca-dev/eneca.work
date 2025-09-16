@@ -136,14 +136,6 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
   useDropdownPositionEffect(showEngineerDropdown, updateEngineerDropdownPosition)
   useDropdownPositionEffect(showClientDropdown, updateClientDropdownPosition)
 
-  const updateManagerDropdownPosition = managerDropdown.updatePosition
-  const updateEngineerDropdownPosition = engineerDropdown.updatePosition
-  const updateClientDropdownPosition = clientDropdown.updatePosition
-
-  useDropdownPositionEffect(showManagerDropdown, updateManagerDropdownPosition)
-  useDropdownPositionEffect(showEngineerDropdown, updateEngineerDropdownPosition)
-  useDropdownPositionEffect(showClientDropdown, updateClientDropdownPosition)
-
   const handleCreate = async () => {
     if (!projectName.trim()) return
     return Sentry.startSpan(
