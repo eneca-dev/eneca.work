@@ -149,7 +149,12 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
       >
         <Bell className={cn("h-4 w-4", hasUnread && "animate-pulse")} />
         {hasUnread && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-xs font-medium text-white flex items-center justify-center">
+          <span
+            className={cn(
+              "absolute -top-1 left-[calc(100%-1rem)] h-5 rounded-full bg-red-600 text-xs font-medium text-white flex items-center justify-center",
+              unreadCount > 99 ? "px-1 min-w-[2rem]" : "w-5"
+            )}
+          >
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}

@@ -75,6 +75,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Серверные счетчики по типам (без архива)
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
   const [isLoadingTypeCounts, setIsLoadingTypeCounts] = useState(false)
+  // Локальный индикатор ручного обновления по кнопке
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false)
 
   const { 
     notifications, 
@@ -510,6 +512,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Обновление уведомлений
   const handleRefresh = async () => {
+    // Отображаем полноэкранный индикатор загрузки в панели
+    setIsManualRefreshing(true)
     return Sentry.startSpan(
       {
         op: "ui.click",
@@ -519,11 +523,11 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         try {
           span.setAttribute("refresh.trigger", "manual")
           span.setAttribute("notifications.current_count", notifications.length)
-          
+
           await fetchNotifications()
-          
+
           span.setAttribute("refresh.success", true)
-          
+
           Sentry.addBreadcrumb({
             message: 'Notifications refreshed manually',
             category: 'notifications',
@@ -550,6 +554,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
             }
           })
           console.error('Ошибка при обновлении уведомлений:', error)
+        } finally {
+          // Скрываем уведомления и показываем спиннер только в период ручного обновления
+          setIsManualRefreshing(false)
         }
       }
     )
@@ -574,7 +581,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         {/* Заголовок */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {isRefreshingOnOpen ? "Обновление уведомлений..." : "Уведомления"}
+            {(isRefreshingOnOpen || isManualRefreshing) ? "Обновление уведомлений..." : "Уведомления"}
           </h3>
           <div className="flex items-center gap-2">
             {/* Кнопка создания объявлений */}
@@ -589,17 +596,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 <Megaphone className="h-4 w-4" />
               </Button>
             )}
-            {(isLoading || isRefreshingOnOpen) && (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-            )}
             <Button
               variant="ghost"
               size="icon"
               onClick={handleRefresh}
-              disabled={isLoading || isRefreshingOnOpen}
+              disabled={isLoading || isRefreshingOnOpen || isManualRefreshing}
               className="h-6 w-6"
             >
-              <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshingOnOpen) && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshingOnOpen || isManualRefreshing) && "animate-spin")} />
             </Button>
             <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
               <X className="h-4 w-4" />
@@ -782,7 +786,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
         {/* Список уведомлений */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {(isLoading || isManualRefreshing) ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
               <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
