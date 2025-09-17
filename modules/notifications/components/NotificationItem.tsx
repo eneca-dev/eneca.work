@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
-import { AlertCircle, CheckCircle, Info, AlertTriangle, ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
+import { ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
@@ -23,19 +23,7 @@ interface NotificationItemProps {
   onEditAnnouncement?: (announcementId: string) => void // Функция для редактирования объявлений
 }
 
-const typeIcons = {
-  info: Info,
-  success: CheckCircle,
-  warning: AlertTriangle,
-  error: AlertCircle,
-}
-
-const typeColors = {
-  info: "text-blue-500",
-  success: "text-green-500",
-  warning: "text-yellow-500",
-  error: "text-red-500",
-}
+// Убраны иконки типов уведомлений по требованиям дизайна
 
 // Добавляем теги для типов уведомлений
 const notificationTags = {
@@ -68,8 +56,6 @@ function getNotificationTag(entityType?: string) {
 }
 
 export function NotificationItem({ notification, isVisible = false, onEditAnnouncement }: NotificationItemProps) {
-  const Icon = typeIcons[notification.type || "info"]
-  const iconColor = typeColors[notification.type || "info"]
   const notificationTag = getNotificationTag(notification.entityType)
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -350,7 +336,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       )}
     >
       {notificationTag && (
-        <div className="absolute right-2 top-6 -translate-y-1/2 z-10 inline-flex items-start gap-2">
+        <div className="absolute right-2 top-4 z-10 inline-flex items-start gap-2">
           <span
             className={cn(
               "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
@@ -359,12 +345,11 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           >
             {notificationTag.text}
           </span>
-          {!notification.isRead && (
-            <span
-              className="h-2 w-2 rounded-full bg-blue-500"
-              aria-label="Непрочитанное уведомление"
-            />
-          )}
+          <span
+            className={cn("h-2 w-2 rounded-full", notification.isRead ? "invisible" : "bg-blue-500")}
+            aria-hidden={notification.isRead}
+            aria-label={notification.isRead ? undefined : "Непрочитанное уведомление"}
+          />
         </div>
       )}
 
@@ -534,7 +519,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 }}
                 {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
                 className={cn(
-                  "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
+                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
                   // Реплика состояния :hover у ghost-кнопки
                   isArchiveButtonHovered && "bg-accent text-accent-foreground"
                 )}
@@ -577,7 +562,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
               }}
               {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
               className={cn(
-                "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
+                "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
                 // Реплика состояния :hover у ghost-кнопки
                 isArchiveButtonHovered && "bg-accent text-accent-foreground"
               )}
@@ -589,14 +574,11 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           )}
         </div>
       </div>
-      {/* Первый уровень: иконка слева */}
-      <div className="flex items-center mb-3">
-        <Icon className={cn("h-4 w-4 flex-shrink-0", iconColor)} />
-      </div>
+      
 
       {/* Второй уровень: заголовок слева, тип уведомления справа */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0 pr-3">
+        <div className={cn("flex-1 min-w-0", notificationTag ? "pr-28" : "pr-3") }>
           <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
             {notification.title}
           </h4>
