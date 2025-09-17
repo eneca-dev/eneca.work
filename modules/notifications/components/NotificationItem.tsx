@@ -15,6 +15,7 @@ import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
+import { useHoverWithPortalSupport } from "@/hooks/useHoverWithPortalSupport"
 
 interface NotificationItemProps {
   notification: Notification
@@ -92,7 +93,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
   const setHoveredNotification = useNotificationsStore((s) => s.setHoveredNotification)
   const clearHoveredNotification = useNotificationsStore((s) => s.clearHoveredNotification)
-  // Больше не подписываемся на координаты курсора из стора, чтобы не вызывать лишние ререндеры
+  // Подписываемся на координаты курсора из стора, чтобы реактивно восстанавливать hover
+  const lastPointerPosition = useNotificationsStore((s) => s.lastPointerPosition)
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
   // canManage permission allows full management of announcements (create, edit, delete, etc.)
@@ -140,9 +142,25 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     return escapedText
   }
 
+  // Универсальная проверка: находится ли указатель внутри элемента
+  function isPointerInsideElement(element: HTMLElement | null, clientX: number, clientY: number): boolean {
+    if (!element) return false
+    const rect = element.getBoundingClientRect()
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+  }
+
   // Реф и вычисление: есть ли обрезка (только для анонсов)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const rootRef = useRef<HTMLDivElement | null>(null)
+  const { ref: rootRef, isHovered: isRootHovered, handlers: rootHoverHandlers } = useHoverWithPortalSupport<HTMLDivElement>()
+
+  // Синхронизируем локальный hover с глобальным стором
+  useEffect(() => {
+    if (isRootHovered) {
+      setHoveredNotification(notification.id)
+    } else {
+      clearHoveredNotification()
+    }
+  }, [isRootHovered, notification.id, setHoveredNotification, clearHoveredNotification])
   // Рефы для кнопок управления (прочитано/редактировать/архив)
   const readBtnRef = useRef<HTMLButtonElement | null>(null)
   const editBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -152,6 +170,27 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const [isReadButtonHovered, setIsReadButtonHovered] = useState(false)
   const [isEditButtonHovered, setIsEditButtonHovered] = useState(false)
   const [isArchiveButtonHovered, setIsArchiveButtonHovered] = useState(false)
+
+  // Фабричный хелпер: создает устойчивые hover-обработчики для кнопок на основе ref и сеттера
+  function createButtonHoverHandlers(
+    buttonRef: { current: HTMLElement | null },
+    setHovered: (value: boolean) => void
+  ) {
+    return {
+      onMouseEnter: () => setHovered(true),
+      onMouseMove: () => setHovered(true),
+      onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+        const el = buttonRef.current
+        if (!el) { setHovered(false); return }
+        const rect = el.getBoundingClientRect()
+        const x = e.clientX
+        const y = e.clientY
+        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+        if (inside) return
+        setHovered(false)
+      },
+    }
+  }
 
   useEffect(() => {
     if (!(notification.entityType === 'announcement' || notification.entityType === 'announcements')) {
@@ -218,30 +257,21 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   // Восстанавливаем hover, если курсор неподвижен внутри карточки, но произошел ререндер/пересоздание DOM
   useEffect(() => {
     const el = rootRef.current
-    const pos = useNotificationsStore.getState().lastPointerPosition
-    if (!el || !pos) return
-    const rect = el.getBoundingClientRect()
-    const inside = pos.x >= rect.left && pos.x <= rect.right && pos.y >= rect.top && pos.y <= rect.bottom
-    if (inside) {
+    const pos = lastPointerPosition
+    if (!pos) return
+    if (isPointerInsideElement(el, pos.x, pos.y)) {
       setHoveredNotification(notification.id)
     }
-  }, [notification.id, setHoveredNotification])
+  }, [notification.id, setHoveredNotification, lastPointerPosition])
 
   // Восстанавливаем hover для кнопок, если курсор неподвижен поверх них
   useEffect(() => {
-    const pos = useNotificationsStore.getState().lastPointerPosition
+    const pos = lastPointerPosition
     if (!pos) return
-    const applyFromPos = (ref: React.RefObject<HTMLElement>, setter: (v: boolean) => void) => {
-      const el = ref.current
-      if (!el) { setter(false); return }
-      const rect = el.getBoundingClientRect()
-      const inside = pos.x >= rect.left && pos.x <= rect.right && pos.y >= rect.top && pos.y <= rect.bottom
-      setter(inside)
-    }
-    applyFromPos(readBtnRef as unknown as React.RefObject<HTMLElement>, setIsReadButtonHovered)
-    applyFromPos(editBtnRef as unknown as React.RefObject<HTMLElement>, setIsEditButtonHovered)
-    applyFromPos(archiveBtnRef as unknown as React.RefObject<HTMLElement>, setIsArchiveButtonHovered)
-  }, [hoveredNotificationId, notification.id, notification.isArchived])
+    setIsReadButtonHovered(isPointerInsideElement(readBtnRef.current, pos.x, pos.y))
+    setIsEditButtonHovered(isPointerInsideElement(editBtnRef.current, pos.x, pos.y))
+    setIsArchiveButtonHovered(isPointerInsideElement(archiveBtnRef.current, pos.x, pos.y))
+  }, [hoveredNotificationId, notification.id, notification.isArchived, lastPointerPosition])
 
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
@@ -304,23 +334,9 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       ref={rootRef}
       data-notification-id={notification.id}
       onClick={handleClick}
-      onMouseEnter={() => setHoveredNotification(notification.id)}
-      onMouseMove={() => setHoveredNotification(notification.id)}
-      onMouseLeave={(e) => {
-        const root = rootRef.current
-        if (!root) {
-          clearHoveredNotification()
-          return
-        }
-        // Геометрическая проверка: если указатель всё ещё внутри прямоугольника карточки,
-        // не сбрасываем hover (устраняет ошибки с non-Node relatedTarget и порталами)
-        const rect = root.getBoundingClientRect()
-        const x = e.clientX
-        const y = e.clientY
-        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-        if (inside) return
-        clearHoveredNotification()
-      }}
+      // Используем pointer-события из хука для устойчивого hover без дублирования геометрии
+      onPointerEnter={rootHoverHandlers.onPointerEnter}
+      onPointerLeave={rootHoverHandlers.onPointerLeave}
       className={cn(
         "relative p-4 rounded-lg border transition-colors group",
         // Курсор: для объявлений оставляем обычный курсор, для остальных — pointer
@@ -411,18 +427,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                onMouseEnter={() => setIsReadButtonHovered(true)}
-                onMouseMove={() => setIsReadButtonHovered(true)}
-                onMouseLeave={(e) => {
-                  const el = readBtnRef.current
-                  if (!el) { setIsReadButtonHovered(false); return }
-                  const rect = el.getBoundingClientRect()
-                  const x = e.clientX
-                  const y = e.clientY
-                  const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-                  if (inside) return
-                  setIsReadButtonHovered(false)
-                }}
+                {...createButtonHoverHandlers(readBtnRef, setIsReadButtonHovered)}
                 className={cn(
                   "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
                   // Реплика состояния :hover у ghost-кнопки, чтобы не пропадало при статичном курсоре
@@ -454,18 +459,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     e.stopPropagation()
                     onEditAnnouncement(announcementId)
                   }}
-                  onMouseEnter={() => setIsEditButtonHovered(true)}
-                  onMouseMove={() => setIsEditButtonHovered(true)}
-                  onMouseLeave={(e) => {
-                    const el = editBtnRef.current
-                    if (!el) { setIsEditButtonHovered(false); return }
-                    const rect = el.getBoundingClientRect()
-                    const x = e.clientX
-                    const y = e.clientY
-                    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-                    if (inside) return
-                    setIsEditButtonHovered(false)
-                  }}
+                  {...createButtonHoverHandlers(editBtnRef, setIsEditButtonHovered)}
                   className={cn(
                     "h-7 w-7 text-gray-500 hover:text-blue-600 pointer-events-auto",
                     // Реплика состояния :hover у ghost-кнопки + фирменный цвет текста
@@ -490,7 +484,33 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                       span.setAttribute("notification.id", notification.id)
                       if (!notification.isRead) {
                         markAsRead(notification.id)
-                        try { await markAsReadInDB(notification.id) } catch {}
+                        try {
+                          await markAsReadInDB(notification.id)
+                        } catch (error) {
+                          // Логируем ошибку вместо молчаливого игнорирования и делаем минимальное восстановление (ретрай)
+                          Sentry.captureException(error, {
+                            tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read', error_type: 'db_error' },
+                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                          })
+                          console.error('Не удалось отметить уведомление прочитанным в БД перед архивированием', {
+                            notificationId: notification.id,
+                            error,
+                          })
+
+                          // Минимальное восстановление: однократная отложенная попытка
+                          setTimeout(() => {
+                            markAsReadInDB(notification.id).catch((retryError) => {
+                              Sentry.captureException(retryError, {
+                                tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read_retry', error_type: 'db_error' },
+                                extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                              })
+                              console.error('Повторная попытка отметить прочитанным в БД не удалась', {
+                                notificationId: notification.id,
+                                error: retryError,
+                              })
+                            })
+                          }, 2000)
+                        }
                       }
                       setNotificationArchived(notification.id, true)
                       try {
@@ -512,18 +532,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                onMouseEnter={() => setIsArchiveButtonHovered(true)}
-                onMouseMove={() => setIsArchiveButtonHovered(true)}
-                onMouseLeave={(e) => {
-                  const el = archiveBtnRef.current
-                  if (!el) { setIsArchiveButtonHovered(false); return }
-                  const rect = el.getBoundingClientRect()
-                  const x = e.clientX
-                  const y = e.clientY
-                  const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-                  if (inside) return
-                  setIsArchiveButtonHovered(false)
-                }}
+                {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
                 className={cn(
                   "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
                   // Реплика состояния :hover у ghost-кнопки
@@ -566,18 +575,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   })
                 }
               }}
-              onMouseEnter={() => setIsArchiveButtonHovered(true)}
-              onMouseMove={() => setIsArchiveButtonHovered(true)}
-              onMouseLeave={(e) => {
-                const el = archiveBtnRef.current
-                if (!el) { setIsArchiveButtonHovered(false); return }
-                const rect = el.getBoundingClientRect()
-                const x = e.clientX
-                const y = e.clientY
-                const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-                if (inside) return
-                setIsArchiveButtonHovered(false)
-              }}
+              {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
               className={cn(
                 "h-7 w-7 text-gray-500 hover:text-gray-700 pointer-events-auto",
                 // Реплика состояния :hover у ghost-кнопки

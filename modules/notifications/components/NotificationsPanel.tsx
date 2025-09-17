@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import throttle from "lodash.throttle"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
@@ -38,6 +39,12 @@ const NOTIFICATION_TYPES = [
   { value: 'task', label: 'Задачи', color: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-200' },
 ]
 
+// Нормализация ключей типов: приводим возможные множественные формы к форме entityType
+const normalizeType = (value: string | null | undefined): string => {
+  if (!value) return ''
+  return value === 'assignments' ? 'assignment' : value
+}
+
 export function NotificationsPanel({ onCloseAction, collapsed = false }: NotificationsPanelProps) {
   const [localSearchQuery, setLocalSearchQuery] = useState("")
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
@@ -57,6 +64,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const currentUserId = useNotificationsStore((s) => s.currentUserId)
   const allFilteredRef = useRef(0)
   const isMountedRef = useRef(true)
+
+  // Мемоизированная троттлинговая функция (~60fps)
+  const throttledSetPointerPosition = useMemo(() =>
+    throttle((pos: { x: number; y: number }) => {
+      setPointerPosition(pos)
+    }, 16)
+  , [setPointerPosition])
 
   // Серверные счетчики по типам (без архива)
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
@@ -90,6 +104,11 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     [isSearchMode, selectedTypes, readFilter]
   )
 
+  // Нормализованный набор выбранных типов для сопоставления с entityType
+  const normalizedSelectedTypes = useMemo(() => {
+    return new Set(Array.from(selectedTypes).map((t) => normalizeType(t)))
+  }, [selectedTypes])
+
   // Автоподгрузка: когда выбран тип, догружаем страницы, пока отфильтрованное количество
   // не достигнет ожидаемого серверного counts для этих типов (или пока не закончатся страницы)
   useEffect(() => {
@@ -97,18 +116,21 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     if (isLoading || isLoadingMore) return
     // Вычисляем ожидаемое количество по выбранным типам
     const expected = Array.from(selectedTypes).reduce((sum, t) => {
-      const key = t === 'assignments' ? 'assignment' : t
+      const key = normalizeType(t)
       return sum + (typeCounts[key] || 0)
     }, 0)
     // Если ожидаемое неизвестно (поповер не открыт/не загружено) — не спамим загрузкой
     if (expected === 0) return
 
-    const currentCount = notifications.filter(n => selectedTypes.has(n.entityType || '') && !(n as any).isArchived).length
+    const currentCount = notifications.filter(n => {
+      const type = normalizeType(n.entityType)
+      return normalizedSelectedTypes.has(type) && !(n as any).isArchived
+    }).length
     if (currentCount < expected && hasMore) {
       // Стартуем фоновую догрузку одной страницы
       loadMoreNotifications()
     }
-  }, [isClientFilterMode, selectedTypes, typeCounts, notifications, hasMore, isLoading, isLoadingMore, loadMoreNotifications])
+  }, [isClientFilterMode, selectedTypes, normalizedSelectedTypes, typeCounts, notifications, hasMore, isLoading, isLoadingMore, loadMoreNotifications])
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
@@ -160,21 +182,29 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       
       // Рекурсивная функция для загрузки всех страниц
       const loadAllPages = async (): Promise<void> => {
-        // Проверяем, что компонент еще смонтирован
-        if (!isMountedRef.current) return
-        
-        const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
-        
-        if (!more) return
-        
-        if (!loadingMore) {
-          await loadMore()
-          // Рекурсивно вызываем себя для загрузки следующей страницы
-          return loadAllPages()
-        } else {
+        // Итеративная загрузка страниц с лимитом повторов ожидания
+        let retries = 0
+        const maxRetries = 10
+
+        while (isMountedRef.current) {
+          const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
+
+          if (!more) break
+
+          if (!loadingMore) {
+            await loadMore()
+            retries = 0
+            continue
+          }
+
+          if (retries >= maxRetries) {
+            console.warn('Достигнут максимальный лимит попыток при загрузке страниц')
+            break
+          }
+
           // Ждем небольшую задержку и пробуем снова
           await new Promise((resolve) => setTimeout(resolve, 100))
-          return loadAllPages()
+          retries += 1
         }
       }
       
@@ -374,6 +404,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }
   }, [])
 
+  // Очистка таймеров троттлинга при размонтировании, чтобы избежать утечек и устаревших обновлений
+  useEffect(() => {
+    return () => {
+      throttledSetPointerPosition.cancel()
+    }
+  }, [throttledSetPointerPosition])
+
   // Эффект для обновления уведомлений при первом открытии панели
   useEffect(() => {
     // Проверяем условия для обновления уведомлений
@@ -405,7 +442,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       return notifications.filter((notification) => {
         // Применяем только клиентские фильтры (типы и статус)
         const matchesType = selectedTypes.size === 0 || 
-          (notification.entityType && selectedTypes.has(notification.entityType))
+          (notification.entityType && normalizedSelectedTypes.has(normalizeType(notification.entityType)))
         
         let matchesRead = true
         if (readFilter === 'unread') {
@@ -430,7 +467,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       
       // Фильтр по типам (если выбраны типы)
       const matchesType = selectedTypes.size === 0 || 
-        (notification.entityType && selectedTypes.has(notification.entityType))
+        (notification.entityType && normalizedSelectedTypes.has(normalizeType(notification.entityType)))
       
       // Фильтр по статусу прочтения/архиву
       let matchesRead = true
@@ -529,7 +566,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
       )}
       style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
-      onMouseMove={(e) => setPointerPosition({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => throttledSetPointerPosition({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => clearPointerPosition()}
     >
       {/* Контент панели: header + scrollable list, full height */}
