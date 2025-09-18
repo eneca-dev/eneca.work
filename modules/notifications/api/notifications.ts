@@ -783,6 +783,135 @@ export async function getUserNotifications(
 }
 
 /**
+ * Получить уведомления пользователя, отфильтрованные по типам (entity_types.entity_name), с пагинацией
+ * По умолчанию исключает архивированные.
+ */
+export async function getUserNotificationsByTypes(
+  userId: string,
+  types: string[],
+  page: number = 1,
+  limit: number = 10,
+  options?: { includeArchived?: boolean }
+): Promise<{
+  notifications: UserNotificationWithNotification[]
+  totalCount: number
+  hasMore: boolean
+}> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.get_user_notifications_by_types",
+      name: "Get User Notifications By Types",
+    },
+    async (span) => {
+      const supabase = createClient()
+      const offset = (page - 1) * limit
+
+      try {
+        const includeArchived = options?.includeArchived ?? false
+
+        // Нормализуем возможные синонимы типов (singular/plural)
+        const expandTypeSynonyms = (src: string[]): string[] => {
+          const set = new Set<string>()
+          for (const t of src) {
+            const v = t.trim()
+            if (!v) continue
+            set.add(v)
+            if (v === 'assignment') set.add('assignments')
+            if (v === 'assignments') set.add('assignment')
+            if (v === 'announcement') set.add('announcements')
+            if (v === 'announcements') set.add('announcement')
+          }
+          return Array.from(set)
+        }
+
+        const requestedTypes = expandTypeSynonyms(types)
+
+        span.setAttribute('user.id', userId)
+        span.setAttribute('pagination.page', page)
+        span.setAttribute('pagination.limit', limit)
+        span.setAttribute('pagination.offset', offset)
+        span.setAttribute('filter.types', requestedTypes.join(','))
+        span.setAttribute('filter.include_archived', includeArchived)
+
+        // Фильтрация по вложенному полю связанной таблицы допускается в PostgREST
+        // отбираем user_notifications пользователя + фильтр по notifications.entity_types.entity_name
+        let query = supabase
+          .from('user_notifications')
+          .select(`
+            *,
+            notifications:notification_id (
+              *,
+              entity_types:entity_type_id (*)
+            )
+          `, { count: 'exact' })
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .in('notifications.entity_types.entity_name', requestedTypes)
+
+        if (!includeArchived) {
+          query = query.eq('is_archived', false)
+        }
+
+        const { data, error, count } = await query
+          .range(offset, offset + limit - 1)
+
+        if (error) {
+          span.setAttribute('fetch.success', false)
+          span.setAttribute('fetch.error', error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'get_user_notifications_by_types',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'getUserNotificationsByTypes',
+              user_id: userId,
+              page,
+              limit,
+              types: requestedTypes,
+              include_archived: includeArchived,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
+
+        span.setAttribute('fetch.success', true)
+        span.setAttribute('notifications.count', data?.length || 0)
+        span.setAttribute('notifications.total_count', count || 0)
+        span.setAttribute('notifications.has_more', (count || 0) > offset + limit)
+
+        return {
+          notifications: data || [],
+          totalCount: count || 0,
+          hasMore: (count || 0) > offset + limit
+        }
+      } catch (error) {
+        span.setAttribute('fetch.success', false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'get_user_notifications_by_types',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'getUserNotificationsByTypes',
+            user_id: userId,
+            page,
+            limit,
+            types,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+
+/**
  * Получить количество непрочитанных уведомлений
  */
 export async function getUnreadNotificationsCount(userId: string): Promise<number> {

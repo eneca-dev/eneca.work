@@ -13,7 +13,8 @@ import {
 } from "@/modules/notifications/api/notifications"
 import { 
   markNotificationAsUnread,
-  setUserNotificationArchived
+  setUserNotificationArchived,
+  getUserNotificationsByTypes
 } from "@/modules/notifications/api/notifications"
 import { 
   generateAssignmentNotificationText,
@@ -76,6 +77,9 @@ interface NotificationsState {
   hasMore: boolean
   isLoadingMore: boolean
   currentPage: number
+  // Режим серверной фильтрации по типам
+  filterMode: 'none' | 'types'
+  filterTypes: string[]
   
   // Поиск
   searchQuery: string
@@ -126,6 +130,9 @@ interface NotificationsState {
   fetchUnreadCount: () => Promise<void>
   loadMoreNotifications: () => Promise<void>
   resetPagination: () => void
+  // Серверная фильтрация по типам
+  setServerTypeFilter: (types: string[]) => Promise<void>
+  clearServerFilters: () => void
   
   // Методы для поиска
   searchNotifications: (query: string) => Promise<void>
@@ -146,7 +153,7 @@ interface NotificationsState {
 const transformNotificationData = (un: UserNotificationWithNotification): Notification => {
   const notification = un.notifications
   const rawType = notification?.entity_types?.entity_name || 'unknown'
-  const entityType = rawType === 'assignments' ? 'assignment' : rawType
+  const entityType = rawType === 'assignments' ? 'assignment' : (rawType === 'announcements' ? 'announcement' : rawType)
   
   // Извлекаем данные из payload
   const payload = notification?.payload || {}
@@ -247,6 +254,8 @@ export const useNotificationsStore = create<NotificationsState>()(
       hasMore: true,
       isLoadingMore: false,
       currentPage: 1,
+      filterMode: 'none',
+      filterTypes: [],
       
       // Поиск
       searchQuery: '',
@@ -468,6 +477,66 @@ export const useNotificationsStore = create<NotificationsState>()(
           hasMore: true, 
           isLoadingMore: false 
         })
+      },
+
+      // Установка серверного фильтра по типам с загрузкой первой страницы
+      setServerTypeFilter: async (types) => {
+        const state = get()
+        const requestUserId = state.currentUserId
+        if (!requestUserId) {
+          console.warn('⚠️ Нет currentUserId для фильтрации по типам')
+          return
+        }
+
+        // Нормализуем типы (assignments -> assignment и обратно обрабатывается на API уровне через синонимы)
+        const normalized = Array.from(new Set(types.map((t) => t === 'assignments' ? 'assignment' : t)))
+
+        // Сбрасываем состояние списка под новый фильтр
+        set({
+          isLoading: true,
+          error: null,
+          notifications: [],
+          currentPage: 1,
+          hasMore: true,
+          isLoadingMore: false,
+          filterMode: 'types',
+          filterTypes: normalized,
+        })
+
+        try {
+          const { notifications: userNotifications, hasMore } = await getUserNotificationsByTypes(
+            requestUserId,
+            normalized,
+            1,
+            10,
+            { includeArchived: false }
+          )
+
+          // Проверяем актуальность запроса
+          const currentState = get()
+          if (currentState.currentUserId !== requestUserId) return
+
+          const mapped = userNotifications.map(transformNotificationData)
+          set({
+            notifications: mapped,
+            currentPage: 1,
+            hasMore,
+            isLoading: false,
+            isLoadingMore: false,
+          })
+        } catch (error) {
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            console.error('❌ Ошибка при загрузке уведомлений по типам:', error)
+            set({ isLoading: false, isLoadingMore: false, error: 'Ошибка при загрузке уведомлений' })
+          }
+        }
+      },
+
+      // Очистка серверных фильтров и возврат к обычной пагинации
+      clearServerFilters: () => {
+        set({ filterMode: 'none', filterTypes: [], currentPage: 1, hasMore: true, isLoadingMore: false })
+        get().fetchNotifications()
       },
       
       // Методы для поиска
@@ -755,10 +824,20 @@ export const useNotificationsStore = create<NotificationsState>()(
 
         try {
           set({ isLoadingMore: true, error: null })
-          
-          const { notifications: userNotifications, hasMore } = await getUserNotifications(requestUserId, nextPage, 10)
+
+          let result:
+            | { notifications: UserNotificationWithNotification[]; hasMore: boolean }
+            | null = null
+
+          if (state.filterMode === 'types' && state.filterTypes.length > 0) {
+            result = await getUserNotificationsByTypes(requestUserId, state.filterTypes, nextPage, 10, { includeArchived: false })
+          } else {
+            result = await getUserNotifications(requestUserId, nextPage, 10)
+          }
+
+          const { notifications: userNotifications, hasMore } = result
           console.log('📦 Получено дополнительных уведомлений:', userNotifications?.length || 0, 'hasMore:', hasMore)
-          
+
           // Проверяем, не изменился ли пользователь во время запроса
           const currentState = get()
           if (currentState.currentUserId !== requestUserId) {
@@ -766,18 +845,15 @@ export const useNotificationsStore = create<NotificationsState>()(
             return
           }
 
-          // Преобразуем данные в формат UI
           const newNotifications: Notification[] = userNotifications.map(transformNotificationData)
-          console.log('✨ Преобразованные дополнительные уведомления:', newNotifications.length)
 
-          // Добавляем к существующим уведомлениям
           set((prevState) => ({
             notifications: [...prevState.notifications, ...newNotifications],
             currentPage: nextPage,
             hasMore,
             isLoadingMore: false
           }))
-          
+
           console.log('✅ Дополнительные уведомления успешно загружены')
         } catch (error) {
           // Проверяем, актуален ли еще этот запрос

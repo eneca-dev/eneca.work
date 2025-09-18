@@ -8,8 +8,7 @@ import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { NotificationItem } from "./NotificationItem"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { X, Search, Loader2, RefreshCw, Filter, ChevronDown, SlidersHorizontal, Check, Megaphone } from "lucide-react"
+import { X, Loader2, RefreshCw, Filter, SlidersHorizontal, Check, Megaphone } from "lucide-react"
 import {
   Popover,
   PopoverContent,
@@ -42,11 +41,12 @@ const NOTIFICATION_TYPES = [
 // Нормализация ключей типов: приводим возможные множественные формы к форме entityType
 const normalizeType = (value: string | null | undefined): string => {
   if (!value) return ''
-  return value === 'assignments' ? 'assignment' : value
+  if (value === 'assignments') return 'assignment'
+  if (value === 'announcements') return 'announcement'
+  return value
 }
 
 export function NotificationsPanel({ onCloseAction, collapsed = false }: NotificationsPanelProps) {
-  const [localSearchQuery, setLocalSearchQuery] = useState("")
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'archived'>('all')
   const [isTypeFilterOpen, setIsTypeFilterOpen] = useState(false)
@@ -55,6 +55,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
   const [hasPanelBeenOpened, setHasPanelBeenOpened] = useState(false)
   const [isRefreshingOnOpen, setIsRefreshingOnOpen] = useState(false)
+  // Состояние сортировки списков в дебаг-панели по типам уведомлений
+  const [debugSortType, setDebugSortType] = useState<'all' | 'section_comment' | 'announcement'>('all')
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Трекинг позиции указателя внутри панели для устойчивого hover
@@ -77,6 +79,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const [isLoadingTypeCounts, setIsLoadingTypeCounts] = useState(false)
   // Локальный индикатор ручного обновления по кнопке
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  // Количество точек в анимации загрузки счетчиков типов (1..3)
+  const [loadingDots, setLoadingDots] = useState(1)
 
   const { 
     notifications, 
@@ -90,79 +94,63 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     hasMore,
     isLoadingMore,
     loadMoreNotifications,
-    // Поля для поиска
-    searchQuery: storeSearchQuery,
-    isSearchMode,
-    searchNotifications,
-    clearSearch,
-    setSearchQuery
+    setServerTypeFilter,
+    clearServerFilters
   } = useNotificationsStore()
 
   // Локальные состояния для клиентской пагинации при активных фильтрах
   const [isPreloadingAll, setIsPreloadingAll] = useState(false)
   const [visibleFilteredCount, setVisibleFilteredCount] = useState(10)
+  // Клиентский режим фильтрации используется только для статуса прочитанности,
+  // фильтрация по типам переведена на серверную пагинацию
   const isClientFilterMode = useMemo(
-    () => !isSearchMode && (selectedTypes.size > 0 || readFilter !== 'all'),
-    [isSearchMode, selectedTypes, readFilter]
+    () => (selectedTypes.size === 0 && readFilter !== 'all'),
+    [selectedTypes, readFilter]
   )
+
+  // Форматирование времени и даты: HH:mm dd.MM.yyyy
+  const formatDateTime = useCallback((value: string | Date | number | null | undefined): string => {
+    if (!value) return ''
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const hh = pad(d.getHours())
+    const mm = pad(d.getMinutes())
+    const ss = pad(d.getSeconds())
+    const dd = pad(d.getDate())
+    const MM = pad(d.getMonth() + 1)
+    const yyyy = d.getFullYear()
+    return `${hh}:${mm}:${ss} ${dd}.${MM}.${yyyy}`
+  }, [])
 
   // Нормализованный набор выбранных типов для сопоставления с entityType
   const normalizedSelectedTypes = useMemo(() => {
     return new Set(Array.from(selectedTypes).map((t) => normalizeType(t)))
   }, [selectedTypes])
 
-  // Автоподгрузка: когда выбран тип, догружаем страницы, пока отфильтрованное количество
-  // не достигнет ожидаемого серверного counts для этих типов (или пока не закончатся страницы)
-  useEffect(() => {
-    if (!isClientFilterMode) return
-    if (isLoading || isLoadingMore) return
-    // Вычисляем ожидаемое количество по выбранным типам
-    const expected = Array.from(selectedTypes).reduce((sum, t) => {
-      const key = normalizeType(t)
-      return sum + (typeCounts[key] || 0)
-    }, 0)
-    // Если ожидаемое неизвестно (поповер не открыт/не загружено) — не спамим загрузкой
-    if (expected === 0) return
-
-    const currentCount = notifications.filter(n => {
-      const type = normalizeType(n.entityType)
-      return normalizedSelectedTypes.has(type) && !(n as any).isArchived
-    }).length
-    if (currentCount < expected && hasMore) {
-      // Стартуем фоновую догрузку одной страницы
-      loadMoreNotifications()
+  // Дедупликация уведомлений по id, чтобы избежать повторов
+  const dedupedNotifications = useMemo(() => {
+    const seen = new Set<string>()
+    const result: typeof notifications = []
+    for (const n of notifications) {
+      const id = (n as any)?.id
+      if (id && !seen.has(id)) {
+        seen.add(id)
+        result.push(n)
+      }
     }
-  }, [isClientFilterMode, selectedTypes, normalizedSelectedTypes, typeCounts, notifications, hasMore, isLoading, isLoadingMore, loadMoreNotifications])
+    return result
+  }, [notifications])
+
+  // Автодогрузка для клиентского фильтра по статусу (типов нет) больше не нужна.
+  // Догрузка теперь обрабатывается единообразно обработчиком скролла ниже через hasMore.
 
   // Хуки для работы с объявлениями
   const { removeAnnouncement, fetchAnnouncements: fetchAnnouncementsData } = useAnnouncements()
   const { canManage: canManageAnnouncements } = useAnnouncementsPermissions()
   const { announcements } = useAnnouncementsStore()
 
-  // Debounced поиск
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current)
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      if (localSearchQuery !== storeSearchQuery) {
-        if (localSearchQuery.trim()) {
-          searchNotifications(localSearchQuery)
-        } else {
-          clearSearch()
-        }
-      }
-    }, 500)
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current)
-      }
-    }
-  }, [localSearchQuery, storeSearchQuery, searchNotifications, clearSearch])
+  // Поиск временно отключен
 
   // Функция для закрытия панели
   const handleClose = useCallback(() => {
@@ -174,51 +162,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     onCloseAction()
   }, [onCloseAction])
 
-  // Фоновая предзагрузка всех уведомлений для корректной фильтрации по всей выборке
-  const ensureAllNotificationsLoaded = useCallback(async () => {
-    if (isSearchMode) return
-    if (isPreloadingAll) return
-    
-    try {
-      setIsPreloadingAll(true)
-      
-      // Рекурсивная функция для загрузки всех страниц
-      const loadAllPages = async (): Promise<void> => {
-        // Итеративная загрузка страниц с лимитом повторов ожидания
-        let retries = 0
-        const maxRetries = 10
-
-        while (isMountedRef.current) {
-          const { hasMore: more, isLoadingMore: loadingMore, loadMoreNotifications: loadMore } = useNotificationsStore.getState()
-
-          if (!more) break
-
-          if (!loadingMore) {
-            await loadMore()
-            retries = 0
-            continue
-          }
-
-          if (retries >= maxRetries) {
-            console.warn('Достигнут максимальный лимит попыток при загрузке страниц')
-            break
-          }
-
-          // Ждем небольшую задержку и пробуем снова
-          await new Promise((resolve) => setTimeout(resolve, 100))
-          retries += 1
-        }
-      }
-      
-      await loadAllPages()
-    } catch (e) {
-      console.error('Ошибка предзагрузки всех уведомлений:', e)
-    } finally {
-      if (isMountedRef.current) {
-        setIsPreloadingAll(false)
-      }
-    }
-  }, [isSearchMode, isPreloadingAll])
+  // Фоновая предзагрузка отключена вместе с поиском
 
   // При открытии поповера типов — загружаем серверные счетчики (исключая архив)
   useEffect(() => {
@@ -240,6 +184,17 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     return () => { cancelled = true }
   }, [isTypeFilterOpen, currentUserId])
 
+  // Анимация точек во время загрузки счетчиков типов
+  useEffect(() => {
+    if (!isTypeFilterOpen || !isLoadingTypeCounts) return
+    // Сбрасываем при каждом запуске загрузки
+    setLoadingDots(1)
+    const id = setInterval(() => {
+      setLoadingDots((prev) => (prev >= 3 ? 1 : prev + 1))
+    }, 400)
+    return () => clearInterval(id)
+  }, [isTypeFilterOpen, isLoadingTypeCounts])
+
   // Обработка изменения фильтра по типам
   const handleTypeFilterChange = useCallback((type: string, checked: boolean) => {
     setSelectedTypes(prev => {
@@ -256,12 +211,21 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Сброс всех фильтров
   const handleClearFilters = useCallback(() => {
-    setLocalSearchQuery("")
     setSelectedTypes(new Set())
     setReadFilter('all')
-    clearSearch() // Очищаем серверный поиск
     setVisibleFilteredCount(10)
-  }, [clearSearch])
+  }, [])
+
+  // Реакция на изменение выбранных типов: инициируем серверную фильтрацию пачками по 10
+  useEffect(() => {
+    const typesArray = Array.from(selectedTypes)
+    if (typesArray.length > 0) {
+      const normalized = typesArray.map((t) => t === 'assignments' ? 'assignment' : t)
+      setServerTypeFilter(normalized)
+    } else {
+      clearServerFilters()
+    }
+  }, [selectedTypes, setServerTypeFilter, clearServerFilters])
 
   // Обработчики для модального окна создания объявлений
   const handleCreateAnnouncement = useCallback(() => {
@@ -308,7 +272,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     setEditingAnnouncement(null)
   }, [])
 
-  // Обработка прокрутки для бесконечной загрузки (отключаем в режиме поиска)
+  // Обработка прокрутки для бесконечной загрузки
   useEffect(() => {
     const scrollElement = scrollRef.current
     if (!scrollElement) return
@@ -316,9 +280,6 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollElement
       const isNearBottom = scrollTop + clientHeight >= scrollHeight - 200
-
-      // В режиме поиска не скроллим вручную
-      if (isSearchMode) return
 
       if (isClientFilterMode) {
         if (isNearBottom) {
@@ -338,7 +299,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
     scrollElement.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollElement.removeEventListener('scroll', handleScroll)
-  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isSearchMode, isClientFilterMode, visibleFilteredCount])
+  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isClientFilterMode, visibleFilteredCount])
 
   // Авто-прочтение отключено: больше не помечаем как прочитанные при появлении в зоне видимости
 
@@ -439,37 +400,11 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Фильтрация уведомлений
   const filteredNotifications = useMemo(() => {
-    // В режиме поиска показываем результаты как есть (поиск уже выполнен на сервере)
-    if (isSearchMode) {
-      return notifications.filter((notification) => {
-        // Применяем только клиентские фильтры (типы и статус)
-        const matchesType = selectedTypes.size === 0 || 
-          (notification.entityType && normalizedSelectedTypes.has(normalizeType(notification.entityType)))
-        
-        let matchesRead = true
-        if (readFilter === 'unread') {
-          matchesRead = !notification.isRead && !Boolean((notification as any).isArchived)
-        } else if (readFilter === 'archived') {
-          matchesRead = Boolean((notification as any).isArchived)
-        } else {
-          matchesRead = !Boolean((notification as any).isArchived)
-        }
-        
-        return matchesType && matchesRead
-      })
-    }
-
     // В обычном режиме применяем все фильтры
-    const allFiltered = notifications.filter((notification) => {
-      // Фильтр по поисковому запросу (только если не в режиме серверного поиска)
-      const matchesSearch = 
-        localSearchQuery === '' ||
-        notification.title.toLowerCase().includes(localSearchQuery.toLowerCase()) ||
-        notification.message.toLowerCase().includes(localSearchQuery.toLowerCase())
-      
-      // Фильтр по типам (если выбраны типы)
-      const matchesType = selectedTypes.size === 0 || 
-        (notification.entityType && normalizedSelectedTypes.has(normalizeType(notification.entityType)))
+    const allFiltered = dedupedNotifications.filter((notification) => {
+      // Фильтр по типам на клиенте отключен: доверяем серверу при выбранных типах,
+      // а при отсутствии выбранных типов показываем все
+      const matchesType = true
       
       // Фильтр по статусу прочтения/архиву
       let matchesRead = true
@@ -483,7 +418,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         matchesRead = !Boolean((notification as any).isArchived)
       }
       
-      return matchesSearch && matchesType && matchesRead
+      return matchesType && matchesRead
     }).sort((a, b) => {
       // Стабильная сортировка: сначала по дате, затем по id для детерминизма
       const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -501,7 +436,40 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }
 
     return allFiltered
-  }, [notifications, localSearchQuery, selectedTypes, readFilter, isSearchMode, isClientFilterMode, visibleFilteredCount])
+  }, [dedupedNotifications, readFilter, isClientFilterMode, visibleFilteredCount])
+
+  // Вспомогательная сортировка для дебаг-списков: продвигаем выбранный тип вверх
+  const sortForDebugByType = useCallback(
+    (list: typeof dedupedNotifications) => {
+      if (debugSortType === 'all') return list
+      return [...list].sort((a, b) => {
+        const aMatch = normalizeType((a as any).entityType) === debugSortType
+        const bMatch = normalizeType((b as any).entityType) === debugSortType
+        if (aMatch === bMatch) return 0
+        return aMatch ? -1 : 1
+      })
+    },
+    [debugSortType]
+  )
+
+  // Подготовка списков для дебаг-панели (на основе всех загруженных уведомлений без учета клиентских фильтров)
+  const debugLists = useMemo(() => {
+    // Прочитанные (не архив)
+    const readList = dedupedNotifications.filter((n: any) => Boolean(n.isRead) && !Boolean(n.isArchived))
+    // Непрочитанные (не архив)
+    const unreadList = dedupedNotifications.filter((n: any) => !Boolean(n.isRead) && !Boolean(n.isArchived))
+    // Архивные
+    const archivedList = dedupedNotifications.filter((n: any) => Boolean(n.isArchived))
+
+    // Стабильная сортировка внутри списков по дате
+    const byDateDesc = (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+    return {
+      read: sortForDebugByType(readList.sort(byDateDesc)),
+      unread: sortForDebugByType(unreadList.sort(byDateDesc)),
+      archived: sortForDebugByType(archivedList.sort(byDateDesc)),
+    }
+  }, [dedupedNotifications, sortForDebugByType])
 
   // При входе в режим клиентских фильтров просто сбрасываем лимит (без принудительной полной предзагрузки)
   useEffect(() => {
@@ -563,7 +531,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   }
 
   // Проверяем, есть ли активные фильтры
-  const hasActiveFilters = localSearchQuery || selectedTypes.size > 0 || readFilter !== 'all' || isSearchMode
+  const hasActiveFilters = selectedTypes.size > 0 || readFilter !== 'all'
 
   return (
     <div
@@ -572,77 +540,48 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
         "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
       )}
-      style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
+      // Расширяем панель под дебаг-колонку справа (+320px)
+      style={{ width: panelWidthPx + 320, left: collapsed ? 80 : 256 }}
       onMouseMove={(e) => throttledSetPointerPosition({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => clearPointerPosition()}
     >
       {/* Контент панели: header + scrollable list, full height */}
       <div className="flex h-full flex-col">
-        {/* Заголовок */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {(isRefreshingOnOpen || isManualRefreshing) ? "Обновление уведомлений..." : "Уведомления"}
-          </h3>
-          <div className="flex items-center gap-2">
-            {/* Кнопка создания объявлений */}
-            {canManageAnnouncements && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={handleCreateAnnouncement}
-                className="h-6 w-6"
-                title="Создать объявление"
-              >
-                <Megaphone className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleRefresh}
-              disabled={isLoading || isRefreshingOnOpen || isManualRefreshing}
-              className="h-6 w-6"
-            >
-              <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshingOnOpen || isManualRefreshing) && "animate-spin")} />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Поиск и фильтры */}
+        {/* Заголовок + компактные фильтры */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            {/* Поиск */}
-            <div className="relative flex-1">
-              <Search className={cn(
-                "absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4",
-                isSearchMode ? "text-blue-500" : "text-gray-400"
-              )} />
-              <Input
-                placeholder={isSearchMode ? "Поиск по всем уведомлениям..." : "Поиск уведомлений..."}
-                value={localSearchQuery}
-                onChange={(e) => setLocalSearchQuery(e.target.value)}
-                className={cn(
-                  "pl-10",
-                  isSearchMode && "border-blue-300 ring-1 ring-blue-200"
-                )}
-              />
-              {isSearchMode && (
-                <button
-                  onClick={() => {
-                    setLocalSearchQuery("")
-                    clearSearch()
-                  }}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  title="Очистить поиск"
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {(isRefreshingOnOpen || isManualRefreshing) ? "Обновление уведомлений..." : "Уведомления"}
+            </h3>
+            <div className="flex items-center gap-2">
+              {/* Кнопка создания объявлений */}
+              {canManageAnnouncements && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleCreateAnnouncement}
+                  className="h-6 w-6"
+                  title="Создать объявление"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  <Megaphone className="h-4 w-4" />
+                </Button>
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isLoading || isRefreshingOnOpen || isManualRefreshing}
+                className="h-6 w-6"
+              >
+                <RefreshCw className={cn("h-4 w-4", (isLoading || isRefreshingOnOpen || isManualRefreshing) && "animate-spin")} />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleClose} className="h-6 w-6">
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            
+          </div>
+          {/* Компактные фильтры под кнопками действий */}
+          <div className="mt-2 flex items-center gap-2">
             {/* Фильтр по статусу (иконка-меню) */}
             <Popover open={isReadFilterOpen} onOpenChange={setIsReadFilterOpen}>
               <PopoverTrigger asChild>
@@ -650,18 +589,18 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                   variant="outline"
                   size="icon"
                   className={cn(
-                    "relative h-10 w-10",
+                    "relative h-8 w-8",
                     readFilter !== 'all' && "text-blue-600 border-blue-300 dark:text-blue-400"
                   )}
                   aria-label="Фильтр уведомлений"
                   title="Фильтр уведомлений"
                 >
-                  <SlidersHorizontal className="h-4 w-4" />
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-48 p-1" align="end">
                 <div className="flex flex-col">
-                <Button
+                  <Button
                     variant="ghost"
                     size="sm"
                     className={cn("justify-start gap-2", readFilter === 'all' && "bg-gray-100 dark:bg-gray-800")}
@@ -695,9 +634,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative h-10 w-10"
+                  className="relative h-8 w-8"
                 >
-                  <Filter className="h-4 w-4" />
+                  <Filter className="h-3.5 w-3.5" />
                   {/* Счетчик выбранных типов */}
                   {selectedTypes.size > 0 && (
                     <Badge 
@@ -727,7 +666,6 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                       </Button>
                     )}
                   </div>
-                  
                   {/* Список типов */}
                   <div className="space-y-2">
                     {NOTIFICATION_TYPES.map((type) => (
@@ -750,7 +688,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                           className={cn("text-xs", type.color)}
                         >
                           {isLoadingTypeCounts
-                            ? '...'
+                            ? '.'.repeat(loadingDots)
                             : (typeCounts[type.value === 'assignments' ? 'assignment' : type.value] || 0)}
                         </Badge>
                       </div>
@@ -762,107 +700,190 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           </div>
         </div>
 
-        {/* Информация о поиске */}
-        {isSearchMode && (
-          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-blue-700 dark:text-blue-300">
-                Поиск: "{storeSearchQuery}" • Найдено: {filteredNotifications.length}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setLocalSearchQuery("")
-                  clearSearch()
-                }}
-                className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
-              >
-                Очистить
-              </Button>
-            </div>
-          </div>
-        )}
 
-        {/* Список уведомлений */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {(isLoading || isManualRefreshing) ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+
+        {/* Основная зона: слева список уведомлений, справа дебаг-панель */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Список уведомлений */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto border-r border-gray-200 dark:border-gray-700">
+            {(isLoading || isManualRefreshing) ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+              </div>
+            ) : error ? (
+              <div className="p-8 text-center text-red-500 dark:text-red-400">
+                <p className="text-sm">Ошибка загрузки уведомлений</p>
+                <p className="text-xs mt-1 text-gray-500">{error}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  className="mt-3"
+                >
+                  Попробовать снова
+                </Button>
+              </div>
+            ) : filteredNotifications.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <p className="mb-4">
+                  {hasActiveFilters ? "Уведомления по заданным фильтрам не найдены" : "Нет уведомлений"}
+                </p>
+                {hasActiveFilters && (
+                  <div className="flex justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearFilters}
+                      className="px-4"
+                    >
+                      {"Сбросить фильтры"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-2 space-y-2">
+                {filteredNotifications.map((notification) => (
+                  <NotificationItem 
+                    key={notification.id} 
+                    notification={notification}
+                    onEditAnnouncement={handleEditAnnouncement}
+                  />
+                ))}
+                
+                {/* Индикатор загрузки дополнительных уведомлений */}
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                    <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+                  </div>
+                )}
+                
+                {/* Сообщение о том, что все уведомления загружены */}
+                {!hasMore && filteredNotifications.length > 0 && (
+                  <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                    Все уведомления загружены
+                  </div>
+                )}
+                {/* Триггер для догрузки при достижении низа (страховка) */}
+                {hasMore && !isLoadingMore && (
+                  <div className="flex justify-center py-2">
+                    <Button variant="ghost" size="sm" onClick={loadMoreNotifications}>
+                      Загрузить ещё
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Правая дебаг-панель */}
+          <div className="w-[320px] shrink-0 overflow-y-auto p-3">
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Дебаг уведомлений</div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant={debugSortType === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDebugSortType('all')}
+                  className="h-7 px-3"
+                >
+                  Все
+                </Button>
+                <Button
+                  variant={debugSortType === 'section_comment' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDebugSortType('section_comment')}
+                  className="h-7 px-3"
+                  title="Комментарии"
+                >
+                  Комментарии
+                </Button>
+                <Button
+                  variant={debugSortType === 'announcement' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDebugSortType('announcement')}
+                  className="h-7 px-3"
+                >
+                  Объявления
+                </Button>
+              </div>
             </div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-500 dark:text-red-400">
-              <p className="text-sm">Ошибка загрузки уведомлений</p>
-              <p className="text-xs mt-1 text-gray-500">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                className="mt-3"
-              >
-                Попробовать снова
-              </Button>
-            </div>
-          ) : filteredNotifications.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              <p className="mb-4">
-                {isSearchMode 
-                  ? `Уведомления по запросу "${storeSearchQuery}" не найдены`
-                  : hasActiveFilters 
-                    ? "Уведомления по заданным фильтрам не найдены" 
-                    : "Нет уведомлений"
+
+            {(isLoading || isRefreshingOnOpen || isManualRefreshing) ? (
+              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-sm">Обновление...</span>
+              </div>
+            ) : (
+              <>
+                {/* Прочитанные: новее сверху, старее снизу */
                 }
-              </p>
-              {(hasActiveFilters || isSearchMode) && (
-                <div className="flex justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={isSearchMode ? () => {
-                      setLocalSearchQuery("")
-                      clearSearch()
-                    } : handleClearFilters}
-                    className="px-4"
-                  >
-                    {isSearchMode ? "Очистить поиск" : "Сбросить фильтры"}
-                  </Button>
+                <div className="mb-4">
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    Прочитанные уведомления ({debugLists.read.length}):
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                    {debugLists.read.length > 0 ? (
+                      debugLists.read.map((n: any) => {
+                        const dt = formatDateTime(n.createdAt)
+                        return (
+                          <div key={n.id} title={String(n.createdAt)} className="truncate">
+                            {n.title} {dt}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-2 space-y-2">
-              {filteredNotifications.map((notification) => (
-                <NotificationItem 
-                  key={notification.id} 
-                  notification={notification}
-                  onEditAnnouncement={handleEditAnnouncement}
-                />
-              ))}
-              
-              {/* Индикатор загрузки дополнительных уведомлений (только не в режиме поиска) */}
-              {!isSearchMode && isLoadingMore && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-                  <span className="ml-2 text-sm text-gray-500">Загрузка...</span>
+
+                {/* Непрочитанные: новее сверху, старее снизу */}
+                <div className="mb-4">
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    Непрочитанные уведомления ({debugLists.unread.length}):
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                    {debugLists.unread.length > 0 ? (
+                      debugLists.unread.map((n: any) => {
+                        const dt = formatDateTime(n.createdAt)
+                        return (
+                          <div key={n.id} title={String(n.createdAt)} className="truncate">
+                            {n.title} {dt}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              {/* Сообщение о том, что все уведомления загружены (только не в режиме поиска) */}
-              {!isSearchMode && !hasMore && filteredNotifications.length > 0 && (
-                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                  Все уведомления загружены
+
+                {/* Архивные: новее сверху, старее снизу */}
+                <div className="mb-2">
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    Архивные уведомления ({debugLists.archived.length}):
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                    {debugLists.archived.length > 0 ? (
+                      debugLists.archived.map((n: any) => {
+                        const dt = formatDateTime(n.createdAt)
+                        return (
+                          <div key={n.id} title={String(n.createdAt)} className="truncate">
+                            {n.title} {dt}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              {/* Информация в режиме поиска */}
-              {isSearchMode && filteredNotifications.length > 0 && (
-                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                  Показаны все найденные уведомления
-                </div>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

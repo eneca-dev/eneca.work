@@ -29,23 +29,23 @@ interface NotificationItemProps {
 const notificationTags = {
   announcement: {
     text: "Объявление",
-    color: "bg-purple-100 text-purple-800 border border-purple-800/30 dark:bg-purple-800/30 dark:text-purple-200 dark:border-purple-200/30",
+    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-200",
   },
   announcements: {
     text: "Объявление",
-    color: "bg-purple-100 text-purple-800 border border-purple-800/30 dark:bg-purple-800/30 dark:text-purple-200 dark:border-purple-200/30 ",
+    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-200",
   },
   assignment: {
     text: "Передача заданий",
-    color: "bg-orange-100 text-orange-800 border border-orange-800/30 dark:bg-orange-800/30 dark:text-orange-200 dark:border-orange-200/30",
+    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-200",
   },
   assignments: {
     text: "Передача заданий",
-    color: "bg-orange-100 text-orange-800 border border-orange-800/30 dark:bg-orange-800/30 dark:text-orange-200 dark:border-orange-200/30",
+    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-200",
   },
   section_comment: {
     text: "Комментарий",
-    color: "bg-blue-100 text-blue-800 border border-blue-800/30 dark:bg-blue-800/30 dark:text-blue-200 dark:border-blue-200/30",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-200",
   },
 }
 
