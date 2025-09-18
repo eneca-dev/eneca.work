@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Star } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock } from 'lucide-react';
+// Острая звезда для кнопки "только избранные" в панели фильтров
+function SharpStarIcon({ className, filled = false }: { className?: string; filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="1em" height="1em" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="miter" />
+    </svg>
+  )
+}
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 // Используем изолированный store фильтров для модуля projects
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
@@ -79,6 +87,8 @@ export default function ProjectsPage() {
 
   // Состояние для адаптивного отображения текста фильтров
   const [isCompactMode, setIsCompactMode] = useState(false);
+  // Состояние UI для кнопки «только избранные» (синхронизируем через window события)
+  const [onlyFavoritesUI, setOnlyFavoritesUI] = useState(false);
 
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
@@ -240,6 +250,19 @@ export default function ProjectsPage() {
     return () => window.removeEventListener('resize', checkCompactMode);
   }, []);
 
+  // Синхронизация состояния звезды «только избранные» через глобальные события дерева
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleToggle = () => setOnlyFavoritesUI(prev => !prev)
+    const handleReset = () => setOnlyFavoritesUI(false)
+    window.addEventListener('projectsTree:toggleOnlyFavorites', handleToggle as EventListener)
+    window.addEventListener('projectsTree:resetOnlyFavorites', handleReset as EventListener)
+    return () => {
+      window.removeEventListener('projectsTree:toggleOnlyFavorites', handleToggle as EventListener)
+      window.removeEventListener('projectsTree:resetOnlyFavorites', handleReset as EventListener)
+    }
+  }, [])
+
   return (
     <div className="px-0 pt-0 pb-0">
       {/* Новый липкий FilterBar. Старые фильтры ProjectsFilters оставляем ниже. */}
@@ -285,8 +308,9 @@ export default function ProjectsPage() {
               className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Показать только избранные"
               onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:toggleOnlyFavorites')) }}
+              aria-pressed={onlyFavoritesUI ? 'true' : 'false'}
             >
-              <Star className="h-4 w-4" />
+              <SharpStarIcon className={onlyFavoritesUI ? 'h-4 w-4 text-yellow-600' : 'h-4 w-4 text-slate-400'} filled={onlyFavoritesUI} />
             </button>
 
             {/* Синхронизация с Worksection — перенесена в выпадающий список "Проект" */}
