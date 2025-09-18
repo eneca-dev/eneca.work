@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from "@sentry/nextjs"
 import { Save, Loader2, Calendar, User } from 'lucide-react'
+import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
@@ -44,6 +45,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const [actualProjectId, setActualProjectId] = useState<string | null>(null)
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
+  const [range, setRange] = useState<DateRange | null>(null)
   
   const { setNotification } = useUiStore()
   const { statuses } = useSectionStatuses()
@@ -325,6 +327,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     setSectionResponsible('')
     setSectionStartDate('')
     setSectionEndDate('')
+    setRange(null)
     setSectionStatusId('') // Сбрасывается, чтобы при следующем открытии снова установился "План"
     setSearchResponsible('')
     setShowResponsibleDropdown(false)
@@ -471,57 +474,25 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-                Дата начала
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={sectionStartDate}
-                  max={sectionEndDate || undefined}
-                  onChange={(e) => {
-                    const newValue = e.target.value
-                    if (sectionEndDate && newValue && newValue > sectionEndDate) {
-                      setNotification('Дата начала не может быть позже даты окончания')
-                      // Возвращаем к максимально допустимому значению
-                      setSectionStartDate(sectionEndDate)
-                      return
-                    }
-                    setSectionStartDate(newValue)
-                  }}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
-                  disabled={loading}
-                />
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-                Дата окончания
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={sectionEndDate}
-                  min={sectionStartDate || undefined}
-                  onChange={(e) => {
-                    const newValue = e.target.value
-                    if (sectionStartDate && newValue && newValue < sectionStartDate) {
-                      setNotification('Дата окончания не может быть раньше даты начала')
-                      // Возвращаем к минимально допустимому значению
-                      setSectionEndDate(sectionStartDate)
-                      return
-                    }
-                    setSectionEndDate(newValue)
-                  }}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
-                  disabled={loading}
-                />
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+              Сроки раздела
+            </label>
+            <DateRangePicker
+              value={range}
+              onChange={(r) => {
+                setRange(r)
+                const start = r?.from ? new Date(r.from.getFullYear(), r.from.getMonth(), r.from.getDate()) : null
+                const end = r?.to ? new Date(r.to.getFullYear(), r.to.getMonth(), r.to.getDate()) : null
+                const toIso = (d: Date | null) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : ''
+                setSectionStartDate(toIso(start))
+                setSectionEndDate(toIso(end))
+              }}
+              placeholder="Выберите период"
+              calendarWidth="500px"
+              inputWidth="100%"
+            />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Можно выбрать один день (оба конца на одну дату).</p>
           </div>
         </form>
       </Modal.Body>
