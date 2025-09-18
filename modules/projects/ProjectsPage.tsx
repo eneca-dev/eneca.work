@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Star } from 'lucide-react';
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 // Используем изолированный store фильтров для модуля projects
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
@@ -148,6 +148,7 @@ export default function ProjectsPage() {
 
     // Принудительная перезагрузка дерева, чтобы не зависеть от эффектов синхронизации
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('projectsTree:resetOnlyFavorites'))
       window.dispatchEvent(new CustomEvent('projectsTree:reload'))
     }
   };
@@ -259,7 +260,7 @@ export default function ProjectsPage() {
       >
         {/* Инструменты: кнопки управления + поиск по структуре */}
         <div className="flex items-center gap-2 mr-2 text-[11px] md:text-xs">
-          {/* Блок кнопок управления — свернуть всё + синхронизация */}
+          {/* Блок кнопок управления — группировка, свернуть всё, только избранные */}
           <div className="flex items-center gap-1.5">
             {/* Переключить группировку по руководителям */}
             <button
@@ -277,6 +278,15 @@ export default function ProjectsPage() {
               onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:collapseAll')) }}
             >
               <Minimize className="h-4 w-4" />
+            </button>
+
+            {/* Показать только избранные проекты */}
+            <button
+              className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Показать только избранные"
+              onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projectsTree:toggleOnlyFavorites')) }}
+            >
+              <Star className="h-4 w-4" />
             </button>
 
             {/* Синхронизация с Worksection — перенесена в выпадающий список "Проект" */}

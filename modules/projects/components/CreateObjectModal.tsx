@@ -276,7 +276,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               type="text"
               value={objectName}
               onChange={(e) => setObjectName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:border-transparent ring-offset-white dark:ring-offset-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="Введите название объекта"
               disabled={loading}
               autoFocus
@@ -291,12 +291,11 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               value={objectDescription}
               onChange={(e) => setObjectDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:border-transparent focus-visible:placeholder-green-600 ring-offset-white dark:ring-offset-slate-800 dark:bg-slate-800 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
               placeholder="Введите описание объекта (необязательно)"
               disabled={loading}
             />
           </div>
-
           {/* Ответственный удалён по требованиям */}
 
           {/* Даты начала/окончания удалены по требованиям */}

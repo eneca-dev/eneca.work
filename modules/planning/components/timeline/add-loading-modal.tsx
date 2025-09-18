@@ -50,6 +50,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     rate: 1,
     projectId: "",
     sectionId: "",
+    comment: "",
   })
 
   // Состояния для списков проектов и разделов
@@ -350,7 +351,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           .slice(0, 10)
 
   // Обработчик изменения полей формы
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
 
     // Если изменился проект, обновляем список разделов и сбрасываем выбранный раздел
@@ -471,6 +472,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
             responsibleName: employee.fullName || employee.name,
             responsibleAvatarUrl: employee.avatarUrl,
             responsibleTeamName: employee.teamName,
+            comment: formData.comment?.trim() || undefined,
           })
 
           if (!result.success) {
@@ -702,6 +704,30 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Комментарий */}
+          <div>
+            <label
+              className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}
+            >
+              Комментарий (необязательно)
+            </label>
+            <textarea
+              name="comment"
+              value={formData.comment}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Например: уточнение по задачам, договорённости и т.п."
+              disabled={isSaving}
+              className={cn(
+                "w-full text-sm rounded border px-3 py-2 resize-y min-h-[72px]",
+                theme === "dark"
+                  ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
+                  : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
+                isSaving ? "opacity-50 cursor-not-allowed" : "",
+              )}
+            />
           </div>
 
           <div>

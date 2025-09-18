@@ -28,6 +28,9 @@ interface Profile {
 
 const supabase = createClient()
 
+// Dropdown configuration constants
+const DROPDOWN_MAX_HEIGHT_PX = 256
+
 export function CreateSectionModal({ isOpen, onClose, objectId, objectName, projectId, onSuccess }: CreateSectionModalProps) {
   const [sectionName, setSectionName] = useState('')
   const [sectionDescription, setSectionDescription] = useState('')
@@ -135,8 +138,7 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
     if (!inputWrapperRef.current) return
     const rect = inputWrapperRef.current.getBoundingClientRect()
     const viewportSpaceBelow = window.innerHeight - rect.bottom
-    const desired = 320 // px, desired max height
-    const openUp = viewportSpaceBelow < 160 && rect.top > viewportSpaceBelow
+    const openUp = viewportSpaceBelow < DROPDOWN_MAX_HEIGHT_PX / 2 && rect.top > viewportSpaceBelow
     setDropdownPosition({ left: rect.left, top: openUp ? rect.top : rect.bottom, width: rect.width, openUp })
   }
 
@@ -428,7 +430,10 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
                         <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Ответственный
                         </div>
-                        <div className="max-h-80 overflow-y-auto overscroll-contain">
+                        <div
+                          className="overflow-y-auto overscroll-contain"
+                          style={{ maxHeight: DROPDOWN_MAX_HEIGHT_PX }}
+                        >
                           <button
                             type="button"
                             onClick={() => {

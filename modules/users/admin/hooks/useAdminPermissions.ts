@@ -11,6 +11,9 @@ export function useAdminPermissions(): AdminPermissions {
     canManageTeams: hasPermission('users.manage.teams'),
     canManagePositions: hasPermission('users.manage.positions'),
     canManageCategories: hasPermission('users.manage.categories'),
+    // Редакторские права уровня отдела/команды
+    canEditDepartment: hasPermission('users.edit.department'),
+    canEditTeam: hasPermission('users.edit.team'),
     canChangeRoles: hasPermission('users.assign_roles'),
     canAddAdminRole: hasPermission('users.assign_admin_role'),
   }

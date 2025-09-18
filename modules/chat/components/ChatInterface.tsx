@@ -20,7 +20,10 @@ export function ChatInterface() {
     chatSize,
     setChatSize,
     handleResizeStart,
-    isResizing
+    isResizing,
+    conversationId,
+    startConversation,
+    debug
   } = useChat()
 
   return (
@@ -57,6 +60,42 @@ export function ChatInterface() {
               </h3>
             </div>
             <div className="flex items-center space-x-1">
+              {/* Debug toggle */}
+              <details className="relative">
+                <summary className="list-none p-2 hover:bg-emerald-100 dark:hover:bg-emerald-900 rounded-lg transition-colors text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer">
+                  Debug
+                </summary>
+                <div className="absolute right-0 mt-2 w-80 max-w-[80vw] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs z-50">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="text-gray-500">conversationId</div>
+                    <div className="font-mono break-all">{conversationId || '-'}</div>
+                    <div className="text-gray-500">subscribed</div>
+                    <div className="font-mono">{debug?.isSubscribed ? 'yes' : 'no'}</div>
+                    <div className="text-gray-500">lastEventAt</div>
+                    <div className="font-mono">{debug?.lastEventAt ? debug.lastEventAt.toLocaleTimeString() : '-'}</div>
+                    <div className="text-gray-500">lastEventKind</div>
+                    <div className="font-mono">{debug?.lastEventKind || '-'}</div>
+                    <div className="text-gray-500">lastLatencyMs</div>
+                    <div className="font-mono">{debug?.lastLatencyMs ?? '-'}</div>
+                    <div className="text-gray-500">lastError</div>
+                    <div className="font-mono break-all text-red-600 dark:text-red-400">{debug?.lastError || '-'}</div>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={startConversation}
+                      className="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-500"
+                    >
+                      Старт беседы
+                    </button>
+                    <button
+                      onClick={clearMessages}
+                      className="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
+                    >
+                      Очистить
+                    </button>
+                  </div>
+                </div>
+              </details>
               <button
                 onClick={toggleFullscreen}
                 className="p-2 hover:bg-emerald-100 dark:hover:bg-emerald-900 rounded-lg transition-colors text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400"

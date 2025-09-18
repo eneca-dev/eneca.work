@@ -33,6 +33,25 @@ export function CompactStatusSelector({
 
   const selectedStatus = statuses.find(status => status.id === value);
 
+  // Вспомогательные функции для окраски бейджа под цвет статуса
+  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+    const normalized = hex.replace('#', '');
+    if (!(normalized.length === 3 || normalized.length === 6)) return null;
+    const full = normalized.length === 3
+      ? normalized.split('').map((c) => c + c).join('')
+      : normalized;
+    const r = parseInt(full.substring(0, 2), 16);
+    const g = parseInt(full.substring(2, 4), 16);
+    const b = parseInt(full.substring(4, 6), 16);
+    return { r, g, b };
+  };
+
+  const rgba = (hex: string, alpha: number): string | undefined => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return undefined;
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+  };
+
   // Функция для обновления позиции дропдауна
   const updateDropdownPosition = () => {
     if (buttonRef.current) {
@@ -96,15 +115,27 @@ export function CompactStatusSelector({
           type="button"
           onClick={handleToggle}
           className={`
-            w-full px-2 py-1 rounded-full border text-xs transition-colors
-            ${disabled 
-              ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed border-gray-200 dark:border-slate-600' 
-              : selectedStatus || currentStatusName
-                ? 'border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer'
-                : 'border-gray-300 dark:border-slate-500 hover:border-gray-400 dark:hover:border-slate-400 cursor-pointer text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
-            }
+            w-full px-2 py-1 rounded border text-xs transition-colors cursor-pointer
+            ${disabled ? 'cursor-not-allowed opacity-70' : 'hover:opacity-90'}
           `}
           disabled={disabled}
+          style={(() => {
+            const color = selectedStatus?.color || currentStatusColor;
+            if (disabled) {
+              return {
+                backgroundColor: 'var(--tw-bg-opacity, rgba(0,0,0,0))',
+                borderColor: 'rgb(229 231 235)',
+              } as React.CSSProperties;
+            }
+            if (color) {
+              return {
+                backgroundColor: rgba(color, 0.12),
+                borderColor: rgba(color, 0.35),
+                color: color,
+              } as React.CSSProperties;
+            }
+            return undefined;
+          })()}
         >
           <div className="flex items-center justify-between gap-1">
             {isLoading ? (
@@ -115,7 +146,7 @@ export function CompactStatusSelector({
                   className="w-2 h-2 rounded-full flex-shrink-0" 
                   style={{ backgroundColor: selectedStatus.color }}
                 />
-                <span className="truncate text-gray-700 dark:text-slate-300">
+                <span className="truncate">
                   {selectedStatus.name}
                 </span>
               </div>
@@ -125,12 +156,12 @@ export function CompactStatusSelector({
                   className="w-2 h-2 rounded-full flex-shrink-0" 
                   style={{ backgroundColor: currentStatusColor }}
                 />
-                <span className="truncate text-gray-700 dark:text-slate-300">
+                <span className="truncate">
                   {currentStatusName}
                 </span>
               </div>
             ) : (
-              <span className="truncate">Без статуса</span>
+              <span className="truncate text-gray-500 dark:text-slate-400">Без статуса</span>
             )}
             <ChevronDown className="h-3 w-3 flex-shrink-0 text-gray-400 dark:text-slate-500" />
           </div>

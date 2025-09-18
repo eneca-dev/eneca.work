@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from '@sentry/nextjs'
 import { useUserStore } from '@/stores/useUserStore'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
@@ -30,33 +31,48 @@ import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+import { updateProject } from '@/lib/supabase-client'
+import {
+  getProjectStatusBadgeClasses,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+  PROJECT_STATUS_OPTIONS,
+} from '../constants/project-status'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
 
 interface ProjectNode {
   id: string
   name: string
-  type: 'manager' | 'project' | 'stage' | 'object' | 'section' | 'client'
-  managerId?: string
+  type: 'client' | 'manager' | 'project' | 'stage' | 'object' | 'section'
+  children?: ProjectNode[]
+  // Доп. поля
   projectId?: string
   stageId?: string
   objectId?: string
-  clientId?: string
-  children?: ProjectNode[]
-  dates?: {
-    start?: string
-    end?: string
-  }
-  responsibleName?: string
-  responsibleAvatarUrl?: string
   projectName?: string
   stageName?: string
   departmentName?: string
-  clientName?: string
-  // Поля для статуса секции
-  statusId?: string
+  dates?: { start?: string; end?: string}
+  responsibleName?: string
+  responsibleAvatarUrl?: string
+  statusId?: string | null
   statusName?: string
-  statusColor?: string
+  statusColor?: string 
+  managerId?: string | null
+  clientId?: string | null
+  // Поле статуса проекта (DB value)
+  projectStatus?:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
+  // Признак избранного проекта (только для узлов типа 'project')
+  isFavorite?: boolean
 }
 
 interface ProjectsTreeProps {
@@ -92,6 +108,7 @@ interface TreeNodeProps {
   onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
+  onToggleFavorite?: (project: ProjectNode, e: React.MouseEvent) => void
 }
 
 const supabase = createClient()
@@ -114,7 +131,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onDeleteProject,
   onOpenProjectDashboard,
   onOpenStatusManagement,
-  statuses
+  statuses,
+  onToggleFavorite
 }) => {
   const { focusSectionId, highlightedSectionId, focusProjectId } = useProjectsStore()
   const { assignments } = useTaskTransferStore()
@@ -137,6 +155,41 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const [sectionDue, setSectionDue] = useState<string | null>(null)
   const hasPermission = usePermissionsStore(state => state.hasPermission)
   const canDeleteProject = hasPermission('projects.delete')
+  const canChangeProjectStatus = hasPermission('projects.change_project_statuses')
+
+  const [updatingProjectStatus, setUpdatingProjectStatus] = useState(false)
+
+  // Вспомогательные функции отображения статуса проекта
+  const getProjectStatusText = (status?: ProjectNode['projectStatus']) => {
+    return getProjectStatusLabel(status)
+  }
+
+  const getProjectStatusClasses = (status?: ProjectNode['projectStatus']) => {
+    return getProjectStatusBadgeClasses(status)
+  }
+
+  const handleUpdateProjectStatus = async (newStatusInput: ProjectNode['projectStatus']) => {
+    if (node.type !== 'project') return
+    if (!canChangeProjectStatus) return
+    setUpdatingProjectStatus(true)
+    try {
+      const normalized = normalizeProjectStatus(newStatusInput) || 'active'
+      const res = await updateProject(node.id, { project_status: normalized })
+      if (!res.success) throw new Error(res.error || 'Не удалось обновить статус проекта')
+
+      // Локально обновим узел и оповестим дерево
+      node.projectStatus = normalized
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('projectsTree:projectStatusUpdated', {
+          detail: { projectId: node.id, projectStatus: normalized }
+        }))
+      }
+    } catch (e) {
+      console.error('Ошибка смены статуса проекта:', e)
+    } finally {
+      setUpdatingProjectStatus(false)
+    }
+  }
 
   const loadMiniDecomposition = async () => {
     try {
@@ -444,8 +497,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                       value={node.statusId || ''}
                       onChange={(statusId) => updateSectionStatus(statusId || null)}
                       disabled={updatingStatus}
-                      currentStatusName={node.statusName}
-                      currentStatusColor={node.statusColor}
+                      currentStatusName={node.statusName ?? undefined}
+                      currentStatusColor={node.statusColor ?? undefined}
                     />
                   </div>
                 )}
@@ -457,9 +510,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 <span className="text-blue-700 dark:text-blue-300">
                   {(node.dates?.start || node.dates?.end) ? (
                     <>
-                      {formatDate(node.dates?.start) || '—'}
+                      {formatDate(node.dates?.start ?? undefined) || '—'}
                       {node.dates?.start && node.dates?.end && <span className="text-blue-500 dark:text-blue-400 mx-1">-</span>}
-                      {node.dates?.end && formatDate(node.dates?.end)}
+                      {node.dates?.end && formatDate(node.dates?.end ?? undefined)}
                     </>
                   ) : (
                     '— — —'
@@ -542,11 +595,69 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               </span>
             )}
 
+            {/* Звёздочка избранного для проектов */}
+            {node.type === 'project' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite && onToggleFavorite(node, e) }}
+                className={cn(
+                  "ml-2 p-0.5 rounded transition-opacity",
+                  node.isFavorite ? "opacity-100" : "opacity-60 hover:opacity-100"
+                )}
+                title={node.isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                aria-pressed={node.isFavorite ? 'true' : 'false'}
+              >
+                <Star
+                  className={cn(
+                    "h-4 w-4",
+                    node.isFavorite ? "text-yellow-500" : "text-slate-300 dark:text-slate-600"
+                  )}
+                  // Для заливки используем текущий цвет
+                  fill={node.isFavorite ? 'currentColor' : 'none'}
+                />
+              </button>
+            )}
+
 
 
             {/* Кнопки редактирования для проектов */}
             {node.type === 'project' && (
               <div className="flex items-center ml-2">
+                {/* Статус проекта */}
+                <div className="mr-2">
+                  {canChangeProjectStatus ? (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`px-2 py-0.5 text-[11px] border rounded-md transition-colors ${getProjectStatusClasses(node.projectStatus)}`}
+                            disabled={updatingProjectStatus}
+                            title="Изменить статус проекта"
+                          >
+                            {updatingProjectStatus ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Обновление...
+                              </span>
+                            ) : (
+                              getProjectStatusText(node.projectStatus)
+                            )}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-40 p-0">
+                          {PROJECT_STATUS_OPTIONS.map((opt) => (
+                            <DropdownMenuItem key={opt} onClick={() => handleUpdateProjectStatus(opt)}>
+                              {getProjectStatusLabel(opt)}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : (
+                    <span className={`px-2 py-0.5 text-[11px] border rounded-md ${getProjectStatusClasses(node.projectStatus)}`}>
+                      {getProjectStatusText(node.projectStatus)}
+                    </span>
+                  )}
+                </div>
                 {/* Развернуть весь проект */}
                 <button
                   onClick={(e) => { e.stopPropagation(); expandAllFromNode(node) }}
@@ -705,6 +816,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onOpenProjectDashboard={onOpenProjectDashboard}
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
+              onToggleFavorite={onToggleFavorite}
             />
           ))}
         </div>
@@ -766,6 +878,8 @@ export function ProjectsTree({
   const [selectedStageForObject, setSelectedStageForObject] = useState<ProjectNode | null>(null)
   const [showCreateSectionModal, setShowCreateSectionModal] = useState(false)
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
+  // Локальный фильтр: отображать только избранные проекты
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false)
 
 
   // Закрытие выпадающего списка статусов при клике вне его
@@ -787,6 +901,8 @@ export function ProjectsTree({
     const collapseAll = () => collapseAllNodes()
     const onlySections = () => setShowOnlySections((v) => v) // отключено, держим состояние как есть
     const openStatusManagement = () => setShowStatusManagementModal(true)
+    const toggleOnlyFavorites = () => setShowOnlyFavorites(v => !v)
+    const resetOnlyFavorites = () => setShowOnlyFavorites(false)
 
     window.addEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
     window.addEventListener('projectsTree:toggleShowManagers', toggleManagers as EventListener)
@@ -794,6 +910,8 @@ export function ProjectsTree({
     // обработчик toggleOnlySections оставлен на будущее, но логика отключена
     // window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
     window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+    window.addEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
+    window.addEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
 
     return () => {
       window.removeEventListener('projectsTree:toggleGroupByClient', toggleGroup as EventListener)
@@ -801,6 +919,8 @@ export function ProjectsTree({
       window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
       // window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
       window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+      window.removeEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
+      window.removeEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
     }
   }, [toggleGroupByClient, toggleShowManagers, collapseAllNodes, showOnlySections, groupByClient, expandedNodes])
 
@@ -1010,6 +1130,37 @@ export function ProjectsTree({
         window.removeEventListener('statusCreated', handleStatusCreate as EventListener)
         window.removeEventListener('statusUpdated', handleStatusUpdate as EventListener)
         window.removeEventListener('statusDeleted', handleStatusDelete as EventListener)
+      }
+    }
+  }, [])
+
+  // Слушаем обновление статуса проекта (локальное обновление дерева)
+  useEffect(() => {
+    const handleProjectStatusUpdated = (event: CustomEvent) => {
+      const { projectId, projectStatus } = event.detail || {}
+      if (!projectId) return
+
+      const updateProjectStatusInNodes = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            return { ...node, projectStatus }
+          }
+          if (node.children) {
+            return { ...node, children: updateProjectStatusInNodes(node.children) }
+          }
+          return node
+        })
+      }
+
+      setTreeData(current => updateProjectStatusInNodes(current))
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('projectsTree:projectStatusUpdated', handleProjectStatusUpdated as EventListener)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('projectsTree:projectStatusUpdated', handleProjectStatusUpdated as EventListener)
       }
     }
   }, [])
@@ -1375,8 +1526,17 @@ export function ProjectsTree({
           type: 'project',
           managerId: managerId,
           clientId: clientId,
-          children: []
+          projectStatus: normalizeProjectStatus(row.project_status),
+          children: [],
+          // Признак избранного приходит из view_project_tree
+          isFavorite: Boolean(row.is_favorite)
         })
+      } else {
+        // Если проект уже есть, но пришёл флаг is_favorite=true — обновим
+        if (row.is_favorite) {
+          const p = projects.get(row.project_id)!
+          if (!p.isFavorite) p.isFavorite = true
+        }
       }
 
       // 4. Стадии
@@ -1386,7 +1546,7 @@ export function ProjectsTree({
           name: row.stage_name,
           type: 'stage',
           projectId: row.project_id,
-          children: []
+          children: [],
         })
       }
 
@@ -1400,7 +1560,7 @@ export function ProjectsTree({
           projectId: row.project_id,
           projectName: row.project_name,
           stageName: row.stage_name,
-          children: []
+          children: [],
         })
       }
 
@@ -1448,8 +1608,13 @@ export function ProjectsTree({
       }
     })
 
-    // Функция умной сортировки для названий с числами
+    // Функция сортировки: избранные проекты первыми, затем умная сортировка по названию
     const smartSort = (a: ProjectNode, b: ProjectNode): number => {
+      // 0) Избранные проекты всегда выше обычных
+      const aFav = a.type === 'project' && a.isFavorite ? 1 : 0
+      const bFav = b.type === 'project' && b.isFavorite ? 1 : 0
+      if (aFav !== bFav) return bFav - aFav
+
       // Извлекаем числа из названий
       const aNumbers = a.name.match(/\d+/g)
       const bNumbers = b.name.match(/\d+/g)
@@ -1534,6 +1699,60 @@ export function ProjectsTree({
       }
 
       return sortTreeRecursively(result)
+    }
+  }
+
+  // Тоггл избранного проекта: insert/delete в user_favorite_projects + оптимистичное обновление
+  const handleToggleFavorite = async (project: ProjectNode) => {
+    try {
+      const currentUserId = useUserStore.getState().id
+      if (!currentUserId) {
+        console.warn('Не удалось получить user_id для тоггла избранного')
+        return
+      }
+
+      // Оптимистично обновим локально
+      setTreeData(prev => {
+        const update = (nodes: ProjectNode[]): ProjectNode[] => nodes.map(n => {
+          if (n.type === 'project' && n.id === project.id) {
+            return { ...n, isFavorite: !n.isFavorite }
+          }
+          return { ...n, children: n.children ? update(n.children) : n.children }
+        })
+        // Легкая пересортировка после переключения
+        const sortNodes = (nodes2: ProjectNode[]): ProjectNode[] => nodes2
+          .sort((a, b) => {
+            const aFav = a.type === 'project' && a.isFavorite ? 1 : 0
+            const bFav = b.type === 'project' && b.isFavorite ? 1 : 0
+            if (aFav !== bFav) return bFav - aFav
+            return a.name.localeCompare(b.name, 'ru', { numeric: true })
+          })
+          .map(n => ({ ...n, children: n.children ? sortNodes(n.children) : n.children }))
+        return sortNodes(update(prev))
+      })
+
+      if (project.isFavorite) {
+        // Был избранным -> удаляем
+        const { error } = await supabase
+          .from('user_favorite_projects')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('project_id', project.id)
+        if (error) throw error
+      } else {
+        // Не был избранным -> добавляем
+        const { error } = await supabase
+          .from('user_favorite_projects')
+          .insert({ user_id: currentUserId, project_id: project.id })
+        if (error) throw error
+      }
+
+      // Перезагрузим данные для консистентности с БД
+      await loadTreeData()
+    } catch (e) {
+      console.error('Ошибка переключения избранного проекта:', e)
+      // В случае ошибки — перезагрузим данные из БД, чтобы не зависнуть в неверном состоянии
+      await loadTreeData()
     }
   }
 
@@ -1691,6 +1910,29 @@ export function ProjectsTree({
       data = sections
     }
 
+    // Фильтр: только избранные проекты
+    if (showOnlyFavorites) {
+      // Оставляем только те ветки, где есть избранные проекты.
+      const filterFavorites = (nodes: ProjectNode[]): ProjectNode[] => {
+        const result: ProjectNode[] = []
+        for (const n of nodes) {
+          if (n.type === 'project') {
+            if (n.isFavorite) {
+              // Сохраняем проект как есть, с полным поддеревом
+              result.push(n)
+            }
+          } else if (n.children && n.children.length > 0) {
+            const filteredChildren = filterFavorites(n.children)
+            if (filteredChildren.length > 0) {
+              result.push({ ...n, children: filteredChildren })
+            }
+          }
+        }
+        return result
+      }
+      data = filterFavorites(data)
+    }
+
     // Затем применяем поиск
     const result = filterNodesBySearch(data, searchQuery)
     // [DEBUG:PROJECTS] фильтрация: результат
@@ -1806,6 +2048,7 @@ export function ProjectsTree({
                 onOpenProjectDashboard={onOpenProjectDashboard}
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
+                onToggleFavorite={(project, e) => { e.stopPropagation(); handleToggleFavorite(project) }}
               />
             ))
           )}

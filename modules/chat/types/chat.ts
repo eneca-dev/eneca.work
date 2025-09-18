@@ -45,6 +45,7 @@ export interface ChatRequest {
   userId?: string
   userContext?: UserContext
   systemRules?: string
+  conversationId?: string
 }
 
 export interface ChatRequestWithHistory extends ChatRequest {

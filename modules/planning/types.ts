@@ -14,6 +14,8 @@ export interface Loading {
   endDate: Date   // Приходит как ISO строка, преобразуется в Date
   rate: number
   status?: string
+  // Необязательный комментарий к загрузке (создаётся на клиенте; для полной поддержки нужен столбец loading_comment в БД и выдача в представлениях)
+  comment?: string
   createdAt: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt: Date // Приходит как ISO строка, преобразуется в Date
 }

@@ -21,7 +21,10 @@ export async function updateSession(request: NextRequest) {
     '/api/auth',
     '/api/debug',
     '/api/geo',
-    '/api/docs'
+    '/api/docs',
+    // Чатовые API обрабатывают авторизацию самостоятельно (Bearer JWT)
+    '/api/chat',
+    '/api/chat/thinking'
   ]
 
   // Проверяем, является ли роут публичным или API

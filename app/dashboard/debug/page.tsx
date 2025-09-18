@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useUserStore } from "@/stores/useUserStore"
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore"
 // Убираем старую отладочную панель ролей/разрешений
@@ -10,6 +10,7 @@ import { createClient } from "@/utils/supabase/client"
 import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { Input } from "@/components/ui/input"
 
 export default function DebugPage() {
   const [refreshCounter, setRefreshCounter] = useState(0)
@@ -21,6 +22,12 @@ export default function DebugPage() {
   const userState = useUserStore()
   const permissionsState = usePermissionsStore()
   const { reloadPermissions } = usePermissionsLoader()
+  
+  // Chat debug state
+  const [conversationId, setConversationId] = useState<string>("")
+  const [chatEvents, setChatEvents] = useState<any[]>([])
+  const [stepIndex, setStepIndex] = useState<number>(0)
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null)
   
   useEffect(() => {
     const fetchData = async () => {
@@ -85,6 +92,136 @@ export default function DebugPage() {
       })
     } finally {
       setIsSyncing(false)
+    }
+  }
+  
+  // Chat: subscribe to conversation messages via Supabase Realtime
+  const subscribeToConversation = async (convId: string) => {
+    if (!convId) return
+    const supabase = createClient()
+    if (channelRef.current) {
+      try { channelRef.current.unsubscribe() } catch {}
+      channelRef.current = null
+    }
+    const channel = supabase
+      .channel(`realtime:chat_messages:${convId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${convId}` }, (payload) => {
+        setChatEvents(prev => [payload.new, ...prev].slice(0, 200))
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${convId}` }, (payload) => {
+        setChatEvents(prev => [payload.new, ...prev].slice(0, 200))
+      })
+      .subscribe((status) => {
+        console.log('📡 Chat Realtime статус подписки:', status)
+      })
+    channelRef.current = channel
+    toast({ title: 'Подписка активна', description: `conversation_id=${convId}` })
+  }
+  
+  const unsubscribeConversation = () => {
+    if (channelRef.current) {
+      try { channelRef.current.unsubscribe() } catch {}
+      channelRef.current = null
+      toast({ title: 'Подписка остановлена' })
+    }
+  }
+  
+  // Chat: create test conversation for current user
+  const handleCreateConversation = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      toast({ title: 'Не авторизован', description: 'Войдите в систему', variant: 'destructive' })
+      return
+    }
+    const { data, error } = await supabase
+      .from('chat_conversations')
+      .insert({ user_id: user.id, status: 'active' })
+      .select('id')
+      .single()
+    if (error) {
+      console.error('Create conversation error', error)
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' })
+      return
+    }
+    setConversationId(data.id)
+    setChatEvents([])
+    setStepIndex(0)
+    await subscribeToConversation(data.id)
+  }
+  
+  // Chat: insert test user message
+  const handleInsertUserMessage = async () => {
+    if (!conversationId) return
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'user',
+        kind: 'message',
+        content: `Тестовое пользовательское сообщение ${new Date().toLocaleTimeString()}`,
+        is_final: false,
+      })
+    if (error) {
+      console.error('Insert user message error', error)
+      toast({ title: 'Ошибка вставки', description: error.message, variant: 'destructive' })
+    } else {
+      toast({ title: 'Вставлено', description: 'User message' })
+    }
+  }
+  
+  // Chat: insert test thinking step
+  const handleInsertThinking = async () => {
+    if (!conversationId) return
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const next = stepIndex + 1
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'assistant',
+        kind: 'thinking',
+        content: `Шаг мышления #${next}`,
+        step_index: next,
+        is_final: false,
+      })
+    if (error) {
+      console.error('Insert thinking error', error)
+      toast({ title: 'Ошибка вставки', description: error.message, variant: 'destructive' })
+    } else {
+      setStepIndex(next)
+      toast({ title: 'Вставлено', description: `Thinking #${next}` })
+    }
+  }
+  
+  // Chat: insert test final assistant message
+  const handleInsertFinal = async () => {
+    if (!conversationId) return
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'assistant',
+        kind: 'message',
+        content: `Финальный ответ ассистента ${new Date().toLocaleTimeString()}`,
+        is_final: true,
+      })
+    if (error) {
+      console.error('Insert final error', error)
+      toast({ title: 'Ошибка вставки', description: error.message, variant: 'destructive' })
+    } else {
+      toast({ title: 'Вставлено', description: 'Final assistant message' })
     }
   }
   
@@ -224,6 +361,46 @@ export default function DebugPage() {
         {/* Старые окна дебага ролей/разрешений удалены */}
 
         {/* Data Scope Store блок удален в упрощенной версии */}
+        
+        {/* Chat Realtime Debug */}
+        <Card className="p-6 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Chat Realtime Debug</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="col-span-2 flex items-center gap-2">
+              <Input
+                placeholder="conversation_id"
+                value={conversationId}
+                onChange={(e) => setConversationId(e.target.value)}
+              />
+              <Button variant="outline" onClick={() => subscribeToConversation(conversationId)} disabled={!conversationId}>Подписаться</Button>
+              <Button variant="outline" onClick={unsubscribeConversation}>Стоп</Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleCreateConversation} className="bg-blue-600 hover:bg-blue-700">Новая беседа</Button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Button variant="secondary" onClick={handleInsertUserMessage} disabled={!conversationId}>Вставить user message</Button>
+            <Button variant="secondary" onClick={handleInsertThinking} disabled={!conversationId}>Вставить thinking</Button>
+            <Button variant="secondary" onClick={handleInsertFinal} disabled={!conversationId}>Вставить final</Button>
+          </div>
+          <div className="text-xs">
+            <h3 className="font-medium mb-2">Последние события (вверх новые)</h3>
+            <div className="bg-gray-50 p-3 rounded max-h-[280px] overflow-auto">
+              {chatEvents.length === 0 ? (
+                <div className="text-gray-400">Нет событий</div>
+              ) : (
+                chatEvents.map((ev, idx) => (
+                  <div key={idx} className="mb-2 font-mono">
+                    {JSON.stringify(ev)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </Card>
         
         <Card className="p-6 border border-gray-200 rounded-lg shadow-sm">
           <div className="flex justify-between items-center mb-4">

@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react"
 import type { Department, Employee, Loading } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -132,7 +132,7 @@ export function DepartmentRow({
             {/* Столбец с названием отдела */}
             <div
               className={cn(
-                "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]", // Добавлена border-b
+                "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]",
                 theme === "dark"
                   ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
                   : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
@@ -153,6 +153,7 @@ export function DepartmentRow({
                     <ChevronRight className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
                   )}
                 </div>
+                <Building2 className={cn("h-4 w-4 mr-2", theme === "dark" ? "text-emerald-400" : "text-emerald-600")} />
                 <div className="flex flex-col min-w-0">
                   <span
                     className={cn(
@@ -344,24 +345,34 @@ export function DepartmentRow({
                 isExpanded={expandedTeams[team.id] || false}
                 onToggleExpand={() => toggleTeamExpanded(team.id)}
               />
-              {(expandedTeams[team.id] || false) && team.employees.map((employee, employeeIndex) => (
-                <EmployeeRow
-                  key={employee.id}
-                  employee={employee}
-                  departmentPosition={departmentIndex}
-                  employeeIndex={employeeIndex}
-                  timeUnits={timeUnits}
-                  theme={theme}
-                  rowHeight={rowHeight}
-                  padding={padding}
-                  leftOffset={leftOffset}
-                  cellWidth={cellWidth}
-                  stickyColumnShadow={stickyColumnShadow}
-                  totalFixedWidth={totalFixedWidth}
-                  isExpanded={expandedEmployees[employee.id] || false}
-                  onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
-                />
-              ))}
+              {(expandedTeams[team.id] || false) && (() => {
+                // Формируем список сотрудников так, чтобы тимлид был первым, остальные — в исходном порядке
+                const sortedEmployees = [...(team.employees || [])]
+                const leadIndex = team.teamLeadId ? sortedEmployees.findIndex((e) => e.id === team.teamLeadId) : -1
+                if (leadIndex > 0) {
+                  const [lead] = sortedEmployees.splice(leadIndex, 1)
+                  sortedEmployees.unshift(lead)
+                }
+                return sortedEmployees.map((employee, employeeIndex) => (
+                  <EmployeeRow
+                    key={employee.id}
+                    employee={employee}
+                    departmentPosition={departmentIndex}
+                    employeeIndex={employeeIndex}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={rowHeight}
+                    padding={padding}
+                    leftOffset={leftOffset}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalFixedWidth={totalFixedWidth}
+                    isExpanded={expandedEmployees[employee.id] || false}
+                    onToggleExpand={() => toggleEmployeeExpanded(employee.id)}
+                    isTeamLead={!!team.teamLeadId && employee.id === team.teamLeadId}
+                  />
+                ))
+              })()}
             </div>
           ))}
         </>
@@ -421,6 +432,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   <ChevronRight className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
                 )}
               </div>
+              <Users className={cn("h-4 w-4 mr-2", theme === "dark" ? "text-slate-400" : "text-slate-500")} />
               <div className="flex flex-col min-w-0">
                 <span className={cn("font-medium truncate whitespace-nowrap overflow-hidden max-w-[300px]", theme === "dark" ? "text-slate-200" : "text-slate-800")}>{team.name}</span>
                 {team.teamLeadName && (
@@ -552,6 +564,7 @@ interface EmployeeRowProps {
   totalFixedWidth: number
   isExpanded: boolean
   onToggleExpand: () => void
+  isTeamLead: boolean
 }
 
 function EmployeeRow({
@@ -568,6 +581,7 @@ function EmployeeRow({
   totalFixedWidth,
   isExpanded,
   onToggleExpand,
+  isTeamLead,
 }: EmployeeRowProps) {
   // Состояния для модальных окон
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
@@ -706,10 +720,19 @@ function EmployeeRow({
                     </Tooltip>
                     <div className="ml-2">
                       {/* Имя сотрудника */}
-                      <div
-                        className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}
-                      >
+                      <div className={cn("text-xs font-medium flex items-center gap-1", theme === "dark" ? "text-slate-200" : "text-slate-700")}>
                         {employee.fullName || "Не указан"}
+                        {isTeamLead && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center justify-center rounded-sm text-[10px] px-1 py-0.5",
+                              theme === "dark" ? "bg-amber-900/60 text-amber-300" : "bg-amber-100 text-amber-700"
+                            )}
+                            title="Тимлид команды"
+                          >
+                            ★
+                          </span>
+                        )}
                       </div>
                       {/* Должность сотрудника или пометка дефицита */}
                       <div className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
@@ -983,7 +1006,14 @@ function EmployeeRow({
       {isExpanded && employee.loadings && employee.loadings.length > 0 && (
         <>
           {employee.loadings.map((loading) => (
-            <div key={loading.id} className="relative w-full flex" style={{ height: `${reducedRowHeight}px` }}>
+            <div
+              key={loading.id}
+              className="relative w-full flex cursor-pointer"
+              style={{ height: `${reducedRowHeight}px` }}
+              title="Открыть информацию о загрузке"
+              onClick={() => setEditingLoading(loading)}
+              role="button"
+            >
               {/* Фиксированные столбцы с sticky позиционированием */}
               <div
                 className={cn("sticky left-0 z-20", "flex")}
