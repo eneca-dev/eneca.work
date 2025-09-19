@@ -93,6 +93,7 @@ export function EditProjectModal({
   const engineerItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const clientItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const { setNotification } = useUiStore()
+  
 
   // Refs for proper focus management
   const statusInputRef = useRef<HTMLInputElement>(null)

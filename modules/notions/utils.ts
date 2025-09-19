@@ -392,7 +392,7 @@ export function markdownToHtml(text: string): string {
         // Конец блока кода
         inCodeBlock = false
         const codeContent = codeBlockContent.join('\n')
-        htmlLines.push(`<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code class="font-mono text-sm ${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${codeContent}</code></pre>`)
+        htmlLines.push(`<pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code class="font-mono text-sm ${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${escapeHtml(codeContent)}</code></pre>`)
         codeBlockContent = []
         codeBlockLanguage = ''
       }
@@ -1208,7 +1208,7 @@ export function markdownToTipTapHTML(markdown: string): string {
         // Конец блока кода
         inCodeBlock = false
         const codeContent = codeBlockContent.join('\n')
-        htmlParts.push(`<pre><code class="${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${codeContent}</code></pre>`)
+        htmlParts.push(`<pre><code class="${codeBlockLanguage ? `language-${codeBlockLanguage}` : ''}">${escapeHtml(codeContent)}</code></pre>`)
         codeBlockContent = []
         codeBlockLanguage = ''
       }

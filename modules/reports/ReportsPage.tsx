@@ -12,6 +12,7 @@ import { createClient } from "@/utils/supabase/client"
 import { useReportsOrgFiltersStore } from "./filters/store"
 import { useReportsProjectFiltersStore } from "./filters/projectStore"
 import { useReportsAuthorFilterStore } from "./filters/authorStore"
+import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
 
 interface WorkLogRow {
   work_log_id: string
@@ -207,6 +208,14 @@ export default function ReportsPage() {
         ? `по ${formatDisplayDate(periodTo)}`
         : ''
   const isDefaultPeriod = periodPreset === 'm' && !dateFrom && !dateTo
+
+  // Вспомогательный объект для DateRangePicker в панели периода
+  const pickerRange: DateRange | null = useMemo(() => {
+    const from = dateFrom ? new Date(dateFrom) : null
+    const to = dateTo ? new Date(dateTo) : null
+    if (!from && !to) return null
+    return { from, to }
+  }, [dateFrom, dateTo])
 
   const buildBaseQuery = () => {
     let query = supabase
@@ -693,7 +702,7 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[320px] p-0">
+            <DropdownMenuContent align="start" className="min-w-[340px] p-0">
               <div className="p-2 space-y-2">
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -709,11 +718,21 @@ export default function ReportsPage() {
                     >{p.label}</button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">c</span>
-                  <input type="date" value={dateFrom} onChange={e=>{setPeriodPreset('custom'); setDateFrom(e.target.value)}} className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" />
-                  <span className="text-xs text-slate-500 dark:text-slate-400">по</span>
-                  <input type="date" value={dateTo} onChange={e=>{setPeriodPreset('custom'); setDateTo(e.target.value)}} className="px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white" />
+                <div>
+                  <DateRangePicker
+                    value={pickerRange}
+                    onChange={(r) => {
+                      setPeriodPreset('custom')
+                      const fromStr = r?.from ? `${r.from.getFullYear()}-${String(r.from.getMonth()+1).padStart(2,'0')}-${String(r.from.getDate()).padStart(2,'0')}` : ''
+                      const toStr = r?.to ? `${r.to.getFullYear()}-${String(r.to.getMonth()+1).padStart(2,'0')}-${String(r.to.getDate()).padStart(2,'0')}` : ''
+                      setDateFrom(fromStr)
+                      setDateTo(toStr)
+                    }}
+                    placeholder="ДД.MM.ГГГГ — ДД.MM.ГГГГ"
+                    calendarWidth="500px"
+                    inputWidth="100%"
+                    inputClassName="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 dark:text-white"
+                  />
                 </div>
               </div>
             </DropdownMenuContent>

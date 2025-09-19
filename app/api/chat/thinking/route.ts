@@ -8,7 +8,6 @@ const payloadSchema = z.object({
 	userId: z.string().uuid(),
 	taskId: z.string().uuid().optional().nullable(),
 	runId: z.string().min(1).max(256).optional(),
-	stepIndex: z.number().int().nonnegative().optional(),
 	kind: z.enum(['thinking', 'tool', 'observation', 'message']),
 	content: z.string().min(1).max(5000),
 	isFinal: z.boolean().optional(),
@@ -18,8 +17,11 @@ const payloadSchema = z.object({
 type Payload = z.infer<typeof payloadSchema>
 
 export async function POST(request: NextRequest) {
-	const span = Sentry.startSpan({ name: 'api.chat.thinking', op: 'http.server' })
-	try {
+	return await Sentry.startSpan({ name: 'api.chat.thinking', op: 'http.server' }, async () => {
+		const requestId = (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+		Sentry.setTag('chat.thinking.request_id', requestId)
+		Sentry.addBreadcrumb({ category: 'chat', level: 'info', message: 'thinking request start', data: { requestId } })
+		try {
 		// 1) Проверка секрета из n8n
 		const secret = request.headers.get('x-n8n-secret') || ''
 		const expected = process.env.N8N_THINKING_SECRET || ''
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 			runId: raw?.runId ?? request.headers.get('x-run-id') ?? undefined,
 		})
 		if (!parse.success) {
-			return NextResponse.json({ error: 'Invalid payload', details: parse.error.flatten() }, { status: 400 })
+			return new NextResponse(JSON.stringify({ error: 'Invalid payload', phase: 'validation', details: parse.error.flatten(), requestId }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Debug-Id': requestId } })
 		}
 		const body: Payload = parse.data
 
@@ -62,23 +64,7 @@ export async function POST(request: NextRequest) {
 			}
 		})
 
-		// 4) Idempotency: если есть runId+stepIndex+kind, не дублируем
-		if (body.runId && body.stepIndex !== undefined) {
-			const { data: existing, error: existErr } = await admin
-				.from('chat_messages')
-				.select('id')
-				.eq('conversation_id', body.conversationId)
-				.eq('run_id', body.runId)
-				.eq('step_index', body.stepIndex)
-				.eq('kind', body.kind)
-				.limit(1)
-				.maybeSingle()
-			if (existErr) {
-				Sentry.captureException(existErr, { tags: { module: 'chat', action: 'idempotency_check' } })
-			} else if (existing) {
-				return NextResponse.json({ ok: true, id: existing.id, duplicate: true })
-			}
-		}
+		// 4) Идемпотентность по stepIndex отключена
 
 		// 5) Вставка сообщения
 		const result = await Sentry.startSpan({ name: 'db.insert_message', op: 'db', attributes: { kind: body.kind } }, async () => {
@@ -90,7 +76,6 @@ export async function POST(request: NextRequest) {
 					role: body.kind === 'message' ? 'assistant' : 'assistant',
 					kind: body.kind,
 					content: body.content,
-					step_index: body.stepIndex ?? null,
 					run_id: body.runId ?? null,
 					is_final: body.isFinal ?? false,
 					meta: body.meta ?? {},
@@ -101,12 +86,12 @@ export async function POST(request: NextRequest) {
 			return data
 		})
 
-		return NextResponse.json({ ok: true, id: result.id })
-	} catch (error) {
-		Sentry.captureException(error, { tags: { module: 'chat', endpoint: 'thinking', critical: true } })
-		console.error('thinking endpoint error:', error)
-		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-	} finally {
-		span.end()
-	}
+		return new NextResponse(JSON.stringify({ ok: true, id: result.id, requestId }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Debug-Id': requestId } })
+		} catch (error) {
+			Sentry.captureException(error, { tags: { module: 'chat', endpoint: 'thinking', critical: true }, extra: { requestId } })
+			console.error('thinking endpoint error:', error)
+			const message = error instanceof Error ? `${error.name}: ${error.message}` : 'Internal Server Error'
+			return new NextResponse(JSON.stringify({ error: message, phase: 'handler', requestId }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Debug-Id': requestId } })
+		}
+	})
 }

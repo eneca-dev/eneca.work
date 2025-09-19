@@ -16,6 +16,7 @@ import { TaskList } from "./components/TaskList"
 import { useTaskTransferStore } from "./store"
 import type { AssignmentDirection, TaskFilters, CreateAssignmentData } from "./types"
 import { toast } from "@/components/ui/use-toast"
+import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
 
 export default function TaskTransferPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -28,6 +29,7 @@ export default function TaskTransferPage() {
   const [description, setDescription] = useState<string>("")
   const [plannedDuration, setPlannedDuration] = useState<string>("7")
   const [deadline, setDeadline] = useState<string>("")
+  const [plannedTransmittedDate, setPlannedTransmittedDate] = useState<string>("")
   const [link, setLink] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
   const [filters, setFilters] = useState<TaskFilters>({
@@ -96,6 +98,7 @@ export default function TaskTransferPage() {
     setDescription("")
     setPlannedDuration("7")
     setDeadline("")
+    setPlannedTransmittedDate("")
     setLink("")
   }, [])
 
@@ -159,7 +162,7 @@ export default function TaskTransferPage() {
         due_date: deadline || undefined,
         link: link || undefined,
         planned_duration: duration,
-        planned_transmitted_date: undefined
+        planned_transmitted_date: plannedTransmittedDate || undefined
       }
 
       const result = await createNewAssignment(assignmentData)
@@ -352,16 +355,43 @@ export default function TaskTransferPage() {
                   </Label>
                   <Info className="h-4 w-4 text-gray-400" />
                 </div>
-                <div className="relative">
-                  <Input 
-                    id="deadline" 
-                    type="date" 
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    placeholder="Выберите дату" 
-                    className="w-full pr-10" 
+                <div>
+                  <ProjectDatePicker
+                    value={deadline ? new Date(deadline) : null}
+                    onChange={(d) => {
+                      const y = d.getFullYear()
+                      const m = String(d.getMonth() + 1).padStart(2, '0')
+                      const day = String(d.getDate()).padStart(2, '0')
+                      setDeadline(`${y}-${m}-${day}`)
+                    }}
+                    placeholder="Выберите дату"
+                    calendarWidth="260px"
+                    inputWidth="100%"
                   />
-                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+              </div>
+
+              {/* Плановая дата передачи */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1">
+                  <Label className="text-sm font-medium">
+                    Плановая дата передачи
+                  </Label>
+                  <Info className="h-4 w-4 text-gray-400" />
+                </div>
+                <div>
+                  <ProjectDatePicker
+                    value={plannedTransmittedDate ? new Date(plannedTransmittedDate) : null}
+                    onChange={(d) => {
+                      const y = d.getFullYear()
+                      const m = String(d.getMonth() + 1).padStart(2, '0')
+                      const day = String(d.getDate()).padStart(2, '0')
+                      setPlannedTransmittedDate(`${y}-${m}-${day}`)
+                    }}
+                    placeholder="Выберите дату передачи"
+                    calendarWidth="260px"
+                    inputWidth="100%"
+                  />
                 </div>
               </div>
 

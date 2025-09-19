@@ -191,10 +191,11 @@ export function useChat() {
 
     try {
       // Обеспечиваем наличие беседы и realtime-подписки
-      await ensureConversation()
+      const ensuredConvId = await ensureConversation()
       const startedAt = Date.now()
       const response = await sendChatMessage({
-        message: content
+        message: content,
+        conversationId: ensuredConvId || conversationId || undefined,
       })
       setLastLatencyMs(Date.now() - startedAt)
 

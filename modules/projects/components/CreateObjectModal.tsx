@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import * as Sentry from "@sentry/nextjs"
-import { Save, Loader2, Calendar, User } from 'lucide-react'
+import { Save, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
@@ -260,7 +260,7 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} size="md">
       <Modal.Header 
         title="Создать новый объект" 
         subtitle={`Стадия: ${stageName}`}
@@ -296,123 +296,9 @@ export function CreateObjectModal({ isOpen, onClose, stageId, stageName, onSucce
               disabled={loading}
             />
           </div>
+          {/* Ответственный удалён по требованиям */}
 
-          <div>
-            <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-              Ответственный
-            </label>
-            <div className="relative" ref={inputWrapperRef}>
-              <input
-                type="text"
-                value={showResponsibleDropdown ? searchResponsible : getSelectedResponsibleName()}
-                onChange={(e) => {
-                  setSearchResponsible(e.target.value)
-                  setShowResponsibleDropdown(true)
-                }}
-                onFocus={() => {
-                  setSearchResponsible('')
-                  setShowResponsibleDropdown(true)
-                }}
-                onBlur={() => {
-                  setTimeout(() => setShowResponsibleDropdown(false), 200)
-                }}
-                placeholder={getSelectedResponsibleName() || "Поиск ответственного..."}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:border-transparent ring-offset-white dark:ring-offset-slate-800 dark:bg-slate-800 dark:text-white"
-                disabled={loading}
-              />
-              <User className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              {showResponsibleDropdown && dropdownPosition && typeof document !== 'undefined' && (
-                (typeof window !== 'undefined') && (
-                  require('react-dom').createPortal(
-                    <div
-                      style={{
-                        position: 'fixed',
-                        left: dropdownPosition.left,
-                        top: dropdownPosition.top,
-                        width: dropdownPosition.width,
-                        transform: dropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
-                      }}
-                      className="z-50"
-                      onMouseDown={(e) => e.preventDefault()}
-                    >
-                      <div className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                        <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Ответственный
-                        </div>
-                        <div className="max-h-64 overflow-y-auto overscroll-contain">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setObjectResponsible('')
-                              setSearchResponsible('')
-                              setShowResponsibleDropdown(false)
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600 text-slate-600 dark:text-slate-300"
-                          >
-                            Не назначен
-                          </button>
-                          {filteredResponsible.map((profile) => (
-                            <button
-                              type="button"
-                              key={profile.user_id}
-                              onClick={() => {
-                                setObjectResponsible(profile.user_id)
-                                setSearchResponsible('')
-                                setShowResponsibleDropdown(false)
-                              }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
-                            >
-                              <div className="font-medium dark:text-white truncate">
-                                {getProfileName(profile)}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
-                                {profile.email}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )
-                )
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-                Дата начала
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={objectStartDate}
-                  onChange={(e) => setObjectStartDate(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:border-transparent ring-offset-white dark:ring-offset-slate-800 dark:bg-slate-800 dark:text-white"
-                  disabled={loading}
-                  max={objectEndDate || undefined}
-                />
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
-                Дата окончания
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={objectEndDate}
-                  onChange={(e) => setObjectEndDate(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-slate-600 rounded-lg focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:border-transparent ring-offset-white dark:ring-offset-slate-800 dark:bg-slate-800 dark:text-white"
-                  disabled={loading}
-                />
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-          </div>
+          {/* Даты начала/окончания удалены по требованиям */}
         </form>
       </Modal.Body>
 
