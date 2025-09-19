@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 import * as Sentry from '@sentry/nextjs'
 import { useUserStore } from '@/stores/useUserStore'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star } from 'lucide-react'
@@ -31,6 +32,7 @@ import SectionDecompositionTab from './SectionDecompositionTab'
 import SectionTasksPreview from './SectionTasksPreview'
 import SectionDescriptionCompact from './SectionDescriptionCompact'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
+import { SectionAnalytics } from '@/modules/section-analytics'
 import { updateProject } from '@/lib/supabase-client'
 import {
   getProjectStatusBadgeClasses,
@@ -40,6 +42,28 @@ import {
 } from '../constants/project-status'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
+
+// Более острая звезда: собственный SVG, чтобы добиться чётких углов и контролировать заливку/тон
+function SharpStarIcon({ className, filled = false }: { className?: string; filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="miter"
+      />
+    </svg>
+  )
+}
 
 interface ProjectNode {
   id: string
@@ -109,6 +133,8 @@ interface TreeNodeProps {
   onOpenStatusManagement: () => void
   statuses: Array<{id: string, name: string, color: string, description?: string}>
   onToggleFavorite?: (project: ProjectNode, e: React.MouseEvent) => void
+  // для режима «только избранные»
+  disableListAnimations?: boolean
 }
 
 const supabase = createClient()
@@ -132,9 +158,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onOpenProjectDashboard,
   onOpenStatusManagement,
   statuses,
-  onToggleFavorite
+  onToggleFavorite,
+  disableListAnimations
 }) => {
   const { focusSectionId, highlightedSectionId, focusProjectId } = useProjectsStore()
+  const [childrenParent, enableChildrenAnimations] = useAutoAnimate()
+  useEffect(() => {
+    enableChildrenAnimations(!(disableListAnimations ?? false))
+  }, [disableListAnimations, enableChildrenAnimations])
   const { assignments } = useTaskTransferStore()
   const incomingCount = node.type === 'section' ? assignments.filter(a => a.to_section_id === node.id).length : 0
   const outgoingCount = node.type === 'section' ? assignments.filter(a => a.from_section_id === node.id).length : 0
@@ -473,11 +504,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               {node.type === 'section' && (incomingCount > 0 || outgoingCount > 0) && (
                 <div
                   className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 cursor-default"
-                  title={`Исходящие: ${outgoingCount} • Входящие: ${incomingCount}`}
+                  title={`Входящие: ${incomingCount} • Исходящие: ${outgoingCount}`}
                 >
-                  <span className="text-primary font-semibold">{outgoingCount}</span>
+                  <span className="text-primary font-semibold">{incomingCount}</span>
                   <span className="opacity-60">/</span>
-                  <span className="text-secondary-foreground font-semibold">{incomingCount}</span>
+                  <span className="text-secondary-foreground font-semibold">{outgoingCount}</span>
                 </div>
               )}
             </div>
@@ -606,13 +637,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 title={node.isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
                 aria-pressed={node.isFavorite ? 'true' : 'false'}
               >
-                <Star
+                <SharpStarIcon
                   className={cn(
                     "h-4 w-4",
-                    node.isFavorite ? "text-yellow-500" : "text-slate-300 dark:text-slate-600"
+                    node.isFavorite ? "text-yellow-600" : "text-slate-300 dark:text-slate-600"
                   )}
-                  // Для заливки используем текущий цвет
-                  fill={node.isFavorite ? 'currentColor' : 'none'}
+                  filled={Boolean(node.isFavorite)}
                 />
               </button>
             )}
@@ -784,21 +814,15 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
       {(node.type === 'section' && isExpanded) && (
         <div className="pl-14 pr-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-b dark:border-slate-700">
-          {/* Заглушка аналитики раздела */}
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
-            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Аналитика по разделу</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Здесь будет аналитика по разделу (заглушка).
-            </div>
-          </div>
+          <SectionAnalytics sectionId={node.id} />
         </div>
       )}
 
       {hasChildren && isExpanded && node.type !== 'section' && (
-        <div>
-          {node.children!.map((child, index) => (
+        <div ref={childrenParent}>
+          {node.children!.map((child) => (
             <TreeNode
-              key={`child-${child.id}-${index}`}
+              key={child.id}
               node={child}
               level={level + 1}
               expandedNodes={expandedNodes}
@@ -817,6 +841,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               onOpenStatusManagement={onOpenStatusManagement}
               statuses={statuses}
               onToggleFavorite={onToggleFavorite}
+              disableListAnimations={disableListAnimations}
             />
           ))}
         </div>
@@ -841,6 +866,7 @@ export function ProjectsTree({
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const latestTreeRef = useRef<ProjectNode[]>([])
+  const [rootParent, enableRootAnimations] = useAutoAnimate()
   const { 
     expandedNodes, 
     toggleNode: toggleNodeInStore,
@@ -880,6 +906,10 @@ export function ProjectsTree({
   const [selectedObjectForSection, setSelectedObjectForSection] = useState<ProjectNode | null>(null)
   // Локальный фильтр: отображать только избранные проекты
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false)
+  // В режиме «только избранные» отключаем корневые анимации (elements просто исчезают/появляются)
+  useEffect(() => {
+    enableRootAnimations(!showOnlyFavorites)
+  }, [showOnlyFavorites, enableRootAnimations])
 
 
   // Закрытие выпадающего списка статусов при клике вне его
@@ -1747,8 +1777,7 @@ export function ProjectsTree({
         if (error) throw error
       }
 
-      // Перезагрузим данные для консистентности с БД
-      await loadTreeData()
+      // Успех: оставляем оптимистичное состояние без немедленной перезагрузки
     } catch (e) {
       console.error('Ошибка переключения избранного проекта:', e)
       // В случае ошибки — перезагрузим данные из БД, чтобы не зависнуть в неверном состоянии
@@ -2018,7 +2047,7 @@ export function ProjectsTree({
   return (
     <TooltipProvider>
       <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
-        <div>
+        <div ref={rootParent}>
           {filteredData.length === 0 ? (
             <div className="p-8 text-center">
               <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -2028,9 +2057,9 @@ export function ProjectsTree({
               <p className="text-sm dark:text-slate-400 text-slate-500 mt-1">Попробуйте изменить фильтры</p>
             </div>
           ) : (
-            filteredData.map((node, index) => (
+            filteredData.map((node) => (
               <TreeNode
-                key={`root-${node.id}-${index}`}
+                key={node.id}
                 node={node}
                 level={0}
                 expandedNodes={expandedNodes}
@@ -2049,6 +2078,7 @@ export function ProjectsTree({
                 onOpenStatusManagement={() => setShowStatusManagementModal(true)}
                 statuses={statuses || []}
                 onToggleFavorite={(project, e) => { e.stopPropagation(); handleToggleFavorite(project) }}
+                disableListAnimations={showOnlyFavorites}
               />
             ))
           )}
