@@ -16,6 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TemplatesPanel } from "@/modules/decomposition-templates"
 // no slider for progress editing; using numeric input and a capsule view
 import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { useHasPermission } from "@/modules/permissions"
 
 interface SectionDecompositionTabProps {
   sectionId: string
@@ -74,6 +77,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [newPlannedHours, setNewPlannedHours] = useState("")
   const [newPlannedDueDate, setNewPlannedDueDate] = useState("")
   const [newResponsibleSearch, setNewResponsibleSearch] = useState("")
+  const [newResponsibleId, setNewResponsibleId] = useState<string | null>(null)
   const [newProgress, setNewProgress] = useState("0")
 
   // Состояние для работы с профилями
@@ -90,11 +94,55 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [editDraft, setEditDraft] = useState<DecompositionItemRow | null>(null)
   const [responsibleSearch, setResponsibleSearch] = useState<string>("")
   const [savingId, setSavingId] = useState<string | null>(null)
+  const editDescRef = useRef<HTMLTextAreaElement | null>(null)
   const [isLogModalOpen, setIsLogModalOpen] = useState(false)
   const [selectedForLog, setSelectedForLog] = useState<string | null>(null)
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false)
   const [departmentId, setDepartmentId] = useState<string | null>(null)
   const [sectionStartDate, setSectionStartDate] = useState<string | null>(null)
+  const [responsibleFilter, setResponsibleFilter] = useState<string>("")
+
+  // Управление открытием popover-окон по строкам
+  const [openCatId, setOpenCatId] = useState<string | null>(null)
+  const [openRespId, setOpenRespId] = useState<string | null>(null)
+  const [openStatusId, setOpenStatusId] = useState<string | null>(null)
+
+  const isCatOpen = (id: string) => openCatId === id
+  const isRespOpen = (id: string) => openRespId === id
+  const isStatusOpen = (id: string) => openStatusId === id
+
+  // Утилита авто-ресайза для textarea
+  const autoResizeTextarea = (element: HTMLTextAreaElement) => {
+    element.style.height = 'auto'
+    const h = Math.min(160, Math.max(28, element.scrollHeight))
+    element.style.height = h + 'px'
+  }
+
+  // Debounce для поля описания, чтобы избежать лавинообразных обновлений при быстром вводе
+  const descDebounceRef = useRef<number | null>(null)
+  const handleDescriptionChange = (value: string) => {
+    if (descDebounceRef.current) {
+      window.clearTimeout(descDebounceRef.current)
+    }
+    // Короткая задержка сглаживает поток событий и предотвращает глубокие цепочки обновлений
+    descDebounceRef.current = window.setTimeout(() => {
+      setEditDraft(prev => (prev ? { ...prev, decomposition_item_description: value } as DecompositionItemRow : prev))
+    }, 50) as unknown as number
+  }
+
+  useEffect(() => {
+    return () => {
+      if (descDebounceRef.current) window.clearTimeout(descDebounceRef.current)
+    }
+  }, [])
+
+  // Права на редактирование полей декомпозиции
+  const canEditDueDate = useHasPermission('dec.items.edit_due_date')
+  const canEditPlannedHours = useHasPermission('dec.items.edit_planned_hours')
+  const canEditResponsible = useHasPermission('dec.items.edit_responsible')
+  const canEditStatus = useHasPermission('dec.items.edit_status')
+  const canEditProgress = useHasPermission('dec.items.edit_progress')
+
 
   useEffect(() => {
     if (!sectionId) return
@@ -305,6 +353,15 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     if (!item.decomposition_item_responsible || !item.responsible_profile) return ""
     return getProfileName(item.responsible_profile)
   }
+  // Мемоизация фильтрации профилей по вводу поиска
+  const filteredProfiles = useMemo(() => {
+    const q = responsibleFilter.trim().toLowerCase()
+    if (!q) return profiles
+    return profiles.filter(p => {
+      const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email
+      return name.toLowerCase().includes(q)
+    })
+  }, [profiles, responsibleFilter])
 
   // Простая функция для получения имени ответственного (как у категории)
 
@@ -331,27 +388,24 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       const nextOrder = (items[items.length - 1]?.decomposition_item_order ?? -1) + 1
       // Поиск ответственного по введённому тексту
       let responsibleId: string | null = null
-      if (newResponsibleSearch.trim().length > 0) {
-        const val = newResponsibleSearch.trim().toLowerCase()
-        const match = profiles.find(p => getProfileName(p).toLowerCase() === val) ||
-                      profiles.find(p => getProfileName(p).toLowerCase().startsWith(val)) ||
-                      profiles.find(p => getProfileName(p).toLowerCase().includes(val))
-        responsibleId = match ? match.user_id : null
+      responsibleId = newResponsibleId
+      // Формируем объект вставки с учётом прав: поля без прав не устанавливаем
+      const insertData: any = {
+        decomposition_item_section_id: sectionId,
+        decomposition_item_description: newDescription.trim(),
+        decomposition_item_work_category_id: newCategoryId,
+        decomposition_item_order: nextOrder,
+        decomposition_item_created_by: userId,
       }
+      if (canEditPlannedHours) insertData.decomposition_item_planned_hours = Number(newPlannedHours)
+      if (canEditDueDate) insertData.decomposition_item_planned_due_date = newPlannedDueDate || null
+      if (canEditResponsible) insertData.decomposition_item_responsible = responsibleId
+      if (canEditStatus) insertData.decomposition_item_status_id = newStatusId || null
+      if (canEditProgress) insertData.decomposition_item_progress = Number(newProgress) || 0
+
       const { error } = await supabase
         .from("decomposition_items")
-        .insert({
-          decomposition_item_section_id: sectionId,
-          decomposition_item_description: newDescription.trim(),
-          decomposition_item_work_category_id: newCategoryId,
-          decomposition_item_planned_hours: Number(newPlannedHours),
-          decomposition_item_planned_due_date: newPlannedDueDate || null,
-          decomposition_item_responsible: responsibleId,
-          decomposition_item_status_id: newStatusId || null,
-          decomposition_item_progress: Number(newProgress) || 0,
-          decomposition_item_order: nextOrder,
-          decomposition_item_created_by: userId,
-        })
+        .insert(insertData)
 
       if (error) throw error
 
@@ -400,7 +454,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       setNewCategoryId("")
       setNewPlannedHours("")
       setNewPlannedDueDate("")
-      setNewResponsibleSearch("")
+      setNewResponsibleId(null)
       setNewProgress("0")
       // Сбрасываем статус на "План" (по умолчанию)
       const defaultStatus = statuses.find(s => s.name === "План")
@@ -421,6 +475,12 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     setEditDraft({ ...item })
     setResponsibleSearch(getResponsibleName(item) || "")
   }
+
+  // Автоустановка высоты textarea описания при входе в редактирование и при изменении текста
+  useEffect(() => {
+    if (!editingId || !editDescRef.current) return
+    autoResizeTextarea(editDescRef.current)
+  }, [editingId, editDraft?.decomposition_item_description])
 
   const cancelEdit = () => {
     setEditingId(null)
@@ -450,9 +510,22 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   ) => {
     try {
       setSavingId(id)
+      // Фильтруем patch по правам: запрещённые поля не обновляем
+      const safePatch: any = {}
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_work_category_id')) {
+        // Категорию можно менять без специальных прав
+        safePatch.decomposition_item_work_category_id = patch.decomposition_item_work_category_id
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_responsible') && canEditResponsible) {
+        safePatch.decomposition_item_responsible = patch.decomposition_item_responsible
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_status_id') && canEditStatus) {
+        safePatch.decomposition_item_status_id = patch.decomposition_item_status_id
+      }
+
       const { error } = await supabase
         .from('decomposition_items')
-        .update(patch)
+        .update(safePatch)
         .eq('decomposition_item_id', id)
       if (error) throw error
       // Добавляем производные поля для локального отображения
@@ -482,28 +555,32 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     const merged: DecompositionItemRow = { ...editDraft, ...(patch || {}) } as DecompositionItemRow
     setSavingId(editingId)
     try {
+      // Обновляем только разрешённые поля
+      const updateData: any = {
+        decomposition_item_description: merged.decomposition_item_description,
+        decomposition_item_work_category_id: merged.decomposition_item_work_category_id,
+      }
+      if (canEditPlannedHours) updateData.decomposition_item_planned_hours = Number(merged.decomposition_item_planned_hours)
+      if (canEditDueDate) updateData.decomposition_item_planned_due_date = merged.decomposition_item_planned_due_date
+      if (canEditResponsible) updateData.decomposition_item_responsible = merged.decomposition_item_responsible
+      if (canEditStatus) updateData.decomposition_item_status_id = merged.decomposition_item_status_id
+      if (canEditProgress) updateData.decomposition_item_progress = Number(merged.decomposition_item_progress) || 0
+
       const { error } = await supabase
         .from('decomposition_items')
-        .update({
-          decomposition_item_description: merged.decomposition_item_description,
-          decomposition_item_work_category_id: merged.decomposition_item_work_category_id,
-          decomposition_item_planned_hours: Number(merged.decomposition_item_planned_hours),
-          decomposition_item_planned_due_date: merged.decomposition_item_planned_due_date,
-          decomposition_item_responsible: merged.decomposition_item_responsible,
-          decomposition_item_status_id: merged.decomposition_item_status_id,
-          decomposition_item_progress: Number(merged.decomposition_item_progress) || 0,
-        })
+        .update(updateData)
         .eq('decomposition_item_id', editingId)
       if (error) throw error
 
       const enriched: DecompositionItemRow = {
         ...merged,
-        responsible_profile: merged.decomposition_item_responsible
+        // Обновляем производные поля только если соответствующее поле могло быть изменено
+        responsible_profile: (canEditResponsible && merged.decomposition_item_responsible)
           ? (profiles.find(p => p.user_id === merged.decomposition_item_responsible) || null)
-          : null,
-        status: merged.decomposition_item_status_id
+          : merged.responsible_profile ?? null,
+        status: (canEditStatus && merged.decomposition_item_status_id)
           ? (statuses.find(s => s.id === merged.decomposition_item_status_id) || null)
-          : null,
+          : merged.status ?? null,
       }
       setItems(prev => prev.map(i => (i.decomposition_item_id === editingId ? enriched : i)))
       setNotification('Изменения сохранены')
@@ -607,335 +684,492 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
       <div className="overflow-x-auto">
         <div className={(compact ? "text-[11px] " : "text-sm ") + "w-full min-w-[1120px] border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"}>
-          {/* Шапка */}
-          <div className={(compact ? "text-[11px] " : "text-[12px] xl:text-[13px] ") + `sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 ${rowGridClass} items-center ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} border-b border-slate-200 dark:border-slate-700`}>
-            <div className="flex items-center">
-              <button onClick={() => setIsTemplatesOpen(true)} className={`inline-flex items-center ${compact ? 'gap-1.5 h-6 text-[11px]' : 'gap-2 h-7 text-[12px]'} px-2 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100`} title="Открыть шаблоны">
-                <LayoutTemplate className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-                Шаблон
-              </button>
-            </div>
-            <div className="px-2 flex items-center font-medium">{compact ? 'Описание' : 'Описание работ'}</div>
-            <div className="px-2 flex items-center font-medium">{compact ? 'Кат.' : 'Категория'}</div>
-            <div className="px-2 flex items-center font-medium">{compact ? 'Отв.' : 'Ответственный'}</div>
-            <div className="px-2 flex items-center font-medium">{compact ? 'Стат.' : 'Статус'}</div>
-            <div className="px-2 text-center flex items-center justify-center font-medium">%</div>
-            <div className="px-2 text-center flex items-center justify-center font-medium">План</div>
-            <div className="px-2 text-center flex items-center justify-center font-medium">Факт</div>
-            <div className="px-2 flex items-center font-medium">Срок</div>
+          {/* Верхняя панель с кнопкой Шаблон */}
+          <div className="px-2 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40">
+            <button onClick={() => setIsTemplatesOpen(true)} className={`inline-flex items-center ${compact ? 'gap-1.5 h-6 text-[11px]' : 'gap-2 h-7 text-[12px]'} px-2 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-100`} title="Открыть шаблоны">
+              <LayoutTemplate className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+              Шаблон
+            </button>
           </div>
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[44px]" />
+              <col className="w-[30%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[8%]" />
+              <col className="w-[9%]" />
+              <col className="w-[9%]" />
+              <col className="w-[12%]" />
+              <col className="w-[44px]" />
+            </colgroup>
+            <thead>
+              <tr className={(compact ? "text-[11px] " : "text-[12px] xl:text-[13px] ") + "sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200"}>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Лог</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Описание работ</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Категория</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Ответственный</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Статус</th>
+                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">%</th>
+                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">План, ч</th>
+                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">Факт, ч</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Срок</th>
+                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">…</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr
+                  key={item.decomposition_item_id}
+                  className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                    editingId === item.decomposition_item_id
+                      ? '[&>td]:border [&>td]:border-slate-200 [&>td]:dark:border-slate-700'
+                      : '[&>td]:border-0'
+                  }`}
+                >
+                  {/* Лог */}
+                  <td className="px-2 py-2 align-middle border">
+                    <div className="relative flex items-center justify-center">
+                      <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчёт" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
+                        <Clock className={compact ? 'h-3.5 w-3.5 text-emerald-600' : 'h-4 w-4 text-emerald-600'} />
+                      </button>
+                      {logsCountByItemId[item.decomposition_item_id] ? (
+                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-emerald-600 text-white text-[10px] leading-none px-[4px]">
+                          {Math.min(99, logsCountByItemId[item.decomposition_item_id])}
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
 
-          {/* Строки */}
-          <div className="divide-y divide-slate-200 dark:divide-slate-700">
-            {items.map(item => (
-              <div key={item.decomposition_item_id} className={`${rowGridClass} items-center ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'} hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors`}>
-                <div className="flex items-center justify-center relative">
-                  <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчёт" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
-                    <Clock className={compact ? 'h-3.5 w-3.5 text-emerald-600' : 'h-4 w-4 text-emerald-600'} />
-                  </button>
-                  {logsCountByItemId[item.decomposition_item_id] ? (
-                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-emerald-600 text-white text-[10px] leading-none px-[4px]">
-                      {Math.min(99, logsCountByItemId[item.decomposition_item_id])}
-                    </span>
-                  ) : null}
-                </div>
-                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[12px]' : 'text-[12px] xl:text-[14px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <textarea autoFocus value={editDraft?.decomposition_item_description || ""} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_description: e.target.value } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} maxLength={MAX_DESC_CHARS} rows={3} className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white resize-y min-h-[2.5rem] max-h-40" />
-                  ) : (
-                    <div title={item.decomposition_item_description} className="whitespace-pre-wrap" style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden", overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                      {item.decomposition_item_description}
-                    </div>
-                  )}
-                </div>
-                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <select value={editDraft?.decomposition_item_work_category_id || ""} onChange={e => { const v = e.target.value; setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: v } as DecompositionItemRow : prev); updateItemFields(item.decomposition_item_id, { decomposition_item_work_category_id: v }); }} onKeyDown={handleEditKey} className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white">
-                      {categories.map(c => (
-                        <option key={c.work_category_id} value={c.work_category_id}>{c.work_category_name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">{categoryById.get(item.decomposition_item_work_category_id) || "—"}</span>
-                  )}
-                </div>
-                {/* Колонка ответственного с поиском (Command) */}
-                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <div className="relative">
-                      <input
-                        list={`profiles-${item.decomposition_item_id}`}
-                        className="w-full pl-2 pr-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white text-[11px]"
-                        placeholder="Начните вводить имя"
-                        value={responsibleSearch}
-                        onChange={(e) => setResponsibleSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            const val = responsibleSearch.trim().toLowerCase()
-                            const match = profiles.find(p => getProfileName(p).toLowerCase() === val) ||
-                                          profiles.find(p => getProfileName(p).toLowerCase().startsWith(val)) ||
-                                          profiles.find(p => getProfileName(p).toLowerCase().includes(val))
-                            const selectedId = match ? match.user_id : null
-                            setEditDraft(prev => prev ? { ...prev, decomposition_item_responsible: selectedId } as DecompositionItemRow : prev)
-                            saveEditWithPatch({ decomposition_item_responsible: selectedId })
-                          }
-                        }}
+                  {/* Описание */}
+                  <td className="px-2 py-2 align-middle border" onClick={() => startEdit(item)}>
+                    {editingId === item.decomposition_item_id ? (
+                      <textarea
+                        autoFocus
+                        ref={editDescRef}
+                        value={editDraft?.decomposition_item_description || ""}
+                        onChange={e => handleDescriptionChange(e.target.value)}
+                        onInput={(e) => autoResizeTextarea(e.currentTarget)}
+                        onKeyDown={handleEditKey}
+                        rows={1}
+                        style={{ overflow: 'hidden' }}
+                        className="w-full px-1 py-[6px] bg-transparent border-0 focus:ring-0 focus:border-0 outline-none focus:outline-none dark:bg-transparent dark:text-white resize-none overflow-hidden leading-[18px]"
                       />
-                      <datalist id={`profiles-${item.decomposition_item_id}`}>
-                        <option value="" />
-                        {profiles.map(p => (
-                          <option key={p.user_id} value={getProfileName(p)} />
-                        ))}
-                      </datalist>
-                    </div>
-                  ) : (
-                    <span className="inline-block max-w-full truncate text-[11px]">
-                      {getResponsibleName(item) || "—"}
-                    </span>
-                  )}
-                </div>
-                
-                {/* Колонка статуса */}
-                <div className="px-2 dark:text-slate-200 text-[11px] xl:text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors" onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <select 
-                      value={editDraft?.decomposition_item_status_id || ""} 
-                      onChange={e => { const v = e.target.value || null; setEditDraft(prev => prev ? { ...prev, decomposition_item_status_id: v } as DecompositionItemRow : prev); updateItemFields(item.decomposition_item_id, { decomposition_item_status_id: v }); }} 
-                      onKeyDown={handleEditKey} 
-                      className="w-full pl-2 pr-8 py-1.5 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white text-[11px]"
-                    >
-                      {statuses.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span 
-                      className="inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
-                      style={{ 
-                        backgroundColor: item.status?.color || '#6c757d', 
-                        color: 'white' 
-                      }}
-                    >
-                      {item.status?.name || "—"}
-                    </span>
-                  )}
-                              </div>
-                
-                {/* Колонка процента готовности */}
-                <div className={`px-2 dark:text-slate-200 text-center tabular-nums ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <div className="flex items-center justify-center">
-                      <input 
-                        type="number" 
-                        min={0} 
-                        max={100} 
-                        value={editDraft?.decomposition_item_progress ?? 0} 
-                        onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_progress: Math.min(100, Math.max(0, Number(e.target.value))) } as DecompositionItemRow : prev)} 
-                        onKeyDown={handleEditKey} 
-                        className="w-12 px-1 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white text-[11px]" 
-                      />
-                      <span className="ml-1 text-[10px] text-slate-500">%</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-20 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{ width: `${Math.min(100, Math.max(0, Number(item.decomposition_item_progress || 0)))}%` }}
-                        />
+                    ) : (
+                      <div
+                        title={item.decomposition_item_description}
+                        className="whitespace-pre-wrap line-clamp-3 break-words overflow-hidden"
+                      >
+                        {item.decomposition_item_description}
                       </div>
-                      <span className="text-[11px] w-8 text-right">{item.decomposition_item_progress || 0}%</span>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </td>
 
-                <div className={`px-2 dark:text-slate-200 text-center tabular-nums ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <input type="number" step="0.25" min={0} value={editDraft?.decomposition_item_planned_hours ?? 0} onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: Number(e.target.value) } as DecompositionItemRow : prev)} onKeyDown={handleEditKey} className="w-14 px-2 py-1.5 text-center tabular-nums border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-slate-800 dark:text-white" />
-                  ) : (
-                    Number(item.decomposition_item_planned_hours).toFixed(2)
-                  )}
-                </div>
-                <div className="px-2 dark:text-slate-200 text-center tabular-nums text-[11px] xl:text-[13px]">
-                  {(() => {
-                    const actual = Number(actualByItemId[item.decomposition_item_id] || 0)
-                    const planned = Number(item.decomposition_item_planned_hours || 0)
-                    const ratio = planned > 0 ? actual / planned : 0
-                    const nearLimit = ratio >= 0.9 && ratio < 1
-                    const exceed = ratio >= 1
-                    return (
-                      <div className="inline-flex items-center justify-center gap-1">
-                        <span>{actual.toFixed(2)}</span>
-                        {nearLimit && <span title="Достигнуто 90% плана" className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />}
-                        {exceed && <span title="Превышение плана" className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />}
-                      </div>
-                    )
-                  })()}
-                </div>
-                <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} whitespace-nowrap hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
-                  {editingId === item.decomposition_item_id ? (
-                    <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
-                      <ProjectDatePicker
-                        value={(() => {
-                          const v = editDraft?.decomposition_item_planned_due_date
-                          return v ? new Date(v) : null
-                        })()}
-                        onChange={(d) => {
-                          const iso = formatISODate(d)
-                          setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: iso } as DecompositionItemRow : prev)
-                          // мгновенно сохраняем и выходим из режима редактирования
-                          saveEditWithPatch({ decomposition_item_planned_due_date: iso })
-                        }}
-                        placeholder="Выберите срок"
-                        calendarWidth="260px"
-                        inputWidth="160px"
-                        placement="left"
-                        offsetX={8}
-                        offsetY={0}
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="truncate">{item.decomposition_item_planned_due_date ? new Date(item.decomposition_item_planned_due_date).toLocaleDateString("ru-RU") : "—"}</span>
-                      <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
-                              <MoreHorizontal className="h-4 w-4" />
+                  {/* Категория */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border`} onClick={() => startEdit(item)}>
+                    {editingId === item.decomposition_item_id ? (
+                      <Popover open={isCatOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenCatId(o ? item.decomposition_item_id : null)}>
+                        <PopoverTrigger asChild>
+                          <button className="inline-flex flex-wrap items-center text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full" onClick={(e) => { e.stopPropagation(); setOpenCatId(item.decomposition_item_id) }}>
+                            {categoryById.get(editDraft?.decomposition_item_work_category_id || item.decomposition_item_work_category_id) || 'выбрать'}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                          <ScrollArea className="max-h-[240px]">
+                            <div className="py-1">
+                              {categories.map(c => (
+                                <button
+                                  key={c.work_category_id}
+                                  className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                  onClick={() => {
+                                    const v = c.work_category_id
+                                    setEditDraft(prev => prev ? { ...prev, decomposition_item_work_category_id: v } as DecompositionItemRow : prev)
+                                    updateItemFields(item.decomposition_item_id, { decomposition_item_work_category_id: v })
+                                    setOpenCatId(null)
+                                  }}
+                                >
+                                  {c.work_category_name}
+                                </button>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span className="inline-block max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
+                        {categoryById.get(item.decomposition_item_work_category_id) || "—"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Ответственный */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditResponsible ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditResponsible) startEdit(item) }} title={canEditResponsible ? undefined : 'Недостаточно прав: изменение ответственного'}>
+                    {editingId === item.decomposition_item_id ? (
+                      canEditResponsible ? (
+                        <Popover open={isRespOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenRespId(o ? item.decomposition_item_id : null)}>
+                          <PopoverTrigger asChild>
+                            <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800" onClick={(e) => { e.stopPropagation(); setOpenRespId(item.decomposition_item_id) }}>
+                              {getResponsibleName(editDraft || item as any) || 'ввести'}
                             </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-[8rem]">
-                            <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
-                              {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
-                              Удалить
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                          </PopoverTrigger>
+                          <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div className="p-2">
+                              <input
+                                value={responsibleFilter}
+                                onChange={(e) => setResponsibleFilter(e.target.value)}
+                                placeholder="Поиск"
+                                className="w-full h-7 px-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-[12px]"
+                              />
+                            </div>
+                            <ScrollArea className="max-h-[240px]">
+                              <div className="py-1">
+                              {filteredProfiles
+                                .map(p => (
+                                  <button
+                                    key={p.user_id}
+                                    className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                    onClick={() => {
+                                      const selectedId = p.user_id
+                                      setEditDraft(prev => prev ? { ...prev, decomposition_item_responsible: selectedId } as DecompositionItemRow : prev)
+                                      saveEditWithPatch({ decomposition_item_responsible: selectedId })
+                                      setResponsibleFilter("")
+                                      setOpenRespId(null)
+                                    }}
+                                  >
+                                    {`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email}
+                                  </button>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <span className="inline-block max-w-full truncate text-[11px]">{getResponsibleName(item) || "—"}</span>
+                      )
+                    ) : (
+                      <span className="inline-block max-w-full truncate text-[11px]">{getResponsibleName(item) || "—"}</span>
+                    )}
+                  </td>
 
-            {/* Новая строка */}
-            <div className={`${rowGridClass} items-center px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60`}>
-              {/* Кнопка добавления слева, как в Notion */}
-              <div className="flex items-center justify-center">
-                <button
-                  type="button"
-                  disabled={!canAdd}
-                  onClick={handleAdd}
-                  title={canAdd ? "Добавить строку" : "Введите описание и план"}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-40"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                </button>
-              </div>
-              {/* Описание — плоское поле без рамок */}
-              <div className="px-2">
-                <input
-                  type="text"
-                  value={newDescription}
-                  onChange={e => setNewDescription(e.target.value)}
-                  placeholder="Новая строка — введите описание"
-                  maxLength={MAX_DESC_CHARS}
-                  className="w-full bg-transparent px-1 py-1.5 border border-transparent focus:border-slate-300 focus:ring-0 rounded-md dark:text-white"
-                  onKeyDown={handleEditKey}
-                />
-              </div>
-              {/* Категория — лаконичный select */}
-              <div className="px-2">
-                <select
-                  value={newCategoryId}
-                  onChange={e => setNewCategoryId(e.target.value)}
-                  className="w-full bg-transparent pl-2 pr-6 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
-                  onKeyDown={handleEditKey}
-                >
-                  <option value="">Категория</option>
-                  {categories.map(c => (
-                    <option key={c.work_category_id} value={c.work_category_id}>{c.work_category_name}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Ответственный — поиск по тексту */}
-              <div className="px-2">
-                <input
-                  list="new-row-profiles"
-                  className="w-full bg-transparent pl-2 pr-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
-                  placeholder="Ответственный"
-                  value={newResponsibleSearch}
-                  onChange={(e) => setNewResponsibleSearch(e.target.value)}
-                  onKeyDown={handleEditKey}
-                />
-                <datalist id="new-row-profiles">
-                  <option value="" />
-                  {profiles.map(p => (
-                    <option key={p.user_id} value={getProfileName(p)} />
-                  ))}
-                </datalist>
-              </div>
-              {/* Статус — простой select */}
-              <div className="px-2">
-                <select
-                  value={newStatusId}
-                  onChange={e => setNewStatusId(e.target.value)}
-                  className="w-full bg-transparent pl-2 pr-6 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
-                  onKeyDown={handleEditKey}
-                >
-                  {statuses.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                  </div>
-              
-              {/* Процент готовности — компактный инпут */}
-              <div className="px-2">
-                <div className="flex items-center justify-center">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={newProgress}
-                    onChange={e => setNewProgress(Math.min(100, Math.max(0, Number(e.target.value))).toString())}
-                    placeholder="0"
-                    className="w-12 text-center tabular-nums bg-transparent px-1 py-1.5 border border-transparent focus:border-slate-300 rounded-md dark:text-white text-[11px]"
+                  {/* Статус */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditStatus ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditStatus) startEdit(item) }} title={canEditStatus ? undefined : 'Недостаточно прав: изменение статуса'}>
+                    {editingId === item.decomposition_item_id ? (
+                      canEditStatus ? (
+                        <Popover open={isStatusOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenStatusId(o ? item.decomposition_item_id : null)}>
+                          <PopoverTrigger asChild>
+                            <button className="inline-flex flex-wrap items-center text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full" onClick={(e) => { e.stopPropagation(); setOpenStatusId(item.decomposition_item_id) }}>
+                              {statuses.find(s => s.id === (editDraft?.decomposition_item_status_id ?? item.decomposition_item_status_id))?.name || 'выбрать'}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div className="py-1">
+                              {statuses.map(s => (
+                                <button
+                                  key={s.id}
+                                  className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                  onClick={() => {
+                                    const v = s.id
+                                    setEditDraft(prev => prev ? { ...prev, decomposition_item_status_id: v } as DecompositionItemRow : prev)
+                                    updateItemFields(item.decomposition_item_id, { decomposition_item_status_id: v })
+                                    setOpenStatusId(null)
+                                  }}
+                                >
+                                  {s.name}
+                                </button>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <span className="inline-block max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: item.status?.color || '#6c757d', color: 'white' }}>
+                          {item.status?.name || "—"}
+                        </span>
+                      )
+                    ) : (
+                      <span className="inline-block max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: item.status?.color || '#6c757d', color: 'white' }}>
+                        {item.status?.name || "—"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* % */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditProgress ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditProgress) startEdit(item) }} title={canEditProgress ? undefined : 'Недостаточно прав: изменение процента готовности'}>
+                    {editingId === item.decomposition_item_id ? (
+                      canEditProgress ? (
+                        <input
+                          type="text"
+                          value={editDraft?.decomposition_item_progress ?? 0}
+                          onChange={e => {
+                            const v = e.target.value.replace(/[^0-9]/g, '')
+                            const num = Math.max(0, Math.min(100, Number(v || 0)))
+                            setEditDraft(prev => prev ? { ...prev, decomposition_item_progress: num } as DecompositionItemRow : prev)
+                          }}
+                          onKeyDown={handleEditKey}
+                          className="w-12 px-1 py-1 text-center tabular-nums bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 dark:bg-transparent dark:text-white text-[12px]"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-20 h-2 rounded-full bg-slate-600/30 overflow-hidden">
+                            <div className="h-2 bg-emerald-500" style={{ width: `${Math.max(0, Math.min(100, Number(item.decomposition_item_progress || 0)))}%` }} />
+                          </div>
+                          <span className="text-[11px] w-8 text-right">{Math.max(0, Math.min(100, Number(item.decomposition_item_progress || 0)))}%</span>
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-20 h-2 rounded-full bg-slate-600/30 overflow-hidden">
+                          <div className="h-2 bg-emerald-500" style={{ width: `${Math.max(0, Math.min(100, Number(item.decomposition_item_progress || 0)))}%` }} />
+                        </div>
+                        <span className="text-[11px] w-8 text-right">{Math.max(0, Math.min(100, Number(item.decomposition_item_progress || 0)))}%</span>
+                      </div>
+                    )}
+                  </td>
+
+                  {/* План */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditPlannedHours ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditPlannedHours) startEdit(item) }} title={canEditPlannedHours ? undefined : 'Недостаточно прав: изменение плановых часов'}>
+                    {editingId === item.decomposition_item_id ? (
+                      canEditPlannedHours ? (
+                        <input
+                          type="text"
+                          value={editDraft?.decomposition_item_planned_hours ?? 0}
+                          onChange={e => {
+                            const raw = e.target.value.replace(',', '.')
+                            let cleaned = raw.replace(/[^0-9.]/g, '')
+                            const parts = cleaned.split('.')
+                            if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
+                            const num = Math.max(0, Number(cleaned || 0))
+                            setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_hours: num } as DecompositionItemRow : prev)
+                          }}
+                          onKeyDown={handleEditKey}
+                          className="w-14 px-1 py-1 text-center tabular-nums bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 dark:bg-transparent dark:text-white text-[12px]"
+                        />
+                      ) : (
+                        Number(item.decomposition_item_planned_hours).toFixed(2)
+                      )
+                    ) : (
+                      Number(item.decomposition_item_planned_hours).toFixed(2)
+                    )}
+                  </td>
+
+                  {/* Факт */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border`}>
+                    {(() => {
+                      const actual = Number(actualByItemId[item.decomposition_item_id] || 0)
+                      const planned = Number(item.decomposition_item_planned_hours || 0)
+                      const ratio = planned > 0 ? actual / planned : 0
+                      const nearLimit = ratio >= 0.9 && ratio < 1
+                      const exceed = ratio >= 1
+                      return (
+                        <div className="inline-flex items-center justify-center gap-1">
+                          <span>{actual.toFixed(2)}</span>
+                          {nearLimit && <span title="Достигнуто 90% плана" className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />}
+                          {exceed && <span title="Превышение плана" className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />}
+                        </div>
+                      )
+                    })()}
+                  </td>
+
+                  {/* Срок */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditDueDate ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditDueDate) startEdit(item) }} title={canEditDueDate ? undefined : 'Недостаточно прав: изменение срока'}>
+                    {editingId === item.decomposition_item_id ? (
+                      canEditDueDate ? (
+                        <div className="flex items-center gap-2 text-[12px]" onClick={e => e.stopPropagation()}>
+                          <ProjectDatePicker
+                            value={(() => {
+                              const v = editDraft?.decomposition_item_planned_due_date
+                              return v ? new Date(v) : null
+                            })()}
+                            onChange={(d) => {
+                              const iso = formatISODate(d)
+                              setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: iso } as DecompositionItemRow : prev)
+                              saveEditWithPatch({ decomposition_item_planned_due_date: iso })
+                            }}
+                            placeholder="Выберите срок"
+                            calendarWidth="240px"
+                            inputWidth="120px"
+                            placement="left"
+                            offsetX={8}
+                            offsetY={0}
+                            inputClassName="bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px] px-2 py-1"
+                            variant="minimal"
+                          />
+                        </div>
+                      ) : (
+                        <span className="truncate">{item.decomposition_item_planned_due_date ? new Date(item.decomposition_item_planned_due_date).toLocaleDateString("ru-RU") : "—"}</span>
+                      )
+                    ) : (
+                      <span className="truncate">{item.decomposition_item_planned_due_date ? new Date(item.decomposition_item_planned_due_date).toLocaleDateString("ru-RU") : "—"}</span>
+                    )}
+                  </td>
+
+                  {/* Действия */}
+                  <td className={`px-1 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center border`}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[8rem]">
+                        <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
+                          {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
+                          Удалить
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))}
+
+              {/* Новая строка */}
+              <tr className="bg-slate-50 dark:bg-slate-800/60 [&>td]:border-slate-200 [&>td]:dark:border-slate-700">
+                <td className="px-2 py-1 align-middle text-center border">
+                  <button
+                    type="button"
+                    disabled={!canAdd}
+                    onClick={handleAdd}
+                    title={canAdd ? "Добавить строку" : "Введите описание и план"}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-40 focus:outline-none focus:ring-0"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                  </button>
+                </td>
+                <td className="px-2 py-1 align-middle border">
+                  <textarea
+                    value={newDescription}
+                    onChange={e => setNewDescription(e.target.value)}
+                    onInput={(e) => autoResizeTextarea(e.currentTarget)}
+                    rows={1}
+                    placeholder="Новая строка — введите описание"
+                    className="w-full bg-transparent px-1 py-[6px] border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none rounded-none dark:text-white resize-none text-[12px]"
                     onKeyDown={handleEditKey}
                   />
-                  <span className="ml-1 text-[10px] text-slate-500">%</span>
-                </div>
-              </div>
-
-              {/* План, ч — компактный инпут */}
-              <div className="px-2">
-                <input
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  value={newPlannedHours}
-                  onChange={e => setNewPlannedHours(e.target.value)}
-                  placeholder="0"
-                  className="w-[72px] text-center tabular-nums bg-transparent px-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md dark:text-white"
-                  onKeyDown={handleEditKey}
-                />
-              </div>
-              {/* Факт для новой строки */}
-              <div className="px-2 text-center text-slate-400">—</div>
-              {/* Дата — единый DatePicker */}
-              <div className="px-2">
-                <ProjectDatePicker
-                  value={newPlannedDueDate ? new Date(newPlannedDueDate) : null}
-                  onChange={(d) => setNewPlannedDueDate(formatISODate(d))}
-                  placeholder="Срок"
-                  calendarWidth="260px"
-                  inputWidth="120px"
-                  placement="auto-top"
-                  offsetY={6}
-                />
-              </div>
-            </div>
-          </div>
+                </td>
+                <td className="px-2 py-1 align-middle border">
+                  <Popover open={openCatId === 'new'} onOpenChange={(o) => setOpenCatId(o ? 'new' : null)}>
+                    <PopoverTrigger asChild>
+                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => setOpenCatId('new')}>
+                        {categories.find(c => c.work_category_id === newCategoryId)?.work_category_name || 'выбрать'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <ScrollArea className="max-h-[240px]">
+                        <div className="py-1">
+                          {categories.map(c => (
+                            <button key={c.work_category_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60" onClick={() => { setNewCategoryId(c.work_category_id); setOpenCatId(null) }}>{c.work_category_name}</button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
+                </td>
+                <td className={`px-2 py-1 align-middle border ${canEditResponsible ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditResponsible ? undefined : 'Недостаточно прав: изменение ответственного'}>
+                  <Popover open={openRespId === 'new'} onOpenChange={(o) => setOpenRespId(o ? 'new' : null)}>
+                    <PopoverTrigger asChild>
+                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditResponsible) setOpenRespId('new') }} disabled={!canEditResponsible}>
+                        {(() => {
+                          if (!newResponsibleId) return 'выбрать'
+                          const p = profiles.find(p => p.user_id === newResponsibleId)
+                          return p ? ((`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email)) : 'выбрать'
+                        })()}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <div className="p-2">
+                        <input
+                          value={responsibleFilter}
+                          onChange={(e) => setResponsibleFilter(e.target.value)}
+                          placeholder="Поиск"
+                          className="w-full h-7 px-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-[12px]"
+                          disabled={!canEditResponsible}
+                        />
+                      </div>
+                      <ScrollArea className="max-h-[240px]">
+                        <div className="py-1">
+                          {filteredProfiles
+                            .map(p => (
+                              <button key={p.user_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-60" onClick={() => { if (!canEditResponsible) return; setNewResponsibleId(p.user_id); setOpenRespId(null) }} disabled={!canEditResponsible}>{`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email}</button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
+                </td>
+                <td className={`px-2 py-1 align-middle border ${canEditStatus ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditStatus ? undefined : 'Недостаточно прав: изменение статуса'}>
+                  <Popover open={openStatusId === 'new'} onOpenChange={(o) => setOpenStatusId(o ? 'new' : null)}>
+                    <PopoverTrigger asChild>
+                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditStatus) setOpenStatusId('new') }} disabled={!canEditStatus}>
+                        {statuses.find(s => s.id === newStatusId)?.name || 'выбрать'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <div className="py-1">
+                        {statuses.map(s => (
+                          <button key={s.id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-60" onClick={() => { if (canEditStatus) { setNewStatusId(s.id); setOpenStatusId(null) } }} disabled={!canEditStatus}>{s.name}</button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </td>
+                <td className="px-2 py-1 align-middle text-center border">
+                  <input
+                    type="text"
+                    value={newProgress}
+                    onChange={e => {
+                      const v = e.target.value.replace(/[^0-9]/g, '')
+                      const num = Math.max(0, Math.min(100, Number(v || 0)))
+                      setNewProgress(String(num))
+                    }}
+                    placeholder="0"
+                    className="w-12 text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
+                    onKeyDown={handleEditKey}
+                    disabled={!canEditProgress}
+                    title={canEditProgress ? undefined : 'Недостаточно прав: изменение процента готовности'}
+                  />
+                </td>
+                <td className="px-2 py-1 align-middle text-center border">
+                  <input
+                    type="text"
+                    value={newPlannedHours}
+                    onChange={e => {
+                      const raw = e.target.value.replace(',', '.')
+                      let cleaned = raw.replace(/[^0-9.]/g, '')
+                      const parts = cleaned.split('.')
+                      if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
+                      setNewPlannedHours(cleaned)
+                    }}
+                    placeholder="0"
+                    className="w-[72px] text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
+                    onKeyDown={handleEditKey}
+                    disabled={!canEditPlannedHours}
+                    title={canEditPlannedHours ? undefined : 'Недостаточно прав: изменение плановых часов'}
+                  />
+                </td>
+                <td className="px-2 py-1 align-middle text-center text-slate-400 border">—</td>
+                <td className={`px-2 py-1 align-middle border ${canEditDueDate ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditDueDate ? undefined : 'Недостаточно прав: изменение срока'}>
+                  {canEditDueDate ? (
+                    <ProjectDatePicker
+                      value={newPlannedDueDate ? new Date(newPlannedDueDate) : null}
+                      onChange={(d) => setNewPlannedDueDate(formatISODate(d))}
+                      placeholder="Срок"
+                      calendarWidth="240px"
+                      inputWidth="120px"
+                      placement="auto-top"
+                      offsetY={6}
+                      inputClassName="bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px] px-2 py-1"
+                      variant="minimal"
+                    />
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-1 py-1 align-middle text-center border">
+                  <span className="text-slate-400">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
       {!compact && (
@@ -1037,7 +1271,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       />
 
       <Dialog open={isTemplatesOpen} onOpenChange={setIsTemplatesOpen}>
-        <DialogContent className="w-[96vw] max-w-[1400px]">
+        <DialogContent className="w-[96vw] sm:max-w-[600px] max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Шаблоны декомпозиции</DialogTitle>
           </DialogHeader>

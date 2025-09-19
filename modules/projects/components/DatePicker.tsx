@@ -15,6 +15,7 @@ interface DatePickerProps {
   inputClassName?: string
   renderToBody?: boolean
   autoOpen?: boolean
+  variant?: 'default' | 'minimal'
 }
 
 export const DatePicker: React.FC<DatePickerProps> = ({
@@ -29,6 +30,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   inputClassName,
   renderToBody = true,
   autoOpen = false,
+  variant = 'default',
 }) => {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState<string>(value ? value.toLocaleDateString("ru-RU") : "")
@@ -265,7 +267,9 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           }
         }}
         className={cn(
-          "w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white placeholder:text-sm text-sm",
+          variant === 'minimal'
+            ? "w-full px-2.5 py-1.5 border-0 bg-transparent outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px]"
+            : "w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-800 dark:text-white placeholder:text-sm text-sm",
           inputClassName
         )}
       />
