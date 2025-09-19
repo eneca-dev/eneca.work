@@ -816,10 +816,6 @@ export async function getUserNotificationsByTypes(
             const v = t.trim()
             if (!v) continue
             set.add(v)
-            if (v === 'assignment') set.add('assignments')
-            if (v === 'assignments') set.add('assignment')
-            if (v === 'announcement') set.add('announcements')
-            if (v === 'announcements') set.add('announcement')
           }
           return Array.from(set)
         }
@@ -833,8 +829,46 @@ export async function getUserNotificationsByTypes(
         span.setAttribute('filter.types', requestedTypes.join(','))
         span.setAttribute('filter.include_archived', includeArchived)
 
-        // Фильтрация по вложенному полю связанной таблицы допускается в PostgREST
-        // отбираем user_notifications пользователя + фильтр по notifications.entity_types.entity_name
+        // Получаем уведомления пользователя с фильтрацией по типам через subquery
+        // Сначала получаем все notification_id с нужными типами
+        const { data: notificationIds, error: idsError } = await supabase
+          .from('notifications')
+          .select('id')
+          .in('entity_type_id', (
+            await supabase
+              .from('entity_types')
+              .select('id')
+              .in('entity_name', requestedTypes)
+          ).data?.map(et => et.id) || [])
+
+        if (idsError) {
+          span.setAttribute('fetch.success', false)
+          span.setAttribute('fetch.error', idsError.message)
+          Sentry.captureException(idsError, {
+            tags: {
+              module: 'notifications',
+              action: 'get_user_notifications_by_types',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'getUserNotificationsByTypes',
+              user_id: userId,
+              types: requestedTypes,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw idsError
+        }
+
+        if (!notificationIds || notificationIds.length === 0) {
+          return {
+            notifications: [],
+            totalCount: 0,
+            hasMore: false
+          }
+        }
+
+        // Теперь получаем user_notifications для этих notification_id
         let query = supabase
           .from('user_notifications')
           .select(`
@@ -845,8 +879,8 @@ export async function getUserNotificationsByTypes(
             )
           `, { count: 'exact' })
           .eq('user_id', userId)
+          .in('notification_id', notificationIds.map(n => n.id))
           .order('created_at', { ascending: false })
-          .in('notifications.entity_types.entity_name', requestedTypes)
 
         if (!includeArchived) {
           query = query.eq('is_archived', false)
@@ -1318,7 +1352,7 @@ export async function getNotificationTypeCounts(
   const counts: Record<string, number> = {}
   for (const row of data || []) {
     const raw = (row as any).notifications?.entity_types?.entity_name as string | undefined
-    const entity = raw === 'assignments' ? 'assignment' : raw // нормализация
+    const entity = raw // нормализация больше не нужна
     if (!entity) continue
     counts[entity] = (counts[entity] || 0) + 1
   }

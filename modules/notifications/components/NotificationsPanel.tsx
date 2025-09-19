@@ -41,8 +41,7 @@ const NOTIFICATION_TYPES = [
 // Нормализация ключей типов: приводим возможные множественные формы к форме entityType
 const normalizeType = (value: string | null | undefined): string => {
   if (!value) return ''
-  if (value === 'assignments') return 'assignment'
-  if (value === 'announcements') return 'announcement'
+  // Больше нет множественных форм для нормализации
   return value
 }
 
@@ -220,7 +219,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   useEffect(() => {
     const typesArray = Array.from(selectedTypes)
     if (typesArray.length > 0) {
-      const normalized = typesArray.map((t) => t === 'assignments' ? 'assignment' : t)
+      const normalized = typesArray // нормализация больше не нужна
       setServerTypeFilter(normalized)
     } else {
       clearServerFilters()
@@ -689,7 +688,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                         >
                           {isLoadingTypeCounts
                             ? '.'.repeat(loadingDots)
-                            : (typeCounts[type.value === 'assignments' ? 'assignment' : type.value] || 0)}
+                            : (typeCounts[type.value] || 0)}
                         </Badge>
                       </div>
                     ))}

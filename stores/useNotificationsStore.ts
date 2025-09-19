@@ -153,7 +153,7 @@ interface NotificationsState {
 const transformNotificationData = (un: UserNotificationWithNotification): Notification => {
   const notification = un.notifications
   const rawType = notification?.entity_types?.entity_name || 'unknown'
-  const entityType = rawType === 'assignments' ? 'assignment' : (rawType === 'announcements' ? 'announcement' : rawType)
+  const entityType = rawType
   
   // Извлекаем данные из payload
   const payload = notification?.payload || {}
@@ -170,7 +170,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
   })
   
   // Генерируем текст на лету в зависимости от типа уведомления
-  if (entityType === 'assignment' || entityType === 'assignments') {
+  if (entityType === 'assignment') {
     // Проверяем, есть ли данные в payload.assignment или прямо в payload
     const assignmentData = payload.assignment || {
       project: payload.project,
@@ -187,7 +187,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
       title = payload.title || payload.project || 'Передача заданий'
       message = payload.message || `Вам передано ${payload.amount || 'несколько'} заданий`
     }
-  } else if (entityType === 'announcement' || entityType === 'announcements') {
+  } else if (entityType === 'announcement') {
     // Проверяем, есть ли данные в payload.announcement или прямо в payload
     const announcementData = payload.announcement || {
       user_name: payload.user_name,
@@ -387,7 +387,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       updateAnnouncementTitle: (announcementId, newTitle) => {
         set((state) => {
           const updateList = (list: Notification[]) => list.map((n) => {
-            if (n.entityType !== 'announcement' && n.entityType !== 'announcements') return n
+            if (n.entityType !== 'announcement') return n
             const payload = n.payload || {}
             const idFromPayload = payload.announcement_id || payload?.action?.data?.announcementId
             if (idFromPayload === announcementId) {
@@ -488,8 +488,8 @@ export const useNotificationsStore = create<NotificationsState>()(
           return
         }
 
-        // Нормализуем типы (assignments -> assignment и обратно обрабатывается на API уровне через синонимы)
-        const normalized = Array.from(new Set(types.map((t) => t === 'assignments' ? 'assignment' : t)))
+        // Типы больше не нуждаются в нормализации
+        const normalized = Array.from(new Set(types))
 
         // Сбрасываем состояние списка под новый фильтр
         set({

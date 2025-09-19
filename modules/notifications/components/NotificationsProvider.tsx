@@ -38,16 +38,14 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
           
           switch (entityType) {
             case 'announcement':
-            case 'announcements':
-              span.setAttribute("module.name", "announcements")
+              span.setAttribute("module.name", "announcement")
               console.log('📢 Обновляем модуль объявлений')
               await fetchAnnouncements()
               span.setAttribute("update.success", true)
               break
             
             case 'assignment':
-            case 'assignments':
-              span.setAttribute("module.name", "assignments")
+              span.setAttribute("module.name", "assignment")
               console.log('📋 Обновляем модуль заданий')
               // Здесь можно добавить обновление модуля заданий
               // await fetchAssignments()

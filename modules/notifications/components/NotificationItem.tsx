@@ -31,15 +31,7 @@ const notificationTags = {
     text: "Объявление",
     color: "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-200",
   },
-  announcements: {
-    text: "Объявление",
-    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-200",
-  },
   assignment: {
-    text: "Передача заданий",
-    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-200",
-  },
-  assignments: {
     text: "Передача заданий",
     color: "bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-200",
   },
@@ -61,12 +53,12 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const [isExpanded, setIsExpanded] = useState(false)
   
   // Получаем имя пользователя из payload для объявлений
-  const userName = (notification.entityType === 'announcement' || notification.entityType === 'announcements') 
+  const userName = (notification.entityType === 'announcement') 
     ? notification.payload?.user_name 
     : null
   
   // Получаем название раздела из payload для заданий
-  const fromSection = (notification.entityType === 'assignment' || notification.entityType === 'assignments') 
+  const fromSection = (notification.entityType === 'assignment') 
     ? notification.payload?.from_section
     : null
 
@@ -90,10 +82,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
   const shouldShowDateTime = hoursSinceCreation >= 24
 
-  // ID объявления если он есть в payload
-  const announcementId = (notification.entityType === 'announcement' || notification.entityType === 'announcements')
-    ? (notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId)
-    : null
+  // ID объявления если он есть в payload (независимо от entityType)
+  const announcementId = (notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId) || null
 
   // Пытаемся взять полный текст объявления из стора, иначе из payload
   const announcementFromStore = announcementId 
@@ -179,7 +169,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   }
 
   useEffect(() => {
-    if (!(notification.entityType === 'announcement' || notification.entityType === 'announcements')) {
+    if (!(notification.entityType === 'announcement')) {
       setIsExpandableAnnouncement(false)
       return
     }
@@ -262,7 +252,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
     // Для объявлений клики по карточке отключены полностью
-    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+    if (notification.entityType === 'announcement') {
       return
     }
     Sentry.startSpan(
@@ -326,7 +316,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       className={cn(
         "relative p-4 rounded-lg border transition-colors group",
         // Курсор: для объявлений оставляем обычный курсор, для остальных — pointer
-        (notification.entityType === 'announcement' || notification.entityType === 'announcements')
+        (notification.entityType === 'announcement')
           ? "cursor-default"
           : "cursor-pointer",
         "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-500",
@@ -335,8 +325,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
         hoveredNotificationId === notification.id && "bg-gray-100 dark:bg-gray-700/40"
       )}
     >
-      {notificationTag && (
-        <div className="absolute right-2 top-4 z-10 inline-flex items-start gap-2">
+      <div className="absolute right-2 top-4 z-10 inline-flex items-start gap-2">
+        {notificationTag && (
           <span
             className={cn(
               "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
@@ -345,13 +335,13 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           >
             {notificationTag.text}
           </span>
-          <span
-            className={cn("h-2 w-2 rounded-full", notification.isRead ? "invisible" : "bg-blue-500")}
-            aria-hidden={notification.isRead}
-            aria-label={notification.isRead ? undefined : "Непрочитанное уведомление"}
-          />
-        </div>
-      )}
+        )}
+        <span
+          className={cn("h-2 w-2 rounded-full", notification.isRead ? "invisible" : "bg-blue-500")}
+          aria-hidden={notification.isRead}
+          aria-label={notification.isRead ? undefined : "Непрочитанное уведомление"}
+        />
+      </div>
 
       <div className={cn(
         // Мгновенное появление при hover без задержки за счет CSS
@@ -431,8 +421,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 )}
               </Button>
 
-              {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
-               canManageAnnouncements && 
+              {canManageAnnouncements && 
                onEditAnnouncement && 
                announcementId && (
                 <Button
@@ -587,7 +576,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
 
       {/* Контент уведомления */}
       <div className="mb-3">
-        {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText ? (
+        {(notification.entityType === 'announcement') && fullAnnouncementText ? (
           <div
             className={cn(
               "text-xs text-gray-600 dark:text-gray-400 break-words",
@@ -604,7 +593,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       </div>
 
       {/* Кнопка раскрытия для объявлений */}
-      {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && isExpandableAnnouncement && (
+      {(notification.entityType === 'announcement') && fullAnnouncementText && isExpandableAnnouncement && (
         <div className="mb-3">
           <button
             type="button"
