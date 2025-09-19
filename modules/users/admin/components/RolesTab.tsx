@@ -27,6 +27,7 @@ import { validateEntityName, validateRoleName, checkDuplicateName, getDuplicateE
 const ROLE_NAME_MAX_LENGTH = 20
 const ROLE_DESCRIPTION_MAX_LENGTH = 50
 const PROTECTED_ROLES = ['user', 'admin']
+const READ_ONLY = true // Вкладка только для просмотра: без создания/удаления/редактирования
 
 interface Role {
   id: string
@@ -143,7 +144,7 @@ export default function RolesTab() {
   }, [roles, search])
 
   const hasChanges = useMemo(() => {
-    return pendingChanges.length > 0
+    return READ_ONLY ? false : pendingChanges.length > 0
   }, [pendingChanges])
 
   const checkHasPermission = useCallback((roleId: string, permissionId: string) => {
@@ -157,6 +158,12 @@ export default function RolesTab() {
   }, [pendingChanges])
 
   const getCellStyle = useCallback((hasPermission: boolean, pendingChange?: PendingChange) => {
+    if (READ_ONLY) {
+      return hasPermission
+        ? "bg-emerald-500 text-white border-emerald-600"
+        : "border border-gray-300 dark:border-gray-600 bg-transparent"
+    }
+
     if (pendingChange) {
       if (pendingChange.action === 'add') {
         return "bg-green-500 text-white hover:bg-green-600"
@@ -457,16 +464,26 @@ export default function RolesTab() {
       )
     }
 
+    // Группируем permissions по категории (префикс до точки)
+    const groups = permissions.reduce((acc: Record<string, Permission[]>, p) => {
+      const category = (p.name.includes('.') ? p.name.split('.')[0] : 'Общее') || 'Общее'
+      if (!acc[category]) acc[category] = []
+      acc[category].push(p)
+      return acc
+    }, {} as Record<string, Permission[]>)
+
+    const orderedGroupEntries = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]))
+
     return (
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-80 text-left">
+              <TableHead className="w-64 text-left text-sm">
                 Разрешения
               </TableHead>
               {filteredRoles.map(role => (
-                <TableHead key={role.id} className="w-32 text-center">
+                <TableHead key={role.id} className="w-24 text-center text-xs">
                   <div className="flex items-center justify-center gap-1" title={role.name}>
                     <span className="truncate">
                       {role.name}
@@ -492,34 +509,43 @@ export default function RolesTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {permissions.map(permission => (
-              <TableRow key={permission.id} className="hover:bg-transparent">
-                <TableCell className="w-80 font-medium">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate">{permission.name}</span>
-                    {permission.description && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent 
-                            className="max-w-xs bg-gray-900 border-gray-700 text-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
-                            side="top"
-                          >
-                            <p className="text-sm">{permission.description}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                </TableCell>
-                {filteredRoles.map(role => (
-                  <TableCell key={`${role.id}-${permission.id}`} className="w-32 text-center">
-                    {renderPermissionCell(role.id, permission.id)}
+            {orderedGroupEntries.map(([category, items]) => (
+              <>
+                <TableRow key={`cat-${category}`}>
+                  <TableCell colSpan={1 + filteredRoles.length} className="bg-gray-50 dark:bg-gray-800/50 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                    {category}
                   </TableCell>
+                </TableRow>
+                {items.map(permission => (
+                  <TableRow key={permission.id} className="hover:bg-transparent">
+                    <TableCell className="w-64 font-medium text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{permission.name}</span>
+                        {permission.description && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent 
+                                className="max-w-xs bg-gray-900 border-gray-700 text-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+                                side="top"
+                              >
+                                <p className="text-sm">{permission.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </TableCell>
+                    {filteredRoles.map(role => (
+                      <TableCell key={`${role.id}-${permission.id}`} className="w-24 text-center">
+                        {renderPermissionCell(role.id, permission.id)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))}
-              </TableRow>
+              </>
             ))}
           </TableBody>
         </Table>
@@ -536,6 +562,21 @@ export default function RolesTab() {
     const permission = permissions.find(p => p.id === permissionId)
     const role = roles.find(r => r.id === roleId)
     
+    if (READ_ONLY) {
+      const roIcon = hasPermission ? <Check className="h-3 w-3" /> : null
+      return (
+        <div className="flex justify-center items-center">
+          <div
+            className={`w-6 h-6 rounded-md flex items-center justify-center ${cellStyle} cursor-default select-none`}
+            aria-hidden
+            title={hasPermission ? 'Разрешение есть' : 'Разрешение отсутствует'}
+          >
+            {roIcon}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="flex justify-center items-center">
         <button
@@ -737,33 +778,21 @@ export default function RolesTab() {
   return (
     <div className="mb-6 space-y-6">
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <CardTitle className="text-xl font-semibold">Управление ролями</CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-xl font-semibold">Роли и разрешения</CardTitle>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">Только просмотр</span>
+            </div>
             <div className="flex justify-end gap-2">
               <Input
                 placeholder="Поиск ролей..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="max-w-xs"
+                className="max-w-xs h-8 text-sm"
                 disabled={loading}
               />
-              <Button onClick={handleCreateRole} disabled={loading}>
-                Создать роль
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteRole} disabled={loading}>
-                Удалить роль
-              </Button>
-              <Button 
-                variant={hasChanges ? "default" : "secondary"} 
-                size="icon"
-                className="h-10 w-10 min-w-10 p-0"
-                disabled={!hasChanges || loading}
-                onClick={handleSaveChanges}
-                title="Сохранить изменения"
-              >
-                <Save className="h-4 w-4" />
-              </Button>
+              {/* Управляющие действия скрыты в режиме только чтение */}
             </div>
           </div>
         </CardContent>
@@ -775,10 +804,7 @@ export default function RolesTab() {
         </CardContent>
       </Card>
 
-      {renderCreateRoleModal()}
-      {renderDeleteRoleModal()}
-      {renderDeleteConfirmModal()}
-      {renderSaveChangesModal()}
+      {/* Модальные окна действий отключены в режиме только чтение */}
     </div>
   )
 } 
