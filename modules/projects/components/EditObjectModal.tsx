@@ -208,7 +208,7 @@ export function EditObjectModal({
   }, [showResponsibleDropdown])
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} size="md">
       <Modal.Header 
         title="Редактирование объекта" 
         onClose={onClose}
@@ -255,134 +255,6 @@ export function EditObjectModal({
               />
             </div>
 
-            {/* Ответственный */}
-            <div>
-              <label className="block text-sm font-medium mb-2 dark:text-slate-300">
-                Ответственный
-              </label>
-              <div className="relative" ref={inputWrapperRef}>
-                <input
-                  type="text"
-                  value={showResponsibleDropdown ? searchResponsible : getSelectedResponsibleName()}
-                  onChange={(e) => {
-                    setSearchResponsible(e.target.value)
-                    setShowResponsibleDropdown(true)
-                  }}
-                  onFocus={() => {
-                    setSearchResponsible('')
-                    setShowResponsibleDropdown(true)
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowResponsibleDropdown(false), 200)
-                  }}
-                  placeholder={getSelectedResponsibleName() || "Поиск ответственного..."}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                />
-                {showResponsibleDropdown && dropdownPosition && typeof document !== 'undefined' && (
-                  (typeof window !== 'undefined') && (
-                    require('react-dom').createPortal(
-                      <div
-                        style={{
-                          position: 'fixed',
-                          left: dropdownPosition.left,
-                          top: dropdownPosition.top,
-                          width: dropdownPosition.width,
-                          transform: dropdownPosition.openUp ? 'translateY(-8px) translateY(-100%)' : 'translateY(8px)',
-                        }}
-                        className="z-50"
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <div className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden">
-                          <div className="sticky top-0 bg-white/90 dark:bg-slate-700/90 backdrop-blur px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Ответственный
-                          </div>
-                          <div
-                            ref={dropdownContentRef}
-                            className="max-h-64 overflow-y-auto overscroll-contain"
-                            role="listbox"
-                            aria-label="Выберите ответственного"
-                          >
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={objectData?.object_responsible == null}
-                              onClick={() => {
-                                setObjectData({
-                                  ...objectData!,
-                                  object_responsible: null
-                                })
-                                setSearchResponsible('')
-                                setShowResponsibleDropdown(false)
-                              }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer border-b border-gray-100 dark:border-slate-600 text-slate-600 dark:text-slate-300"
-                            >
-                              Не назначен
-                            </button>
-                            {filteredResponsible.map((profile) => (
-                              <button
-                                type="button"
-                                role="option"
-                                aria-selected={objectData?.object_responsible === profile.user_id}
-                                key={profile.user_id}
-                                onClick={() => {
-                                  setObjectData({
-                                    ...objectData!,
-                                    object_responsible: profile.user_id
-                                  })
-                                  setSearchResponsible('')
-                                  setShowResponsibleDropdown(false)
-                                }}
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-600/70 cursor-pointer"
-                              >
-                                <div className="font-medium dark:text-white truncate">
-                                  {getProfileName(profile)}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-slate-400 truncate">
-                                  {profile.email}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>,
-                      document.body
-                    )
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* Даты */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-slate-300">
-                  Дата начала
-                </label>
-                <input
-                  type="date"
-                  value={objectData.object_start_date || ''}
-                  onChange={(e) => setObjectData({
-                    ...objectData,
-                    object_start_date: e.target.value || null
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-slate-300">
-                  Дата окончания
-                </label>
-                <input
-                  type="date"
-                  value={objectData.object_end_date || ''}
-                  onChange={(e) => setObjectData({
-                    ...objectData,
-                    object_end_date: e.target.value || null
-                  })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                />
-              </div>
-            </div>
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 dark:text-slate-400">

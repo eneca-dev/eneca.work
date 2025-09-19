@@ -4,6 +4,7 @@ import { sendChatMessage } from '../api/chat'
 import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
 import { useSidebarState } from '@/hooks/useSidebarState'
+import { createClient } from '@/utils/supabase/client'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -14,6 +15,13 @@ export function useChat() {
   const [chatSize, setChatSize] = useState({ width: 320, height: 448 }) // 28rem = 448px
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
+  const [conversationId, setConversationId] = useState<string>('')
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
+  const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
+  const [lastEventAt, setLastEventAt] = useState<Date | null>(null)
+  const [lastEventKind, setLastEventKind] = useState<string | null>(null)
+  const [lastError, setLastError] = useState<string | null>(null)
+  const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null)
 
   const userStore = useUserStore()
   const userId = userStore.id
@@ -31,6 +39,77 @@ export function useChat() {
       setMessages([])
     }
   }, [userId, userStore.isAuthenticated])
+
+  // ---- Realtime: управление беседой и подпиской ----
+  const subscribeToConversation = useCallback(async (convId: string) => {
+    if (!convId) return
+    const supabase = createClient()
+    // cleanup предыдущего канала
+    if (channelRef.current) {
+      try { channelRef.current.unsubscribe() } catch {}
+      channelRef.current = null
+    }
+    const channel = supabase
+      .channel(`realtime:chat:${convId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${convId}` },
+        (payload) => {
+          const row: any = payload.new
+          const role: 'user' | 'assistant' = row.role === 'user' ? 'user' : 'assistant'
+          // Обозначаем тип мыслей префиксом для визуального отличия
+          const kind = row.kind as string | undefined
+          const prefix = kind && kind !== 'message' ? `(${kind}) ` : ''
+          const evt: ChatMessage = {
+            id: row.id,
+            role,
+            content: `${prefix}${row.content ?? ''}`,
+            timestamp: new Date(row.created_at ?? Date.now()),
+          }
+          setMessages(prev => [...prev, evt])
+          setLastEventAt(new Date())
+          setLastEventKind(kind ?? 'message')
+        }
+      )
+      .subscribe()
+    channelRef.current = channel
+    setIsSubscribed(true)
+  }, [])
+
+  const ensureConversation = useCallback(async (): Promise<string> => {
+    if (conversationId) return conversationId
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return ''
+    // создаём беседу
+    const { data, error } = await supabase
+      .from('chat_conversations')
+      .insert({ user_id: user.id, status: 'active' })
+      .select('id')
+      .single()
+    if (error) {
+      console.error('Не удалось создать беседу:', error)
+      return ''
+    }
+    setConversationId(data.id)
+    // подписываемся
+    subscribeToConversation(data.id)
+    return data.id
+  }, [conversationId, subscribeToConversation])
+
+  // Автоподписка при наличии conversationId
+  useEffect(() => {
+    if (conversationId) {
+      subscribeToConversation(conversationId)
+    }
+    return () => {
+      if (channelRef.current) {
+        try { channelRef.current.unsubscribe() } catch {}
+        channelRef.current = null
+      }
+      setIsSubscribed(false)
+    }
+  }, [conversationId, subscribeToConversation])
 
   const toggleChat = useCallback(() => {
     setIsOpen(!isOpen)
@@ -111,9 +190,14 @@ export function useChat() {
     setIsLoading(true)
 
     try {
+      // Обеспечиваем наличие беседы и realtime-подписки
+      const ensuredConvId = await ensureConversation()
+      const startedAt = Date.now()
       const response = await sendChatMessage({
-        message: content
+        message: content,
+        conversationId: ensuredConvId || conversationId || undefined,
       })
+      setLastLatencyMs(Date.now() - startedAt)
 
       const botMessage: ChatMessage = {
         id: crypto.randomUUID(),
@@ -127,6 +211,11 @@ export function useChat() {
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
       console.error('Chat error:', error)
+      if (error instanceof Error) {
+        setLastError(error.message)
+      } else {
+        setLastError('Unknown error')
+      }
       
       let errorText = 'Извините, произошла ошибка. Попробуйте еще раз.'
       
@@ -177,6 +266,16 @@ export function useChat() {
     chatSize,
     setChatSize,
     handleResizeStart,
-    isResizing
+    isResizing,
+    conversationId,
+    setConversationId,
+    startConversation: ensureConversation,
+    debug: {
+      isSubscribed,
+      lastEventAt,
+      lastEventKind,
+      lastError,
+      lastLatencyMs,
+    }
   }
 } 

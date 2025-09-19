@@ -11,6 +11,8 @@ interface DateRangePickerProps {
   placeholder?: string
   calendarWidth?: string
   inputWidth?: string
+  inputClassName?: string
+  renderToBody?: boolean
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
@@ -19,6 +21,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   placeholder = "Выберите период",
   calendarWidth = "500px",
   inputWidth = "100%",
+  inputClassName,
+  renderToBody = true,
 }) => {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
@@ -27,16 +31,32 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const [dragOverDate, setDragOverDate] = useState<Date | null>(null)
   const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [recalcKey, setRecalcKey] = useState(0)
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const inWrapper = wrapperRef.current?.contains(target)
+      const inPopup = popupRef.current?.contains(target)
+      if (!inWrapper && !inPopup) {
         setOpen(false)
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!open || !renderToBody) return
+    const handler = () => setRecalcKey((k) => k + 1)
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => {
+      window.removeEventListener('scroll', handler, true)
+      window.removeEventListener('resize', handler)
+    }
+  }, [open, renderToBody])
 
   useEffect(() => {
     if (!open) {
@@ -181,6 +201,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     
     setDraggedBoundary(null)
     setDragOverDate(null)
+    // Останавливаем автопрокрутку и закрываем календарь после применения диапазона
+    if (autoScrollIntervalRef.current) {
+      clearInterval(autoScrollIntervalRef.current)
+      autoScrollIntervalRef.current = null
+    }
+    setOpen(false)
   }
 
   // Функции для автопрокрутки календаря при drag
@@ -244,8 +270,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
     return (
       <div className="flex-1" key={`${year}-${month}`}>
-        <div className="flex items-center justify-between mb-1">
-          {showNavigation === 'left' && (
+        <div className="grid grid-cols-[28px_1fr_28px] items-center mb-1">
+          {showNavigation === 'left' ? (
             <button
               className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
               onClick={handlePrev}
@@ -271,11 +297,13 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             >
               ←
             </button>
+          ) : (
+            <span className="w-[28px] h-[24px]" />
           )}
-          <div className={cn("text-center font-bold text-foreground text-sm", showNavigation === 'none' && "flex-1")}>
+          <div className="text-center font-bold text-foreground text-sm">
             {date.toLocaleString("ru-RU", { month: "long", year: "numeric" })}
           </div>
-          {showNavigation === 'right' && (
+          {showNavigation === 'right' ? (
             <button
               className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
               onClick={handleNext}
@@ -301,6 +329,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             >
               →
             </button>
+          ) : (
+            <span className="w-[28px] h-[24px]" />
           )}
         </div>
         <div className="grid grid-cols-7 text-center">
@@ -378,10 +408,16 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         value={inputValue}
         placeholder={placeholder}
         onClick={handleInputClick}
-        className="w-full p-2 border border-border rounded bg-gray-50 dark:bg-slate-700 dark:border-slate-500 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm"
+        className={cn(
+          inputClassName
+            ? "w-full cursor-pointer"
+            : "w-full p-2 border border-border rounded bg-gray-50 dark:bg-slate-700 dark:border-slate-500 text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50 placeholder:text-sm text-sm",
+          inputClassName
+        )}
       />
-      {open && (
+      {open && (!renderToBody ? (
         <div
+          ref={popupRef}
           className="absolute left-0 z-50 shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
           style={openUpward ? { bottom: '100%', marginBottom: '4px' } : { top: '100%', marginTop: '4px' }}
         >
@@ -408,7 +444,54 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             )}
           </div>
         </div>
-      )}
+      ) : (
+        (() => {
+          if (typeof document === 'undefined' || !wrapperRef.current) return null
+          const rect = wrapperRef.current.getBoundingClientRect()
+          const calWidth = typeof calendarWidth === 'string' ? parseInt(calendarWidth) || 500 : 500
+          const calendarHeight = 280
+          let top = openUpward ? rect.top - calendarHeight - 4 : rect.bottom + 4
+          // Центрируем относительно инпута
+          let left = rect.left + rect.width / 2 - calWidth / 2
+          // clamp horizontally
+          const minX = 8
+          const maxX = Math.max(minX, window.innerWidth - calWidth - 8)
+          left = Math.min(maxX, Math.max(minX, left))
+
+          const node = (
+            <div
+              key={recalcKey}
+              ref={popupRef}
+              className="fixed z-[2000] shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
+              style={{ left, top, width: calendarWidth as any, pointerEvents: 'auto' }}
+            >
+              <div className="font-sans bg-background rounded-lg p-2 dark:bg-slate-700" style={{ width: calendarWidth }}>
+                <div className="flex gap-4">
+                  {renderMonth(currentMonth, 'left')}
+                  {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
+                </div>
+                {selectedDate && (
+                  <div className="flex gap-2 mt-3 pt-2 border-t border-border dark:border-slate-600">
+                    <button
+                      onClick={saveAsStartDate}
+                      className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                    >
+                      Сохранить как дату начала
+                    </button>
+                    <button
+                      onClick={saveAsEndDate}
+                      className="flex-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-slate-600 text-foreground rounded hover:bg-gray-200 dark:hover:bg-slate-500 transition-colors"
+                    >
+                      Сохранить как дату окончания
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+          return (require('react-dom') as any).createPortal(node, document.body)
+        })()
+      ))}
     </div>
   )
 }

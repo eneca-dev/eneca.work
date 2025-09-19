@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Info, SquareStack, Calendar as CalendarIcon } from "lucide-react"
+import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
 import { useToast } from "@/hooks/use-toast"
 import { useTaskTransferStore } from "@/modules/task-transfer/store"
 import type { CreateAssignmentData } from "@/modules/task-transfer/types"
@@ -446,14 +447,20 @@ export function CreateObjectAssignmentModal({
             <Label htmlFor="planned-transmitted-date" className="text-sm font-medium">
               Плановая дата передачи <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="planned-transmitted-date"
-              type="date"
-              value={plannedTransmittedDate || ""}
-              onChange={(e) => setPlannedTransmittedDate(e.target.value || undefined)}
+            <ProjectDatePicker
+              value={plannedTransmittedDate ? new Date(plannedTransmittedDate) : null}
+              onChange={(d) => {
+                const y = d.getFullYear()
+                const m = String(d.getMonth() + 1).padStart(2, '0')
+                const day = String(d.getDate()).padStart(2, '0')
+                setPlannedTransmittedDate(`${y}-${m}-${day}`)
+              }}
               placeholder="Выберите дату"
-              disabled={isCreating}
-              className="w-full"
+              calendarWidth="260px"
+              inputWidth="100%"
+              placement="auto-top"
+              offsetY={6}
+              renderToBody={false}
             />
           </div>
         </div>

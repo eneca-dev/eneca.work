@@ -2,6 +2,7 @@ import { ChatRequest, ChatResponse, ChatRequestWithHistory } from '../types/chat
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import { getContextForRequest } from '../utils/chatCache'
+import * as Sentry from '@sentry/nextjs'
 
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   try {
@@ -21,16 +22,20 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       ? getContextForRequest(userId) 
       : []
     
-    const response = await fetch('https://eneca.app.n8n.cloud/webhook/0378ba55-d98b-4983-b0ef-83a0ac4ee28c', {
+    // Идём через наш гейт /api/chat (full switch)
+    const payload = {
+      message: request.message,
+      conversationHistory: conversationHistory,
+      conversationId: request.conversationId
+    }
+    console.debug('sendChatMessage payload → /api/chat', payload)
+    const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({
-        message: request.message,
-        conversationHistory: conversationHistory
-      })
+      body: JSON.stringify(payload)
     })
 
     if (!response.ok) {
@@ -46,6 +51,10 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
         // Если не удалось распарсить JSON, используем статус код
         console.warn('Не удалось распарсить ошибку сервера:', e)
       }
+      Sentry.captureException(new Error(errorMessage), {
+        tags: { module: 'chat', endpoint: 'gateway-client' },
+        extra: { status: response.status }
+      })
       throw new Error(errorMessage)
     }
 

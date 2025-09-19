@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { TemplatesPanel } from "@/modules/decomposition-templates"
 // no slider for progress editing; using numeric input and a capsule view
+import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
 
 interface SectionDecompositionTabProps {
   sectionId: string
@@ -251,6 +252,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
     loadActuals()
   }, [items])
+
+  const formatISODate = (date: Date): string => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
 
   const categoryById = useMemo(() => {
     const map = new Map<string, string>()
@@ -768,19 +776,29 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 <div className={`px-2 dark:text-slate-200 ${compact ? 'text-[11px]' : 'text-[11px] xl:text-[13px]'} whitespace-nowrap hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded transition-colors`} onClick={() => startEdit(item)}>
                   {editingId === item.decomposition_item_id ? (
                     <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
-                      <input 
-                        type="date" 
-                        value={editDraft?.decomposition_item_planned_due_date || ""} 
-                        onChange={e => setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: e.target.value } as DecompositionItemRow : prev)} 
-                        onKeyDown={handleEditKey} 
-                        onBlur={saveEdit}
-                        className="flex-1 px-2 py-1.5 text-[11px] border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-800 dark:text-white"
+                      <ProjectDatePicker
+                        value={(() => {
+                          const v = editDraft?.decomposition_item_planned_due_date
+                          return v ? new Date(v) : null
+                        })()}
+                        onChange={(d) => {
+                          const iso = formatISODate(d)
+                          setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: iso } as DecompositionItemRow : prev)
+                          // мгновенно сохраняем и выходим из режима редактирования
+                          saveEditWithPatch({ decomposition_item_planned_due_date: iso })
+                        }}
+                        placeholder="Выберите срок"
+                        calendarWidth="260px"
+                        inputWidth="160px"
+                        placement="left"
+                        offsetX={8}
+                        offsetY={0}
                       />
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 w-full" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 w-full">
                       <span className="truncate">{item.decomposition_item_planned_due_date ? new Date(item.decomposition_item_planned_due_date).toLocaleDateString("ru-RU") : "—"}</span>
-                      <div className="ml-auto">
+                      <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
@@ -904,14 +922,16 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               </div>
               {/* Факт для новой строки */}
               <div className="px-2 text-center text-slate-400">—</div>
-              {/* Дата — плоский date input */}
+              {/* Дата — единый DatePicker */}
               <div className="px-2">
-                <input
-                  type="date"
-                  value={newPlannedDueDate}
-                  onChange={e => setNewPlannedDueDate(e.target.value)}
-                  className="bg-transparent px-2 py-1.5 border border-transparent focus:border-slate-300 rounded-md text-slate-600 dark:text-slate-200"
-                  onKeyDown={handleEditKey}
+                <ProjectDatePicker
+                  value={newPlannedDueDate ? new Date(newPlannedDueDate) : null}
+                  onChange={(d) => setNewPlannedDueDate(formatISODate(d))}
+                  placeholder="Срок"
+                  calendarWidth="260px"
+                  inputWidth="120px"
+                  placement="auto-top"
+                  offsetY={6}
                 />
               </div>
             </div>

@@ -7,6 +7,11 @@ import { Save, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { updateProject } from '@/lib/supabase-client'
+import {
+  PROJECT_STATUS_OPTIONS,
+  getProjectStatusLabel,
+  normalizeProjectStatus,
+} from '../constants/project-status'
 import { Modal, ModalButton } from '@/components/modals'
 import { DeleteProjectModal } from './DeleteProjectModal'
 
@@ -23,7 +28,15 @@ interface ProjectData {
   project_description: string | null
   project_manager: string | null
   project_lead_engineer: string | null
-  project_status: 'active' | 'archive' | 'paused' | 'canceled'
+  project_status:
+    | 'draft'
+    | 'active'
+    | 'completed'
+    | 'paused'
+    | 'waiting for input data'
+    | 'author supervision'
+    | 'actual calculation'
+    | 'customer approval'
   client_id: string | null
 }
 
@@ -59,13 +72,17 @@ export function EditProjectModal({
   const [searchManager, setSearchManager] = useState('')
   const [searchEngineer, setSearchEngineer] = useState('')
   const [searchClient, setSearchClient] = useState('')
+  const [searchStatus, setSearchStatus] = useState('')
   const [showManagerDropdown, setShowManagerDropdown] = useState(false)
   const [showEngineerDropdown, setShowEngineerDropdown] = useState(false)
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [statusHighlightedIndex, setStatusHighlightedIndex] = useState(-1)
   const [focusedManagerIndex, setFocusedManagerIndex] = useState(0)
   const [focusedEngineerIndex, setFocusedEngineerIndex] = useState(0)
   const [focusedClientIndex, setFocusedClientIndex] = useState(0)
+  const [canRenderPortal, setCanRenderPortal] = useState(false)
   const managerDropdown = useDropdownPosition()
   const engineerDropdown = useDropdownPosition()
   const clientDropdown = useDropdownPosition()
@@ -76,7 +93,17 @@ export function EditProjectModal({
   const engineerItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const clientItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const { setNotification } = useUiStore()
-  const canRenderPortal = typeof window !== 'undefined' && typeof document !== 'undefined'
+  
+
+  // Refs for proper focus management
+  const statusInputRef = useRef<HTMLInputElement>(null)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
+  const statusMouseDownRef = useRef(false)
+
+  // Проверка возможности рендера портала
+  useEffect(() => {
+    setCanRenderPortal(typeof document !== 'undefined')
+  }, [])
 
   // Загрузка данных проекта
   useEffect(() => {
@@ -86,6 +113,13 @@ export function EditProjectModal({
       loadClients()
     }
   }, [isOpen, projectId])
+
+  // Reset highlighted index when dropdown state changes
+  useEffect(() => {
+    if (showStatusDropdown) {
+      setStatusHighlightedIndex(-1)
+    }
+  }, [showStatusDropdown])
 
   // Очистка refs при размонтировании компонента
   useEffect(() => {
@@ -166,7 +200,7 @@ export function EditProjectModal({
             project_description: projectData.project_description,
             project_manager: projectData.project_manager,
             project_lead_engineer: projectData.project_lead_engineer,
-            project_status: projectData.project_status,
+            project_status: normalizeProjectStatus(projectData.project_status) || 'active',
             client_id: projectData.client_id
           })
 
@@ -257,17 +291,74 @@ export function EditProjectModal({
     return client ? client.client_name : ''
   }
 
-  const filteredManagers = profiles.filter(profile => 
+  const getStatusName = (status: ProjectData['project_status']) => getProjectStatusLabel(status)
+
+  const getSelectedStatusName = () => {
+    if (!projectData?.project_status) return ''
+    return getStatusName(projectData.project_status)
+  }
+
+  const statusOptions: readonly ProjectData['project_status'][] = PROJECT_STATUS_OPTIONS
+
+  const filteredManagers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchManager.toLowerCase())
   )
 
-  const filteredEngineers = profiles.filter(profile => 
+  const filteredEngineers = profiles.filter(profile =>
     getProfileName(profile).toLowerCase().includes(searchEngineer.toLowerCase())
   )
 
   const filteredClients = clients.filter(client =>
     client.client_name.toLowerCase().includes(searchClient.toLowerCase())
   )
+
+  const filteredStatuses = statusOptions.filter(status =>
+    getStatusName(status).toLowerCase().includes(searchStatus.toLowerCase())
+  )
+
+  // Keyboard handler for status combobox
+  const handleStatusKeyDown = (e: React.KeyboardEvent) => {
+    if (!showStatusDropdown && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      setShowStatusDropdown(true)
+      return
+    }
+
+    if (!showStatusDropdown) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setStatusHighlightedIndex(prev =>
+          prev < filteredStatuses.length - 1 ? prev + 1 : 0
+        )
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setStatusHighlightedIndex(prev =>
+          prev > 0 ? prev - 1 : filteredStatuses.length - 1
+        )
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (statusHighlightedIndex >= 0 && statusHighlightedIndex < filteredStatuses.length) {
+          const selectedStatus = filteredStatuses[statusHighlightedIndex]
+          setProjectData({
+            ...projectData!,
+            project_status: selectedStatus
+          })
+          setSearchStatus('')
+          setShowStatusDropdown(false)
+          setStatusHighlightedIndex(-1)
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setShowStatusDropdown(false)
+        setStatusHighlightedIndex(-1)
+        setSearchStatus('')
+        break
+    }
+  }
 
   const updateManagerDropdownPosition = managerDropdown.updatePosition
   const updateEngineerDropdownPosition = engineerDropdown.updatePosition
@@ -481,30 +572,77 @@ export function EditProjectModal({
                   Статус проекта
                 </label>
                 <div className="relative">
-                  <select
-                    value={projectData.project_status}
-                    onChange={(e) => setProjectData({
-                      ...projectData,
-                      project_status: e.target.value as ProjectData['project_status']
-                    })}
-                    className="w-full px-3 py-2 pr-8 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white appearance-none"
-                  >
-                    <option value="active">Активный</option>
-                    <option value="paused">Приостановлен</option>
-                    <option value="archive">Архив</option>
-                    <option value="canceled">Отменен</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-                    <svg
-                      className="h-4 w-4 text-gray-400 dark:text-slate-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
+                  <input
+                    ref={statusInputRef}
+                    type="text"
+                    value={showStatusDropdown ? searchStatus : getSelectedStatusName()}
+                    onChange={(e) => {
+                      setSearchStatus(e.target.value)
+                      setShowStatusDropdown(true)
+                    }}
+                    onFocus={() => {
+                      setSearchStatus('')
+                      setShowStatusDropdown(true)
+                    }}
+                    onBlur={() => {
+                      // Don't close immediately - let mouse events be handled first
+                      setTimeout(() => {
+                        if (!statusMouseDownRef.current) {
+                          setShowStatusDropdown(false)
+                          setStatusHighlightedIndex(-1)
+                          setSearchStatus('')
+                        }
+                      }, 150)
+                    }}
+                    onKeyDown={handleStatusKeyDown}
+                    placeholder={getSelectedStatusName() || "Выберите статус проекта..."}
+                    role="combobox"
+                    aria-expanded={showStatusDropdown}
+                    aria-controls="status-listbox"
+                    aria-activedescendant={showStatusDropdown && statusHighlightedIndex >= 0 ? `status-option-${statusHighlightedIndex}` : undefined}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                  />
+                  {showStatusDropdown && (
+                    <div
+                      ref={statusDropdownRef}
+                      id="status-listbox"
+                      role="listbox"
+                      className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                      onMouseDown={() => {
+                        statusMouseDownRef.current = true
+                      }}
+                      onMouseUp={() => {
+                        statusMouseDownRef.current = false
+                      }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                      {filteredStatuses.map((status, index) => (
+                        <div
+                          key={status}
+                          id={`status-option-${index}`}
+                          role="option"
+                          aria-selected={index === statusHighlightedIndex}
+                          onClick={() => {
+                            setProjectData({
+                              ...projectData,
+                              project_status: status
+                            })
+                            setSearchStatus('')
+                            setShowStatusDropdown(false)
+                            setStatusHighlightedIndex(-1)
+                          }}
+                          className={`px-3 py-2 cursor-pointer ${
+                            index === statusHighlightedIndex
+                              ? 'bg-blue-100 dark:bg-blue-900'
+                              : 'hover:bg-gray-100 dark:hover:bg-slate-600'
+                          }`}
+                        >
+                          <div className="font-medium dark:text-white">
+                            {getStatusName(status)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

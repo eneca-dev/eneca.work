@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { Calendar as CalendarIcon } from 'lucide-react'
+import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
 
 interface SectionReportsTabProps {
   sectionId: string
@@ -27,7 +28,15 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
   const [loading, setLoading] = useState(true)
   const [dateFrom, setDateFrom] = useState<string>("")
   const [dateTo, setDateTo] = useState<string>("")
+  const [range, setRange] = useState<DateRange | null>(null)
   const [preset, setPreset] = useState<'7d' | 'm' | 'q' | 'y' | 'all'>('m')
+
+  const formatLocalYMD = (d: Date): string => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
 
   // Устанавливаем диапазон по пресету
   useEffect(() => {
@@ -47,8 +56,15 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
     } else if (preset === 'all') {
       from = null
     }
-    setDateFrom(from ? from.toISOString().slice(0, 10) : '')
-    setDateTo(to.toISOString().slice(0, 10))
+    if (preset === 'all') {
+      setDateFrom('')
+      setDateTo('')
+      setRange(null)
+    } else {
+      setDateFrom(from ? formatLocalYMD(from) : '')
+      setDateTo(formatLocalYMD(to))
+      setRange({ from: from || null, to })
+    }
   }, [preset])
 
   const fetchLogs = async () => {
@@ -118,20 +134,20 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 bg-white dark:bg-slate-900">
-            <CalendarIcon className="h-4 w-4 text-slate-400" />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-transparent text-xs outline-none"
-            />
-            <span className="text-slate-400 text-xs">—</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="bg-transparent text-xs outline-none"
+          <div className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-900 h-[30px]">
+            <DateRangePicker
+              value={range}
+              onChange={(r) => {
+                setRange(r)
+                const fromStr = r?.from ? formatLocalYMD(new Date(r.from.getFullYear(), r.from.getMonth(), r.from.getDate())) : ''
+                const toStr = r?.to ? formatLocalYMD(new Date(r.to.getFullYear(), r.to.getMonth(), r.to.getDate())) : ''
+                setDateFrom(fromStr)
+                setDateTo(toStr)
+              }}
+              placeholder="Выберите период"
+              calendarWidth="500px"
+              inputWidth="180px"
+              inputClassName="bg-transparent border-0 focus:outline-none focus:ring-0 outline-none text-xs h-[22px] leading-[22px] px-2 py-0 m-0"
             />
           </div>
         </div>
