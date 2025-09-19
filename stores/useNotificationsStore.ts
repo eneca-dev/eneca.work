@@ -157,8 +157,8 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
   
   // Извлекаем данные из payload
   const payload = notification?.payload || {}
-  let title = 'Новое уведомление'
-  let message = 'Нет описания'
+  let title = ''
+  let message = ''
   
   // Отладочная информация
   console.log('🔄 Трансформация уведомления:', {
@@ -488,7 +488,7 @@ export const useNotificationsStore = create<NotificationsState>()(
           return
         }
 
-        // Типы больше не нуждаются в нормализации
+        // Типы больше не требуют полной нормализации — выполняется только дедупликация
         const normalized = Array.from(new Set(types))
 
         // Сбрасываем состояние списка под новый фильтр

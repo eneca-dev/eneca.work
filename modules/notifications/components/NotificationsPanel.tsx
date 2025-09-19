@@ -38,12 +38,7 @@ const NOTIFICATION_TYPES = [
   { value: 'task', label: 'Задачи', color: 'bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-200' },
 ]
 
-// Нормализация ключей типов: приводим возможные множественные формы к форме entityType
-const normalizeType = (value: string | null | undefined): string => {
-  if (!value) return ''
-  // Больше нет множественных форм для нормализации
-  return value
-}
+// Нормализация типов больше не используется
 
 export function NotificationsPanel({ onCloseAction, collapsed = false }: NotificationsPanelProps) {
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set())
@@ -54,8 +49,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
   const [hasPanelBeenOpened, setHasPanelBeenOpened] = useState(false)
   const [isRefreshingOnOpen, setIsRefreshingOnOpen] = useState(false)
-  // Состояние сортировки списков в дебаг-панели по типам уведомлений
-  const [debugSortType, setDebugSortType] = useState<'all' | 'section_comment' | 'announcement'>('all')
+  // Дебаг-панель отключена
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Трекинг позиции указателя внутри панели для устойчивого hover
@@ -98,7 +92,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   } = useNotificationsStore()
 
   // Локальные состояния для клиентской пагинации при активных фильтрах
-  const [isPreloadingAll, setIsPreloadingAll] = useState(false)
+  // Клиентская предзагрузка не используется
   const [visibleFilteredCount, setVisibleFilteredCount] = useState(10)
   // Клиентский режим фильтрации используется только для статуса прочитанности,
   // фильтрация по типам переведена на серверную пагинацию
@@ -107,25 +101,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     [selectedTypes, readFilter]
   )
 
-  // Форматирование времени и даты: HH:mm dd.MM.yyyy
-  const formatDateTime = useCallback((value: string | Date | number | null | undefined): string => {
-    if (!value) return ''
-    const d = new Date(value)
-    if (Number.isNaN(d.getTime())) return ''
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const hh = pad(d.getHours())
-    const mm = pad(d.getMinutes())
-    const ss = pad(d.getSeconds())
-    const dd = pad(d.getDate())
-    const MM = pad(d.getMonth() + 1)
-    const yyyy = d.getFullYear()
-    return `${hh}:${mm}:${ss} ${dd}.${MM}.${yyyy}`
-  }, [])
+  // Форматирование даты не используется (дебаг отключен)
 
-  // Нормализованный набор выбранных типов для сопоставления с entityType
-  const normalizedSelectedTypes = useMemo(() => {
-    return new Set(Array.from(selectedTypes).map((t) => normalizeType(t)))
-  }, [selectedTypes])
 
   // Дедупликация уведомлений по id, чтобы избежать повторов
   const dedupedNotifications = useMemo(() => {
@@ -437,38 +414,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     return allFiltered
   }, [dedupedNotifications, readFilter, isClientFilterMode, visibleFilteredCount])
 
-  // Вспомогательная сортировка для дебаг-списков: продвигаем выбранный тип вверх
-  const sortForDebugByType = useCallback(
-    (list: typeof dedupedNotifications) => {
-      if (debugSortType === 'all') return list
-      return [...list].sort((a, b) => {
-        const aMatch = normalizeType((a as any).entityType) === debugSortType
-        const bMatch = normalizeType((b as any).entityType) === debugSortType
-        if (aMatch === bMatch) return 0
-        return aMatch ? -1 : 1
-      })
-    },
-    [debugSortType]
-  )
-
-  // Подготовка списков для дебаг-панели (на основе всех загруженных уведомлений без учета клиентских фильтров)
-  const debugLists = useMemo(() => {
-    // Прочитанные (не архив)
-    const readList = dedupedNotifications.filter((n: any) => Boolean(n.isRead) && !Boolean(n.isArchived))
-    // Непрочитанные (не архив)
-    const unreadList = dedupedNotifications.filter((n: any) => !Boolean(n.isRead) && !Boolean(n.isArchived))
-    // Архивные
-    const archivedList = dedupedNotifications.filter((n: any) => Boolean(n.isArchived))
-
-    // Стабильная сортировка внутри списков по дате
-    const byDateDesc = (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-
-    return {
-      read: sortForDebugByType(readList.sort(byDateDesc)),
-      unread: sortForDebugByType(unreadList.sort(byDateDesc)),
-      archived: sortForDebugByType(archivedList.sort(byDateDesc)),
-    }
-  }, [dedupedNotifications, sortForDebugByType])
+  // Дебаг-списки отключены
 
   // При входе в режим клиентских фильтров просто сбрасываем лимит (без принудительной полной предзагрузки)
   useEffect(() => {
@@ -539,8 +485,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
         // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
         "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
       )}
-      // Расширяем панель под дебаг-колонку справа (+320px)
-      style={{ width: panelWidthPx + 320, left: collapsed ? 80 : 256 }}
+      // Панель без дебаг-колонки
+      style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
       onMouseMove={(e) => throttledSetPointerPosition({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => clearPointerPosition()}
     >
@@ -701,10 +647,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
 
 
-        {/* Основная зона: слева список уведомлений, справа дебаг-панель */}
+        {/* Основная зона: список уведомлений */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Список уведомлений */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto border-r border-gray-200 dark:border-gray-700">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto">
             {(isLoading || isManualRefreshing) ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -774,113 +719,6 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Правая дебаг-панель */}
-          <div className="w-[320px] shrink-0 overflow-y-auto p-3">
-            <div className="mb-3">
-              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Дебаг уведомлений</div>
-              <div className="mt-2 flex gap-2">
-                <Button
-                  variant={debugSortType === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setDebugSortType('all')}
-                  className="h-7 px-3"
-                >
-                  Все
-                </Button>
-                <Button
-                  variant={debugSortType === 'section_comment' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setDebugSortType('section_comment')}
-                  className="h-7 px-3"
-                  title="Комментарии"
-                >
-                  Комментарии
-                </Button>
-                <Button
-                  variant={debugSortType === 'announcement' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setDebugSortType('announcement')}
-                  className="h-7 px-3"
-                >
-                  Объявления
-                </Button>
-              </div>
-            </div>
-
-            {(isLoading || isRefreshingOnOpen || isManualRefreshing) ? (
-              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span className="text-sm">Обновление...</span>
-              </div>
-            ) : (
-              <>
-                {/* Прочитанные: новее сверху, старее снизу */
-                }
-                <div className="mb-4">
-                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    Прочитанные уведомления ({debugLists.read.length}):
-                  </div>
-                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                    {debugLists.read.length > 0 ? (
-                      debugLists.read.map((n: any) => {
-                        const dt = formatDateTime(n.createdAt)
-                        return (
-                          <div key={n.id} title={String(n.createdAt)} className="truncate">
-                            {n.title} {dt}
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Непрочитанные: новее сверху, старее снизу */}
-                <div className="mb-4">
-                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    Непрочитанные уведомления ({debugLists.unread.length}):
-                  </div>
-                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                    {debugLists.unread.length > 0 ? (
-                      debugLists.unread.map((n: any) => {
-                        const dt = formatDateTime(n.createdAt)
-                        return (
-                          <div key={n.id} title={String(n.createdAt)} className="truncate">
-                            {n.title} {dt}
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Архивные: новее сверху, старее снизу */}
-                <div className="mb-2">
-                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    Архивные уведомления ({debugLists.archived.length}):
-                  </div>
-                  <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                    {debugLists.archived.length > 0 ? (
-                      debugLists.archived.map((n: any) => {
-                        const dt = formatDateTime(n.createdAt)
-                        return (
-                          <div key={n.id} title={String(n.createdAt)} className="truncate">
-                            {n.title} {dt}
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                </div>
-              </>
             )}
           </div>
         </div>

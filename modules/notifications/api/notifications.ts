@@ -809,18 +809,7 @@ export async function getUserNotificationsByTypes(
       try {
         const includeArchived = options?.includeArchived ?? false
 
-        // Нормализуем возможные синонимы типов (singular/plural)
-        const expandTypeSynonyms = (src: string[]): string[] => {
-          const set = new Set<string>()
-          for (const t of src) {
-            const v = t.trim()
-            if (!v) continue
-            set.add(v)
-          }
-          return Array.from(set)
-        }
-
-        const requestedTypes = expandTypeSynonyms(types)
+        const requestedTypes = types
 
         span.setAttribute('user.id', userId)
         span.setAttribute('pagination.page', page)

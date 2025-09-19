@@ -20,8 +20,8 @@ export function useHoverWithPortalSupport<T extends HTMLElement>() {
       return
     }
     const rect = element.getBoundingClientRect()
-    const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
-      e.clientY >= rect.top && e.clientY <= rect.bottom
+    const inside = e.clientX >= rect.left && e.clientX < rect.right &&
+      e.clientY >= rect.top && e.clientY < rect.bottom
     if (!inside) setIsHovered(false)
   }, [])
 
