@@ -132,38 +132,8 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
     fetchDepartments()
   }, [fetchDepartments])
 
-  // Дополнительное обновление данных каждые 30 секунд для синхронизации
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchDepartments()
-    }, 30000)
-
-    return () => clearInterval(interval)
-  }, [fetchDepartments])
-
-  // Обновление данных при фокусе на странице
-  useEffect(() => {
-    const handleFocus = () => {
-      fetchDepartments()
-    }
-
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [fetchDepartments])
-
-  // Автоматическое обновление данных при изменении поискового запроса
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (search.trim()) {
-        fetchDepartments()
-      } else if (search === "") {
-        // Если поиск очищен, обновляем данные для показа всех отделов
-        fetchDepartments()
-      }
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [search, fetchDepartments])
+  // Удалены автообновления (интервал, фокус окна, ввод в поиск).
+  // Данные обновляются при монтировании и явных действиях пользователя.
 
   // Фильтрация отделов по поиску с дедупликацией
   const filteredDepartments = useMemo(() => {
