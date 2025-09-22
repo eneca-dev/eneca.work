@@ -783,6 +783,158 @@ export async function getUserNotifications(
 }
 
 /**
+ * Получить уведомления пользователя, отфильтрованные по типам (entity_types.entity_name), с пагинацией
+ * По умолчанию исключает архивированные.
+ */
+export async function getUserNotificationsByTypes(
+  userId: string,
+  types: string[],
+  page: number = 1,
+  limit: number = 10,
+  options?: { includeArchived?: boolean }
+): Promise<{
+  notifications: UserNotificationWithNotification[]
+  totalCount: number
+  hasMore: boolean
+}> {
+  return Sentry.startSpan(
+    {
+      op: "notifications.get_user_notifications_by_types",
+      name: "Get User Notifications By Types",
+    },
+    async (span) => {
+      const supabase = createClient()
+      const offset = (page - 1) * limit
+
+      try {
+        const includeArchived = options?.includeArchived ?? false
+
+        const requestedTypes = types
+
+        span.setAttribute('user.id', userId)
+        span.setAttribute('pagination.page', page)
+        span.setAttribute('pagination.limit', limit)
+        span.setAttribute('pagination.offset', offset)
+        span.setAttribute('filter.types', requestedTypes.join(','))
+        span.setAttribute('filter.include_archived', includeArchived)
+
+        // Получаем уведомления пользователя с фильтрацией по типам через subquery
+        // Сначала получаем все notification_id с нужными типами
+        const { data: notificationIds, error: idsError } = await supabase
+          .from('notifications')
+          .select('id')
+          .in('entity_type_id', (
+            await supabase
+              .from('entity_types')
+              .select('id')
+              .in('entity_name', requestedTypes)
+          ).data?.map(et => et.id) || [])
+
+        if (idsError) {
+          span.setAttribute('fetch.success', false)
+          span.setAttribute('fetch.error', idsError.message)
+          Sentry.captureException(idsError, {
+            tags: {
+              module: 'notifications',
+              action: 'get_user_notifications_by_types',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'getUserNotificationsByTypes',
+              user_id: userId,
+              types: requestedTypes,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw idsError
+        }
+
+        if (!notificationIds || notificationIds.length === 0) {
+          return {
+            notifications: [],
+            totalCount: 0,
+            hasMore: false
+          }
+        }
+
+        // Теперь получаем user_notifications для этих notification_id
+        let query = supabase
+          .from('user_notifications')
+          .select(`
+            *,
+            notifications:notification_id (
+              *,
+              entity_types:entity_type_id (*)
+            )
+          `, { count: 'exact' })
+          .eq('user_id', userId)
+          .in('notification_id', notificationIds.map(n => n.id))
+          .order('created_at', { ascending: false })
+
+        if (!includeArchived) {
+          query = query.eq('is_archived', false)
+        }
+
+        const { data, error, count } = await query
+          .range(offset, offset + limit - 1)
+
+        if (error) {
+          span.setAttribute('fetch.success', false)
+          span.setAttribute('fetch.error', error.message)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'notifications',
+              action: 'get_user_notifications_by_types',
+              error_type: 'db_error'
+            },
+            extra: {
+              component: 'getUserNotificationsByTypes',
+              user_id: userId,
+              page,
+              limit,
+              types: requestedTypes,
+              include_archived: includeArchived,
+              timestamp: new Date().toISOString()
+            }
+          })
+          throw error
+        }
+
+        span.setAttribute('fetch.success', true)
+        span.setAttribute('notifications.count', data?.length || 0)
+        span.setAttribute('notifications.total_count', count || 0)
+        span.setAttribute('notifications.has_more', (count || 0) > offset + limit)
+
+        return {
+          notifications: data || [],
+          totalCount: count || 0,
+          hasMore: (count || 0) > offset + limit
+        }
+      } catch (error) {
+        span.setAttribute('fetch.success', false)
+        span.recordException(error as Error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'notifications',
+            action: 'get_user_notifications_by_types',
+            error_type: 'unexpected_error'
+          },
+          extra: {
+            component: 'getUserNotificationsByTypes',
+            user_id: userId,
+            page,
+            limit,
+            types,
+            timestamp: new Date().toISOString()
+          }
+        })
+        throw error
+      }
+    }
+  )
+}
+
+/**
  * Получить количество непрочитанных уведомлений
  */
 export async function getUnreadNotificationsCount(userId: string): Promise<number> {
@@ -1189,7 +1341,7 @@ export async function getNotificationTypeCounts(
   const counts: Record<string, number> = {}
   for (const row of data || []) {
     const raw = (row as any).notifications?.entity_types?.entity_name as string | undefined
-    const entity = raw === 'assignments' ? 'assignment' : raw // нормализация
+    const entity = raw // нормализация больше не нужна
     if (!entity) continue
     counts[entity] = (counts[entity] || 0) + 1
   }
@@ -1275,24 +1427,6 @@ export async function debugUserNotifications(userId: string): Promise<void> {
     console.error('🔍 DEBUG: ошибка entity_types:', entityError)
   }
   
-  // Проверяем конкретные notification_id из вашей таблицы
-  const testNotificationIds = [
-    '18c5808d-ebd1-4989-8f94-d9db531ca7e7',
-    '1e3ff8c4-ddb6-426c-adc9-3eeb98fbcdf3',
-    '7140d06a-b69e-4ebd-b245-079967dd2e39',
-    'cd960712-8a2f-4fbb-9ded-180b2bff63d3',
-    '4792c6f4-daaf-42f9-8d10-d2af9a417968'
-  ]
-  
-  for (const notifId of testNotificationIds) {
-    const { data: notifData, error: notifError } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('id', notifId)
-      .single()
-      
-    logNotificationDebug(`DEBUG: notification ${notifId}`, notifData || 'НЕ НАЙДЕНО')
-  }
 }
 
 /**

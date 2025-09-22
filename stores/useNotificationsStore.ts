@@ -13,7 +13,8 @@ import {
 } from "@/modules/notifications/api/notifications"
 import { 
   markNotificationAsUnread,
-  setUserNotificationArchived
+  setUserNotificationArchived,
+  getUserNotificationsByTypes
 } from "@/modules/notifications/api/notifications"
 import { 
   generateAssignmentNotificationText,
@@ -67,11 +68,18 @@ interface NotificationsState {
   // Состояние UI панели уведомлений
   isPanelOpen: boolean
   panelWidthPx: number
+  // Наведение на уведомление (устойчивое к ремоунтам)
+  hoveredNotificationId: string | null
+  // Последняя позиция указателя внутри панели (для восстановления hover при ререндере)
+  lastPointerPosition: { x: number, y: number } | null
   
   // Пагинация
   hasMore: boolean
   isLoadingMore: boolean
   currentPage: number
+  // Режим серверной фильтрации по типам
+  filterMode: 'none' | 'types'
+  filterTypes: string[]
   
   // Поиск
   searchQuery: string
@@ -100,6 +108,11 @@ interface NotificationsState {
   setError: (error: string | null) => void
   setCurrentUserId: (userId: string | null) => void
   setModuleUpdateCallback: (callback: ((entityType: string) => void) | null) => void
+  // Управление наведением
+  setHoveredNotification: (id: string) => void
+  clearHoveredNotification: () => void
+  setPointerPosition: (pos: { x: number, y: number }) => void
+  clearPointerPosition: () => void
   
   // Методы управления панелью уведомлений
   openPanel: () => void
@@ -117,6 +130,9 @@ interface NotificationsState {
   fetchUnreadCount: () => Promise<void>
   loadMoreNotifications: () => Promise<void>
   resetPagination: () => void
+  // Серверная фильтрация по типам
+  setServerTypeFilter: (types: string[]) => Promise<void>
+  clearServerFilters: () => void
   
   // Методы для поиска
   searchNotifications: (query: string) => Promise<void>
@@ -137,12 +153,12 @@ interface NotificationsState {
 const transformNotificationData = (un: UserNotificationWithNotification): Notification => {
   const notification = un.notifications
   const rawType = notification?.entity_types?.entity_name || 'unknown'
-  const entityType = rawType === 'assignments' ? 'assignment' : rawType
+  const entityType = rawType
   
   // Извлекаем данные из payload
   const payload = notification?.payload || {}
-  let title = 'Новое уведомление'
-  let message = 'Нет описания'
+  let title = ''
+  let message = ''
   
   // Отладочная информация
   console.log('🔄 Трансформация уведомления:', {
@@ -154,7 +170,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
   })
   
   // Генерируем текст на лету в зависимости от типа уведомления
-  if (entityType === 'assignment' || entityType === 'assignments') {
+  if (entityType === 'assignment') {
     // Проверяем, есть ли данные в payload.assignment или прямо в payload
     const assignmentData = payload.assignment || {
       project: payload.project,
@@ -171,7 +187,7 @@ const transformNotificationData = (un: UserNotificationWithNotification): Notifi
       title = payload.title || payload.project || 'Передача заданий'
       message = payload.message || `Вам передано ${payload.amount || 'несколько'} заданий`
     }
-  } else if (entityType === 'announcement' || entityType === 'announcements') {
+  } else if (entityType === 'announcement') {
     // Проверяем, есть ли данные в payload.announcement или прямо в payload
     const announcementData = payload.announcement || {
       user_name: payload.user_name,
@@ -231,11 +247,15 @@ export const useNotificationsStore = create<NotificationsState>()(
       onModuleUpdate: null, // Инициализируем колбэк
       isPanelOpen: false,
       panelWidthPx: 420,
+      hoveredNotificationId: null,
+      lastPointerPosition: null,
       
       // Пагинация
       hasMore: true,
       isLoadingMore: false,
       currentPage: 1,
+      filterMode: 'none',
+      filterTypes: [],
       
       // Поиск
       searchQuery: '',
@@ -367,7 +387,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       updateAnnouncementTitle: (announcementId, newTitle) => {
         set((state) => {
           const updateList = (list: Notification[]) => list.map((n) => {
-            if (n.entityType !== 'announcement' && n.entityType !== 'announcements') return n
+            if (n.entityType !== 'announcement') return n
             const payload = n.payload || {}
             const idFromPayload = payload.announcement_id || payload?.action?.data?.announcementId
             if (idFromPayload === announcementId) {
@@ -457,6 +477,66 @@ export const useNotificationsStore = create<NotificationsState>()(
           hasMore: true, 
           isLoadingMore: false 
         })
+      },
+
+      // Установка серверного фильтра по типам с загрузкой первой страницы
+      setServerTypeFilter: async (types) => {
+        const state = get()
+        const requestUserId = state.currentUserId
+        if (!requestUserId) {
+          console.warn('⚠️ Нет currentUserId для фильтрации по типам')
+          return
+        }
+
+        // Типы больше не требуют полной нормализации — выполняется только дедупликация
+        const normalized = Array.from(new Set(types))
+
+        // Сбрасываем состояние списка под новый фильтр
+        set({
+          isLoading: true,
+          error: null,
+          notifications: [],
+          currentPage: 1,
+          hasMore: true,
+          isLoadingMore: false,
+          filterMode: 'types',
+          filterTypes: normalized,
+        })
+
+        try {
+          const { notifications: userNotifications, hasMore } = await getUserNotificationsByTypes(
+            requestUserId,
+            normalized,
+            1,
+            10,
+            { includeArchived: false }
+          )
+
+          // Проверяем актуальность запроса
+          const currentState = get()
+          if (currentState.currentUserId !== requestUserId) return
+
+          const mapped = userNotifications.map(transformNotificationData)
+          set({
+            notifications: mapped,
+            currentPage: 1,
+            hasMore,
+            isLoading: false,
+            isLoadingMore: false,
+          })
+        } catch (error) {
+          const currentState = get()
+          if (currentState.currentUserId === requestUserId) {
+            console.error('❌ Ошибка при загрузке уведомлений по типам:', error)
+            set({ isLoading: false, isLoadingMore: false, error: 'Ошибка при загрузке уведомлений' })
+          }
+        }
+      },
+
+      // Очистка серверных фильтров и возврат к обычной пагинации
+      clearServerFilters: () => {
+        set({ filterMode: 'none', filterTypes: [], currentPage: 1, hasMore: true, isLoadingMore: false })
+        get().fetchNotifications()
       },
       
       // Методы для поиска
@@ -574,6 +654,12 @@ export const useNotificationsStore = create<NotificationsState>()(
       closePanel: () => set({ isPanelOpen: false }),
       togglePanel: () => set((state) => ({ isPanelOpen: !state.isPanelOpen })),
       setPanelWidth: (widthPx) => set({ panelWidthPx: Math.max(320, Math.min(720, Math.round(widthPx))) }),
+
+      // Управление наведением
+      setHoveredNotification: (id) => set({ hoveredNotificationId: id }),
+      clearHoveredNotification: () => set({ hoveredNotificationId: null }),
+      setPointerPosition: (pos) => set({ lastPointerPosition: pos }),
+      clearPointerPosition: () => set({ lastPointerPosition: null }),
 
       // Методы для Realtime
       initializeRealtime: () => {
@@ -738,10 +824,20 @@ export const useNotificationsStore = create<NotificationsState>()(
 
         try {
           set({ isLoadingMore: true, error: null })
-          
-          const { notifications: userNotifications, hasMore } = await getUserNotifications(requestUserId, nextPage, 10)
+
+          let result:
+            | { notifications: UserNotificationWithNotification[]; hasMore: boolean }
+            | null = null
+
+          if (state.filterMode === 'types' && state.filterTypes.length > 0) {
+            result = await getUserNotificationsByTypes(requestUserId, state.filterTypes, nextPage, 10, { includeArchived: false })
+          } else {
+            result = await getUserNotifications(requestUserId, nextPage, 10)
+          }
+
+          const { notifications: userNotifications, hasMore } = result
           console.log('📦 Получено дополнительных уведомлений:', userNotifications?.length || 0, 'hasMore:', hasMore)
-          
+
           // Проверяем, не изменился ли пользователь во время запроса
           const currentState = get()
           if (currentState.currentUserId !== requestUserId) {
@@ -749,18 +845,15 @@ export const useNotificationsStore = create<NotificationsState>()(
             return
           }
 
-          // Преобразуем данные в формат UI
           const newNotifications: Notification[] = userNotifications.map(transformNotificationData)
-          console.log('✨ Преобразованные дополнительные уведомления:', newNotifications.length)
 
-          // Добавляем к существующим уведомлениям
           set((prevState) => ({
             notifications: [...prevState.notifications, ...newNotifications],
             currentPage: nextPage,
             hasMore,
             isLoadingMore: false
           }))
-          
+
           console.log('✅ Дополнительные уведомления успешно загружены')
         } catch (error) {
           // Проверяем, актуален ли еще этот запрос

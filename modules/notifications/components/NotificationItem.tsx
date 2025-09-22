@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 
 import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
-import { AlertCircle, CheckCircle, Info, AlertTriangle, ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
+import { ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
 import { Notification } from "@/stores/useNotificationsStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
@@ -15,6 +15,7 @@ import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
+import { useHoverWithPortalSupport } from "@/hooks/useHoverWithPortalSupport"
 
 interface NotificationItemProps {
   notification: Notification
@@ -22,41 +23,21 @@ interface NotificationItemProps {
   onEditAnnouncement?: (announcementId: string) => void // Функция для редактирования объявлений
 }
 
-const typeIcons = {
-  info: Info,
-  success: CheckCircle,
-  warning: AlertTriangle,
-  error: AlertCircle,
-}
-
-const typeColors = {
-  info: "text-blue-500",
-  success: "text-green-500",
-  warning: "text-yellow-500",
-  error: "text-red-500",
-}
+// Убраны иконки типов уведомлений по требованиям дизайна
 
 // Добавляем теги для типов уведомлений
 const notificationTags = {
   announcement: {
     text: "Объявление",
-    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-200",
-  },
-  announcements: {
-    text: "Объявление",
-    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/20 dark:text-purple-200",
+    color: "bg-purple-100 text-purple-800 dark:bg-purple-800/30 dark:text-purple-200",
   },
   assignment: {
     text: "Передача заданий",
-    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200",
-  },
-  assignments: {
-    text: "Передача заданий",
-    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-200",
+    color: "bg-orange-100 text-orange-800 dark:bg-orange-800/30 dark:text-orange-200",
   },
   section_comment: {
     text: "Комментарий",
-    color: "bg-blue-100 text-blue-800 dark:bg-blue-800/20 dark:text-blue-200",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-800/30 dark:text-blue-200",
   },
 }
 
@@ -67,19 +48,17 @@ function getNotificationTag(entityType?: string) {
 }
 
 export function NotificationItem({ notification, isVisible = false, onEditAnnouncement }: NotificationItemProps) {
-  const Icon = typeIcons[notification.type || "info"]
-  const iconColor = typeColors[notification.type || "info"]
   const notificationTag = getNotificationTag(notification.entityType)
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
   
   // Получаем имя пользователя из payload для объявлений
-  const userName = (notification.entityType === 'announcement' || notification.entityType === 'announcements') 
+  const userName = (notification.entityType === 'announcement') 
     ? notification.payload?.user_name 
     : null
   
   // Получаем название раздела из payload для заданий
-  const fromSection = (notification.entityType === 'assignment' || notification.entityType === 'assignments') 
+  const fromSection = (notification.entityType === 'assignment') 
     ? notification.payload?.from_section
     : null
 
@@ -89,6 +68,11 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     : null
 
   const { markAsRead, markAsUnread, markAsReadInDB, markAsUnreadInDB, setArchivedInDB, setNotificationArchived } = useNotificationsStore()
+  const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
+  const setHoveredNotification = useNotificationsStore((s) => s.setHoveredNotification)
+  const clearHoveredNotification = useNotificationsStore((s) => s.clearHoveredNotification)
+  // Подписываемся на координаты курсора из стора, чтобы реактивно восстанавливать hover
+  const lastPointerPosition = useNotificationsStore((s) => s.lastPointerPosition)
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
   // canManage permission allows full management of announcements (create, edit, delete, etc.)
@@ -98,10 +82,8 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const hoursSinceCreation = differenceInHours(new Date(), notification.createdAt)
   const shouldShowDateTime = hoursSinceCreation >= 24
 
-  // ID объявления если он есть в payload
-  const announcementId = (notification.entityType === 'announcement' || notification.entityType === 'announcements')
-    ? (notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId)
-    : null
+  // ID объявления если он есть в payload (независимо от entityType)
+  const announcementId = (notification.payload?.announcement_id || notification.payload?.action?.data?.announcementId) || null
 
   // Пытаемся взять полный текст объявления из стора, иначе из payload
   const announcementFromStore = announcementId 
@@ -136,12 +118,58 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     return escapedText
   }
 
+  // Универсальная проверка: находится ли указатель внутри элемента
+  function isPointerInsideElement(element: HTMLElement | null, clientX: number, clientY: number): boolean {
+    if (!element) return false
+    const rect = element.getBoundingClientRect()
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+  }
+
   // Реф и вычисление: есть ли обрезка (только для анонсов)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const { ref: rootRef, isHovered: isRootHovered, handlers: rootHoverHandlers } = useHoverWithPortalSupport<HTMLDivElement>()
+
+  // Синхронизируем локальный hover с глобальным стором
+  useEffect(() => {
+    if (isRootHovered) {
+      setHoveredNotification(notification.id)
+    } else {
+      clearHoveredNotification()
+    }
+  }, [isRootHovered, notification.id, setHoveredNotification, clearHoveredNotification])
+  // Рефы для кнопок управления (прочитано/редактировать/архив)
+  const readBtnRef = useRef<HTMLButtonElement | null>(null)
+  const editBtnRef = useRef<HTMLButtonElement | null>(null)
+  const archiveBtnRef = useRef<HTMLButtonElement | null>(null)
   const [isExpandableAnnouncement, setIsExpandableAnnouncement] = useState(false)
+  // Локальные флаги для устойчивого hover кнопок, чтобы не зависеть от :hover при ремоунтах
+  const [isReadButtonHovered, setIsReadButtonHovered] = useState(false)
+  const [isEditButtonHovered, setIsEditButtonHovered] = useState(false)
+  const [isArchiveButtonHovered, setIsArchiveButtonHovered] = useState(false)
+
+  // Фабричный хелпер: создает устойчивые hover-обработчики для кнопок на основе ref и сеттера
+  function createButtonHoverHandlers(
+    buttonRef: { current: HTMLElement | null },
+    setHovered: (value: boolean) => void
+  ) {
+    return {
+      onMouseEnter: () => setHovered(true),
+      onMouseMove: () => setHovered(true),
+      onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+        const el = buttonRef.current
+        if (!el) { setHovered(false); return }
+        const rect = el.getBoundingClientRect()
+        const x = e.clientX
+        const y = e.clientY
+        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+        if (inside) return
+        setHovered(false)
+      },
+    }
+  }
 
   useEffect(() => {
-    if (!(notification.entityType === 'announcement' || notification.entityType === 'announcements')) {
+    if (!(notification.entityType === 'announcement')) {
       setIsExpandableAnnouncement(false)
       return
     }
@@ -202,10 +230,29 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     return () => window.removeEventListener('resize', onResize)
   }, [notification.entityType, fullAnnouncementText])
 
+  // Восстанавливаем hover, если курсор неподвижен внутри карточки, но произошел ререндер/пересоздание DOM
+  useEffect(() => {
+    const el = rootRef.current
+    const pos = lastPointerPosition
+    if (!pos) return
+    if (isPointerInsideElement(el, pos.x, pos.y)) {
+      setHoveredNotification(notification.id)
+    }
+  }, [notification.id, setHoveredNotification, lastPointerPosition])
+
+  // Восстанавливаем hover для кнопок, если курсор неподвижен поверх них
+  useEffect(() => {
+    const pos = lastPointerPosition
+    if (!pos) return
+    setIsReadButtonHovered(isPointerInsideElement(readBtnRef.current, pos.x, pos.y))
+    setIsEditButtonHovered(isPointerInsideElement(editBtnRef.current, pos.x, pos.y))
+    setIsArchiveButtonHovered(isPointerInsideElement(archiveBtnRef.current, pos.x, pos.y))
+  }, [hoveredNotificationId, notification.id, notification.isArchived, lastPointerPosition])
+
   // Функция для обработки клика на уведомление
   const handleClick = useCallback(() => {
     // Для объявлений клики по карточке отключены полностью
-    if (notification.entityType === 'announcement' || notification.entityType === 'announcements') {
+    if (notification.entityType === 'announcement') {
       return
     }
     Sentry.startSpan(
@@ -260,30 +307,60 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
 
   return (
     <div
+      ref={rootRef}
       data-notification-id={notification.id}
       onClick={handleClick}
+      // Используем pointer-события из хука для устойчивого hover без дублирования геометрии
+      onPointerEnter={rootHoverHandlers.onPointerEnter}
+      onPointerLeave={rootHoverHandlers.onPointerLeave}
       className={cn(
-        "relative p-4 rounded-lg border transition-colors",
-        // Ховер и курсор только если это не объявление
-        (notification.entityType === 'announcement' || notification.entityType === 'announcements')
+        "relative p-4 rounded-lg border transition-colors group",
+        // Курсор: для объявлений оставляем обычный курсор, для остальных — pointer
+        (notification.entityType === 'announcement')
           ? "cursor-default"
-          : "hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
-        "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700",
-        // Зеленая окантовка и подсветка для непрочитанных уведомлений
-        !notification.isRead && "border-green-500 bg-green-50/30 dark:bg-green-900/10"
+          : "cursor-pointer",
+        "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-500",
+        // Мгновенная реакция на hover через CSS, плюс устойчивый hover через стор
+        "hover:bg-gray-100 dark:hover:bg-gray-700/40",
+        hoveredNotificationId === notification.id && "bg-gray-100 dark:bg-gray-700/40"
       )}
     >
-      {/* Первый уровень: иконка слева, кнопки действий справа */}
-      <div className="flex items-center justify-between mb-3">
-        <Icon className={cn("h-4 w-4 flex-shrink-0", iconColor)} />
-        <div className="flex items-center gap-1">
-          {/* Если уведомление не в архиве — показываем чекбокс и иконку Архива */}
-          {!notification.isArchived && (
+      <div className="absolute right-2 top-4 z-10 inline-flex items-start gap-2">
+        {notificationTag && (
+          <span
+            className={cn(
+              "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+              notificationTag.color
+            )}
+          >
+            {notificationTag.text}
+          </span>
+        )}
+        <span
+          className={cn("h-2 w-2 rounded-full", notification.isRead ? "invisible" : "bg-blue-500")}
+          aria-hidden={notification.isRead}
+          aria-label={notification.isRead ? undefined : "Непрочитанное уведомление"}
+        />
+      </div>
+
+      <div className={cn(
+        // Мгновенное появление при hover без задержки за счет CSS
+        "absolute top-2 right-2 z-20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-0",
+        // Дополнительно держим панель видимой, если hover зафиксирован в сторе
+        hoveredNotificationId === notification.id && "opacity-100"
+      )}>
+        <div
+          className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm px-1 py-0.5 pointer-events-auto"
+          onMouseEnter={() => setHoveredNotification(notification.id)}
+          onMouseMove={() => setHoveredNotification(notification.id)}
+        >
+          {!notification.isArchived ? (
             <>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                ref={readBtnRef}
                 onClick={async (e) => {
                   e.stopPropagation()
                   try {
@@ -325,31 +402,43 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                className={cn("h-7 w-7", notification.isRead ? "text-gray-400" : "text-green-600 hover:text-green-700")}
+                {...createButtonHoverHandlers(readBtnRef, setIsReadButtonHovered)}
+                className={cn(
+                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                  // Реплика состояния :hover у ghost-кнопки, чтобы не пропадало при статичном курсоре
+                  isReadButtonHovered && "bg-accent text-accent-foreground"
+                )}
                 aria-label={notification.isRead ? "Прочитано" : "Отметить прочитанным"}
                 title={notification.isRead ? "Сделать непрочитанным" : "Отметить прочитанным"}
               >
                 {notification.isRead ? (
-                  <Square className="h-4 w-4" />
-                ) : (
                   <SquareCheck className="h-4 w-4" />
+                ) : (
+                  <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                    <Square className="h-4 w-4" />
+                    <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  </span>
                 )}
               </Button>
 
-              {/* Кнопка редактирования для объявлений */}
-              {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && 
-               canManageAnnouncements && 
+              {canManageAnnouncements && 
                onEditAnnouncement && 
                announcementId && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  ref={editBtnRef}
                   onClick={(e) => {
                     e.stopPropagation()
                     onEditAnnouncement(announcementId)
                   }}
-                  className="h-7 w-7 text-gray-500 hover:text-blue-600"
+                  {...createButtonHoverHandlers(editBtnRef, setIsEditButtonHovered)}
+                  className={cn(
+                    "h-7 w-7 text-gray-500 hover:text-blue-600 pointer-events-auto",
+                    // Реплика состояния :hover у ghost-кнопки + фирменный цвет текста
+                    isEditButtonHovered && "bg-accent text-blue-600"
+                  )}
                   aria-label="Редактировать объявление"
                   title="Редактировать объявление"
                 >
@@ -357,20 +446,45 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 </Button>
               )}
 
-              {/* Архив */}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                ref={archiveBtnRef}
                 onClick={async (e) => {
                   e.stopPropagation()
                   try {
                     await Sentry.startSpan({ op: "notifications.archive_click", name: "Archive Notification" }, async (span) => {
                       span.setAttribute("notification.id", notification.id)
-                      // При архивации помечаем прочитанным
                       if (!notification.isRead) {
                         markAsRead(notification.id)
-                        try { await markAsReadInDB(notification.id) } catch {}
+                        try {
+                          await markAsReadInDB(notification.id)
+                        } catch (error) {
+                          // Логируем ошибку вместо молчаливого игнорирования и делаем минимальное восстановление (ретрай)
+                          Sentry.captureException(error, {
+                            tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read', error_type: 'db_error' },
+                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                          })
+                          console.error('Не удалось отметить уведомление прочитанным в БД перед архивированием', {
+                            notificationId: notification.id,
+                            error,
+                          })
+
+                          // Минимальное восстановление: однократная отложенная попытка
+                          setTimeout(() => {
+                            markAsReadInDB(notification.id).catch((retryError) => {
+                              Sentry.captureException(retryError, {
+                                tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read_retry', error_type: 'db_error' },
+                                extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
+                              })
+                              console.error('Повторная попытка отметить прочитанным в БД не удалась', {
+                                notificationId: notification.id,
+                                error: retryError,
+                              })
+                            })
+                          }, 2000)
+                        }
                       }
                       setNotificationArchived(notification.id, true)
                       try {
@@ -392,21 +506,24 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                     })
                   }
                 }}
-                className="h-7 w-7 text-gray-500 hover:text-gray-700"
+                {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
+                className={cn(
+                  "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                  // Реплика состояния :hover у ghost-кнопки
+                  isArchiveButtonHovered && "bg-accent text-accent-foreground"
+                )}
                 aria-label="В архив"
                 title="В архив"
               >
                 <Archive className="h-4 w-4" />
               </Button>
             </>
-          )}
-
-          {/* Если уведомление в архиве — показываем кнопку разархивации */}
-          {notification.isArchived && (
+          ) : (
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              ref={archiveBtnRef}
               onClick={async (e) => {
                 e.stopPropagation()
                 try {
@@ -432,7 +549,12 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   })
                 }
               }}
-              className="h-7 w-7 text-gray-500 hover:text-gray-700"
+              {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
+              className={cn(
+                "h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pointer-events-auto",
+                // Реплика состояния :hover у ghost-кнопки
+                isArchiveButtonHovered && "bg-accent text-accent-foreground"
+              )}
               aria-label="Вернуть из архива"
               title="Вернуть из архива"
             >
@@ -441,27 +563,20 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
           )}
         </div>
       </div>
+      
 
       {/* Второй уровень: заголовок слева, тип уведомления справа */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0 pr-3">
+        <div className={cn("flex-1 min-w-0", notificationTag ? "pr-28" : "pr-3") }>
           <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-relaxed">
             {notification.title}
           </h4>
         </div>
-        {notificationTag && (
-          <span className={cn(
-            "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0",
-            notificationTag.color
-          )}>
-            {notificationTag.text}
-          </span>
-        )}
       </div>
 
       {/* Контент уведомления */}
       <div className="mb-3">
-        {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText ? (
+        {(notification.entityType === 'announcement') && fullAnnouncementText ? (
           <div
             className={cn(
               "text-xs text-gray-600 dark:text-gray-400 break-words",
@@ -478,7 +593,7 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
       </div>
 
       {/* Кнопка раскрытия для объявлений */}
-      {(notification.entityType === 'announcement' || notification.entityType === 'announcements') && fullAnnouncementText && isExpandableAnnouncement && (
+      {(notification.entityType === 'announcement') && fullAnnouncementText && isExpandableAnnouncement && (
         <div className="mb-3">
           <button
             type="button"
