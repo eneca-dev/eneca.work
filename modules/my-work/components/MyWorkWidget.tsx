@@ -13,6 +13,7 @@ import { useTasksData } from '../hooks/useTasksData'
 import { supabase } from '@/lib/supabase-client'
 import { useUserStore } from '@/stores/useUserStore'
 import type { UserLoading } from '../types'
+import { SectionPanel } from '@/components/modals'
 
 export const MyWorkWidget: React.FC = () => {
   const userStore = useUserStore()
@@ -24,12 +25,14 @@ export const MyWorkWidget: React.FC = () => {
   const [loadingStatus, setLoadingStatus] = useState<'active' | 'archived'>('active')
   const [displayedLoadings, setDisplayedLoadings] = useState<UserLoading[]>([])
   const [listHeight, setListHeight] = useState<number>(400)
+  const [isSectionPanelOpen, setIsSectionPanelOpen] = useState(false)
+  const [sectionPanelId, setSectionPanelId] = useState<string | null>(null)
 
   // Вычисляем доступную высоту viewport
       const calculateAvailableHeight = () => {
       const viewportHeight = window.innerHeight
       const headerHeight = 80 // Высота заголовка виджета
-      const chartHeight = !selectedLoading ? 198 : 0 // График + отступы (158 + 40)
+      const chartHeight = 0 // График всегда в правой колонке, сверху ничего не отнимаем
       const margins = 48 // Отступы между блоками
       const scrollBoundary = 19 // 5мм от границы (примерно 19px)
       const selectedLoadingBuffer = selectedLoading ? 20 : 30 // Дополнительный буфер (больше для неразвернутого списка)
@@ -90,6 +93,11 @@ export const MyWorkWidget: React.FC = () => {
     setLoadingStatus(status)
     setSelectedLoading(null) // Сбрасываем выбранную загрузку при смене статуса
     fetchLoadingsForDisplay(status)
+  }
+
+  const openSectionPanel = (sectionId: string) => {
+    setSectionPanelId(sectionId)
+    setIsSectionPanelOpen(true)
   }
 
   // Эффект для инициализации отображаемых загрузок
@@ -178,17 +186,8 @@ export const MyWorkWidget: React.FC = () => {
       
       <div className="flex-1 overflow-hidden px-6">
         <div className="h-full overflow-y-auto overflow-x-hidden pr-2 space-y-6">
-          {/* График задач - сверху только когда загрузка не выбрана */}
-          {!selectedLoading && (
-            <WorkTasksChart 
-              workLogs={data.workLogs}
-              daysToShow={7}
-              height={158}
-            />
-          )}
-
-          {/* Адаптивный layout: 1 колонка на мобильных, 2 на md+, с 2fr/1fr на lg при отсутствии выбранной загрузки */}
-          <div className={`grid gap-6 grid-cols-1 md:grid-cols-2 ${!selectedLoading ? 'lg:grid-cols-[2fr_1fr]' : 'lg:grid-cols-2'}`}>
+          {/* Адаптивный layout: 1 колонка на мобильных, 2 на md+, всегда равные колонки на lg */}
+          <div className={`grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-2`}>
             {/* Левая колонка - Заголовок и список загрузок */}
             <div className="flex flex-col">
               <div className="flex items-center justify-between mb-4">
@@ -258,20 +257,19 @@ export const MyWorkWidget: React.FC = () => {
                   tasksError={tasksError}
                   onLoadingHover={setHighlightedLoadingId}
                   highlightedLoadingId={highlightedLoadingId || undefined}
+                  onOpenSection={openSectionPanel}
                 />
               </div>
             </div>
 
                          {/* Правая колонка - всегда видна */}
-             <div className="flex flex-col space-y-6 overflow-hidden h-full">
-              {/* График задач в правой колонке - только когда загрузка выбрана */}
-              {selectedLoading && (
-                <WorkTasksChart 
-                  workLogs={data.workLogs}
-                  daysToShow={7}
-                  height={118}
-                />
-              )}
+            <div className="flex flex-col space-y-6 overflow-hidden h-full">
+              {/* График задач всегда в правой колонке */}
+              <WorkTasksChart 
+                workLogs={data.workLogs}
+                daysToShow={7}
+                height={118}
+              />
 
                              {/* Ответственности для руководителей */}
                {isLeader && <ResponsibilitiesBlock responsibilities={data.responsibilities} isCompact={!!selectedLoading} />}
@@ -293,6 +291,14 @@ export const MyWorkWidget: React.FC = () => {
           </div>
         </div>
       </div>
+      {isSectionPanelOpen && sectionPanelId && (
+        <SectionPanel
+          isOpen={isSectionPanelOpen}
+          onClose={() => setIsSectionPanelOpen(false)}
+          sectionId={sectionPanelId}
+          initialTab={'overview'}
+        />
+      )}
     </div>
   )
 }
