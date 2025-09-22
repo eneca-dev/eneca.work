@@ -1,7 +1,9 @@
 "use client"
 
 import React from 'react'
-import { Calendar, TrendingUp, Layers, CheckSquare } from 'lucide-react'
+import { Calendar, TrendingUp, Layers, CheckSquare, ExternalLink } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useProjectsStore } from '@/modules/projects/store'
 import type { UserLoading, UserTask, DecompositionItem } from '../types'
 
 // Utility функция для обрезания текста
@@ -24,6 +26,7 @@ interface UserLoadingsListProps {
   tasksError?: string | null
   onLoadingHover?: (loadingId: string | null) => void
   highlightedLoadingId?: string | null
+  onOpenSection?: (sectionId: string) => void
 }
 
 export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
@@ -38,8 +41,11 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
   isTasksLoading = false,
   tasksError = null,
   onLoadingHover,
-  highlightedLoadingId
+  highlightedLoadingId,
+  onOpenSection
 }) => {
+  const router = useRouter()
+  const { focusSection } = useProjectsStore()
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ru-RU', {
       day: '2-digit',
@@ -94,11 +100,31 @@ export const UserLoadingsList: React.FC<UserLoadingsListProps> = ({
                   {loading.section_name}
                 </h3>
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-                <Calendar className="h-3 w-3" />
-                <span>
-                  {formatDate(loading.loading_start)} — {formatDate(loading.loading_finish)}
-                </span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                  <Calendar className="h-3 w-3" />
+                  <span>
+                    {formatDate(loading.loading_start)} — {formatDate(loading.loading_finish)}
+                  </span>
+                </div>
+                <a
+                  href="#section"
+                  title="Открыть окно раздела"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (onOpenSection) {
+                      onOpenSection(loading.section_id)
+                    } else {
+                      focusSection(loading.section_id)
+                      router.push('/dashboard/projects')
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md border bg-white dark:bg-slate-700/40 border-gray-200 dark:border-slate-600 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  к разделу
+                </a>
               </div>
             </div>
 
