@@ -299,7 +299,7 @@ export const DecompositionTemplates: React.FC<DecompositionTemplatesProps> = ({
           <ScrollArea className="h-[400px] rounded-md border">
             <div className="p-4">
               <table className="w-full">
-                <thead className="bg-muted sticky top-0 z-10">
+                <thead className="bg-muted sticky top-0 z-10 dark:bg-slate-700">
                   <tr>
                     <th className="px-4 py-2 text-left font-medium w-10">#</th>
                     <th className="px-4 py-2 text-left font-medium">Группа работ</th>

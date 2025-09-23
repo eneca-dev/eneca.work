@@ -6,8 +6,8 @@ import type { DecompositionTemplate } from '../types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Dialog as InnerDialog, DialogContent as InnerDialogContent, DialogHeader as InnerDialogHeader, DialogTitle as InnerDialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog as InnerDialog, DialogContent as InnerDialogContent, DialogHeader as InnerDialogHeader, DialogTitle as InnerDialogTitle, DialogDescription as InnerDialogDescription } from '@/components/ui/dialog'
 import { applyTemplateAppend, validateTemplateApplicability } from '../api'
 import { createClient } from '@/utils/supabase/client'
 import { Check, Trash2, PlusCircle, FolderOpen } from 'lucide-react'
@@ -24,6 +24,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useHasPermission } from '@/modules/permissions'
+import { useUserStore } from '@/stores/useUserStore'
+import { getUserRoles } from '@/modules/permissions/supabase/supabasePermissions'
 
 interface TemplatesPanelProps {
   departmentId: string | null
@@ -43,7 +45,6 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
     deleteTemplate,
   } = useTemplatesStore()
 
-  // baseDate не используется
   const [name, setName] = useState('')
   const [isCreateOpen, setCreateOpen] = useState(false)
   const [isInnerOpen, setInnerOpen] = useState(false)
@@ -51,6 +52,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [profiles, setProfiles] = useState<{ id: string; name: string }[]>([])
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
+  const [currentDepartmentName, setCurrentDepartmentName] = useState<string>("")
   const [newDesc, setNewDesc] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newHours, setNewHours] = useState('')
@@ -59,9 +61,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
   const [newProgress, setNewProgress] = useState<string>('')
   // Выбранный для применения шаблон
   const [applyId, setApplyId] = useState<string | null>(null)
-  // Режим isEditing больше не используется — редактирование по клику на ячейку
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  // Поиск по ответственным через popover; отдельный кэш не нужен
   const [editingId, setEditingId] = useState<string | null>(null)
   const [openCatId, setOpenCatId] = useState<string | null>(null)
   const isCatOpen = (id: string) => openCatId === id
@@ -75,13 +75,45 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
 
   // Право на управление шаблонами
   const canManageTemplates = useHasPermission('dec.templates.manage')
+  const userId = useUserStore(s => s.id)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    if (departmentId && departmentId !== depInStore) setDepartment(departmentId)
-  }, [departmentId, depInStore, setDepartment])
+    let cancelled = false
+    const load = async () => {
+      if (!userId) { setIsAdmin(false); return }
+      try {
+        const res = await getUserRoles(userId)
+        if (!cancelled) {
+          const isAdm = res.roles.some(r => (r.roleName || '').toLowerCase().includes('admin'))
+          setIsAdmin(isAdm)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.error('Failed to fetch user roles in TemplatesPanel:', e)
+          setIsAdmin(false)
+        }
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  useEffect(() => {
+    // Не админ: всегда фиксируем отдел из пропсов
+    if (!isAdmin) {
+      if (departmentId && departmentId !== depInStore) setDepartment(departmentId)
+      return
+    }
+    // Админ: инициализируем из пропсов только один раз, когда стор ещё пустой
+    if (!depInStore && departmentId) {
+      setDepartment(departmentId)
+    }
+  }, [isAdmin, departmentId, depInStore, setDepartment])
 
   // Загружаем список отделов для временной переключалки
   useEffect(() => {
+    if (!isAdmin) return
     const loadDepartments = async () => {
       const { data, error } = await supabase
         .from('departments')
@@ -94,7 +126,27 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
       }
     }
     loadDepartments()
-  }, [supabase])
+  }, [supabase, isAdmin])
+
+  // Для не-админа: выводим название отдела текстом
+  useEffect(() => {
+    if (isAdmin) return
+    const idToUse = depInStore || departmentId
+    if (!idToUse) { setCurrentDepartmentName(""); return }
+    let cancelled = false
+    const loadName = async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('department_name')
+        .eq('department_id', idToUse)
+        .single()
+      if (!cancelled) {
+        setCurrentDepartmentName(!error && data ? (data as any).department_name as string : "")
+      }
+    }
+    loadName()
+    return () => { cancelled = true }
+  }, [isAdmin, depInStore, departmentId, supabase])
 
   // Категории работ
   useEffect(() => {
@@ -146,12 +198,6 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
     if (depInStore) fetchTemplates()
   }, [depInStore, fetchTemplates])
 
-  // Синхронизация плейсхолдеров не требуется
-
-  // commitEdits более не используется (сохранение на blur/выборе)
-
-  // Базовая дата убрана — синхронизация не требуется
-
   // Активный шаблон для применения — явный выбор
   const canApply = useMemo(() => Boolean(applyId), [applyId])
 
@@ -193,70 +239,77 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Select
-          value={depInStore ?? departmentId ?? ''}
-          onValueChange={async (val) => {
-            setDepartment(val)
-            await fetchTemplates()
-          }}
-        >
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder="Отдел" />
-          </SelectTrigger>
-          <SelectContent>
-            {departments.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isAdmin ? (
+          <Select
+            value={depInStore ?? departmentId ?? ''}
+            onValueChange={async (val) => {
+              setDepartment(val)
+              await fetchTemplates()
+            }}
+          >
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Отдел" />
+            </SelectTrigger>
+            <SelectContent>
+              {departments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{currentDepartmentName || '—'}</span>
+          </div>
+        )}
         <Button
           variant="default"
           onClick={() => setCreateOpen(true)}
           disabled={!canManageTemplates}
-          title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}
         >
           Создать шаблон
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-2">
-        {templates.map((tpl: DecompositionTemplate) => (
-          <div
-            key={tpl.id}
-            className={`border rounded-md p-2 flex items-center justify-between ${applyId === tpl.id ? 'border-primary' : ''}`}
-          >
-            <div className="min-w-0">
-              <div className="font-medium truncate">{tpl.name}</div>
-              {tpl.description && <div className="text-sm text-muted-foreground truncate">{tpl.description}</div>}
+      <div className="max-h-[56vh] overflow-y-auto pr-2">
+        <div className="grid grid-cols-1 gap-2">
+          {templates.map((tpl: DecompositionTemplate) => (
+            <div
+              key={tpl.id}
+              className={`border border-slate-200 dark:border-slate-600 rounded-md p-2 flex items-center justify-between ${applyId === tpl.id ? 'border-primary' : ''}`}
+            >
+              <div className="min-w-0">
+                <div className="font-medium truncate">{tpl.name}</div>
+                {tpl.description && <div className="text-sm text-muted-foreground truncate">{tpl.description}</div>}
+              </div>
+              <div className="flex items-center gap-2">
+                    <button
+                  className={`h-8 w-8 grid place-items-center rounded-sm border ${applyId === tpl.id ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400/60 hover:bg-slate-700/10'} focus:outline-none`}
+                  title={applyId === tpl.id ? 'Выбран' : 'Выбрать'}
+                  onClick={() => setApplyId(applyId === tpl.id ? null : tpl.id)}
+                >
+                  <Check className={`h-4 w-4 ${applyId === tpl.id ? 'text-white' : 'text-slate-400'}`} />
+                </button>
+                    <button
+                  className="h-8 w-8 grid place-items-center rounded-md border border-slate-400/60 hover:bg-slate-700/10 focus:outline-none"
+                  title="Открыть"
+                  onClick={async () => { await openTemplate(tpl.id); setApplyId(tpl.id); setInnerOpen(true); setEditingId(null) }}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </button>
+                    <button
+                  className="h-8 w-8 grid place-items-center rounded-md border border-red-300 text-red-500 hover:bg-red-500/10 focus:outline-none"
+                      
+                  onClick={() => setConfirmDeleteId(tpl.id)}
+                  disabled={!canManageTemplates}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                className={`h-8 w-8 grid place-items-center rounded-sm border ${applyId === tpl.id ? 'bg-emerald-500 border-emerald-500' : 'border-slate-400/60 hover:bg-slate-700/10'} focus:outline-none`}
-                title={applyId === tpl.id ? 'Выбран' : 'Выбрать'}
-                onClick={() => setApplyId(applyId === tpl.id ? null : tpl.id)}
-              >
-                <Check className={`h-4 w-4 ${applyId === tpl.id ? 'text-white' : 'text-slate-400'}`} />
-              </button>
-              <button
-                className="h-8 w-8 grid place-items-center rounded-md border border-slate-400/60 hover:bg-slate-700/10 focus:outline-none"
-                title="Открыть"
-                onClick={async () => { await openTemplate(tpl.id); setApplyId(tpl.id); setInnerOpen(true); setEditingId(null) }}
-              >
-                <FolderOpen className="h-4 w-4" />
-              </button>
-              <button
-                className="h-8 w-8 grid place-items-center rounded-md border border-red-300 text-red-500 hover:bg-red-500/10 focus:outline-none"
-                title={canManageTemplates ? 'Удалить шаблон' : 'Недостаточно прав: управление шаблонами'}
-                onClick={() => setConfirmDeleteId(tpl.id)}
-                disabled={!canManageTemplates}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Подтверждение удаления шаблона */}
@@ -280,9 +333,10 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
         <InnerDialogContent className="w-[96vw] sm:max-w-[1200px] max-h-[80vh]">
           <InnerDialogHeader>
             <InnerDialogTitle>{selectedTemplate ? `Шаблон: ${selectedTemplate.name}` : 'Шаблон'}</InnerDialogTitle>
+            <InnerDialogDescription className="sr-only">Просмотр и редактирование шаблона декомпозиции</InnerDialogDescription>
           </InnerDialogHeader>
           {selectedTemplate ? (
-            <div className={`overflow-x-auto ${canManageTemplates ? '' : 'cursor-not-allowed'}`} title={canManageTemplates ? undefined : 'Недостаточно прав: доступен только просмотр'}>
+      <div className={`overflow-x-auto ${canManageTemplates ? '' : ''}`}>
               <table className="w-full table-fixed border-collapse text-[12px]">
                 <colgroup>
                   <col className="w-[44px]" />
@@ -295,24 +349,24 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                   <col className="w-[10%]" />
                 </colgroup>
                 <thead>
-                  <tr className="sticky top-0 z-[0] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                    <th className="px-2 py-2 border"></th>
-                    <th className="px-2 py-2 border">Описание работ</th>
-                    <th className="px-2 py-2 border">Категория</th>
-                    <th className="px-2 py-2 border text-center">План, ч</th>
-                    <th className="px-2 py-2 border text-center">±дн</th>
-                    <th className="px-2 py-2 border">Ответственный</th>
-                    <th className="px-2 py-2 border text-center">%</th>
-                    <th className="px-2 py-2 border">Статус</th>
+                  <tr className="sticky top-0 z-[0] bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                    <th className="px-2 py-2 border dark:border-slate-600"></th>
+                    <th className="px-2 py-2 border dark:border-slate-600">Описание работ</th>
+                    <th className="px-2 py-2 border dark:border-slate-600">Категория</th>
+                    <th className="px-2 py-2 border text-center dark:border-slate-600">План, ч</th>
+                    <th className="px-2 py-2 border text-center dark:border-slate-600">±дн</th>
+                    <th className="px-2 py-2 border dark:border-slate-600">Ответственный</th>
+                    <th className="px-2 py-2 border text-center dark:border-slate-600">%</th>
+                    <th className="px-2 py-2 border dark:border-slate-600">Статус</th>
                   </tr>
                 </thead>
                 <tbody>
             {useTemplatesStore.getState().templateItems.map((it) => (
-                    <tr key={it.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${editingId === it.id ? 'relative z-[1] [&>td]:border [&>td]:border-t-2 [&>td]:border-slate-200 [&>td]:dark:border-slate-700' : '[&>td]:border-0'}`}>
+                    <tr key={it.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors ${editingId === it.id ? 'relative z-[1] [&>td]:border [&>td]:border-t-2 [&>td]:border-slate-200 [&>td]:dark:border-slate-700' : '[&>td]:border-0'}`}>
                       {/* Пустая ячейка под плюс для существующих строк */}
                       <td className="px-2 py-2 align-middle"></td>
                       {/* Описание */}
-                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }}>
                         {editingId === it.id ? (
                         canManageTemplates ? (
                         <input
@@ -331,7 +385,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* Категория */}
-                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                           <Popover open={isCatOpen(it.id)} onOpenChange={(o) => setOpenCatId(o ? it.id : null)}>
@@ -364,19 +418,25 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* План, ч */}
-                      <td className={`px-2 py-2 align-top text-center tabular-nums ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top text-center tabular-nums ${canManageTemplates ? '' : 'opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                             <input
-                  type="number"
-                  step="0.25"
-                            className="w-full h-8 px-2 py-1 text-[12px] bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 appearance-none"
-                            style={{ MozAppearance: 'textfield' as any }}
-                            value={it.planned_hours}
-                            onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { planned_hours: Number(e.target.value) })}
-                            onBlur={async () => { const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.planned_hours || 0; await useTemplatesStore.getState().updateItem(it.id, { planned_hours: cur }); }}
-                            onKeyDown={async (e) => { if (e.key === 'Enter') { e.preventDefault(); const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.planned_hours || 0; await useTemplatesStore.getState().updateItem(it.id, { planned_hours: cur }); setEditingId(null) } }}
-                          />
+                              type="text"
+                              inputMode="decimal"
+                              className="w-full h-8 px-2 py-1 text-[12px] text-center bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0"
+                              value={String(it.planned_hours ?? '')}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(',', '.')
+                                let cleaned = raw.replace(/[^0-9.]/g, '')
+                                const parts = cleaned.split('.')
+                                if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
+                                const num = cleaned === '' ? 0 : Number(cleaned)
+                                useTemplatesStore.getState().updateItemLocal(it.id, { planned_hours: Number.isFinite(num) ? num : 0 })
+                              }}
+                              onBlur={async () => { const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.planned_hours || 0; await useTemplatesStore.getState().updateItem(it.id, { planned_hours: cur }); }}
+                              onKeyDown={async (e) => { if (e.key === 'Enter') { e.preventDefault(); const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.planned_hours || 0; await useTemplatesStore.getState().updateItem(it.id, { planned_hours: cur }); setEditingId(null) } }}
+                            />
                           ) : (
                             <>{Number(it.planned_hours || 0).toFixed(2)}</>
                           )
@@ -385,19 +445,25 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* ±дн */}
-                      <td className={`px-2 py-2 align-top text-center ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top text-center ${canManageTemplates ? '' : 'opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                             <input
-                  type="number"
-                            className="w-full h-8 px-2 py-1 text-[12px] bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 appearance-none"
-                            style={{ MozAppearance: 'textfield' as any }}
-                  placeholder="±дн"
-                            value={it.due_offset_days ?? ''}
-                            onChange={(e) => useTemplatesStore.getState().updateItemLocal(it.id, { due_offset_days: e.target.value === '' ? null : Number(e.target.value) })}
-                            onBlur={async () => { const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.due_offset_days ?? null; await useTemplatesStore.getState().updateItem(it.id, { due_offset_days: cur as any }); }}
-                            onKeyDown={async (e) => { if (e.key === 'Enter') { e.preventDefault(); const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.due_offset_days ?? null; await useTemplatesStore.getState().updateItem(it.id, { due_offset_days: cur as any }); setEditingId(null) } }}
-                          />
+                              type="text"
+                              inputMode="numeric"
+                              className="w-full h-8 px-2 py-1 text-[12px] text-center bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0"
+                              placeholder="±дн"
+                              value={it.due_offset_days ?? ''}
+                              onChange={(e) => {
+                                const digits = e.target.value.replace(/[^0-9-]/g, '')
+                                // Не даём вводить более одного минуса и только в начале
+                                const sanitized = digits.startsWith('-') ? ('-' + digits.replace(/-/g, '').slice(0)) : digits.replace(/-/g, '')
+                                const parsed = sanitized === '' || sanitized === '-' ? null : Number(sanitized)
+                                useTemplatesStore.getState().updateItemLocal(it.id, { due_offset_days: parsed as any })
+                              }}
+                              onBlur={async () => { const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.due_offset_days ?? null; await useTemplatesStore.getState().updateItem(it.id, { due_offset_days: cur as any }); }}
+                              onKeyDown={async (e) => { if (e.key === 'Enter') { e.preventDefault(); const cur = useTemplatesStore.getState().templateItems.find(r=>r.id===it.id)?.due_offset_days ?? null; await useTemplatesStore.getState().updateItem(it.id, { due_offset_days: cur as any }); setEditingId(null) } }}
+                            />
                           ) : (
                             <>{it.due_offset_days != null ? `±${it.due_offset_days}` : '—'}</>
                           )
@@ -406,7 +472,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* Ответственный */}
-                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'opacity-70'}`} onClick={(e) => { if (!canManageTemplates) { e.preventDefault(); e.stopPropagation(); return } setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                           <Popover open={isRespOpen(it.id)} onOpenChange={(o) => setOpenRespId(o ? it.id : null)}>
@@ -446,7 +512,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* % */}
-                      <td className={`px-2 py-2 align-top text-center tabular-nums ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canManageTemplates) setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top text-center tabular-nums ${canManageTemplates ? '' : 'opacity-70'}`} onClick={() => { if (canManageTemplates) setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                             <input
@@ -465,7 +531,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                         )}
                       </td>
                       {/* Статус */}
-                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canManageTemplates) setEditingId(it.id) }} title={canManageTemplates ? undefined : 'Недостаточно прав: управление шаблонами'}>
+                      <td className={`px-2 py-2 align-top ${canManageTemplates ? '' : 'opacity-70'}`} onClick={() => { if (canManageTemplates) setEditingId(it.id) }}>
                         {editingId === it.id ? (
                           canManageTemplates ? (
                           <Popover open={isStatusOpen(it.id)} onOpenChange={(o) => setOpenStatusId(o ? it.id : null)}>
@@ -495,12 +561,11 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
                 {/* Новая строка */}
                 {selectedTemplate && (
                   <tbody>
-                    <tr className="bg-slate-50 dark:bg-slate-800/60 [&>td]:border-slate-200 [&>td]:dark:border-slate-700">
+                    <tr className="bg-slate-50 dark:bg-slate-700/40 [&>td]:border-slate-200 [&>td]:dark:border-slate-700">
                       <td className="px-2 py-1 align-middle border text-center">
                         <button
                           type="button"
                           disabled={!canManageTemplates || !canAdd}
-                          title={canManageTemplates ? (canAdd ? 'Добавить строку' : 'Заполните обязательные поля') : 'Недостаточно прав: управление шаблонами'}
                           className="h-7 w-7 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 disabled:opacity-40 focus:outline-none focus:ring-0"
                   onClick={async () => {
                     if (!selectedTemplate) return
@@ -565,6 +630,7 @@ export function TemplatesPanel({ departmentId, sectionId, onApplied }: Templates
         <DialogContent className="sm:max-w-md w-[92vw] max-w-lg">
           <DialogHeader>
             <DialogTitle>Новый шаблон</DialogTitle>
+            <DialogDescription className="sr-only">Создание нового шаблона декомпозиции</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>

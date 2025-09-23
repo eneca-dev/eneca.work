@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import AddWorkLogModal from "./AddWorkLogModal"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { TemplatesPanel } from "@/modules/decomposition-templates"
 // no slider for progress editing; using numeric input and a capsule view
 import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
@@ -58,9 +59,11 @@ interface DecompositionItemRow {
   status?: SectionStatus | null
 }
 
-const supabase = createClient()
+// Создание клиента Supabase внутри компонента через useMemo,
+// чтобы избежать проблем с SSR и повторным созданием соединений
 
 export function SectionDecompositionTab({ sectionId, compact = false }: SectionDecompositionTabProps) {
+  const supabase = useMemo(() => createClient(), [])
   const { setNotification } = useUiStore()
   const MAX_DESC_CHARS = 500
   const [loading, setLoading] = useState(true)
@@ -101,6 +104,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [departmentId, setDepartmentId] = useState<string | null>(null)
   const [sectionStartDate, setSectionStartDate] = useState<string | null>(null)
   const [responsibleFilter, setResponsibleFilter] = useState<string>("")
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   // Управление открытием popover-окон по строкам
   const [openCatId, setOpenCatId] = useState<string | null>(null)
@@ -142,6 +147,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const canEditResponsible = useHasPermission('dec.items.edit_responsible')
   const canEditStatus = useHasPermission('dec.items.edit_status')
   const canEditProgress = useHasPermission('dec.items.edit_progress')
+  const canDeleteItem = useHasPermission('dec.items.delete')
 
 
   useEffect(() => {
@@ -365,7 +371,53 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
   // Простая функция для получения имени ответственного (как у категории)
 
+  // Общая select-строка для выбора полей декомпозиции и связанных сущностей
+  const DECOMPOSITION_SELECT_QUERY = `
+    decomposition_item_id, 
+    decomposition_item_description, 
+    decomposition_item_work_category_id, 
+    decomposition_item_planned_hours, 
+    decomposition_item_planned_due_date, 
+    decomposition_item_order,
+    decomposition_item_responsible,
+    decomposition_item_status_id,
+    decomposition_item_progress,
+    profiles!decomposition_item_responsible (
+      user_id,
+      first_name,
+      last_name,
+      email
+    ),
+    section_statuses!decomposition_item_status_id (
+      id,
+      name,
+      color,
+      description
+    )
+  `
 
+  // Единая функция перезагрузки данных декомпозиции текущего раздела
+  const reloadDecompositionData = async (): Promise<{ data: any[] | null; error: any | null }> => {
+    const { data, error } = await supabase
+      .from("decomposition_items")
+      .select(DECOMPOSITION_SELECT_QUERY)
+      .eq("decomposition_item_section_id", sectionId)
+      .order("decomposition_item_order", { ascending: true })
+      .order("decomposition_item_created_at", { ascending: true })
+
+    if (error) {
+      return { data: null, error }
+    }
+
+    const normalized = ((data as any[]) || []).map((item: any) => ({
+      ...item,
+      responsible_profile: item.profiles || null,
+      status: item.section_statuses || null,
+    })) as DecompositionItemRow[]
+
+    setItems(normalized)
+    return { data, error: null }
+  }
 
   const canAdd = useMemo(() => {
     const hours = Number(newPlannedHours)
@@ -386,22 +438,22 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       if (!userId) throw new Error("Пользователь не найден")
 
       const nextOrder = (items[items.length - 1]?.decomposition_item_order ?? -1) + 1
-      // Поиск ответственного по введённому тексту
-      let responsibleId: string | null = null
-      responsibleId = newResponsibleId
-      // Формируем объект вставки с учётом прав: поля без прав не устанавливаем
+      // Ответственный выбирается напрямую из состояния формы
+      const responsibleId: string | null = newResponsibleId
+      // Формируем объект вставки: обязательные поля всегда задаём, редактируемые — только при наличии прав
       const insertData: any = {
         decomposition_item_section_id: sectionId,
         decomposition_item_description: newDescription.trim(),
         decomposition_item_work_category_id: newCategoryId,
         decomposition_item_order: nextOrder,
         decomposition_item_created_by: userId,
+        // Даже без права редактирования при создании задаём безопасные значения по умолчанию
+        decomposition_item_planned_hours: Number(newPlannedHours) || 0,
+        decomposition_item_planned_due_date: canEditDueDate ? (newPlannedDueDate || null) : null,
+        decomposition_item_responsible: canEditResponsible ? responsibleId : null,
+        decomposition_item_status_id: canEditStatus ? (newStatusId || null) : null,
+        decomposition_item_progress: Number(newProgress) || 0,
       }
-      if (canEditPlannedHours) insertData.decomposition_item_planned_hours = Number(newPlannedHours)
-      if (canEditDueDate) insertData.decomposition_item_planned_due_date = newPlannedDueDate || null
-      if (canEditResponsible) insertData.decomposition_item_responsible = responsibleId
-      if (canEditStatus) insertData.decomposition_item_status_id = newStatusId || null
-      if (canEditProgress) insertData.decomposition_item_progress = Number(newProgress) || 0
 
       const { error } = await supabase
         .from("decomposition_items")
@@ -409,46 +461,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
       if (error) throw error
 
-      // Reload
-      const { data, error: reloadErr } = await supabase
-        .from("decomposition_items")
-        .select(`
-          decomposition_item_id, 
-          decomposition_item_description, 
-          decomposition_item_work_category_id, 
-          decomposition_item_planned_hours, 
-          decomposition_item_planned_due_date, 
-          decomposition_item_order,
-          decomposition_item_responsible,
-          decomposition_item_status_id,
-          decomposition_item_progress,
-          profiles!decomposition_item_responsible (
-            user_id,
-            first_name,
-            last_name,
-            email
-          ),
-          section_statuses!decomposition_item_status_id (
-            id,
-            name,
-            color,
-            description
-          )
-        `)
-        .eq("decomposition_item_section_id", sectionId)
-        .order("decomposition_item_order", { ascending: true })
-        .order("decomposition_item_created_at", { ascending: true })
-
+      // Перезагрузка данных списка после вставки
+      const { error: reloadErr } = await reloadDecompositionData()
       if (reloadErr) throw reloadErr
-      
-      // Обрабатываем данные и нормализуем profiles и статусы
-      const normalizedReloadItems = (data || []).map((item: any) => ({
-        ...item,
-        responsible_profile: item.profiles || null,
-        status: item.section_statuses || null
-      })) as DecompositionItemRow[]
-      
-      setItems(normalizedReloadItems)
 
       setNewDescription("")
       setNewCategoryId("")
@@ -462,8 +477,11 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         setNewStatusId(defaultStatus.id)
       }
       setNotification("Строка декомпозиции добавлена")
-    } catch (error) {
-      console.error("Ошибка добавления строки декомпозиции:", error)
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : (typeof error === 'string' ? error : JSON.stringify(error))
+      console.error("Ошибка добавления строки декомпозиции:", message, error)
       setNotification("Ошибка добавления строки декомпозиции")
     } finally {
       setSaving(false)
@@ -594,6 +612,11 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   }
 
   const handleDelete = async (id: string) => {
+    // Защита: при отсутствии права не позволяем удалять
+    if (!canDeleteItem) {
+      setNotification('Недостаточно прав: удаление строки')
+      return
+    }
     setDeletingId(id)
     try {
       const { error } = await supabase
@@ -695,18 +718,18 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             <colgroup>
               <col className="w-[44px]" />
               <col className="w-[30%]" />
-              <col className="w-[14%]" />
+              <col className="w-[18%]" />
               <col className="w-[16%]" />
-              <col className="w-[12%]" />
+              <col className="w-[10%]" />
               <col className="w-[8%]" />
               <col className="w-[9%]" />
               <col className="w-[9%]" />
               <col className="w-[12%]" />
-              <col className="w-[44px]" />
+              <col className="w-[36px]" />
             </colgroup>
             <thead>
               <tr className={(compact ? "text-[11px] " : "text-[12px] xl:text-[13px] ") + "sticky top-0 z-[1] bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200"}>
-                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Лог</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Отчет</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Описание работ</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Категория</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Ответственный</th>
@@ -715,7 +738,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">План, ч</th>
                 <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">Факт, ч</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Срок</th>
-                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">…</th>
+                <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700"><span className="font-normal">…</span></th>
               </tr>
             </thead>
             <tbody>
@@ -731,7 +754,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   {/* Лог */}
                   <td className="px-2 py-2 align-middle border">
                     <div className="relative flex items-center justify-center">
-                      <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчёт" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
+                      <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Добавить отчет" onClick={() => { setSelectedForLog(item.decomposition_item_id); setIsLogModalOpen(true); }}>
                         <Clock className={compact ? 'h-3.5 w-3.5 text-emerald-600' : 'h-4 w-4 text-emerald-600'} />
                       </button>
                       {logsCountByItemId[item.decomposition_item_id] ? (
@@ -772,7 +795,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                       <Popover open={isCatOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenCatId(o ? item.decomposition_item_id : null)}>
                         <PopoverTrigger asChild>
                           <button className="inline-flex flex-wrap items-center text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full" onClick={(e) => { e.stopPropagation(); setOpenCatId(item.decomposition_item_id) }}>
-                            {categoryById.get(editDraft?.decomposition_item_work_category_id || item.decomposition_item_work_category_id) || 'выбрать'}
+                            {categoryById.get(editDraft?.decomposition_item_work_category_id || item.decomposition_item_work_category_id) || <span className="text-slate-400">Выбрать</span>}
                           </button>
                         </PopoverTrigger>
                         <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -804,13 +827,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   </td>
 
                   {/* Ответственный */}
-                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditResponsible ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditResponsible) startEdit(item) }} title={canEditResponsible ? undefined : 'Недостаточно прав: изменение ответственного'}>
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditResponsible ? '' : 'opacity-70'}`} onClick={() => { if (canEditResponsible) startEdit(item) }}>
                     {editingId === item.decomposition_item_id ? (
                       canEditResponsible ? (
                         <Popover open={isRespOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenRespId(o ? item.decomposition_item_id : null)}>
                           <PopoverTrigger asChild>
                             <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800" onClick={(e) => { e.stopPropagation(); setOpenRespId(item.decomposition_item_id) }}>
-                              {getResponsibleName(editDraft || item as any) || 'ввести'}
+                              {getResponsibleName(editDraft || item as any) || <span className="text-slate-400">Выбрать</span>}
                             </button>
                           </PopoverTrigger>
                           <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -853,13 +876,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   </td>
 
                   {/* Статус */}
-                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditStatus ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditStatus) startEdit(item) }} title={canEditStatus ? undefined : 'Недостаточно прав: изменение статуса'}>
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditStatus ? '' : 'opacity-70'}`} onClick={() => { if (canEditStatus) startEdit(item) }}>
                     {editingId === item.decomposition_item_id ? (
                       canEditStatus ? (
                         <Popover open={isStatusOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenStatusId(o ? item.decomposition_item_id : null)}>
                           <PopoverTrigger asChild>
                             <button className="inline-flex flex-wrap items-center text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full" onClick={(e) => { e.stopPropagation(); setOpenStatusId(item.decomposition_item_id) }}>
-                              {statuses.find(s => s.id === (editDraft?.decomposition_item_status_id ?? item.decomposition_item_status_id))?.name || 'выбрать'}
+                              {statuses.find(s => s.id === (editDraft?.decomposition_item_status_id ?? item.decomposition_item_status_id))?.name || <span className="text-slate-400">Выбрать</span>}
                             </button>
                           </PopoverTrigger>
                           <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -894,7 +917,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   </td>
 
                   {/* % */}
-                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditProgress ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditProgress) startEdit(item) }} title={canEditProgress ? undefined : 'Недостаточно прав: изменение процента готовности'}>
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditProgress ? '' : 'opacity-70'}`} onClick={() => { if (canEditProgress) startEdit(item) }}>
                     {editingId === item.decomposition_item_id ? (
                       canEditProgress ? (
                         <input
@@ -927,7 +950,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   </td>
 
                   {/* План */}
-                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditPlannedHours ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditPlannedHours) startEdit(item) }} title={canEditPlannedHours ? undefined : 'Недостаточно прав: изменение плановых часов'}>
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center tabular-nums border ${canEditPlannedHours ? '' : 'opacity-70'}`} onClick={() => { if (canEditPlannedHours) startEdit(item) }}>
                     {editingId === item.decomposition_item_id ? (
                       canEditPlannedHours ? (
                         <input
@@ -971,7 +994,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   </td>
 
                   {/* Срок */}
-                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditDueDate ? '' : 'cursor-not-allowed opacity-70'}`} onClick={() => { if (canEditDueDate) startEdit(item) }} title={canEditDueDate ? undefined : 'Недостаточно прав: изменение срока'}>
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border ${canEditDueDate ? '' : 'opacity-70'}`} onClick={() => { if (canEditDueDate) startEdit(item) }}>
                     {editingId === item.decomposition_item_id ? (
                       canEditDueDate ? (
                         <div className="flex items-center gap-2 text-[12px]" onClick={e => e.stopPropagation()}>
@@ -985,9 +1008,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                               setEditDraft(prev => prev ? { ...prev, decomposition_item_planned_due_date: iso } as DecompositionItemRow : prev)
                               saveEditWithPatch({ decomposition_item_planned_due_date: iso })
                             }}
-                            placeholder="Выберите срок"
+                            placeholder="Выбрать"
                             calendarWidth="240px"
-                            inputWidth="120px"
+                            inputWidth="140px"
                             placement="left"
                             offsetX={8}
                             offsetY={0}
@@ -1005,19 +1028,31 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
                   {/* Действия */}
                   <td className={`px-1 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle text-center border`}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[8rem]">
-                        <DropdownMenuItem onClick={() => handleDelete(item.decomposition_item_id)} className="text-red-600 focus:text-red-700">
-                          {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
-                          Удалить
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {canDeleteItem ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex" title="Действия">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[8rem]">
+                          <DropdownMenuItem onClick={() => { setPendingDeleteId(item.decomposition_item_id); setShowDeleteConfirm(true) }} className="text-red-600 focus:text-red-700 dark:bg-[rgb(30_41_59)] dark:text-slate-100 dark:hover:bg-slate-700 dark:focus:bg-slate-700">
+                            {deletingId === item.decomposition_item_id ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Trash2 className="h-4 w-4" />)}
+                            Удалить
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <button
+                        className="p-1 rounded inline-flex text-slate-400"
+                        onClick={(e) => { e.preventDefault(); }}
+                        disabled
+                        aria-disabled
+                        type="button"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1050,7 +1085,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                   <Popover open={openCatId === 'new'} onOpenChange={(o) => setOpenCatId(o ? 'new' : null)}>
                     <PopoverTrigger asChild>
                       <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => setOpenCatId('new')}>
-                        {categories.find(c => c.work_category_id === newCategoryId)?.work_category_name || 'выбрать'}
+                        {categories.find(c => c.work_category_id === newCategoryId)?.work_category_name || <span className="text-slate-400">Выбрать</span>}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -1064,14 +1099,14 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </PopoverContent>
                   </Popover>
                 </td>
-                <td className={`px-2 py-1 align-middle border ${canEditResponsible ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditResponsible ? undefined : 'Недостаточно прав: изменение ответственного'}>
+                <td className={`px-2 py-1 align-middle border ${canEditResponsible ? '' : 'opacity-70'}`}>
                   <Popover open={openRespId === 'new'} onOpenChange={(o) => setOpenRespId(o ? 'new' : null)}>
                     <PopoverTrigger asChild>
                       <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditResponsible) setOpenRespId('new') }} disabled={!canEditResponsible}>
                         {(() => {
-                          if (!newResponsibleId) return 'выбрать'
+                          if (!newResponsibleId) return <span className="text-slate-400">Выбрать</span>
                           const p = profiles.find(p => p.user_id === newResponsibleId)
-                          return p ? ((`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email)) : 'выбрать'
+                          return p ? ((`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email)) : <span className="text-slate-400">Выбрать</span>
                         })()}
                       </button>
                     </PopoverTrigger>
@@ -1096,11 +1131,11 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </PopoverContent>
                   </Popover>
                 </td>
-                <td className={`px-2 py-1 align-middle border ${canEditStatus ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditStatus ? undefined : 'Недостаточно прав: изменение статуса'}>
+                <td className={`px-2 py-1 align-middle border ${canEditStatus ? '' : 'opacity-70'}`}>
                   <Popover open={openStatusId === 'new'} onOpenChange={(o) => setOpenStatusId(o ? 'new' : null)}>
                     <PopoverTrigger asChild>
                       <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditStatus) setOpenStatusId('new') }} disabled={!canEditStatus}>
-                        {statuses.find(s => s.id === newStatusId)?.name || 'выбрать'}
+                        {statuses.find(s => s.id === newStatusId)?.name || <span className="text-slate-400">Выбрать</span>}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -1125,7 +1160,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     className="w-12 text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
                     onKeyDown={handleEditKey}
                     disabled={!canEditProgress}
-                    title={canEditProgress ? undefined : 'Недостаточно прав: изменение процента готовности'}
                   />
                 </td>
                 <td className="px-2 py-1 align-middle text-center border">
@@ -1143,18 +1177,17 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     className="w-[72px] text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
                     onKeyDown={handleEditKey}
                     disabled={!canEditPlannedHours}
-                    title={canEditPlannedHours ? undefined : 'Недостаточно прав: изменение плановых часов'}
                   />
                 </td>
                 <td className="px-2 py-1 align-middle text-center text-slate-400 border">—</td>
-                <td className={`px-2 py-1 align-middle border ${canEditDueDate ? '' : 'cursor-not-allowed opacity-70'}`} title={canEditDueDate ? undefined : 'Недостаточно прав: изменение срока'}>
+                <td className={`px-2 py-1 align-middle border ${canEditDueDate ? '' : 'opacity-70'}`}>
                   {canEditDueDate ? (
                     <ProjectDatePicker
                       value={newPlannedDueDate ? new Date(newPlannedDueDate) : null}
                       onChange={(d) => setNewPlannedDueDate(formatISODate(d))}
-                      placeholder="Срок"
+                      placeholder="Выбрать"
                       calendarWidth="240px"
-                      inputWidth="120px"
+                      inputWidth="140px"
                       placement="auto-top"
                       offsetY={6}
                       inputClassName="bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px] px-2 py-1"
@@ -1218,41 +1251,10 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         key={isLogModalOpen ? `add-log-${selectedForLog || 'none'}` : 'add-log-hidden'}
         onSuccess={async () => {
           // Обновим статистику и список
-          const { data, error } = await supabase
-            .from("decomposition_items")
-            .select(`
-              decomposition_item_id,
-              decomposition_item_description,
-              decomposition_item_work_category_id,
-              decomposition_item_planned_hours,
-              decomposition_item_planned_due_date,
-              decomposition_item_order,
-              decomposition_item_responsible,
-              decomposition_item_status_id,
-              decomposition_item_progress,
-              profiles!decomposition_item_responsible (
-                user_id,
-                first_name,
-                last_name,
-                email
-              ),
-              section_statuses!decomposition_item_status_id (
-                id,
-                name,
-                color,
-                description
-              )
-            `)
-            .eq("decomposition_item_section_id", sectionId)
-            .order("decomposition_item_order", { ascending: true })
-            .order("decomposition_item_created_at", { ascending: true })
-          if (!error) {
-            const normalized = ((data as any[]) || []).map((item: any) => ({
-              ...item,
-              responsible_profile: item.profiles || null,
-              status: item.section_statuses || null,
-            }))
-            setItems(normalized as any)
+          const { error } = await reloadDecompositionData()
+          if (error) {
+            console.error('Ошибка перезагрузки декомпозиции после отчёта:', error)
+            setNotification('Ошибка обновления списка')
           }
           // Обновим сводные по секции
           const totals = await supabase
@@ -1270,51 +1272,48 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         }}
       />
 
+      {/* Диалог подтверждения удаления строки декомпозиции */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить строку декомпозиции?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие необратимо. Строка и связанные данные будут удалены.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 text-white"
+              onClick={() => {
+                if (pendingDeleteId) {
+                  handleDelete(pendingDeleteId)
+                }
+                setShowDeleteConfirm(false)
+                setPendingDeleteId(null)
+              }}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isTemplatesOpen} onOpenChange={setIsTemplatesOpen}>
         <DialogContent className="w-[96vw] sm:max-w-[600px] max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Шаблоны декомпозиции</DialogTitle>
+            <DialogDescription className="sr-only">Просмотр и применение шаблонов декомпозиции</DialogDescription>
           </DialogHeader>
           <TemplatesPanel
             departmentId={departmentId}
             sectionId={sectionId}
             onApplied={async ({ inserted }) => {
               // Перезагрузка списка после применения шаблона
-              const { data, error } = await supabase
-                .from("decomposition_items")
-                .select(`
-                  decomposition_item_id,
-                  decomposition_item_description,
-                  decomposition_item_work_category_id,
-                  decomposition_item_planned_hours,
-                  decomposition_item_planned_due_date,
-                  decomposition_item_order,
-                  decomposition_item_responsible,
-                  decomposition_item_status_id,
-                  decomposition_item_progress,
-                  profiles!decomposition_item_responsible (
-                    user_id,
-                    first_name,
-                    last_name,
-                    email
-                  ),
-                  section_statuses!decomposition_item_status_id (
-                    id,
-                    name,
-                    color,
-                    description
-                  )
-                `)
-                .eq("decomposition_item_section_id", sectionId)
-                .order("decomposition_item_order", { ascending: true })
-                .order("decomposition_item_created_at", { ascending: true })
-              if (!error) {
-                const normalized = ((data as any[]) || []).map((item: any) => ({
-                  ...item,
-                  responsible_profile: item.profiles || null,
-                  status: item.section_statuses || null,
-                }))
-                setItems(normalized as any)
+              const { error } = await reloadDecompositionData()
+              if (error) {
+                console.error('Ошибка перезагрузки декомпозиции после применения шаблона:', error)
+                setNotification('Ошибка обновления списка')
               }
               // Обновим сводные по секции
               const totals = await supabase
