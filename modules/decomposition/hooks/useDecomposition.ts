@@ -7,11 +7,17 @@ import { useDecompositionStore } from "../store"
 import { useUserStore } from "@/stores/useUserStore"
 import { supabase } from "../utils"
 import type { SectionHierarchy } from "../types"
+import { getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
+import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore"
 
 export const useDecomposition = () => {
   // Получаем данные пользователя из userStore
   const userStore = useUserStore()
   const { id, name, profile, isAuthenticated } = userStore
+
+  usePermissionsLoader()
+  const hasPermission = usePermissionsStore(state => state.hasPermission)
 
   const [departmentName, setDepartmentName] = useState<string>("")
   const [storeLoaded, setStoreLoaded] = useState(false)
@@ -29,6 +35,26 @@ export const useDecomposition = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null)
+
+  // Определяем, является ли пользователь админом по роли (через view_user_roles)
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const detect = async () => {
+      if (!id) { setIsAdmin(false); return }
+      try {
+        const { roles } = await getUserRoles(id)
+        if (!cancelled) setIsAdmin(roles.some(r => (r.roleName || '').toLowerCase().includes('admin')))
+      } catch (e) {
+        if (!cancelled) {
+          console.error('Failed to fetch user roles in useDecomposition:', e)
+          setIsAdmin(false)
+        }
+      }
+    }
+    detect()
+    return () => { cancelled = true }
+  }, [id])
 
   const {
     activeTab,
@@ -116,13 +142,15 @@ export const useDecomposition = () => {
     }
   }, [profile?.departmentId, storeLoaded])
 
-  // Загружаем шаблоны для всех пользователей
+  // Загружаем шаблоны: админ — все отделы, не админ — только свой отдел
   useEffect(() => {
-    if (storeLoaded) {
-      // Передаем null для загрузки всех шаблонов независимо от отдела
+    if (!storeLoaded) return
+    if (isAdmin) {
       fetchTemplates(null)
+    } else if (profile?.departmentId) {
+      fetchTemplates(profile.departmentId)
     }
-  }, [fetchTemplates, storeLoaded])
+  }, [fetchTemplates, storeLoaded, isAdmin, profile?.departmentId])
 
   // Добавьте этот эффект для обработки данных разделов
   useEffect(() => {
@@ -303,6 +331,9 @@ export const useDecomposition = () => {
     handleFileUpload,
     handleSave,
     storeLoaded,
+
+    // Проверки разрешений через стор
+    hasPermission,
 
     // Добавьте эти новые переменные
     projects,

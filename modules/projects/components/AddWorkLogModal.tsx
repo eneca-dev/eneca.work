@@ -58,6 +58,8 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
 
   // Проверки разрешений
   const canEditRate = useHasPermission('work_logs.rate.edit')
+  const canEditExecutor = useHasPermission('work_logs.executor.edit')
+  const canEditDate = useHasPermission('work_logs.date.edit')
   const isAdmin = useHasPermission('users.admin_panel') // Проверка роли администратора
 
   useEffect(() => {
@@ -106,14 +108,14 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
         }
         if (!catsRes.error && catsRes.data) setCategories(catsRes.data as WorkCategory[])
 
-        // Подставляем ставку из профиля пользователя; если нет, используем последнюю из work_logs
+        // Подставляем ставку и формируем дефолтного исполнителя = текущий пользователь
         try {
           const { data: authData } = await supabase.auth.getUser()
           const userId = authData?.user?.id
           if (userId) {
             const { data: profileData } = await supabase
               .from('profiles')
-              .select('salary, is_hourly')
+              .select('salary, is_hourly, first_name, last_name, email, avatar_url')
               .eq('user_id', userId)
               .single()
 
@@ -123,11 +125,31 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
               const lastRate = lastLogRes.data[0].work_log_hourly_rate
               if (lastRate != null) setRate(String(lastRate))
             }
+
+            // Устанавливаем текущего пользователя исполнителем по умолчанию
+            if (!selectedUserId) {
+              setSelectedUserId(userId)
+            }
+
+            // Создаём локальный объект текущего пользователя (используем как фолбэк, если список недоступен)
+            const firstName = (profileData as any)?.first_name || ''
+            const lastName = (profileData as any)?.last_name || ''
+            const email = (profileData as any)?.email || authData?.user?.email || ''
+            const avatar_url = (profileData as any)?.avatar_url || undefined
+            const me: UserOption = {
+              user_id: userId,
+              first_name: firstName,
+              last_name: lastName,
+              email,
+              avatar_url,
+              full_name: `${firstName} ${lastName}`.trim() || email,
+            }
+            setUsers(prev => (prev && prev.length > 0 ? prev : [me]))
           }
         } catch {}
 
-        // Загружаем пользователей только для админов
-        if (isAdmin) {
+        // Загружаем список пользователей только при наличии права менять исполнителя
+        if (canEditExecutor) {
           const { data: usersData, error: usersError } = await supabase
             .from("view_users")
             .select(`
@@ -158,7 +180,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
       }
     }
     load()
-  }, [isOpen, sectionId, isAdmin])
+  }, [isOpen, sectionId, canEditExecutor])
 
   useEffect(() => {
     // Если пришёл новый defaultItemId — проставим
@@ -188,14 +210,18 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
 
   // Получение выбранного пользователя
   const selectedUser = useMemo(() => {
-    return users.find(user => user.user_id === selectedUserId)
+    const found = users.find(user => user.user_id === selectedUserId)
+    if (found) return found
+    // Фолбэк: если список пользователей не загружен, но выбран текущий пользователь
+    if (users.length > 0 && selectedUserId) return users[0]?.user_id === selectedUserId ? users[0] : undefined
+    return found
   }, [users, selectedUserId])
 
   const canSave = useMemo(() => {
     const h = Number(hours)
     const r = Number(rate)
     const descOk = description.trim().length > 0
-    const executorOk = !isAdmin || selectedUserId // Для админов нужен выбор исполнителя
+    const executorOk = !canEditExecutor || selectedUserId // При наличии права нужен явный выбор
     const rateOk = !isAdmin || (Number.isFinite(r) && r >= 0) // Для админов нужна валидная ставка
     return selectedItemId && Number.isFinite(h) && h > 0 && !!workDate && descOk && executorOk && rateOk
   }, [selectedItemId, hours, rate, workDate, description, isAdmin, selectedUserId])
@@ -215,7 +241,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
       const payload = {
         decomposition_item_id: selectedItemId,
         work_log_description: description || null,
-        work_log_created_by: isAdmin ? selectedUserId : userId, // Для админов - выбранный исполнитель, для пользователей - текущий
+        work_log_created_by: canEditExecutor ? selectedUserId : userId, // При наличии права — выбранный исполнитель, иначе — текущий
         work_log_date: workDate,
         work_log_hours: Number(hours),
         work_log_hourly_rate: isAdmin ? Number(rate) : (Number(rate) || 0), // Для обычных пользователей ставка может быть 0
@@ -245,6 +271,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
   }
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} size="sm" className="min-h-[520px]">
       <Modal.Header title="Добавить отчёт" subtitle="Привяжите отчёт к строке декомпозиции" />
       <Modal.Body className="overflow-visible">
@@ -296,11 +323,13 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
                   Исполнитель <span className="text-red-500">*</span>
                 </label>
-                {selectedUser ? (
-                  <div 
-                    className="flex items-center gap-3 p-2.5 border border-slate-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
-                    onClick={() => setSelectedUserId("")}
-                  >
+                 {selectedUser ? (
+                   <button
+                     type="button"
+                     className={`w-full text-left flex items-center gap-3 p-2.5 border border-slate-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800 ${canEditExecutor ? 'hover:bg-slate-100 dark:hover:bg-slate-700' : 'cursor-not-allowed opacity-60'}`}
+                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (canEditExecutor) setSelectedUserId("") }}
+                     title={canEditExecutor ? 'Нажмите, чтобы выбрать другого исполнителя' : 'Недостаточно прав для изменения исполнителя'}
+                   >
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={selectedUser.avatar_url || undefined} />
                       <AvatarFallback className="text-xs">
@@ -311,8 +340,8 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                       <div className="text-sm font-medium">{selectedUser.full_name}</div>
                       <div className="text-xs text-slate-500">{selectedUser.email}</div>
                     </div>
-                    <User className="h-4 w-4 text-slate-400" />
-                  </div>
+                     {canEditExecutor && <User className="h-4 w-4 text-slate-400" />}
+                   </button>
                 ) : (
                   <div className="space-y-2">
                     <div className="relative">
@@ -320,8 +349,11 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                       <Input
                         placeholder="Найти пользователя..."
                         value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
+                         onChange={e => setUserSearch(e.target.value)}
                         className="pl-9"
+                        disabled={!canEditExecutor}
+                        title={canEditExecutor ? undefined : 'Недостаточно прав для изменения исполнителя'}
+                        autoFocus
                       />
                     </div>
                     {filteredUsers.length > 0 && (
@@ -329,8 +361,9 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                         {filteredUsers.slice(0, 5).map((user) => (
                           <div
                             key={user.user_id}
-                            className="flex items-center gap-3 p-2.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                            className={`flex items-center gap-3 p-2.5 ${canEditExecutor ? 'hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
                             onClick={() => {
+                              if (!canEditExecutor) return
                               setSelectedUserId(user.user_id)
                               setUserSearch("")
                             }}
@@ -365,7 +398,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   calendarWidth="260px"
                   placement="right"
                   offsetY={-40}
-                  inputClassName="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  inputClassName={`focus:outline-none focus:ring-2 focus:ring-primary/50 ${canEditDate ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 pointer-events-none'}`}
                 />
               </div>
               <div>
@@ -377,7 +410,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   value={hours}
                   onChange={e => setHours(e.target.value)}
                   placeholder="0"
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white"
+                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white no-spinner"
                 />
               </div>
               {/* Ставка — видна всем, редактируема только для админов */}
@@ -390,7 +423,7 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
                   value={rate}
                   onChange={e => setRate(e.target.value)}
                   placeholder="0"
-                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white disabled:opacity-60"
+                  className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-700 rounded-md text-center dark:bg-slate-800 dark:text-white disabled:opacity-60 no-spinner"
                   disabled={!isAdmin || !canEditRate}
                   readOnly={!isAdmin}
                   title={!isAdmin ? 'Только просмотр' : (canEditRate ? undefined : 'Недостаточно прав для изменения ставки')}
@@ -424,6 +457,19 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
         </ModalButton>
       </Modal.Footer>
     </Modal>
+    <style jsx global>{`
+      /* Убираем стрелки у input[type=number] только в модальном окне отчёта */
+      .no-spinner::-webkit-outer-spin-button,
+      .no-spinner::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .no-spinner {
+        -moz-appearance: textfield;
+        appearance: textfield;
+      }
+    `}</style>
+    </>
   )
 }
 
