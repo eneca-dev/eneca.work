@@ -1,7 +1,6 @@
 
 import { create } from 'zustand'
 import { fetchSectionComments, createSectionComment, updateCommentContent } from './api/comments'
-import { sendCommentNotifications } from './utils/notificationHelpers'
 import type { SectionComment } from './types'
 
 interface CommentsStore {
@@ -64,8 +63,6 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
     set({ isSubmitting: true })
     try {
       await createSectionComment(sectionId, content, mentions)
-      sendCommentNotifications(sectionId, mentions, content)
-        .catch((error: any) => console.error('Ошибка уведомлений:', error))
 
       await get().fetchComments(sectionId)
       set({ newCommentContent: '', isSubmitting: false })
