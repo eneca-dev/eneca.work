@@ -4,10 +4,18 @@ import { useUserStore } from '@/stores/useUserStore'
 import { usePermissionsStore } from '../store/usePermissionsStore'
 import { getUserPermissions } from '../supabase/supabasePermissions'
 
+// Глобальные маркеры, чтобы избежать повторных загрузок при том же userId в dev (StrictMode/HMR)
+let globalLastUserId: string | null = null
+let globalLoadInFlight: Promise<void> | null = null
+
 /**
  * Простой и надёжный хук для загрузки разрешений
  * Автоматически загружает разрешения при авторизации
  * Показывает ошибку если разрешений нет
+ *
+ * Идемпотентность:
+ * - Если для того же userId загрузка уже выполнялась или идёт — повторная не запускается
+ * - reloadPermissions выполняет принудительную перезагрузку, обходя глобальные стражи
  */
 export function usePermissionsLoader() {
   const isAuthenticated = useUserStore(state => state.isAuthenticated)
@@ -24,12 +32,21 @@ export function usePermissionsLoader() {
   
   const loadingRef = useRef(false)
   const lastUserIdRef = useRef<string | null>(null)
+  const forceNextRef = useRef(false)
 
-  // Функция загрузки разрешений
+  // Функция загрузки разрешений (с поддержкой принудительной перезагрузки)
   const loadPermissions = useCallback(async (userIdToLoad: string) => {
-    // Защита от дублирования запросов
+    const isForce = forceNextRef.current === true
+
+    // Защита от дублирования запросов на уровне инстанса хука
     if (loadingRef.current) {
       console.log('🔄 Загрузка разрешений уже в процессе')
+      return
+    }
+
+    // Глобальная защита от повторной загрузки для того же userId (если не принудительно)
+    if (!isForce && globalLoadInFlight && globalLastUserId === userIdToLoad) {
+      console.log('⏭️ Пропускаем: глобально уже идёт загрузка для этого пользователя')
       return
     }
 
@@ -39,8 +56,9 @@ export function usePermissionsLoader() {
 
     try {
       console.log('🚀 Начинаем загрузку разрешений для:', userIdToLoad)
-      
-      Sentry.startSpan({ name: 'loadUserPermissions' }, async () => {
+      globalLastUserId = userIdToLoad
+
+      const taskResult = Sentry.startSpan({ name: 'loadUserPermissions' }, async () => {
         const result = await getUserPermissions(userIdToLoad)
         
         if (result.error) {
@@ -64,6 +82,14 @@ export function usePermissionsLoader() {
         setPermissions(result.permissions)
       })
 
+      // Фиксируем глобально «в полёте», чтобы другие экземпляры хука не дублировали
+      const taskPromise: Promise<void> = Promise.resolve(taskResult)
+      if (!isForce) {
+        globalLoadInFlight = taskPromise
+      }
+
+      await taskPromise
+
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка'
       console.error('💥 Критическая ошибка загрузки разрешений:', errorMsg)
@@ -72,6 +98,11 @@ export function usePermissionsLoader() {
     } finally {
       setLoading(false)
       loadingRef.current = false
+      // Сбрасываем принудительный флаг только после попытки
+      forceNextRef.current = false
+      // Если это была не принудительная загрузка — очищаем глобальный in-flight по её завершению
+      // Очистим глобальный маркер, если отслеживали нефорсированную загрузку
+      if (!forceNextRef.current) globalLoadInFlight = null
     }
   }, [setPermissions, setLoading, setError, clearError])
 
@@ -79,7 +110,13 @@ export function usePermissionsLoader() {
   useEffect(() => {
     // Если пользователь авторизован и есть userId
     if (isAuthenticated && userId) {
-      // Проверяем, нужно ли загружать (пользователь сменился)
+      // Если в сторе уже есть разрешения для этого же userId, избегаем повторной загрузки
+      if ((globalLastUserId === userId || permissions.length > 0) && lastUserIdRef.current !== userId) {
+        lastUserIdRef.current = userId
+        return
+      }
+
+      // Проверяем, нужно ли загружать (пользователь сменился в рамках текущего инстанса)
       if (lastUserIdRef.current !== userId && !loadingRef.current) {
         console.log('👤 Пользователь сменился, загружаем разрешения')
         lastUserIdRef.current = userId
@@ -90,15 +127,18 @@ export function usePermissionsLoader() {
     else if (!isAuthenticated) {
       console.log('🚪 Пользователь вышел, очищаем разрешения')
       lastUserIdRef.current = null
+      globalLastUserId = null
       setPermissions([])
       clearError()
     }
-  }, [isAuthenticated, userId, loadPermissions, setPermissions, clearError])
+  }, [isAuthenticated, userId, loadPermissions, setPermissions, clearError, permissions.length])
 
   // Функция принудительной перезагрузки
   const reloadPermissions = useCallback(() => {
     if (userId) {
       console.log('🔄 Принудительная перезагрузка разрешений')
+      // Следующая загрузка будет форсирована (обойдёт глобальные стражи)
+      forceNextRef.current = true
       loadPermissions(userId)
     }
   }, [userId, loadPermissions])
@@ -111,3 +151,4 @@ export function usePermissionsLoader() {
     hasPermissions: permissions.length > 0
   }
 }
+

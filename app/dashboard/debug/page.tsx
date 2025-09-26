@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
 import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { useUserPermissionsSync } from "@/modules/permissions"
 import { Input } from "@/components/ui/input"
 
 export default function DebugPage() {
@@ -21,7 +21,7 @@ export default function DebugPage() {
   const [localCaches, setLocalCaches] = useState<{ user?: any; permissions?: any }>({})
   const userState = useUserStore()
   const permissionsState = usePermissionsStore()
-  const { reloadPermissions } = usePermissionsLoader()
+  const { reloadPermissions } = useUserPermissionsSync()
   
   // Chat debug state
   const [conversationId, setConversationId] = useState<string>("")
@@ -112,7 +112,7 @@ export default function DebugPage() {
         setChatEvents(prev => [payload.new, ...prev].slice(0, 200))
       })
       .subscribe((status) => {
-        console.log('📡 Chat Realtime статус подписки:', status)
+        console.log('📡 CHAT Realtime статус подписки:', status)
       })
     channelRef.current = channel
     toast({ title: 'Подписка активна', description: `conversation_id=${convId}` })

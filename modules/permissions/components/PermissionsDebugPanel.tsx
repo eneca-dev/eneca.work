@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { RefreshCw, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { usePermissionsStore } from '../store/usePermissionsStore'
 import { useUserStore } from '@/stores/useUserStore'
-import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
+import { useUserPermissionsSync } from '../integration/userStoreSync'
 
 /**
  * Отладочная панель для системы разрешений
@@ -13,7 +13,7 @@ import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
 export function PermissionsDebugPanel() {
   const { permissions, isLoading, error, lastUpdated } = usePermissionsStore()
   const { id: userId, profile } = useUserStore()
-  const { reloadPermissions, hasPermissions } = usePermissionsLoader()
+  const { reloadPermissions, hasPermissions } = useUserPermissionsSync()
 
   const getStatusIcon = () => {
     if (isLoading) return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />

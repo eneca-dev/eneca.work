@@ -1,4 +1,13 @@
+import { useEffect } from 'react'
+import { createClient } from '@/utils/supabase/client'
+import { useUserStore } from '@/stores/useUserStore'
+import { usePermissionsStore } from '../store/usePermissionsStore'
 import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
+import { getUserPermissions } from '../supabase/supabasePermissions'
+
+// Глобальная подписка на изменения таблицы user_permissions_cache для избежания дубликатов
+let activeUserId: string | null = null
+let activeChannel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null
 
 /**
  * Хук для синхронизации permissions модуля с useUserStore
@@ -7,6 +16,51 @@ import { usePermissionsLoader } from '../hooks/usePermissionsLoader'
 export function useUserPermissionsSync() {
   // Используем новый надёжный загрузчик разрешений
   const { isLoading, error, hasPermissions, reloadPermissions } = usePermissionsLoader()
+  const userId = useUserStore(state => state.id)
+  const isAuthenticated = useUserStore(state => state.isAuthenticated)
+  const setPermissions = usePermissionsStore(state => state.setPermissions)
+
+  useEffect(() => {
+    // На логауте или отсутствии userId — отписываемся и очищаем глобальные ссылки
+    if (!isAuthenticated || !userId) {
+      if (activeChannel) {
+        activeChannel.unsubscribe()
+        activeChannel = null
+      }
+      activeUserId = null
+      return
+    }
+
+    // Если подписка уже активна для этого пользователя — ничего не делаем
+    if (activeUserId === userId && activeChannel) {
+      return
+    }
+
+    // Переподписка при смене пользователя
+    if (activeChannel) {
+      activeChannel.unsubscribe()
+      activeChannel = null
+    }
+
+    const supabase = createClient()
+    activeUserId = userId
+    activeChannel = supabase
+      .channel(`user_permissions_cache:${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_permissions_cache',
+        filter: `user_id=eq.${userId}`
+      }, (payload: any) => {
+        try {
+          const nextPermissions: string[] = payload?.new?.permissions ?? []
+          setPermissions(Array.isArray(nextPermissions) ? nextPermissions : [])
+        } catch (e) {
+          console.warn('PERMISSIONS Не удалось применить пермишенны из Realtime события', e)
+        }
+      })
+      .subscribe()
+  }, [isAuthenticated, userId, setPermissions])
   
   // Возвращаем состояние для компонентов
   return {
@@ -14,6 +68,27 @@ export function useUserPermissionsSync() {
     error,
     hasPermissions,
     reloadPermissions
+  }
+}
+
+// Утилита для ручной перезагрузки без монтирования хуков загрузчика в компонентах
+export async function reloadUserPermissions(): Promise<void> {
+  const { id: userId } = useUserStore.getState()
+  const { setPermissions, setLoading, setError, clearError } = usePermissionsStore.getState()
+  if (!userId) return
+  try {
+    setLoading(true)
+    clearError()
+    const result = await getUserPermissions(userId)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setPermissions(result.permissions || [])
+  } catch (e: any) {
+    setError(e?.message || 'Не удалось перезагрузить разрешения')
+  } finally {
+    setLoading(false)
   }
 }
 

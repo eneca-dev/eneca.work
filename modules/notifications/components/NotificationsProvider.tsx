@@ -128,7 +128,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         },
         async (span) => {
           try {
-            console.log('🔍 NotificationsProvider: Получение текущего пользователя...')
+            console.log('🔍 NOTIFICATIONS Provider: Получение текущего пользователя...')
             const { data: { user }, error } = await supabase.auth.getUser()
             
             if (error) {
@@ -145,7 +145,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
                   timestamp: new Date().toISOString()
                 }
               })
-              console.error('❌ NotificationsProvider: Ошибка получения пользователя:', error)
+              console.error('❌ NOTIFICATIONS Provider: Ошибка получения пользователя:', error)
               setCurrentUserId(null) // Очищаем при ошибке
               return
             }
@@ -155,7 +155,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
               span.setAttribute("user.id", user.id)
               span.setAttribute("user.found", true)
               
-              console.log('👤 NotificationsProvider: Пользователь найден:', user.id)
+              console.log('👤 NOTIFICATIONS Provider: Пользователь найден:', user.id)
               setCurrentUserId(user.id)
               
               Sentry.addBreadcrumb({
@@ -169,7 +169,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
             } else {
               span.setAttribute("auth.success", true)
               span.setAttribute("user.found", false)
-              console.warn('⚠️ NotificationsProvider: Пользователь не найден')
+              console.warn('⚠️ NOTIFICATIONS Provider: Пользователь не найден')
               setCurrentUserId(null) // Очищаем если пользователя нет
             }
           } catch (error) {
@@ -186,7 +186,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
                 timestamp: new Date().toISOString()
               }
             })
-            console.error('❌ NotificationsProvider: Неожиданная ошибка при получении пользователя:', error)
+            console.error('❌ NOTIFICATIONS Provider: Неожиданная ошибка при получении пользователя:', error)
             setCurrentUserId(null) // Очищаем при ошибке
           }
         }
@@ -197,18 +197,18 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 NotificationsProvider: Auth state change:', event, session?.user?.id)
+      console.log('🔄 NOTIFICATIONS Provider: Auth state change:', event, session?.user?.id)
       
       if (event === 'SIGNED_OUT') {
-        console.log('👋 NotificationsProvider: Пользователь вышел')
+        console.log('👋 NOTIFICATIONS Provider: Пользователь вышел')
         setCurrentUserId(null)
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         const userId = session?.user?.id || null
-        console.log('👤 NotificationsProvider: Пользователь вошел:', userId)
+        console.log('👤 NOTIFICATIONS Provider: Пользователь вошел:', userId)
         setCurrentUserId(userId)
       } else if (event === 'USER_UPDATED') {
         const userId = session?.user?.id || null
-        console.log('🔄 NotificationsProvider: Данные пользователя обновлены:', userId)
+        console.log('🔄 NOTIFICATIONS Provider: Данные пользователя обновлены:', userId)
         setCurrentUserId(userId)
       }
     })
@@ -227,7 +227,7 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     
     const initializeProvider = async () => {
       if (currentUserId) {
-        console.log('🚀 NotificationsProvider: Инициализация для пользователя:', currentUserId)
+        console.log('🚀 NOTIFICATIONS Provider: Инициализация для пользователя:', currentUserId)
 
         // Отладочная проверка базы данных
         const { debugUserNotifications, createTestNotification } = await import('../api/notifications')
@@ -238,10 +238,10 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
         // await createTestNotification(currentUserId)
 
         // Загрузка уведомлений уже происходит в setCurrentUserId, поэтому здесь только инициализируем Realtime
-        console.log('📡 NotificationsProvider: Инициализация Realtime...')
+        console.log('📡 NOTIFICATIONS Provider: Инициализация Realtime...')
         initializeRealtime()
       } else {
-        console.log('⏳ NotificationsProvider: currentUserId не установлен, очищаем уведомления')
+        console.log('⏳ NOTIFICATIONS Provider: currentUserId не установлен, очищаем уведомления')
         // Если пользователя нет, отписываемся от всех подписок
         unsubscribeFromNotifications()
       }
