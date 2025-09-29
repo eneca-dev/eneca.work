@@ -110,6 +110,11 @@ export function usePermissionsLoader() {
   useEffect(() => {
     // Если пользователь авторизован и есть userId
     if (isAuthenticated && userId) {
+      // При смене пользователя перед загрузкой очищаем предыдущие разрешения
+      if (lastUserIdRef.current && lastUserIdRef.current !== userId) {
+        setPermissions([])
+        clearError()
+      }
       // Если в сторе уже есть разрешения для этого же userId, избегаем повторной загрузки
       if ((globalLastUserId === userId || permissions.length > 0) && lastUserIdRef.current !== userId) {
         lastUserIdRef.current = userId

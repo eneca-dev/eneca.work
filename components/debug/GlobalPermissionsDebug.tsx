@@ -86,12 +86,12 @@ export default function GlobalPermissionsDebug() {
 
             <div className="text-xs text-gray-600 dark:text-gray-300 mb-2">
             <div className="flex items-center justify-between">
-                <span>роль</span>
+                <span>Роль</span>
                 <span className="font-mono">{role}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Всего разрешений</span>
-                <span className="font-mono">{permissions.length}</span>
+                <span className="font-mono">{permissions.length}</span>  
               </div>
               <div className="flex items-center justify-between">
                 <span>Обновлено</span>

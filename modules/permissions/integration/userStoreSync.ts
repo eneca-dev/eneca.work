@@ -8,6 +8,8 @@ import { getUserPermissions } from '../supabase/supabasePermissions'
 // Глобальная подписка на изменения таблицы user_permissions_cache для избежания дубликатов
 let activeUserId: string | null = null
 let activeChannel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null
+// Маркер, что для данного пользователя уже проверили/обеспечили дефолтную роль
+let ensuredRoleForUserId: string | null = null
 
 /**
  * Хук для синхронизации permissions модуля с useUserStore
@@ -28,6 +30,7 @@ export function useUserPermissionsSync() {
         activeChannel = null
       }
       activeUserId = null
+      ensuredRoleForUserId = null
       return
     }
 
@@ -60,6 +63,55 @@ export function useUserPermissionsSync() {
         }
       })
       .subscribe()
+
+    // При первой авторизации/смене пользователя — если ролей нет, назначаем дефолтную роль "user"
+    ;(async () => {
+      try {
+        if (ensuredRoleForUserId === userId) return
+        // Проверяем текущие роли пользователя
+        const { data: existingRoles, error: rolesErr } = await supabase
+          .from('view_user_roles')
+          .select('role_name')
+          .eq('user_id', userId)
+
+        if (rolesErr) {
+          console.warn('PERMISSIONS Ошибка проверки ролей пользователя:', rolesErr)
+          return
+        }
+
+        const hasAnyRole = Array.isArray(existingRoles) && existingRoles.length > 0
+        if (!hasAnyRole) {
+          // Ищем id роли "user"
+          const { data: userRole, error: findErr } = await supabase
+            .from('roles')
+            .select('id')
+            .eq('name', 'user')
+            .single()
+
+          if (findErr || !userRole?.id) {
+            console.warn('PERMISSIONS Не удалось найти дефолтную роль "user"', findErr)
+            return
+          }
+
+          // Назначаем роль
+          const { error: assignErr } = await supabase
+            .from('user_roles')
+            .insert({ user_id: userId, role_id: userRole.id })
+
+          if (assignErr) {
+            console.warn('PERMISSIONS Не удалось назначить дефолтную роль пользователю:', assignErr)
+            return
+          }
+
+          // После назначения перезагружаем разрешения вручную
+          reloadPermissions()
+        }
+
+        ensuredRoleForUserId = userId
+      } catch (e) {
+        console.warn('PERMISSIONS Ошибка при обеспечении дефолтной роли:', e)
+      }
+    })()
   }, [isAuthenticated, userId, setPermissions])
   
   // Возвращаем состояние для компонентов
