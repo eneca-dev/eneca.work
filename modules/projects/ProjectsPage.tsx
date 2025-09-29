@@ -335,7 +335,8 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+        {/* Разделитель сделан чуть тоньше для визуального выравнивания с остальными */}
+        <div className="h-6 w-[0.5px] bg-slate-200 dark:bg-slate-700 mx-1" />
 
         {/* Организация: Department → Team → Employee */}
         <DropdownMenu>
