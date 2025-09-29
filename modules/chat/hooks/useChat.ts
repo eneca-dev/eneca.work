@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { ChatMessage } from '../types/chat'
+import { ChatMessage, ChatEnv } from '../types/chat'
 import { sendChatMessage } from '../api/chat'
 import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -17,15 +18,68 @@ export function useChat() {
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
   const [conversationId, setConversationId] = useState<string>('')
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
+  // Флаг ожидания финального ответа текущего запроса
+  const awaitingFinalRef = useRef<boolean>(false)
+  // Безопасный таймер авто-сброса индикатора печати
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
   const [lastEventAt, setLastEventAt] = useState<Date | null>(null)
   const [lastEventKind, setLastEventKind] = useState<string | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null)
+  // env удалён — всегда используем прод вебхук через серверный gateway
 
   const userStore = useUserStore()
   const userId = userStore.id
   const { collapsed } = useSidebarState()
+
+  // Допустимые виды серверных событий чата
+  type MessageKind = NonNullable<ChatMessage['kind']>
+  const allowedKinds: readonly MessageKind[] = ['thinking', 'tool', 'observation', 'message'] as const
+
+  // Нормализация и валидация kind: приводим к нижнему регистру, проверяем против разрешённых значений
+  const normalizeKind = (value: unknown): MessageKind => {
+    if (typeof value !== 'string') return 'message'
+    const normalized = value.toLowerCase().trim()
+    return (allowedKinds as readonly string[]).includes(normalized) ? (normalized as MessageKind) : 'message'
+  }
+
+  // Сравнение сообщений для дедупликации (замены последнего локального)
+  // Совпадение по: роли, виду (kind) и содержимому (content). content сравниваем после trim.
+  const areMessagesEquivalentForDedupe = useCallback((a: ChatMessage | undefined, b: ChatMessage | undefined): boolean => {
+    if (!a || !b) return false
+    const kindA = a.kind ? normalizeKind(a.kind) : 'message'
+    const kindB = b.kind ? normalizeKind(b.kind) : 'message'
+    return a.role === b.role && kindA === kindB && (a.content?.trim?.() ?? '') === (b.content?.trim?.() ?? '')
+  }, [])
+
+  // Возвращает новый массив сообщений, где входящее событие заменяет последнее локальное, если оно эквивалентно
+  const replaceLastIfDuplicateElseAppend = useCallback((prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] => {
+    const last = prev.length > 0 ? prev[prev.length - 1] : undefined
+    if (areMessagesEquivalentForDedupe(last, incoming)) {
+      return [...prev.slice(0, -1), incoming]
+    }
+    return [...prev, incoming]
+  }, [areMessagesEquivalentForDedupe])
+
+  // Запуск/сброс страховочного таймера индикатора печати (~5 мин)
+  const startTypingSafetyTimer = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      // Авто-очистка на случай отсутствия финального события
+      setIsTyping(false)
+      awaitingFinalRef.current = false
+    }, 300000)
+  }, [])
+
+  const clearTypingSafetyTimer = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = null
+    }
+  }, [])
 
   // Загружаем историю только при наличии авторизованного пользователя
   useEffect(() => {
@@ -57,18 +111,40 @@ export function useChat() {
         (payload) => {
           const row: any = payload.new
           const role: 'user' | 'assistant' = row.role === 'user' ? 'user' : 'assistant'
-          // Обозначаем тип мыслей префиксом для визуального отличия
-          const kind = row.kind as string | undefined
-          const prefix = kind && kind !== 'message' ? `(${kind}) ` : ''
+          // Сохраняем тип сообщения для презентации в UI
+          const kind = normalizeKind(row.kind)
           const evt: ChatMessage = {
             id: row.id,
             role,
-            content: `${prefix}${row.content ?? ''}`,
+            kind,
+            content: row.content ?? '',
             timestamp: new Date(row.created_at ?? Date.now()),
           }
-          setMessages(prev => [...prev, evt])
+          // Дедупликация: если последнее локально добавленное сообщение совпадает с приходящим, заменяем его, иначе добавляем
+          setMessages(prev => replaceLastIfDuplicateElseAppend(prev, evt))
           setLastEventAt(new Date())
           setLastEventKind(kind ?? 'message')
+          // Индикатор печати после HTTP: thinking/tool → включаем, observation → выключаем, message → выключаем
+          if (role === 'assistant') {
+            if (kind === 'observation') {
+              setIsTyping(false)
+              awaitingFinalRef.current = false
+              clearTypingSafetyTimer()
+            } else if (kind === 'thinking' || kind === 'tool') {
+              setIsTyping(true)
+              awaitingFinalRef.current = true
+              startTypingSafetyTimer()
+            } else if (kind === 'message') {
+              setIsTyping(false)
+              awaitingFinalRef.current = false
+              clearTypingSafetyTimer()
+            } else {
+              // Непредвиденный тип события — явно сбрасываем индикатор, чтобы не зависал
+              setIsTyping(false)
+              awaitingFinalRef.current = false
+              clearTypingSafetyTimer()
+            }
+          }
         }
       )
       .subscribe()
@@ -108,6 +184,8 @@ export function useChat() {
         channelRef.current = null
       }
       setIsSubscribed(false)
+      // Чистим таймер при размонтировании/отписке
+      clearTypingSafetyTimer()
     }
   }, [conversationId, subscribeToConversation])
 
@@ -186,8 +264,12 @@ export function useChat() {
 
     // Сохраняем сообщение пользователя в кеш с userId
     saveMessage(userMessage, userId)
-    setMessages(prev => [...prev, userMessage])
+    // Дедупликация локального добавления: если предыдущее сообщение эквивалентно, заменяем его
+    setMessages(prev => replaceLastIfDuplicateElseAppend(prev, userMessage))
     setIsLoading(true)
+    setIsTyping(true)
+    awaitingFinalRef.current = true
+    startTypingSafetyTimer()
 
     try {
       // Обеспечиваем наличие беседы и realtime-подписки
@@ -203,12 +285,19 @@ export function useChat() {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: response.message,
-        timestamp: new Date()
+        timestamp: new Date(),
+        kind: 'message',
       }
 
       // Сохраняем ответ бота в кеш с userId
       saveMessage(botMessage, userId)
-      setMessages(prev => [...prev, botMessage])
+      // Дедупликация: если последнее локальное сообщение совпадает, заменяем вместо добавления
+      setMessages(prev => replaceLastIfDuplicateElseAppend(prev, botMessage))
+      // После успешного HTTP-ответа включаем индикатор,
+      // он погаснет при получении 'observation' из realtime
+      setIsTyping(true)
+      awaitingFinalRef.current = true
+      startTypingSafetyTimer()
     } catch (error) {
       console.error('Chat error:', error)
       if (error instanceof Error) {
@@ -238,11 +327,15 @@ export function useChat() {
       
       // Сохраняем сообщение об ошибке в кеш с userId
       saveMessage(errorMessage, userId)
-      setMessages(prev => [...prev, errorMessage])
+      // Дедупликация ошибок по тем же правилам
+      setMessages(prev => replaceLastIfDuplicateElseAppend(prev, errorMessage))
+      setIsTyping(false)
+      awaitingFinalRef.current = false
+      clearTypingSafetyTimer()
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, userId])
+  }, [isLoading, userId, conversationId, ensureConversation])
 
   const clearMessages = useCallback(() => {
     if (!userId) return
@@ -255,6 +348,7 @@ export function useChat() {
   return {
     messages,
     isLoading,
+    isTyping,
     isOpen,
     input,
     setInput,
