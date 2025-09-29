@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react'
 import { ChatMessage } from '../types/chat'
 import { formatMessageTime } from '../utils/formatTime'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { Brain, Wrench, Eye } from 'lucide-react'
 
 interface MessageListProps {
   messages: ChatMessage[]
   isLoading: boolean
+  isTyping?: boolean
 }
 
 function TypingIndicator() {
@@ -25,13 +27,13 @@ function TypingIndicator() {
   )
 }
 
-export function MessageList({ messages, isLoading }: MessageListProps) {
+export function MessageList({ messages, isLoading, isTyping }: MessageListProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Автоскролл к новым сообщениям
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+  }, [messages, isLoading, isTyping])
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/30 dark:bg-gray-900/30">
@@ -62,8 +64,21 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                 </span>
               </>
             ) : (
-              // Структура для сообщений агента - время под текстом
+              // Структура для сообщений агента - бейдж по kind и время под текстом
               <>
+                {message.kind && message.kind !== 'message' && (
+                  <div className="mb-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
+                    {message.kind === 'thinking' && <Brain size={10} />}
+                    {message.kind === 'tool' && <Wrench size={10} />}
+                    {message.kind === 'observation' && <Eye size={10} />}
+                    <span>
+                      {message.kind === 'thinking' ? 'Размышляю…'
+                        : message.kind === 'tool' ? 'Инструмент'
+                        : message.kind === 'observation' ? 'Наблюдение'
+                        : null}
+                    </span>
+                  </div>
+                )}
                 <div className="mb-1">
                   <MarkdownRenderer 
                     content={message.content}
@@ -79,7 +94,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
         </div>
       ))}
       
-      {isLoading && <TypingIndicator />}
+      {(isTyping || isLoading) && <TypingIndicator />}
       
       <div ref={messagesEndRef} />
     </div>
