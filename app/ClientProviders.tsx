@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { GlobalNotification } from "@/components/ui/notification";
 import { NoSSR } from "@/components/NoSSR";
 import { useEffect } from "react";
-import GlobalPermissionsDebug from "@/components/debug/GlobalPermissionsDebug";
 import { UserPermissionsSyncProvider } from "@/modules/permissions";
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
@@ -38,8 +37,6 @@ export default function ClientProviders({ children }: { children: React.ReactNod
           {children}
           <Toaster />
           <GlobalNotification />
-          {/* Глобальное всплывающее окно дебага permissions */}
-          <GlobalPermissionsDebug />
         </UserPermissionsSyncProvider>
       </NoSSR>
     </ThemeProvider>

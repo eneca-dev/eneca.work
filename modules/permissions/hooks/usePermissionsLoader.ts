@@ -76,9 +76,6 @@ export function usePermissionsLoader() {
           return
         }
 
-        console.log('✅ Разрешения успешно загружены:', result.permissions.length)
-        console.log('👥 Роли пользователя:', result.roles)
-        console.log('⭐ Основная роль:', result.primaryRole)
         setPermissions(result.permissions)
       })
 
@@ -116,7 +113,7 @@ export function usePermissionsLoader() {
         clearError()
       }
       // Если в сторе уже есть разрешения для этого же userId, избегаем повторной загрузки
-      if ((globalLastUserId === userId || permissions.length > 0) && lastUserIdRef.current !== userId) {
+      if (((globalLoadInFlight && globalLastUserId === userId) || permissions.length > 0) && lastUserIdRef.current !== userId) {
         lastUserIdRef.current = userId
         return
       }

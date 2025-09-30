@@ -203,7 +203,7 @@ export const getPermissionDescription = (permission: string): string => {
   const actionLabel = actionLabels[action] || action
   const scopeLabel = scopeLabels[scope || ''] || scope || ''
   
-  return `${actionLabel} ${moduleLabel.toLowerCase()} ${scopeLabel}`
+  return [actionLabel, moduleLabel.toLowerCase(), scopeLabel].filter(Boolean).join(' ')
 }
 
 /**

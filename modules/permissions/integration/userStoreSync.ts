@@ -23,20 +23,24 @@ export function useUserPermissionsSync() {
   const setPermissions = usePermissionsStore(state => state.setPermissions)
 
   useEffect(() => {
-    // На логауте или отсутствии userId — отписываемся и очищаем глобальные ссылки
-    if (!isAuthenticated || !userId) {
+    const cleanup = () => {
       if (activeChannel) {
         activeChannel.unsubscribe()
         activeChannel = null
       }
       activeUserId = null
       ensuredRoleForUserId = null
-      return
+    }
+
+    // На логауте или отсутствии userId — отписываемся и очищаем глобальные ссылки
+    if (!isAuthenticated || !userId) {
+      cleanup()
+      return cleanup
     }
 
     // Если подписка уже активна для этого пользователя — ничего не делаем
     if (activeUserId === userId && activeChannel) {
-      return
+      return cleanup
     }
 
     // Переподписка при смене пользователя
@@ -112,7 +116,8 @@ export function useUserPermissionsSync() {
         console.warn('PERMISSIONS Ошибка при обеспечении дефолтной роли:', e)
       }
     })()
-  }, [isAuthenticated, userId, setPermissions])
+    return cleanup
+  }, [isAuthenticated, userId, setPermissions, reloadPermissions])
   
   // Возвращаем состояние для компонентов
   return {

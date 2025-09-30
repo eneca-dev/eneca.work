@@ -43,14 +43,32 @@ export async function getUserPermissions(userId: string): Promise<{
     }
 
     const roles = userRoles?.map(r => r.role_name) || []
-    
-    console.log('✅ Загружено разрешений:', permissions?.length || 0)
-    console.log('👤 Роли пользователя:', roles)
+
+    // Вычисляем основную роль по иерархии пермишенов и/или списку ролей
+    const computePrimaryRole = (perms: string[], rs: string[]): string | null => {
+      const set = new Set(perms)
+      if (set.has('hierarchy.is_admin')) return 'admin'
+      if (set.has('hierarchy.is_department_head')) return 'department_head'
+      if (set.has('hierarchy.is_team_lead')) return 'team_lead'
+      if (set.has('hierarchy.is_user')) return 'user'
+      // fallback по именам ролей из view_user_roles
+      if (rs.includes('admin')) return 'admin'
+      if (rs.includes('department_head')) return 'department_head'
+      if (rs.includes('team_lead')) return 'team_lead'
+      if (rs.includes('user')) return 'user'
+      return null
+    }
+
+    const primaryRole = computePrimaryRole(permissions || [], roles)
+
+    console.log('✅ Загружено разрешений в supabasePermissions:', permissions?.length || 0)
+    console.log('👤 Роли пользователя в supabasePermissions:', roles)
+    console.log('⭐ Основная роль в supabasePermissions:', primaryRole)
     
     return {
       permissions: permissions || [],
       roles,
-      primaryRole: null,
+      primaryRole,
       error: null
     }
 
