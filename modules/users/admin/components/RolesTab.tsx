@@ -1,5 +1,5 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
@@ -510,7 +510,7 @@ export default function RolesTab() {
           </TableHeader>
           <TableBody>
             {orderedGroupEntries.map(([category, items]) => (
-              <>
+              <Fragment key={`group-${category}`}>
                 <TableRow key={`cat-${category}`}>
                   <TableCell colSpan={1 + filteredRoles.length} className="bg-gray-50 dark:bg-gray-800/50 text-xs font-semibold text-gray-600 dark:text-gray-300">
                     {category}
@@ -545,7 +545,7 @@ export default function RolesTab() {
                     ))}
                   </TableRow>
                 ))}
-              </>
+              </Fragment>
             ))}
           </TableBody>
         </Table>
