@@ -163,22 +163,22 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh] dark:bg-gray-800 dark:border-gray-700">
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] flex flex-col overflow-hidden dark:bg-gray-800 dark:border-gray-700">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-foreground">
               Управление статусами
             </DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Создание, редактирование и удаление статусов секций
+              Создание, редактирование и удаление статусов разделов
             </p>
           </DialogHeader>
           
-          <div className="py-4">
+          <div className="py-4 flex-1 overflow-y-auto">
             {/* Заголовок с кнопкой создания */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <h4 className="text-lg font-medium text-foreground">
-                  Статусы секций
+                  Статусы разделов
                 </h4>
                 {statuses.length > 0 && (
                   <Badge 
@@ -223,7 +223,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
             )}
 
             {/* Список статусов */}
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
               {isLoading ? (
                 <div className="flex justify-center items-center py-12">
                   <div className="text-center">
@@ -238,7 +238,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                   </div>
                   <h3 className="text-lg font-medium text-foreground mb-2">Нет созданных статусов</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Создайте первый статус для работы с секциями
+                    Создайте первый статус для работы с разделами
                   </p>
                   <Button
                     onClick={handleCreateStatus}
@@ -271,7 +271,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                 filteredStatuses.map((status) => (
                   <div
                     key={status.id}
-                    className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border hover:bg-muted/50 transition-colors dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                   >
                     <div className="flex items-center flex-1">
                       <div 
@@ -291,7 +291,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
                     </div>
 
                     {/* Кнопки управления */}
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -315,7 +315,7 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-0">
             <Button 
               variant="outline" 
               onClick={handleClose}

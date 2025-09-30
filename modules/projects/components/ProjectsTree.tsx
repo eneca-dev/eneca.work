@@ -108,6 +108,7 @@ interface ProjectsTreeProps {
   selectedTeamId?: string | null
   selectedEmployeeId?: string | null
   selectedStatusIds?: string[]
+  selectedProjectStatuses?: string[]
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
@@ -673,7 +674,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                             )}
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-40 p-0">
+                        <DropdownMenuContent align="start" className="w-40 p-0 dark:bg-slate-800 dark:border-slate-700">
                           {PROJECT_STATUS_OPTIONS.map((opt) => (
                             <DropdownMenuItem key={opt} onClick={() => handleUpdateProjectStatus(opt)}>
                               {getProjectStatusLabel(opt)}
@@ -859,6 +860,7 @@ export function ProjectsTree({
   selectedTeamId,
   selectedEmployeeId,
   selectedStatusIds = [],
+  selectedProjectStatuses = [],
   urlSectionId,
   urlTab,
   externalSearchQuery,
@@ -1359,6 +1361,7 @@ export function ProjectsTree({
           selectedEmployeeId,
           externalSearchQuery,
           selectedStatusIds,
+          selectedProjectStatuses,
         })
         try {
           // Функция построения базового запроса с фильтрами
@@ -1388,6 +1391,10 @@ export function ProjectsTree({
             }
             if (selectedEmployeeId) {
               q = q.eq('section_responsible_id', selectedEmployeeId)
+            }
+            // Фильтр по статусам проектов на уровне запроса, если выбраны
+            if (selectedProjectStatuses && selectedProjectStatuses.length > 0) {
+              q = q.in('project_status', selectedProjectStatuses)
             }
             return q
           }
@@ -1429,12 +1436,11 @@ export function ProjectsTree({
 
           console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
-          // Дополнительно включаем проекты текущего менеджера без разделов, если активны орг-фильтры
           try {
             const currentUserId = useUserStore.getState().id || null
             const orgFiltersActive = Boolean(selectedDepartmentId || selectedTeamId || selectedEmployeeId)
             const managerFilterAllowsSelf = !selectedManagerId || selectedManagerId === currentUserId
-            if (currentUserId && orgFiltersActive && managerFilterAllowsSelf) {
+            if (currentUserId && !orgFiltersActive && managerFilterAllowsSelf) {
               const { data: ownProjectsNoSections, error: extraErr } = await supabase
                 .from('view_project_tree')
                 .select('*')
@@ -1455,6 +1461,43 @@ export function ProjectsTree({
             }
           } catch (e) {
             console.warn('[DEBUG:PROJECTS] tree:merge own projects failed', e)
+          }
+
+          // Добавляем проекты в статусе draft для гарантированной видимости,
+          // НО только если фильтр статусов проектов пуст ИЛИ явно включает 'draft'.
+          // Исключение: если выбран конкретный проект (selectedProjectId) — не вмешиваемся.
+          try {
+            if (!selectedProjectId) {
+              const allowDrafts = !selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')
+              if (allowDrafts) {
+                let draftQuery = supabase
+                  .from('view_project_tree')
+                  .select('*')
+                  .eq('project_status', 'draft')
+                if (selectedManagerId && selectedManagerId !== 'no-manager') {
+                  draftQuery = draftQuery.eq('manager_id', selectedManagerId)
+                } else if (selectedManagerId === 'no-manager') {
+                  draftQuery = draftQuery.is('manager_id', null)
+                }
+                const { data: draftRows, error: draftErr } = await draftQuery
+
+                if (!draftErr && draftRows && draftRows.length > 0) {
+                  const seen = new Set((data || []).map((r: any) => `${r.project_id}:${r.section_id || 'null'}`))
+                  let added = 0
+                  draftRows.forEach((r: any) => {
+                    const key = `${r.project_id}:${r.section_id || 'null'}`
+                    if (!seen.has(key)) {
+                      data.push(r)
+                      seen.add(key)
+                      added += 1
+                    }
+                  })
+                  console.log('[DEBUG:PROJECTS] tree:merged_drafts', { added })
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[DEBUG:PROJECTS] tree:merge drafts failed', e)
           }
 
       // [DEBUG:PROJECTS] итоги сырого ответа
@@ -1913,12 +1956,140 @@ export function ProjectsTree({
     console.log('[DEBUG:PROJECTS] tree:filter:start', {
       treeNodes: treeData.length,
       statusFilter: selectedStatusIds,
+      projectStatusFilter: selectedProjectStatuses,
       showOnlySections,
       searchQuery,
     })
 
-    // Сначала применяем фильтр по статусам
+    // Сначала применяем фильтр по статусам проектов (если заданы)
+    const filterByProjectStatus = (nodes: ProjectNode[]): ProjectNode[] => {
+      if (!selectedProjectStatuses || selectedProjectStatuses.length === 0) return nodes
+      const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+        const filtered: ProjectNode[] = []
+        for (const node of nodeList) {
+          let shouldInclude = false
+          let filteredChildren: ProjectNode[] = []
+          if (node.type === 'project') {
+            const nodeStatus = node.projectStatus ? normalizeProjectStatus(node.projectStatus) : undefined
+            shouldInclude = nodeStatus ? selectedProjectStatuses.includes(nodeStatus) : false
+            // даже если проект не проходит, у него могут быть дети; но для чистоты убираем ветку целиком
+          } else if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+          if (shouldInclude) {
+            filtered.push({ ...node, children: node.type === 'project' ? node.children : filteredChildren })
+          }
+        }
+        return filtered
+      }
+      return filterRecursive(nodes)
+    }
+
+    data = filterByProjectStatus(data)
+
+    // Затем применяем фильтр по статусам разделов
     data = filterNodesByStatus(data, selectedStatusIds)
+
+    // Видимость проектов-черновиков (draft) при пустом фильтре статусов проектов
+    // или если фильтр статусов проектов явно включает 'draft'.
+    // Исключения: явный выбор projectId и поиск/onlyFavorites учитываются как раньше.
+    if (!selectedProjectId && (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft'))) {
+      const reintegrateDrafts = (original: ProjectNode[], filtered: ProjectNode[]): ProjectNode[] => {
+        const isDraftProject = (n: ProjectNode) => n.type === 'project' && (normalizeProjectStatus(n.projectStatus) === 'draft')
+
+        // Индексация текущего отфильтрованного дерева по id
+        const filteredIds = new Set<string>()
+        const collectIds = (nodes: ProjectNode[]) => {
+          nodes.forEach(n => {
+            filteredIds.add(n.id)
+            if (n.children && n.children.length > 0) collectIds(n.children)
+          })
+        }
+        collectIds(filtered)
+
+        // Условия включения черновиков
+        const draftsShouldBeIncluded = (p: ProjectNode): boolean => {
+          if (!isDraftProject(p)) return false
+          if (showOnlyFavorites && !p.isFavorite) return false
+          if (selectedManagerId && selectedManagerId !== 'no-manager') {
+            return p.managerId === selectedManagerId
+          }
+          if (selectedManagerId === 'no-manager') {
+            return !p.managerId
+          }
+          return true
+        }
+
+        const matchesSearch = (node: ProjectNode): boolean => {
+          if (!searchQuery || !searchQuery.trim()) return true
+          const q = searchQuery.toLowerCase()
+          const hay = [node.name, node.projectName, node.stageName, node.responsibleName, node.departmentName]
+            .filter(Boolean)
+            .map(s => (s as string).toLowerCase())
+          return hay.some(h => h.includes(q))
+        }
+
+        // Рекурсивное объединение: строим новое поддерево, добавляя недостающие draft-проекты
+        const mergeBranch = (origSiblings: ProjectNode[], filteredSiblings: ProjectNode[]): ProjectNode[] => {
+          // быстрый доступ к узлам filtered по id
+          const filteredMap = new Map<string, ProjectNode>(filteredSiblings.map(n => [n.id, n]))
+          const result: ProjectNode[] = []
+
+          for (const origNode of origSiblings) {
+            const existing = filteredMap.get(origNode.id)
+
+            // Рекурсивно мержим детей (если есть)
+            const existingChildren = existing?.children || []
+            const origChildren = origNode.children || []
+            const mergedChildren = (origChildren.length > 0 || existingChildren.length > 0)
+              ? mergeBranch(origChildren, existingChildren || [])
+              : []
+
+            if (existing) {
+              // Узел уже есть в отфильтрованном дереве — возвращаем его, но с обновлёнными детьми
+              result.push({
+                ...existing,
+                children: mergedChildren.length > 0 ? mergedChildren : existing.children
+              })
+              continue
+            }
+
+            // Узла нет: решаем, включать ли его
+            let shouldInclude = false
+            if (origNode.type === 'project') {
+              shouldInclude = draftsShouldBeIncluded(origNode) && matchesSearch(origNode) && !filteredIds.has(origNode.id)
+            } else {
+              shouldInclude = mergedChildren.length > 0
+            }
+
+            if (shouldInclude) {
+              // Клонируем оригинальный узел, приклеиваем соответствующие (уже смерженные) дочерние
+              const cloned: ProjectNode = {
+                ...origNode,
+                children: origNode.type === 'project' ? origNode.children : (mergedChildren.length > 0 ? mergedChildren : undefined)
+              }
+              result.push(cloned)
+
+              // Обновим множество id, чтобы не допустить последующих дублей
+              const stack: ProjectNode[] = [cloned]
+              while (stack.length) {
+                const cur = stack.pop()!
+                filteredIds.add(cur.id)
+                if (cur.children && cur.children.length > 0) stack.push(...cur.children)
+              }
+            }
+          }
+
+          return result
+        }
+
+        const merged = mergeBranch(original, filtered)
+        return merged
+      }
+
+      data = reintegrateDrafts(treeData, data)
+    }
 
     // Затем применяем фильтр "только разделы"
     if (showOnlySections) {
