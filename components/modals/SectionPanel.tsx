@@ -9,6 +9,7 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
+import { SectionStagesTab } from '@/modules/projects/components/SectionStagesTab'
 import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
@@ -58,7 +59,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(initialTab === 'details' ? 'overview' : initialTab as any)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'stages' | 'tasks' | 'reports' | 'loadings'>(initialTab === 'details' ? 'overview' : initialTab as any)
   const initializedRef = useRef(false)
   
   // Состояние для inline редактирования отдельных полей
@@ -783,6 +784,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               Декомпозиция
             </button>
             <button
+              onClick={() => setActiveTab('stages')}
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+                activeTab === 'stages'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Этапы
+            </button>
+            <button
               onClick={() => setActiveTab('tasks')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
                 activeTab === 'tasks'
@@ -1044,6 +1055,9 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               )}
               {activeTab === 'decomposition' && (
                 <SectionDecompositionTab sectionId={sectionId} compact />
+              )}
+              {activeTab === 'stages' && (
+                <SectionStagesTab sectionId={sectionId} />
               )}
               {activeTab === 'tasks' && (
                 <div>

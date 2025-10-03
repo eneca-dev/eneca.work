@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import throttle from "lodash.throttle"
+import { throttle } from "@/utils/throttle"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"

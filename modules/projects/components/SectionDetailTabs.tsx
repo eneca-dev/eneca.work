@@ -9,7 +9,7 @@ interface SectionDetailTabsProps {
   sectionId: string
 }
 
-type TabType = 'tasks-comments' | 'decomposition'
+type TabType = 'tasks-comments'
 
 export function SectionDetailTabs({ sectionId }: SectionDetailTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('tasks-comments')
@@ -27,16 +27,6 @@ export function SectionDetailTabs({ sectionId }: SectionDetailTabsProps) {
           onClick={() => setActiveTab("tasks-comments")}
         >
           Задания / Комментарии
-        </button>
-        <button
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "decomposition"
-              ? "border-blue-500 text-blue-600 dark:text-blue-400"
-              : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-          }`}
-          onClick={() => setActiveTab("decomposition")}
-        >
-          Декомпозиция
         </button>
       </div>
 
@@ -62,11 +52,7 @@ export function SectionDetailTabs({ sectionId }: SectionDetailTabsProps) {
           </div>
         )}
 
-        {activeTab === 'decomposition' && (
-          <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
-            <SectionDecompositionTab sectionId={sectionId} compact={false} />
-          </div>
-        )}
+        {/* Вкладка "Декомпозиция" удалена: декомпозиция доступна только в модальном окне SectionPanel */}
       </div>
     </div>
   )

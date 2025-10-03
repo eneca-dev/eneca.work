@@ -76,6 +76,17 @@ export const useDecomposition = () => {
     saveAsTemplate,
     loadFromTemplate,
     deleteTemplate,
+
+    // Stages API from store
+    stages,
+    stageItems,
+    fetchStages,
+    fetchStageItems,
+    createStage,
+    updateStage,
+    deleteStage,
+    reorderStages,
+    assignItemToStage,
   } = useDecompositionStore()
 
   // Проверяем, загружен ли store
@@ -360,5 +371,16 @@ export const useDecomposition = () => {
     handleDeleteTemplate,
 
     // Остальные существующие переменные...
+
+    // Stages exposure
+    stages,
+    stageItems,
+    fetchStages,
+    fetchStageItems,
+    createStage,
+    updateStage,
+    deleteStage,
+    reorderStages,
+    assignItemToStage,
   }
 }

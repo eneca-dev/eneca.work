@@ -277,7 +277,6 @@ export function NotesBlock() {
         .menu-item,
         .navigation-link,
         [href="/dashboard/planning"],
-        [href="/dashboard/decomposition"],
         [href="/dashboard/projects"],
         [href="/dashboard/users"],
         [href="/dashboard/settings"],
