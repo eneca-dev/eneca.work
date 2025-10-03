@@ -27,6 +27,13 @@ Sentry.init({
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+
+  // Не отправлять Cookie в POST /_relay 
+  transportOptions: {
+    fetchOptions: {
+      credentials: 'omit',
+    },
+  },
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
