@@ -66,6 +66,14 @@ export interface Employee {
   shortageDescription?: string | null
 }
 
+export interface DecompositionStage {
+  id: string
+  name: string
+  start: Date | null
+  finish: Date | null
+  color?: string
+}
+
 export interface Section {
   id: string
   name: string
@@ -87,6 +95,8 @@ export interface Section {
   responsibleAvatarUrl?: string
   hasLoadings?: boolean
   loadings?: Loading[]
+  // Этапы декомпозиции раздела
+  decompositionStages?: DecompositionStage[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }

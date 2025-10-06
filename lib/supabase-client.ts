@@ -365,6 +365,7 @@ export async function fetchSectionsWithLoadings(
           endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : new Date(),
           status: sectionItem.latest_plan_loading_status || undefined,
           hasLoadings: sectionItem.has_loadings,
+          decompositionStages: [], // Будет заполнено ниже
         })
 
         // Инициализируем массив загрузок для этого раздела
@@ -392,6 +393,38 @@ export async function fetchSectionsWithLoadings(
         })
       }
     })
+
+    // Загружаем этапы декомпозиции для всех разделов одним запросом
+    const sectionIds = Array.from(sectionsMap.keys())
+    if (sectionIds.length > 0) {
+      const { data: stagesData, error: stagesError } = await supabase
+        .from('decomposition_stages')
+        .select('decomposition_stage_id, decomposition_stage_section_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_order')
+        .in('decomposition_stage_section_id', sectionIds)
+        .order('decomposition_stage_order', { ascending: true })
+
+      if (!stagesError && stagesData) {
+        // Группируем этапы по разделам
+        const stagesBySectionId: Record<string, any[]> = {}
+        stagesData.forEach((stage: any) => {
+          const sectionId = stage.decomposition_stage_section_id
+          if (!stagesBySectionId[sectionId]) {
+            stagesBySectionId[sectionId] = []
+          }
+          stagesBySectionId[sectionId].push({
+            id: stage.decomposition_stage_id,
+            name: stage.decomposition_stage_name,
+            start: stage.decomposition_stage_start ? new Date(stage.decomposition_stage_start) : null,
+            finish: stage.decomposition_stage_finish ? new Date(stage.decomposition_stage_finish) : null,
+          })
+        })
+
+        // Добавляем этапы к разделам
+        sectionsMap.forEach((section, sectionId) => {
+          section.decompositionStages = stagesBySectionId[sectionId] || []
+        })
+      }
+    }
 
     return {
       sections: Array.from(sectionsMap.values()),

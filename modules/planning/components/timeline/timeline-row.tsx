@@ -175,6 +175,36 @@ export function TimelineRow({
     }, 0)
   }
 
+  // Функция для получения этапов активных в указанную дату
+  const getActiveStagesForDate = (date: Date) => {
+    const stages = section.decompositionStages || []
+    if (stages.length === 0) return []
+
+    return stages.filter(stage => {
+      if (!stage.start || !stage.finish) return false
+      
+      const stageStart = new Date(stage.start)
+      const stageFinish = new Date(stage.finish)
+      
+      stageStart.setHours(0, 0, 0, 0)
+      stageFinish.setHours(23, 59, 59, 999)
+      
+      const checkDate = new Date(date)
+      checkDate.setHours(0, 0, 0, 0)
+      
+      return checkDate >= stageStart && checkDate <= stageFinish
+    })
+  }
+
+  // Генерируем цвет для этапа по его индексу
+  const getStageColor = (stageIndex: number, isDark: boolean): string => {
+    const colors = isDark
+      ? ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#f97316', '#14b8a6']
+      : ['#2563eb', '#059669', '#7c3aed', '#d97706', '#db2777', '#0891b2', '#ea580c', '#0d9488']
+    
+    return colors[stageIndex % colors.length]
+  }
+
   // Вычисляем позицию строки раздела с учетом загрузок предыдущих разделов
   const sectionPosition = headerHeight * 2 + sectionIndex * rowHeight + totalLoadingsBeforeSection * reducedRowHeight
 
@@ -488,31 +518,38 @@ export function TimelineRow({
                     ></div>
                   )}
                   
-                  {/* Графическое отображение суммарной нагрузки */}
-                  {sectionWorkload > 0 && (
-                    <div className="absolute inset-0 flex items-end justify-center p-1">
-                      <div
-                        className={cn(
-                          "rounded-t-sm transition-all duration-200",
-                          theme === "dark" ? "bg-blue-400" : "bg-blue-500"  // Нейтральный синий цвет
-                        )}
-                        style={{
-                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы (почти на всю ячейку)
-                          height: `${Math.max(
-                            Math.min(
-                              (sectionWorkload / 3) * (rowHeight - 10),  // Высота пропорционально нагрузке (3 ставки = полная высота)
-                              rowHeight - 6  // Максимальная высота
-                            ),
-                            3  // Минимальная высота для видимости
-                          )}px`,
-                          opacity: theme === "dark" ? 0.8 : 0.7
-                        }}
-                        title={`Нагрузка: ${sectionWorkload === Math.floor(sectionWorkload) 
-                          ? sectionWorkload.toString() 
-                          : sectionWorkload.toFixed(1)} ставки`}
-                      ></div>
-                    </div>
-                  )}
+                  {/* Отображение этапов декомпозиции */}
+                  {(() => {
+                    const activeStages = getActiveStagesForDate(unit.date)
+                    const allStages = section.decompositionStages || []
+                    
+                    if (activeStages.length === 0) return null
+                    
+                    const barHeight = Math.floor(rowHeight / Math.max(allStages.length, 1)) - 2
+                    
+                    return (
+                      <div className="absolute inset-0 flex flex-col justify-center gap-0.5 p-1">
+                        {activeStages.map((stage) => {
+                          const stageIndex = allStages.findIndex(s => s.id === stage.id)
+                          const color = getStageColor(stageIndex, theme === "dark")
+                          
+                          return (
+                            <div
+                              key={stage.id}
+                              className="rounded-sm transition-all duration-200"
+                              style={{
+                                backgroundColor: color,
+                                height: `${barHeight}px`,
+                                minHeight: '3px',
+                                opacity: theme === "dark" ? 0.8 : 0.7,
+                              }}
+                              title={`${stage.name}`}
+                            />
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
