@@ -12,6 +12,7 @@ import { DepartmentRow } from "./timeline/department-row" // Новый комп
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 
 // Обновляем интерфейс TimelineGridProps, добавляя отделы
@@ -76,6 +77,9 @@ export function TimelineGrid({
   // Получаем состояние раскрытия разделов и отделов
   const expandedSections = usePlanningStore((state) => state.expandedSections)
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
+  const groupByProject = usePlanningStore((state) => state.groupByProject)
+  const expandedProjectGroups = usePlanningStore((state) => state.expandedProjectGroups)
+  const toggleProjectGroup = usePlanningStore((state) => state.toggleProjectGroup)
   
   // Получаем функции переключения видимости
   const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
@@ -291,25 +295,94 @@ export function TimelineGrid({
             collapseAllDepartments={collapseAllDepartments}
           />
 
-          {/* Строки с разделами */}
-          {showSections && sections.map((section, index) => (
-            <TimelineRow
-              key={section.id}
-              section={section}
-              sectionIndex={index}
-              timeUnits={timeUnits}
-              theme={theme}
-              rowHeight={ROW_HEIGHT}
-              headerHeight={HEADER_HEIGHT}
-              columnWidth={COLUMN_WIDTHS.section}
-              padding={PADDING}
-              leftOffset={LEFT_OFFSET}
-              cellWidth={cellWidth}
-              stickyColumnShadow={stickyColumnShadow}
-              totalExpandedSections={totalExpandedSections}
-              totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
-              onOpenSectionPanel={onOpenSectionPanel}
-            />
+          {/* Строки с разделами (возможна группировка по проектам) */}
+          {showSections && (!groupByProject ? (
+            sections.map((section, index) => (
+              <TimelineRow
+                key={section.id}
+                section={section}
+                sectionIndex={index}
+                timeUnits={timeUnits}
+                theme={theme}
+                rowHeight={ROW_HEIGHT}
+                headerHeight={HEADER_HEIGHT}
+                columnWidth={COLUMN_WIDTHS.section}
+                padding={PADDING}
+                leftOffset={LEFT_OFFSET}
+                cellWidth={cellWidth}
+                stickyColumnShadow={stickyColumnShadow}
+                totalExpandedSections={totalExpandedSections}
+                totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                onOpenSectionPanel={onOpenSectionPanel}
+              />
+            ))
+          ) : (
+            // Группировка по названию проекта
+            Object.entries(
+              sections.reduce((acc, s) => {
+                const key = s.projectName || "Без проекта"
+                if (!acc[key]) acc[key] = [] as typeof sections
+                acc[key].push(s)
+                return acc
+              }, {} as Record<string, typeof sections>)
+            ).sort((a, b) => a[0].localeCompare(b[0])).map(([projectName, projectSections]) => (
+              <div key={projectName}>
+                {/* Заголовок группы проекта */}
+                <div
+                  className={cn(
+                    "sticky left-0 z-10 flex items-center font-semibold border-b cursor-pointer select-none",
+                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                  )}
+                  style={{ height: `${HEADER_HEIGHT}px` }}
+                  onClick={() => toggleProjectGroup(projectName)}
+                >
+                  <div
+                    className={cn(
+                      "border-r flex items-center",
+                      theme === "dark" ? "border-slate-700" : "border-slate-200"
+                    )}
+                    style={{
+                      width: `${totalFixedWidth}px`,
+                      minWidth: `${totalFixedWidth}px`,
+                      padding: `${PADDING}px`,
+                    }}
+                  >
+                    <span className="mr-2">
+                      {expandedProjectGroups[projectName] ? (
+                        <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                      ) : (
+                        <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                      )}
+                    </span>
+                    <span className={cn("text-sm", theme === "dark" ? "text-slate-200" : "text-slate-800")}>{projectName}</span>
+                  </div>
+                  {/* Заполнитель для правой части, чтобы выровнять сетку */}
+                  <div className="flex-1" />
+                </div>
+                {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
+                  const index = sections.indexOf(section)
+                  return (
+                    <TimelineRow
+                      key={section.id}
+                      section={section}
+                      sectionIndex={index}
+                      timeUnits={timeUnits}
+                      theme={theme}
+                      rowHeight={ROW_HEIGHT}
+                      headerHeight={HEADER_HEIGHT}
+                      columnWidth={COLUMN_WIDTHS.section}
+                      padding={PADDING}
+                      leftOffset={LEFT_OFFSET}
+                      cellWidth={cellWidth}
+                      stickyColumnShadow={stickyColumnShadow}
+                      totalExpandedSections={totalExpandedSections}
+                      totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                      onOpenSectionPanel={onOpenSectionPanel}
+                    />
+                  )
+                })}
+              </div>
+            ))
           ))}
 
           {/* Если нет разделов или идет загрузка */}

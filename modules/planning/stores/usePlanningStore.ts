@@ -26,6 +26,9 @@ interface PlanningState {
   expandedTeams: Record<string, boolean> // Отслеживание раскрытых команд
   showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
+  // Группировка
+  groupByProject: boolean
+  expandedProjectGroups: Record<string, boolean>
 
   // Пагинация
   currentPage: number
@@ -113,6 +116,10 @@ interface PlanningState {
   setCurrentPage: (page: number) => void
   toggleShowSections: () => void
   toggleShowDepartments: () => void
+  toggleGroupByProject: () => void
+  toggleProjectGroup: (projectName: string) => void
+  expandAllProjectGroups: () => void
+  collapseAllProjectGroups: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
 
@@ -194,6 +201,8 @@ export const usePlanningStore = create<PlanningState>()(
         expandedTeams: {},
         showSections: true, // По умолчанию разделы показываются
         showDepartments: false,
+        groupByProject: true,
+        expandedProjectGroups: {},
         currentPage: 1,
         sectionsPerPage: 20,
         loadingsMap: {},
@@ -1774,6 +1783,44 @@ export const usePlanningStore = create<PlanningState>()(
           }
 
           set({ showDepartments: newShowDepartments })
+        },
+
+        // Переключатель группировки по проектам
+        toggleGroupByProject: () => {
+          const { groupByProject } = get()
+          set({ groupByProject: !groupByProject })
+        },
+
+        // Переключить конкретную проектную группу
+        toggleProjectGroup: (projectName: string) => {
+          set((state) => ({
+            expandedProjectGroups: {
+              ...state.expandedProjectGroups,
+              [projectName]: !state.expandedProjectGroups[projectName],
+            },
+          }))
+        },
+
+        // Развернуть все проектные группы
+        expandAllProjectGroups: () => {
+          const { sections } = get()
+          const all: Record<string, boolean> = {}
+          sections.forEach((s) => {
+            const key = s.projectName || "Без проекта"
+            all[key] = true
+          })
+          set({ expandedProjectGroups: all })
+        },
+
+        // Свернуть все проектные группы
+        collapseAllProjectGroups: () => {
+          const { sections } = get()
+          const all: Record<string, boolean> = {}
+          sections.forEach((s) => {
+            const key = s.projectName || "Без проекта"
+            all[key] = false
+          })
+          set({ expandedProjectGroups: all })
         },
 
         // Добавление нового раздела
