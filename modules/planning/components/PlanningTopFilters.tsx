@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, RotateCcw, Lock, Network, Layers, ListTree } from 'lucide-react'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, RotateCcw, Lock, Network, Layers, ListTree } from 'lucide-react'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
@@ -107,10 +107,10 @@ export default function PlanningTopFilters() {
         <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] md:text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800" title="Текущий диапазон">
           <CalendarIcon className="h-3.5 w-3.5" /> {rangeChip}
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollBackward(14)} title="Назад на 2 недели">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={scrollBackward} title="Назад на 2 недели">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollForward(14)} title="Вперёд на 2 недели">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={scrollForward} title="Вперёд на 2 недели">
           <ChevronRight className="h-4 w-4" />
         </Button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goToday} title="Сегодня">
@@ -134,9 +134,6 @@ export default function PlanningTopFilters() {
           title={groupByProject ? 'Отключить группировку по проектам' : 'Включить группировку по проектам'}
         >
           <ListTree className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.dispatchEvent(new CustomEvent('planning:toggleProjectColumn'))} title="Показать/скрыть колонку Проект">
-          <Columns3 className="h-4 w-4" />
         </Button>
         {/* Развернуть/Свернуть все проектные группы */}
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={expandAllProjectGroups} title="Развернуть все проектные группы" disabled={!groupByProject}>

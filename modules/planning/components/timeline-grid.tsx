@@ -151,12 +151,14 @@ export function TimelineGrid({
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(ROW_HEIGHT * 0.75)
 
-  // Вычисляем количество загрузок для каждого раздела
+  // Вычисляем количество вложенных строк (этапы + загрузки) для каждого раздела
   const loadingCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     sections.forEach((section) => {
-      if (expandedSections[section.id] && section.loadings) {
-        counts[section.id] = section.loadings.length
+      if (expandedSections[section.id]) {
+        const loadingsCount = section.loadings ? section.loadings.length : 0
+        const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
+        counts[section.id] = loadingsCount + stagesCount
       } else {
         counts[section.id] = 0
       }
@@ -178,15 +180,17 @@ export function TimelineGrid({
     return counts
   }, [departments, expandedDepartments])
 
-  // Вычисляем общее количество загрузок перед каждым разделом
+  // Вычисляем общее количество вложенных строк перед каждым разделом (этапы + загрузки)
   const loadingsBeforeSection = useMemo(() => {
     const counts: Record<number, number> = {}
     let totalLoadings = 0
 
     sections.forEach((section, index) => {
       counts[index] = totalLoadings
-      if (expandedSections[section.id] && section.loadings) {
-        totalLoadings += section.loadings.length
+      if (expandedSections[section.id]) {
+        const loadingsCount = section.loadings ? section.loadings.length : 0
+        const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
+        totalLoadings += loadingsCount + stagesCount
       }
     })
 
