@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { validateEntityName, validateCategoryName, validatePositionName, checkDuplicateName, getDuplicateErrorMessage, ValidationResult } from "@/utils/validation"
 import { Modal, ModalButton } from '@/components/modals'
 import { Save } from 'lucide-react'
+import * as Sentry from "@sentry/nextjs"
 
 interface EntityModalProps {
   open: boolean
@@ -197,6 +198,7 @@ export default function EntityModal({
       onOpenChange(false)
     } catch (error) {
       console.error("Error:", error instanceof Error ? error.message : error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'EntityModal', action: mode === 'create' ? 'create_entity' : 'update_entity', error_type: 'unexpected' }, extra: { table, idField, nameField } })
       toast.error("Произошла ошибка при сохранении")
     } finally {
       setLoading(false)

@@ -1,19 +1,19 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo } from "react"
+import * as Sentry from "@sentry/nextjs"
 
 import UsersList from "../components/users-list"
-import { CurrentUserCard } from "../components/current-user-card"
+import CurrentUserCard from "../components/current-user-card"
 import { AdminPanel } from "@/modules/users/admin"
 import { AdminAccessCheck } from "../components/admin-access-check"
-import { AddUserForm } from "../components/add-user-form"
+import AddUserForm from "../components/add-user-form"
 import UserAnalytics from "../components/user-analytics"
 import { getUsers } from "@/services/org-data-service"
 import type { UserWithRoles } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
-
 // Отладочный флаг для управления console.log вызовами
 const debug = process.env.NEXT_PUBLIC_DEBUG === "true"
 
@@ -54,6 +54,7 @@ export default function UsersPage() {
       }
     } catch (error) {
       debug && console.error("UsersPage: Ошибка загрузки пользователей:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'UsersPage', action: 'load_users', error_type: 'unexpected' } })
       setError("Не удалось загрузить пользователей")
     } finally {
       setIsLoading(false)

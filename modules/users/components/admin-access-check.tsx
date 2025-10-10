@@ -9,6 +9,7 @@ import { AlertCircle } from "lucide-react"
 import { useUserStore } from "@/stores/useUserStore"
 import { useRouter } from "next/navigation"
 import { usePermissionsHook as usePermissions } from "@/modules/permissions"
+import * as Sentry from "@sentry/nextjs"
 
 interface AdminAccessCheckProps {
   children: React.ReactNode
@@ -36,6 +37,7 @@ export function AdminAccessCheck({
         // Если есть ошибка загрузки разрешений - блокируем доступ
         if (permissionsError) {
           console.error('❌ Ошибка загрузки разрешений, блокируем доступ:', permissionsError)
+          Sentry.captureException(permissionsError, { tags: { module: 'users', component: 'AdminAccessCheck', action: 'permissions_load', error_type: 'unexpected' } })
           setHasAccess(false)
           if (redirectOnFailure) {
             router.push("/dashboard/users")
@@ -56,6 +58,7 @@ export function AdminAccessCheck({
         setIsLoading(false)
       } catch (error) {
         console.error("Error checking admin panel access:", error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'AdminAccessCheck', action: 'check_access', error_type: 'unexpected' } })
         setHasAccess(false)
         if (redirectOnFailure) {
           router.push("/dashboard/users")

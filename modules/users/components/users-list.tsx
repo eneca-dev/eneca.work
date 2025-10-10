@@ -44,6 +44,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteUserConfirm } from "./DeleteUserConfirm"
 import { createClient } from "@/utils/supabase/client"
 import { cn } from "@/lib/utils"
+import * as Sentry from "@sentry/nextjs"
 
 interface UsersListProps {
   users: User[]
@@ -71,7 +72,7 @@ const getWorkLocationInfo = (location: string | null) => {
   }
 }
 
-export default function UsersList({ users, onUserUpdated }: UsersListProps) {
+function UsersList({ users, onUserUpdated }: UsersListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -243,9 +244,12 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
   }, [])
 
   const handleDeleteUser = useCallback(async (userId: string) => {
+    Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'UsersList: delete user confirm', data: { user_id: userId } })
     setIsDeleting(userId)
     try {
-      await deleteUser(userId)
+      await Sentry.startSpan({ name: 'Users/UsersList deleteUser', op: 'ui.action', attributes: { user_id: userId } }, async () => {
+        await deleteUser(userId)
+      })
       toast({
         title: "Успех",
         description: "Пользователь успешно удален",
@@ -372,6 +376,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     } catch (e) {
       // Игнорируем ошибки восстановления состояния
       console.warn('Не удалось восстановить состояние списка пользователей:', e)
+      Sentry.captureException(e, { tags: { module: 'users', component: 'UsersList', action: 'restore_state', error_type: 'unexpected' } })
     }
     // Выполняем только на монтировании
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -435,6 +440,7 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
       }
     } catch (e) {
       console.warn('Не удалось сохранить состояние списка пользователей:', e)
+      Sentry.captureException(e, { tags: { module: 'users', component: 'UsersList', action: 'persist_state', error_type: 'unexpected' } })
     }
   }, [searchTerm, groupBy, filters, router, pathname, searchParams])
 
@@ -1117,14 +1123,20 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                           </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                          <DropdownMenuItem onClick={() => {
+                                            Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
+                                            handleEditUser(user)
+                                          }}>
                                             <Edit className="mr-2 h-4 w-4" />
                                             Редактировать
                                           </DropdownMenuItem>
                                           <DropdownMenuSeparator />
                                           <DropdownMenuItem
                                             className="text-red-600 dark:text-red-400"
-                                            onClick={() => openDeleteDialog(user)}
+                                            onClick={() => {
+                                              Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
+                                              openDeleteDialog(user)
+                                            }}
                                             disabled={isDeleting === user.id}
                                           >
                                             <Trash className="mr-2 h-4 w-4" />
@@ -1257,14 +1269,20 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
                                                 </Button>
                                               </DropdownMenuTrigger>
                                               <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                                                <DropdownMenuItem onClick={() => {
+                                                  Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
+                                                  handleEditUser(user)
+                                                }}>
                                                   <Edit className="mr-2 h-4 w-4" />
                                                   Редактировать
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
                                                   className="text-red-600 dark:text-red-400"
-                                                  onClick={() => openDeleteDialog(user)}
+                                                  onClick={() => {
+                                                    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
+                                                    openDeleteDialog(user)
+                                                  }}
                                                   disabled={isDeleting === user.id}
                                                 >
                                                   <Trash className="mr-2 h-4 w-4" />
@@ -1303,6 +1321,9 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
         user={userToDelete}
         onConfirm={async () => {
           if (userToDelete) {
+            Sentry.addBreadcrumb({ category: 'ui.confirm', level: 'info', message: 'UsersList: confirm delete user', data: { user_id: userToDelete.id } })
+          }
+          if (userToDelete) {
             await handleDeleteUser(userToDelete.id)
             setDeleteDialogOpen(false)
           }
@@ -1312,3 +1333,5 @@ export default function UsersList({ users, onUserUpdated }: UsersListProps) {
     </TooltipProvider>
   )
 }
+
+export default Sentry.withProfiler(UsersList, { name: 'UsersList' })

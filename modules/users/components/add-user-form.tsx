@@ -15,6 +15,7 @@ import type { Department, Team, Position, Category } from "@/types/db"
 import { toast } from "sonner"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { UserPlus, AlertCircle } from "lucide-react"
+import * as Sentry from "@sentry/nextjs"
 
 interface AddUserFormData {
   email: string
@@ -37,7 +38,7 @@ interface AddUserFormProps {
 
 const DEFAULT_PASSWORD = "enecaworkPass"
 
-export function AddUserForm({ onUserAdded }: AddUserFormProps) {
+function AddUserForm({ onUserAdded }: AddUserFormProps) {
   const [formData, setFormData] = useState<AddUserFormData>({
     email: "",
     firstName: "",
@@ -80,12 +81,12 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
     async function loadReferenceData() {
       try {
         setIsLoading(true)
-        const [depts, allTeams, pos, cats] = await Promise.all([
+        const [depts, allTeams, pos, cats] = await Sentry.startSpan({ name: 'Users/AddUserForm loadReferenceData', op: 'ui.load' }, async () => Promise.all([
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
-        ])
+        ]))
 
         setDepartments(depts)
         setTeams(allTeams)
@@ -93,7 +94,7 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
         setCategories(cats)
 
         // Загружаем роли
-        const availableRoles = await getAvailableRoles(canAddAdminRole)
+        const availableRoles = await Sentry.startSpan({ name: 'Users/AddUserForm loadAvailableRoles', op: 'ui.load', attributes: { canAddAdminRole } }, async () => getAvailableRoles(canAddAdminRole))
         setRoles(availableRoles)
 
         setIsDataLoaded(true)
@@ -179,6 +180,9 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
   }, [formData.department, departments, teams])
 
   const handleChange = (field: string, value: string) => {
+    if (field === 'email' || field === 'firstName' || field === 'lastName') {
+      Sentry.addBreadcrumb({ category: 'ui.input', level: 'info', message: 'AddUserForm: change', data: { field } })
+    }
     setFormData((prev) => ({ ...prev, [field]: value }))
     
     // Если изменяется роль, обновляем roleId (используется для назначения в user_roles)
@@ -189,6 +193,7 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
   }
 
   const resetForm = () => {
+    Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'AddUserForm: reset form' })
     setFormData({
       email: "",
       firstName: "",
@@ -246,7 +251,8 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
         city: formData.city || undefined,
       }
       
-      const result = await createUserViaAPI(userData)
+      Sentry.addBreadcrumb({ category: 'ui.submit', level: 'info', message: 'AddUserForm: submit create user' })      
+      const result = await Sentry.startSpan({ name: 'Users/AddUserForm createUserViaAPI', op: 'http' }, async () => createUserViaAPI(userData))
       
       if (result.success) {
         toast.success("Пользователь успешно добавлен")
@@ -621,3 +627,5 @@ export function AddUserForm({ onUserAdded }: AddUserFormProps) {
     </Card>
   )
 }
+
+export default Sentry.withProfiler(AddUserForm, { name: 'AddUserForm' })

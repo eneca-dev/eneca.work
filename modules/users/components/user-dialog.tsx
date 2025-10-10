@@ -23,6 +23,7 @@ import { useUserPermissions } from "../hooks/useUserPermissions"
 import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import * as Sentry from "@sentry/nextjs"
 
 interface UserDialogProps {
   open: boolean
@@ -32,7 +33,7 @@ interface UserDialogProps {
   isSelfEdit?: boolean
 }
 
-export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
+function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
   const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string }>>({
     firstName: "",
     lastName: "",
@@ -122,13 +123,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   useEffect(() => {
     async function loadReferenceData() {
       try {
-        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Promise.all([
+        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Sentry.startSpan({ name: 'Users/UserDialog loadReferenceData', op: 'ui.load' }, async () => Promise.all([
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
           getAllRoles()
-        ])
+        ]))
         
         console.log("=== UserDialog: Загружены справочные данные ===")
         console.log("departments:", departmentsData)
@@ -175,7 +176,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   // Функция для загрузки ролей пользователя
   const loadUserRoles = async (userId: string) => {
     try {
-      const result = await getUserRoles(userId)
+      const result = await Sentry.startSpan({ name: 'Users/UserDialog loadUserRoles', op: 'ui.load', attributes: { user_id: userId } }, async () => getUserRoles(userId))
       if (result.error) {
         console.error("Ошибка загрузки ролей пользователя:", result.error)
         return
@@ -408,6 +409,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     if (!user?.id) return
     
     setIsSavingRoles(true)
+    let addedCount = 0
+    let removedCount = 0
     try {
       // Получаем текущие роли пользователя
       const currentRoleIds = userRoles.map(ur => ur.roleId)
@@ -436,12 +439,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       console.log("rolesToRemove:", rolesToRemove)
       
       let success = true
-      let addedCount = 0
-      let removedCount = 0
       
       // Добавляем новые роли
       for (const roleId of rolesToAdd) {
-        const result = await assignRoleToUser(user.id, roleId, currentUserId || undefined)
+        const result = await Sentry.startSpan({ name: 'Users/UserDialog assignRole', op: 'db.write', attributes: { role_id: roleId, user_id: user.id } }, async () => assignRoleToUser(user.id, roleId, currentUserId || undefined))
         if (result) {
           addedCount++
         } else {
@@ -452,7 +453,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       
       // Удаляем роли
       for (const roleId of rolesToRemove) {
-        const result = await revokeRoleFromUser(user.id, roleId)
+        const result = await Sentry.startSpan({ name: 'Users/UserDialog revokeRole', op: 'db.write', attributes: { role_id: roleId, user_id: user.id } }, async () => revokeRoleFromUser(user.id, roleId))
         if (result) {
           removedCount++
         } else {
@@ -592,7 +593,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         
         console.log("Итоговые данные для updateUser:", updateData);
         
-        await updateUser(user.id, updateData)
+        await Sentry.startSpan({ name: 'Users/UserDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, updateData))
         console.log("updateUser завершен успешно");
         
         // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
@@ -600,11 +601,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           console.log("Обновляем Zustand для собственного профиля");
           // Получаем свежие данные пользователя из базы
           const freshSupabase = createClient();
-          const { data: freshProfile, error: profileError } = await freshSupabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", user.id)
-            .single()
+          const { data: freshProfile, error: profileError } = await Sentry.startSpan({ name: 'Users/UserDialog loadFreshProfile', op: 'db.read', attributes: { user_id: user.id } }, async () =>
+            freshSupabase
+              .from("profiles")
+              .select("*")
+              .eq("user_id", user.id)
+              .single()
+          )
           
           if (profileError) {
             console.error("Ошибка получения обновленного профиля:", profileError);
@@ -671,12 +674,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     setIsDeleting(true)
     try {
       // Используем API endpoint для безопасного удаления
-      const response = await fetch(`/api/admin/delete-user?userId=${user.id}`, {
+      const response = await Sentry.startSpan({ name: 'Users/UserDialog deleteProfile', op: 'http', attributes: { user_id: user.id } }, async () => fetch(`/api/admin/delete-user?userId=${user.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-      })
+      }))
 
       const result = await response.json()
 
@@ -696,7 +699,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       // Если пользователь удалил свой собственный профиль, выходим из системы
       if (isEditingOwnProfile) {
         const supabase = createClient()
-        await supabase.auth.signOut()
+        await Sentry.startSpan({ name: 'Users/UserDialog signOut', op: 'auth' }, async () => supabase.auth.signOut())
         window.location.href = '/auth/login'
       } else if (onUserUpdated) {
         onUserUpdated()
@@ -1316,3 +1319,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     </Modal>
   )
 }
+
+export { UserDialog }
+export default Sentry.withProfiler(UserDialog, { name: 'UserDialog' })

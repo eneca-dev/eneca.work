@@ -3,11 +3,11 @@ import UsersPage from "./pages/users-page"
 import UsersList from "./components/users-list"
 import PaymentList from "./components/payment-list"
 import UserAnalytics from "./components/user-analytics"
-import { CurrentUserCard } from "./components/current-user-card"
-import { UserDialog } from "./components/user-dialog"
-import { PaymentDialog } from "./components/payment-dialog"
-import { PaymentAccessCheck } from "./components/payment-access-check"
-import { UserFilters } from "./components/user-filters"
+import CurrentUserCard from "./components/current-user-card"
+import UserDialog from "./components/user-dialog"
+import PaymentDialog from "./components/payment-dialog"
+import PaymentAccessCheck from "./components/payment-access-check"
+import UserFilters from "./components/user-filters"
 import {
   getUsers,
   getDepartments,
