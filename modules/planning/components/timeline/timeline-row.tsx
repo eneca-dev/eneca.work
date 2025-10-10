@@ -1,15 +1,15 @@
 "use client"
 
-import type React from "react"
+import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
-import type { Section, Loading, DecompositionStage } from "../../types"
+import type { Section, Loading, DecompositionStage, PlannedLoading } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { useState } from "react"
+// useState уже импортирован выше
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
@@ -50,10 +50,10 @@ export function TimelineRow({
   // Состояние для отслеживания наведения на аватары
   const [hoveredSpecialist, setHoveredSpecialist] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
-  const [hoveredLoadingCounter, setHoveredLoadingCounter] = useState(false)
+  // Убрали ховер для создания по разделу
   const [hoveredStagesCounter, setHoveredStagesCounter] = useState(false)
   const [showAssignResponsibleModal, setShowAssignResponsibleModal] = useState(false)
-  const [showCreateLoadingModal, setShowCreateLoadingModal] = useState(false)
+  // Создание перенесено на уровень этапа/плана
 
   // Получаем видимость и ширину столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
@@ -68,8 +68,10 @@ export function TimelineRow({
   // Проверяем, есть ли у раздела загрузки и/или этапы
   const hasLoadings = section.hasLoadings || (section.loadings && section.loadings.length > 0) || false
   const stages: DecompositionStage[] = section.decompositionStages || []
+  const planned: PlannedLoading[] = (section as any).plannedLoadings || []
   const hasStages = stages.length > 0
-  const hasChildren = hasLoadings || hasStages
+  const hasPlanned = planned.length > 0
+  const hasChildren = hasLoadings || hasStages || hasPlanned
 
   // На фиксированные значения:
   const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
@@ -295,32 +297,18 @@ export function TimelineRow({
                   )}
                 </div>
 
-                {/* Счетчик загрузок справа от аватара */}
-                <div
-                  className="cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowCreateLoadingModal(true)
-                  }}
-                  onMouseEnter={() => setHoveredLoadingCounter(true)}
-                  onMouseLeave={() => setHoveredLoadingCounter(false)}
-                >
-                  <Tooltip 
-                    content="Создать загрузку в этом разделе" 
-                    isVisible={hoveredLoadingCounter}
-                    position="top"
+                {/* Счетчик загрузок справа от аватара (без кнопки создания на уровне раздела) */}
+                <div>
+                  <span
+                    className={cn(
+                      "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0",
+                      theme === "dark" 
+                        ? "text-slate-400 bg-slate-600" 
+                        : "text-slate-500 bg-slate-200"
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0 transition-colors",
-                        theme === "dark" 
-                          ? "text-slate-400 bg-slate-600 hover:text-slate-200 hover:bg-slate-500" 
-                          : "text-slate-500 bg-slate-200 hover:text-slate-700 hover:bg-slate-300"
-                      )}
-                    >
-                      {uniqueLoadings.length}
-                    </span>
-                  </Tooltip>
+                    {uniqueLoadings.length}
+                  </span>
                 </div>
 
                 {/* Счетчик этапов (показываем только когда раздел свернут) */}
@@ -591,43 +579,90 @@ export function TimelineRow({
       {/* Отображаем этапы и загрузки, если раздел раскрыт */}
       {isExpanded && (
         <>
-          {/* Этапы под разделом */}
-          {stages.map((stage, stageIndex) => (
-            <StageRow
-              key={`${stage.id}-${stageIndex}`}
-              stage={stage}
-              sectionPosition={sectionPosition}
-              stageIndex={stageIndex}
-              timeUnits={timeUnits}
-              theme={theme}
-              rowHeight={rowHeight}
-              padding={padding}
-              leftOffset={leftOffset}
-              cellWidth={cellWidth}
-              stickyColumnShadow={stickyColumnShadow}
-              totalFixedWidth={totalFixedWidth}
-            />
-          ))}
+          {(() => {
+            // Группируем плановые и фактические загрузки по stageId
+            const plannedByStage: Record<string, PlannedLoading[]> = {}
+            const loadingsByStage: Record<string, Loading[]> = {}
 
-          {/* Загрузки под этапами */}
-          {uniqueLoadings.map((loading, loadingIndex) => (
-            <LoadingRow
-              key={`${loading.id}-${loadingIndex}`}
-              loading={loading}
-              sectionPosition={sectionPosition}
-              loadingIndex={loadingIndex}
-              additionalOffsetRows={stages.length}
-              timeUnits={timeUnits}
-              theme={theme}
-              rowHeight={rowHeight}
-              padding={padding}
-              leftOffset={leftOffset}
-              cellWidth={cellWidth}
-              stickyColumnShadow={stickyColumnShadow}
-              totalFixedWidth={totalFixedWidth}
-              sectionResponsibleId={(section as any)?.responsibleId || null}
-            />
-          ))}
+            planned.forEach((pl) => {
+              const key = pl.stageId || "__no_stage__"
+              ;(plannedByStage[key] ||= []).push(pl)
+            })
+
+            uniqueLoadings.forEach((ld) => {
+              const key = (ld as any).stageId || "__no_stage__"
+              ;(loadingsByStage[key] ||= []).push(ld)
+            })
+
+            // Подготавливаем список этапов, включая псевдо-этап "Без этапа", если есть неподвязанные записи
+            const hasNoStageItems = Boolean(plannedByStage["__no_stage__"]?.length || loadingsByStage["__no_stage__"]?.length)
+            const stagesWithNoStage = hasNoStageItems
+              ? [...stages, { id: "__no_stage__", name: "Без этапа", start: null, finish: null } as DecompositionStage]
+              : stages
+
+            return stagesWithNoStage.map((stage, stageIndex) => (
+              <React.Fragment key={`${stage.id}-${stageIndex}`}>
+                {/* Строка этапа */}
+                <StageRow
+                  stage={stage}
+                  sectionPosition={sectionPosition}
+                  stageIndex={stageIndex}
+                  timeUnits={timeUnits}
+                  theme={theme}
+                  rowHeight={rowHeight}
+                  padding={padding}
+                  leftOffset={leftOffset}
+                  cellWidth={cellWidth}
+                  stickyColumnShadow={stickyColumnShadow}
+                  totalFixedWidth={totalFixedWidth}
+                  section={section}
+                />
+
+                {/* Плановые загрузки для этого этапа */}
+                {(plannedByStage[stage.id] || []).map((p, plannedIndex) => (
+                  <PlannedRow
+                    key={`planned-${stage.id}-${p.id}-${plannedIndex}`}
+                    planned={p}
+                    sectionPosition={sectionPosition}
+                    plannedIndex={plannedIndex}
+                    additionalOffsetRows={0}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={rowHeight}
+                    padding={padding}
+                    leftOffset={leftOffset}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalFixedWidth={totalFixedWidth}
+                    sectionId={section.id}
+                    section={section}
+                    stageId={stage.id !== "__no_stage__" ? stage.id : null}
+                    stageName={stage.name}
+                  />
+                ))}
+
+                {/* Фактические загрузки для этого этапа */}
+                {(loadingsByStage[stage.id] || []).map((loading, loadingIndex) => (
+                  <LoadingRow
+                    key={`loading-${stage.id}-${loading.id}-${loadingIndex}`}
+                    loading={loading}
+                    sectionPosition={sectionPosition}
+                    loadingIndex={loadingIndex}
+                    additionalOffsetRows={0}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={rowHeight}
+                    padding={padding}
+                    leftOffset={leftOffset}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalFixedWidth={totalFixedWidth}
+                    sectionResponsibleId={(section as any)?.responsibleId || null}
+                  />
+                ))}
+              </React.Fragment>
+            ))
+          })()}
         </>
       )}
       {/* Модальное окно назначения ответственного */}
@@ -635,14 +670,7 @@ export function TimelineRow({
         <AssignResponsibleModal section={section} setShowAssignModal={setShowAssignResponsibleModal} theme={theme} />
       )}
 
-      {/* Модальное окно создания загрузки по разделу */}
-      {showCreateLoadingModal && (
-        <CreateLoadingBySectionModal 
-          section={section} 
-          setShowModal={setShowCreateLoadingModal} 
-          theme={theme} 
-        />
-      )}
+      {/* Создание загрузки перенесено на этап и план */}
     </>
   )
 }
@@ -662,6 +690,175 @@ interface LoadingRowProps {
   stickyColumnShadow: string
   totalFixedWidth: number
   sectionResponsibleId?: string | null
+}
+
+// Компонент строки плановой загрузки (по категории, серый, без ответственного)
+interface PlannedRowProps {
+  planned: PlannedLoading
+  sectionPosition: number
+  plannedIndex: number
+  additionalOffsetRows: number
+  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  theme: string
+  rowHeight: number
+  padding: number
+  leftOffset: number
+  cellWidth: number
+  stickyColumnShadow: string
+  totalFixedWidth: number
+  sectionId: string
+  section: Section
+  stageId?: string | null
+  stageName?: string | null
+}
+
+function PlannedRow({
+  planned,
+  sectionPosition,
+  plannedIndex,
+  additionalOffsetRows,
+  timeUnits,
+  theme,
+  rowHeight,
+  padding,
+  leftOffset,
+  cellWidth,
+  stickyColumnShadow,
+  totalFixedWidth,
+  sectionId,
+  section,
+  stageId,
+  stageName,
+}: PlannedRowProps) {
+  const [hovered, setHovered] = useState(false)
+  const reducedRowHeight = Math.floor(rowHeight * 0.75)
+
+  const isDateInPlan = (date: Date): boolean => {
+    const start = new Date(planned.startDate)
+    const finish = new Date(planned.endDate)
+    start.setHours(0, 0, 0, 0)
+    finish.setHours(23, 59, 59, 999)
+    const d = new Date(date)
+    d.setHours(0, 0, 0, 0)
+    return d >= start && d <= finish
+  }
+
+  // Открытие модалки создания загрузки c предзаполнением
+  const [createOpen, setCreateOpen] = useState(false)
+
+  return (
+    <div className="group/planned w-full">
+      <div className="flex transition-colors w-full" style={{ height: `${reducedRowHeight}px` }}>
+        {/* Фиксированные столбцы */}
+        <div
+          className={cn("sticky left-0 z-20", "flex")}
+          style={{
+            height: `${reducedRowHeight}px`,
+            width: `${totalFixedWidth}px`,
+            borderBottom: "1px solid",
+            borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+          }}
+        >
+          <div
+            className={cn(
+              "p-2 font-medium border-r flex items-center transition-colors h-full",
+              theme === "dark"
+                ? "border-slate-700 bg-slate-900/60 group-hover/planned:bg-emerald-900/30"
+                : "border-slate-200 bg-slate-100 group-hover/planned:bg-emerald-50",
+            )}
+            style={{
+              width: `${totalFixedWidth}px`,
+              minWidth: `${totalFixedWidth}px`,
+              padding: `${padding - 1}px`,
+              borderRight: "1px solid",
+              borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+            }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                  {/* Пусто для отступа */}
+                </div>
+                <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-300" : "text-slate-700")}> 
+                  {planned.categoryName || "Категория"} — {planned.rate} ставка
+                </div>
+              </div>
+              <button
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded",
+                  theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                )}
+                title="Создать загрузку на основе плана"
+                onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
+              >
+                Назначить
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Ячейки для каждого периода */}
+        <div className="flex-1 flex w-full">
+          {timeUnits.map((unit, i) => {
+            const isMonthStart = isFirstDayOfMonth(unit.date)
+            const active = isDateInPlan(unit.date)
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "border-r border-b relative",
+                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                  isMonthStart
+                    ? theme === "dark"
+                      ? "border-l border-l-slate-600"
+                      : "border-l border-l-slate-300"
+                    : "",
+                )}
+                style={{
+                  height: `${reducedRowHeight}px`,
+                  width: `${cellWidth}px`,
+                  borderRight: "1px solid",
+                  borderBottom: "1px solid",
+                  borderLeft: isMonthStart ? "1px solid" : "none",
+                  borderLeftColor: isMonthStart
+                    ? theme === "dark"
+                      ? "rgb(71, 85, 105)"
+                      : "rgb(203, 213, 225)"
+                    : "transparent",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                }}
+              >
+                {active && (
+                  <div
+                    className="absolute inset-1 rounded-sm"
+                    style={{ backgroundColor: theme === "dark" ? "rgb(100, 116, 139)" : "rgb(226, 232, 240)", opacity: theme === "dark" ? 0.45 : 1 }}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Открываем модалку создания загрузки с предзаполнением дат и ставки */}
+      {createOpen && (
+        <CreateLoadingBySectionModal
+          section={section}
+          setShowModal={setCreateOpen}
+          theme={theme}
+          defaultStartDate={planned.startDate}
+          defaultEndDate={planned.endDate}
+          defaultRate={planned.rate}
+          stageId={stageId ?? planned.stageId ?? null}
+          stageName={stageName}
+          convertPlanId={planned.id}
+        />
+      )}
+    </div>
+  )
 }
 
 function LoadingRow({
@@ -948,6 +1145,7 @@ interface StageRowProps {
   cellWidth: number
   stickyColumnShadow: string
   totalFixedWidth: number
+  section: Section
 }
 
 function StageRow({
@@ -962,8 +1160,10 @@ function StageRow({
   cellWidth,
   stickyColumnShadow,
   totalFixedWidth,
+  section,
 }: StageRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const isDateInStage = (date: Date): boolean => {
     if (!stage.start || !stage.finish) return false
@@ -1011,6 +1211,16 @@ function StageRow({
                 </div>
                 <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{stage.name || "Этап"}</div>
               </div>
+              <button
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded inline-flex items-center gap-1",
+                  theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                )}
+                title="Создать загрузку в этом этапе"
+                onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
+              >
+                <PlusCircle size={12} /> Создать
+              </button>
             </div>
           </div>
         </div>
@@ -1061,6 +1271,18 @@ function StageRow({
           })}
         </div>
       </div>
+      {createOpen && (
+        <CreateLoadingBySectionModal
+          section={section}
+          setShowModal={setCreateOpen}
+          theme={theme}
+          stageId={stage.id}
+          stageName={stage.name}
+          defaultStartDate={stage.start || undefined}
+          defaultEndDate={stage.finish || undefined}
+          defaultRate={1}
+        />
+      )}
     </div>
   )
 }

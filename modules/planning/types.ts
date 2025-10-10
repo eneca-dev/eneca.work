@@ -5,6 +5,7 @@ export interface Loading {
   projectStatus?: string
   sectionId: string | null
   sectionName?: string
+  stageId?: string | null
   employeeId?: string
   responsibleId?: string
   responsibleName?: string
@@ -18,6 +19,20 @@ export interface Loading {
   comment?: string
   createdAt: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt: Date // Приходит как ISO строка, преобразуется в Date
+}
+
+export interface PlannedLoading {
+  id: string
+  sectionId: string | null
+  startDate: Date
+  endDate: Date
+  rate: number
+  categoryId: string | null
+  categoryName?: string
+  stageId?: string | null
+  status?: string
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface Team {
@@ -97,6 +112,8 @@ export interface Section {
   loadings?: Loading[]
   // Этапы декомпозиции раздела
   decompositionStages?: DecompositionStage[]
+  // Плановые загрузки (по категориям специалистов)
+  plannedLoadings?: PlannedLoading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }

@@ -157,8 +157,9 @@ export function TimelineGrid({
     sections.forEach((section) => {
       if (expandedSections[section.id]) {
         const loadingsCount = section.loadings ? section.loadings.length : 0
+        const plannedCount = (section as any).plannedLoadings ? (section as any).plannedLoadings.length : 0
         const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
-        counts[section.id] = loadingsCount + stagesCount
+        counts[section.id] = loadingsCount + plannedCount + stagesCount
       } else {
         counts[section.id] = 0
       }
@@ -189,8 +190,9 @@ export function TimelineGrid({
       counts[index] = totalLoadings
       if (expandedSections[section.id]) {
         const loadingsCount = section.loadings ? section.loadings.length : 0
+        const plannedCount = (section as any).plannedLoadings ? (section as any).plannedLoadings.length : 0
         const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
-        totalLoadings += loadingsCount + stagesCount
+        totalLoadings += loadingsCount + plannedCount + stagesCount
       }
     })
 

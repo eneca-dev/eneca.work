@@ -28,9 +28,18 @@ interface CreateLoadingBySectionModalProps {
   section: Section
   setShowModal: (show: boolean) => void
   theme: string
+  // Дополнительные параметры предзаполнения
+  defaultStartDate?: Date | string
+  defaultEndDate?: Date | string
+  defaultRate?: number
+  // Привязка к этапу
+  stageId?: string | null
+  stageName?: string | null
+  // Если открыто из плановой записи — укажем id, чтобы удалить план после создания
+  convertPlanId?: string
 }
 
-export function CreateLoadingBySectionModal({ section, setShowModal, theme }: CreateLoadingBySectionModalProps): JSX.Element {
+export function CreateLoadingBySectionModal({ section, setShowModal, theme, defaultStartDate, defaultEndDate, defaultRate, stageId, stageName, convertPlanId }: CreateLoadingBySectionModalProps): JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -40,12 +49,29 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
+  const fetchSections = usePlanningStore((state) => state.fetchSections)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
+  const normalizeDateValue = (val?: Date | string) => {
+    if (!val) return null
+    try {
+      if (typeof val === "string") {
+        // Ожидаем YYYY-MM-DD или ISO
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
+        const d = new Date(val)
+        return d.toISOString().split("T")[0]
+      }
+      return val.toISOString().split("T")[0]
+    } catch {
+      return null
+    }
+  }
+
   const [formData, setFormData] = useState({
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    rate: 1,
+    startDate: normalizeDateValue(defaultStartDate) || new Date().toISOString().split("T")[0],
+    endDate:
+      normalizeDateValue(defaultEndDate) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    rate: defaultRate ?? 1,
     comment: "",
   })
 
@@ -219,6 +245,7 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
             responsibleAvatarUrl: selectedEmployee!.avatar_url,
             responsibleTeamName: selectedEmployee!.team_name,
             comment: formData.comment?.trim() || undefined,
+            stageId: stageId ?? undefined,
           })
 
           if (!result.success) {
@@ -231,6 +258,17 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
           span.setAttribute("loading.id", result.loadingId || "unknown")
 
           setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
+
+          // Если создаём из плановой записи — удалим план и перезагрузим разделы
+          if (convertPlanId) {
+            try {
+              const { deletePlannedLoading } = await import("@/lib/supabase-client")
+              await deletePlannedLoading(convertPlanId)
+              await fetchSections()
+            } catch (e) {
+              console.warn("Не удалось удалить плановую запись после создания загрузки:", e)
+            }
+          }
 
           // Автоматически раскрываем раздел, чтобы показать новую загрузку
           toggleSectionExpanded(section.id)
@@ -309,7 +347,8 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
               <div className={cn("mt-2 text-sm", theme === "dark" ? "text-teal-300" : "text-teal-700")}>
                 <p className="mb-1"><strong>Раздел:</strong> {section.name}</p>
                 <p className="mb-1"><strong>Проект:</strong> {section.projectName || "Не указан"}</p>
-                <p><strong>Отдел:</strong> {section.departmentName || "Не указан"}</p>
+                <p className="mb-1"><strong>Отдел:</strong> {section.departmentName || "Не указан"}</p>
+                <p><strong>Этап:</strong> {stageName || "-"}</p>
               </div>
             </div>
           </div>

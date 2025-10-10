@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
-import type { Section, Loading } from "@/modules/planning/types"
+import type { Section, Loading, PlannedLoading } from "@/modules/planning/types"
 
 // Используем единый клиент Supabase вместо создания нового
 export const supabase = createClient()
@@ -40,6 +40,7 @@ export interface LoadingData {
   responsible_name?: string | null
   responsible_avatar: string | null
   loading_section: string
+  loading_stage?: string | null
   loading_start: string | null
   loading_finish: string | null
   loading_rate: number | null
@@ -80,6 +81,7 @@ export interface SectionWithLoadings {
   responsible_last_name: string | null
   responsible_avatar: string | null
   responsible_team_name: string | null
+  // Доп. поля для плановых загрузок (nullable в view не гарантируется) — получим из отдельного запроса
 }
 
 // Добавляем новый интерфейс для данных о загрузке сотрудников
@@ -142,6 +144,158 @@ export interface ShortageLoadingRow {
   loading_status: "active" | "archived"
 }
 
+// -------- PLAN LOADINGS (плановые загрузки) --------
+export interface PlanLoadingRow {
+  plan_loading_id: string
+  plan_loading_section: string | null
+  plan_loading_start: string
+  plan_loading_finish: string
+  plan_loading_rate: number
+  plan_loading_status: string | null
+  plan_loading_stage: string | null
+  plan_loading_category: string | null
+  plan_loading_created: string | null
+  plan_loading_updated: string | null
+  category_name?: string | null
+}
+
+export async function fetchPlannedLoadings(sectionIds: string[]): Promise<Record<string, PlannedLoading[]>> {
+  if (!sectionIds || sectionIds.length === 0) return {}
+  const { data, error } = await supabase
+    .from("plan_loadings")
+    .select(`
+      plan_loading_id,
+      plan_loading_section,
+      plan_loading_start,
+      plan_loading_finish,
+      plan_loading_rate,
+      plan_loading_status,
+      plan_loading_stage,
+      plan_loading_category,
+      plan_loading_created,
+      plan_loading_updated,
+      categories:plan_loading_category (category_name)
+    `)
+    .in("plan_loading_section", sectionIds)
+
+  if (error) {
+    console.error("Ошибка загрузки plan_loadings:", error)
+    return {}
+  }
+
+  const result: Record<string, PlannedLoading[]> = {}
+  ;(data || []).forEach((row: any) => {
+    const sId: string = row.plan_loading_section
+    if (!sId) return
+    const arr = (result[sId] ||= [])
+    arr.push({
+      id: row.plan_loading_id,
+      sectionId: row.plan_loading_section,
+      startDate: new Date(row.plan_loading_start),
+      endDate: new Date(row.plan_loading_finish),
+      rate: Number(row.plan_loading_rate || 0),
+      categoryId: row.plan_loading_category || null,
+      categoryName: row.categories?.category_name || undefined,
+      stageId: row.plan_loading_stage || null,
+      status: row.plan_loading_status || undefined,
+      createdAt: row.plan_loading_created ? new Date(row.plan_loading_created) : undefined,
+      updatedAt: row.plan_loading_updated ? new Date(row.plan_loading_updated) : undefined,
+    })
+  })
+  return result
+}
+
+export async function createPlannedLoading(params: {
+  sectionId: string
+  startDate: string
+  endDate: string
+  rate: number
+  categoryId: string
+  stageId?: string | null
+  description?: string | null
+}): Promise<{ success: boolean; error?: string; planLoadingId?: string }> {
+  try {
+    const payload: any = {
+      plan_loading_section: params.sectionId,
+      plan_loading_start: params.startDate,
+      plan_loading_finish: params.endDate,
+      plan_loading_rate: params.rate,
+      plan_loading_status: "active",
+      plan_loading_category: params.categoryId,
+      plan_loading_stage: params.stageId || null,
+      plan_loading_description: params.description || null,
+      plan_loading_created: new Date().toISOString(),
+      plan_loading_updated: new Date().toISOString(),
+    }
+    const { data, error } = await supabase
+      .from("plan_loadings")
+      .insert(payload)
+      .select("plan_loading_id")
+      .single()
+    if (error) return { success: false, error: error.message }
+    return { success: true, planLoadingId: data?.plan_loading_id }
+  } catch (e) {
+    console.error("Ошибка createPlannedLoading:", e)
+    return { success: false, error: "Произошла неожиданная ошибка" }
+  }
+}
+
+export async function deletePlannedLoading(planLoadingId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from("plan_loadings").delete().eq("plan_loading_id", planLoadingId)
+    if (error) return { success: false, error: error.message }
+    return { success: true }
+  } catch (e) {
+    console.error("Ошибка deletePlannedLoading:", e)
+    return { success: false, error: "Произошла неожиданная ошибка" }
+  }
+}
+
+// Конвертация плановой загрузки в реальную (создаём запись в loadings и удаляем plan_loadings)
+export async function convertPlannedToLoading(params: {
+  planLoadingId: string
+  sectionId: string
+  responsibleId: string
+}): Promise<{ success: boolean; error?: string; loadingId?: string }> {
+  try {
+    // Сначала получим плановую запись
+    const { data: planRow, error: getErr } = await supabase
+      .from("plan_loadings")
+      .select("plan_loading_start, plan_loading_finish, plan_loading_rate, plan_loading_stage")
+      .eq("plan_loading_id", params.planLoadingId)
+      .single()
+    if (getErr || !planRow) return { success: false, error: getErr?.message || "План не найден" }
+
+    // Создаём загрузку
+    const insertPayload = {
+      loading_responsible: params.responsibleId,
+      loading_section: params.sectionId,
+      loading_start: planRow.plan_loading_start,
+      loading_finish: planRow.plan_loading_finish,
+      loading_rate: planRow.plan_loading_rate,
+      loading_status: "active",
+      loading_created: new Date().toISOString(),
+      loading_updated: new Date().toISOString(),
+      loading_stage: planRow.plan_loading_stage || null,
+    }
+    const { data: loadIns, error: loadErr } = await supabase
+      .from("loadings")
+      .insert(insertPayload)
+      .select("loading_id")
+      .single()
+    if (loadErr) return { success: false, error: loadErr.message }
+
+    // Удаляем плановую запись
+    const { error: delErr } = await supabase.from("plan_loadings").delete().eq("plan_loading_id", params.planLoadingId)
+    if (delErr) return { success: false, error: delErr.message }
+
+    return { success: true, loadingId: loadIns?.loading_id }
+  } catch (e) {
+    console.error("Ошибка convertPlannedToLoading:", e)
+    return { success: false, error: "Произошла неожиданная ошибка" }
+  }
+}
+
 // Функция для получения разделов из представления view_section_hierarchy
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
@@ -176,6 +330,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
         loading_id,
         loading_responsible,
         section_id,
+        loading_stage,
         loading_start,
         loading_finish,
         loading_rate,
@@ -210,6 +365,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
       loading_id: item.loading_id,
       loading_responsible: item.loading_responsible,
       loading_section: item.section_id, // Маппим section_id в loading_section
+      loading_stage: item.loading_stage ?? null,
       loading_start: item.loading_start,
       loading_finish: item.loading_finish,
       loading_rate: item.loading_rate,
@@ -376,6 +532,7 @@ export async function fetchSectionsWithLoadings(
       if (sectionItem.loading_id && sectionItem.loading_status === "active") {
         loadingsMap[sectionItem.section_id].push({
           id: sectionItem.loading_id,
+          stageId: (sectionItem as any).loading_stage || undefined,
           responsibleId: sectionItem.loading_responsible || "",
           responsibleName:
             sectionItem.responsible_first_name && sectionItem.responsible_last_name
@@ -394,23 +551,26 @@ export async function fetchSectionsWithLoadings(
       }
     })
 
-    // Загружаем этапы декомпозиции для всех разделов одним запросом
+    // Загружаем этапы декомпозиции и плановые загрузки для всех разделов одним набором запросов
     const sectionIds = Array.from(sectionsMap.keys())
     if (sectionIds.length > 0) {
-      const { data: stagesData, error: stagesError } = await supabase
-        .from('decomposition_stages')
-        .select('decomposition_stage_id, decomposition_stage_section_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_order')
-        .in('decomposition_stage_section_id', sectionIds)
-        .order('decomposition_stage_order', { ascending: true })
+      const [stagesQ, plannedMap] = await Promise.all([
+        supabase
+          .from('decomposition_stages')
+          .select('decomposition_stage_id, decomposition_stage_section_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_order')
+          .in('decomposition_stage_section_id', sectionIds)
+          .order('decomposition_stage_order', { ascending: true }),
+        fetchPlannedLoadings(sectionIds),
+      ])
+
+      const stagesData = stagesQ.data
+      const stagesError = stagesQ.error
 
       if (!stagesError && stagesData) {
-        // Группируем этапы по разделам
         const stagesBySectionId: Record<string, any[]> = {}
         stagesData.forEach((stage: any) => {
           const sectionId = stage.decomposition_stage_section_id
-          if (!stagesBySectionId[sectionId]) {
-            stagesBySectionId[sectionId] = []
-          }
+          if (!stagesBySectionId[sectionId]) stagesBySectionId[sectionId] = []
           stagesBySectionId[sectionId].push({
             id: stage.decomposition_stage_id,
             name: stage.decomposition_stage_name,
@@ -419,9 +579,10 @@ export async function fetchSectionsWithLoadings(
           })
         })
 
-        // Добавляем этапы к разделам
         sectionsMap.forEach((section, sectionId) => {
           section.decompositionStages = stagesBySectionId[sectionId] || []
+          // Прикрепляем плановые загрузки
+          section.plannedLoadings = plannedMap[sectionId] || []
         })
       }
     }
@@ -684,6 +845,7 @@ export async function createLoading(loadingData: {
   rate: number
   // Необязательный комментарий (если в БД нет колонки, запрос упадет — обработаем фолбэком)
   comment?: string
+  stageId?: string
 }): Promise<{ success: boolean; error?: string; loadingId?: string }> {
   try {
     console.log("Создание новой загрузки:", loadingData)
@@ -695,6 +857,7 @@ export async function createLoading(loadingData: {
       loading_start: loadingData.startDate,
       loading_finish: loadingData.endDate,
       loading_rate: loadingData.rate,
+      loading_stage: loadingData.stageId ?? null,
       loading_status: "active",
       loading_created: new Date().toISOString(),
       loading_updated: new Date().toISOString(),

@@ -95,6 +95,7 @@ interface PlanningState {
     startDate: Date
     endDate: Date
     rate: number
+    stageId?: string
     projectName?: string
     sectionName?: string
     responsibleName?: string
@@ -942,6 +943,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate.toISOString().split("T")[0],
               endDate: loadingData.endDate.toISOString().split("T")[0],
               rate: loadingData.rate,
+              stageId: loadingData.stageId,
             }
 
             // Вызываем API
@@ -965,6 +967,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
               rate: loadingData.rate,
+              stageId: loadingData.stageId,
               comment: (loadingData as any).comment,
               createdAt: new Date(),
               updatedAt: new Date(),

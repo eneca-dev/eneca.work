@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import type { Section } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { supabase, updateSectionResponsible } from "@/lib/supabase-client"
+import { supabase, updateSectionResponsible, convertPlannedToLoading } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 
 interface Employee {
@@ -25,9 +25,11 @@ interface AssignResponsibleModalProps {
   section: Section
   setShowAssignModal: (show: boolean) => void
   theme: string
+  // Режим конверсии плановой загрузки в реальную
+  convertPlan?: { planLoadingId: string; sectionId: string; onConverted?: () => void }
 }
 
-export function AssignResponsibleModal({ section, setShowAssignModal, theme }: AssignResponsibleModalProps) {
+export function AssignResponsibleModal({ section, setShowAssignModal, theme, convertPlan }: AssignResponsibleModalProps) {
   // Состояние для отслеживания процесса сохранения
   const [isSaving, setIsSaving] = useState(false)
   // Состояние для отслеживания ошибок валидации
@@ -213,33 +215,51 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
           span.setAttribute("employee.name", selectedEmployee!.full_name)
           span.setAttribute("employee.email", selectedEmployee!.email)
 
-          console.log("Используемый sectionId:", sectionId)
-          console.log("Попытка обновления ответственного:", {
-            sectionId: sectionId,
-            responsibleId: selectedEmployee!.user_id,
-            responsibleName: selectedEmployee!.full_name,
-          })
+          if (convertPlan) {
+            // Конвертация плановой загрузки в реальную
+            const conv = await convertPlannedToLoading({
+              planLoadingId: convertPlan.planLoadingId,
+              sectionId: convertPlan.sectionId,
+              responsibleId: selectedEmployee!.user_id,
+            })
+            if (!conv.success) {
+              span.setAttribute("operation.success", false)
+              span.setAttribute("operation.error", conv.error || "Неизвестная ошибка")
+              throw new Error(conv.error || "Не удалось создать загрузку")
+            }
+            span.setAttribute("operation.success", true)
 
-          // ЭТО ОСНОВНОЙ КОД СОХРАНЕНИЯ В БД:
-          const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
+            // Обновим данные разделов, чтобы исчезла плановая и появилась реальная загрузка
+            await usePlanningStore.getState().fetchSections()
 
-          if (!result.success) {
-            span.setAttribute("operation.success", false)
-            span.setAttribute("operation.error", result.error || "Неизвестная ошибка")
-            throw new Error(result.error || "Неизвестная ошибка при обновлении")
+            setNotification("Плановая загрузка преобразована в загрузку сотрудника")
+            convertPlan.onConverted?.()
+          } else {
+            console.log("Используемый sectionId:", sectionId)
+            console.log("Попытка обновления ответственного:", {
+              sectionId: sectionId,
+              responsibleId: selectedEmployee!.user_id,
+              responsibleName: selectedEmployee!.full_name,
+            })
+
+            const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
+
+            if (!result.success) {
+              span.setAttribute("operation.success", false)
+              span.setAttribute("operation.error", result.error || "Неизвестная ошибка")
+              throw new Error(result.error || "Неизвестная ошибка при обновлении")
+            }
+
+            span.setAttribute("operation.success", true)
+            console.log("Обновление прошло успешно:", result.data)
+
+            updateSectionInStore(sectionId, {
+              responsibleName: selectedEmployee!.full_name,
+              responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
+            })
+
+            setNotification(`Ответственный для раздела "${section.name}" успешно назначен: ${selectedEmployee!.full_name}`)
           }
-
-          span.setAttribute("operation.success", true)
-          console.log("Обновление прошло успешно:", result.data)
-
-          // Обновляем раздел в сторе (локальное состояние)
-          updateSectionInStore(sectionId, {
-            responsibleName: selectedEmployee!.full_name,
-            responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
-          })
-
-          // Показываем уведомление об успехе
-          setNotification(`Ответственный для раздела "${section.name}" успешно назначен: ${selectedEmployee!.full_name}`)
 
           // Автоматически скрываем уведомление через 3 секунды
           setTimeout(() => {
