@@ -36,7 +36,10 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit()
+      // Не отправляем, если идет загрузка
+      if (!isLoading) {
+        handleSubmit()
+      }
     }
   }
 
@@ -47,8 +50,8 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="p-2 rounded-lg border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
-              title="Быстрые операции"
+              className="p-2 rounded-lg border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isLoading ? "Ожидание ответа..." : "Быстрые операции"}
               aria-label="Быстрые операции"
               disabled={isLoading}
             >
@@ -84,8 +87,8 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Напишите сообщение..."
-          className="flex-1 resize-none bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-24 disabled:opacity-50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-system"
+          placeholder={isLoading ? "Ожидание ответа..." : "Напишите сообщение..."}
+          className="flex-1 resize-none bg-gray-100 dark:bg-gray-700 border-0 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-24 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-system"
           rows={1}
           disabled={isLoading}
           maxLength={500}
@@ -94,8 +97,8 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
         <button
           onClick={handleSubmit}
           disabled={isLoading || !input.trim()}
-          className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white p-2 rounded-lg transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md disabled:shadow-none"
-          title="Отправить сообщение"
+          className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white p-2 rounded-lg transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md disabled:shadow-none disabled:cursor-not-allowed"
+          title={isLoading ? "Ожидание ответа..." : "Отправить сообщение"}
         >
           {isLoading ? (
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

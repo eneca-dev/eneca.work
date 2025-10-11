@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
 		Sentry.addBreadcrumb({ category: 'chat', level: 'debug', message: 'payload.parsed', data: { requestId, hasConversationId: Boolean(conversationId), hasHistory: Array.isArray(conversationHistory) && conversationHistory.length > 0 } })
 
         // 4) Вебхук (только PROD)
-        const n8nUrl = 'https://eneca.app.n8n.cloud/webhook/0378ba55-d98b-4983-b0ef-83a0ac4ee28c'
+        // const n8nUrl = 'https://eneca.app.n8n.cloud/webhook/0378ba55-d98b-4983-b0ef-83a0ac4ee28c'
+		const n8nUrl = 'https://eneca.app.n8n.cloud/webhook-test/0378ba55-d98b-4983-b0ef-83a0ac4ee28c'
 		Sentry.addBreadcrumb({ category: 'chat', level: 'debug', message: 'upstream.prepare', data: { requestId, n8nUrl } })
 		const controller = new AbortController()
 		let n8nResp: Response
