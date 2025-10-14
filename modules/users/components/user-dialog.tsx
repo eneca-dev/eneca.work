@@ -20,7 +20,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { useUserPermissions } from "../hooks/useUserPermissions"
-import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { useUserPermissionsSync } from "@/modules/permissions"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import * as Sentry from "@sentry/nextjs"
@@ -96,7 +96,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
   const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
-  const { reloadPermissions } = usePermissionsLoader()
+  const { reloadPermissions } = useUserPermissionsSync()
 
   // Определяем, может ли пользователь редактировать роли
   const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole || canAssignRoles)

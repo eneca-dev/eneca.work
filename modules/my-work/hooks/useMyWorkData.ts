@@ -167,51 +167,20 @@ export function useMyWorkData() {
   // Загрузка информации об ответственности пользователя (оптимизированная через UNION)
   const fetchUserResponsibilities = async (userId: string): Promise<ResponsibilityInfo[]> => {
     try {
+      // Берём ответственности напрямую из представления view_my_work_analytics
       const { data, error } = await supabase
-        .rpc('get_user_responsibilities', { user_id: userId })
+        .from('view_my_work_analytics')
+        .select('responsibilities')
+        .eq('user_id', userId)
+        .single()
 
       if (error) {
-        // Fallback на отдельные запросы если RPC недоступна
-        const [projectsAsManager, projectsAsLead, objects, sections] = await Promise.all([
-          supabase.from('projects').select('project_id, project_name, project_description').eq('project_manager', userId),
-          supabase.from('projects').select('project_id, project_name, project_description').eq('project_lead_engineer', userId),
-          supabase.from('objects').select('object_id, object_name, object_description').eq('object_responsible', userId),
-          supabase.from('sections').select('section_id, section_name, section_description').eq('section_responsible', userId)
-        ])
-
-        const responsibilities: ResponsibilityInfo[] = []
-
-        if (projectsAsManager.data) {
-          responsibilities.push(...projectsAsManager.data.map(p => ({
-            type: 'project_manager' as const,
-            entity_id: p.project_id,
-            entity_name: p.project_name,
-            entity_description: p.project_description
-          })))
-        }
-
-        if (projectsAsLead.data) {
-          responsibilities.push(...projectsAsLead.data.map(p => ({
-            type: 'lead_engineer' as const,
-            entity_id: p.project_id,
-            entity_name: p.project_name,
-            entity_description: p.project_description
-          })))
-        }
-
-        if (sections.data) {
-          responsibilities.push(...sections.data.map(s => ({
-            type: 'section_responsible' as const,
-            entity_id: s.section_id,
-            entity_name: s.section_name,
-            entity_description: s.section_description
-          })))
-        }
-
-        return responsibilities
+        console.error('Ошибка загрузки responsibilities из view_my_work_analytics:', error)
+        return []
       }
 
-      return data || []
+      const list = (data?.responsibilities as ResponsibilityInfo[] | null) || []
+      return list
     } catch (error) {
       console.error('Ошибка в fetchUserResponsibilities:', error)
       return []

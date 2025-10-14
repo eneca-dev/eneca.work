@@ -1,3 +1,4 @@
+
 declare module '@sentry/nextjs' {
   import type React, { ComponentType } from 'react'
   import type { ProfilerProps } from '@sentry/react'

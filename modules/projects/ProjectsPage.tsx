@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
+import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel, normalizeProjectStatus } from '@/modules/projects/constants/project-status';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info } from 'lucide-react';
 // Острая звезда для кнопки "только избранные" в панели фильтров
 function SharpStarIcon({ className, filled = false }: { className?: string; filled?: boolean }) {
   return (
@@ -17,7 +18,7 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
 import { getFiltersPermissionContextAsync } from '@/modules/permissions/integration/filters-permission-context'
-import { usePermissionsLoader } from '@/modules/permissions'
+import { useUserPermissionsSync } from '@/modules/permissions'
 import { applyProjectLocks } from '@/modules/projects/integration/project-filter-locks'
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
@@ -35,6 +36,7 @@ import { useTaskTransferStore } from '@/modules/task-transfer/store';
 import { useSidebarState } from '@/hooks/useSidebarState';
 
 import { X } from 'lucide-react';
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 export default function ProjectsPage() {
   const searchParams = useSearchParams();
@@ -58,7 +60,7 @@ export default function ProjectsPage() {
   // Локальный стор фильтров модуля projects
   const filterStore = useProjectFilterStore();
   // Состояние готовности прав (инициализация перед загрузкой дерева)
-  const { isLoading: permLoading, error: permError } = usePermissionsLoader()
+  const { isLoading: permLoading, error: permError } = useUserPermissionsSync()
   const [locksApplied, setLocksApplied] = useState(false)
 
   // Состояние фильтров для передачи в дерево
@@ -73,9 +75,9 @@ export default function ProjectsPage() {
   const [treeSearch, setTreeSearch] = useState<string>('');
   // "Только разделы" теперь управляется через событие для дерева
   const { statuses } = useSectionStatuses();
-  const [statusSearch, setStatusSearch] = useState('');
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
-  const filteredStatuses = (statuses || []).filter(s => !statusSearch.trim() || s.name.toLowerCase().includes(statusSearch.toLowerCase()) || (s.description && s.description.toLowerCase().includes(statusSearch.toLowerCase())));
+  const [selectedProjectStatuses, setSelectedProjectStatuses] = useState<string[]>([]);
+  
 
   // Состояние для модального окна дашборда проекта
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
@@ -132,6 +134,7 @@ export default function ProjectsPage() {
       treeSearch,
       projectSearch,
       selectedStatusIdsLocal,
+      selectedProjectStatuses,
     })
 
     // Сбрасываем фильтры проекта (менеджер/проект/стадия/объект + организация)
@@ -141,6 +144,7 @@ export default function ProjectsPage() {
     setProjectSearch('')
     setTreeSearch('')
     setSelectedStatusIdsLocal([])
+    setSelectedProjectStatuses([])
 
     // [DEBUG:PROJECTS] Лог состояния после сброса
     console.log('[DEBUG:PROJECTS] reset:after', {
@@ -154,6 +158,7 @@ export default function ProjectsPage() {
       treeSearch: '',
       projectSearch: '',
       selectedStatusIdsLocal: [],
+      selectedProjectStatuses: [],
     })
 
     // Принудительная перезагрузка дерева, чтобы не зависеть от эффектов синхронизации
@@ -264,6 +269,7 @@ export default function ProjectsPage() {
   }, [])
 
   return (
+    <TooltipProvider>
     <div className="px-0 pt-0 pb-0">
       {/* Новый липкий FilterBar. Старые фильтры ProjectsFilters оставляем ниже. */}
       <FilterBar 
@@ -329,7 +335,8 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+        {/* Разделитель сделан чуть тоньше для визуального выравнивания с остальными */}
+        <div className="h-6 w-[0.5px] bg-slate-200 dark:bg-slate-700 mx-1" />
 
         {/* Организация: Department → Team → Employee */}
         <DropdownMenu>
@@ -351,19 +358,32 @@ export default function ProjectsPage() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[320px] p-0">
+          <DropdownMenuContent align="start" className="w-[320px] p-0 dark:bg-slate-800 dark:border-slate-700">
             <div className="p-2 space-y-2">
               {/* Отдел */}
               <div>
                 <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                   <span>Отдел</span>
-                  {filterStore.isFilterLocked('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                  {filterStore.isFilterLocked('department') && (
+                    <>
+                      <Lock className="h-3 w-3 text-slate-400" />
+                      <UiTooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                          Недостаточно прав для изменения отдела
+                        </TooltipContent>
+                      </UiTooltip>
+                    </>
+                  )}
                 </div>
                 <select
                   value={filterStore.selectedDepartmentId || ''}
                   onChange={e => filterStore.setFilter('department', e.target.value || null)}
                   className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
+                  disabled={Array.isArray((filterStore as any).lockedFilters) && (filterStore as any).lockedFilters.includes('department')}
                   
                 >
                   <option value="">Все</option>
@@ -376,13 +396,26 @@ export default function ProjectsPage() {
               <div>
                 <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                   <span>Команда</span>
-                  {filterStore.isFilterLocked('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                  {filterStore.isFilterLocked('team') && (
+                    <>
+                      <Lock className="h-3 w-3 text-slate-400" />
+                      <UiTooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                          Недостаточно прав для изменения команды
+                        </TooltipContent>
+                      </UiTooltip>
+                    </>
+                  )}
                 </div>
                 <select
                   value={filterStore.selectedTeamId || ''}
                   onChange={e => filterStore.setFilter('team', e.target.value || null)}
                   className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
                   size={6}
+                  disabled={Array.isArray((filterStore as any).lockedFilters) && (filterStore as any).lockedFilters.includes('team')}
                   
                 >
                   <option value="">Все</option>
@@ -418,29 +451,22 @@ export default function ProjectsPage() {
             <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
               <Filter className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
               <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                Статусы
+                Статусы разделов
               </span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[320px] p-0">
+          <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
             <div className="p-2 space-y-2">
-              <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам</div>
-              <input
-                type="text"
-                placeholder="Поиск статусов..."
-                className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
-                value={statusSearch}
-                onChange={(e)=> setStatusSearch(e.target.value)}
-              />
+              <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам разделов</div>
               <div className="flex items-center justify-between">
                 <button
-                  className="text-[11px] md:text-xs px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
+                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 rounded-md"
                   onClick={()=> setSelectedStatusIdsLocal([])}
                 >
                   Очистить
                 </button>
                 <button
-                  className="text-[11px] md:text-xs px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 inline-flex items-center gap-1 transition-all duration-200 rounded-md"
+                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 inline-flex items-center gap-1 transition-all duration-200 rounded-md"
                   onClick={()=> {
                     if (typeof window !== 'undefined') {
                       window.dispatchEvent(new CustomEvent('projectsTree:openStatusManagement'))
@@ -451,19 +477,66 @@ export default function ProjectsPage() {
                 </button>
               </div>
               {/* Список статусов */}
-              <div className="max-h-64 overflow-auto space-y-1">
-                {filteredStatuses.map(s => (
-                  <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
+              <div className="space-y-0.5">
+                {(statuses || []).map(s => (
+                  <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
                     <input
                       type="checkbox"
                       className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
                       checked={selectedStatusIdsLocal.includes(s.id)}
                       onChange={() => setSelectedStatusIdsLocal(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
                     />
-                    <div className="w-3 h-3" style={{ backgroundColor: s.color }} />
+                    <div className="w-2.5 h-2.5" style={{ backgroundColor: s.color }} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium dark:text-white truncate">{s.name}</div>
-                      {s.description && <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{s.description}</div>}
+                      <div className="text-[13px] font-medium dark:text-slate-200 truncate">{s.name}</div>
+                      {s.description && <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{s.description}</div>}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+        {/* Статусы проектов — отдельный дропдаун рядом через разделитель */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
+              <Layers className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Статусы проектов
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
+            <div className="p-2 space-y-2">
+              <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам проектов</div>
+              <div className="flex items-center justify-between">
+                <button
+                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 rounded-md"
+                  onClick={()=> setSelectedProjectStatuses([])}
+                >
+                  Очистить
+                </button>
+              </div>
+              {/* Список статусов проектов */}
+              <div className="space-y-0.5">
+                {PROJECT_STATUS_OPTIONS.map(s => (
+                  <label key={s} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
+                    <input
+                      type="checkbox"
+                      className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                      checked={(() => { const norm = normalizeProjectStatus(s); return norm ? selectedProjectStatuses.includes(norm) : false })()}
+                      onChange={() => setSelectedProjectStatuses(prev => {
+                        const norm = normalizeProjectStatus(s) as string
+                        const setNorm = Array.from(new Set((prev || []).map(normalizeProjectStatus).filter(Boolean))) as string[]
+                        return setNorm.includes(norm) ? setNorm.filter(x => x !== norm) : [...setNorm, norm]
+                      })}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium dark:text-slate-200 truncate">{getProjectStatusLabel(s)}</div>
                     </div>
                   </label>
                 ))}
@@ -495,42 +568,22 @@ export default function ProjectsPage() {
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[340px] p-0">
+          <DropdownMenuContent align="start" className="w-[340px] p-0 dark:bg-slate-800 dark:border-slate-700">
             <div className="p-2 space-y-2">
               {/* Панель инструментов: синхронизация + поиск по структуре */}
               <div className="flex items-center justify-between">
                 <div className="text-[10px] text-slate-500">Проектная иерархия</div>
-                <div className="flex items-center gap-1">
-                  {/* Синхронизация с Worksection */}
-                  <SyncButton 
-                    className="h-6 px-2 py-1"
-                    size="sm"
-                    showText={false}
-                  />
-                  <button
-                    className="text-[10px] px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('projectsTree:openProjectManagement'))
-                      }
-                    }}
-                  >
-                    <Settings className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Поиск по структуре */}
-              <div className="relative">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Поиск по структуре..."
-                  value={projectSearch}
-                  onChange={(e) => setProjectSearch(e.target.value)}
-                  className="w-full pl-7 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+              <div className="flex items-center gap-1">
+                {/* Синхронизация с Worksection */}
+                <SyncButton 
+                  className="h-6 px-2 py-1"
+                  size="sm"
+                  showText={false}
                 />
               </div>
+              </div>
+
+              {/* Поиск по структуре удалён по требованию */}
 
               {/* Менеджер */}
               <div>
@@ -633,6 +686,7 @@ export default function ProjectsPage() {
           selectedTeamId={filterStore.selectedTeamId}
           selectedEmployeeId={filterStore.selectedEmployeeId}
           selectedStatusIds={selectedStatusIdsLocal}
+          selectedProjectStatuses={selectedProjectStatuses}
           externalSearchQuery={treeSearch}
           urlSectionId={urlSectionId}
           urlTab={urlTab || 'overview'}
@@ -683,5 +737,6 @@ export default function ProjectsPage() {
         />
       )}
     </div>
+    </TooltipProvider>
   );
 } 
