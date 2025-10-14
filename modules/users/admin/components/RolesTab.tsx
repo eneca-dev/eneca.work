@@ -1,6 +1,7 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState, Fragment } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
+import * as Sentry from "@sentry/nextjs"
 import { Button } from "@/components/ui/button"
 import { Table, TableHead, TableRow, TableHeader, TableBody, TableCell } from "@/components/ui/table"
 import { createClient } from "@/utils/supabase/client"
@@ -90,18 +91,21 @@ export default function RolesTab() {
       
       if (rolesResult.error) {
         console.error('Ошибка при загрузке ролей:', rolesResult.error)
+        Sentry.captureException(rolesResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_roles', error_type: 'db_error' } })
         notification.error("Ошибка загрузки ролей", rolesResult.error.message)
         return
       }
       
       if (permissionsResult.error) {
         console.error('Ошибка при загрузке разрешений:', permissionsResult.error)
+        Sentry.captureException(permissionsResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_permissions', error_type: 'db_error' } })
         notification.error("Ошибка загрузки разрешений", permissionsResult.error.message)
         return
       }
       
       if (rolePermissionsResult.error) {
         console.error('Ошибка при загрузке связей роль-разрешение:', rolePermissionsResult.error)
+        Sentry.captureException(rolePermissionsResult.error, { tags: { module: 'users', component: 'RolesTab', action: 'load_role_permissions', error_type: 'db_error' } })
         notification.error("Ошибка загрузки связей", rolePermissionsResult.error.message)
         return
       }
@@ -111,6 +115,7 @@ export default function RolesTab() {
       setRolePermissions(rolePermissionsResult.data || [])
     } catch (error) {
       console.error('Общая ошибка при загрузке данных:', error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'fetch_data', error_type: 'unexpected' } })
       notification.error("Ошибка загрузки данных", "Неизвестная ошибка")
     } finally {
       setLoading(false)
@@ -290,6 +295,7 @@ export default function RolesTab() {
       await fetchData()
     } catch (error) {
       console.error('Error creating role:', error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'create_role', error_type: 'unexpected' } })
       notification.error("Role Creation Error", "Unknown error occurred")
     } finally {
       setLoading(false)
@@ -333,6 +339,7 @@ export default function RolesTab() {
       await fetchData()
     } catch (error) {
       console.error('Ошибка при удалении роли:', error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'delete_role', error_type: 'unexpected' }, extra: { role_id: selectedRole?.id, role_name: selectedRole?.name } })
       notification.error("Ошибка удаления роли", "Неизвестная ошибка")
     } finally {
       setLoading(false)
@@ -405,6 +412,7 @@ export default function RolesTab() {
         
       } catch (operationError) {
         console.error('Ошибка при выполнении операций:', operationError)
+        Sentry.captureException(operationError, { tags: { module: 'users', component: 'RolesTab', action: 'save_changes_operations', error_type: 'db_error' }, extra: { insert_count: successfulInserts.length, delete_count: successfulDeletes.length } })
         
         try {
           if (successfulInserts.length > 0) {
@@ -430,6 +438,7 @@ export default function RolesTab() {
             "Операция отменена, изменения откатаны. Попробуйте еще раз.")
         } catch (rollbackError) {
           console.error('Ошибка отката:', rollbackError)
+          Sentry.captureException(rollbackError, { tags: { module: 'users', component: 'RolesTab', action: 'save_changes_rollback', error_type: 'db_error' } })
           notification.error("Критическая ошибка", 
             "Не удалось откатить изменения. Обновите страницу и попробуйте снова.")
         }
@@ -439,6 +448,7 @@ export default function RolesTab() {
       
     } catch (error) {
       console.error('Критическая ошибка при сохранении изменений:', error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'RolesTab', action: 'save_changes', error_type: 'unexpected' } })
       notification.error("Ошибка сохранения", 
         "Произошла неизвестная ошибка. Попробуйте обновить страницу.")
     } finally {

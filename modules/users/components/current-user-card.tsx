@@ -12,13 +12,14 @@ import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { AvatarUploader } from "./avatar-uploader"
 import { toast } from "sonner"
+import * as Sentry from "@sentry/nextjs"
 
 interface CurrentUserCardProps {
   onUserUpdated?: () => void
   fallbackUser?: User // Для случаев, если в Zustand нет данных
 }
 
-export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) {
+function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const userState = useUserStore() // Получаем все состояние без деструктурирования
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -37,14 +38,17 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
       try {
         console.log("CurrentUserCard: Загружаем данные из view_users для пользователя:", userState.id)
         
-        const { data: userData, error } = await supabase
-          .from("view_users")
-          .select("*")
-          .eq("user_id", userState.id)
-          .single()
+        const { data: userData, error } = await Sentry.startSpan({ name: 'Users/CurrentUserCard loadUserView', op: 'db.read', attributes: { user_id: userState.id } }, async () =>
+          supabase
+            .from("view_users")
+            .select("*")
+            .eq("user_id", userState.id)
+            .single()
+        )
 
         if (error) {
           console.error("Ошибка получения данных пользователя из view_users:", error)
+          Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view', error_type: 'db_error' }, extra: { user_id: userState.id } })
           // Если не удалось получить данные из view, используем данные из Zustand
           if (userState.profile) {
             setCurrentUser(createUserFromZustand())
@@ -89,6 +93,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
 
       } catch (error) {
         console.error("Критическая ошибка при получении данных пользователя:", error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'CurrentUserCard', action: 'load_user_view_unexpected', error_type: 'unexpected' }, extra: { user_id: userState.id } })
         // Fallback к данным из Zustand
         if (userState.profile) {
           setCurrentUser(createUserFromZustand())
@@ -172,6 +177,7 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
   
   // Обработчик успешной загрузки аватара
   const handleAvatarUploaded = (url: string) => {
+    Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'CurrentUserCard: avatar uploaded' })
     // Обновляем аватар в Zustand
     updateAvatar(url)
     
@@ -267,7 +273,10 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(true)}>
+            <Button variant="outline" size="sm" onClick={() => {
+              Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'CurrentUserCard: open user dialog' })
+              setIsDialogOpen(true)
+            }}>
               <Settings className="mr-2 h-4 w-4" />
               Настройки профиля
             </Button>
@@ -285,3 +294,5 @@ export function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCard
     </TooltipProvider>
   )
 }
+
+export default Sentry.withProfiler(CurrentUserCard, { name: 'CurrentUserCard' })

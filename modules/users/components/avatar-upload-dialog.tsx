@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import * as Sentry from "@sentry/nextjs"
 import { toast } from "sonner"
 import { 
   Dialog, 
@@ -23,7 +24,7 @@ interface AvatarUploadDialogProps {
   onAvatarUploaded?: (url: string) => void
 }
 
-export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUploadDialogProps) {
+function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: AvatarUploadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -87,6 +88,7 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
 
   // Обработчик выбора файла
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    Sentry.addBreadcrumb({ category: 'ui.input', level: 'info', message: 'AvatarUploadDialog: file selected' })
     if (!e.target.files || e.target.files.length === 0) {
       setSelectedFile(null)
       return
@@ -106,6 +108,7 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
   
   // Обработчик удаления фотографии
   const handleRemoveFile = () => {
+    Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'AvatarUploadDialog: remove file' })
     setSelectedFile(null)
     setPreview(null)
     setProcessingError(null)
@@ -123,7 +126,7 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
 
     try {
       // Получаем access_token пользователя
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const { data: sessionData, error: sessionError } = await Sentry.startSpan({ name: 'Users/AvatarUploadDialog getSession', op: 'auth' }, async () => supabase.auth.getSession())
       if (sessionError || !sessionData.session) {
         throw new Error("Не удалось получить access_token пользователя")
       }
@@ -148,13 +151,14 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
         // Отправляем на Edge Function
         let resp
         try {
-          resp = await fetch("https://gvrcbvifirhxxdnvrwlz.supabase.co/functions/v1/generate-avatar-from-photo", {
+          Sentry.addBreadcrumb({ category: 'http', level: 'info', message: 'AvatarUploadDialog: call edge function' })
+          resp = await Sentry.startSpan({ name: 'Users/AvatarUploadDialog edgeFunction', op: 'http' }, async () => fetch("https://gvrcbvifirhxxdnvrwlz.supabase.co/functions/v1/generate-avatar-from-photo", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${access_token}`
             },
             body: formData
-          })
+          }))
         } catch (err) {
           setIsProcessing(false)
           setProcessingError("Ошибка сети при отправке изображения")
@@ -186,10 +190,12 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
         }
 
         // Обновляем профиль пользователя в Supabase (таблица profiles)
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({ avatar_url: data.url })
-          .eq("user_id", user_id)
+        const { error: updateError } = await Sentry.startSpan({ name: 'Users/AvatarUploadDialog updateProfile', op: 'db.write' }, async () =>
+          supabase
+            .from("profiles")
+            .update({ avatar_url: data.url })
+            .eq("user_id", user_id)
+        )
 
         if (updateError) {
           setIsProcessing(false)
@@ -223,7 +229,7 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
       toast.error("Пожалуйста, подтвердите согласие на обработку фотографии")
       return
     }
-    
+    Sentry.addBreadcrumb({ category: 'ui.submit', level: 'info', message: 'AvatarUploadDialog: upload clicked' })
     await uploadAvatar()
   }
 
@@ -335,4 +341,6 @@ export function AvatarUploadDialog({ open, onOpenChange, onAvatarUploaded }: Ava
       </DialogContent>
     </Dialog>
   )
-} 
+}
+
+export default Sentry.withProfiler(AvatarUploadDialog, { name: 'AvatarUploadDialog' })

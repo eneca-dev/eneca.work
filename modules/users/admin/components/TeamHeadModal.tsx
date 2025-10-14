@@ -7,6 +7,7 @@ import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
 import { UserCheck } from 'lucide-react'
+import * as Sentry from "@sentry/nextjs"
 
 interface User {
   user_id: string
@@ -74,6 +75,7 @@ export default function TeamHeadModal({
       
       if (error) {
         console.error("Ошибка при загрузке пользователей:", error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'TeamHeadModal', action: 'load_users', error_type: 'db_error' }, extra: { team_name: team.name } })
         toast.error("Не удалось загрузить пользователей")
         return
       }
@@ -81,6 +83,7 @@ export default function TeamHeadModal({
       setUsers(data || [])
     } catch (error) {
       console.error("Ошибка при загрузке пользователей:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'TeamHeadModal', action: 'fetch_users', error_type: 'unexpected' }, extra: { team_name: team.name } })
       toast.error("Произошла ошибка при загрузке данных")
     } finally {
       setIsLoading(false)
@@ -132,6 +135,7 @@ export default function TeamHeadModal({
       
       if (error) {
         console.error("Ошибка при назначении руководителя:", error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'TeamHeadModal', action: 'assign_team_lead', error_type: 'db_error' }, extra: { team_id: team.id, user_id: selectedUser.user_id } })
         toast.error("Не удалось назначить руководителя")
         return
       }
@@ -141,6 +145,7 @@ export default function TeamHeadModal({
       onOpenChange(false)
     } catch (error) {
       console.error("Ошибка при назначении руководителя:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'TeamHeadModal', action: 'assign_team_lead_unexpected', error_type: 'unexpected' }, extra: { team_id: team.id, user_id: selectedUser?.user_id } })
       toast.error("Произошла ошибка")
     } finally {
       setIsSaving(false)

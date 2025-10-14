@@ -7,20 +7,23 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { checkPaymentAccess } from "@/services/org-data-service"
+import * as Sentry from "@sentry/nextjs"
 
 interface PaymentAccessCheckProps {
   children: React.ReactNode
 }
 
-export function PaymentAccessCheck({ children }: PaymentAccessCheckProps) {
+function PaymentAccessCheck({ children }: PaymentAccessCheckProps) {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function checkAccess() {
       try {
-        const access = await checkPaymentAccess()
-        setHasAccess(access)
+        await Sentry.startSpan({ name: 'Users/PaymentAccessCheck checkPaymentAccess', op: 'ui.load' }, async () => {
+          const access = await checkPaymentAccess()
+          setHasAccess(access)
+        })
       } catch (error) {
         console.error("Ошибка при проверке доступа:", error)
         setHasAccess(false)
@@ -57,3 +60,5 @@ export function PaymentAccessCheck({ children }: PaymentAccessCheckProps) {
 
   return <>{children}</>
 }
+
+export default Sentry.withProfiler(PaymentAccessCheck, { name: 'PaymentAccessCheck' })
