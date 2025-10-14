@@ -209,7 +209,6 @@ export const useProjectFilterStore = create<FilterStore>()(
             let query = supabase
               .from('projects')
               .select('project_id, project_name, project_manager')
-              .eq('project_status', 'active')
               .order('project_name')
             if (managerId) query = query.eq('project_manager', managerId)
             const { data, error } = await query
