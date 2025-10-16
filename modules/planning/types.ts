@@ -87,6 +87,19 @@ export interface DecompositionStage {
   start: Date | null
   finish: Date | null
   color?: string
+  // Статистика уровней сложности для этапа (агрегирована в БД)
+  difficultyStats?: StageDifficultyStat[]
+}
+
+// Агрегированная статистика по уровням сложности этапа
+export interface StageDifficultyStat {
+  difficulty_id: string | null
+  difficulty_abbr: string
+  difficulty_definition: string
+  difficulty_weight: number
+  items_count: number
+  planned_hours: number
+  weighted_hours: number
 }
 
 export interface Section {

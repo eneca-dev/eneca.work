@@ -259,16 +259,6 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
 
           setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
 
-          // Если создаём из плановой записи — удалим план и перезагрузим разделы
-          if (convertPlanId) {
-            try {
-              const { deletePlannedLoading } = await import("@/lib/supabase-client")
-              await deletePlannedLoading(convertPlanId)
-              await fetchSections()
-            } catch (e) {
-              console.warn("Не удалось удалить плановую запись после создания загрузки:", e)
-            }
-          }
 
           // Автоматически раскрываем раздел, чтобы показать новую загрузку
           toggleSectionExpanded(section.id)

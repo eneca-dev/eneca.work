@@ -869,7 +869,9 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
               responsibleAvatarUrl: item.responsible_avatar || undefined,
-              sectionId: item.section_id, // Исправлено: используем section_id из view_sections_with_loadings
+              // Берём корректные поля из ответа fetchLoadings (view_sections_with_loadings)
+              sectionId: item.section_id,
+              stageId: item.loading_stage || null,
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,

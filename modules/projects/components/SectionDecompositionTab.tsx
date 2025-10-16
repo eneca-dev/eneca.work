@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState, KeyboardEvent, useRef } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { createClient } from "@/utils/supabase/client"
-import { Loader2, MoreHorizontal, Trash2, PlusCircle, Clock, LayoutTemplate, Edit3, Check, X } from "lucide-react"
+import { Loader2, MoreHorizontal, Trash2, PlusCircle, Clock, LayoutTemplate, Edit3, Check, X, ChevronDown } from "lucide-react"
 import { useUiStore } from "@/stores/useUiStore"
 import {
   DropdownMenu,
@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import AddWorkLogModal from "./AddWorkLogModal"
 import { DecompositionStagesChart } from "./DecompositionStagesChart"
-import PlanLoadingsChart from "./PlanLoadingsChart"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -23,7 +22,6 @@ import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/D
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useHasPermission } from "@/modules/permissions"
-import { createPlannedLoading } from "@/lib/supabase-client"
 
 interface SectionDecompositionTabProps {
   sectionId: string
@@ -40,6 +38,13 @@ interface Profile {
   first_name: string
   last_name: string
   email: string
+}
+
+interface DifficultyLevel {
+  difficulty_id: string
+  difficulty_abbr: string
+  difficulty_definition: string
+  difficulty_weight: number
 }
 
 interface SectionStatus {
@@ -60,6 +65,7 @@ interface DecompositionItemRow {
   decomposition_item_status_id: string | null
   decomposition_item_progress: number
   decomposition_item_stage_id: string | null
+  decomposition_item_difficulty_id: string | null
   responsible_profile?: Profile | null
   status?: SectionStatus | null
 }
@@ -75,7 +81,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [categories, setCategories] = useState<WorkCategory[]>([])
-  const [employeeCategories, setEmployeeCategories] = useState<{ category_id: string; category_name: string }[]>([])
   const [items, setItems] = useState<DecompositionItemRow[]>([])
   const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({})
   const [logsCountByItemId, setLogsCountByItemId] = useState<Record<string, number>>({})
@@ -97,6 +102,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [statuses, setStatuses] = useState<SectionStatus[]>([])
   const [newStatusId, setNewStatusId] = useState("")
   const [newStageId, setNewStageId] = useState<string | null>(null)
+  // Сложности работ
+  const [difficultyLevels, setDifficultyLevels] = useState<DifficultyLevel[]>([])
+  const [newDifficultyId, setNewDifficultyId] = useState<string | null>(null)
   // Стадии (этапы) для группировки/назначения
   const [stages, setStages] = useState<{ id: string; name: string; start: string | null; finish: string | null; description: string | null }[]>([])
   const [groupByStage, setGroupByStage] = useState(true)
@@ -122,49 +130,16 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const [openCatId, setOpenCatId] = useState<string | null>(null)
   const [openRespId, setOpenRespId] = useState<string | null>(null)
   const [openStatusId, setOpenStatusId] = useState<string | null>(null)
+  const [openDifficultyId, setOpenDifficultyId] = useState<string | null>(null)
   const [openStagePicker, setOpenStagePicker] = useState<boolean>(false)
   const [createStageOpen, setCreateStageOpen] = useState<boolean>(false)
   const [createStageDraft, setCreateStageDraft] = useState<{ name: string; start: string | null; finish: string | null; description: string | null }>({ name: "", start: null, finish: null, description: null })
   
-  // Состояние для плановой загрузки этапа
-  const [showPlanLoadingTable, setShowPlanLoadingTable] = useState<boolean>(false)
-  const [planLoadingRows, setPlanLoadingRows] = useState<Array<{
-    id: string
-    start: string
-    finish: string
-    categoryId: string
-    rate: string
-  }>>([])
-  const [newPlanLoadingRow, setNewPlanLoadingRow] = useState<{
-    start: string
-    finish: string
-    categoryId: string
-    rate: string
-  }>({ start: "", finish: "", categoryId: "", rate: "1" })
-  const [openPlanLoadingCategory, setOpenPlanLoadingCategory] = useState<boolean>(false)
-
-  // Состояние для редактирования плановой загрузки существующего этапа
-  const [editPlanLoadingOpen, setEditPlanLoadingOpen] = useState<boolean>(false)
-  const [editingStageForPlanLoading, setEditingStageForPlanLoading] = useState<{ id: string; name: string; start: string | null; finish: string | null } | null>(null)
-  const [existingPlanLoadingRows, setExistingPlanLoadingRows] = useState<Array<{
-    id: string
-    start: string
-    finish: string
-    categoryId: string
-    rate: string
-    planLoadingId?: string // ID существующей записи в БД
-  }>>([])
-  const [newExistingPlanLoadingRow, setNewExistingPlanLoadingRow] = useState<{
-    start: string
-    finish: string
-    categoryId: string
-    rate: string
-  }>({ start: "", finish: "", categoryId: "", rate: "1" })
-  const [openExistingPlanLoadingCategory, setOpenExistingPlanLoadingCategory] = useState<boolean>(false)
 
   const isCatOpen = (id: string) => openCatId === id
   const isRespOpen = (id: string) => openRespId === id
   const isStatusOpen = (id: string) => openStatusId === id
+  const isDifficultyOpen = (id: string) => openDifficultyId === id
 
   // Утилита авто-ресайза для textarea
   const autoResizeTextarea = (element: HTMLTextAreaElement) => {
@@ -205,7 +180,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     const init = async () => {
       setLoading(true)
       try {
-        const [cats, rows, totals, profilesRes, statusesRes, stagesRes, empCats] = await Promise.all([
+        const [cats, rows, totals, profilesRes, statusesRes, stagesRes, difficultyRes] = await Promise.all([
           supabase
             .from("work_categories")
             .select("work_category_id, work_category_name")
@@ -223,6 +198,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               decomposition_item_status_id,
               decomposition_item_progress,
               decomposition_item_stage_id,
+              decomposition_item_difficulty_id,
               profiles!decomposition_item_responsible (
                 user_id,
                 first_name,
@@ -258,16 +234,16 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             .eq('decomposition_stage_section_id', sectionId)
             .order('decomposition_stage_order', { ascending: true }),
           supabase
-            .from("categories")
-            .select("category_id, category_name")
-            .order("category_name", { ascending: true })
+            .from('decomposition_difficulty_levels')
+            .select('difficulty_id, difficulty_abbr, difficulty_definition, difficulty_weight')
+            .order('difficulty_weight', { ascending: true }),
         ])
 
         if (cats.error) throw cats.error
         if (rows.error) throw rows.error
         if (profilesRes.error) throw profilesRes.error
         if (statusesRes.error) throw statusesRes.error
-        if (empCats.error) throw empCats.error
+        if (difficultyRes.error) throw difficultyRes.error
         
         if (!totals.error) {
           setSectionTotals({
@@ -278,9 +254,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         }
 
         setCategories(cats.data || [])
-        setEmployeeCategories(empCats.data || [])
         setProfiles(profilesRes.data || [])
         setStatuses(statusesRes.data || [])
+        setDifficultyLevels(difficultyRes.data || [])
         if (!stagesRes.error) {
           setStages(
             (stagesRes.data as any[]).map((s) => ({
@@ -298,6 +274,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         if (defaultStatus) {
           setNewStatusId(defaultStatus.id)
         }
+        // Устанавливаем сложность по умолчанию «К» для новых строк
+        const defaultDifficulty = (difficultyRes.data || []).find((d: any) => d.difficulty_abbr === 'К')
+        if (defaultDifficulty) {
+          setNewDifficultyId(defaultDifficulty.difficulty_id)
+        } else if ((difficultyRes.data || []).length > 0) {
+          setNewDifficultyId((difficultyRes.data as any[])[0].difficulty_id)
+        }
         
         // Обрабатываем данные и нормализуем profiles и статусы
         const normalizedItems = (rows.data || []).map((item: any) => ({
@@ -305,6 +288,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           responsible_profile: item.profiles || null,
           status: item.section_statuses || null,
           decomposition_item_stage_id: item.decomposition_item_stage_id || null,
+          decomposition_item_difficulty_id: item.decomposition_item_difficulty_id || null,
         })) as DecompositionItemRow[]
         
         setItems(normalizedItems)
@@ -400,6 +384,12 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     return map
   }, [stages])
 
+  const difficultyById = useMemo(() => {
+    const map = new Map<string, DifficultyLevel>()
+    difficultyLevels.forEach(d => map.set(d.difficulty_id, d))
+    return map
+  }, [difficultyLevels])
+
   // Группировка по этапам (без изменения текущего UX по умолчанию)
   const itemsByStage = useMemo(() => {
     const map = new Map<string, DecompositionItemRow[]>()
@@ -474,6 +464,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     decomposition_item_status_id,
     decomposition_item_progress,
     decomposition_item_stage_id,
+    decomposition_item_difficulty_id,
     profiles!decomposition_item_responsible (
       user_id,
       first_name,
@@ -546,6 +537,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         decomposition_item_status_id: canEditStatus ? (newStatusId || null) : null,
         decomposition_item_progress: Number(newProgress) || 0,
         decomposition_item_stage_id: newStageId || null,
+        decomposition_item_difficulty_id: newDifficultyId || null,
       }
 
       const { error } = await supabase
@@ -564,6 +556,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       setNewPlannedDueDate("")
       setNewResponsibleId(null)
       setNewProgress("0")
+      // Сохраняем выбранную сложность (если по умолчанию выставили), не сбрасываем newDifficultyId
       // Сохраняем выбранный этап, не сбрасываем newStageId умышленно
       // Сбрасываем статус на "План" (по умолчанию)
       const defaultStatus = statuses.find(s => s.name === "План")
@@ -582,153 +575,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
   }
 
-  // Функции для работы с плановой загрузкой этапа
-  const addPlanLoadingRow = () => {
-    if (!newPlanLoadingRow.start || !newPlanLoadingRow.finish || !newPlanLoadingRow.categoryId || !newPlanLoadingRow.rate) return
-    
-    const newRow = {
-      id: `temp-${Date.now()}`,
-      start: newPlanLoadingRow.start,
-      finish: newPlanLoadingRow.finish,
-      categoryId: newPlanLoadingRow.categoryId,
-      rate: newPlanLoadingRow.rate,
-    }
-    
-    setPlanLoadingRows(prev => [...prev, newRow])
-    setNewPlanLoadingRow({ start: "", finish: "", categoryId: "", rate: "1" })
-  }
-
-  const removePlanLoadingRow = (id: string) => {
-    setPlanLoadingRows(prev => prev.filter(row => row.id !== id))
-  }
-
-  const canAddPlanLoadingRow = useMemo(() => {
-    return Boolean(
-      newPlanLoadingRow.start && 
-      newPlanLoadingRow.finish && 
-      newPlanLoadingRow.categoryId && 
-      newPlanLoadingRow.rate &&
-      Number(newPlanLoadingRow.rate) > 0
-    )
-  }, [newPlanLoadingRow])
-
-  // Функции для работы с плановой загрузкой существующего этапа
-  const canAddExistingPlanLoadingRow = useMemo(() => {
-    return Boolean(
-      newExistingPlanLoadingRow.start && 
-      newExistingPlanLoadingRow.finish && 
-      newExistingPlanLoadingRow.categoryId && 
-      newExistingPlanLoadingRow.rate &&
-      Number(newExistingPlanLoadingRow.rate) > 0
-    )
-  }, [newExistingPlanLoadingRow])
-
-  const loadExistingPlanLoading = async (stageId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('planned_loadings')
-        .select(`
-          plan_loading_id,
-          plan_loading_start,
-          plan_loading_finish,
-          plan_loading_category_id,
-          plan_loading_rate
-        `)
-        .eq('plan_loading_stage_id', stageId)
-        .order('plan_loading_start', { ascending: true })
-
-      if (error) throw error
-
-      const rows = (data || []).map((item: any, index: number) => ({
-        id: `existing-${index}`,
-        start: item.plan_loading_start,
-        finish: item.plan_loading_finish,
-        categoryId: item.plan_loading_category_id,
-        rate: String(item.plan_loading_rate || 1),
-        planLoadingId: item.plan_loading_id,
-      }))
-
-      setExistingPlanLoadingRows(rows)
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : (typeof error === 'string'
-              ? error
-              : (() => {
-                  try { return JSON.stringify(error) } catch { return 'Неизвестная ошибка' }
-                })())
-      console.warn(`Ошибка загрузки плановой загрузки этапа: ${errorMessage}`, error)
-      setNotification(`Ошибка загрузки плановой загрузки: ${errorMessage}`)
-    }
-  }
-
-  const openEditPlanLoading = async (stage: { id: string; name: string; start: string | null; finish: string | null }) => {
-    setEditingStageForPlanLoading(stage)
-    setEditPlanLoadingOpen(true)
-    await loadExistingPlanLoading(stage.id)
-  }
-
-  const addExistingPlanLoadingRow = () => {
-    if (!canAddExistingPlanLoadingRow) return
-    
-    const newRow = {
-      id: `temp-existing-${Date.now()}`,
-      start: newExistingPlanLoadingRow.start,
-      finish: newExistingPlanLoadingRow.finish,
-      categoryId: newExistingPlanLoadingRow.categoryId,
-      rate: newExistingPlanLoadingRow.rate,
-    }
-    
-    setExistingPlanLoadingRows(prev => [...prev, newRow])
-    setNewExistingPlanLoadingRow({ start: "", finish: "", categoryId: "", rate: "1" })
-  }
-
-  const removeExistingPlanLoadingRow = (id: string) => {
-    setExistingPlanLoadingRows(prev => prev.filter(row => row.id !== id))
-  }
-
-  const saveExistingPlanLoading = async () => {
-    if (!editingStageForPlanLoading) return
-
-    try {
-      setSaving(true)
-      const stageId = editingStageForPlanLoading.id
-
-      // Удаляем все существующие записи для этапа
-      const { error: deleteError } = await supabase
-        .from('planned_loadings')
-        .delete()
-        .eq('plan_loading_stage_id', stageId)
-      
-      if (deleteError) throw deleteError
-
-      // Создаем все записи заново
-      for (const row of existingPlanLoadingRows) {
-        const result = await createPlannedLoading({
-          sectionId,
-          startDate: row.start,
-          endDate: row.finish,
-          rate: Number(row.rate),
-          categoryId: row.categoryId,
-          stageId: stageId,
-          description: null,
-        })
-        
-        if (!result.success) throw new Error(result.error || 'Не удалось создать плановую загрузку')
-      }
-
-      setNotification('Плановая загрузка этапа сохранена')
-      setEditPlanLoadingOpen(false)
-      setEditingStageForPlanLoading(null)
-      setExistingPlanLoadingRows([])
-    } catch (e) {
-      console.error('Ошибка сохранения плановой загрузки этапа:', e)
-      setNotification('Ошибка сохранения плановой загрузки')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   // Быстрое добавление этапа из вкладки Декомпозиции
   const handleCreateStage = async () => {
@@ -752,20 +598,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
 
       const stageId = (data as any)?.decomposition_stage_id
 
-      // Создаем плановую загрузку для этапа, если есть строки
-      if (stageId && planLoadingRows.length > 0) {
-        for (const row of planLoadingRows) {
-          await createPlannedLoading({
-            sectionId,
-            startDate: row.start,
-            endDate: row.finish,
-            rate: Number(row.rate),
-            categoryId: row.categoryId,
-            stageId: stageId,
-            description: null,
-          })
-        }
-      }
 
       // Перезагрузим список этапов
       const stRes = await supabase
@@ -804,6 +636,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         setNotification('Нет категорий работ — добавление невозможно')
         return
       }
+      // Определим сложность по умолчанию «К», иначе возьмём первую по весу
+      const defDiff = difficultyLevels.find(d => d.difficulty_abbr === 'К') || difficultyLevels[0]
       const nextOrder = (items[items.length - 1]?.decomposition_item_order ?? -1) + 1
       const { error } = await supabase
         .from('decomposition_items')
@@ -818,6 +652,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           decomposition_item_status_id: newStatusId || null,
           decomposition_item_progress: 0,
           decomposition_item_stage_id: stageId,
+          decomposition_item_difficulty_id: defDiff ? defDiff.difficulty_id : null,
         })
       if (error) throw error
       const { error: reloadErr } = await reloadDecompositionData()
@@ -830,48 +665,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     }
   }
 
-  // ===== Создание плановой загрузки для этапа (простая форма на верхней панели) =====
-  const [planStart, setPlanStart] = useState<string>("")
-  const [planFinish, setPlanFinish] = useState<string>("")
-  const [planRate, setPlanRate] = useState<string>("1")
-  const [planCategoryId, setPlanCategoryId] = useState<string>("")
-  const [planStageId, setPlanStageId] = useState<string | null>(null)
-  const [openPlanCategory, setOpenPlanCategory] = useState(false)
-  const [openPlanStage, setOpenPlanStage] = useState(false)
-
-  const planFormValid = useMemo(() => {
-    const r = Number(planRate)
-    return Boolean(planStart && planFinish && planCategoryId && !Number.isNaN(r) && r > 0)
-  }, [planStart, planFinish, planCategoryId, planRate])
-
-  const handleCreatePlanLoading = async () => {
-    try {
-      if (!planFormValid) return
-      setSaving(true)
-      const res = await createPlannedLoading({
-        sectionId,
-        startDate: planStart,
-        endDate: planFinish,
-        rate: Number(planRate),
-        categoryId: planCategoryId,
-        stageId: planStageId || newStageId || null,
-        description: null,
-      })
-      if (!res.success) throw new Error(res.error || 'Не удалось создать плановую загрузку')
-      setNotification('Плановая загрузка создана')
-      // Сброс формы
-      setPlanStart("")
-      setPlanFinish("")
-      setPlanRate("1")
-      setPlanCategoryId("")
-      setPlanStageId(null)
-    } catch (e) {
-      console.error('Ошибка создания плановой загрузки:', e)
-      setNotification('Ошибка создания плановой загрузки')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   // ===== Редактирование этапа =====
   const [editingStageId, setEditingStageId] = useState<string | null>(null)
@@ -996,7 +789,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   const updateItemFields = async (
     id: string,
     patch: Partial<Pick<DecompositionItemRow,
-      'decomposition_item_work_category_id' | 'decomposition_item_responsible' | 'decomposition_item_status_id'>>
+      'decomposition_item_work_category_id' | 'decomposition_item_responsible' | 'decomposition_item_status_id' | 'decomposition_item_difficulty_id'>>
   ) => {
     try {
       setSavingId(id)
@@ -1011,6 +804,9 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_status_id') && canEditStatus) {
         safePatch.decomposition_item_status_id = patch.decomposition_item_status_id
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'decomposition_item_difficulty_id')) {
+        safePatch.decomposition_item_difficulty_id = patch.decomposition_item_difficulty_id
       }
 
       const { error } = await supabase
@@ -1217,6 +1013,55 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         ) : (
           <span className="inline-block max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
             {categoryById.get(item.decomposition_item_work_category_id) || "—"}
+          </span>
+        )}
+      </td>
+
+      {/* Сложность */}
+      <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border`} onClick={() => startEdit(item)}>
+        {editingId === item.decomposition_item_id ? (
+          <Popover open={isDifficultyOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenDifficultyId(o ? item.decomposition_item_id : null)}>
+            <PopoverTrigger asChild>
+              <button
+                className="inline-flex items-center gap-1 text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full"
+                onClick={(e) => { e.stopPropagation(); setOpenDifficultyId(item.decomposition_item_id) }}
+              >
+                {(() => {
+                  const id = (editDraft?.decomposition_item_difficulty_id ?? item.decomposition_item_difficulty_id) || null
+                  const d = id ? difficultyById.get(id) : null
+                  return d ? d.difficulty_abbr : <span className="text-slate-400">Выбрать</span>
+                })()}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <ScrollArea className="max-h-[240px]">
+                <div className="py-1">
+                  {difficultyLevels.map(d => (
+                    <button
+                      key={d.difficulty_id}
+                      className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                      onClick={() => {
+                        const v = d.difficulty_id
+                        setEditDraft(prev => prev ? { ...prev, decomposition_item_difficulty_id: v } as DecompositionItemRow : prev)
+                        updateItemFields(item.decomposition_item_id, { decomposition_item_difficulty_id: v })
+                        setOpenDifficultyId(null)
+                      }}
+                    >
+                      {`${d.difficulty_abbr} — ${d.difficulty_definition}`}
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <span className="inline-flex items-center gap-1 max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
+            {(() => {
+              const d = item.decomposition_item_difficulty_id ? difficultyById.get(item.decomposition_item_difficulty_id) : null
+              return d ? d.difficulty_abbr : '—'
+            })()}
+            <ChevronDown className="h-3.5 w-3.5 opacity-50" />
           </span>
         )}
       </td>
@@ -1572,6 +1417,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               <col className="w-[44px]" />
               <col className="w-[30%]" />
               <col className="w-[18%]" />
+              <col className="w-[10%]" />
               <col className="w-[16%]" />
               <col className="w-[10%]" />
               <col className="w-[8%]" />
@@ -1585,6 +1431,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Отчет</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Описание работ</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Категория</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Сложность</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Ответственный</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Статус</th>
                 <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">%</th>
@@ -1675,6 +1522,55 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     ) : (
                       <span className="inline-block max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
                         {categoryById.get(item.decomposition_item_work_category_id) || "—"}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Сложность */}
+                  <td className={`px-2 ${editingId === item.decomposition_item_id ? 'py-1' : 'py-2'} align-middle border`} onClick={() => startEdit(item)}>
+                    {editingId === item.decomposition_item_id ? (
+                      <Popover open={isDifficultyOpen(item.decomposition_item_id)} onOpenChange={(o) => setOpenDifficultyId(o ? item.decomposition_item_id : null)}>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="inline-flex items-center gap-1 text-left whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 w-auto max-w-full"
+                            onClick={(e) => { e.stopPropagation(); setOpenDifficultyId(item.decomposition_item_id) }}
+                          >
+                            {(() => {
+                              const id = (editDraft?.decomposition_item_difficulty_id ?? item.decomposition_item_difficulty_id) || null
+                              const d = id ? difficultyById.get(id) : null
+                              return d ? d.difficulty_abbr : <span className="text-slate-400">Выбрать</span>
+                            })()}
+                            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                          <ScrollArea className="max-h-[240px]">
+                            <div className="py-1">
+                              {difficultyLevels.map(d => (
+                                <button
+                                  key={d.difficulty_id}
+                                  className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                                  onClick={() => {
+                                    const v = d.difficulty_id
+                                    setEditDraft(prev => prev ? { ...prev, decomposition_item_difficulty_id: v } as DecompositionItemRow : prev)
+                                    updateItemFields(item.decomposition_item_id, { decomposition_item_difficulty_id: v })
+                                    setOpenDifficultyId(null)
+                                  }}
+                                >
+                                  {`${d.difficulty_abbr} — ${d.difficulty_definition} (вес ${d.difficulty_weight})`}
+                                </button>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 max-w-full whitespace-normal break-words rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-100">
+                        {(() => {
+                          const d = item.decomposition_item_difficulty_id ? difficultyById.get(item.decomposition_item_difficulty_id) : null
+                          return d ? d.difficulty_abbr : '—'
+                        })()}
+                        <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                       </span>
                     )}
                   </td>
@@ -1953,6 +1849,33 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                     </PopoverContent>
                   </Popover>
                 </td>
+                <td className={`px-2 py-1 align-middle border`}>
+                  <Popover open={openDifficultyId === 'new'} onOpenChange={(o) => setOpenDifficultyId(o ? 'new' : null)}>
+                    <PopoverTrigger asChild>
+                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => setOpenDifficultyId('new')}>
+                        {(() => {
+                          const d = newDifficultyId ? difficultyById.get(newDifficultyId) : null
+                          return d ? `${d.difficulty_abbr}` : <span className="text-slate-400">Выбрать</span>
+                        })()}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                      <ScrollArea className="max-h-[240px]">
+                        <div className="py-1">
+                          {difficultyLevels.map(d => (
+                            <button
+                              key={d.difficulty_id}
+                              className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+                              onClick={() => { setNewDifficultyId(d.difficulty_id); setOpenDifficultyId(null) }}
+                            >
+                              {`${d.difficulty_abbr} — ${d.difficulty_definition} (вес ${d.difficulty_weight})`}
+                            </button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
+                </td>
                 <td className={`px-2 py-1 align-middle border ${canEditResponsible ? '' : 'opacity-70'}`}>
                   <Popover open={openRespId === 'new'} onOpenChange={(o) => setOpenRespId(o ? 'new' : null)}>
                     <PopoverTrigger asChild>
@@ -2065,6 +1988,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               <col className="w-[44px]" />
               <col className="w-[30%]" />
               <col className="w-[18%]" />
+              <col className="w-[10%]" />
               <col className="w-[16%]" />
               <col className="w-[10%]" />
               <col className="w-[8%]" />
@@ -2078,6 +2002,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Отчет</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Описание работ</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Категория</th>
+                <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Сложность</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Ответственный</th>
                 <th className="px-2 py-2 text-left align-middle border border-slate-200 dark:border-slate-700">Статус</th>
                 <th className="px-2 py-2 text-center align-middle border border-slate-200 dark:border-slate-700">%</th>
@@ -2097,7 +2022,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 return (
                   <React.Fragment key={`stage-${st.id}`}>
                     <tr className="group border-t bg-slate-50 dark:bg-slate-800/40">
-                      <td className="px-2 py-2" colSpan={10}>
+                      <td className="px-2 py-2" colSpan={11}>
                         <div className="flex items-center justify-between">
                           <div className="min-w-0">
                             {editingStageId === st.id ? (
@@ -2159,13 +2084,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                               >
                                 <PlusCircle className="h-4 w-4" />
                               </button>
-                              <button
-                                className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-200/60 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-300"
-                                title="Редактировать плановую загрузку"
-                                onClick={() => openEditPlanLoading(st)}
-                              >
-                                <Clock className="h-4 w-4" />
-                              </button>
                               {editingStageId === st.id ? (
                                 <button className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-200/60 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-300" title="Отмена" onClick={cancelEditStage}>
                                   <X className="h-4 w-4" />
@@ -2200,7 +2118,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 return (
                   <React.Fragment key="stage-none">
                     <tr className="border-t bg-slate-50 dark:bg-slate-800/40">
-                      <td className="px-2 py-2" colSpan={10}>
+                      <td className="px-2 py-2" colSpan={11}>
                         <div className="flex items-center justify-between">
                           <div className="font-medium">Без этапа</div>
                           <div className="text-xs tabular-nums">{actualSum.toFixed(2)} / {plannedSum.toFixed(2)} ч <span className="mx-1 text-slate-400">•</span> {logsSum} отч.</div>
@@ -2361,9 +2279,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         if (!open) {
           // Сброс состояния при закрытии
           setCreateStageDraft({ name: '', start: null, finish: null, description: null })
-          setPlanLoadingRows([])
-          setNewPlanLoadingRow({ start: "", finish: "", categoryId: "", rate: "1" })
-          setShowPlanLoadingTable(false)
         }
       }}>
         <DialogContent className="w-[96vw] sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
@@ -2421,153 +2336,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 />
               </div>
             </div>
-
-            {/* Кнопка для показа таблицы плановой загрузки */}
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Плановая загрузка этапа</h4>
-              <button
-                className="h-8 px-3 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700 text-xs"
-                onClick={() => setShowPlanLoadingTable(!showPlanLoadingTable)}
-              >
-                {showPlanLoadingTable ? 'Скрыть таблицу' : 'Создать плановую загрузку'}
-              </button>
-            </div>
-
-            {/* Таблица плановой загрузки */}
-            {showPlanLoadingTable && (
-              <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-                  <h5 className="text-xs font-medium text-slate-600 dark:text-slate-300">Строки плановой загрузки</h5>
-                </div>
-                
-                {/* Существующие строки */}
-                {planLoadingRows.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-                          <th className="px-2 py-2 text-left">Начало</th>
-                          <th className="px-2 py-2 text-left">Окончание</th>
-                          <th className="px-2 py-2 text-left">Категория</th>
-                          <th className="px-2 py-2 text-center">Ставка</th>
-                          <th className="px-2 py-2 text-center w-8"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {planLoadingRows.map((row) => (
-                          <tr key={row.id} className="border-b border-slate-100 dark:border-slate-700/50">
-                            <td className="px-2 py-2">{row.start ? new Date(row.start).toLocaleDateString('ru-RU') : '—'}</td>
-                            <td className="px-2 py-2">{row.finish ? new Date(row.finish).toLocaleDateString('ru-RU') : '—'}</td>
-                            <td className="px-2 py-2">{employeeCategories.find(c => c.category_id === row.categoryId)?.category_name || '—'}</td>
-                            <td className="px-2 py-2 text-center">{row.rate}</td>
-                            <td className="px-2 py-2 text-center">
-                              <button
-                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500"
-                                onClick={() => removePlanLoadingRow(row.id)}
-                                title="Удалить строку"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Форма добавления новой строки */}
-                <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Начало</label>
-                      <ProjectDatePicker
-                        value={newPlanLoadingRow.start ? new Date(newPlanLoadingRow.start) : null}
-                        onChange={d => setNewPlanLoadingRow(prev => ({ ...prev, start: formatISODate(d) }))}
-                        placeholder="Дата"
-                        calendarWidth="200px"
-                        inputWidth="100%"
-                        placement="auto"
-                        inputClassName="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                        variant="minimal"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Окончание</label>
-                      <ProjectDatePicker
-                        value={newPlanLoadingRow.finish ? new Date(newPlanLoadingRow.finish) : null}
-                        onChange={d => setNewPlanLoadingRow(prev => ({ ...prev, finish: formatISODate(d) }))}
-                        placeholder="Дата"
-                        calendarWidth="200px"
-                        inputWidth="100%"
-                        placement="auto"
-                        inputClassName="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                        variant="minimal"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Категория</label>
-                      <Popover open={openPlanLoadingCategory} onOpenChange={setOpenPlanLoadingCategory}>
-                        <PopoverTrigger asChild>
-                          <button className="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-left" onClick={() => setOpenPlanLoadingCategory(true)}>
-                            {employeeCategories.find(c => c.category_id === newPlanLoadingRow.categoryId)?.category_name || 'Выбрать'}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent align="start" sideOffset={6} className="p-0 w-[200px] text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                          <ScrollArea className="max-h-[200px]">
-                            <div className="py-1">
-                              {employeeCategories.map(c => (
-                                <button key={c.category_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60" onClick={() => { setNewPlanLoadingRow(prev => ({ ...prev, categoryId: c.category_id })); setOpenPlanLoadingCategory(false) }}>{c.category_name}</button>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Ставка</label>
-                      <input
-                        className="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                        value={newPlanLoadingRow.rate}
-                        onChange={e => {
-                          const v = e.target.value.replace(',', '.')
-                          let cleaned = v.replace(/[^0-9.]/g, '')
-                          const parts = cleaned.split('.')
-                          if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
-                          setNewPlanLoadingRow(prev => ({ ...prev, rate: cleaned }))
-                        }}
-                        placeholder="1.0"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      className="h-7 px-3 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs disabled:opacity-50"
-                      disabled={!canAddPlanLoadingRow}
-                      onClick={addPlanLoadingRow}
-                    >
-                      Добавить строку
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Превью плановой загрузки для нового этапа */}
-            <div>
-              <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Превью плановой загрузки этапа</h4>
-              <PlanLoadingsChart
-                stageStart={createStageDraft.start}
-                stageFinish={createStageDraft.finish}
-                rows={planLoadingRows.map(r => ({
-                  start: r.start,
-                  finish: r.finish,
-                  categoryId: r.categoryId,
-                  rate: Number(r.rate || 0)
-                }))}
-                categories={employeeCategories.map(c => ({ category_id: c.category_id, category_name: c.category_name }))}
-              />
-            </div>
+            
           </div>
           <div className="flex items-center justify-end gap-2">
             <button className="h-9 px-3 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700" onClick={() => setCreateStageOpen(false)}>Отмена</button>
@@ -2577,9 +2346,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 await handleCreateStage()
                 setCreateStageOpen(false)
                 setCreateStageDraft({ name: '', start: null, finish: null, description: null })
-                setPlanLoadingRows([])
-                setNewPlanLoadingRow({ start: "", finish: "", categoryId: "", rate: "1" })
-                setShowPlanLoadingTable(false)
               }}
             >
               Создать этап
@@ -2588,182 +2354,6 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         </DialogContent>
       </Dialog>
 
-      {/* Диалог редактирования плановой загрузки этапа */}
-      <Dialog open={editPlanLoadingOpen} onOpenChange={(open) => {
-        setEditPlanLoadingOpen(open)
-        if (!open) {
-          // Сброс состояния при закрытии
-          setEditingStageForPlanLoading(null)
-          setExistingPlanLoadingRows([])
-          setNewExistingPlanLoadingRow({ start: "", finish: "", categoryId: "", rate: "1" })
-        }
-      }}>
-        <DialogContent className="w-[96vw] sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Плановая загрузка этапа</DialogTitle>
-            <DialogDescription>
-              {editingStageForPlanLoading ? `Редактирование плановой загрузки для этапа "${editingStageForPlanLoading.name}"` : 'Редактирование плановой загрузки'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 text-sm">
-            {/* Информация об этапе */}
-            {editingStageForPlanLoading && (
-              <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{editingStageForPlanLoading.name}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Период: {editingStageForPlanLoading.start ? new Date(editingStageForPlanLoading.start).toLocaleDateString('ru-RU') : 'не указан'} — {editingStageForPlanLoading.finish ? new Date(editingStageForPlanLoading.finish).toLocaleDateString('ru-RU') : 'не указан'}
-                </div>
-              </div>
-            )}
-
-            {/* Существующие строки плановой загрузки */}
-            <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
-              <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-                <h5 className="text-xs font-medium text-slate-600 dark:text-slate-300">Строки плановой загрузки</h5>
-              </div>
-              
-              {/* Существующие строки */}
-              {existingPlanLoadingRows.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-                        <th className="px-2 py-2 text-left">Начало</th>
-                        <th className="px-2 py-2 text-left">Окончание</th>
-                        <th className="px-2 py-2 text-left">Категория</th>
-                        <th className="px-2 py-2 text-center">Ставка</th>
-                        <th className="px-2 py-2 text-center w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {existingPlanLoadingRows.map((row) => (
-                        <tr key={row.id} className="border-b border-slate-100 dark:border-slate-700/50">
-                          <td className="px-2 py-2">{row.start ? new Date(row.start).toLocaleDateString('ru-RU') : '—'}</td>
-                          <td className="px-2 py-2">{row.finish ? new Date(row.finish).toLocaleDateString('ru-RU') : '—'}</td>
-                          <td className="px-2 py-2">{employeeCategories.find(c => c.category_id === row.categoryId)?.category_name || '—'}</td>
-                          <td className="px-2 py-2 text-center">{row.rate}</td>
-                          <td className="px-2 py-2 text-center">
-                            <button
-                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500"
-                              onClick={() => removeExistingPlanLoadingRow(row.id)}
-                              title="Удалить строку"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Форма добавления новой строки */}
-              <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20">
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Начало</label>
-                    <ProjectDatePicker
-                      value={newExistingPlanLoadingRow.start ? new Date(newExistingPlanLoadingRow.start) : null}
-                      onChange={d => setNewExistingPlanLoadingRow(prev => ({ ...prev, start: formatISODate(d) }))}
-                      placeholder="Дата"
-                      calendarWidth="200px"
-                      inputWidth="100%"
-                      placement="auto"
-                      inputClassName="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                      variant="minimal"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Окончание</label>
-                    <ProjectDatePicker
-                      value={newExistingPlanLoadingRow.finish ? new Date(newExistingPlanLoadingRow.finish) : null}
-                      onChange={d => setNewExistingPlanLoadingRow(prev => ({ ...prev, finish: formatISODate(d) }))}
-                      placeholder="Дата"
-                      calendarWidth="200px"
-                      inputWidth="100%"
-                      placement="auto"
-                      inputClassName="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                      variant="minimal"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Категория</label>
-                    <Popover open={openExistingPlanLoadingCategory} onOpenChange={setOpenExistingPlanLoadingCategory}>
-                      <PopoverTrigger asChild>
-                        <button className="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-left" onClick={() => setOpenExistingPlanLoadingCategory(true)}>
-                          {employeeCategories.find(c => c.category_id === newExistingPlanLoadingRow.categoryId)?.category_name || 'Выбрать'}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" sideOffset={6} className="p-0 w-[200px] text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <ScrollArea className="max-h-[200px]">
-                          <div className="py-1">
-                            {employeeCategories.map(c => (
-                              <button key={c.category_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60" onClick={() => { setNewExistingPlanLoadingRow(prev => ({ ...prev, categoryId: c.category_id })); setOpenExistingPlanLoadingCategory(false) }}>{c.category_name}</button>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">Ставка</label>
-                    <input
-                      className="w-full h-7 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                      value={newExistingPlanLoadingRow.rate}
-                      onChange={e => {
-                        const v = e.target.value.replace(',', '.')
-                        let cleaned = v.replace(/[^0-9.]/g, '')
-                        const parts = cleaned.split('.')
-                        if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
-                        setNewExistingPlanLoadingRow(prev => ({ ...prev, rate: cleaned }))
-                      }}
-                      placeholder="1.0"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end mt-2">
-                  <button
-                    className="h-7 px-3 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs disabled:opacity-50"
-                    disabled={!canAddExistingPlanLoadingRow}
-                    onClick={addExistingPlanLoadingRow}
-                  >
-                    Добавить строку
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Превью плановой загрузки */}
-            {editingStageForPlanLoading && (
-              <div>
-                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Превью плановой загрузки этапа</h4>
-                <PlanLoadingsChart
-                  stageStart={editingStageForPlanLoading.start}
-                  stageFinish={editingStageForPlanLoading.finish}
-                  rows={existingPlanLoadingRows.map(r => ({
-                    start: r.start,
-                    finish: r.finish,
-                    categoryId: r.categoryId,
-                    rate: Number(r.rate || 0)
-                  }))}
-                  categories={employeeCategories.map(c => ({ category_id: c.category_id, category_name: c.category_name }))}
-                />
-              </div>
-            )}
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button className="h-9 px-3 rounded bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-700/70 dark:hover:bg-slate-700" onClick={() => setEditPlanLoadingOpen(false)}>Отмена</button>
-            <button 
-              className="h-9 px-3 rounded bg-blue-600 hover:bg-blue-700 text-white" 
-              onClick={saveExistingPlanLoading}
-              disabled={saving}
-            >
-              {saving ? 'Сохранение...' : 'Сохранить'}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

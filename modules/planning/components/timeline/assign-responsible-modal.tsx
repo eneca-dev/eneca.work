@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import type { Section } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { supabase, updateSectionResponsible, convertPlannedToLoading } from "@/lib/supabase-client"
+import { supabase, updateSectionResponsible } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 
 interface Employee {
@@ -214,52 +214,6 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme, con
           span.setAttribute("employee.id", selectedEmployee!.user_id)
           span.setAttribute("employee.name", selectedEmployee!.full_name)
           span.setAttribute("employee.email", selectedEmployee!.email)
-
-          if (convertPlan) {
-            // Конвертация плановой загрузки в реальную
-            const conv = await convertPlannedToLoading({
-              planLoadingId: convertPlan.planLoadingId,
-              sectionId: convertPlan.sectionId,
-              responsibleId: selectedEmployee!.user_id,
-            })
-            if (!conv.success) {
-              span.setAttribute("operation.success", false)
-              span.setAttribute("operation.error", conv.error || "Неизвестная ошибка")
-              throw new Error(conv.error || "Не удалось создать загрузку")
-            }
-            span.setAttribute("operation.success", true)
-
-            // Обновим данные разделов, чтобы исчезла плановая и появилась реальная загрузка
-            await usePlanningStore.getState().fetchSections()
-
-            setNotification("Плановая загрузка преобразована в загрузку сотрудника")
-            convertPlan.onConverted?.()
-          } else {
-            console.log("Используемый sectionId:", sectionId)
-            console.log("Попытка обновления ответственного:", {
-              sectionId: sectionId,
-              responsibleId: selectedEmployee!.user_id,
-              responsibleName: selectedEmployee!.full_name,
-            })
-
-            const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
-
-            if (!result.success) {
-              span.setAttribute("operation.success", false)
-              span.setAttribute("operation.error", result.error || "Неизвестная ошибка")
-              throw new Error(result.error || "Неизвестная ошибка при обновлении")
-            }
-
-            span.setAttribute("operation.success", true)
-            console.log("Обновление прошло успешно:", result.data)
-
-            updateSectionInStore(sectionId, {
-              responsibleName: selectedEmployee!.full_name,
-              responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
-            })
-
-            setNotification(`Ответственный для раздела "${section.name}" успешно назначен: ${selectedEmployee!.full_name}`)
-          }
 
           // Автоматически скрываем уведомление через 3 секунды
           setTimeout(() => {

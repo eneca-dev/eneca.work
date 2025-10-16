@@ -144,157 +144,6 @@ export interface ShortageLoadingRow {
   loading_status: "active" | "archived"
 }
 
-// -------- PLAN LOADINGS (плановые загрузки) --------
-export interface PlanLoadingRow {
-  plan_loading_id: string
-  plan_loading_section: string | null
-  plan_loading_start: string
-  plan_loading_finish: string
-  plan_loading_rate: number
-  plan_loading_status: string | null
-  plan_loading_stage: string | null
-  plan_loading_category: string | null
-  plan_loading_created: string | null
-  plan_loading_updated: string | null
-  category_name?: string | null
-}
-
-export async function fetchPlannedLoadings(sectionIds: string[]): Promise<Record<string, PlannedLoading[]>> {
-  if (!sectionIds || sectionIds.length === 0) return {}
-  const { data, error } = await supabase
-    .from("plan_loadings")
-    .select(`
-      plan_loading_id,
-      plan_loading_section,
-      plan_loading_start,
-      plan_loading_finish,
-      plan_loading_rate,
-      plan_loading_status,
-      plan_loading_stage,
-      plan_loading_category,
-      plan_loading_created,
-      plan_loading_updated,
-      categories:plan_loading_category (category_name)
-    `)
-    .in("plan_loading_section", sectionIds)
-
-  if (error) {
-    console.error("Ошибка загрузки plan_loadings:", error)
-    return {}
-  }
-
-  const result: Record<string, PlannedLoading[]> = {}
-  ;(data || []).forEach((row: any) => {
-    const sId: string = row.plan_loading_section
-    if (!sId) return
-    const arr = (result[sId] ||= [])
-    arr.push({
-      id: row.plan_loading_id,
-      sectionId: row.plan_loading_section,
-      startDate: new Date(row.plan_loading_start),
-      endDate: new Date(row.plan_loading_finish),
-      rate: Number(row.plan_loading_rate || 0),
-      categoryId: row.plan_loading_category || null,
-      categoryName: row.categories?.category_name || undefined,
-      stageId: row.plan_loading_stage || null,
-      status: row.plan_loading_status || undefined,
-      createdAt: row.plan_loading_created ? new Date(row.plan_loading_created) : undefined,
-      updatedAt: row.plan_loading_updated ? new Date(row.plan_loading_updated) : undefined,
-    })
-  })
-  return result
-}
-
-export async function createPlannedLoading(params: {
-  sectionId: string
-  startDate: string
-  endDate: string
-  rate: number
-  categoryId: string
-  stageId?: string | null
-  description?: string | null
-}): Promise<{ success: boolean; error?: string; planLoadingId?: string }> {
-  try {
-    const payload: any = {
-      plan_loading_section: params.sectionId,
-      plan_loading_start: params.startDate,
-      plan_loading_finish: params.endDate,
-      plan_loading_rate: params.rate,
-      plan_loading_status: "active",
-      plan_loading_category: params.categoryId,
-      plan_loading_stage: params.stageId || null,
-      plan_loading_description: params.description || null,
-      plan_loading_created: new Date().toISOString(),
-      plan_loading_updated: new Date().toISOString(),
-    }
-    const { data, error } = await supabase
-      .from("plan_loadings")
-      .insert(payload)
-      .select("plan_loading_id")
-      .single()
-    if (error) return { success: false, error: error.message }
-    return { success: true, planLoadingId: data?.plan_loading_id }
-  } catch (e) {
-    console.error("Ошибка createPlannedLoading:", e)
-    return { success: false, error: "Произошла неожиданная ошибка" }
-  }
-}
-
-export async function deletePlannedLoading(planLoadingId: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { error } = await supabase.from("plan_loadings").delete().eq("plan_loading_id", planLoadingId)
-    if (error) return { success: false, error: error.message }
-    return { success: true }
-  } catch (e) {
-    console.error("Ошибка deletePlannedLoading:", e)
-    return { success: false, error: "Произошла неожиданная ошибка" }
-  }
-}
-
-// Конвертация плановой загрузки в реальную (создаём запись в loadings и удаляем plan_loadings)
-export async function convertPlannedToLoading(params: {
-  planLoadingId: string
-  sectionId: string
-  responsibleId: string
-}): Promise<{ success: boolean; error?: string; loadingId?: string }> {
-  try {
-    // Сначала получим плановую запись
-    const { data: planRow, error: getErr } = await supabase
-      .from("plan_loadings")
-      .select("plan_loading_start, plan_loading_finish, plan_loading_rate, plan_loading_stage")
-      .eq("plan_loading_id", params.planLoadingId)
-      .single()
-    if (getErr || !planRow) return { success: false, error: getErr?.message || "План не найден" }
-
-    // Создаём загрузку
-    const insertPayload = {
-      loading_responsible: params.responsibleId,
-      loading_section: params.sectionId,
-      loading_start: planRow.plan_loading_start,
-      loading_finish: planRow.plan_loading_finish,
-      loading_rate: planRow.plan_loading_rate,
-      loading_status: "active",
-      loading_created: new Date().toISOString(),
-      loading_updated: new Date().toISOString(),
-      loading_stage: planRow.plan_loading_stage || null,
-    }
-    const { data: loadIns, error: loadErr } = await supabase
-      .from("loadings")
-      .insert(insertPayload)
-      .select("loading_id")
-      .single()
-    if (loadErr) return { success: false, error: loadErr.message }
-
-    // Удаляем плановую запись
-    const { error: delErr } = await supabase.from("plan_loadings").delete().eq("plan_loading_id", params.planLoadingId)
-    if (delErr) return { success: false, error: delErr.message }
-
-    return { success: true, loadingId: loadIns?.loading_id }
-  } catch (e) {
-    console.error("Ошибка convertPlannedToLoading:", e)
-    return { success: false, error: "Произошла неожиданная ошибка" }
-  }
-}
 
 // Функция для получения разделов из представления view_section_hierarchy
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
@@ -554,13 +403,12 @@ export async function fetchSectionsWithLoadings(
     // Загружаем этапы декомпозиции и плановые загрузки для всех разделов одним набором запросов
     const sectionIds = Array.from(sectionsMap.keys())
     if (sectionIds.length > 0) {
-      const [stagesQ, plannedMap] = await Promise.all([
+      const [stagesQ] = await Promise.all([
         supabase
           .from('decomposition_stages')
           .select('decomposition_stage_id, decomposition_stage_section_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_order')
           .in('decomposition_stage_section_id', sectionIds)
-          .order('decomposition_stage_order', { ascending: true }),
-        fetchPlannedLoadings(sectionIds),
+          .order('decomposition_stage_order', { ascending: true })
       ])
 
       const stagesData = stagesQ.data
@@ -568,21 +416,53 @@ export async function fetchSectionsWithLoadings(
 
       if (!stagesError && stagesData) {
         const stagesBySectionId: Record<string, any[]> = {}
+        const allStageIds: string[] = []
         stagesData.forEach((stage: any) => {
           const sectionId = stage.decomposition_stage_section_id
           if (!stagesBySectionId[sectionId]) stagesBySectionId[sectionId] = []
-          stagesBySectionId[sectionId].push({
+          const stageObj = {
             id: stage.decomposition_stage_id,
             name: stage.decomposition_stage_name,
             start: stage.decomposition_stage_start ? new Date(stage.decomposition_stage_start) : null,
             finish: stage.decomposition_stage_finish ? new Date(stage.decomposition_stage_finish) : null,
-          })
+          }
+          stagesBySectionId[sectionId].push(stageObj)
+          if (stageObj.id) allStageIds.push(stageObj.id)
         })
 
+        // Загружаем статистику сложностей по этапам из представления и раскладываем по этапам
+        let statsByStageId: Record<string, any[]> = {}
+        if (allStageIds.length > 0) {
+          const { data: statsData, error: statsError } = await supabase
+            .from('view_stage_difficulty_stats')
+            .select('stage_id, difficulty_id, difficulty_abbr, difficulty_definition, difficulty_weight, items_count, planned_hours, weighted_hours')
+            .in('stage_id', allStageIds)
+
+          if (!statsError && Array.isArray(statsData)) {
+            for (const row of statsData) {
+              const sId = row.stage_id as string
+              ;(statsByStageId[sId] ||= []).push({
+                difficulty_id: row.difficulty_id,
+                difficulty_abbr: row.difficulty_abbr,
+                difficulty_definition: row.difficulty_definition,
+                difficulty_weight: Number(row.difficulty_weight ?? 0),
+                items_count: Number(row.items_count ?? 0),
+                planned_hours: Number(row.planned_hours ?? 0),
+                weighted_hours: Number(row.weighted_hours ?? 0),
+              })
+            }
+          } else if (statsError) {
+            console.warn('Не удалось загрузить view_stage_difficulty_stats:', statsError)
+          }
+        }
+
         sectionsMap.forEach((section, sectionId) => {
-          section.decompositionStages = stagesBySectionId[sectionId] || []
-          // Прикрепляем плановые загрузки
-          section.plannedLoadings = plannedMap[sectionId] || []
+          const stages = stagesBySectionId[sectionId] || []
+          // Прикрепляем статистику сложностей к каждому этапу
+          stages.forEach((st: any) => {
+            st.difficultyStats = statsByStageId[st.id] || []
+          })
+          section.decompositionStages = stages
         })
       }
     }
