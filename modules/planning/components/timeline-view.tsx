@@ -20,6 +20,7 @@ import { PermissionBadge } from "./permission-badge"
 import { Button } from "@/components/ui/button"
 import { SectionPanel } from "@/components/modals"
 import { useTimelineAutoRefresh } from "../hooks/useTimelineAutoRefresh"
+import { Pagination } from "./pagination"
 
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
@@ -118,7 +119,7 @@ useEffect(() => {
   // Состояние для SectionPanel
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
-  const [initialSectionTab, setInitialSectionTab] = useState<'overview' | 'comments' | 'decomposition'>('overview')
+  const [initialSectionTab, setInitialSectionTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>('overview')
 
   // Счетчик для принудительных обновлений
   const [refreshCounter, setRefreshCounter] = useState(0)
@@ -204,29 +205,34 @@ useEffect(() => {
 
   // Подписываемся на изменения в стор для автоматического обновления
   useEffect(() => {
-    const unsubscribe = usePlanningStore.subscribe(
-      (state) => ({ 
+    let previousState = {
+      sectionsLength: usePlanningStore.getState().sections.length,
+      loadingsMapSize: Object.keys(usePlanningStore.getState().loadingsMap).length,
+      totalLoadings: Object.values(usePlanningStore.getState().loadingsMap).reduce((sum, loadings) => sum + loadings.length, 0)
+    }
+
+    const unsubscribe = usePlanningStore.subscribe((state) => {
+      const current = {
         sectionsLength: state.sections.length,
         loadingsMapSize: Object.keys(state.loadingsMap).length,
-        // Считаем общее количество загрузок
         totalLoadings: Object.values(state.loadingsMap).reduce((sum, loadings) => sum + loadings.length, 0)
-      }),
-      (current, previous) => {
-        // Обновляем только при реальных изменениях данных
-        if (
-          current.sectionsLength !== previous?.sectionsLength ||
-          current.loadingsMapSize !== previous?.loadingsMapSize ||
-          current.totalLoadings !== previous?.totalLoadings
-        ) {
-          console.log("📊 Данные изменились, обновляем Timeline:", {
-            sections: current.sectionsLength,
-            loadingsMap: current.loadingsMapSize,
-            totalLoadings: current.totalLoadings
-          })
-          setRefreshCounter(prev => prev + 1)
-        }
       }
-    )
+
+      // Обновляем только при реальных изменениях данных
+      if (
+        current.sectionsLength !== previousState.sectionsLength ||
+        current.loadingsMapSize !== previousState.loadingsMapSize ||
+        current.totalLoadings !== previousState.totalLoadings
+      ) {
+        console.log("📊 Данные изменились, обновляем Timeline:", {
+          sections: current.sectionsLength,
+          loadingsMap: current.loadingsMapSize,
+          totalLoadings: current.totalLoadings
+        })
+        setRefreshCounter(prev => prev + 1)
+        previousState = current
+      }
+    })
 
     return unsubscribe
   }, [])
@@ -277,7 +283,7 @@ useEffect(() => {
   }
 
   // Обработчик открытия SectionPanel
-  const handleOpenSectionPanel = (sectionId: string, initialTab: 'overview' | 'comments' | 'decomposition' = 'overview') => {
+  const handleOpenSectionPanel = (sectionId: string, initialTab: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings' = 'overview') => {
     setSelectedSectionId(sectionId)
     setInitialSectionTab(initialTab)
     setShowSectionPanel(true)
@@ -359,28 +365,47 @@ useEffect(() => {
             <Loader2 className={cn("h-8 w-8 animate-spin", "text-teal-500")} />
           </div>
         ) : (
-          <div className="relative w-full overflow-x-auto" style={{ borderCollapse: "collapse" }}>
-            <TimelineGrid
-              sections={sections}
-              departments={departments}
-              showSections={showSections}
-              showDepartments={showDepartments}
-              startDate={startDate}
-              daysToShow={daysToShow}
-              theme={theme}
-              isLoading={isLoadingSections}
-              isLoadingDepartments={isLoadingDepartments}
-              enableShadow={true}
-              useAbsoluteColumns={false}
-              cellWidth={22}
-              windowWidth={windowSize.width}
-              hasActiveFilters={hasActiveFilters}
-              onOpenSectionPanel={handleOpenSectionPanel}
-              expandAllDepartments={expandAllDepartments}
-              collapseAllDepartments={collapseAllDepartments}
-              refreshCounter={refreshCounter}
-            />
-          </div>
+          <>
+            <div className="relative w-full overflow-x-auto" style={{ borderCollapse: "collapse" }}>
+              <TimelineGrid
+                sections={sections}
+                departments={departments}
+                showSections={showSections}
+                showDepartments={showDepartments}
+                startDate={startDate}
+                daysToShow={daysToShow}
+                theme={theme}
+                isLoading={isLoadingSections}
+                isLoadingDepartments={isLoadingDepartments}
+                enableShadow={true}
+                useAbsoluteColumns={false}
+                cellWidth={22}
+                windowWidth={windowSize.width}
+                hasActiveFilters={hasActiveFilters}
+                onOpenSectionPanel={handleOpenSectionPanel}
+                expandAllDepartments={expandAllDepartments}
+                collapseAllDepartments={collapseAllDepartments}
+                refreshCounter={refreshCounter}
+              />
+            </div>
+
+            {/* Пагинация в самом низу страницы */}
+            {totalPages > 1 && (
+              <div
+                className={cn(
+                  "flex justify-center items-center py-4 border-t",
+                  theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
+                )}
+              >
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  theme={theme}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 

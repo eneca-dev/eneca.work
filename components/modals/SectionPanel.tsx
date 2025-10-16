@@ -18,7 +18,7 @@ interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
-  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition'
+  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'
 }
 
 interface SectionData {
