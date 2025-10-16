@@ -118,6 +118,7 @@ useEffect(() => {
   // Состояние для SectionPanel
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
+  const [initialSectionTab, setInitialSectionTab] = useState<'overview' | 'comments' | 'decomposition'>('overview')
 
   // Счетчик для принудительных обновлений
   const [refreshCounter, setRefreshCounter] = useState(0)
@@ -276,8 +277,9 @@ useEffect(() => {
   }
 
   // Обработчик открытия SectionPanel
-  const handleOpenSectionPanel = (sectionId: string) => {
+  const handleOpenSectionPanel = (sectionId: string, initialTab: 'overview' | 'comments' | 'decomposition' = 'overview') => {
     setSelectedSectionId(sectionId)
+    setInitialSectionTab(initialTab)
     setShowSectionPanel(true)
   }
 
@@ -390,6 +392,7 @@ useEffect(() => {
           isOpen={showSectionPanel}
           onClose={handleCloseSectionPanel}
           sectionId={selectedSectionId}
+          initialTab={initialSectionTab}
         />
       )}
     </div>

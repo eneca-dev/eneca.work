@@ -31,7 +31,7 @@ interface TimelineGridProps {
   cellWidth?: number
   windowWidth?: number // Добавляем ширину окна для перерисовки
   hasActiveFilters?: boolean // Добавляем новый пропс
-  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
   refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния

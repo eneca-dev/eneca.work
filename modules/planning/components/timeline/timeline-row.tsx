@@ -28,7 +28,7 @@ interface TimelineRowProps {
   stickyColumnShadow: string
   totalExpandedSections: number // Добавляем счетчик раскрытых разделов
   totalLoadingsBeforeSection: number // Добавляем счетчик загрузок перед текущим разделом
-  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'details') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
 }
 
 export function TimelineRow({
@@ -624,6 +624,7 @@ export function TimelineRow({
                   stickyColumnShadow={stickyColumnShadow}
                   totalFixedWidth={totalFixedWidth}
                   section={section}
+                  onOpenSectionPanel={onOpenSectionPanel}
                 />
 
                 {/* Фактические загрузки для этого этапа */}
@@ -964,6 +965,7 @@ interface StageRowProps {
   stickyColumnShadow: string
   totalFixedWidth: number
   section: Section
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'details') => void
 }
 
 function StageRow({
@@ -979,6 +981,7 @@ function StageRow({
   stickyColumnShadow,
   totalFixedWidth,
   section,
+  onOpenSectionPanel,
 }: StageRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   const [createOpen, setCreateOpen] = useState(false)
@@ -993,6 +996,23 @@ function StageRow({
     d.setHours(0, 0, 0, 0)
     return d >= start && d <= finish
   }
+
+  // Суммарные плановые часы по этапу из декомпозиции
+  const totalPlannedHours: number = Array.isArray((stage as any).difficultyStats)
+    ? (stage as any).difficultyStats.reduce(
+        (sum: number, stat: any) => sum + (Number(stat?.planned_hours) || 0),
+        0,
+      )
+    : 0
+
+  // Количество дней в этапе по видимым единицам времени (инклюзивно)
+  const activeDaysCount: number = timeUnits.reduce(
+    (count, unit) => count + (isDateInStage(unit.date) ? 1 : 0),
+    0,
+  )
+
+  // Часы в день
+  const hoursPerDay: number = activeDaysCount > 0 ? totalPlannedHours / activeDaysCount : 0
 
   return (
     <div className="group/stage w-full">
@@ -1027,34 +1047,37 @@ function StageRow({
                 <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                   <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                 </div>
-                <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{stage.name || "Этап"}</div>
-                {/* Краткая сводка по сложностям: формат "1 к, 0 вс, 3 гс" */}
-                {Array.isArray((stage as any).difficultyStats) && (stage as any).difficultyStats.length > 0 && (
-                  <div className={cn("ml-2 text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}
-                    title={(stage as any).difficultyStats.map((d: any) => `${d.difficulty_abbr}: ${d.items_count} элементов, ${d.planned_hours} ч`).join("; ")}
-                  >
-                    {(() => {
-                      const stats = (stage as any).difficultyStats as Array<{ difficulty_abbr: string; items_count: number }>
-                      // Сортировка по abbr для стабильности отображения (К, ВС, ГС, ...)
-                      const ordered = [...stats].sort((a, b) => a.difficulty_abbr.localeCompare(b.difficulty_abbr, "ru"))
-                      // Берём только непустые
-                      const nonZero = ordered.filter(s => (s.items_count || 0) > 0)
-                      const toShow = (nonZero.length > 0 ? nonZero : ordered).map(s => `${s.items_count} ${s.difficulty_abbr.toLowerCase()}`)
-                      return <span>({toShow.join(", ")})</span>
-                    })()}
-                  </div>
-                )}
+                <div
+                  className={cn("text-xs font-medium cursor-pointer hover:underline", theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-700 hover:text-teal-600")}
+                  onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
+                  title="Открыть декомпозицию раздела"
+                >{stage.name || "Этап"}</div>
               </div>
-              <button
-                className={cn(
-                  "text-xs px-2 py-0.5 rounded inline-flex items-center gap-1",
-                  theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+              <div className="flex items-center gap-2">
+                {totalPlannedHours > 0 && activeDaysCount > 0 && (
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded",
+                      theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
+                    )}
+                    title={`План: ${totalPlannedHours} ч на ${activeDaysCount} дн`}
+                  >
+                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} ч/д` : `${hoursPerDay.toFixed(1)} ч/д`}
+                  </span>
                 )}
-                title="Создать загрузку в этом этапе"
-                onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
-              >
-                <PlusCircle size={12} /> Создать
-              </button>
+                <button
+                  className={cn(
+                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
+                    theme === "dark" 
+                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
+                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
+                  )}
+                  title="Создать загрузку в этом этапе"
+                  onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
+                >
+                  <PlusCircle size={12} /> 
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1070,6 +1093,7 @@ function StageRow({
                 className={cn(
                   "border-r border-b relative",
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
+                  theme === "dark" ? "group-hover/stage:bg-emerald-900/20" : "group-hover/stage:bg-emerald-50",
                   isMonthStart
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
