@@ -200,8 +200,8 @@ export const usePlanningStore = create<PlanningState>()(
         expandedSections: {},
         expandedDepartments: {},
         expandedTeams: {},
-        showSections: true, // По умолчанию разделы показываются
-        showDepartments: false,
+        showSections: false, // По умолчанию разделы скрыты
+        showDepartments: true, // По умолчанию отделы показываются
         groupByProject: true,
         expandedProjectGroups: {},
         currentPage: 1,

@@ -259,9 +259,12 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
 
           setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
 
-
-          // Автоматически раскрываем раздел, чтобы показать новую загрузку
-          toggleSectionExpanded(section.id)
+          
+          // Гарантируем, что раздел раскрыт, не закрывая уже открытые
+          const { expandedSections } = usePlanningStore.getState()
+          if (!expandedSections[section.id]) {
+            toggleSectionExpanded(section.id)
+          }
 
           successTimeoutRef.current = setTimeout(() => {
             clearNotification()

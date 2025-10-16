@@ -488,8 +488,11 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           const projectName = selectedProject?.project_name || "Неизвестный проект"
           setNotification(`Загрузка для сотрудника ${employee.fullName} на проект "${projectName}" успешно создана`)
 
-          // Автоматически раскрываем раздел, чтобы показать новую загрузку
-          toggleSectionExpanded(formData.sectionId)
+          // Гарантируем, что раздел раскрыт, не закрывая уже открытые
+          const { expandedSections } = usePlanningStore.getState()
+          if (!expandedSections[formData.sectionId]) {
+            toggleSectionExpanded(formData.sectionId)
+          }
 
           // Автоматически скрываем уведомление через 3 секунды
           successTimeoutRef.current = setTimeout(() => {
