@@ -2463,10 +2463,23 @@ export const usePlanningStore = create<PlanningState>()(
       }),
       {
         name: "planning-data-storage",
+        version: 2,
+        migrate: (persistedState: any, version: number) => {
+          try {
+            // До v2 мы сохраняли showDepartments и могли зафиксировать false,
+            // что сбивает дефолт при первой загрузке. Принудительно включаем.
+            if (version < 2 && persistedState) {
+              const { showDepartments: _oldShowDepartments, ...rest } = persistedState as any
+              return { ...rest, showDepartments: true }
+            }
+          } catch (_) {
+            // no-op, вернём как есть ниже
+          }
+          return persistedState as any
+        },
         partialize: (state) => ({
           expandedSections: state.expandedSections,
           expandedDepartments: state.expandedDepartments,
-          showDepartments: state.showDepartments,
           currentPage: state.currentPage,
         }),
       },

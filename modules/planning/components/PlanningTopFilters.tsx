@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, ListTree, RotateCcw } from 'lucide-react'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw } from 'lucide-react'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
@@ -21,8 +21,6 @@ export default function PlanningTopFilters() {
     showDepartments,
     toggleShowSections,
     toggleShowDepartments,
-    toggleGroupByProject,
-    groupByProject,
     expandAllProjectGroups,
     collapseAllProjectGroups,
     expandAllDepartments,
@@ -36,6 +34,19 @@ export default function PlanningTopFilters() {
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [statusSearch, setStatusSearch] = useState('')
   const [projectSearch, setProjectSearch] = useState('')
+
+  // Гарантируем дефолт: отделы включены, разделы выключены при первом монтировании
+  const [__initialized, setInitialized] = useState(false)
+  useEffect(() => {
+    if (__initialized) return
+    if (!showDepartments) {
+      toggleShowDepartments()
+    }
+    if (showSections) {
+      toggleShowSections()
+    }
+    setInitialized(true)
+  }, [__initialized])
 
   useEffect(() => {
     const checkCompactMode = () => setIsCompactMode(window.innerWidth < 1200)
@@ -105,6 +116,25 @@ export default function PlanningTopFilters() {
     setStartDate(d)
   }
 
+  // Универсальные функции для разворачивания/сворачивания всех групп
+  const handleExpandAll = () => {
+    // Всегда разворачиваем проектные группы (они всегда включены)
+    expandAllProjectGroups()
+    // Разворачиваем отделы, если они показаны
+    if (showDepartments) {
+      expandAllDepartments()
+    }
+  }
+
+  const handleCollapseAll = () => {
+    // Всегда сворачиваем проектные группы (они всегда включены)
+    collapseAllProjectGroups()
+    // Сворачиваем отделы, если они показаны
+    if (showDepartments) {
+      collapseAllDepartments()
+    }
+  }
+
   return (
     <FilterBar title="Планирование" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg" right={(
       <div className="flex items-center gap-1">
@@ -129,31 +159,13 @@ export default function PlanningTopFilters() {
         <Button variant="ghost" size="icon" className={`h-7 w-7 ${showSections ? 'text-teal-600 dark:text-teal-400' : ''}`} onClick={toggleShowSections} title={showSections ? 'Скрыть разделы' : 'Показать разделы'}>
           {showSections ? <Layers className="h-4 w-4" /> : <Layers className="h-4 w-4 opacity-50" />}
         </Button>
-        {/* Группировка по проекту */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={`h-7 w-7 ${groupByProject ? 'text-teal-600 dark:text-teal-400' : ''}`}
-          onClick={toggleGroupByProject}
-          title={groupByProject ? 'Отключить группировку по проектам' : 'Включить группировку по проектам'}
-        >
-          <ListTree className="h-4 w-4" />
-        </Button>
-        {/* Развернуть/Свернуть все проектные группы */}
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={expandAllProjectGroups} title="Развернуть все проектные группы" disabled={!groupByProject}>
+        {/* Развернуть/Свернуть все */}
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleExpandAll} title="Развернуть все">
           <ChevronsDown className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={collapseAllProjectGroups} title="Свернуть все проектные группы" disabled={!groupByProject}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCollapseAll} title="Свернуть все">
           <ChevronsUp className="h-4 w-4" />
         </Button>
-        {/* Развернуть/Свернуть все отделы */}
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={expandAllDepartments} title="Развернуть все отделы">
-          <ChevronsDown className="h-4 w-4 opacity-60" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={collapseAllDepartments} title="Свернуть все отделы">
-          <ChevronsUp className="h-4 w-4 opacity-60" />
-        </Button>
-        {/* Кнопка сброса перенесена в блок фильтров слева */}
       </div>
     )}>
       {/* Организация */}
