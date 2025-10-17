@@ -24,6 +24,7 @@ interface PlanningState {
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
   expandedTeams: Record<string, boolean> // Отслеживание раскрытых команд
+  expandedEmployees: Record<string, boolean> // Отслеживание раскрытых сотрудников
   showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
   // Группировка
@@ -110,10 +111,15 @@ interface PlanningState {
   toggleSectionExpanded: (sectionId: string) => void
   toggleDepartmentExpanded: (departmentId: string) => void
   toggleTeamExpanded: (teamId: string) => void
+  toggleEmployeeExpanded: (employeeId: string) => void
   expandAllSections: () => Promise<void>
   collapseAllSections: () => void
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
+  expandAllTeams: () => void
+  collapseAllTeams: () => void
+  expandAllEmployees: () => void
+  collapseAllEmployees: () => void
   setCurrentPage: (page: number) => void
   toggleShowSections: () => void
   toggleShowDepartments: () => void
@@ -200,6 +206,7 @@ export const usePlanningStore = create<PlanningState>()(
         expandedSections: {},
         expandedDepartments: {},
         expandedTeams: {},
+        expandedEmployees: {},
         showSections: false, // По умолчанию разделы скрыты
         showDepartments: true, // По умолчанию отделы показываются
         groupByProject: true,
@@ -1651,8 +1658,10 @@ export const usePlanningStore = create<PlanningState>()(
           // Находим раздел
           const section = sections.find((s) => s.id === sectionId)
 
-          // Если раздел не найден или у него нет загрузок, ничего не делаем
-          if (!section || !section.hasLoadings) return
+          // Раздел должен иметь потомков: либо загрузки, либо этапы
+          const hasStages = section && Array.isArray(section.decompositionStages) && section.decompositionStages.length > 0
+          const hasChildren = section && (section.hasLoadings || hasStages)
+          if (!section || !hasChildren) return
 
           // Обновляем состояние раскрытия
           set((state) => ({
@@ -1710,32 +1719,49 @@ export const usePlanningStore = create<PlanningState>()(
           }))
         },
 
+        // Переключение состояния раскрытия сотрудника (для показа его детальных загрузок)
+        toggleEmployeeExpanded: (employeeId: string) => {
+          set((state) => ({
+            expandedEmployees: {
+              ...state.expandedEmployees,
+              [employeeId]: !state.expandedEmployees[employeeId],
+            },
+          }))
+        },
+
         // Развернуть все разделы
         expandAllSections: async () => {
           const { sections, loadingsMap } = get()
-          const sectionsWithLoadings = sections.filter((section) => section.hasLoadings)
+          const sectionsToExpand = sections.filter((section) => {
+            const hasStages = Array.isArray(section.decompositionStages) && section.decompositionStages.length > 0
+            return section.hasLoadings || hasStages
+          })
 
-          // Создаем объект с состоянием раскрытия для всех разделов с загрузками
+          // Создаем объект с состоянием раскрытия для всех разделов с потомками
           const newExpandedSections: Record<string, boolean> = {}
-          sectionsWithLoadings.forEach((section) => {
+          sectionsToExpand.forEach((section) => {
             newExpandedSections[section.id] = true
           })
+
+          const idsToExpand = new Set(sectionsToExpand.map((s) => s.id))
 
           // Обновляем состояние
           set((state) => ({
             expandedSections: newExpandedSections,
             sections: state.sections.map((s) => {
-              if (s.hasLoadings) {
+              if (idsToExpand.has(s.id)) {
                 return {
                   ...s,
                   isExpanded: true,
-                  // Объединяем загрузки из раздела и карты загрузок, избегая дубликатов
-                  loadings: mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[s.id] || []),
+                  // Для разделов с загрузками — актуализируем список загрузок из карты
+                  loadings: s.hasLoadings
+                    ? mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[s.id] || [])
+                    : s.loadings,
                 }
               }
               return s
             }),
-            allSections: state.allSections.map((s) => (s.hasLoadings ? { ...s, isExpanded: true } : s)),
+            allSections: state.allSections.map((s) => (idsToExpand.has(s.id) ? { ...s, isExpanded: true } : s)),
           }))
         },
 
@@ -1769,6 +1795,46 @@ export const usePlanningStore = create<PlanningState>()(
             expandedDepartments: {},
             departments: state.departments.map((d) => ({ ...d, isExpanded: false })),
           }))
+        },
+
+        // Развернуть все команды во всех отделах
+        expandAllTeams: () => {
+          const { departments } = get()
+          const newExpandedTeams: Record<string, boolean> = {}
+          departments.forEach((dept) => {
+            dept.teams.forEach((team) => {
+              newExpandedTeams[team.id] = true
+            })
+          })
+          set((state) => ({
+            expandedTeams: newExpandedTeams,
+          }))
+        },
+
+        // Свернуть все команды во всех отделах
+        collapseAllTeams: () => {
+          set({ expandedTeams: {} })
+        },
+
+        // Развернуть всех сотрудников (детали) у кого есть загрузки
+        expandAllEmployees: () => {
+          const { departments } = get()
+          const newExpandedEmployees: Record<string, boolean> = {}
+          departments.forEach((dept) => {
+            dept.teams.forEach((team) => {
+              team.employees.forEach((emp) => {
+                if (emp.loadings && emp.loadings.length > 0) {
+                  newExpandedEmployees[emp.id] = true
+                }
+              })
+            })
+          })
+          set({ expandedEmployees: newExpandedEmployees })
+        },
+
+        // Свернуть всех сотрудников (детали)
+        collapseAllEmployees: () => {
+          set({ expandedEmployees: {} })
         },
 
         // Добавляем функцию переключения показа разделов

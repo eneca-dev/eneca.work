@@ -58,9 +58,7 @@ export function DepartmentRow({
   // Проверяем, раскрыт ли отдел
   const isDepartmentExpanded = expandedDepartments[department.id] || false
 
-  // Состояния для модальных окон и раскрытых сотрудников/команд
-  const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
-  const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({})
+  // Состояния для модальных окон
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
@@ -87,19 +85,10 @@ export function DepartmentRow({
   // Добавим функцию для переключения состояния раскрытия сотрудника
   // Добавьте следующую функцию после handleToggleExpand:
 
-  const toggleEmployeeExpanded = (employeeId: string) => {
-    setExpandedEmployees((prev) => ({
-      ...prev,
-      [employeeId]: !prev[employeeId],
-    }))
-  }
-
-  const toggleTeamExpanded = (teamId: string) => {
-    setExpandedTeams((prev) => ({
-      ...prev,
-      [teamId]: !prev[teamId],
-    }))
-  }
+  const expandedTeams = usePlanningStore((s) => s.expandedTeams)
+  const expandedEmployees = usePlanningStore((s) => s.expandedEmployees)
+  const toggleTeamExpanded = usePlanningStore((s) => s.toggleTeamExpanded)
+  const toggleEmployeeExpanded = usePlanningStore((s) => s.toggleEmployeeExpanded)
 
   // Получаем всех сотрудников отдела из всех команд (исключая строку дефицита)
   const allEmployees = department.teams.flatMap((team) => team.employees.filter((e) => !(e as any).isShortage))

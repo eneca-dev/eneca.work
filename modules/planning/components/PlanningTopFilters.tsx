@@ -21,15 +21,24 @@ export default function PlanningTopFilters() {
     showDepartments,
     toggleShowSections,
     toggleShowDepartments,
+    expandAllSections,
+    collapseAllSections,
     expandAllProjectGroups,
     collapseAllProjectGroups,
     expandAllDepartments,
     collapseAllDepartments,
+    expandAllTeams,
+    collapseAllTeams,
+    expandAllEmployees,
+    collapseAllEmployees,
+    groupByProject,
     fetchSections,
     fetchDepartments,
     toggleSectionExpanded,
     toggleDepartmentExpanded,
   } = usePlanningStore()
+  const expandedSections = usePlanningStore(s => s.expandedSections)
+  const expandedProjectGroups = usePlanningStore(s => s.expandedProjectGroups)
 
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [statusSearch, setStatusSearch] = useState('')
@@ -117,21 +126,91 @@ export default function PlanningTopFilters() {
   }
 
   // Универсальные функции для разворачивания/сворачивания всех групп
-  const handleExpandAll = () => {
-    // Всегда разворачиваем проектные группы (они всегда включены)
-    expandAllProjectGroups()
-    // Разворачиваем отделы, если они показаны
-    if (showDepartments) {
-      expandAllDepartments()
+  const handleExpandAll = async () => {
+    // Если показываются только отделы — двухшагово: 1) команды, 2) сотрудники
+    if (showDepartments && !showSections) {
+      // Если есть свернутые команды — сначала команды
+      const hasCollapsedTeams = Object.values(usePlanningStore.getState().expandedTeams).some((v) => v === false) || Object.keys(usePlanningStore.getState().expandedTeams).length === 0
+      if (hasCollapsedTeams) {
+        expandAllTeams()
+        return
+      }
+      // Иначе — раскрываем сотрудников
+      expandAllEmployees()
+      return
     }
+
+    // Если показываются и разделы, и отделы — разворачиваем всё (двухшагово для проектов/разделов)
+    if (showSections && showDepartments) {
+      const hasCollapsedProjectGroups = groupByProject && Object.values(expandedProjectGroups).some(v => v === false)
+      const expandedTeamsMap = usePlanningStore.getState().expandedTeams
+      const hasCollapsedTeams = Object.values(expandedTeamsMap).some((v) => v === false) || Object.keys(expandedTeamsMap).length === 0
+
+      // Первая стадия: если где-то сверху ещё есть свернутые уровни (проекты или команды)
+      if (hasCollapsedProjectGroups || hasCollapsedTeams) {
+        if (hasCollapsedProjectGroups) {
+          expandAllProjectGroups()
+        }
+        if (hasCollapsedTeams) {
+          expandAllTeams()
+        }
+        return
+      }
+
+      // Вторая стадия: раскрываем разделы и сотрудников
+      await expandAllSections()
+      expandAllEmployees()
+      return
+    }
+
+    // Иначе (только разделы)
+    const hasCollapsedProjectGroups = groupByProject && Object.values(expandedProjectGroups).some(v => v === false)
+    if (hasCollapsedProjectGroups) {
+      expandAllProjectGroups()
+      return
+    }
+    await expandAllSections()
   }
 
   const handleCollapseAll = () => {
-    // Всегда сворачиваем проектные группы (они всегда включены)
-    collapseAllProjectGroups()
-    // Сворачиваем отделы, если они показаны
-    if (showDepartments) {
-      collapseAllDepartments()
+    // Если показываются только отделы — двухшагово: 1) сотрудники внутрь команд, 2) команды внутрь отделов
+    if (showDepartments && !showSections) {
+      const anyEmployeeExpanded = Object.values(usePlanningStore.getState().expandedEmployees).some(Boolean)
+      if (anyEmployeeExpanded) {
+        collapseAllEmployees()
+        return
+      }
+      collapseAllTeams()
+      return
+    }
+
+    // Если показываются и разделы, и отделы — сворачиваем всё
+    if (showSections && showDepartments) {
+      const anySectionExpanded = Object.values(expandedSections).some(Boolean)
+      const anyEmployeeExpanded = Object.values(usePlanningStore.getState().expandedEmployees).some(Boolean)
+      if (anySectionExpanded || anyEmployeeExpanded) {
+        // 1) Прячем этапы внутрь разделов
+        if (anySectionExpanded) collapseAllSections()
+        // 1) Прячем сотрудников внутрь команд
+        if (anyEmployeeExpanded) collapseAllEmployees()
+        return
+      }
+      // Если разделы и сотрудники уже закрыты — сворачиваем проектные группы и команды
+      if (groupByProject) {
+        collapseAllProjectGroups()
+      }
+      collapseAllTeams()
+      return
+    }
+
+    // Иначе (только разделы) — двухшагово
+    const anySectionExpanded = Object.values(expandedSections).some(Boolean)
+    if (anySectionExpanded) {
+      collapseAllSections()
+      return
+    }
+    if (groupByProject) {
+      collapseAllProjectGroups()
     }
   }
 
