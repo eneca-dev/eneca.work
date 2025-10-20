@@ -1142,7 +1142,7 @@ function StageRow({
     const y = baselineY - (value / maxRateForGraph) * graphHeight
     return [x, y]
   }
-  const segments: { line: string; area: string }[] = []
+  const segments: { line: string; area: string; x1: number; x2: number }[] = []
   let current: Point[] = []
   for (let i = 0; i < series.length; i++) {
     const v = series[i]
@@ -1153,7 +1153,7 @@ function StageRow({
       const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
         current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
         ` L ${current[current.length - 1][0]} ${baselineY} Z`
-      segments.push({ line, area })
+      segments.push({ line, area, x1: current[0][0], x2: current[current.length - 1][0] })
       current = []
     }
   }
@@ -1162,8 +1162,16 @@ function StageRow({
     const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
       current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
       ` L ${current[current.length - 1][0]} ${baselineY} Z`
-    segments.push({ line, area })
+    segments.push({ line, area, x1: current[0][0], x2: current[current.length - 1][0] })
   }
+
+  // Средняя ставка по этапу из средних часов в день (8 ч = 1 ставка)
+  const avgRatePerDay = hoursPerDay > 0 ? hoursPerDay / 8 : 0
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+  const avgY = clamp(baselineY - (avgRatePerDay / maxRateForGraph) * graphHeight, graphPadding, baselineY)
+  const avgRateLabel = avgRatePerDay
+    ? (Number.isInteger(avgRatePerDay) ? `${avgRatePerDay} ст/д` : `${avgRatePerDay.toFixed(2)} ст/д`)
+    : ""
 
   return (
     <div className="group/stage w-full">
@@ -1220,7 +1228,7 @@ function StageRow({
                     )}
                     title={`План: ${totalPlannedHours} ч на ${activeDaysCount} дн`}
                   >
-                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} ч/д` : `${hoursPerDay.toFixed(1)} ч/д`}
+                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} час/день` : `${hoursPerDay.toFixed(1)} час/день`}
                   </span>
                 )}
                 <button
@@ -1252,6 +1260,32 @@ function StageRow({
                     <path d={seg.line} fill="none" stroke={stageBarColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                   </g>
                 ))}
+
+                {/* Красная линия средней ставки по этапу — только на участках, где есть загрузка */}
+                {avgRatePerDay > 0 && segments.map((seg, idx) => (
+                  <line
+                    key={`avg-${idx}`}
+                    x1={seg.x1}
+                    y1={avgY}
+                    x2={seg.x2}
+                    y2={avgY}
+                    stroke="rgb(239, 68, 68)"
+                    strokeWidth={1.5}
+                  />
+                ))}
+
+                {/* Подпись значения ставки у начала первого сегмента */}
+                {avgRatePerDay > 0 && segments[0] && (
+                  <text
+                    x={segments[0].x1 + 4}
+                    y={avgY - 4}
+                    fill="rgb(239, 68, 68)"
+                    fontSize="10"
+                    fontWeight="600"
+                  >
+                    {avgRateLabel}
+                  </text>
+                )}
               </svg>
             </div>
           )}
