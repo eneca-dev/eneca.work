@@ -28,7 +28,7 @@ interface TimelineRowProps {
   stickyColumnShadow: string
   totalExpandedSections: number // Добавляем счетчик раскрытых разделов
   totalLoadingsBeforeSection: number // Добавляем счетчик загрузок перед текущим разделом
-  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'details') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
 }
 
 export function TimelineRow({
@@ -972,7 +972,7 @@ interface StageRowProps {
   stickyColumnShadow: string
   totalFixedWidth: number
   section: Section
-  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'details') => void
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void
 }
 
 function StageRow({
