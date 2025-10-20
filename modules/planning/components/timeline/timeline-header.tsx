@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from "react"
 import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { Search, Eye, EyeOff, Expand, Minimize, Columns3, Users } from "lucide-react"
+import { Search, Eye, EyeOff, Expand, Minimize, Columns3, Users, X } from "lucide-react"
 
 interface TimelineHeaderProps {
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
@@ -282,13 +282,30 @@ export function TimelineHeader({
                 value={searchQuery}
                 onChange={handleSearchChange}
                 className={cn(
-                  "w-full py-1 pl-8 pr-2 text-xs rounded border",
+                  "w-full py-1 pl-8 pr-6 text-xs rounded border",
                   theme === "dark"
                     ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400 focus:border-teal-500"
                     : "bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-teal-500",
                   "focus:outline-none focus:ring-1 focus:ring-teal-500",
                 )}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Очистить"
+                  title="Очистить"
+                  onClick={() => {
+                    setSearchQuery("")
+                    filterSectionsByName("")
+                  }}
+                  className={cn(
+                    "absolute inset-y-0 right-0 flex items-center pr-2",
+                    theme === "dark" ? "text-slate-400 hover:text-slate-300" : "text-slate-400 hover:text-slate-600",
+                  )}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -321,13 +338,30 @@ export function TimelineHeader({
                   value={projectSearchQuery}
                   onChange={handleProjectSearchChange}
                   className={cn(
-                    "w-full py-1 pl-8 pr-2 text-xs rounded border",
+                    "w-full py-1 pl-8 pr-6 text-xs rounded border",
                     theme === "dark"
                       ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400 focus:border-teal-500"
                       : "bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-teal-500",
                     "focus:outline-none focus:ring-1 focus:ring-teal-500",
                   )}
                 />
+                {projectSearchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Очистить"
+                    title="Очистить"
+                    onClick={() => {
+                      setProjectSearchQuery("")
+                      filterSectionsByProject("")
+                    }}
+                    className={cn(
+                      "absolute inset-y-0 right-0 flex items-center pr-2",
+                      theme === "dark" ? "text-slate-400 hover:text-slate-300" : "text-slate-400 hover:text-slate-600",
+                    )}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             </div>
           )}
