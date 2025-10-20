@@ -147,6 +147,8 @@ export function TimelineRow({
   // Вычисляем суммарную ставку
   const totalRate = calculateTotalRate()
 
+  // Удалена логика подсветки перерасходов относительно этапов
+
   // Функция для проверки, активна ли загрузка в указанную дату
   const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
     try {
@@ -335,6 +337,8 @@ export function TimelineRow({
                     </Tooltip>
                   </div>
                 )}
+
+                {/* Индикатор перерасходов удалён */}
 
                 {/* Иконка раскрытия и название раздела */}
                 <div className="flex items-center mr-3">
@@ -736,6 +740,8 @@ function LoadingRow({
     }
   }
 
+  // Удалена логика проверки перерасхода относительно этапа
+
   // Функция для получения стилей прямоугольника в зависимости от ставки
   const getLoadingBarStyles = (rate: number) => {
     let backgroundColor = ""
@@ -942,6 +948,7 @@ function LoadingRow({
                     }}
                   ></div>
                 )}
+                {/* Красные оверлеи удалены */}
               </div>
             )
           })}
