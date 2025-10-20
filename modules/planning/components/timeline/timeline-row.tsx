@@ -1107,6 +1107,12 @@ function StageRow({
     return rgbToString(blendRgb(base, target, amount))
   }
 
+  // Преобразование rgb(...) в rgba(..., a)
+  const toRgba = (rgbStr: string, alpha: number): string => {
+    const [r, g, b] = parseRgb(rgbStr)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
   // Нормализованные даты старта/конца этапа (для вертикальных линий в строке этапа)
   const stageStartDate = (() => {
     if (!stage.start) return null
@@ -1120,6 +1126,44 @@ function StageRow({
     d.setHours(0, 0, 0, 0)
     return d
   })()
+
+  // Данные для sparkline-графика суммарной загрузки этапа
+  const series: number[] = timeUnits.map((u) => getStageWorkloadForDate(u.date))
+  const maxRateForGraph = Math.max(1, ...series)
+  const graphPadding = 3
+  const graphWidth = cellWidth * timeUnits.length
+  const graphHeight = Math.max(0, Math.floor(reducedRowHeight) - graphPadding * 2)
+  const baselineY = graphPadding + graphHeight
+  // Разбиваем график на сегменты только там, где v > 0, чтобы не показывать линии в пустых местах
+  type Point = [number, number]
+  const graphLeftShift = cellWidth / 2
+  const makePoint = (idx: number, value: number): Point => {
+    const x = idx * cellWidth + cellWidth / 2 - graphLeftShift
+    const y = baselineY - (value / maxRateForGraph) * graphHeight
+    return [x, y]
+  }
+  const segments: { line: string; area: string }[] = []
+  let current: Point[] = []
+  for (let i = 0; i < series.length; i++) {
+    const v = series[i]
+    if (v > 0) {
+      current.push(makePoint(i, v))
+    } else if (current.length) {
+      const line = `M ${current[0][0]} ${current[0][1]}` + current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("")
+      const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
+        current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
+        ` L ${current[current.length - 1][0]} ${baselineY} Z`
+      segments.push({ line, area })
+      current = []
+    }
+  }
+  if (current.length) {
+    const line = `M ${current[0][0]} ${current[0][1]}` + current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("")
+    const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
+      current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
+      ` L ${current[current.length - 1][0]} ${baselineY} Z`
+    segments.push({ line, area })
+  }
 
   return (
     <div className="group/stage w-full">
@@ -1196,12 +1240,23 @@ function StageRow({
           </div>
         </div>
 
-        {/* Ячейки таймлайна для этапа */}
-        <div className="flex-1 flex w-full">
+        {/* Ячейки таймлайна для этапа + sparkline поверх */}
+        <div className="flex-1 flex w-full" style={{ position: "relative" }}>
+          {/* Sparkline суммарной загрузки этапа */}
+          {graphWidth > 0 && segments.length > 0 && (
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
+              <svg width={graphWidth} height={reducedRowHeight}>
+                {segments.map((seg, idx) => (
+                  <g key={idx}>
+                    <path d={seg.area} fill={toRgba(stageBarColor, 0.25)} stroke="none" />
+                    <path d={seg.line} fill="none" stroke={stageBarColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                  </g>
+                ))}
+              </svg>
+            </div>
+          )}
           {timeUnits.map((unit, i) => {
             const isMonthStart = isFirstDayOfMonth(unit.date)
-            const workload = getStageWorkloadForDate(unit.date)
-            const { basePct, extras } = buildOverflowLayers(workload)
             // Совпадение дня с датами старта/окончания этапа
             const day = new Date(unit.date)
             day.setHours(0, 0, 0, 0)
@@ -1235,52 +1290,8 @@ function StageRow({
                   borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
-                {workload > 0 && (
-                  <div
-                    className="absolute inset-1 rounded-sm overflow-hidden"
-                    title={`${workload} ${workload === 1 ? 'ставка' : 'ставки'}`}
-                  >
-                    {/* Базовый слой: 0–1 ставки */}
-                    <div
-                      className="absolute left-0 right-0 bottom-0 rounded-sm"
-                      style={{
-                        height: `${Math.max(basePct, 3)}%`,
-                        backgroundColor: stageBarColor,
-                        opacity: theme === 'dark' ? 0.8 : 0.7,
-                      }}
-                    />
-
-                    {/* Слои переполнения: каждая дополнительная ставка рисуется во вложенном колодце */}
-                    {extras.map((pct, idx) => {
-                      const inset = 2 * (idx + 1) // равномерный зазор
-                      const wellStyle: React.CSSProperties = {
-                        position: 'absolute',
-                        left: inset,
-                        right: inset,
-                        top: inset,
-                        bottom: inset,
-                        borderRadius: 2,
-                        pointerEvents: 'none',
-                      }
-                      const fillStyle: React.CSSProperties = {
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        height: `${Math.max(pct, 3)}%`,
-                        backgroundColor: getOverflowShadeColor(idx),
-                        opacity: theme === 'dark' ? 0.95 : 0.9,
-                        borderRadius: 2,
-                      }
-                      return (
-                        <div key={idx} style={wellStyle}>
-                          <div style={fillStyle} />
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                  {(isStartDay || isEndDay) && (
+                {/* Вертикальные линии начала/конца этапа поверх графика */}
+                {(isStartDay || isEndDay) && (
                     <>
                       {isStartDay && (
                         <div
@@ -1291,7 +1302,8 @@ function StageRow({
                             bottom: '2px',
                             left: '0px',
                             width: '2px',
-                            backgroundColor: 'rgba(34,197,94,0.9)',
+                          backgroundColor: 'rgba(34,197,94,0.9)',
+                          zIndex: 3,
                           }}
                         />
                       )}
@@ -1304,7 +1316,8 @@ function StageRow({
                             bottom: '2px',
                             left: isStartDay ? '2px' : '0px',
                             width: '2px',
-                            backgroundColor: 'rgba(5,150,105,0.9)',
+                          backgroundColor: 'rgba(5,150,105,0.9)',
+                          zIndex: 3,
                           }}
                         />
                       )}
