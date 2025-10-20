@@ -993,6 +993,17 @@ function StageRow({
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   const [createOpen, setCreateOpen] = useState(false)
 
+  // Форматирование даты ДД.ММ
+  const formatShortDate = (date: Date | string | null | undefined): string => {
+    if (!date) return "-"
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date
+      return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(d)
+    } catch {
+      return "-"
+    }
+  }
+
   const isDateInStage = (date: Date): boolean => {
     if (!stage.start || !stage.finish) return false
     const start = new Date(stage.start)
@@ -1020,6 +1031,58 @@ function StageRow({
 
   // Часы в день
   const hoursPerDay: number = activeDaysCount > 0 ? totalPlannedHours / activeDaysCount : 0
+
+  // Загрузки, относящиеся к данному этапу (включая специальный этап "без этапа")
+  const stageLoadings: Loading[] = Array.isArray((section as any).loadings)
+    ? (section as any).loadings.filter((ld: Loading) => {
+        const ldStageId = (ld as any).stageId || null
+        if (stage.id === "__no_stage__") return !ldStageId
+        return ldStageId === stage.id
+      })
+    : []
+
+  // Проверка активности загрузки в конкретный день
+  const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
+    try {
+      const loadingStart = new Date(loading.startDate)
+      const loadingEnd = new Date(loading.endDate)
+      loadingStart.setHours(0, 0, 0, 0)
+      loadingEnd.setHours(23, 59, 59, 999)
+      const d = new Date(date)
+      d.setHours(0, 0, 0, 0)
+      return d >= loadingStart && d <= loadingEnd
+    } catch {
+      return false
+    }
+  }
+
+  // Сумма ставок этапа в конкретную дату
+  const getStageWorkloadForDate = (date: Date): number => {
+    if (!stageLoadings.length) return 0
+    return stageLoadings.reduce((sum, ld) => {
+      return isLoadingActiveInPeriod(ld, date) ? sum + (ld.rate || 0) : sum
+    }, 0)
+  }
+
+  // Максимум по диапазону для нормализации высоты столбиков
+  const maxWorkload = Math.max(
+    1,
+    ...timeUnits.map(u => getStageWorkloadForDate(u.date))
+  )
+
+  // Нормализованные даты старта/конца этапа (для вертикальных линий в строке этапа)
+  const stageStartDate = (() => {
+    if (!stage.start) return null
+    const d = new Date(stage.start)
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+  const stageFinishDate = (() => {
+    if (!stage.finish) return null
+    const d = new Date(stage.finish)
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
 
   return (
     <div className="group/stage w-full">
@@ -1059,6 +1122,13 @@ function StageRow({
                   onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
                   title="Открыть декомпозицию раздела"
                 >{stage.name || "Этап"}</div>
+                {(stage.start || stage.finish) && (
+                  <div className={cn("ml-2 text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                    {formatShortDate(stage.start)}
+                    <span className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}>—</span>
+                    {formatShortDate(stage.finish)}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {totalPlannedHours > 0 && activeDaysCount > 0 && (
@@ -1093,7 +1163,13 @@ function StageRow({
         <div className="flex-1 flex w-full">
           {timeUnits.map((unit, i) => {
             const isMonthStart = isFirstDayOfMonth(unit.date)
-            const active = isDateInStage(unit.date)
+            const workload = getStageWorkloadForDate(unit.date)
+            const heightPercent = workload > 0 ? Math.max((workload / maxWorkload) * 100, 10) : 0
+            // Совпадение дня с датами старта/окончания этапа
+            const day = new Date(unit.date)
+            day.setHours(0, 0, 0, 0)
+            const isStartDay = stageStartDate ? day.getTime() === stageStartDate.getTime() : false
+            const isEndDay = stageFinishDate ? day.getTime() === stageFinishDate.getTime() : false
             return (
               <div
                 key={i}
@@ -1122,15 +1198,49 @@ function StageRow({
                   borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
-                {active && (
+                {workload > 0 && (
                   <div
-                    className="absolute inset-1 rounded-sm"
+                    className="absolute left-1 right-1 rounded-sm"
                     style={{
-                      backgroundColor: stage.color || (theme === "dark" ? "rgb(56, 189, 248)" : "rgb(14, 165, 233)"),
-                      opacity: theme === "dark" ? 0.6 : 0.4,
+                      bottom: '4px',
+                      height: `${heightPercent}%`,
+                      minHeight: '3px',
+                      backgroundColor: stage.color || (theme === 'dark' ? 'rgb(56, 189, 248)' : 'rgb(14, 165, 233)'),
+                      opacity: theme === 'dark' ? 0.8 : 0.7,
                     }}
+                    title={`${workload} ${workload === 1 ? 'ставка' : 'ставки'}`}
                   />
                 )}
+                  {(isStartDay || isEndDay) && (
+                    <>
+                      {isStartDay && (
+                        <div
+                          title="Старт этапа"
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            bottom: '2px',
+                            left: '0px',
+                            width: '2px',
+                            backgroundColor: 'rgba(34,197,94,0.9)',
+                          }}
+                        />
+                      )}
+                      {isEndDay && (
+                        <div
+                          title="Конец этапа"
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            bottom: '2px',
+                            left: isStartDay ? '2px' : '0px',
+                            width: '2px',
+                            backgroundColor: 'rgba(5,150,105,0.9)',
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
               </div>
             )
           })}
