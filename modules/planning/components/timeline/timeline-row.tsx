@@ -1064,11 +1064,48 @@ function StageRow({
     }, 0)
   }
 
-  // Максимум по диапазону для нормализации высоты столбиков
-  const maxWorkload = Math.max(
-    1,
-    ...timeUnits.map(u => getStageWorkloadForDate(u.date))
-  )
+  // Вспомогательная функция: строит слои переполнения для ставок > 1
+  const buildOverflowLayers = (rate: number) => {
+    const safeRate = Math.max(0, Number(rate) || 0)
+    const basePct = Math.min(safeRate, 1) * 100
+    const remainder = Math.max(0, safeRate - 1)
+    const extraCount = Math.ceil(remainder)
+    const extras: number[] = []
+    for (let i = 0; i < extraCount; i++) {
+      const pct = Math.max(0, Math.min(1, remainder - i)) * 100
+      extras.push(pct)
+    }
+    return { basePct, extras }
+  }
+
+  // Цвет заливки столбиков нагрузки этапа
+  const stageBarColor = (stage as any).color || (theme === 'dark' ? 'rgb(56, 189, 248)' : 'rgb(14, 165, 233)')  
+
+  // Парсинг и смешивание цветов для получения заметно иного оттенка того же цвета
+  const parseRgb = (rgb: string): [number, number, number] => {
+    const m = rgb.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
+    if (!m) return [56, 189, 248]
+    return [Number(m[1]), Number(m[2]), Number(m[3])]
+  }
+  const blendRgb = (base: [number, number, number], target: [number, number, number], amount: number): [number, number, number] => {
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
+    return [
+      clamp(base[1 - 1] * (1 - amount) + target[1 - 1] * amount),
+      clamp(base[2 - 1] * (1 - amount) + target[2 - 1] * amount),
+      clamp(base[3 - 1] * (1 - amount) + target[3 - 1] * amount),
+    ]
+  }
+  const rgbToString = (rgb: [number, number, number]): string => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  const getOverflowShadeColor = (index: number): string => {
+    const base = parseRgb(stageBarColor)
+    // Сильные сдвиги по светлоте для высокой заметности различий
+    const amountsLight = [0.15, 0.25, 0.35, 0.45, 0.55] // светлая тема — мягко затемняем к чёрному
+    const amountsDark = [0.15, 0.25, 0.35, 0.45, 0.55] // тёмная тема — больший разрыв между 2-м и 3-м слоями
+    const arr = theme === 'dark' ? amountsDark : amountsLight
+    const amount = arr[Math.min(index, arr.length - 1)]
+    const target: [number, number, number] = theme === 'dark' ? [255, 255, 255] : [0, 0, 0]
+    return rgbToString(blendRgb(base, target, amount))
+  }
 
   // Нормализованные даты старта/конца этапа (для вертикальных линий в строке этапа)
   const stageStartDate = (() => {
@@ -1164,7 +1201,7 @@ function StageRow({
           {timeUnits.map((unit, i) => {
             const isMonthStart = isFirstDayOfMonth(unit.date)
             const workload = getStageWorkloadForDate(unit.date)
-            const heightPercent = workload > 0 ? Math.max((workload / maxWorkload) * 100, 10) : 0
+            const { basePct, extras } = buildOverflowLayers(workload)
             // Совпадение дня с датами старта/окончания этапа
             const day = new Date(unit.date)
             day.setHours(0, 0, 0, 0)
@@ -1200,16 +1237,48 @@ function StageRow({
               >
                 {workload > 0 && (
                   <div
-                    className="absolute left-1 right-1 rounded-sm"
-                    style={{
-                      bottom: '4px',
-                      height: `${heightPercent}%`,
-                      minHeight: '3px',
-                      backgroundColor: stage.color || (theme === 'dark' ? 'rgb(56, 189, 248)' : 'rgb(14, 165, 233)'),
-                      opacity: theme === 'dark' ? 0.8 : 0.7,
-                    }}
+                    className="absolute inset-1 rounded-sm overflow-hidden"
                     title={`${workload} ${workload === 1 ? 'ставка' : 'ставки'}`}
-                  />
+                  >
+                    {/* Базовый слой: 0–1 ставки */}
+                    <div
+                      className="absolute left-0 right-0 bottom-0 rounded-sm"
+                      style={{
+                        height: `${Math.max(basePct, 3)}%`,
+                        backgroundColor: stageBarColor,
+                        opacity: theme === 'dark' ? 0.8 : 0.7,
+                      }}
+                    />
+
+                    {/* Слои переполнения: каждая дополнительная ставка рисуется во вложенном колодце */}
+                    {extras.map((pct, idx) => {
+                      const inset = 2 * (idx + 1) // равномерный зазор
+                      const wellStyle: React.CSSProperties = {
+                        position: 'absolute',
+                        left: inset,
+                        right: inset,
+                        top: inset,
+                        bottom: inset,
+                        borderRadius: 2,
+                        pointerEvents: 'none',
+                      }
+                      const fillStyle: React.CSSProperties = {
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: `${Math.max(pct, 3)}%`,
+                        backgroundColor: getOverflowShadeColor(idx),
+                        opacity: theme === 'dark' ? 0.95 : 0.9,
+                        borderRadius: 2,
+                      }
+                      return (
+                        <div key={idx} style={wellStyle}>
+                          <div style={fillStyle} />
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
                   {(isStartDay || isEndDay) && (
                     <>
