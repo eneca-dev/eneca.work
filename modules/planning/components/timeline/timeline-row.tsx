@@ -1149,20 +1149,55 @@ function StageRow({
     if (v > 0) {
       current.push(makePoint(i, v))
     } else if (current.length) {
-      const line = `M ${current[0][0]} ${current[0][1]}` + current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("")
-      const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
-        current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
-        ` L ${current[current.length - 1][0]} ${baselineY} Z`
-      segments.push({ line, area, x1: current[0][0], x2: current[current.length - 1][0] })
+      const firstX = current[0][0]
+      const firstY = current[0][1]
+      const lastX = current[current.length - 1][0]
+      const lastY = current[current.length - 1][1]
+      // Продлеваем последний сегмент на ширину ячейки, чтобы покрыть весь последний день
+      const extendedLastX = lastX + cellWidth
+      // Ступенчатая линия: чередуем горизонтальные и вертикальные отрезки
+      let line = `M ${firstX} ${firstY}`
+      for (let k = 1; k < current.length; k++) {
+        const [x, y] = current[k]
+        const prevY = current[k - 1][1]
+        line += ` L ${x} ${prevY} L ${x} ${y}`
+      }
+      line += ` L ${extendedLastX} ${lastY}`
+
+      // Ступенчатая заливка под линией
+      let area = `M ${firstX} ${baselineY} L ${firstX} ${firstY}`
+      for (let k = 1; k < current.length; k++) {
+        const [x, y] = current[k]
+        const prevY = current[k - 1][1]
+        area += ` L ${x} ${prevY} L ${x} ${y}`
+      }
+      area += ` L ${extendedLastX} ${lastY} L ${extendedLastX} ${baselineY} Z`
+      segments.push({ line, area, x1: firstX, x2: extendedLastX })
       current = []
     }
   }
   if (current.length) {
-    const line = `M ${current[0][0]} ${current[0][1]}` + current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("")
-    const area = `M ${current[0][0]} ${baselineY} L ${current[0][0]} ${current[0][1]}` +
-      current.slice(1).map((p) => ` L ${p[0]} ${p[1]}`).join("") +
-      ` L ${current[current.length - 1][0]} ${baselineY} Z`
-    segments.push({ line, area, x1: current[0][0], x2: current[current.length - 1][0] })
+    const firstX = current[0][0]
+    const firstY = current[0][1]
+    const lastX = current[current.length - 1][0]
+    const lastY = current[current.length - 1][1]
+    const extendedLastX = lastX + cellWidth
+    let line = `M ${firstX} ${firstY}`
+    for (let k = 1; k < current.length; k++) {
+      const [x, y] = current[k]
+      const prevY = current[k - 1][1]
+      line += ` L ${x} ${prevY} L ${x} ${y}`
+    }
+    line += ` L ${extendedLastX} ${lastY}`
+
+    let area = `M ${firstX} ${baselineY} L ${firstX} ${firstY}`
+    for (let k = 1; k < current.length; k++) {
+      const [x, y] = current[k]
+      const prevY = current[k - 1][1]
+      area += ` L ${x} ${prevY} L ${x} ${y}`
+    }
+    area += ` L ${extendedLastX} ${lastY} L ${extendedLastX} ${baselineY} Z`
+    segments.push({ line, area, x1: firstX, x2: extendedLastX })
   }
 
   // Средняя ставка по этапу из средних часов в день (8 ч = 1 ставка)
