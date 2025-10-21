@@ -1376,6 +1376,51 @@ function StageRow({
                           }}
                         />
                       )}
+                      {isStartDay && (
+                        <>
+                          {/* Горизонтальные линии для формирования скобки [ */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              left: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(34,197,94,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              left: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(34,197,94,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          {/* Подпись даты старта */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: 'calc(100% + 6px)',
+                              color: 'rgba(34,197,94,0.9)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              lineHeight: 1,
+                              zIndex: 4,
+                              whiteSpace: 'nowrap',
+                              pointerEvents: 'none',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {formatShortDate(stage.start)}
+                          </div>
+                        </>
+                      )}
                       {isEndDay && (
                         <div
                           title="Конец этапа"
@@ -1383,12 +1428,57 @@ function StageRow({
                             position: 'absolute',
                             top: '2px',
                             bottom: '2px',
-                            left: isStartDay ? '2px' : '0px',
+                            right: '0px',
                             width: '2px',
                           backgroundColor: 'rgba(5,150,105,0.9)',
                           zIndex: 3,
                           }}
                         />
+                      )}
+                      {isEndDay && (
+                        <>
+                          {/* Горизонтальные линии для формирования скобки ] */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(5,150,105,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              right: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(5,150,105,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          {/* Подпись даты окончания */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              left: 'calc(100% + 6px)',
+                              color: 'rgba(5,150,105,0.9)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              lineHeight: 1,
+                              zIndex: 4,
+                              whiteSpace: 'nowrap',
+                              pointerEvents: 'none',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {formatShortDate(stage.finish)}
+                          </div>
+                        </>
                       )}
                     </>
                   )}
