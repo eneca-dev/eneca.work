@@ -54,6 +54,44 @@ export function TimelineRow({
   const [hoveredStagesCounter, setHoveredStagesCounter] = useState(false)
   const [showAssignResponsibleModal, setShowAssignResponsibleModal] = useState(false)
   // Создание перенесено на уровень этапа/плана
+  // Состояние сворачивания загрузок по этапам
+  const [collapsedStages, setCollapsedStages] = useState<Record<string, boolean>>({})
+  const toggleStageCollapsed = (stageId: string) => {
+    setCollapsedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }))
+  }
+  const isStageCollapsed = (stageId: string) => Boolean(collapsedStages[stageId])
+
+  // Вспомогательные функции для массового сворачивания/разворачивания по разделу
+  const getSectionStageIds = (): string[] => {
+    const ids = new Set<string>()
+    // существующие этапы раздела
+    stages.forEach((s) => ids.add(s.id))
+    // этапы из загрузок, которые могли появиться раньше, и специальный __no_stage__
+    let hasNoStage = false
+    uniqueLoadings.forEach((ld) => {
+      const sid = (ld as any).stageId || null
+      if (sid) ids.add(sid)
+      else hasNoStage = true
+    })
+    if (hasNoStage) ids.add("__no_stage__")
+    return Array.from(ids)
+  }
+  const areAllSectionStagesCollapsed = (): boolean => {
+    const ids = getSectionStageIds()
+    if (ids.length === 0) return false
+    return ids.every((id) => Boolean(collapsedStages[id]))
+  }
+  const setSectionStagesCollapsed = (collapsed: boolean) => {
+    const ids = getSectionStageIds()
+    if (ids.length === 0) return
+    setCollapsedStages((prev) => {
+      const next = { ...prev }
+      ids.forEach((id) => {
+        next[id] = collapsed
+      })
+      return next
+    })
+  }
 
   // Получаем видимость и ширину столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
@@ -366,6 +404,29 @@ export function TimelineRow({
                   >
                     {section.name}
                   </span>
+
+                {/* Кнопка сворачивания/разворачивания загрузок всех этапов раздела */}
+                {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
+                  <button
+                    className={cn(
+                      "ml-2 w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
+                      theme === "dark"
+                        ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20"
+                        : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20",
+                    )}
+                    title={areAllSectionStagesCollapsed() ? "Развернуть загрузки этапов" : "Свернуть загрузки этапов"}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSectionStagesCollapsed(!areAllSectionStagesCollapsed())
+                    }}
+                  >
+                    {areAllSectionStagesCollapsed() ? (
+                      <ChevronRight size={12} />
+                    ) : (
+                      <ChevronDown size={12} />
+                    )}
+                  </button>
+                )}
                 </div>
 
                 {/* Дополнительная информация в две строки */}
@@ -629,10 +690,12 @@ export function TimelineRow({
                   totalFixedWidth={totalFixedWidth}
                   section={section}
                   onOpenSectionPanel={onOpenSectionPanel}
+                  isCollapsed={isStageCollapsed(stage.id)}
+                  onToggleCollapse={() => toggleStageCollapsed(stage.id)}
                 />
 
                 {/* Фактические загрузки для этого этапа */}
-                {(loadingsByStage[stage.id] || []).map((loading, loadingIndex) => (
+                {!isStageCollapsed(stage.id) && (loadingsByStage[stage.id] || []).map((loading, loadingIndex) => (
                   <LoadingRow
                     key={`loading-${stage.id}-${loading.id}-${loadingIndex}`}
                     loading={loading}
@@ -973,6 +1036,8 @@ interface StageRowProps {
   totalFixedWidth: number
   section: Section
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void
+  isCollapsed: boolean
+  onToggleCollapse: () => void
 }
 
 function StageRow({
@@ -989,6 +1054,8 @@ function StageRow({
   totalFixedWidth,
   section,
   onOpenSectionPanel,
+  isCollapsed,
+  onToggleCollapse,
 }: StageRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   const [createOpen, setCreateOpen] = useState(false)
@@ -1238,9 +1305,21 @@ function StageRow({
           >
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
-                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                  <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
-                </div>
+              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                <button
+                  className={cn(
+                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md mr-1",
+                    theme === "dark" 
+                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
+                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
+                  )}
+                  title={isCollapsed ? "Развернуть загрузки" : "Свернуть загрузки"}
+                  onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
+                >
+                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                </button>
+                <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+              </div>
                 <div
                   className={cn("text-xs font-medium cursor-pointer hover:underline", theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-700 hover:text-teal-600")}
                   onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
