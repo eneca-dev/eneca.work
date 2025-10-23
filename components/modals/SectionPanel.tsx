@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Save, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import { X, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
@@ -13,7 +13,6 @@ import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
-import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -69,8 +68,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
   
-  // Удаление раздела
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  //
   
   // Состояние для выбора статуса
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -104,7 +102,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       setEditValues({})
       setSectionData(null)
       setSavingField(null)
-      setShowDeleteModal(false)
+      
       setShowStatusDropdown(false)
       setUpdatingStatus(false)
       initializedRef.current = false // Сбрасываем флаг инициализации
@@ -1011,16 +1009,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                     )
                   })()}
 
-                  {/* Кнопка удаления раздела */}
-                  <div className="flex items-center justify-end pt-4">
-                    <button
-                      onClick={() => setShowDeleteModal(true)}
-                      className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Удалить раздел
-                    </button>
-                  </div>
+                  
                 </>
               )}
 
@@ -1052,17 +1041,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           )}
         </div>
 
-        {/* Модальное окно удаления раздела из модуля проектов */}
-        <DeleteSectionModal
-          isOpen={showDeleteModal}
-          onClose={() => setShowDeleteModal(false)}
-          sectionId={sectionId}
-          sectionName={sectionData?.section_name || ''}
-          onSuccess={() => {
-            onClose()
-            if (typeof window !== 'undefined') window.location.reload()
-          }}
-        />
+        
       </div>
       </div>
     </>
