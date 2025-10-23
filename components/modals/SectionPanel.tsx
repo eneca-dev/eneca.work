@@ -13,6 +13,7 @@ import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
+import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
 
 interface SectionPanelProps {
   isOpen: boolean
@@ -68,9 +69,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
   
-  // Состояние для подтверждения удаления
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  // Удаление раздела
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   
   // Состояние для выбора статуса
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -104,8 +104,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       setEditValues({})
       setSectionData(null)
       setSavingField(null)
-      setShowDeleteConfirm(false)
-      setIsDeleting(false)
+      setShowDeleteModal(false)
       setShowStatusDropdown(false)
       setUpdatingStatus(false)
       initializedRef.current = false // Сбрасываем флаг инициализации
@@ -402,32 +401,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     setShowResponsibleDropdown(false)
   }
 
-  const handleDeleteSection = async () => {
-    if (!sectionData || isDeleting) return
-    
-    setIsDeleting(true)
-    try {
-      // Удаляем раздел
-      const { error } = await supabase
-        .from('sections')
-        .delete()
-        .eq('section_id', sectionId)
-
-      if (error) throw error
-
-      setNotification('Раздел успешно удален')
-      onClose() // Закрываем модальное окно
-      
-      // Обновляем страницу или список проектов
-      window.location.reload()
-    } catch (error) {
-      console.error('Ошибка удаления раздела:', error)
-      setNotification('Ошибка при удалении раздела')
-    } finally {
-      setIsDeleting(false)
-      setShowDeleteConfirm(false)
-    }
-  }
+  // удаление выполняется через DeleteSectionModal
 
   const getProfileName = (profile: Profile) => {
     return `${profile.first_name} ${profile.last_name}`.trim() || profile.email
@@ -1036,6 +1010,17 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                       </div>
                     )
                   })()}
+
+                  {/* Кнопка удаления раздела */}
+                  <div className="flex items-center justify-end pt-4">
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Удалить раздел
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -1067,63 +1052,17 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           )}
         </div>
 
-        {/* Модальное окно подтверждения удаления */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-            <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md mx-4 border border-red-200 dark:border-red-800">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                    Подтвердите удаление
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Это действие необратимо
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
-                <p className="text-sm text-red-800 dark:text-red-200">
-                  Вы действительно хотите удалить раздел{' '}
-                  <span className="font-semibold">"{sectionData?.section_name}"</span>?
-                </p>
-                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                  Все связанные данные, включая задачи и загрузки, будут удалены безвозвратно.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 justify-end">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={isDeleting}
-                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleDeleteSection}
-                  disabled={isDeleting}
-                  className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Удаление...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-3 w-3" />
-                      Удалить
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Модальное окно удаления раздела из модуля проектов */}
+        <DeleteSectionModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          sectionId={sectionId}
+          sectionName={sectionData?.section_name || ''}
+          onSuccess={() => {
+            onClose()
+            if (typeof window !== 'undefined') window.location.reload()
+          }}
+        />
       </div>
       </div>
     </>
