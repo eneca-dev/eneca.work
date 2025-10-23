@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { TemplatesPanel } from "@/modules/decomposition-templates"
+import ManageStagesDialog from "@/modules/projects/components/ManageStagesDialog"
 // no slider for progress editing; using numeric input and a capsule view
 import { DatePicker as ProjectDatePicker } from "@/modules/projects/components/DatePicker"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -1372,9 +1373,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
               <LayoutTemplate className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
               Шаблон
             </button>
-            <button onClick={() => setCreateStageOpen(true)} className={`inline-flex items-center ${compact ? 'gap-1.5 h-6 text-[11px]' : 'gap-2 h-7 text-[12px]'} px-2 rounded bg-blue-600 hover:bg-blue-700 text-white`}>
-              Добавить этап
-            </button>
+            {/* Кнопка Управление удалена: интерфейс управления встроен ниже */}
             {/* Выбор этапа для новой строки */}
             {stages.length > 0 && (
               <Popover open={openStagePicker} onOpenChange={setOpenStagePicker}>
@@ -1400,18 +1399,10 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             )}
 
           </div>
-          {/* Переключатель группировки по этапам (опционально, по умолчанию выкл) */}
-          {!compact && stages.length > 0 && (
-            <div className="px-2 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
-              <label className="text-xs text-slate-600 dark:text-slate-400 inline-flex items-center gap-2">
-                <input type="checkbox" checked={groupByStage} onChange={(e) => setGroupByStage(e.target.checked)} />
-                Группировать по этапам
-              </label>
-              {groupByStage && <span className="text-xs text-slate-500">Этапы: {stages.length}</span>}
-            </div>
-          )}
+          {/* Блок управления этапами и декомпозициями встроен ниже */}
 
-          {!groupByStage && (
+          {/* !groupByStage и группированные таблицы заменены на inline ManageStagesDialog */}
+          {false && (
           <table className="w-full table-fixed border-collapse">
             <colgroup>
               <col className="w-[44px]" />
@@ -1806,183 +1797,12 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 </tr>
               ))}
 
-              {/* Новая строка */}
-              <tr className="bg-slate-50 dark:bg-slate-800/60 [&>td]:border-slate-200 [&>td]:dark:border-slate-700">
-                <td className="px-2 py-1 align-middle text-center border">
-                  <button
-                    type="button"
-                    disabled={!canAdd}
-                    onClick={handleAdd}
-                    title={canAdd ? "Добавить строку" : "Введите описание и план"}
-                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 disabled:opacity-40 focus:outline-none focus:ring-0"
-                  >
-                    <PlusCircle className="h-4 w-4" />
-                  </button>
-                </td>
-                <td className="px-2 py-1 align-middle border">
-                  <textarea
-                    value={newDescription}
-                    onChange={e => setNewDescription(e.target.value)}
-                    onInput={(e) => autoResizeTextarea(e.currentTarget)}
-                    rows={1}
-                    placeholder="Новая строка — введите описание"
-                    className="w-full bg-transparent px-1 py-[6px] border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none rounded-none dark:text-white resize-none text-[12px]"
-                    onKeyDown={handleEditKey}
-                    ref={newDescRef}
-                  />
-                </td>
-                <td className="px-2 py-1 align-middle border">
-                  <Popover open={openCatId === 'new'} onOpenChange={(o) => setOpenCatId(o ? 'new' : null)}>
-                    <PopoverTrigger asChild>
-                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => setOpenCatId('new')}>
-                        {categories.find(c => c.work_category_id === newCategoryId)?.work_category_name || <span className="text-slate-400">Выбрать</span>}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                      <ScrollArea className="max-h-[240px]">
-                        <div className="py-1">
-                          {categories.map(c => (
-                            <button key={c.work_category_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60" onClick={() => { setNewCategoryId(c.work_category_id); setOpenCatId(null) }}>{c.work_category_name}</button>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </PopoverContent>
-                  </Popover>
-                </td>
-                <td className={`px-2 py-1 align-middle border`}>
-                  <Popover open={openDifficultyId === 'new'} onOpenChange={(o) => setOpenDifficultyId(o ? 'new' : null)}>
-                    <PopoverTrigger asChild>
-                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => setOpenDifficultyId('new')}>
-                        {(() => {
-                          const d = newDifficultyId ? difficultyById.get(newDifficultyId) : null
-                          return d ? `${d.difficulty_abbr}` : <span className="text-slate-400">Выбрать</span>
-                        })()}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                      <ScrollArea className="max-h-[240px]">
-                        <div className="py-1">
-                          {difficultyLevels.map(d => (
-                            <button
-                              key={d.difficulty_id}
-                              className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
-                              onClick={() => { setNewDifficultyId(d.difficulty_id); setOpenDifficultyId(null) }}
-                            >
-                              {`${d.difficulty_abbr} — ${d.difficulty_definition} (вес ${d.difficulty_weight})`}
-                            </button>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </PopoverContent>
-                  </Popover>
-                </td>
-                <td className={`px-2 py-1 align-middle border ${canEditResponsible ? '' : 'opacity-70'}`}>
-                  <Popover open={openRespId === 'new'} onOpenChange={(o) => setOpenRespId(o ? 'new' : null)}>
-                    <PopoverTrigger asChild>
-                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditResponsible) setOpenRespId('new') }} disabled={!canEditResponsible}>
-                        {(() => {
-                          if (!newResponsibleId) return <span className="text-slate-400">Выбрать</span>
-                          const p = profiles.find(p => p.user_id === newResponsibleId)
-                          return p ? ((`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email)) : <span className="text-slate-400">Выбрать</span>
-                        })()}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[260px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                      <div className="p-2">
-                        <input
-                          value={responsibleFilter}
-                          onChange={(e) => setResponsibleFilter(e.target.value)}
-                          placeholder="Поиск"
-                          className="w-full h-7 px-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-[12px]"
-                          disabled={!canEditResponsible}
-                        />
-                      </div>
-                      <ScrollArea className="max-h-[240px]">
-                        <div className="py-1">
-                          {filteredProfiles
-                            .map(p => (
-                              <button key={p.user_id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-60" onClick={() => { if (!canEditResponsible) return; setNewResponsibleId(p.user_id); setOpenRespId(null) }} disabled={!canEditResponsible}>{`${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email}</button>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </PopoverContent>
-                  </Popover>
-                </td>
-                <td className={`px-2 py-1 align-middle border ${canEditStatus ? '' : 'opacity-70'}`}>
-                  <Popover open={openStatusId === 'new'} onOpenChange={(o) => setOpenStatusId(o ? 'new' : null)}>
-                    <PopoverTrigger asChild>
-                      <button className="w-full h-7 px-2 rounded bg-transparent text-left text-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-0" onClick={() => { if (canEditStatus) setOpenStatusId('new') }} disabled={!canEditStatus}>
-                        {statuses.find(s => s.id === newStatusId)?.name || <span className="text-slate-400">Выбрать</span>}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" sideOffset={6} className="p-0 w-[220px] text-[12px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-                      <div className="py-1">
-                        {statuses.map(s => (
-                          <button key={s.id} className="w-full text-left px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-60" onClick={() => { if (canEditStatus) { setNewStatusId(s.id); setOpenStatusId(null) } }} disabled={!canEditStatus}>{s.name}</button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </td>
-                <td className="px-2 py-1 align-middle text-center border">
-                  <input
-                    type="text"
-                    value={newProgress}
-                    onChange={e => {
-                      const v = e.target.value.replace(/[^0-9]/g, '')
-                      const num = Math.max(0, Math.min(100, Number(v || 0)))
-                      setNewProgress(String(num))
-                    }}
-                    placeholder="0"
-                    className="w-12 text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
-                    onKeyDown={handleEditKey}
-                    disabled={!canEditProgress}
-                  />
-                </td>
-                <td className="px-2 py-1 align-middle text-center border">
-                  <input
-                    type="text"
-                    value={newPlannedHours}
-                    onChange={e => {
-                      const raw = e.target.value.replace(',', '.')
-                      let cleaned = raw.replace(/[^0-9.]/g, '')
-                      const parts = cleaned.split('.')
-                      if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('')
-                      setNewPlannedHours(cleaned)
-                    }}
-                    placeholder="0"
-                    className="w-[72px] text-center tabular-nums bg-transparent px-1 py-1 border-0 focus:ring-0 focus:border-0 focus:outline-none outline-none dark:text-white text-[12px]"
-                    onKeyDown={handleEditKey}
-                    disabled={!canEditPlannedHours}
-                  />
-                </td>
-                <td className="px-2 py-1 align-middle text-center text-slate-400 border">—</td>
-                <td className={`px-2 py-1 align-middle border ${canEditDueDate ? '' : 'opacity-70'}`}>
-                  {canEditDueDate ? (
-                    <ProjectDatePicker
-                      value={newPlannedDueDate ? new Date(newPlannedDueDate) : null}
-                      onChange={(d) => setNewPlannedDueDate(formatISODate(d))}
-                      placeholder="Выбрать"
-                      calendarWidth="240px"
-                      inputWidth="140px"
-                      placement="auto-top"
-                      offsetY={6}
-                      inputClassName="bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 text-[12px] px-2 py-1"
-                      variant="minimal"
-                    />
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </td>
-                <td className="px-1 py-1 align-middle text-center border">
-                  <span className="text-slate-400">—</span>
-                </td>
-              </tr>
+              {/* Форма добавления строки скрыта: управление теперь в отдельном диалоге */}
             </tbody>
           </table>
           )}
 
-          {groupByStage && (
+          {false && (
           <table className="w-full table-fixed border-collapse">
             <colgroup>
               <col className="w-[44px]" />
@@ -2134,6 +1954,30 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             </tbody>
           </table>
           )}
+
+          <div className="px-2 py-2">
+            <ManageStagesDialog
+              inline
+              open={true}
+              onOpenChange={() => {}}
+              sectionId={sectionId}
+              stages={stages}
+              setStages={setStages}
+              items={items}
+              setItems={setItems}
+              categories={categories}
+              statuses={statuses}
+              profiles={profiles}
+              difficultyLevels={difficultyLevels}
+              canEditDueDate={canEditDueDate}
+              canEditPlannedHours={canEditPlannedHours}
+              canEditResponsible={canEditResponsible}
+              canEditStatus={canEditStatus}
+              canEditProgress={canEditProgress}
+              onReload={reloadDecompositionData}
+              onOpenLog={(itemId: string) => { setSelectedForLog(itemId); setIsLogModalOpen(true) }}
+            />
+          </div>
         </div>
       </div>
       {!compact && (
@@ -2272,6 +2116,8 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
           />
         </DialogContent>
       </Dialog>
+
+      {/* Компонент ManageStagesDialog (модал) удалён — используется inline-версия выше */}
 
       {/* Диалог создания этапа */}
       <Dialog open={createStageOpen} onOpenChange={(open) => {
