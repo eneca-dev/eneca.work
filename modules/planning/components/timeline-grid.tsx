@@ -13,6 +13,8 @@ import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
 import { ChevronDown, ChevronRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useProjectsStore } from "@/modules/projects/store"
 
 
 // Обновляем интерфейс TimelineGridProps, добавляя отделы
@@ -60,6 +62,8 @@ export function TimelineGrid({
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
+  const router = useRouter()
+  const focusProject = useProjectsStore((s) => s.focusProject)
   
   // Определяем эффективную тему
   const getEffectiveTheme = (resolvedTheme: string | null) => {
@@ -358,7 +362,27 @@ export function TimelineGrid({
                         <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                       )}
                     </span>
-                    <span className={cn("text-sm", theme === "dark" ? "text-slate-200" : "text-slate-800")}>{projectName}</span>
+                    {(() => {
+                      const projectIdForGroup = (projectSections.find(s => s.projectId)?.projectId) || null
+                      return (
+                        <span
+                          className={cn(
+                            "text-sm cursor-pointer hover:underline",
+                            theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                          )}
+                          title={projectIdForGroup ? "Перейти к проекту" : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (projectIdForGroup) {
+                              focusProject(projectIdForGroup)
+                              router.push("/dashboard/projects")
+                            }
+                          }}
+                        >
+                          {projectName}
+                        </span>
+                      )
+                    })()}
                   </div>
                   {/* Заполнитель для правой части, чтобы выровнять сетку */}
                   <div className="flex-1" />

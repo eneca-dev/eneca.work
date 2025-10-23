@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
@@ -9,10 +10,12 @@ import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/sect
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
+import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 // useState уже импортирован выше
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
+import { useProjectsStore } from "@/modules/projects/store"
 
 interface TimelineRowProps {
   section: Section
@@ -47,6 +50,8 @@ export function TimelineRow({
   totalLoadingsBeforeSection,
   onOpenSectionPanel,
 }: TimelineRowProps) {
+  const router = useRouter()
+  const focusProject = useProjectsStore((s) => s.focusProject)
   // Состояние для отслеживания наведения на аватары
   const [hoveredSpecialist, setHoveredSpecialist] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
@@ -56,6 +61,7 @@ export function TimelineRow({
   // Создание перенесено на уровень этапа/плана
   // Состояние сворачивания загрузок по этапам
   const [collapsedStages, setCollapsedStages] = useState<Record<string, boolean>>({})
+  const globalCollapsed = useTimelineUiStore((s) => s.stageLoadingsCollapsed)
   const toggleStageCollapsed = (stageId: string) => {
     setCollapsedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }))
   }
@@ -92,6 +98,12 @@ export function TimelineRow({
       return next
     })
   }
+
+  // Реакция на глобальную команду сворачивания/разворачивания загрузок (первый уровень кнопок)
+  React.useEffect(() => {
+    if (globalCollapsed === null) return
+    setSectionStagesCollapsed(Boolean(globalCollapsed))
+  }, [globalCollapsed])
 
   // Получаем видимость и ширину столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
@@ -514,7 +526,20 @@ export function TimelineRow({
                 }}
               >
                 {/* Первая строка - проект */}
-                <span className={cn("text-xs truncate block", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
+                <span
+                  className={cn(
+                    "text-xs truncate block cursor-pointer hover:underline",
+                    theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                  )}
+                  title={section.projectId ? "Перейти к проекту" : undefined}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (section.projectId) {
+                      focusProject(section.projectId)
+                      router.push("/dashboard/projects")
+                    }
+                  }}
+                >
                   {section.projectName || "-"}
                 </span>
                 {/* Вторая строка - объект */}
