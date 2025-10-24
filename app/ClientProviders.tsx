@@ -6,6 +6,8 @@ import { GlobalNotification } from "@/components/ui/notification";
 import { NoSSR } from "@/components/NoSSR";
 import { useEffect } from "react";
 import { UserPermissionsSyncProvider } from "@/modules/permissions";
+import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
+
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   // Подавляем ошибки React о дублированных ключах (временное решение)
@@ -38,6 +40,12 @@ export default function ClientProviders({ children }: { children: React.ReactNod
           <Toaster />
           <GlobalNotification />
         </UserPermissionsSyncProvider>
+        <ThemeSync />
+        <FeedbackProvider>
+          {children}
+        </FeedbackProvider>
+        <Toaster />
+        <GlobalNotification />
       </NoSSR>
     </ThemeProvider>
   );

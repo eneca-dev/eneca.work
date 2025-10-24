@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List, FileText } from "lucide-react"
+import { LogOut, Home, Calendar, Send, ChevronLeft, BarChart, Users, Bug, MessageSquare, Settings, FolderOpen, CalendarDays, ClipboardList, ChevronsLeft, ChevronsRight, LayoutDashboard, List, FileText, LineChart } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { useUserStore } from "@/stores/useUserStore"
 import { WeeklyCalendar } from "@/components/weekly-calendar"
@@ -92,11 +92,79 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  
+
   // Получаем данные из store
-  const { name: storeName, email: storeEmail, profile } = useUserStore()
-  
-  // Используем данные из store, если они есть, иначе из props
+  const { id: userId, name: storeName, email: storeEmail, profile } = useUserStore()
+
+  // Проверяем доступ к аналитике через API
+  const [hasAnalyticsAccess, setHasAnalyticsAccess] = useState(false)
+  const [accessCheckDone, setAccessCheckDone] = useState(false)
+
+  useEffect(() => {
+    // Проверяем только один раз при появлении userId
+    if (!userId || accessCheckDone) {
+      if (!userId) {
+        setHasAnalyticsAccess(false)
+      }
+      return
+    }
+
+    const abortController = new AbortController()
+    let timeoutId: NodeJS.Timeout
+
+    const checkAnalyticsAccess = async () => {
+      try {
+        const response = await fetch('/api/feedback-analytics/access', {
+          signal: abortController.signal,
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+
+        // Проверяем, не был ли запрос отменен
+        if (abortController.signal.aborted) {
+          return
+        }
+
+        if (!response.ok) {
+          console.error('Failed to check analytics access:', response.status)
+          if (!abortController.signal.aborted) {
+            setHasAnalyticsAccess(false)
+            setAccessCheckDone(true)
+          }
+          return
+        }
+
+        const data = await response.json()
+
+        // Проверяем еще раз перед обновлением состояния
+        if (!abortController.signal.aborted) {
+          setHasAnalyticsAccess(data.hasAccess)
+          setAccessCheckDone(true)
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return
+        }
+        console.error('Error checking analytics access:', error)
+        if (!abortController.signal.aborted) {
+          setHasAnalyticsAccess(false)
+          setAccessCheckDone(true)
+        }
+      }
+    }
+
+    // Добавляем небольшую задержку для дебаунса
+    timeoutId = setTimeout(() => {
+      checkAnalyticsAccess()
+    }, 100)
+
+    return () => {
+      clearTimeout(timeoutId)
+      abortController.abort()
+    }
+  }, [userId, accessCheckDone])  // Используем данные из store, если они есть, иначе из props
   const displayName = storeName || user.name || "Пользователь"
   const displayEmail = storeEmail || user.email || ""
   const avatarUrl = profile?.avatar_url || null
@@ -130,6 +198,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       handleLogout()
     } else {
       await supabase.auth.signOut()
+
       router.push("/auth/login")
     }
   }
@@ -242,6 +311,25 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
             ))}
           </ul>
         </nav>
+
+        {/* Аналитика (только для авторизованных пользователей) */}
+        {hasAnalyticsAccess && (
+          <div className="px-2 mt-2">
+            <Link
+              href="/dashboard/feedback-analytics"
+              className={cn(
+                "flex items-center rounded-md px-3 py-2 nav-item transition-colors w-full",
+                pathname === "/dashboard/feedback-analytics"
+                  ? "bg-primary/10 text-primary"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700",
+                collapsed && "justify-center px-0"
+              )}
+            >
+              <LineChart className={cn("h-5 w-5", collapsed ? "mr-0" : "mr-3")} />
+              {!collapsed && <span>Аналитика</span>}
+            </Link>
+          </div>
+        )}
 
         {/* Документация */}
         <div className="px-2 mt-2">
