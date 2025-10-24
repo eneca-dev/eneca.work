@@ -19,7 +19,6 @@ type Payload = z.infer<typeof payloadSchema>
 export async function POST(request: NextRequest) {
 	return await Sentry.startSpan({ name: 'api.chat.thinking', op: 'http.server' }, async () => {
 		const requestId = (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-		Sentry.setTag('chat.thinking.request_id', requestId)
 		Sentry.addBreadcrumb({ category: 'chat', level: 'info', message: 'thinking request start', data: { requestId } })
 		try {
 		// 1) Проверка секрета из n8n

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { ChevronDown, ChevronUp, Filter, Building2, Home, Briefcase } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { User } from "@/types/db"
+import * as Sentry from "@sentry/nextjs"
 
 // Обновим интерфейс UserFiltersProps, чтобы включить roles
 interface UserFiltersProps {
@@ -22,7 +23,7 @@ interface UserFiltersProps {
   users: User[] // Добавим пользователей для фильтрации
 }
 
-export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
+function UserFilters({ onFilterChange, users }: UserFiltersProps) {
   const [openDepartments, setOpenDepartments] = useState(true)
   const [openTeams, setOpenTeams] = useState(true)
   const [openCategories, setOpenCategories] = useState(true)
@@ -203,6 +204,7 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
 
   // Обновим функцию сброса фильтров
   const resetFilters = () => {
+    Sentry.addBreadcrumb({ category: 'ui.action', level: 'info', message: 'UserFilters: reset filters' })
     setSelectedDepartments([])
     setSelectedTeams([])
     setSelectedCategories([])
@@ -253,7 +255,10 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={resetFilters}
+              onClick={() => {
+                Sentry.addBreadcrumb({ category: 'ui.click', level: 'info', message: 'UserFilters: click reset' })
+                resetFilters()
+              }}
               className="w-full mb-4"
             >
               Сбросить все фильтры
@@ -484,3 +489,5 @@ export function UserFilters({ onFilterChange, users }: UserFiltersProps) {
     </Card>
   )
 }
+
+export default Sentry.withProfiler(UserFilters, { name: 'UserFilters' })

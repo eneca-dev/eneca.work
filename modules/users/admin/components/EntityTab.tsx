@@ -10,6 +10,7 @@ import DeleteConfirmModal from "./DeleteConfirmModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
+import * as Sentry from "@sentry/nextjs"
 
 interface EntityTabConfig {
   entityName: string
@@ -57,6 +58,7 @@ export default function EntityTab({ config }: EntityTabProps) {
       
       if (error) {
         console.error(`Ошибка при загрузке ${config.entityNamePlural}:`, error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'EntityTab', action: 'load_entities', error_type: 'db_error' }, extra: { table: config.tableName } })
         toast.error(`Не удалось загрузить ${config.entityNamePlural}`)
         return
       }
@@ -71,6 +73,7 @@ export default function EntityTab({ config }: EntityTabProps) {
       )
     } catch (error) {
       console.error(`Ошибка при загрузке ${config.entityNamePlural}:`, error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'EntityTab', action: 'fetch_entities', error_type: 'unexpected' }, extra: { table: config.tableName } })
       toast.error("Произошла ошибка при загрузке данных")
     } finally {
       setIsLoading(false)

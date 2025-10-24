@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { DocumentationFile } from '../types'
 import FlexSearch from 'flexsearch'
 
@@ -94,6 +95,7 @@ export function useDocumentationFiles() {
           index.add(file.path, searchText)
         } catch (error) {
           console.warn(`Не удалось загрузить файл ${file.path}:`, error)
+          Sentry.captureException(error, { tags: { module: 'user-docs', hook: 'useDocumentationFiles', action: 'load_file', error_type: 'unexpected' }, extra: { path: file.path } })
         }
       }
 
@@ -101,6 +103,7 @@ export function useDocumentationFiles() {
       setSearchIndex(index)
     } catch (error) {
       console.error('Ошибка при создании поискового индекса:', error)
+      Sentry.captureException(error, { tags: { module: 'user-docs', hook: 'useDocumentationFiles', action: 'build_index', error_type: 'unexpected' } })
     } finally {
       setIsIndexing(false)
     }
@@ -136,6 +139,7 @@ export function useDocumentationFiles() {
       }).filter((result: any) => result.file)
     } catch (error) {
       console.error('Ошибка при поиске:', error)
+      Sentry.captureException(error, { tags: { module: 'user-docs', hook: 'useDocumentationFiles', action: 'search', error_type: 'unexpected' } })
       return []
     }
   }
@@ -246,6 +250,7 @@ export function useDocumentationFiles() {
       }
     } catch (error) {
       console.warn('Could not load file from API:', error)
+      Sentry.captureException(error, { tags: { module: 'user-docs', hook: 'useDocumentationFiles', action: 'api_fetch', error_type: 'external_api_error' }, extra: { path } })
     }
 
     // Fallback контент для демонстрации

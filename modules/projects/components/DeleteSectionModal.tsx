@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { Loader2, AlertTriangle, Trash2, X } from 'lucide-react'
+import { Loader2, AlertTriangle, Trash2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
@@ -15,11 +15,13 @@ interface DeleteSectionModalProps {
 }
 
 interface DeleteStats {
-  tasks_count: number
   loadings_count: number
   assignments_count: number
-  decompositions_count: number
+  decomposition_items_count: number
   plan_loadings_count: number
+  section_comments_count: number
+  decomposition_stages_count: number
+  tasks_count: number
 }
 
 const supabase = createClient()
@@ -45,20 +47,34 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
     setIsLoading(true)
     try {
       // Получаем статистику по связанным данным
-      const [tasksResult, loadingsResult, assignmentsResult, decompositionsResult, planLoadingsResult] = await Promise.all([
-        supabase.from('tasks').select('task_id', { count: 'exact' }).eq('task_section_id', sectionId),
-        supabase.from('loadings').select('loading_id', { count: 'exact' }).eq('loading_section_id', sectionId),
-        supabase.from('assignments').select('assignment_id', { count: 'exact' }).eq('assignment_section_id', sectionId),
-        supabase.from('decompositions').select('decomposition_id', { count: 'exact' }).eq('decomposition_section_id', sectionId),
-        supabase.from('plan_loadings').select('plan_loading_id', { count: 'exact' }).eq('plan_loading_section_id', sectionId)
+      const [
+        loadingsResult,
+        assignmentsFromResult,
+        assignmentsToResult,
+        decompositionItemsResult,
+        planLoadingsResult,
+        sectionCommentsResult,
+        decompositionStagesResult,
+        tasksResult
+      ] = await Promise.all([
+        supabase.from('loadings').select('loading_id', { count: 'exact' }).eq('loading_section', sectionId),
+        supabase.from('assignments').select('assignment_id', { count: 'exact' }).eq('from_section_id', sectionId),
+        supabase.from('assignments').select('assignment_id', { count: 'exact' }).eq('to_section_id', sectionId),
+        supabase.from('decomposition_items').select('decomposition_item_id', { count: 'exact' }).eq('decomposition_item_section_id', sectionId),
+        supabase.from('plan_loadings').select('plan_loading_id', { count: 'exact' }).eq('plan_loading_section', sectionId),
+        supabase.from('section_comments').select('id', { count: 'exact' }).eq('section_id', sectionId),
+        supabase.from('decomposition_stages').select('decomposition_stage_id', { count: 'exact' }).eq('decomposition_stage_section_id', sectionId),
+        supabase.from('tasks').select('task_id', { count: 'exact' }).eq('task_parent_section', sectionId)
       ])
 
       setDeleteStats({
-        tasks_count: tasksResult.count || 0,
         loadings_count: loadingsResult.count || 0,
-        assignments_count: assignmentsResult.count || 0,
-        decompositions_count: decompositionsResult.count || 0,
-        plan_loadings_count: planLoadingsResult.count || 0
+        assignments_count: (assignmentsFromResult.count || 0) + (assignmentsToResult.count || 0),
+        decomposition_items_count: decompositionItemsResult.count || 0,
+        plan_loadings_count: planLoadingsResult.count || 0,
+        section_comments_count: sectionCommentsResult.count || 0,
+        decomposition_stages_count: decompositionStagesResult.count || 0,
+        tasks_count: tasksResult.count || 0
       })
     } catch (error) {
       console.error('Ошибка загрузки статистики удаления:', error)
@@ -81,47 +97,70 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
         const { error } = await supabase
           .from('plan_loadings')
           .delete()
-          .eq('plan_loading_section_id', sectionId)
+          .eq('plan_loading_section', sectionId)
         if (error) throw error
       }
 
-      // 2. Назначения
-      if (deleteStats.assignments_count > 0) {
-        const { error } = await supabase
-          .from('assignments')
-          .delete()
-          .eq('assignment_section_id', sectionId)
-        if (error) throw error
-      }
-
-      // 3. Декомпозиции
-      if (deleteStats.decompositions_count > 0) {
-        const { error } = await supabase
-          .from('decompositions')
-          .delete()
-          .eq('decomposition_section_id', sectionId)
-        if (error) throw error
-      }
-
-      // 4. Задачи
+      // 2. Задачи
       if (deleteStats.tasks_count > 0) {
         const { error } = await supabase
           .from('tasks')
           .delete()
-          .eq('task_section_id', sectionId)
+          .eq('task_parent_section', sectionId)
         if (error) throw error
       }
 
-      // 5. Загрузки
+      // 3. Назначения (откуда)
+      const { error: assignmentsFromError } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('from_section_id', sectionId)
+      if (assignmentsFromError) throw assignmentsFromError
+
+      // 4. Назначения (куда)
+      const { error: assignmentsToError } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('to_section_id', sectionId)
+      if (assignmentsToError) throw assignmentsToError
+
+      // 5. Комментарии к разделу
+      if (deleteStats.section_comments_count > 0) {
+        const { error } = await supabase
+          .from('section_comments')
+          .delete()
+          .eq('section_id', sectionId)
+        if (error) throw error
+      }
+
+      // 6. Стадии декомпозиции
+      if (deleteStats.decomposition_stages_count > 0) {
+        const { error } = await supabase
+          .from('decomposition_stages')
+          .delete()
+          .eq('decomposition_stage_section_id', sectionId)
+        if (error) throw error
+      }
+
+      // 7. Элементы декомпозиции
+      if (deleteStats.decomposition_items_count > 0) {
+        const { error } = await supabase
+          .from('decomposition_items')
+          .delete()
+          .eq('decomposition_item_section_id', sectionId)
+        if (error) throw error
+      }
+
+      // 8. Загрузки
       if (deleteStats.loadings_count > 0) {
         const { error } = await supabase
           .from('loadings')
           .delete()
-          .eq('loading_section_id', sectionId)
+          .eq('loading_section', sectionId)
         if (error) throw error
       }
 
-      // 6. Сам раздел
+      // 9. Сам раздел
       const { error: sectionError } = await supabase
         .from('sections')
         .delete()
@@ -145,7 +184,9 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
       if (deleteStats.tasks_count > 0) deletedItems.push(`задач: ${deleteStats.tasks_count}`)
       if (deleteStats.loadings_count > 0) deletedItems.push(`загрузок: ${deleteStats.loadings_count}`)
       if (deleteStats.assignments_count > 0) deletedItems.push(`назначений: ${deleteStats.assignments_count}`)
-      if (deleteStats.decompositions_count > 0) deletedItems.push(`декомпозиций: ${deleteStats.decompositions_count}`)
+      if (deleteStats.decomposition_items_count > 0) deletedItems.push(`элементов декомпозиции: ${deleteStats.decomposition_items_count}`)
+      if (deleteStats.decomposition_stages_count > 0) deletedItems.push(`стадий декомпозиции: ${deleteStats.decomposition_stages_count}`)
+      if (deleteStats.section_comments_count > 0) deletedItems.push(`комментариев: ${deleteStats.section_comments_count}`)
       if (deleteStats.plan_loadings_count > 0) deletedItems.push(`плановых загрузок: ${deleteStats.plan_loadings_count}`)
 
       const detailMessage = deletedItems.length > 0
@@ -164,8 +205,10 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
   }
 
   const totalRelatedItems = deleteStats
-    ? deleteStats.tasks_count + deleteStats.loadings_count + deleteStats.assignments_count + 
-      deleteStats.decompositions_count + deleteStats.plan_loadings_count
+    ? deleteStats.loadings_count + deleteStats.assignments_count +
+      deleteStats.decomposition_items_count + deleteStats.plan_loadings_count +
+      deleteStats.section_comments_count + deleteStats.decomposition_stages_count +
+      deleteStats.tasks_count
     : 0
 
   const isConfirmationValid = confirmationText === sectionName
@@ -202,17 +245,11 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
             </div>
 
             {totalRelatedItems > 0 && (
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4">
                 <h4 className="font-medium text-slate-800 dark:text-slate-200 mb-3">
                   Также будет удалено:
                 </h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  {deleteStats.tasks_count > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Задачи:</span>
-                      <span className="font-medium">{deleteStats.tasks_count}</span>
-                    </div>
-                  )}
                   {deleteStats.loadings_count > 0 && (
                     <div className="flex justify-between">
                       <span className="text-slate-600 dark:text-slate-400">Загрузки:</span>
@@ -221,14 +258,26 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
                   )}
                   {deleteStats.assignments_count > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Назначения:</span>
+                      <span className="text-slate-600 dark:text-slate-400">Задания:</span>
                       <span className="font-medium">{deleteStats.assignments_count}</span>
                     </div>
                   )}
-                  {deleteStats.decompositions_count > 0 && (
+                  {deleteStats.section_comments_count > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Декомпозиции:</span>
-                      <span className="font-medium">{deleteStats.decompositions_count}</span>
+                      <span className="text-slate-600 dark:text-slate-400">Комментарии:</span>
+                      <span className="font-medium">{deleteStats.section_comments_count}</span>
+                    </div>
+                  )}
+                  {deleteStats.decomposition_stages_count > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Стадии декомпозиции:</span>
+                      <span className="font-medium">{deleteStats.decomposition_stages_count}</span>
+                    </div>
+                  )}
+                  {deleteStats.decomposition_items_count > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Элементы декомпозиции:</span>
+                      <span className="font-medium">{deleteStats.decomposition_items_count}</span>
                     </div>
                   )}
                   {deleteStats.plan_loadings_count > 0 && (
@@ -241,15 +290,9 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
               </div>
             )}
 
-            {!showConfirmation ? (
-              <div className="text-center pt-2">
-                <button
-                  onClick={() => setShowConfirmation(true)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Подтвердить удаление
-                </button>
-              </div>
+{!showConfirmation ? (
+              // Убрали text-center pt-2 и перенесем кнопку в футер
+              <div></div>
             ) : (
               <div className="space-y-3">
                 <div>
@@ -287,15 +330,24 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
           Отмена
         </ModalButton>
         
-        {showConfirmation && deleteStats && (
+        {!showConfirmation ? (
           <ModalButton
             variant="danger"
-            onClick={handleDelete}
-            disabled={!isConfirmationValid || isDeleting}
-            icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            onClick={() => setShowConfirmation(true)}
           >
-            {isDeleting ? 'Удаление...' : 'Удалить раздел'}
+            Подтвердить удаление
           </ModalButton>
+        ) : (
+          deleteStats && (
+            <ModalButton
+              variant="danger"
+              onClick={handleDelete}
+              disabled={!isConfirmationValid || isDeleting}
+              icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            >
+              {isDeleting ? 'Удаление...' : 'Удалить раздел'}
+            </ModalButton>
+          )
         )}
       </Modal.Footer>
     </Modal>

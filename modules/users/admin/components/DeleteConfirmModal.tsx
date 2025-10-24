@@ -6,6 +6,7 @@ import { AlertTriangle, Trash2 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
+import * as Sentry from "@sentry/nextjs"
 
 interface DeleteConfirmModalProps {
   open: boolean
@@ -48,6 +49,7 @@ export default function DeleteConfirmModal({
       onOpenChange(false)
     } catch (error) {
       console.error("Error deleting:", error instanceof Error ? error.message : error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'DeleteConfirmModal', action: 'delete_entity', error_type: 'unexpected' }, extra: { table, idField, entityId } })
       toast.error("Произошла ошибка при удалении")
     } finally {
       setLoading(false)

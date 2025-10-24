@@ -1,7 +1,7 @@
 
 import { create } from 'zustand'
 import { fetchSectionComments, createSectionComment, updateCommentContent } from './api/comments'
-import { sendCommentNotifications } from './utils/notificationHelpers'
+import * as Sentry from "@sentry/nextjs"
 import type { SectionComment } from './types'
 
 interface CommentsStore {
@@ -51,6 +51,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
       }))
     } catch (error) {
       console.error('Ошибка загрузки комментариев:', error)
+      Sentry.captureException(error, { tags: { module: 'comments', store: 'useCommentsStore', action: 'fetch', error_type: 'db_error' }, extra: { section_id: sectionId } })
       set(state => ({
         errorBySectionId: { ...state.errorBySectionId, [sectionId]: 'Ошибка загрузки комментариев' },
         loadingBySectionId: { ...state.loadingBySectionId, [sectionId]: false },
@@ -64,13 +65,12 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
     set({ isSubmitting: true })
     try {
       await createSectionComment(sectionId, content, mentions)
-      sendCommentNotifications(sectionId, mentions, content)
-        .catch((error: any) => console.error('Ошибка уведомлений:', error))
 
       await get().fetchComments(sectionId)
       set({ newCommentContent: '', isSubmitting: false })
     } catch (error) {
       console.error('Ошибка добавления комментария:', error)
+      Sentry.captureException(error, { tags: { module: 'comments', store: 'useCommentsStore', action: 'create', error_type: 'db_error' }, extra: { section_id: sectionId } })
       set(state => ({
         errorBySectionId: { ...state.errorBySectionId, [sectionId]: error instanceof Error ? error.message : 'Ошибка при добавлении комментария' },
         isSubmitting: false,
@@ -91,6 +91,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
       set({ commentsBySectionId: updated })
     } catch (error) {
       console.error('Ошибка обновления комментария:', error)
+      Sentry.captureException(error, { tags: { module: 'comments', store: 'useCommentsStore', action: 'update', error_type: 'db_error' }, extra: { comment_id: commentId } })
     }
   },
 

@@ -3,6 +3,9 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  // тип серверного события для сообщений ассистента
+  // 'message' — обычный ответ; 'thinking' — размышления; 'tool' — использование инструмента; 'observation' — наблюдение
+  kind?: 'thinking' | 'tool' | 'observation' | 'message'
 }
 
 export interface ChatHistory {
@@ -40,12 +43,15 @@ export interface UserContext {
   store: UserStoreData // Данные из store приложения
 }
 
+export type ChatEnv = 'dev' | 'prod'
+
 export interface ChatRequest {
   message: string
   userId?: string
   userContext?: UserContext
   systemRules?: string
   conversationId?: string
+  env?: ChatEnv
 }
 
 export interface ChatRequestWithHistory extends ChatRequest {

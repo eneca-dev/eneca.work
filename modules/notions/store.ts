@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { combineNotionContent } from '@/modules/notions/utils'
 import type { Notion, NotionInput, NotionUpdate, NotionsFilter, NotionsState, NotionsMutations } from '@/modules/notions/types'
+import * as Sentry from "@sentry/nextjs"
 
 type NotionsStore = NotionsState & NotionsMutations
 
@@ -71,6 +72,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       set({ notions: sortedData, isLoading: false })
     } catch (error) {
       console.error('Error fetching notions:', error)
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'fetch', error_type: 'db_error' } })
       set({ error: 'Ошибка при загрузке заметок', isLoading: false })
       toast.error('Ошибка при загрузке заметок')
     }
@@ -114,6 +116,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
                           (error as any)?.message || 'Ошибка при создании заметки'
       
       console.error('Error creating notion:', errorMessage)
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'create', error_type: 'db_error' } })
       toast.error(errorMessage)
       throw error
     }
@@ -196,6 +199,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error updating notion:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ошибка при обновлении заметки'
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'update', error_type: 'db_error' } })
       toast.error(errorMessage)
     }
   },
@@ -239,6 +243,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
       return data[0]
     } catch (error) {
       console.error('Error updating notion silently:', error)
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'update_silent', error_type: 'db_error' } })
       throw error
     }
   },
@@ -278,6 +283,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error deleting notion:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ошибка при удалении заметки'
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'delete', error_type: 'db_error' } })
       toast.error(errorMessage)
     }
   },
@@ -317,6 +323,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error deleting notions:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ошибка при удалении заметок'
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'delete_many', error_type: 'db_error' } })
       toast.error(errorMessage)
     }
   },
@@ -410,6 +417,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error marking notions as done:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ошибка при отметке заметок как выполненных'
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'mark_done', error_type: 'db_error' } })
       toast.error(errorMessage)
     }
   },
@@ -460,6 +468,7 @@ export const useNotionsStore = create<NotionsStore>((set, get) => {
     } catch (error) {
       console.error('Error marking notions as undone:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ошибка при отметке заметок как невыполненных'
+      Sentry.captureException(error, { tags: { module: 'notions', store: 'useNotionsStore', action: 'mark_undone', error_type: 'db_error' } })
       toast.error(errorMessage)
     }
   }

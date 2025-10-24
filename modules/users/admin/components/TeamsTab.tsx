@@ -16,6 +16,7 @@ import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import * as Sentry from "@sentry/nextjs"
 
 // Типы для сущностей
 interface Department {
@@ -89,6 +90,7 @@ export default function TeamsTab(props: TeamsTabProps) {
       
       if (teamsError) {
         console.error('Ошибка при загрузке команд:', teamsError)
+        Sentry.captureException(teamsError, { tags: { module: 'users', component: 'TeamsTab', action: 'load_teams', error_type: 'db_error' } })
         toast.error('Не удалось загрузить команды')
         return
       }
@@ -100,6 +102,7 @@ export default function TeamsTab(props: TeamsTabProps) {
       
       if (deptsError) {
         console.error('Ошибка при загрузке отделов:', deptsError)
+        Sentry.captureException(deptsError, { tags: { module: 'users', component: 'TeamsTab', action: 'load_departments', error_type: 'db_error' } })
         toast.error('Не удалось загрузить отделы')
         return
       }
@@ -138,6 +141,7 @@ export default function TeamsTab(props: TeamsTabProps) {
       setDepartments(scopedDepartments)
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'TeamsTab', action: 'fetch_data', error_type: 'unexpected' } })
       toast.error('Произошла ошибка при загрузке данных')
     } finally {
       setIsLoading(false)
