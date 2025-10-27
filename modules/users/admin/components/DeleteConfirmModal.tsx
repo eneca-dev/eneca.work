@@ -17,6 +17,7 @@ interface DeleteConfirmModalProps {
   idField: string
   entityId: string
   onSuccess: () => void
+  onConfirm?: () => Promise<void>
 }
 
 export default function DeleteConfirmModal({
@@ -27,7 +28,8 @@ export default function DeleteConfirmModal({
   table,
   idField,
   entityId,
-  onSuccess
+  onSuccess,
+  onConfirm
 }: DeleteConfirmModalProps) {
   const [loading, setLoading] = useState(false)
 
@@ -35,14 +37,16 @@ export default function DeleteConfirmModal({
     setLoading(true)
 
     try {
-      const supabase = createClient()
-      
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq(idField, entityId)
-
-      if (error) throw error
+      if (onConfirm) {
+        await onConfirm()
+      } else {
+        const supabase = createClient()
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq(idField, entityId)
+        if (error) throw error
+      }
 
       toast.success("Запись успешно удалена")
       onSuccess()
