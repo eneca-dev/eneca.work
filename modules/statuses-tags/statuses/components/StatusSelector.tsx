@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Tag, Search } from 'lucide-react';
-import { useSectionStatuses } from '../hooks/useSectionStatuses';
+import { useSectionStatusesStore } from '../store';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface StatusSelectorProps {
@@ -26,15 +26,13 @@ export function StatusSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  
-  const { statuses, isLoading } = useSectionStatuses();
+
+  const statuses = useSectionStatusesStore(state => state.statuses);
+  const isLoading = useSectionStatusesStore(state => state.isLoading);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  
+
   // Хук для закрытия dropdown при клике вне его
   const dropdownRef = useClickOutside<HTMLDivElement>(() => setIsOpen(false), isOpen);
-
-  // useSectionStatuses хук уже автоматически подписан на все события статусов
-  // Убираем дублирующую подписку чтобы избежать лишних запросов к базе
 
   const selectedStatus = statuses.find(status => status.id === value);
 

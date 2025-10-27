@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useSectionStatuses } from '../hooks/useSectionStatuses';
+import { useSectionStatusesStore } from '../store';
 import { SectionStatus } from '../types';
 import { StatusForm } from './StatusForm';
 import { useUiStore } from '@/stores/useUiStore';
@@ -74,7 +74,9 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
   const [deletingStatus, setDeletingStatus] = useState<SectionStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const { statuses, isLoading, deleteStatus, loadStatuses } = useSectionStatuses();
+  const statuses = useSectionStatusesStore(state => state.statuses);
+  const isLoading = useSectionStatusesStore(state => state.isLoading);
+  const deleteStatus = useSectionStatusesStore(state => state.deleteStatus);
   const { setNotification } = useUiStore();
 
   // Фильтрация статусов по поисковому запросу
@@ -89,31 +91,6 @@ export function StatusManagementModal({ isOpen, onClose }: StatusManagementModal
       (status.description && status.description.toLowerCase().includes(query))
     );
   }, [statuses, searchQuery]);
-
-  // Слушаем события изменения статусов для автоматического обновления
-  useEffect(() => {
-    // Проверяем, что мы в браузере
-    if (typeof window === 'undefined') return;
-    
-    const handleStatusChange = (event: Event) => {
-      // Принудительно перезагружаем статусы
-      loadStatuses();
-    };
-    
-    // Подписываемся на все события изменения статусов
-    window.addEventListener('statusCreated', handleStatusChange);
-    window.addEventListener('statusUpdated', handleStatusChange);
-    window.addEventListener('statusDeleted', handleStatusChange);
-
-    return () => {
-      // Отписываемся при размонтировании компонента
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('statusCreated', handleStatusChange);
-        window.removeEventListener('statusUpdated', handleStatusChange);
-        window.removeEventListener('statusDeleted', handleStatusChange);
-      }
-    };
-  }, [loadStatuses]);
 
   // Обработчик закрытия модального окна
   const handleClose = () => {

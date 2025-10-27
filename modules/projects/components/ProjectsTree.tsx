@@ -23,7 +23,6 @@ import { CreateSectionModal } from './CreateSectionModal'
 import { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { CompactStatusSelector } from './CompactStatusSelector'
@@ -40,6 +39,7 @@ import {
   normalizeProjectStatus,
   PROJECT_STATUS_OPTIONS,
 } from '../constants/project-status'
+import { pluralizeSections } from '@/lib/pluralize'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
 
@@ -113,6 +113,7 @@ interface ProjectsTreeProps {
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
   onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 interface TreeNodeProps {
@@ -531,6 +532,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                       disabled={updatingStatus}
                       currentStatusName={node.statusName ?? undefined}
                       currentStatusColor={node.statusColor ?? undefined}
+                      statuses={statuses}
                     />
                   </div>
                 )}
@@ -772,7 +774,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     {countSections(node)}
                   </span>
                   <span className="dark:text-slate-400 text-slate-500">
-                    разделов
+                    {pluralizeSections(countSections(node))}
                   </span>
                 </div>
                 
@@ -851,10 +853,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   )
 }
 
-export function ProjectsTree({ 
-  selectedManagerId, 
-  selectedProjectId, 
-  selectedStageId, 
+export function ProjectsTree({
+  selectedManagerId,
+  selectedProjectId,
+  selectedStageId,
   selectedObjectId,
   selectedDepartmentId,
   selectedTeamId,
@@ -864,7 +866,8 @@ export function ProjectsTree({
   urlSectionId,
   urlTab,
   externalSearchQuery,
-  onOpenProjectDashboard
+  onOpenProjectDashboard,
+  statuses
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const latestTreeRef = useRef<ProjectNode[]>([])
@@ -883,7 +886,6 @@ export function ProjectsTree({
     groupByClient,
     toggleGroupByClient
   } = useProjectsStore()
-  const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -2338,6 +2340,7 @@ export function ProjectsTree({
           }}
           sectionId={selectedSectionForPanel.id}
           initialTab={highlightedSectionId ? 'comments' : (urlTab || 'overview')}
+          statuses={statuses}
         />
       )}
 
@@ -2387,6 +2390,7 @@ export function ProjectsTree({
           onSuccess={() => {
             loadTreeData() // Перезагружаем данные после создания раздела
           }}
+          statuses={statuses}
         />
       )}
 

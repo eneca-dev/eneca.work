@@ -5,7 +5,6 @@ import { X, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, Al
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
@@ -20,6 +19,7 @@ interface SectionPanelProps {
   onClose: () => void
   sectionId: string
   initialTab?: 'overview' | 'details' | 'comments' | 'decomposition'
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 interface SectionData {
@@ -54,30 +54,29 @@ interface Profile {
 
 const supabase = createClient()
 
-export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview' }: SectionPanelProps) {
+export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview', statuses }: SectionPanelProps) {
   // initialTab теперь приходит уже готовый: 'comments' при навигации из уведомлений, иначе 'overview'
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(initialTab === 'details' ? 'overview' : initialTab as any)
   const initializedRef = useRef(false)
-  
+
   // Состояние для inline редактирования отдельных полей
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Partial<SectionData>>({})
   const [savingField, setSavingField] = useState<string | null>(null)
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
-  
+
   // Состояние для выбора статуса
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
 
   // Состояние для модалки удаления
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  
+
   const { setNotification } = useUiStore()
-  const { statuses } = useSectionStatuses()
   const { updateSectionStatus: updateSectionStatusInStore, updateSectionResponsible: updateSectionResponsibleInStore } = useProjectsStore()
 
   // useSectionStatuses хук уже автоматически обновляется при всех событиях статусов

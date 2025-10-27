@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel, normalizeProjectStatus } from '@/modules/projects/constants/project-status';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info} from 'lucide-react';
 // Острая звезда для кнопки "только избранные" в панели фильтров
 function SharpStarIcon({ className, filled = false }: { className?: string; filled?: boolean }) {
   return (
@@ -13,7 +13,7 @@ function SharpStarIcon({ className, filled = false }: { className?: string; fill
     </svg>
   )
 }
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
+import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store';
 // Используем изолированный store фильтров для модуля projects
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
@@ -74,7 +74,8 @@ export default function ProjectsPage() {
   const [projectSearch, setProjectSearch] = useState<string>('');
   const [treeSearch, setTreeSearch] = useState<string>('');
   // "Только разделы" теперь управляется через событие для дерева
-  const { statuses } = useSectionStatuses();
+  const statuses = useSectionStatusesStore(state => state.statuses);
+  const loadStatuses = useSectionStatusesStore(state => state.loadStatuses);
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState<string[]>([]);
   
@@ -91,7 +92,7 @@ export default function ProjectsPage() {
   const [isCompactMode, setIsCompactMode] = useState(false);
   // Состояние UI для кнопки «только избранные» (синхронизируем через window события)
   const [onlyFavoritesUI, setOnlyFavoritesUI] = useState(false);
-
+  
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
     setSelectedProjectId(projectId);
@@ -200,6 +201,8 @@ export default function ProjectsPage() {
         if (filterStore.employees.length === 0) {
           filterStore.loadEmployees()
         }
+        // Загружаем статусы разделов
+        loadStatuses()
       } catch (err) {
         Sentry.captureException(err)
         console.error('Failed to apply project locks', err)
@@ -478,7 +481,7 @@ export default function ProjectsPage() {
               </div>
               {/* Список статусов */}
               <div className="space-y-0.5">
-                {(statuses || []).map(s => (
+                {(statuses || []).map((s: { id: string; name: string; color: string; description?: string }) => (
                   <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
                     <input
                       type="checkbox"
@@ -664,6 +667,7 @@ export default function ProjectsPage() {
             Сбросить
           </span>
         </button>
+
       </FilterBar>
 
       {/* Нижняя панель инструментов удалена — инструменты перенесены в верхний дропдаун */}
@@ -691,6 +695,7 @@ export default function ProjectsPage() {
           urlSectionId={urlSectionId}
           urlTab={urlTab || 'overview'}
           onOpenProjectDashboard={handleOpenProjectDashboard}
+          statuses={statuses}
         />
         )}
       </div>

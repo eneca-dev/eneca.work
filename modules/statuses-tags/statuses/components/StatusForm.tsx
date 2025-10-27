@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useUiStore } from '@/stores/useUiStore';
 import { SectionStatus, SectionStatusFormData } from '../types';
-import { useSectionStatuses } from '../hooks/useSectionStatuses';
+import { useSectionStatusesStore } from '../store';
 
 interface StatusFormProps {
   isOpen: boolean;
@@ -35,7 +35,8 @@ export function StatusForm({ isOpen, onClose, status, onSuccess }: StatusFormPro
   const colorPickerRef = useRef<HTMLDivElement>(null);
 
   const { setNotification } = useUiStore();
-  const { createStatus, updateStatus } = useSectionStatuses();
+  const createStatus = useSectionStatusesStore(state => state.createStatus);
+  const updateStatus = useSectionStatusesStore(state => state.updateStatus);
 
   const isEditing = !!status;
 

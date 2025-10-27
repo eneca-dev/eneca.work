@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { AlertTriangle, Loader2, Trash2, CheckCircle } from 'lucide-react'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
+import { pluralizeSections } from '@/lib/pluralize'
 
 interface DeleteStageModalProps {
   isOpen: boolean
@@ -190,7 +191,7 @@ export function DeleteStageModal({
       if (stats) {
         const deletedItems = []
         if (stats.objects_count > 0) deletedItems.push(`${stats.objects_count} объектов`)
-        if (stats.sections_count > 0) deletedItems.push(`${stats.sections_count} разделов`)
+        if (stats.sections_count > 0) deletedItems.push(`${stats.sections_count} ${pluralizeSections(stats.sections_count)}`)
         if (stats.loadings_count > 0) deletedItems.push(`${stats.loadings_count} загрузок`)
         if (stats.assignments_count > 0) deletedItems.push(`${stats.assignments_count} передач`)
         
