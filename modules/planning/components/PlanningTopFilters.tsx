@@ -61,8 +61,9 @@ export default function PlanningTopFilters() {
       filterStore.loadProjects(filterStore.selectedManagerId || null)
     }
     // Загружаем статусы разделов
-    loadStatuses()
-  }, [
+    if ((statuses || []).length === 0) {
+      loadStatuses()
+    }  }, [
     filterStore.managers.length,
     filterStore.departments.length,
     filterStore.employees.length,

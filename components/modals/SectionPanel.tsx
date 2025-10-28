@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { X, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
@@ -36,13 +37,14 @@ interface SectionData {
   responsible_name?: string | null
   responsible_avatar?: string
   object_name?: string
+  object_id?: string
   stage_name?: string
+  stage_id?: string
   project_name?: string
+  project_id?: string
   manager_name?: string | null
   status_name?: string | null
   status_color?: string | null
-  objects?: any
-  responsible?: any
 }
 
 interface Profile {
@@ -59,7 +61,9 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(initialTab === 'details' ? 'overview' : initialTab as any)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(
+    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab)
+  )
   const initializedRef = useRef(false)
 
   // Состояние для inline редактирования отдельных полей
@@ -76,41 +80,57 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   // Состояние для модалки удаления
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
+  const router = useRouter()
   const { setNotification } = useUiStore()
-  const { updateSectionStatus: updateSectionStatusInStore, updateSectionResponsible: updateSectionResponsibleInStore } = useProjectsStore()
+  const {
+    updateSectionStatus: updateSectionStatusInStore,
+    updateSectionResponsible: updateSectionResponsibleInStore,
+    focusProject,
+    focusStage,
+    focusObject
+  } = useProjectsStore()
 
   // useSectionStatuses хук уже автоматически обновляется при всех событиях статусов
   // Убираем дублирующие обработчики событий
 
-  useEffect(() => {
-    if (isOpen && sectionId) {
-      loadSectionData()
-      loadProfiles()
-    }
-  }, [isOpen, sectionId])
+  // Функции для навигации к проекту/стадии/объекту
+  const navigateToProject = () => {
+    if (!sectionData?.project_id) return
 
-  // Устанавливаем активную вкладку только при первой инициализации
-  useEffect(() => {
-    if (isOpen && !initializedRef.current) {
-      setActiveTab((initialTab === 'details' ? 'overview' : initialTab) as any)
-      initializedRef.current = true
-    }
-  }, [isOpen, initialTab])
+    onClose() // Закрываем модальное окно
+    focusProject(sectionData.project_id) // Фокусируем проект в дереве
 
-  useEffect(() => {
-    if (!isOpen) {
-      setEditingField(null)
-      setEditValues({})
-      setSectionData(null)
-      setSavingField(null)
-      setShowStatusDropdown(false)
-      setUpdatingStatus(false)
-      setShowDeleteModal(false)
-      initializedRef.current = false // Сбрасываем флаг инициализации
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
     }
-  }, [isOpen])
+  }
 
-  const loadSectionData = async () => {
+  const navigateToStage = () => {
+    if (!sectionData?.stage_id) return
+
+    onClose() // Закрываем модальное окно
+    focusStage(sectionData.stage_id) // Фокусируем стадию в дереве
+
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
+    }
+  }
+
+  const navigateToObject = () => {
+    if (!sectionData?.object_id) return
+
+    onClose() // Закрываем модальное окно
+    focusObject(sectionData.object_id) // Фокусируем объект в дереве
+
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
+    }
+  }
+
+  const loadSectionData = useCallback(async () => {
     setLoading(true)
     try {
       // Загружаем основные данные раздела с информацией о статусе
@@ -142,19 +162,18 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
         if (!profileError && profileData) {
           responsibleName = `${profileData.first_name} ${profileData.last_name}`.trim() || profileData.email
-          // @ts-ignore
-          responsibleAvatar = (profileData as any).avatar_url || null
+          responsibleAvatar = (profileData as { avatar_url?: string }).avatar_url || null
         }
       }
 
       // Загружаем иерархию проекта
       console.log('Загружаем иерархию для раздела:', sectionId)
       let hierarchyData = null
-      
+
       // Сначала пробуем загрузить через представление
       const { data: viewData, error: viewError } = await supabase
         .from('view_section_hierarchy')
-        .select('object_name, stage_name, project_name, manager_name')
+        .select('object_id, object_name, stage_id, stage_name, project_id, project_name, manager_name')
         .eq('section_id', sectionId)
         .single()
 
@@ -163,15 +182,15 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         console.log('Иерархия загружена через представление:', hierarchyData)
       } else {
         console.log('Представление не работает, загружаем через таблицы:', viewError)
-        
+
         // Загружаем иерархию через обычные таблицы
         try {
           console.log('Загружаем объект для section_object_id:', sectionData.section_object_id)
-          
+
           // Получаем данные объекта
           const { data: objectData, error: objectError } = await supabase
             .from('objects')
-            .select('object_name, object_stage_id')
+            .select('object_id, object_name, object_stage_id')
             .eq('object_id', sectionData.section_object_id)
             .single()
 
@@ -192,7 +211,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           // Получаем данные стадии
           const { data: stageData, error: stageError } = await supabase
             .from('stages')
-            .select('stage_name, stage_project_id')
+            .select('stage_id, stage_name, stage_project_id')
             .eq('stage_id', objectData.object_stage_id)
             .single()
 
@@ -213,7 +232,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           // Получаем данные проекта
           const { data: projectData, error: projectError } = await supabase
             .from('projects')
-            .select('project_name, project_manager')
+            .select('project_id, project_name, project_manager')
             .eq('project_id', stageData.stage_project_id)
             .single()
 
@@ -233,7 +252,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           let managerName = null
           if (projectData.project_manager) {
             console.log('Загружаем менеджера для project_manager:', projectData.project_manager)
-            
+
             const { data: managerData, error: managerError } = await supabase
               .from('profiles')
               .select('first_name, last_name, email')
@@ -248,8 +267,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           }
 
           hierarchyData = {
+            object_id: objectData.object_id,
             object_name: objectData.object_name,
+            stage_id: stageData.stage_id,
             stage_name: stageData.stage_name,
+            project_id: projectData.project_id,
             project_name: projectData.project_name,
             manager_name: managerName
           }
@@ -260,11 +282,14 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           console.error('Полная ошибка:', error)
           console.error('Тип ошибки:', typeof error)
           console.error('JSON ошибки:', JSON.stringify(error, null, 2))
-          
+
           // Устанавливаем пустые значения, чтобы интерфейс не сломался
           hierarchyData = {
+            object_id: undefined,
             object_name: 'Не удалось загрузить',
+            stage_id: undefined,
             stage_name: 'Не удалось загрузить',
+            project_id: undefined,
             project_name: 'Не удалось загрузить',
             manager_name: 'Не удалось загрузить'
           }
@@ -275,17 +300,20 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       const formattedData = {
         ...sectionData,
         responsible_name: responsibleName,
-        object_name: hierarchyData?.object_name || null,
-        stage_name: hierarchyData?.stage_name || null,
-        project_name: hierarchyData?.project_name || null,
-        manager_name: hierarchyData?.manager_name || null,
-        status_name: sectionData.section_statuses?.name || null,
-        status_color: sectionData.section_statuses?.color || null,
+        object_id: hierarchyData?.object_id ?? sectionData.section_object_id,
+        object_name: hierarchyData?.object_name ?? null,
+        stage_id: hierarchyData?.stage_id ?? null,
+        stage_name: hierarchyData?.stage_name ?? null,
+        project_id: hierarchyData?.project_id ?? null,
+        project_name: hierarchyData?.project_name ?? null,
+        manager_name: hierarchyData?.manager_name ?? null,
+        status_name: sectionData.section_statuses?.name ?? null,
+        status_color: sectionData.section_statuses?.color ?? null,
         responsible_avatar: responsibleAvatar
       }
 
       console.log('Итоговые данные раздела:', formattedData)
-      
+
       setSectionData(formattedData)
     } catch (error) {
       console.error('Ошибка загрузки данных раздела:', error)
@@ -293,9 +321,9 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     } finally {
       setLoading(false)
     }
-  }
+  }, [sectionId, setNotification])
 
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -307,7 +335,35 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     } catch (error) {
       console.error('Ошибка загрузки профилей:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen && sectionId) {
+      loadSectionData()
+      loadProfiles()
+    }
+  }, [isOpen, sectionId, loadSectionData, loadProfiles])
+
+  // Устанавливаем активную вкладку только при первой инициализации
+  useEffect(() => {
+    if (isOpen && !initializedRef.current) {
+      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab))
+      initializedRef.current = true
+    }
+  }, [isOpen, initialTab])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setEditingField(null)
+      setEditValues({})
+      setSectionData(null)
+      setSavingField(null)
+      setShowStatusDropdown(false)
+      setUpdatingStatus(false)
+      setShowDeleteModal(false)
+      initializedRef.current = false // Сбрасываем флаг инициализации
+    }
+  }, [isOpen])
 
   const updateSectionStatus = async (statusId: string | null): Promise<void> => {
     if (!sectionData) return
@@ -471,7 +527,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const renderEditableField = (
     fieldName: keyof SectionData,
     label: string,
-    value: any,
+    value: string | null | undefined,
     type: 'text' | 'textarea' | 'date' = 'text'
   ) => {
     const isEditing = editingField === fieldName
@@ -576,7 +632,10 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ position: 'fixed', top: '0px', left: '0px', right: '0px', bottom: '0px', margin: '0px', padding: '16px' }}
       >
-        <div className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden">
+        <div
+          className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Заголовок прилегает к верху */}
         <div 
           className="flex items-start justify-between px-6 pt-5 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
@@ -605,21 +664,39 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                     {sectionData.project_name && (
                       <>
                         <Package className="h-3 w-3 text-green-600 dark:text-green-400" />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">{sectionData.project_name}</span>
+                        <span
+                          onClick={navigateToProject}
+                          className="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer hover:text-green-600 dark:hover:text-green-400 hover:underline transition-colors"
+                          title="Перейти к проекту"
+                        >
+                          {sectionData.project_name}
+                        </span>
                         <span className="text-slate-400 dark:text-slate-500">/</span>
                       </>
                     )}
                     {sectionData.stage_name && (
                       <>
                         <Building className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                        <span>{sectionData.stage_name}</span>
+                        <span
+                          onClick={navigateToStage}
+                          className="cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors"
+                          title="Перейти к стадии"
+                        >
+                          {sectionData.stage_name}
+                        </span>
                         <span className="text-slate-400 dark:text-slate-500">/</span>
                       </>
                     )}
                     {sectionData.object_name && (
                       <>
                         <Package className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-                        <span>{sectionData.object_name}</span>
+                        <span
+                          onClick={navigateToObject}
+                          className="cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 hover:underline transition-colors"
+                          title="Перейти к объекту"
+                        >
+                          {sectionData.object_name}
+                        </span>
                       </>
                     )}
                   </div>
@@ -959,12 +1036,12 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                                       ...sectionData,
                                       section_responsible: profile.user_id,
                                       responsible_name: getProfileName(profile),
-                                      responsible_avatar: (profile as any).avatar_url || undefined
+                                      responsible_avatar: (profile as { avatar_url?: string }).avatar_url || undefined
                                     })
 
                                     updateSectionResponsibleInStore(sectionId, {
                                       responsibleName: getProfileName(profile),
-                                      responsibleAvatarUrl: (profile as any).avatar_url || undefined
+                                      responsibleAvatarUrl: (profile as { avatar_url?: string }).avatar_url || undefined
                                     })
 
                                     setNotification('Ответственный успешно назначен')
@@ -1060,7 +1137,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                         {isEditing ? (
                           <div className="space-y-2">
                             <textarea
-                              value={(editValues as any).section_description || ''}
+                              value={(editValues.section_description as string | undefined) || ''}
                               onChange={(e) => setEditValues({ ...editValues, section_description: e.target.value })}
                               className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               rows={3}
