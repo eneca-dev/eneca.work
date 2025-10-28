@@ -94,15 +94,19 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const currentUserId = useUserStore((state) => state.id)
   const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole, isAdmin } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
   const { reloadPermissions } = useUserPermissionsSync()
 
   // Определяем, может ли пользователь редактировать роли
   const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole || canAssignRoles)
 
-  // Определяем, может ли пользователь редактировать организационные поля
-  // При самостоятельном редактировании все пользователи могут редактировать все поля своего профиля
+  // Определяем, может ли пользователь редактировать отдел и команду
+  // Только администраторы могут менять отдел и команду (даже при редактировании своего профиля)
+  const canEditDepartmentAndTeam = isAdmin || canEditAllUsers
+
+  // Определяем, может ли пользователь редактировать остальные организационные поля (должность, категория)
+  // При самостоятельном редактировании все пользователи могут редактировать должность и категорию
   // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей
   const canEditOrganizationalFields = isSelfEdit ? true : canEditAllUsers
 
@@ -528,17 +532,23 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
           updateData.email = trimmedEmail
         }
         
-        // Добавляем организационные поля только если пользователь может их редактировать
-        if (canEditOrganizationalFields) {
+        // Добавляем отдел и команду только если пользователь может их редактировать
+        if (canEditDepartmentAndTeam) {
           // Отдел - может быть пустым (null)
           updateData.department = formData.department && formData.department !== "" ? formData.department : null
 
           // Команда - может быть пустой (null) независимо от отдела
           updateData.team = formData.team && formData.team !== "" ? formData.team : null
+        }
 
+        // Добавляем должность и категорию если пользователь может редактировать организационные поля
+        if (canEditOrganizationalFields) {
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
-        } else if (canEditOnlyTeam) {
+        }
+
+        // Обработка для пользователей с users.edit.team (они могут редактировать только команду)
+        if (canEditOnlyTeam && !canEditDepartmentAndTeam) {
           // Для пользователей с users.edit.team сохраняем только команду с валидацией департамента
           if (formData.team && formData.team !== "") {
             // Находим команду в списке доступных команд
@@ -849,7 +859,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 <Select
                   value={formData.department}
                   onValueChange={(value) => handleChange("department", value)}
-                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
+                  disabled={!canEditDepartmentAndTeam || canEditOnlyTeam}
                 >
                   <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
@@ -877,7 +887,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 <Select
                   value={formData.team}
                   onValueChange={(value) => handleChange("team", value)}
-                  disabled={(!canEditOrganizationalFields && !canEditOnlyTeam) || !formData.department}
+                  disabled={(!canEditDepartmentAndTeam && !canEditOnlyTeam) || !formData.department}
                 >
                   <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />

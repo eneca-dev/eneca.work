@@ -52,7 +52,7 @@ interface UsersListProps {
 }
 
 // Тип для группировки (восстановлен из оригинала)
-type GroupBy = "none" | "department" | "nested"
+type GroupBy = "none" | "nested"
 
 // Функция для получения информации о расположении (восстановлена из оригинала)
 const getWorkLocationInfo = (location: string | null) => {
@@ -200,21 +200,9 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
   const groupedUsers = useMemo(() => {
     // Группировка всегда работает со всем отфильтрованным списком
     const usersToGroup = filteredUsers
-    
+
     if (groupBy === "none") {
       return { "": filteredUsers }
-    }
-
-    if (groupBy === "department") {
-      const groups: Record<string, User[]> = {}
-      usersToGroup.forEach((user) => {
-        const groupKey = user.department || "Без отдела"
-        if (!groups[groupKey]) {
-          groups[groupKey] = []
-        }
-        groups[groupKey].push(user)
-      })
-      return groups
     }
 
     if (groupBy === "nested") {
@@ -338,7 +326,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
 
       if (hasAnyUrlState) {
         setSearchTerm(urlSearch)
-        if (urlGroup === 'none' || urlGroup === 'department' || urlGroup === 'nested') {
+        if (urlGroup === 'none' || urlGroup === 'nested') {
           setGroupBy(urlGroup)
         }
         setFilters({
@@ -358,7 +346,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
         const parsed = JSON.parse(raw)
         if (parsed) {
           if (typeof parsed.search === 'string') setSearchTerm(parsed.search)
-          if (parsed.groupBy === 'none' || parsed.groupBy === 'department' || parsed.groupBy === 'nested') {
+          if (parsed.groupBy === 'none' || parsed.groupBy === 'nested') {
             setGroupBy(parsed.groupBy as GroupBy)
           }
           if (parsed.filters && typeof parsed.filters === 'object') {
@@ -887,18 +875,13 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                {groupBy === "none" ? "Без группировки" : 
-                 groupBy === "department" ? "По отделам" : 
-                 "Отделы → Команды"}
+                {groupBy === "none" ? "Без группировки" : "Отделы → Команды"}
                 <ChevronDown className="h-3 w-3 ml-1" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuItem onClick={() => setGroupBy("none")}>
                 Без группировки
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("department")}>
-                По отделам
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setGroupBy("nested")}>
                 Отделы → Команды
@@ -966,69 +949,108 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
             <Table className="table-auto w-full">
                 <TableHeader>
                   <TableRow>
-                  <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
-                  <div className="flex items-center space-x-1">
-                    <Users className="h-3 w-3" />
-                    <span>Пользователь</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-36">
-                  <div className="flex items-center space-x-1">
-                    <Building2 className="h-3 w-3" />
-                    <span>Отдел</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-36">
-                  <div className="flex items-center space-x-1">
-                    <Briefcase className="h-3 w-3" />
-                    <span>Должность</span>
-                  </div>
-                </TableHead>
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
-                  <div className="flex items-center space-x-1">
-                    <span>Ставка</span>
-                  </div>
-                </TableHead>
-
-                <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
-                  <div className="flex items-center space-x-1">
-                    <Tag className="h-3 w-3" />
-                    <span>Роль</span>
-                  </div>
-                </TableHead>
-
-                {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
+                  {groupBy === "nested" ? (
+                    // Заголовки для режима "Отделы → Команды"
+                    <>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-3 w-3" />
+                          <span>Пользователь</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-36">
+                        <div className="flex items-center space-x-1">
+                          <Building2 className="h-3 w-3" />
+                          <span>Отдел</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-36">
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-3 w-3" />
+                          <span>Команда</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-36">
+                        <div className="flex items-center space-x-1">
+                          <Briefcase className="h-3 w-3" />
+                          <span>Должность</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-28">
+                        <div className="flex items-center space-x-1">
+                          <Tag className="h-3 w-3" />
+                          <span>Категория</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
+                        <div className="flex items-center space-x-1">
+                          <DollarSign className="h-3 w-3" />
+                          <span>Ставка</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
+                        <div className="flex items-center space-x-1">
+                          <Tag className="h-3 w-3" />
+                          <span>Роль</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 w-12">
+                        <div className="flex items-center justify-center space-x-1">
+                          <Home className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
+                    </>
+                  ) : (
+                    // Заголовки для режима "Без группировки"
+                    <>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-3 w-3" />
+                          <span>Пользователь</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-36">
+                        <div className="flex items-center space-x-1">
+                          <Building2 className="h-3 w-3" />
+                          <span>Отдел</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-36">
+                        <div className="flex items-center space-x-1">
+                          <Briefcase className="h-3 w-3" />
+                          <span>Должность</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell min-w-16">
+                        <div className="flex items-center space-x-1">
+                          <span>Ставка</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-20">
+                        <div className="flex items-center space-x-1">
+                          <Tag className="h-3 w-3" />
+                          <span>Роль</span>
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 w-12">
+                        <div className="flex items-center justify-center space-x-1">
+                          <Home className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
+                    </>
+                  )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                {groupBy === "none" || groupBy === "department"
-                  ? // Простая группировка или без группировки
+                {groupBy === "none"
+                  ? // Без группировки
                       Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
                       <React.Fragment key={groupName}>
-                        {groupBy === "department" && groupName && (
-                                                      <TableRow className="bg-slate-50/70 dark:bg-slate-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 5 : 4} className="py-2">
-                              <div
-                                className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
-                                  onClick={() => toggleGroup(groupName)}
-                                >
-                                  {expandedGroups[groupName] ? (
-                                  <ChevronDown className="h-4 w-4 mr-2" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 mr-2" />
-                                )}
-                                <Building2 className="h-4 w-4 mr-2 text-slate-500" />
-                                <span className="text-sm">{groupName}</span>
-                                <span className="ml-2 text-[11px] text-slate-500">{groupUsers.length}</span>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-
-                        {(groupBy === "none" || expandedGroups[groupName]) &&
-                          getPaginatedUsersFromGroup(groupUsers).map((user) => {
+                        {getPaginatedUsersFromGroup(groupUsers).map((user) => {
                             const workLocationInfo = getWorkLocationInfo(user.workLocation)
-                            
+
                             return (
                               <TableRow key={user.id} className="h-12">
                                 <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
@@ -1157,8 +1179,8 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                         ([department, teams]) => (
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
-                          <TableRow className="bg-slate-50/70 dark:bg-slate-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-2">
+                          <TableRow className="bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-50/70 hover:dark:bg-slate-800/50">
+                              <TableCell colSpan={canEditAllUsers ? 9 : 8} className="py-2 px-4">
                                 <div
                                 className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
                                   onClick={() => toggleGroup(department)}
@@ -1179,8 +1201,8 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                             Object.entries(teams).map(([team, teamUsers]) => (
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
-                                <TableRow className="bg-white dark:bg-slate-900/40">
-                                  <TableCell colSpan={canEditAllUsers ? 7 : 6} className="py-1.5 pl-8">
+                                <TableRow className="bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-100/50 hover:dark:bg-slate-800/30">
+                                  <TableCell colSpan={canEditAllUsers ? 9 : 8} className="py-1.5 pl-8 pr-4">
                                     <div className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300">
                                       <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
                                       <span>{team}</span>
@@ -1192,9 +1214,10 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                 {/* Пользователи команды */}
                                 {getPaginatedUsersFromGroup(teamUsers).map((user) => {
                                   const workLocationInfo = getWorkLocationInfo(user.workLocation)
-                                  
+
                                   return (
                                     <TableRow key={user.id} className="pl-12 h-12">
+                                      {/* Пользователь */}
                                       <TableCell className="pl-3 sm:pl-6 lg:pl-12 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <div className="flex items-center space-x-1">
                                           <Avatar className="h-8 w-8">
@@ -1213,22 +1236,27 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                             </div>
                                           </div>
                                         </TableCell>
+                                      {/* Отдел */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
                                       </TableCell>
+                                      {/* Команда */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <span className="block sm:truncate sm:max-w-12 md:max-w-18 lg:max-w-24 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
                                       </TableCell>
+                                      {/* Должность */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                         <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
                                       </TableCell>
+                                      {/* Категория */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                         <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
                                       </TableCell>
+                                      {/* Ставка */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
                                         <div className="text-center">
                                           <span className="text-xs sm:text-sm font-medium">
-                                            {user.salary ? (
+                                            {canViewRate(user) && user.salary ? (
                                               <>
                                                 <span>{user.salary}</span>
                                                 <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
@@ -1237,7 +1265,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                           </span>
                                         </div>
                                       </TableCell>
-
+                                      {/* Роль */}
                                       <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
                                         <div className="flex flex-col items-start space-y-0.5">
                                           {user.role ? (
@@ -1252,13 +1280,14 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                           )}
                                         </div>
                                       </TableCell>
-                                        <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
+                                      {/* Значок дома */}
+                                      <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
                                         <div className="flex justify-center">
                                           {workLocationInfo?.icon || (
                                             <span className="text-gray-400 text-xs">—</span>
                                           )}
                                         </div>
-                                        </TableCell>
+                                      </TableCell>
                                         {canEditAllUsers && (
                                           <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell py-1">
                                             <DropdownMenu>

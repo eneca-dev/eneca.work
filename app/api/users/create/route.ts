@@ -163,20 +163,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (userData.roleId) {
-          profileData.role_id = userData.roleId
-        } else {
-          // Назначаем роль "user" по умолчанию
-          const defaultRole = await supabase
-            .from("roles")
-            .select("id")
-            .eq("name", "user")
-            .single()
-          
-          if (defaultRole.data) {
-            profileData.role_id = defaultRole.data.id
-          }
-        }
+        // Роли больше не записываем в profiles.role_id — назначаем через user_roles ниже
 
         // Заполняем обязательные поля значениями по умолчанию если они пустые
         await fillDefaultFields(supabase, profileData)
@@ -208,6 +195,37 @@ export async function POST(request: NextRequest) {
             { error: `Не удалось обновить профиль пользователя: ${profileError.message}` },
             { status: 400 }
           )
+        }
+
+        // 5. Назначаем роль пользователю через user_roles
+        try {
+          // Определяем целевую роль: из запроса или 'user' по умолчанию
+          let roleIdToAssign: string | null = null
+          if (userData.roleId) {
+            roleIdToAssign = userData.roleId
+          } else {
+            const { data: defaultRole, error: defaultRoleError } = await supabase
+              .from('roles')
+              .select('id')
+              .eq('name', 'user')
+              .single()
+            if (defaultRoleError) {
+              console.warn('Не удалось получить роль по умолчанию user:', defaultRoleError)
+            }
+            roleIdToAssign = defaultRole?.id ?? null
+          }
+
+          if (roleIdToAssign) {
+            const { error: assignError } = await supabase
+              .from('user_roles')
+              .insert({ user_id: authData.user.id, role_id: roleIdToAssign })
+            if (assignError) {
+              console.error('Ошибка назначения роли пользователю:', assignError)
+              // Не прерываем создание — роль можно назначить позже вручную
+            }
+          }
+        } catch (assignEx) {
+          console.error('Неожиданная ошибка при назначении роли:', assignEx)
         }
 
         span.setAttribute("profile.success", true)

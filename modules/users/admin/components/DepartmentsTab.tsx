@@ -509,6 +509,18 @@ function DepartmentsTab(props: DepartmentsTabProps) {
           table="departments"
           idField="department_id"
           entityId={selectedDepartment.department_id}
+          onConfirm={async () => {
+            const response = await Sentry.startSpan({ name: 'Admin/DeleteDepartment', op: 'http', attributes: { department_id: selectedDepartment.department_id } }, async () => fetch(`/api/admin/delete-department?departmentId=${selectedDepartment.department_id}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' }
+            }))
+
+            let result: any = null
+            try { result = await response.json() } catch {}
+            if (!response.ok) {
+              throw new Error(result?.error || 'Не удалось удалить отдел')
+            }
+          }}
           onSuccess={async () => {
             await refreshWithDelay(fetchDepartments, 300)
 
