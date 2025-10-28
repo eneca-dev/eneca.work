@@ -9,6 +9,7 @@ import { useAdminPermissions } from "./hooks/useAdminPermissions"
 import { Loader2, ShieldX } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import * as Sentry from "@sentry/nextjs"
 
 export default function AdminPage() {
   const [isChecking, setIsChecking] = useState(true)
@@ -25,6 +26,7 @@ export default function AdminPage() {
     // Если есть ошибка загрузки разрешений - блокируем доступ
     if (permissionsError) {
       console.error('❌ Ошибка загрузки разрешений в AdminPage:', permissionsError)
+      Sentry.captureException(permissionsError, { tags: { module: 'users', component: 'AdminPage', action: 'permissions_load', error_type: 'unexpected' } })
       setIsAuthorized(false)
       setIsChecking(false)
       return

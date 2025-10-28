@@ -4,11 +4,13 @@ import { useChat } from '../hooks/useChat'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import { MessageCircle, X, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 export function ChatInterface() {
   const { 
     messages, 
     isLoading, 
+    isTyping,
     isOpen, 
     input, 
     setInput, 
@@ -23,7 +25,7 @@ export function ChatInterface() {
     isResizing,
     conversationId,
     startConversation,
-    debug
+    debug,
   } = useChat()
 
   return (
@@ -121,7 +123,7 @@ export function ChatInterface() {
           </div>
 
           {/* Сообщения */}
-          <MessageList messages={messages} isLoading={isLoading} />
+          <MessageList messages={messages} isLoading={isLoading} isTyping={isTyping} />
 
           {/* Поле ввода */}
           <MessageInput 

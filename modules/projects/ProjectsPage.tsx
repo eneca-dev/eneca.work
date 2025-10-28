@@ -18,7 +18,7 @@ import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSe
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
 import { getFiltersPermissionContextAsync } from '@/modules/permissions/integration/filters-permission-context'
-import { usePermissionsLoader } from '@/modules/permissions'
+import { useUserPermissionsSync } from '@/modules/permissions'
 import { applyProjectLocks } from '@/modules/projects/integration/project-filter-locks'
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
@@ -60,7 +60,7 @@ export default function ProjectsPage() {
   // Локальный стор фильтров модуля projects
   const filterStore = useProjectFilterStore();
   // Состояние готовности прав (инициализация перед загрузкой дерева)
-  const { isLoading: permLoading, error: permError } = usePermissionsLoader()
+  const { isLoading: permLoading, error: permError } = useUserPermissionsSync()
   const [locksApplied, setLocksApplied] = useState(false)
 
   // Состояние фильтров для передачи в дерево

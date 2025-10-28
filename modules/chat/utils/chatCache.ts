@@ -10,7 +10,25 @@ export function saveMessage(message: ChatMessage, userId: string): void {
   
   try {
     const history = getHistory(userId)
-    const updated = [...history, message].slice(-MAX_MESSAGES)
+    // Дедупликация: если последнее сообщение эквивалентно по роли, виду и содержимому — заменяем, иначе добавляем
+    const last = history.length > 0 ? history[history.length - 1] as ChatMessage : undefined
+    type MessageKind = NonNullable<ChatMessage['kind']>
+    const allowedKinds: readonly MessageKind[] = ['thinking','tool','observation','message'] as const
+    const normalizeKind = (k?: ChatMessage['kind']): MessageKind => {
+      const v = (k ?? 'message') as string
+      const normalized = v.toLowerCase().trim() as MessageKind
+      return (allowedKinds as readonly string[]).includes(normalized) ? normalized : 'message'
+    }
+    const isEquivalent = (a?: ChatMessage, b?: ChatMessage): boolean => {
+      if (!a || !b) return false
+      const kindA = normalizeKind(a.kind)
+      const kindB = normalizeKind(b.kind)
+      const contentA = (a.content?.trim?.() ?? '')
+      const contentB = (b.content?.trim?.() ?? '')
+      return a.role === b.role && kindA === kindB && contentA === contentB
+    }
+    const updatedBase = isEquivalent(last, message) ? [...history.slice(0, -1), message] : [...history, message]
+    const updated = updatedBase.slice(-MAX_MESSAGES)
     sessionStorage.setItem(getStorageKey(userId), JSON.stringify(updated))
   } catch (error) {
     console.warn('Не удалось сохранить сообщение:', error)

@@ -28,6 +28,5 @@ export {
 } from './api/comments'
 
 // Утилиты
-export { sendCommentNotifications } from './utils/notificationHelpers'
 export { extractMentions } from './utils/mentionParser'
  

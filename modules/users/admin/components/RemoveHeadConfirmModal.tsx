@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
 import { UserMinus, AlertTriangle } from 'lucide-react'
+import * as Sentry from "@sentry/nextjs"
 
 interface RemoveHeadConfirmModalProps {
   open: boolean
@@ -39,6 +40,7 @@ export default function RemoveHeadConfirmModal({
 
         if (error) {
           console.error("Ошибка при удалении руководителя отдела:", error)
+          Sentry.captureException(error, { tags: { module: 'users', component: 'RemoveHeadConfirmModal', action: 'remove_department_head', error_type: 'db_error' }, extra: { entity_id: entityId } })
           toast.error("Не удалось убрать руководителя отдела")
           return
         }
@@ -53,6 +55,7 @@ export default function RemoveHeadConfirmModal({
 
         if (error) {
           console.error("Ошибка при удалении руководителя команды:", error)
+          Sentry.captureException(error, { tags: { module: 'users', component: 'RemoveHeadConfirmModal', action: 'remove_team_head', error_type: 'db_error' }, extra: { entity_id: entityId } })
           toast.error("Не удалось убрать руководителя команды")
           return
         }
@@ -64,6 +67,7 @@ export default function RemoveHeadConfirmModal({
       onOpenChange(false)
     } catch (error) {
       console.error("Ошибка при удалении руководителя:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'RemoveHeadConfirmModal', action: 'remove_head_unexpected', error_type: 'unexpected' }, extra: { entity_id: entityId, type } })
       toast.error("Произошла ошибка")
     } finally {
       setIsRemoving(false)

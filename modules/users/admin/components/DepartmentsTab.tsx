@@ -16,6 +16,7 @@ import DepartmentHeadModal from "./DepartmentHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import * as Sentry from "@sentry/nextjs"
 
 // Утилитарная функция для обновления данных с задержкой
 const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: number = 300) => {
@@ -45,7 +46,7 @@ type DepartmentsTabProps =
   | { scope?: 'all' }
   | { scope: 'department'; departmentId: string }
 
-export default function DepartmentsTab(props: DepartmentsTabProps) {
+function DepartmentsTab(props: DepartmentsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
   const [departments, setDepartments] = useState<Department[]>([])
@@ -65,63 +66,79 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
 
   // Загрузка отделов из представления
   const fetchDepartments = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const supabase = createClient()
-      
-      // Принудительно очищаем кэш для получения свежих данных
-      const { data, error } = await supabase
-        .from("view_departments_with_heads")
-        .select("*")
-        .order("department_name")
-        .abortSignal(AbortSignal.timeout(10000)) // Таймаут 10 секунд
-      
-      if (error) {
-        console.error("Ошибка при загрузке отделов:", error)
-        toast.error("Не удалось загрузить отделы")
-        return
-      }
-      
-      console.log("📊 Данные из view_departments_with_heads:", data)
-      console.log("📊 Количество записей:", data?.length)
-      
-      // Дедупликация данных на уровне состояния
-      const uniqueData = (data || []).reduce((acc: Department[], dept: Department) => {
-        if (!acc.find((d: Department) => d.department_id === dept.department_id)) {
-          acc.push(dept)
+    return await Sentry.startSpan({
+      name: 'Users/DepartmentsTab fetchDepartments',
+      op: 'ui.load',
+      attributes: { scope, departmentId: departmentId || 'all' }
+    }, async () => {
+      try {
+        setIsLoading(true)
+        const supabase = createClient()
+        
+        // Принудительно очищаем кэш для получения свежих данных
+        const { data, error } = await supabase
+          .from("view_departments_with_heads")
+          .select("*")
+          .order("department_name")
+          .abortSignal(AbortSignal.timeout(10000)) // Таймаут 10 секунд
+        
+        if (error) {
+          console.error("Ошибка при загрузке отделов:", error)
+          Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'load_departments', error_type: 'db_error' } })
+          toast.error("Не удалось загрузить отделы")
+          return
         }
-        return acc
-      }, [] as Department[])
-      
-      console.log("📊 Уникальные отделы:", uniqueData)
-      // Применяем скоуп
-      const scoped = scope === 'department'
-        ? (departmentId
-            ? uniqueData.filter((d: Department) => d.department_id === departmentId)
-            : (() => {
-                console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
-                return []
-              })()
-          )
-        : uniqueData
-      setDepartments(scoped)
-    } catch (error) {
-      console.error("Ошибка при загрузке отделов:", error)
-      toast.error("Произошла ошибка при загрузке данных")
-    } finally {
-      setIsLoading(false)
-    }
+        
+        console.log("📊 Данные из view_departments_with_heads:", data)
+        console.log("📊 Количество записей:", data?.length)
+        
+        // Дедупликация данных на уровне состояния
+        const uniqueData = (data || []).reduce((acc: Department[], dept: Department) => {
+          if (!acc.find((d: Department) => d.department_id === dept.department_id)) {
+            acc.push(dept)
+          }
+          return acc
+        }, [] as Department[])
+        
+        console.log("📊 Уникальные отделы:", uniqueData)
+        // Применяем скоуп
+        const scoped = scope === 'department'
+          ? (departmentId
+              ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+              : (() => {
+                  console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
+                  return []
+                })()
+            )
+          : uniqueData
+        setDepartments(scoped)
+      } catch (error) {
+        console.error("Ошибка при загрузке отделов:", error)
+        Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'fetch_departments', error_type: 'unexpected' } })
+        toast.error("Произошла ошибка при загрузке данных")
+      } finally {
+        setIsLoading(false)
+      }
+    })
   }, [scope, departmentId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
+    Sentry.addBreadcrumb({
+      category: 'ui.action',
+      level: 'info',
+      message: 'DepartmentsTab: forceRefresh clicked'
+    })
     console.log("🔄 Принудительное обновление данных...")
     setIsLoading(true)
     try {
-      await fetchDepartments()
+      await Sentry.startSpan({ name: 'Users/DepartmentsTab forceRefresh', op: 'ui.action' }, async () => {
+        await fetchDepartments()
+      })
       toast.success("Данные обновлены")
     } catch (error) {
       console.error("Ошибка при обновлении данных:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'force_refresh', error_type: 'unexpected' } })
       toast.error("Не удалось обновить данные")
     } finally {
       setIsLoading(false)
@@ -154,6 +171,7 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
 
   // Обработчики для управления отделами
   const handleCreateDepartment = useCallback(async () => {
+    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open create department' })
     // Обновляем данные перед открытием модального окна
     await fetchDepartments()
     setModalMode("create")
@@ -162,23 +180,27 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
   }, [fetchDepartments])
 
   const handleEditDepartment = useCallback((department: Department) => {
+    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open edit department', data: { department_id: department.department_id } })
     setModalMode("edit")
     setSelectedDepartment(department)
     setModalOpen(true)
   }, [])
 
   const handleDeleteDepartment = useCallback((department: Department) => {
+    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open delete department confirm', data: { department_id: department.department_id } })
     setSelectedDepartment(department)
     setDeleteModalOpen(true)
   }, [])
 
   // Обработчики для управления руководителями
   const handleAssignHead = useCallback((department: Department) => {
+    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open assign head', data: { department_id: department.department_id } })
     setSelectedDepartment(department)
     setHeadModalOpen(true)
   }, [])
 
   const handleRemoveHeadClick = useCallback((department: Department) => {
+    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open remove head confirm', data: { department_id: department.department_id } })
     setSelectedDepartment(department)
     setRemoveHeadModalOpen(true)
   }, [])
@@ -205,7 +227,10 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
                 <Input
                   placeholder="Поиск отделов..."
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => {
+                    setSearch(e.target.value)
+                    Sentry.addBreadcrumb({ category: 'ui.input', level: 'info', message: 'DepartmentsTab: search change', data: { value_length: e.target.value.length } })
+                  }}
                   className="max-w-xs"
                 />
               )}
@@ -273,7 +298,10 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
                 <Input
                   placeholder="Поиск отделов..."
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => {
+                    setSearch(e.target.value)
+                    Sentry.addBreadcrumb({ category: 'ui.input', level: 'info', message: 'DepartmentsTab: search change', data: { value_length: e.target.value.length } })
+                  }}
                   className="max-w-xs"
                 />
               )}
@@ -523,4 +551,6 @@ export default function DepartmentsTab(props: DepartmentsTabProps) {
       )}
     </div>
   )
-} 
+}
+
+export default Sentry.withProfiler(DepartmentsTab, { name: 'DepartmentsTab' })
