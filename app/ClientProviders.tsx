@@ -4,48 +4,22 @@ import { ThemeSync } from "@/components/theme-sync";
 import { Toaster } from "@/components/ui/toaster";
 import { GlobalNotification } from "@/components/ui/notification";
 import { NoSSR } from "@/components/NoSSR";
-import { useEffect } from "react";
 import { UserPermissionsSyncProvider } from "@/modules/permissions";
 import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
 
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
-  // Подавляем ошибки React о дублированных ключах (временное решение)
-  useEffect(() => {
-    const originalConsoleError = console.error;
-    console.error = (...args) => {
-      // Игнорируем ошибки о дублированных ключах
-      const message = args.join(' ');
-      if (message.includes('Encountered two children with the same key') ||
-          message.includes('Keys should be unique so that components maintain their identity')) {
-        console.log('🔇 Подавлена ошибка React о дублированных ключах:', message);
-        return;
-      }
-      // Передаем остальные ошибки как обычно
-      originalConsoleError.apply(console, args);
-    };
-
-    // Очистка при размонтировании
-    return () => {
-      console.error = originalConsoleError;
-    };
-  }, []);
-
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <NoSSR>
         <UserPermissionsSyncProvider>
-          <ThemeSync />
-          {children}
-          <Toaster />
-          <GlobalNotification />
+          <FeedbackProvider>
+            <ThemeSync />
+            {children}
+            <Toaster />
+            <GlobalNotification />
+          </FeedbackProvider>
         </UserPermissionsSyncProvider>
-        <ThemeSync />
-        <FeedbackProvider>
-          {children}
-        </FeedbackProvider>
-        <Toaster />
-        <GlobalNotification />
       </NoSSR>
     </ThemeProvider>
   );
