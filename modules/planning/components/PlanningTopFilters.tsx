@@ -5,7 +5,7 @@ import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, Lock, Network, Layers, Info } from 'lucide-react'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
@@ -15,7 +15,8 @@ import { applyPlanningLocks } from '@/modules/planning/integration/apply-plannin
 
 export default function PlanningTopFilters() {
   const filterStore = useFilterStore()
-  const { statuses } = useSectionStatuses()
+  const statuses = useSectionStatusesStore(state => state.statuses)
+  const loadStatuses = useSectionStatusesStore(state => state.loadStatuses)
   const { startDate, daysToShow, setStartDate, scrollBackward, scrollForward } = usePlanningViewStore()
   const {
     showSections,
@@ -59,7 +60,10 @@ export default function PlanningTopFilters() {
     if (filterStore.projects.length === 0) {
       filterStore.loadProjects(filterStore.selectedManagerId || null)
     }
-  }, [
+    // Загружаем статусы разделов
+    if ((statuses || []).length === 0) {
+      loadStatuses()
+    }  }, [
     filterStore.managers.length,
     filterStore.departments.length,
     filterStore.employees.length,
@@ -69,6 +73,7 @@ export default function PlanningTopFilters() {
     filterStore.loadDepartments,
     filterStore.loadEmployees,
     filterStore.loadProjects,
+    loadStatuses,
   ])
 
   // Каскадная подзагрузка при выборе проекта/стадии

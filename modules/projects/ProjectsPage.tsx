@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
 import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel, normalizeProjectStatus } from '@/modules/projects/constants/project-status';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info } from 'lucide-react';
+import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info, RefreshCw } from 'lucide-react';
 // Острая звезда для кнопки "только избранные" в панели фильтров
 function SharpStarIcon({ className, filled = false }: { className?: string; filled?: boolean }) {
   return (
@@ -13,7 +13,7 @@ function SharpStarIcon({ className, filled = false }: { className?: string; fill
     </svg>
   )
 }
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
+import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store';
 // Используем изолированный store фильтров для модуля projects
 import { useProjectFilterStore } from '@/modules/projects/filters/store';
 
@@ -74,7 +74,8 @@ export default function ProjectsPage() {
   const [projectSearch, setProjectSearch] = useState<string>('');
   const [treeSearch, setTreeSearch] = useState<string>('');
   // "Только разделы" теперь управляется через событие для дерева
-  const { statuses } = useSectionStatuses();
+  const statuses = useSectionStatusesStore(state => state.statuses);
+  const loadStatuses = useSectionStatusesStore(state => state.loadStatuses);
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState<string[]>([]);
   
@@ -91,6 +92,8 @@ export default function ProjectsPage() {
   const [isCompactMode, setIsCompactMode] = useState(false);
   // Состояние UI для кнопки «только избранные» (синхронизируем через window события)
   const [onlyFavoritesUI, setOnlyFavoritesUI] = useState(false);
+  // Состояние для анимации обновления дерева
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Обработчики фильтров
   const handleProjectChange = (projectId: string | null) => {
@@ -119,6 +122,16 @@ export default function ProjectsPage() {
 
   const handleObjectChange = (objectId: string | null) => {
     setSelectedObjectId(objectId);
+  };
+
+  // Обработчик обновления дерева проектов
+  const handleRefresh = () => {
+    if (isRefreshing) return; // Предотвращаем множественные клики
+
+    // Отправляем событие для перезагрузки дерева
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('projectsTree:reload'));
+    }
   };
 
   const handleResetFilters = () => {
@@ -200,6 +213,8 @@ export default function ProjectsPage() {
         if (filterStore.employees.length === 0) {
           filterStore.loadEmployees()
         }
+        // Загружаем статусы разделов
+        loadStatuses()
       } catch (err) {
         Sentry.captureException(err)
         console.error('Failed to apply project locks', err)
@@ -254,6 +269,22 @@ export default function ProjectsPage() {
     
     return () => window.removeEventListener('resize', checkCompactMode);
   }, []);
+
+  // Синхронизация состояния обновления через события от ProjectsTree
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleRefreshStart = () => setIsRefreshing(true)
+    const handleRefreshEnd = () => setIsRefreshing(false)
+
+    window.addEventListener('projectsTree:refreshStart', handleRefreshStart as EventListener)
+    window.addEventListener('projectsTree:refreshEnd', handleRefreshEnd as EventListener)
+
+    return () => {
+      window.removeEventListener('projectsTree:refreshStart', handleRefreshStart as EventListener)
+      window.removeEventListener('projectsTree:refreshEnd', handleRefreshEnd as EventListener)
+    }
+  }, [])
 
   // Синхронизация состояния звезды «только избранные» через глобальные события дерева
   useEffect(() => {
@@ -317,6 +348,16 @@ export default function ProjectsPage() {
               aria-pressed={onlyFavoritesUI ? 'true' : 'false'}
             >
               <SharpStarIcon className={onlyFavoritesUI ? 'h-4 w-4 text-yellow-600' : 'h-4 w-4 text-slate-400'} filled={onlyFavoritesUI} />
+            </button>
+
+            {/* Обновить дерево проектов */}
+            <button
+              className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Обновить дерево проектов"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
 
             {/* Синхронизация с Worksection — перенесена в выпадающий список "Проект" */}
@@ -446,59 +487,61 @@ export default function ProjectsPage() {
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
 
         {/* Статусы — дропдаун в том же стиле */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
-              <Filter className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
-              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                Статусы разделов
-              </span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
-            <div className="p-2 space-y-2">
-              <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам разделов</div>
-              <div className="flex items-center justify-between">
-                <button
-                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 rounded-md"
-                  onClick={()=> setSelectedStatusIdsLocal([])}
-                >
-                  Очистить
-                </button>
-                <button
-                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 inline-flex items-center gap-1 transition-all duration-200 rounded-md"
-                  onClick={()=> {
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(new CustomEvent('projectsTree:openStatusManagement'))
-                    }
-                  }}
-                >
-                  <Settings className="h-3 w-3" /> Управление
-                </button>
+        <div className="hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
+                <Filter className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+                <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Статусы разделов
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
+              <div className="p-2 space-y-2">
+                <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам разделов</div>
+                <div className="flex items-center justify-between">
+                  <button
+                    className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 rounded-md"
+                    onClick={()=> setSelectedStatusIdsLocal([])}
+                  >
+                    Очистить
+                  </button>
+                  <button
+                    className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 inline-flex items-center gap-1 transition-all duration-200 rounded-md"
+                    onClick={()=> {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('projectsTree:openStatusManagement'))
+                      }
+                    }}
+                  >
+                    <Settings className="h-3 w-3" /> Управление
+                  </button>
+                </div>
+                {/* Список статусов */}
+                <div className="space-y-0.5">
+                  {(statuses || []).map((s: { id: string; name: string; color: string; description?: string }) => (
+                    <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
+                      <input
+                        type="checkbox"
+                        className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                        checked={selectedStatusIdsLocal.includes(s.id)}
+                        onChange={() => setSelectedStatusIdsLocal(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
+                      />
+                      <div className="w-2.5 h-2.5" style={{ backgroundColor: s.color }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-medium dark:text-slate-200 truncate">{s.name}</div>
+                        {s.description && <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{s.description}</div>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
-              {/* Список статусов */}
-              <div className="space-y-0.5">
-                {(statuses || []).map(s => (
-                  <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
-                    <input
-                      type="checkbox"
-                      className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
-                      checked={selectedStatusIdsLocal.includes(s.id)}
-                      onChange={() => setSelectedStatusIdsLocal(prev => prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id])}
-                    />
-                    <div className="w-2.5 h-2.5" style={{ backgroundColor: s.color }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium dark:text-slate-200 truncate">{s.name}</div>
-                      {s.description && <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{s.description}</div>}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+        </div>
 
         {/* Статусы проектов — отдельный дропдаун рядом через разделитель */}
         <DropdownMenu>
@@ -664,6 +707,29 @@ export default function ProjectsPage() {
             Сбросить
           </span>
         </button>
+
+        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+        {/* Управление статусами разделов */}
+        <UiTooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('projectsTree:openStatusManagement'))
+                }
+              }}
+              className="flex items-center justify-center h-7 w-7 transition-all duration-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Управление статусами разделов"
+            >
+              <Settings className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="text-xs dark:text-slate-200">
+            Управление статусами разделов
+          </TooltipContent>
+        </UiTooltip>
+
       </FilterBar>
 
       {/* Нижняя панель инструментов удалена — инструменты перенесены в верхний дропдаун */}
@@ -691,6 +757,7 @@ export default function ProjectsPage() {
           urlSectionId={urlSectionId}
           urlTab={urlTab || 'overview'}
           onOpenProjectDashboard={handleOpenProjectDashboard}
+          statuses={statuses}
         />
         )}
       </div>

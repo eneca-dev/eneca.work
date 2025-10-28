@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface CompactStatusSelectorProps {
@@ -12,19 +11,20 @@ interface CompactStatusSelectorProps {
   disabled?: boolean;
   currentStatusName?: string;
   currentStatusColor?: string;
+  statuses: Array<{id: string, name: string, color: string, description?: string}>;
 }
 
-export function CompactStatusSelector({ 
-  value, 
-  onChange, 
+export function CompactStatusSelector({
+  value,
+  onChange,
   disabled = false,
   currentStatusName,
-  currentStatusColor
+  currentStatusColor,
+  statuses
 }: CompactStatusSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  
-  const { statuses, isLoading } = useSectionStatuses();
+
   const buttonRef = useRef<HTMLButtonElement>(null);
   
   // Хук для закрытия dropdown при клике вне его
@@ -128,9 +128,7 @@ export function CompactStatusSelector({
           })()}
         >
           <div className="flex items-center justify-between gap-1">
-            {isLoading ? (
-              <span className="text-gray-500 dark:text-slate-400">...</span>
-            ) : selectedStatus ? (
+            {selectedStatus ? (
               <div className="flex items-center gap-1 min-w-0">
                 <div 
                   className="w-2 h-2 rounded-full flex-shrink-0" 
