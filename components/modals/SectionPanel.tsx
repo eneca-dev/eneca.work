@@ -44,6 +44,14 @@ interface SectionData {
   responsible?: any
 }
 
+type HierarchyData = {
+  object_name: string | null
+  stage_name?: string | null
+  project_name?: string | null
+  manager_name?: string | null
+  project_manager_name?: string | null
+}
+
 interface Profile {
   user_id: string
   first_name: string
@@ -153,7 +161,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       // Сначала пробуем загрузить через представление
       const { data: viewData, error: viewError } = await supabase
         .from('view_section_hierarchy')
-        .select('object_name, stage_name, project_name, manager_name')
+        .select('object_name, stage_name, project_name, project_manager_name:manager_name')
         .eq('section_id', sectionId)
         .single()
 
@@ -270,14 +278,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         }
       }
 
+      // Приведение типов и формирование итоговых данных
+      const hierarchy = hierarchyData as HierarchyData | null
       // Формируем итоговые данные
       const formattedData = {
         ...sectionData,
         responsible_name: responsibleName,
         object_name: hierarchyData?.object_name || null,
-        stage_name: hierarchyData?.stage_name || null,
-        project_name: hierarchyData?.project_name || null,
-        manager_name: hierarchyData?.manager_name || null,
+        stage_name: hierarchy?.stage_name || null,
+        project_name: hierarchy?.project_name || null,
+        manager_name: hierarchy?.manager_name ?? hierarchy?.project_manager_name ?? null,
         status_name: sectionData.section_statuses?.name || null,
         status_color: sectionData.section_statuses?.color || null,
         responsible_avatar: responsibleAvatar

@@ -1,4 +1,4 @@
-"use client"
+"use client" 
 
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -726,7 +726,6 @@ export function TimelineRow({
                     loading={loading}
                     sectionPosition={sectionPosition}
                     loadingIndex={loadingIndex}
-                    additionalOffsetRows={0}
                     timeUnits={timeUnits}
                     theme={theme}
                     rowHeight={rowHeight}
@@ -758,7 +757,6 @@ interface LoadingRowProps {
   loading: Loading
   sectionPosition: number
   loadingIndex: number
-  additionalOffsetRows: number
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
   theme: string
   rowHeight: number
@@ -776,7 +774,6 @@ function LoadingRow({
   loading,
   sectionPosition,
   loadingIndex,
-  additionalOffsetRows,
   timeUnits,
   theme,
   rowHeight,
@@ -1182,9 +1179,9 @@ function StageRow({
   const blendRgb = (base: [number, number, number], target: [number, number, number], amount: number): [number, number, number] => {
     const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
     return [
-      clamp(base[1 - 1] * (1 - amount) + target[1 - 1] * amount),
-      clamp(base[2 - 1] * (1 - amount) + target[2 - 1] * amount),
-      clamp(base[3 - 1] * (1 - amount) + target[3 - 1] * amount),
+      clamp(base[0] * (1 - amount) + target[0] * amount),
+      clamp(base[1] * (1 - amount) + target[1] * amount),
+      clamp(base[2] * (1 - amount) + target[2] * amount),
     ]
   }
   const rgbToString = (rgb: [number, number, number]): string => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`

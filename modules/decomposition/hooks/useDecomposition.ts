@@ -78,6 +78,7 @@ export const useDecomposition = () => {
     deleteTemplate,
 
     // Stages API from store
+    stages: decompositionStages,
     stageItems,
     fetchStages,
     fetchStageItems,
@@ -372,6 +373,7 @@ export const useDecomposition = () => {
     // Остальные существующие переменные...
 
     // Stages exposure
+    decompositionStages,
     stageItems,
     fetchStages,
     fetchStageItems,

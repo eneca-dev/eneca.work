@@ -28,6 +28,13 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { HelpCircle } from "lucide-react"
 
+type DecompositionStage = {
+  decomposition_stage_id: string
+  decomposition_stage_name: string
+  decomposition_stage_start?: string | null
+  decomposition_stage_finish?: string | null
+}
+
 const DecompositionPage = () => {
   const router = useRouter()
   // Получаем данные напрямую из userStore для отладки
@@ -94,7 +101,7 @@ const DecompositionPage = () => {
     handleDeleteTemplate,
 
     // Новые: работа с этапами
-    stages,
+    decompositionStages: managementStages,
     stageItems,
     fetchStages,
     fetchStageItems,
@@ -661,10 +668,10 @@ document.body.removeChild(link)
                   {/* Простое дерево: этап → его строки */}
                   <div className="border rounded-md">
                     <div className="divide-y">
-                      {stages.length === 0 ? (
+                      {managementStages.length === 0 ? (
                         <div className="p-4 text-sm text-muted-foreground">Этапы отсутствуют</div>
                       ) : (
-                        stages.map((stage) => (
+                        managementStages.map((stage: DecompositionStage) => (
                           <div key={stage.decomposition_stage_id} className="p-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">

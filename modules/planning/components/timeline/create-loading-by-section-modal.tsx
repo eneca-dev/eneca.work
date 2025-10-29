@@ -1,4 +1,4 @@
-"use client"
+"use client" 
 
 import type React from "react"
 import type { JSX } from "react"
@@ -35,11 +35,10 @@ interface CreateLoadingBySectionModalProps {
   // Привязка к этапу
   stageId?: string | null
   stageName?: string | null
-  // Если открыто из плановой записи — укажем id, чтобы удалить план после создания
-  convertPlanId?: string
+
 }
 
-export function CreateLoadingBySectionModal({ section, setShowModal, theme, defaultStartDate, defaultEndDate, defaultRate, stageId, stageName, convertPlanId }: CreateLoadingBySectionModalProps): JSX.Element {
+export function CreateLoadingBySectionModal({ section, setShowModal, theme, defaultStartDate, defaultEndDate, defaultRate, stageId, stageName }: CreateLoadingBySectionModalProps): JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -52,25 +51,35 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
   const fetchSections = usePlanningStore((state) => state.fetchSections)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
+  const formatLocalYMD = (date: Date): string | null => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   const normalizeDateValue = (val?: Date | string) => {
     if (!val) return null
     try {
       if (typeof val === "string") {
-        // Ожидаем YYYY-MM-DD или ISO
+        // Ожидаем YYYY-MM-DD или ISO/дата-время строки
         if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
         const d = new Date(val)
-        return d.toISOString().split("T")[0]
+        const formatted = formatLocalYMD(d)
+        return formatted
       }
-      return val.toISOString().split("T")[0]
+      const formatted = formatLocalYMD(val)
+      return formatted
     } catch {
       return null
     }
   }
 
   const [formData, setFormData] = useState({
-    startDate: normalizeDateValue(defaultStartDate) || new Date().toISOString().split("T")[0],
+    startDate: normalizeDateValue(defaultStartDate) || (formatLocalYMD(new Date()) as string),
     endDate:
-      normalizeDateValue(defaultEndDate) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      normalizeDateValue(defaultEndDate) || (formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) as string),
     rate: defaultRate ?? 1,
     comment: "",
   })

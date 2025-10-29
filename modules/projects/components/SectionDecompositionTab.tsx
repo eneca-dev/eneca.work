@@ -181,121 +181,63 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
     const init = async () => {
       setLoading(true)
       try {
-        const [cats, rows, totals, profilesRes, statusesRes, stagesRes, difficultyRes] = await Promise.all([
-          supabase
-            .from("work_categories")
-            .select("work_category_id, work_category_name")
-            .order("work_category_name", { ascending: true }),
-          supabase
-            .from("decomposition_items")
-            .select(`
-              decomposition_item_id, 
-              decomposition_item_description, 
-              decomposition_item_work_category_id, 
-              decomposition_item_planned_hours, 
-              decomposition_item_planned_due_date, 
-              decomposition_item_order,
-              decomposition_item_responsible,
-              decomposition_item_status_id,
-              decomposition_item_progress,
-              decomposition_item_stage_id,
-              decomposition_item_difficulty_id,
-              profiles!decomposition_item_responsible (
-                user_id,
-                first_name,
-                last_name,
-                email
-              ),
-              section_statuses!decomposition_item_status_id (
-                id,
-                name,
-                color,
-                description
-              )
-            `)
-            .eq("decomposition_item_section_id", sectionId)
-            .order("decomposition_item_order", { ascending: true })
-            .order("decomposition_item_created_at", { ascending: true }),
-          supabase
-            .from("view_section_decomposition_totals")
-            .select("planned_hours, actual_hours, actual_amount")
-            .eq("section_id", sectionId)
-            .single(),
-          supabase
-            .from("profiles")
-            .select("user_id, first_name, last_name, email")
-            .order("first_name", { ascending: true }),
-          supabase
-            .from("section_statuses")
-            .select("id, name, color, description")
-            .order("name", { ascending: true }),
-          supabase
-            .from('decomposition_stages')
-            .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description')
-            .eq('decomposition_stage_section_id', sectionId)
-            .order('decomposition_stage_order', { ascending: true }),
-          supabase
-            .from('decomposition_difficulty_levels')
-            .select('difficulty_id, difficulty_abbr, difficulty_definition, difficulty_weight')
-            .order('difficulty_weight', { ascending: true }),
-        ])
-
-        if (cats.error) throw cats.error
-        if (rows.error) throw rows.error
-        if (profilesRes.error) throw profilesRes.error
-        if (statusesRes.error) throw statusesRes.error
-        if (difficultyRes.error) throw difficultyRes.error
-        
-        if (!totals.error) {
-          setSectionTotals({
-            planned_hours: Number(totals.data?.planned_hours || 0),
-            actual_hours: Number(totals.data?.actual_hours || 0),
-            actual_amount: Number(totals.data?.actual_amount || 0),
-          })
-        }
-
-        setCategories(cats.data || [])
-        setProfiles(profilesRes.data || [])
-        setStatuses(statusesRes.data || [])
-        setDifficultyLevels(difficultyRes.data || [])
-        if (!stagesRes.error) {
-          setStages(
-            (stagesRes.data as any[]).map((s) => ({
-              id: s.decomposition_stage_id as string,
-              name: s.decomposition_stage_name as string,
-              start: (s.decomposition_stage_start as string) || null,
-              finish: (s.decomposition_stage_finish as string) || null,
-              description: (s.decomposition_stage_description as string) || null,
-            }))
-          )
-        }
-        
-        // Устанавливаем статус по умолчанию "План" для новых строк
-        const defaultStatus = statusesRes.data?.find((s: any) => s.name === "План")
-        if (defaultStatus) {
-          setNewStatusId(defaultStatus.id)
-        }
-        // Устанавливаем сложность по умолчанию «К» для новых строк
-        const defaultDifficulty = (difficultyRes.data || []).find((d: any) => d.difficulty_abbr === 'К')
-        if (defaultDifficulty) {
-          setNewDifficultyId(defaultDifficulty.difficulty_id)
-        } else if ((difficultyRes.data || []).length > 0) {
-          setNewDifficultyId((difficultyRes.data as any[])[0].difficulty_id)
-        }
-        
-        // Обрабатываем данные и нормализуем profiles и статусы
-        const normalizedItems = (rows.data || []).map((item: any) => ({
+        const { data, error } = await supabase.rpc('get_decomposition_bootstrap', { p_section_id: sectionId })
+        if (error) throw error
+        const json = (data as any) as any
+        const cats = json?.categories || []
+        const profs = json?.profiles || []
+        const stats = json?.statuses || []
+        const diffs = json?.difficultyLevels || []
+        const stgs = (json?.stages || []).map((s: any) => ({
+          id: s.decomposition_stage_id as string,
+          name: s.decomposition_stage_name as string,
+          start: (s.decomposition_stage_start as string) || null,
+          finish: (s.decomposition_stage_finish as string) || null,
+          description: (s.decomposition_stage_description as string) || null,
+        }))
+        const rows = (json?.items || []).map((item: any) => ({
           ...item,
           responsible_profile: item.profiles || null,
           status: item.section_statuses || null,
           decomposition_item_stage_id: item.decomposition_item_stage_id || null,
           decomposition_item_difficulty_id: item.decomposition_item_difficulty_id || null,
         })) as DecompositionItemRow[]
-        
-        setItems(normalizedItems)
+        const totals = json?.totals || {}
+        const sectionMeta = json?.sectionMeta || {}
+        const actuals = json?.actuals || []
+
+        setCategories(cats)
+        setProfiles(profs)
+        setStatuses(stats)
+        setDifficultyLevels(diffs)
+        setStages(stgs)
+        setItems(rows)
+        setSectionTotals({
+          planned_hours: Number(totals?.planned_hours || 0),
+          actual_hours: Number(totals?.actual_hours || 0),
+          actual_amount: Number(totals?.actual_amount || 0),
+        })
+        setDepartmentId(sectionMeta?.responsible_department_id || null)
+        setSectionStartDate(sectionMeta?.section_start_date || null)
+        // дефолты
+        const defaultStatus = stats.find((s: any) => s.name === 'План')
+        if (defaultStatus) setNewStatusId(defaultStatus.id)
+        const defaultDifficulty = (diffs || []).find((d: any) => d.difficulty_abbr === 'К')
+        if (defaultDifficulty) setNewDifficultyId(defaultDifficulty.difficulty_id)
+        else if ((diffs || []).length > 0) setNewDifficultyId(diffs[0].difficulty_id)
+
+        // факт/логи
+        const hoursById: Record<string, number> = {}
+        const countsById: Record<string, number> = {}
+        for (const r of actuals as any[]) {
+          hoursById[r.decomposition_item_id] = Number(r.actual_hours || 0)
+          countsById[r.decomposition_item_id] = Number(r.logs_count || 0)
+        }
+        setActualByItemId(hoursById)
+        setLogsCountByItemId(countsById)
       } catch (error) {
-        console.error("Ошибка загрузки декомпозиции:", error)
-        setNotification("Ошибка загрузки декомпозиции")
+        console.error('Ошибка загрузки декомпозиции (bootstrap):', error)
+        setNotification('Ошибка загрузки декомпозиции')
       } finally {
         setLoading(false)
       }
@@ -304,19 +246,7 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
   }, [sectionId, setNotification])
 
   useEffect(() => {
-    const loadSectionMeta = async () => {
-      if (!sectionId) return
-      const { data, error } = await supabase
-        .from('view_section_hierarchy')
-        .select('section_id, section_start_date, responsible_department_id')
-        .eq('section_id', sectionId)
-        .single()
-      if (!error && data) {
-        setDepartmentId((data as any).responsible_department_id || null)
-        setSectionStartDate((data as any).section_start_date || null)
-      }
-    }
-    loadSectionMeta()
+    // после bootstrap мы положили sectionMeta сразу, поэтому отдельный вызов не нужен
   }, [sectionId])
 
   // Загрузка фактических часов из view для видимых итемов
@@ -328,38 +258,21 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
         return
       }
       const ids = items.map(i => i.decomposition_item_id)
-      const { data, error } = await supabase
-        .from('view_decomposition_item_actuals')
-        .select('decomposition_item_id, actual_hours')
-        .in('decomposition_item_id', ids)
-
-      if (error) {
-        console.error('Ошибка загрузки факта из view:', error)
-      } else {
-        const agg: Record<string, number> = {}
+      try {
+        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: ids })
+        if (error) throw error
+        const hoursById: Record<string, number> = {}
+        const countsById: Record<string, number> = {}
         for (const row of (data as any[]) || []) {
           const key = row.decomposition_item_id as string
-          const hours = Number(row.actual_hours || 0)
-          agg[key] = hours
+          hoursById[key] = Number(row.actual_hours || 0)
+          countsById[key] = Number(row.logs_count || 0)
         }
-        setActualByItemId(agg)
-      }
-
-      // Загружаем количество отчётов по этим же строкам
-      try {
-        const { data: logs, error: logsErr } = await supabase
-          .from('view_work_logs_enriched')
-          .select('decomposition_item_id, work_log_id')
-          .in('decomposition_item_id', ids)
-        if (logsErr) throw logsErr
-        const counts: Record<string, number> = {}
-        for (const row of (logs as any[]) || []) {
-          const key = row.decomposition_item_id as string
-          counts[key] = (counts[key] || 0) + 1
-        }
-        setLogsCountByItemId(counts)
+        setActualByItemId(hoursById)
+        setLogsCountByItemId(countsById)
       } catch (e) {
-        console.error('Ошибка загрузки количества отчётов:', e)
+        console.error('Ошибка агрегации work_logs:', e)
+        setActualByItemId({})
         setLogsCountByItemId({})
       }
     }
@@ -2039,16 +1952,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
             setNotification('Ошибка обновления списка')
           }
           // Обновим сводные по секции
-          const totals = await supabase
-            .from('view_section_decomposition_totals')
-            .select('planned_hours, actual_hours, actual_amount')
-            .eq('section_id', sectionId)
-            .single()
+          const totals = await supabase.rpc('get_section_decomposition_totals', { p_section_id: sectionId })
           if (!totals.error) {
+            const t = (totals.data as any[])?.[0]
             setSectionTotals({
-              planned_hours: Number(totals.data?.planned_hours || 0),
-              actual_hours: Number(totals.data?.actual_hours || 0),
-              actual_amount: Number(totals.data?.actual_amount || 0),
+              planned_hours: Number(t?.planned_hours || 0),
+              actual_hours: Number(t?.actual_hours || 0),
+              actual_amount: Number(t?.actual_amount || 0),
             })
           }
         }}
@@ -2098,16 +2008,13 @@ export function SectionDecompositionTab({ sectionId, compact = false }: SectionD
                 setNotification('Ошибка обновления списка')
               }
               // Обновим сводные по секции
-              const totals = await supabase
-                .from('view_section_decomposition_totals')
-                .select('planned_hours, actual_hours, actual_amount')
-                .eq('section_id', sectionId)
-                .single()
+              const totals = await supabase.rpc('get_section_decomposition_totals', { p_section_id: sectionId })
               if (!totals.error) {
+                const t = (totals.data as any[])?.[0]
                 setSectionTotals({
-                  planned_hours: Number(totals.data?.planned_hours || 0),
-                  actual_hours: Number(totals.data?.actual_hours || 0),
-                  actual_amount: Number(totals.data?.actual_amount || 0),
+                  planned_hours: Number(t?.planned_hours || 0),
+                  actual_hours: Number(t?.actual_hours || 0),
+                  actual_amount: Number(t?.actual_amount || 0),
                 })
               }
               setIsTemplatesOpen(false)

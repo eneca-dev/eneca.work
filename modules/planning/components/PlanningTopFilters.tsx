@@ -1,9 +1,9 @@
-"use client"
+"use client" 
 
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw } from 'lucide-react'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw, Loader2 } from 'lucide-react'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
@@ -44,11 +44,12 @@ export default function PlanningTopFilters() {
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [statusSearch, setStatusSearch] = useState('')
   const [projectSearch, setProjectSearch] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Гарантируем дефолт: отделы включены, разделы выключены при первом монтировании
-  const [__initialized, setInitialized] = useState(false)
+  const [initialized, setInitialized] = useState(false)
   useEffect(() => {
-    if (__initialized) return
+    if (initialized) return
     if (!showDepartments) {
       toggleShowDepartments()
     }
@@ -56,7 +57,7 @@ export default function PlanningTopFilters() {
       toggleShowSections()
     }
     setInitialized(true)
-  }, [__initialized])
+  }, [initialized, showDepartments, showSections, toggleShowDepartments, toggleShowSections])
 
   useEffect(() => {
     const checkCompactMode = () => setIsCompactMode(window.innerWidth < 1200)
@@ -468,6 +469,8 @@ export default function PlanningTopFilters() {
 
       <button
         onClick={async () => {
+          if (isRefreshing) return
+          setIsRefreshing(true)
           try {
             // Сохраняем текущее положение прокрутки страницы
             const scrollY = typeof window !== 'undefined' ? window.scrollY : 0
@@ -483,10 +486,19 @@ export default function PlanningTopFilters() {
               await fetchDepartments()
             }
 
-            // Восстанавливаем раскрытые разделы и отделы
-            expandedSectionIds.forEach((id) => toggleSectionExpanded(id))
+            // Детерминированно восстанавливаем раскрытые разделы и отделы (не переворачиваем уже корректные)
+            const stateAfter = usePlanningStore.getState()
+            expandedSectionIds.forEach((id) => {
+              if (!stateAfter.expandedSections[id]) {
+                toggleSectionExpanded(id)
+              }
+            })
             if (showDepartments) {
-              expandedDepartmentIds.forEach((id) => toggleDepartmentExpanded(id))
+              expandedDepartmentIds.forEach((id) => {
+                if (!stateAfter.expandedDepartments[id]) {
+                  toggleDepartmentExpanded(id)
+                }
+              })
             }
 
             // Восстанавливаем позицию прокрутки после перерисовки
@@ -497,12 +509,20 @@ export default function PlanningTopFilters() {
             }
           } catch (e) {
             console.error('Не удалось обновить данные планирования', e)
+          } finally {
+            setIsRefreshing(false)
           }
         }}
-        className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md"
+        className={`inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md ${isRefreshing ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="Обновить данные"
+        disabled={isRefreshing}
+        aria-busy={isRefreshing}
       >
-        <RotateCcw className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+        {isRefreshing ? (
+          <Loader2 className="h-4 w-4 animate-spin text-slate-600 dark:text-slate-300" />
+        ) : (
+          <RotateCcw className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+        )}
         <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
           Обновить
         </span>

@@ -201,9 +201,9 @@ export const getPermissionDescription = (permission: string): string => {
   
   const moduleLabel = moduleLabels[module] || module
   const actionLabel = actionLabels[action] || action
-  const scopeLabel = scopeLabels[scope || ''] || scope
+  const scopeLabel = scope ? (scopeLabels[scope] ?? scope) : ''
   
-  return `${actionLabel} ${moduleLabel.toLowerCase()} ${scopeLabel}`
+  return `${actionLabel} ${moduleLabel.toLowerCase()}${scopeLabel ? ` ${scopeLabel}` : ''}`
 }
 
 /**

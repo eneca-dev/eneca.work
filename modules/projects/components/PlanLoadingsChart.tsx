@@ -1,4 +1,3 @@
-"use client"
 
 import React, { useMemo } from "react"
 
@@ -169,14 +168,14 @@ export function PlanLoadingsChart({ stageStart, stageFinish, rows, categories, c
                       <span className="text-slate-600 dark:text-slate-300">Ставка: {it.rate}</span>
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      {new Date(it.start).toLocaleDateString('ru-RU')} — {new Date(it.finish).toLocaleDateString('ru-RU')}
+                      {it.startDate.toLocaleDateString('ru-RU')} — {it.finishDate.toLocaleDateString('ru-RU')}
                     </div>
                   </div>
                   <div className="relative w-full h-6 mt-2 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
                       className={"absolute top-0 bottom-0 rounded-sm opacity-90 " + color}
                       style={{ left: `${it.leftPct}%`, width: `${it.widthPct}%` }}
-                      title={`${categoryName(it.categoryId)}: ${new Date(it.start).toLocaleDateString('ru-RU')} — ${new Date(it.finish).toLocaleDateString('ru-RU')}`}
+                      title={`${categoryName(it.categoryId)}: ${it.startDate.toLocaleDateString('ru-RU')} — ${it.finishDate.toLocaleDateString('ru-RU')}`}
                     />
                   </div>
                 </div>

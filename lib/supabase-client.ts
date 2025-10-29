@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
-import type { Section, Loading, PlannedLoading } from "@/modules/planning/types"
+import type { Section, Loading, PlannedLoading, DecompositionStage } from "@/modules/planning/types"
 
 // Используем единый клиент Supabase вместо создания нового
 export const supabase = createClient()
@@ -71,6 +71,7 @@ export interface SectionWithLoadings {
   has_loadings: boolean
   loading_id: string | null
   loading_responsible: string | null
+  loading_stage?: string | null
   loading_start: string | null
   loading_finish: string | null
   loading_rate: number | null
@@ -81,6 +82,8 @@ export interface SectionWithLoadings {
   responsible_last_name: string | null
   responsible_avatar: string | null
   responsible_team_name: string | null
+  // Этапы декомпозиции раздела (подгружаются отдельным запросом)
+  decompositionStages?: DecompositionStage[] | null
   // Доп. поля для плановых загрузок (nullable в view не гарантируется) — получим из отдельного запроса
 }
 
@@ -341,7 +344,7 @@ export async function fetchSectionsWithLoadings(
     console.log("📊 Получено записей из view_sections_with_loadings:", data?.length || 0)
 
     // Группируем данные по разделам и загрузкам
-    const sectionsMap = new Map<string, Section>()
+    const sectionsMap = new Map<string, Section & { decompositionStages: DecompositionStage[] }>()
     const loadingsMap: Record<string, Loading[]> = {}
 
     data?.forEach((item) => {
@@ -381,7 +384,7 @@ export async function fetchSectionsWithLoadings(
       if (sectionItem.loading_id && sectionItem.loading_status === "active") {
         loadingsMap[sectionItem.section_id].push({
           id: sectionItem.loading_id,
-          stageId: (sectionItem as any).loading_stage || undefined,
+          stageId: sectionItem.loading_stage || undefined,
           responsibleId: sectionItem.loading_responsible || "",
           responsibleName:
             sectionItem.responsible_first_name && sectionItem.responsible_last_name

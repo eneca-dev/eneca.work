@@ -452,7 +452,7 @@ export default function ManageStagesDialog(props: {
     setShowPaste(false)
   }
 
-  const byStage = itemsByStageLocal()
+  const byStage = useMemo(() => itemsByStageLocal(), [items])
 
   const body = (
     <>

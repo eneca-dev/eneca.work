@@ -35,7 +35,7 @@ interface TimelineGridProps {
   hasActiveFilters?: boolean // Добавляем новый пропс
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
-  collapseAllDepartments: () => void
+  collapseAllDepartments: () => void 
   refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния
 }
 
@@ -151,6 +151,11 @@ export function TimelineGrid({
   const totalWidth = useMemo(() => {
     return totalFixedWidth + cellWidth * daysToShow
   }, [totalFixedWidth, cellWidth, daysToShow])
+
+  // Предвычисляем индексы разделов для O(1) доступа вместо sections.indexOf(section)
+  const sectionIndexMap = useMemo(() => {
+    return new Map(sections.map((s, i) => [s, i] as const))
+  }, [sections])
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(ROW_HEIGHT * 0.75)
@@ -388,7 +393,7 @@ export function TimelineGrid({
                   <div className="flex-1" />
                 </div>
                 {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
-                  const index = sections.indexOf(section)
+                  const index = sectionIndexMap.get(section) ?? 0
                   return (
                     <TimelineRow
                       key={section.id}
