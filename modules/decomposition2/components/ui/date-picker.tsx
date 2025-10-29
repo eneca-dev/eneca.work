@@ -202,7 +202,7 @@ export function DatePicker({
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center justify-between gap-2 rounded-full border-0 px-3 text-xs h-6 shadow-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-2",
+          "inline-flex items-center justify-between gap-1 rounded-full border-0 px-3 text-xs h-6 shadow-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-2",
           plainTrigger ? "bg-transparent hover:bg-muted/30 text-foreground" : "bg-muted/60 hover:bg-muted/80",
           triggerClassName
         )}

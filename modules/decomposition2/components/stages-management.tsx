@@ -1,10 +1,12 @@
 "use client";
 
 import type React from "react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -45,80 +47,31 @@ type Decomposition = {
 type Stage = {
   id: string;
   name: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   decompositions: Decomposition[];
 };
 
-// Опции для выпадающих списков
-const TYPE_OF_WORK_OPTIONS = ["Аналитика", "Проектирование", "Разработка", "Тестирование", "Документация"];
-const DIFFICULTY_OPTIONS = ["Низкая", "Средняя", "Высокая"];
-const STATUS_OPTIONS = ["Не начато", "В работе", "Завершено", "Приостановлено"];
-const RESPONSIBLE_OPTIONS = ["Иванов И.И.", "Петров П.П.", "Сидоров С.С.", "Козлов К.К.", "Смирнов С.М."];
+// Дополнительные типы из БД
+type WorkCategory = { work_category_id: string; work_category_name: string };
+type DifficultyLevel = { difficulty_id: string; difficulty_abbr: string; difficulty_definition: string };
+type SectionStatus = { id: string; name: string; color: string; description: string | null };
+type Profile = { user_id: string; first_name: string; last_name: string; email: string };
+type Employee = {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  email: string;
+  position_name: string | null;
+  avatar_url: string | null;
+  team_name: string | null;
+  department_name: string | null;
+  employment_rate: number | null;
+};
 
-// Моковые данные
-const initialStages: Stage[] = [
-  {
-    id: "1",
-    name: "Подготовительный этап",
-    startDate: "2024-01-01",
-    endDate: "2024-01-31",
-    decompositions: [
-      {
-        id: "1-1",
-        description: "Анализ требований",
-        typeOfWork: "Аналитика",
-        difficulty: "Средняя",
-        responsible: "Иванов И.И.",
-        plannedHours: 40,
-        progress: 100,
-        status: "Завершено",
-        completionDate: "2024-01-15",
-      },
-      {
-        id: "1-2",
-        description: "Проектирование архитектуры",
-        typeOfWork: "Проектирование",
-        difficulty: "Высокая",
-        responsible: "Петров П.П.",
-        plannedHours: 60,
-        progress: 80,
-        status: "В работе",
-        completionDate: "2024-01-25",
-      },
-    ],
-  },
-  {
-    id: "2",
-    name: "Разработка",
-    startDate: "2024-02-01",
-    endDate: "2024-03-31",
-    decompositions: [
-      {
-        id: "2-1",
-        description: "Разработка бэкенда",
-        typeOfWork: "Разработка",
-        difficulty: "Высокая",
-        responsible: "Сидоров С.С.",
-        plannedHours: 120,
-        progress: 50,
-        status: "В работе",
-        completionDate: "2024-03-15",
-      },
-      {
-        id: "2-2",
-        description: "Разработка фронтенда",
-        typeOfWork: "Разработка",
-        difficulty: "Средняя",
-        responsible: "Козлов К.К.",
-        plannedHours: 100,
-        progress: 30,
-        status: "В работе",
-        completionDate: "2024-03-20",
-      },
-    ],
-  },
-];
+// Пропсы
+type StagesManagementProps = { sectionId: string };
 
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, string> = {
@@ -162,6 +115,12 @@ function SortableStage({
   focusedDecompositionId,
   pendingNewDecompositionId,
   onDecompositionInteract,
+  typeOfWorkOptions,
+  difficultyOptions,
+  responsibleOptions,
+  statusOptions,
+  employees,
+  formatProfileLabel,
 }: {
   stage: Stage;
   selectedStages: Set<string>;
@@ -171,13 +130,19 @@ function SortableStage({
   toggleDecompositionSelection: (id: string) => void;
   deleteStage: (id: string) => void;
   deleteDecomposition: (stageId: string, decompId: string) => void;
-  addDecomposition: (stageId: string, opts?: { pending?: boolean }) => void;
+  addDecomposition: (stageId: string, opts?: { pending?: boolean; initialCompletionDate?: string }) => void;
   updateStage: (stageId: string, updates: Partial<Stage>) => void;
   updateDecomposition: (stageId: string, decompId: string, updates: Partial<Decomposition>) => void;
   onDecompositionDragEnd: (stageId: string, event: DragEndEvent) => void;
   focusedDecompositionId: string | null;
   pendingNewDecompositionId: string | null;
   onDecompositionInteract: (decompId: string) => void;
+  typeOfWorkOptions: string[];
+  difficultyOptions: string[];
+  responsibleOptions: string[];
+  statusOptions: string[];
+  employees: Employee[];
+  formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
@@ -285,7 +250,7 @@ function SortableStage({
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground/70">
           <DatePicker
-            value={stage.startDate}
+            value={stage.startDate ?? ""}
             onChange={(val) => updateStage(stage.id, { startDate: val })}
             triggerClassName="h-6 px-2"
             openOnToday
@@ -293,7 +258,7 @@ function SortableStage({
           />
           <span className="text-muted-foreground/40">→</span>
           <DatePicker
-            value={stage.endDate}
+            value={stage.endDate ?? ""}
             onChange={(val) => updateStage(stage.id, { endDate: val })}
             triggerClassName="h-6 px-2"
             openOnToday
@@ -388,9 +353,15 @@ function SortableStage({
                     onDelete={deleteDecomposition}
                     onUpdate={updateDecomposition}
                     autoFocus={focusedDecompositionId === decomp.id}
-                    onDateConfirmed={() => addDecomposition(stage.id, { pending: true })}
+                    onDateConfirmed={(val) => addDecomposition(stage.id, { pending: true, initialCompletionDate: val })}
                     onInteract={onDecompositionInteract}
                     isPendingNew={pendingNewDecompositionId === decomp.id}
+                    typeOfWorkOptions={typeOfWorkOptions}
+                    difficultyOptions={difficultyOptions}
+                    responsibleOptions={responsibleOptions}
+                    statusOptions={statusOptions}
+                    employees={employees}
+                    formatProfileLabel={formatProfileLabel}
                   />
                 ))}
               </SortableContext>
@@ -425,6 +396,12 @@ function SortableDecompositionRow({
   onDateConfirmed,
   onInteract,
   isPendingNew,
+  typeOfWorkOptions,
+  difficultyOptions,
+  responsibleOptions,
+  statusOptions,
+  employees,
+  formatProfileLabel,
 }: {
   decomposition: Decomposition;
   stageId: string;
@@ -435,9 +412,15 @@ function SortableDecompositionRow({
   onDelete: (stageId: string, decompId: string) => void;
   onUpdate: (stageId: string, decompId: string, updates: Partial<Decomposition>) => void;
   autoFocus: boolean;
-  onDateConfirmed: () => void;
+  onDateConfirmed: (dateISO: string) => void;
   onInteract: (decompId: string) => void;
   isPendingNew: boolean;
+  typeOfWorkOptions: string[];
+  difficultyOptions: string[];
+  responsibleOptions: string[];
+  statusOptions: string[];
+  employees: Employee[];
+  formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: decomposition.id,
@@ -458,6 +441,87 @@ function SortableDecompositionRow({
   const lastClosedSelectRef = useRef<string | null>(null);
   const [interacted, setInteracted] = useState(false);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>(decomposition.responsible || "");
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState<boolean>(false);
+  const responsibleContainerRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ left: number; top: number; width: number; openUp: boolean }>({ left: 0, top: 0, width: 0, openUp: false });
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearchTerm.trim().toLowerCase();
+    const list = (employees || []).filter((emp) => {
+      if (!q) return true;
+      return (
+        (emp.full_name || `${emp.first_name} ${emp.last_name}`)?.toLowerCase().includes(q) ||
+        (emp.email || '').toLowerCase().includes(q)
+      );
+    });
+    return list.slice(0, 10);
+  }, [employees, employeeSearchTerm]);
+  const updateDropdownPosition = useCallback(() => {
+    const el = responsibleContainerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const openUp = (window.innerHeight - rect.bottom) < 260;
+    const computedTop = openUp ? Math.max(8, rect.top - 260) : rect.bottom + 4;
+    setDropdownPos({ left: rect.left, top: computedTop, width: rect.width, openUp });
+  }, []);
+  useEffect(() => {
+    if (!showEmployeeDropdown) return;
+    updateDropdownPosition();
+    const handler = () => updateDropdownPosition();
+    window.addEventListener("scroll", handler, true);
+    window.addEventListener("resize", handler);
+    return () => {
+      window.removeEventListener("scroll", handler, true);
+      window.removeEventListener("resize", handler);
+    };
+  }, [showEmployeeDropdown, updateDropdownPosition]);
+  useEffect(() => {
+    if (showEmployeeDropdown) {
+      setHighlightedIndex(filteredEmployees.length > 0 ? 0 : -1);
+    }
+  }, [employeeSearchTerm, showEmployeeDropdown, filteredEmployees.length]);
+  useEffect(() => {
+    if (!showEmployeeDropdown) return;
+    if (highlightedIndex < 0) return;
+    const el = dropdownRef.current?.querySelector(`[data-index="${highlightedIndex}"]`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightedIndex, showEmployeeDropdown]);
+  useEffect(() => {
+    if (!showEmployeeDropdown) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (responsibleContainerRef.current?.contains(t)) return;
+      if (dropdownRef.current?.contains(t)) return;
+      setShowEmployeeDropdown(false);
+      setOpenResponsible(false);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [showEmployeeDropdown]);
+  useEffect(() => {
+    setEmployeeSearchTerm(decomposition.responsible || "");
+  }, [decomposition.responsible]);
+
+  const selectEmployee = useCallback((emp: Employee) => {
+    const label = formatProfileLabel({ first_name: emp.first_name, last_name: emp.last_name, email: emp.email });
+    onUpdate(stageId, decomposition.id, { responsible: label });
+    setEmployeeSearchTerm(label);
+    markInteracted();
+    setShowEmployeeDropdown(false);
+    setOpenResponsible(false);
+    setTimeout(() => {
+      if (plannedHoursInputRef.current) {
+        plannedHoursInputRef.current.focus();
+        plannedHoursInputRef.current.select?.();
+      } else {
+        focusNextFrom(responsibleTriggerRef.current);
+      }
+    }, 50);
+  }, [formatProfileLabel, onUpdate, stageId, decomposition.id]);
   useEffect(() => {
     const el = descriptionRef.current;
     if (!el) return;
@@ -585,7 +649,7 @@ function SortableDecompositionRow({
           }}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full bg-muted/60 hover:bg-muted/80 w-[120px] ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full bg-muted/60 hover:bg-muted/80 w-[160px] whitespace-nowrap ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "typeOfWork") {
@@ -611,7 +675,7 @@ function SortableDecompositionRow({
               } catch {}
             }}
           >
-            {TYPE_OF_WORK_OPTIONS.map((option) => (
+            {typeOfWorkOptions.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
@@ -663,7 +727,7 @@ function SortableDecompositionRow({
               } catch {}
             }}
           >
-            {DIFFICULTY_OPTIONS.map((option) => (
+            {difficultyOptions.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
@@ -672,61 +736,92 @@ function SortableDecompositionRow({
         </Select>
       </td>
       <td className="py-1.5 px-2">
-        <Select
-          open={openResponsible}
-          onOpenChange={(v) => {
-            setOpenResponsible(v);
-            if (!v) lastClosedSelectRef.current = "responsible";
-          }}
-          value={decomposition.responsible}
-          onValueChange={(value) => {
-            onUpdate(stageId, decomposition.id, { responsible: value });
-            markInteracted();
-            setOpenResponsible(false);
-            setTimeout(() => {
-              if (plannedHoursInputRef.current) {
-                plannedHoursInputRef.current.focus();
-                plannedHoursInputRef.current.select?.();
-              } else {
-                focusNextFrom(responsibleTriggerRef.current);
-              }
-            }, 50);
-          }}
-        >
-          <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full bg-muted/60 hover:bg-muted/80 w-[130px] ${openResponsible ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if (lastClosedSelectRef.current === "responsible") {
-                lastClosedSelectRef.current = null;
-                return;
-              }
+        <div className="relative w-[200px]" ref={responsibleContainerRef}>
+          <input
+            type="text"
+            value={employeeSearchTerm}
+            onChange={(e) => {
+              setEmployeeSearchTerm(e.target.value);
+              setShowEmployeeDropdown(true);
               setOpenResponsible(true);
+              updateDropdownPosition();
+              setHighlightedIndex(0);
             }}
-            ref={responsibleTriggerRef as unknown as React.Ref<HTMLButtonElement>}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            onPointerDownOutside={() => {
-              try {
-                responsibleTriggerRef.current?.blur();
-              } catch {}
+            onFocus={() => {
+              setShowEmployeeDropdown(true);
+              setOpenResponsible(true);
+              updateDropdownPosition();
             }}
-            onCloseAutoFocus={(e) => {
-              e.preventDefault();
-              try {
-                responsibleTriggerRef.current?.blur();
-              } catch {}
+            onBlur={() => {
+              // Закрытие обрабатывается глобальным обработчиком mousedown
             }}
-          >
-            {RESPONSIBLE_OPTIONS.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            placeholder="Поиск сотрудника..."
+            className="h-6 w-full border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-3 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!showEmployeeDropdown) {
+                  setShowEmployeeDropdown(true);
+                  setOpenResponsible(true);
+                  updateDropdownPosition();
+                }
+                setHighlightedIndex((idx) => {
+                  const next = filteredEmployees.length === 0 ? -1 : (idx + 1) % filteredEmployees.length;
+                  return next;
+                });
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!showEmployeeDropdown) {
+                  setShowEmployeeDropdown(true);
+                  setOpenResponsible(true);
+                  updateDropdownPosition();
+                }
+                setHighlightedIndex((idx) => {
+                  if (filteredEmployees.length === 0) return -1;
+                  const next = idx <= 0 ? filteredEmployees.length - 1 : idx - 1;
+                  return next;
+                });
+              } else if (e.key === 'Enter') {
+                if (filteredEmployees.length > 0) {
+                  const index = highlightedIndex >= 0 ? highlightedIndex : 0;
+                  const emp = filteredEmployees[index];
+                  if (emp) selectEmployee(emp);
+                }
+              } else if (e.key === 'Escape') {
+                setShowEmployeeDropdown(false);
+                setOpenResponsible(false);
+              }
+            }}
+          />
+          {showEmployeeDropdown && openResponsible && createPortal(
+            <div
+              ref={dropdownRef}
+              className="z-[1000] rounded-md border border-border/60 bg-popover text-popover-foreground shadow-sm"
+              style={{ position: "fixed", left: dropdownPos.left, top: dropdownPos.top, width: dropdownPos.width, maxHeight: 240, overflowY: "auto" }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {filteredEmployees.map((emp, idx) => {
+                const disp = emp.full_name || `${emp.first_name} ${emp.last_name}` || emp.email;
+                const isActive = idx === highlightedIndex;
+                return (
+                  <button
+                    key={emp.user_id}
+                    data-index={idx}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex flex-col items-start gap-0.5 ${isActive ? 'bg-muted/70' : 'hover:bg-muted/60'}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectEmployee(emp);
+                    }}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                  >
+                    <span className="whitespace-normal break-words leading-snug">{disp}</span>
+                    <span className="text-[10px] text-muted-foreground leading-snug">{emp.position_name || ''}</span>
+                  </button>
+                );
+              })}
+            </div>, document.body)
+          }
+        </div>
       </td>
       <td className="py-1.5 px-2">
         <Input
@@ -841,7 +936,7 @@ function SortableDecompositionRow({
               } catch {}
             }}
           >
-            {STATUS_OPTIONS.map((option) => (
+            {statusOptions.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
@@ -855,11 +950,9 @@ function SortableDecompositionRow({
           onChange={(val) => {
             onUpdate(stageId, decomposition.id, { completionDate: val });
             markInteracted();
-            setTimeout(() => {
-              onDateConfirmed();
-            }, 30);
+            onDateConfirmed(val);
           }}
-          triggerClassName="w-[125px]"
+          triggerClassName="w-[110px] px-2"
           onKeyDown={handleKeyDown}
           triggerRef={completionDateTriggerRef as unknown as React.Ref<HTMLButtonElement>}
         />
@@ -878,8 +971,15 @@ function SortableDecompositionRow({
   );
 }
 
-export default function StagesManagement() {
-  const [stages, setStages] = useState<Stage[]>(initialStages);
+export default function StagesManagement({ sectionId }: StagesManagementProps) {
+  const supabase = useMemo(() => createClient(), []);
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [categories, setCategories] = useState<WorkCategory[]>([]);
+  const [difficulties, setDifficulties] = useState<DifficultyLevel[]>([]);
+  const [statuses, setStatuses] = useState<SectionStatus[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(false);
   const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set());
   const [selectedDecompositions, setSelectedDecompositions] = useState<Set<string>>(new Set());
   const [showPasteDialog, setShowPasteDialog] = useState(false);
@@ -889,6 +989,7 @@ export default function StagesManagement() {
   const [focusedDecompositionId, setFocusedDecompositionId] = useState<string | null>(null);
   const [pendingNewDecomposition, setPendingNewDecomposition] = useState<{ stageId: string; decompId: string } | null>(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -897,27 +998,200 @@ export default function StagesManagement() {
     })
   );
 
-  const addStage = () => {
-    const newStage: Stage = {
-      id: Date.now().toString(),
-      name: "Новый этап",
-      startDate: new Date().toISOString().split("T")[0],
-      endDate: new Date().toISOString().split("T")[0],
-      decompositions: [],
-    };
-    setStages([...stages, newStage]);
-  };
-
-  const deleteStage = (stageId: string) => {
-    setStages(stages.filter((s) => s.id !== stageId));
-    setSelectedStages((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(stageId);
-      return newSet;
+  // Маппинги имён в id для БД
+  const categoryNameToId = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach(c => map.set(c.work_category_name, c.work_category_id));
+    return map;
+  }, [categories]);
+  const difficultyNameToId = useMemo(() => {
+    const map = new Map<string, string>();
+    difficulties.forEach(d => map.set(d.difficulty_abbr, d.difficulty_id));
+    return map;
+  }, [difficulties]);
+  const statusNameToId = useMemo(() => {
+    const map = new Map<string, string>();
+    statuses.forEach(s => map.set(s.name, s.id));
+    return map;
+  }, [statuses]);
+  const { profileNameToId, responsibleOptions, formatProfileLabel } = useMemo(() => {
+    const nameCounts = new Map<string, number>();
+    profiles.forEach((p) => {
+      const base = `${p.first_name} ${p.last_name}`.trim() || p.email;
+      nameCounts.set(base, (nameCounts.get(base) || 0) + 1);
     });
+
+    const map = new Map<string, string>();
+    const labels: string[] = [];
+    const mkLabel = (p: { first_name: string; last_name: string; email: string | null | undefined }) => {
+      const base = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || (p.email ?? '');
+      const label = (nameCounts.get(base)! > 1 && p.email) ? `${base} (${p.email})` : base;
+      return label;
+    };
+    profiles.forEach((p) => {
+      const label = mkLabel(p);
+      map.set(label, p.user_id);
+      labels.push(label);
+    });
+    return { profileNameToId: map, responsibleOptions: labels, formatProfileLabel: mkLabel };
+  }, [profiles]);
+
+  const typeOfWorkOptions = useMemo(() => categories.map(c => c.work_category_name), [categories]);
+  const difficultyOptions = useMemo(() => difficulties.map(d => d.difficulty_abbr), [difficulties]);
+  const statusOptions = useMemo(() => statuses.map(s => s.name), [statuses]);
+  // responsibleOptions формируются вместе с profileNameToId, чтобы метки были уникальны
+
+  // Загрузка данных из БД
+  useEffect(() => {
+    if (!sectionId) return;
+    const load = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_decomposition_bootstrap', { p_section_id: sectionId });
+        if (error) throw error;
+        const json: any = data as any;
+        const cats = json?.categories || [];
+        const diffs = json?.difficultyLevels || [];
+        const stats = json?.statuses || [];
+        const profs = json?.profiles || [];
+        const stgsRaw = (json?.stages || []) as any[];
+        const itemsRaw = (json?.items || []) as any[];
+        setCategories(cats);
+        setDifficulties(diffs);
+        setStatuses(stats);
+        setProfiles(profs);
+        // Построим локальные этапы
+        const stageMap = new Map<string, Stage>();
+        // Добавим специальный этап для безэтапных элементов
+        stageMap.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
+        stgsRaw.forEach(s => {
+          stageMap.set(s.decomposition_stage_id, {
+            id: s.decomposition_stage_id,
+            name: s.decomposition_stage_name,
+            startDate: s.decomposition_stage_start || null,
+            endDate: s.decomposition_stage_finish || null,
+            decompositions: [],
+          });
+        });
+        itemsRaw.forEach(it => {
+          const stageId = it.decomposition_item_stage_id || '__no_stage__';
+          const stage = stageMap.get(stageId);
+          if (!stage) return;
+          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
+          const statusName = it.section_statuses ? it.section_statuses.name : '';
+          const decomp: Decomposition = {
+            id: it.decomposition_item_id,
+            description: it.decomposition_item_description || '',
+            typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
+            difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
+            responsible: respName,
+            plannedHours: Number(it.decomposition_item_planned_hours || 0),
+            progress: Number(it.decomposition_item_progress || 0),
+            status: statusName || '',
+            completionDate: it.decomposition_item_planned_due_date || new Date().toISOString().split('T')[0],
+          };
+          stage.decompositions.push(decomp);
+        });
+        // Сортировка по order — в itemsRaw он есть, но для простоты оставим текущее добавление
+        setStages(Array.from(stageMap.values()));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('Ошибка загрузки декомпозиции 2:', e);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionId]);
+
+  // Загрузка сотрудников для поиска (view_users)
+  useEffect(() => {
+    let aborted = false;
+    const fetchEmployees = async () => {
+      setIsLoadingEmployees(true);
+      try {
+        const { data, error } = await supabase
+          .from('view_users')
+          .select(`
+            user_id,
+            first_name,
+            last_name,
+            full_name,
+            email,
+            position_name,
+            avatar_url,
+            team_name,
+            department_name,
+            employment_rate
+          `)
+          .order('full_name');
+        if (error) throw error;
+        if (!aborted) setEmployees((data as Employee[]) || []);
+      } catch {
+        if (!aborted) setEmployees([]);
+      } finally {
+        if (!aborted) setIsLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+    return () => {
+      aborted = true;
+    };
+  }, [supabase]);
+
+  const addStage = async () => {
+    try {
+      const nextOrder = (stages
+        .filter(s => s.id !== '__no_stage__')
+        .length) + 1;
+      const { data, error } = await supabase
+        .from('decomposition_stages')
+        .insert({
+          decomposition_stage_section_id: sectionId,
+          decomposition_stage_name: 'Новый этап',
+          decomposition_stage_start: new Date().toISOString().split('T')[0],
+          decomposition_stage_finish: new Date().toISOString().split('T')[0],
+          decomposition_stage_order: nextOrder,
+        })
+        .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish')
+        .single();
+      if (error) throw error;
+      const row = data as any;
+      const newStage: Stage = {
+        id: row.decomposition_stage_id,
+        name: row.decomposition_stage_name,
+        startDate: row.decomposition_stage_start || null,
+        endDate: row.decomposition_stage_finish || null,
+        decompositions: [],
+      };
+      setStages(prev => [...prev, newStage]);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка создания этапа:', e);
+    }
   };
 
-  const addDecomposition = (stageId: string, opts?: { pending?: boolean }) => {
+  const deleteStage = async (stageId: string) => {
+    try {
+      if (stageId === '__no_stage__') return;
+      const { error } = await supabase
+        .from('decomposition_stages')
+        .delete()
+        .eq('decomposition_stage_id', stageId);
+      if (error) throw error;
+      setStages(stages.filter((s) => s.id !== stageId));
+      setSelectedStages((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(stageId);
+        return newSet;
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка удаления этапа:', e);
+    }
+  };
+
+  const addDecomposition = async (stageId: string, opts?: { pending?: boolean; initialCompletionDate?: string }) => {
     const stageRef = stages.find((s) => s.id === stageId);
     if (opts?.pending && stageRef) {
       const hasEmpty = stageRef.decompositions.some((d) => (d.description ?? "").trim() === "");
@@ -925,48 +1199,88 @@ export default function StagesManagement() {
         return;
       }
     }
+    try {
+      const nextOrder = (stageRef?.decompositions.length || 0);
+      // дефолты из списков
+      const defCategoryName = typeOfWorkOptions[0] || '';
+      const defCategoryId = categoryNameToId.get(defCategoryName) || null;
+      const defDifficultyName = difficultyOptions[0] || '';
+      const defDifficultyId = defDifficultyName ? (difficultyNameToId.get(defDifficultyName) || null) : null;
+      const defStatusName = statusOptions[0] || '';
+      const defStatusId = defStatusName ? (statusNameToId.get(defStatusName) || null) : null;
 
-    const newId = `${stageId}-${Date.now()}`;
-    const newDecomposition: Decomposition = {
-      id: newId,
-      description: "",
-      typeOfWork: "Разработка",
-      difficulty: "Средняя",
-      responsible: "",
-      plannedHours: 0,
-      progress: 0,
-      status: "Не начато",
-      completionDate: new Date().toISOString().split("T")[0],
-    };
-
-    setStages(
-      stages.map((stage) =>
-        stage.id === stageId ? { ...stage, decompositions: [...stage.decompositions, newDecomposition] } : stage
-      )
-    );
-    setFocusedDecompositionId(newId);
-    if (opts?.pending) {
-      setPendingNewDecomposition({ stageId, decompId: newId });
-    } else {
-      setPendingNewDecomposition(null);
+      const { data, error } = await supabase
+        .from('decomposition_items')
+        .insert({
+          decomposition_item_section_id: sectionId,
+          decomposition_item_description: '',
+          decomposition_item_work_category_id: defCategoryId,
+          decomposition_item_planned_hours: 0,
+          decomposition_item_order: nextOrder,
+          decomposition_item_planned_due_date: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
+          decomposition_item_responsible: null,
+          decomposition_item_status_id: defStatusId,
+          decomposition_item_progress: 0,
+          decomposition_item_stage_id: stageId === '__no_stage__' ? null : stageId,
+          decomposition_item_difficulty_id: defDifficultyId,
+        })
+        .select('decomposition_item_id')
+        .single();
+      if (error) throw error;
+      const newId = (data as any).decomposition_item_id as string;
+      const newDecomposition: Decomposition = {
+        id: newId,
+        description: '',
+        typeOfWork: defCategoryName,
+        difficulty: defDifficultyName,
+        responsible: '',
+        plannedHours: 0,
+        progress: 0,
+        status: defStatusName,
+        completionDate: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
+      };
+      setStages((prev) =>
+        prev.map((stage) =>
+          stage.id === stageId ? { ...stage, decompositions: [...stage.decompositions, newDecomposition] } : stage
+        )
+      );
+      setFocusedDecompositionId(newId);
+      if (opts?.pending) {
+        setPendingNewDecomposition({ stageId, decompId: newId });
+      } else {
+        setPendingNewDecomposition(null);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка добавления строки:', e);
     }
   };
 
-  const deleteDecomposition = (stageId: string, decompId: string) => {
-    setStages(
-      stages.map((stage) =>
-        stage.id === stageId
-          ? { ...stage, decompositions: stage.decompositions.filter((d) => d.id !== decompId) }
-          : stage
-      )
-    );
-    setSelectedDecompositions((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(decompId);
-      return newSet;
-    });
-    if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompId) {
-      setPendingNewDecomposition(null);
+  const deleteDecomposition = async (stageId: string, decompId: string) => {
+    try {
+      const { error } = await supabase
+        .from('decomposition_items')
+        .delete()
+        .eq('decomposition_item_id', decompId);
+      if (error) throw error;
+      setStages(
+        stages.map((stage) =>
+          stage.id === stageId
+            ? { ...stage, decompositions: stage.decompositions.filter((d) => d.id !== decompId) }
+            : stage
+        )
+      );
+      setSelectedDecompositions((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(decompId);
+        return newSet;
+      });
+      if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompId) {
+        setPendingNewDecomposition(null);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка удаления строки:', e);
     }
   };
 
@@ -988,13 +1302,29 @@ export default function StagesManagement() {
     });
   };
 
-  const updateStage = (stageId: string, updates: Partial<Stage>) => {
+  const updateStage = async (stageId: string, updates: Partial<Stage>) => {
     setStages(stages.map((s) => (s.id === stageId ? { ...s, ...updates } : s)));
+    if (stageId === '__no_stage__') return;
+    try {
+      const payload: any = {};
+      if (updates.name !== undefined) payload.decomposition_stage_name = updates.name;
+      if (updates.startDate !== undefined) payload.decomposition_stage_start = updates.startDate;
+      if (updates.endDate !== undefined) payload.decomposition_stage_finish = updates.endDate;
+      if (Object.keys(payload).length === 0) return;
+      const { error } = await supabase
+        .from('decomposition_stages')
+        .update(payload)
+        .eq('decomposition_stage_id', stageId);
+      if (error) throw error;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка обновления этапа:', e);
+    }
   };
 
-  const updateDecomposition = (stageId: string, decompId: string, updates: Partial<Decomposition>) => {
-    setStages(
-      stages.map((stage) =>
+  const updateDecomposition = async (stageId: string, decompId: string, updates: Partial<Decomposition>) => {
+    setStages((prev) =>
+      prev.map((stage) =>
         stage.id === stageId
           ? {
               ...stage,
@@ -1003,26 +1333,56 @@ export default function StagesManagement() {
           : stage
       )
     );
-  };
-
-  const handleStageDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setStages((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+    try {
+      const payload: any = {};
+      if (updates.description !== undefined) payload.decomposition_item_description = updates.description;
+      if (updates.typeOfWork !== undefined) payload.decomposition_item_work_category_id = categoryNameToId.get(updates.typeOfWork) || null;
+      if (updates.difficulty !== undefined) payload.decomposition_item_difficulty_id = difficultyNameToId.get(updates.difficulty) || null;
+      if (updates.responsible !== undefined) payload.decomposition_item_responsible = updates.responsible ? (profileNameToId.get(updates.responsible) || null) : null;
+      if (updates.plannedHours !== undefined) payload.decomposition_item_planned_hours = Number(updates.plannedHours) || 0;
+      if (updates.progress !== undefined) payload.decomposition_item_progress = Number(updates.progress) || 0;
+      if (updates.status !== undefined) payload.decomposition_item_status_id = statusNameToId.get(updates.status) || null;
+      if (updates.completionDate !== undefined) payload.decomposition_item_planned_due_date = updates.completionDate || null;
+      if (Object.keys(payload).length === 0) return;
+      const { error } = await supabase
+        .from('decomposition_items')
+        .update(payload)
+        .eq('decomposition_item_id', decompId);
+      if (error) throw error;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка обновления строки:', e);
     }
   };
 
-  const handleDecompositionDragEnd = (stageId: string, event: DragEndEvent) => {
+  const handleStageDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setStages((stagesState) =>
-        stagesState.map((stage) => {
+      const oldIndex = stages.findIndex((item) => item.id === active.id);
+      const newIndex = stages.findIndex((item) => item.id === over.id);
+      const updated = arrayMove(stages, oldIndex, newIndex);
+      setStages(updated);
+      try {
+        // пропускаем '__no_stage__'
+        const realStages = updated.filter(s => s.id !== '__no_stage__');
+        await Promise.all(realStages.map((s, idx) => supabase
+          .from('decomposition_stages')
+          .update({ decomposition_stage_order: idx + 1 })
+          .eq('decomposition_stage_id', s.id)
+        ));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('Ошибка обновления порядка этапов:', e);
+      }
+    }
+  };
+
+  const handleDecompositionDragEnd = async (stageId: string, event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const updatedStages = stages.map((stage) => {
           if (stage.id === stageId) {
             const oldIndex = stage.decompositions.findIndex((d) => d.id === active.id);
             const newIndex = stage.decompositions.findIndex((d) => d.id === over.id);
@@ -1032,8 +1392,21 @@ export default function StagesManagement() {
             };
           }
           return stage;
-        })
-      );
+        });
+      setStages(updatedStages);
+      // Обновим порядок в БД
+      try {
+        const target = updatedStages.find((s) => s.id === stageId);
+        const items = target?.decompositions || [];
+        await Promise.all(items.map((it, index) => supabase
+          .from('decomposition_items')
+          .update({ decomposition_item_order: index })
+          .eq('decomposition_item_id', it.id)
+        ));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('Ошибка обновления порядка строк:', e);
+      }
     }
   };
 
@@ -1426,8 +1799,8 @@ export default function StagesManagement() {
   };
 
   return (
-    <div className="min-h-[60vh] bg-background p-4">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-[60vh] bg-background p-4 relative">
+      <div className="w-full">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">Управление этапами</h1>
           <div className="flex gap-2">
@@ -1548,6 +1921,12 @@ export default function StagesManagement() {
                       : null
                   }
                   onDecompositionInteract={handleDecompositionInteract}
+                  typeOfWorkOptions={typeOfWorkOptions}
+                  difficultyOptions={difficultyOptions}
+                  responsibleOptions={responsibleOptions}
+                  statusOptions={statusOptions}
+                  employees={employees}
+                  formatProfileLabel={formatProfileLabel}
                 />
               ))}
             </div>
@@ -1613,6 +1992,11 @@ export default function StagesManagement() {
           </DialogContent>
         </Dialog>
       </div>
+      {isInitialLoading && (
+        <div className="absolute inset-0 z-50 grid place-items-center bg-background/60">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
     </div>
   );
 }

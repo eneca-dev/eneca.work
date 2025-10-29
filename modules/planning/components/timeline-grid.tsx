@@ -99,7 +99,6 @@ export function TimelineGrid({
   // Канонические ширины колонок - единый источник истины
   const COLUMN_WIDTHS = {
     section: 430,  // Ширина для раздела (уменьшена на 10px)
-    project: 170,  // Ширина для проекта (увеличена на 10px)
     object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
@@ -141,11 +140,10 @@ export function TimelineGrid({
   const totalFixedWidth = useMemo(() => {
     return (
       COLUMN_WIDTHS.section + 
-      (columnVisibility.project ? COLUMN_WIDTHS.project : 0) + 
       (columnVisibility.object ? COLUMN_WIDTHS.object : 0)
       // Убираем отсюда stage, startDate, endDate и sectionResponsible, так как они теперь в ячейке раздела
     )
-  }, [columnVisibility.project, columnVisibility.object])
+  }, [columnVisibility.object])
 
   // Вычисляем общую ширину таблицы
   const totalWidth = useMemo(() => {

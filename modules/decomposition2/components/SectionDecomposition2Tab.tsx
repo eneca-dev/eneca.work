@@ -9,11 +9,11 @@ type Props = {
   compact?: boolean;
 };
 
-export default function SectionDecomposition2Tab(_props: Props) {
+export default function SectionDecomposition2Tab(props: Props) {
   return (
     <ToastProvider>
       <div className="p-2">
-        <StagesManagement />
+        <StagesManagement sectionId={props.sectionId} />
       </div>
       <Toaster />
     </ToastProvider>

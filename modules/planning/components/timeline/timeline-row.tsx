@@ -1,7 +1,6 @@
 "use client" 
 
 import React, { useState } from "react"
-import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
@@ -15,7 +14,7 @@ import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
-import { useProjectsStore } from "@/modules/projects/store"
+ 
 
 interface TimelineRowProps {
   section: Section
@@ -50,8 +49,7 @@ export function TimelineRow({
   totalLoadingsBeforeSection,
   onOpenSectionPanel,
 }: TimelineRowProps) {
-  const router = useRouter()
-  const focusProject = useProjectsStore((s) => s.focusProject)
+  
   // Состояние для отслеживания наведения на аватары
   const [hoveredSpecialist, setHoveredSpecialist] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
@@ -123,13 +121,10 @@ export function TimelineRow({
 
   // На фиксированные значения:
   const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
-  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
   const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
-  const stageWidth = 80 // Фиксированная ширина для стадии
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
-  const totalFixedWidth =
-    sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
+  const totalFixedWidth = sectionWidth + (columnVisibility.object ? objectWidth : 0)
   const startDateWidth = 100 // Фиксированная ширина для даты начала
   const endDateWidth = 100 // Фиксированная ширина для даты окончания
   const sectionResponsibleWidth = 120 // Фиксированная ширина для ответственного
@@ -508,46 +503,7 @@ export function TimelineRow({
               </div>
             </div>
 
-            {/* Столбец "Проект" (может быть скрыт) */}
-            {columnVisibility.project && (
-              <div
-                className={cn(
-                  "p-3 border-r transition-colors h-full flex flex-col justify-center",
-                  theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
-                )}
-                style={{
-                  width: `${projectWidth}px`,
-                  minWidth: `${projectWidth}px`,
-                  padding: `${padding}px`,
-                  borderRight: "1px solid",
-                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                }}
-              >
-                {/* Первая строка - проект */}
-                <span
-                  className={cn(
-                    "text-xs truncate block cursor-pointer hover:underline",
-                    theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
-                  )}
-                  title={section.projectId ? "Перейти к проекту" : undefined}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (section.projectId) {
-                      focusProject(section.projectId)
-                      router.push("/dashboard/projects")
-                    }
-                  }}
-                >
-                  {section.projectName || "-"}
-                </span>
-                {/* Вторая строка - объект */}
-                <span className={cn("text-xs truncate block mt-0.5 opacity-75", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                  {section.objectName || "-"}
-                </span>
-              </div>
-            )}
+            
 
             {/* Столбец "Объект" (может быть скрыт) */}
             {columnVisibility.object && (

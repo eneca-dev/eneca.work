@@ -644,7 +644,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         style={{ position: 'fixed', top: '0px', left: '0px', right: '0px', bottom: '0px', margin: '0px', padding: '16px' }}
       >
         <div
-          className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
+          className="w-full max-w-[1400px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Заголовок прилегает к верху */}
@@ -1202,7 +1202,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   })()}
 
                   {/* Кнопка удаления раздела */}
-                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                     <button
                       onClick={() => setShowDeleteModal(true)}
                       className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center gap-1.5 border border-red-200 dark:border-red-800 text-sm"

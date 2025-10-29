@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from "react"
 import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { Search, Eye, EyeOff, Expand, Minimize, Columns3, Users, X } from "lucide-react"
+import { Search, Eye, EyeOff, Expand, Minimize, Users, X } from "lucide-react"
 
 interface TimelineHeaderProps {
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
@@ -45,13 +45,11 @@ export function TimelineHeader({
 }: TimelineHeaderProps) {
   // Состояние для поискового запроса
   const [searchQuery, setSearchQuery] = useState("")
-  // Состояние для поискового запроса по проектам
-  const [projectSearchQuery, setProjectSearchQuery] = useState("")
+  
 
   // Получаем функцию для фильтрации разделов из стора
   const filterSectionsByName = usePlanningStore((state) => state.filterSectionsByName)
-  // Получаем функцию для фильтрации разделов по проекту из стора
-  const filterSectionsByProject = usePlanningStore((state) => state.filterSectionsByProject)
+  
 
   // Обработчик изменения поискового запроса
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,23 +58,17 @@ export function TimelineHeader({
     filterSectionsByName(query)
   }
 
-  // Обработчик изменения поискового запроса по проектам
-  const handleProjectSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value
-    setProjectSearchQuery(query)
-    filterSectionsByProject(query)
-  }
+  
 
   // Сбрасываем поиск при размонтировании компонента
   useEffect(() => {
     return () => {
       filterSectionsByName("")
-      filterSectionsByProject("")
     }
-  }, [filterSectionsByName, filterSectionsByProject])
+  }, [filterSectionsByName])
 
   // Получаем видимость столбцов из стора
-  const { columnVisibility, toggleColumnVisibility } = usePlanningColumnsStore()
+  const { columnVisibility } = usePlanningColumnsStore()
 
 
   // Заменяем сложные расчеты ширины на фиксированные значения
@@ -87,12 +79,9 @@ export function TimelineHeader({
 
   // На фиксированные значения:
   const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
-  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
   const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
 
-  // Также упрощаем расчет общей ширины фиксированных столбцов
-  const totalFixedWidth =
-    sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
+  
 
   // Общие стили для ячеек заголовка
   const headerCellStyle = cn(
@@ -143,41 +132,7 @@ export function TimelineHeader({
             </div>
           </div>
 
-          {/* Заголовок "Проект" (может быть скрыт) */}
-          {columnVisibility.project && (
-            <div
-              className={cn(
-                fixedColumnStyle,
-                theme === "dark" ? "bg-slate-800" : "bg-white",
-              )}
-              style={{
-                width: `${projectWidth}px`,
-                minWidth: `${projectWidth}px`,
-                height: `${headerHeight}px`,
-                padding: `${padding}px`,
-                borderRight: "1px solid",
-                borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-              }}
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                  Проект
-                </div>
-                <button
-                  onClick={() => toggleColumnVisibility('project')}
-                  title='Скрыть колонку "Проект"'
-                  className={cn(
-                    "p-1 rounded hover:bg-opacity-80 transition-colors",
-                    theme === "dark" 
-                      ? "hover:bg-slate-700 text-blue-400 hover:text-blue-300" 
-                      : "hover:bg-slate-100 text-blue-600 hover:text-blue-700"
-                  )}
-                >
-                  <Columns3 size={12} />
-                </button>
-              </div>
-            </div>
-          )}
+          
 
           {/* Заголовок "Объект" (может быть скрыт) */}
           {columnVisibility.object && (
@@ -309,62 +264,7 @@ export function TimelineHeader({
             </div>
           </div>
 
-          {/* Поле поиска для "Проект" */}
-          {columnVisibility.project && (
-            <div
-              className={cn(
-                "border-r border-b border-t flex items-center justify-between px-3",
-                theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
-              )}
-              style={{
-                width: `${projectWidth}px`,
-                minWidth: `${projectWidth}px`,
-                height: `${headerHeight}px`,
-              }}
-            >
-              {/* Добавляем поле поиска по проектам */}
-              <div className="relative flex-1">
-                <div
-                  className={cn(
-                    "absolute inset-y-0 left-0 flex items-center pl-2",
-                    theme === "dark" ? "text-slate-400" : "text-slate-500",
-                  )}
-                >
-                  <Search size={14} />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Поиск проекта..."
-                  value={projectSearchQuery}
-                  onChange={handleProjectSearchChange}
-                  className={cn(
-                    "w-full py-1 pl-8 pr-6 text-xs rounded border",
-                    theme === "dark"
-                      ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400 focus:border-teal-500"
-                      : "bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-teal-500",
-                    "focus:outline-none focus:ring-1 focus:ring-teal-500",
-                  )}
-                />
-                {projectSearchQuery && (
-                  <button
-                    type="button"
-                    aria-label="Очистить"
-                    title="Очистить"
-                    onClick={() => {
-                      setProjectSearchQuery("")
-                      filterSectionsByProject("")
-                    }}
-                    className={cn(
-                      "absolute inset-y-0 right-0 flex items-center pr-2",
-                      theme === "dark" ? "text-slate-400 hover:text-slate-300" : "text-slate-400 hover:text-slate-600",
-                    )}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          
 
           {/* Пустая ячейка для "Объект" */}
           {columnVisibility.object && (
