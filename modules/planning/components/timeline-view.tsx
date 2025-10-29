@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { SectionPanel } from "@/components/modals"
 import { useTimelineAutoRefresh } from "../hooks/useTimelineAutoRefresh"
 import { Pagination } from "./pagination"
+import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
 
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
@@ -106,6 +107,7 @@ useEffect(() => {
   const theme = storeTheme === "system" ? resolvedTheme || "light" : storeTheme
 
   const { setLoading } = useUiStore()
+  const { statuses } = useSectionStatuses()
 
   // Ссылка на контейнер для измерения ширины
   const containerRef = useRef<HTMLDivElement>(null)
@@ -418,6 +420,7 @@ useEffect(() => {
           onClose={handleCloseSectionPanel}
           sectionId={selectedSectionId}
           initialTab={initialSectionTab}
+          statuses={statuses}
         />
       )}
     </div>
