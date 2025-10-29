@@ -209,7 +209,8 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
       deleteStats.tasks_count
     : 0
 
-  const isConfirmationValid = confirmationText === sectionName
+  // Подтверждение теперь происходит без ввода текста, в два шага
+  // Кнопка удаления активна, когда не идет процесс удаления
 
   if (!isOpen) return null
 
@@ -332,7 +333,7 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
             <ModalButton
               variant="danger"
               onClick={handleDelete}
-              disabled={!isConfirmationValid || isDeleting}
+              disabled={isDeleting}
               icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             >
               {isDeleting ? 'Удаление...' : 'Удалить раздел'}
