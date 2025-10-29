@@ -8,7 +8,6 @@ import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { Modal, ModalButton } from '@/components/modals'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 
 interface CreateSectionModalProps {
   isOpen: boolean
@@ -17,6 +16,7 @@ interface CreateSectionModalProps {
   objectName: string
   projectId?: string
   onSuccess: () => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 interface Profile {
@@ -31,7 +31,7 @@ const supabase = createClient()
 // Dropdown configuration constants
 const DROPDOWN_MAX_HEIGHT_PX = 256
 
-export function CreateSectionModal({ isOpen, onClose, objectId, objectName, projectId, onSuccess }: CreateSectionModalProps) {
+export function CreateSectionModal({ isOpen, onClose, objectId, objectName, projectId, onSuccess, statuses }: CreateSectionModalProps) {
   const [sectionName, setSectionName] = useState('')
   const [sectionDescription, setSectionDescription] = useState('')
   const [sectionResponsible, setSectionResponsible] = useState('')
@@ -46,9 +46,8 @@ export function CreateSectionModal({ isOpen, onClose, objectId, objectName, proj
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState<{ left: number; top: number; width: number; openUp: boolean } | null>(null)
   const [range, setRange] = useState<DateRange | null>(null)
-  
+
   const { setNotification } = useUiStore()
-  const { statuses } = useSectionStatuses()
   const noop = () => {}
 
   useEffect(() => {

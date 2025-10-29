@@ -16,8 +16,9 @@ import {
   getTopTeams,
 } from "@/services/org-data-service"
 import { toast } from "@/components/ui/use-toast"
+import * as Sentry from "@sentry/nextjs"
 
-export default function UserAnalytics() {
+function UserAnalytics() {
   const [departmentData, setDepartmentData] = useState<{ name: string; value: number }[]>([])
   const [teamData, setTeamData] = useState<{ name: string; value: number }[]>([])
   const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([])
@@ -36,14 +37,16 @@ export default function UserAnalytics() {
         setIsLoading(true)
 
         // Загрузка данных для аналитики
-        const deptData = (await getUsersByDepartment()) || []
-        const teamData = (await getUsersByTeam()) || []
-        const catData = (await getUsersByCategory()) || []
-        const monthData = (await getUsersJoinedByMonth()) || []
-        const topDepts = (await getTopDepartments()) || []
-        const topTeamsData = (await getTopTeams()) || []
-        const activeCount = (await getActiveUsersCount()) || 0
-        const inactiveCount = (await getInactiveUsersCount()) || 0
+        const [deptData, teamData, catData, monthData, topDepts, topTeamsData, activeCount, inactiveCount] = await Sentry.startSpan({ name: 'Users/UserAnalytics loadAnalytics', op: 'ui.load' }, async () => Promise.all([
+          getUsersByDepartment(),
+          getUsersByTeam(),
+          getUsersByCategory(),
+          getUsersJoinedByMonth(),
+          getTopDepartments(),
+          getTopTeams(),
+          getActiveUsersCount(),
+          getInactiveUsersCount(),
+        ]))
 
         // Преобразование данных в формат для графиков
         // Данные уже приходят в нужном формате {name, value}, просто устанавливаем их
@@ -288,3 +291,5 @@ export default function UserAnalytics() {
     </div>
   )
 }
+
+export default Sentry.withProfiler(UserAnalytics, { name: 'UserAnalytics' })

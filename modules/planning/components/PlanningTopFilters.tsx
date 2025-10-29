@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw, Loader2 } from 'lucide-react'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw, Loader2, Info } from 'lucide-react'
+import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
@@ -15,7 +16,8 @@ import { applyPlanningLocks } from '@/modules/planning/integration/apply-plannin
 
 export default function PlanningTopFilters() {
   const filterStore = useFilterStore()
-  const { statuses } = useSectionStatuses()
+  const statuses = useSectionStatusesStore(state => state.statuses)
+  const loadStatuses = useSectionStatusesStore(state => state.loadStatuses)
   const { startDate, daysToShow, setStartDate, scrollBackward, scrollForward } = usePlanningViewStore()
   const {
     showSections,
@@ -88,7 +90,10 @@ export default function PlanningTopFilters() {
     if (filterStore.projects.length === 0) {
       filterStore.loadProjects(filterStore.selectedManagerId || null)
     }
-  }, [
+    // Загружаем статусы разделов
+    if ((statuses || []).length === 0) {
+      loadStatuses()
+    }  }, [
     filterStore.managers.length,
     filterStore.departments.length,
     filterStore.employees.length,
@@ -98,6 +103,7 @@ export default function PlanningTopFilters() {
     filterStore.loadDepartments,
     filterStore.loadEmployees,
     filterStore.loadProjects,
+    loadStatuses,
   ])
 
   // Каскадная подзагрузка при выборе проекта/стадии
@@ -238,6 +244,7 @@ export default function PlanningTopFilters() {
   }
 
   return (
+    <TooltipProvider>
     <FilterBar title="Планирование" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg" right={(
       <div className="flex items-center gap-1">
         <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] md:text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800" title="Текущий диапазон">
@@ -283,13 +290,25 @@ export default function PlanningTopFilters() {
             )}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[320px] p-0">
+        <DropdownMenuContent align="start" className="w-[320px] p-0 dark:bg-slate-800 dark:border-slate-700">
           <div className="p-2 space-y-2">
             {/* Отдел */}
             <div>
               <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                 <span>Отдел</span>
-                {filterStore.isFilterLocked('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                {filterStore.isFilterLocked('department') && (
+                  <>
+                    <Lock className="h-3 w-3 text-slate-400" />
+                    <UiTooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                        Недостаточно прав для изменения отдела
+                      </TooltipContent>
+                    </UiTooltip>
+                  </>
+                )}
               </div>
               <select
                 value={filterStore.selectedDepartmentId || ''}
@@ -308,7 +327,19 @@ export default function PlanningTopFilters() {
             <div>
               <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                 <span>Команда</span>
-                {filterStore.isFilterLocked('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                {filterStore.isFilterLocked('team') && (
+                  <>
+                    <Lock className="h-3 w-3 text-slate-400" />
+                    <UiTooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                        Недостаточно прав для изменения команды
+                      </TooltipContent>
+                    </UiTooltip>
+                  </>
+                )}
               </div>
               <select
                 value={filterStore.selectedTeamId || ''}
@@ -357,29 +388,13 @@ export default function PlanningTopFilters() {
             )}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[340px] p-0">
+        <DropdownMenuContent align="start" className="w-[340px] p-0 dark:bg-slate-800 dark:border-slate-700">
           <div className="p-2 space-y-2">
             <div className="flex items-center justify-between">
               <div className="text-[10px] text-slate-500">Проектная иерархия</div>
-              <button
-                className="text-[10px] px-2 py-1 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border border-slate-300 dark:border-slate-600 hover:from-slate-100 hover:to-slate-200 dark:hover:from-slate-700 dark:hover:to-slate-600 transition-all duration-200 rounded-md"
-                onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('planning:openProjectManagement')) }}
-              >
-                <Settings className="h-3 w-3" />
-              </button>
             </div>
 
-            {/* Поиск по структуре (локально фильтруем список опций проектов) */}
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Поиск по структуре..."
-                value={projectSearch}
-                onChange={(e) => setProjectSearch(e.target.value)}
-                className="w-full pl-7 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
-              />
-            </div>
+            {/* Поиск по структуре удалён по требованию */}
 
             {/* Менеджер */}
             <div>
@@ -451,7 +466,7 @@ export default function PlanningTopFilters() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Сброс фильтров — кнопка рядом с блоком фильтров */}
+      {/* Сброс фильтров — стиль как в Проектах: перевёрнутая колба + текст */}
       <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
       <button
         onClick={() => filterStore.resetFilters()}
@@ -528,6 +543,7 @@ export default function PlanningTopFilters() {
         </span>
       </button>
     </FilterBar>
+    </TooltipProvider>
   )
 }
 

@@ -23,7 +23,6 @@ import { CreateSectionModal } from './CreateSectionModal'
 import { CreateObjectAssignmentModal } from './CreateObjectAssignmentModal'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { SectionPanel } from '@/components/modals'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { StatusSelector } from '@/modules/statuses-tags/statuses/components/StatusSelector'
 import { StatusManagementModal } from '@/modules/statuses-tags/statuses/components/StatusManagementModal'
 import { CompactStatusSelector } from './CompactStatusSelector'
@@ -40,6 +39,7 @@ import {
   normalizeProjectStatus,
   PROJECT_STATUS_OPTIONS,
 } from '../constants/project-status'
+import { pluralizeSections } from '@/lib/pluralize'
 
 import { SectionDetailTabs } from './SectionDetailTabs'
 
@@ -108,10 +108,12 @@ interface ProjectsTreeProps {
   selectedTeamId?: string | null
   selectedEmployeeId?: string | null
   selectedStatusIds?: string[]
+  selectedProjectStatuses?: string[]
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
   onOpenProjectDashboard?: (project: ProjectNode, e: React.MouseEvent) => void
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 interface TreeNodeProps {
@@ -161,7 +163,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onToggleFavorite,
   disableListAnimations
 }) => {
-  const { focusSectionId, highlightedSectionId, focusProjectId } = useProjectsStore()
+  const { focusSectionId, highlightedSectionId, focusProjectId, focusStageId, focusObjectId } = useProjectsStore()
   const [childrenParent, enableChildrenAnimations] = useAutoAnimate()
   useEffect(() => {
     enableChildrenAnimations(!(disableListAnimations ?? false))
@@ -417,6 +419,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           node.type === 'project' && node.id === focusProjectId
             ? "bg-emerald-50 dark:bg-emerald-900/30 border-b-transparent"
             : undefined,
+          // Подсветка активной стадии при фокусе
+          node.type === 'stage' && node.id === focusStageId
+            ? "bg-emerald-50 dark:bg-emerald-900/30 border-b-transparent"
+            : undefined,
+          // Подсветка активного объекта при фокусе
+          node.type === 'object' && node.id === focusObjectId
+            ? "bg-emerald-50 dark:bg-emerald-900/30 border-b-transparent"
+            : undefined,
           hasChildren ? "cursor-pointer" : "cursor-default",
           // Hover эффекты как в планировании
           "dark:hover:bg-emerald-900/20 hover:bg-emerald-50"
@@ -530,6 +540,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                       disabled={updatingStatus}
                       currentStatusName={node.statusName ?? undefined}
                       currentStatusColor={node.statusColor ?? undefined}
+                      statuses={statuses}
                     />
                   </div>
                 )}
@@ -673,7 +684,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                             )}
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-40 p-0">
+                        <DropdownMenuContent align="start" className="w-40 p-0 dark:bg-slate-800 dark:border-slate-700">
                           {PROJECT_STATUS_OPTIONS.map((opt) => (
                             <DropdownMenuItem key={opt} onClick={() => handleUpdateProjectStatus(opt)}>
                               {getProjectStatusLabel(opt)}
@@ -771,7 +782,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     {countSections(node)}
                   </span>
                   <span className="dark:text-slate-400 text-slate-500">
-                    разделов
+                    {pluralizeSections(countSections(node))}
                   </span>
                 </div>
                 
@@ -850,25 +861,27 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   )
 }
 
-export function ProjectsTree({ 
-  selectedManagerId, 
-  selectedProjectId, 
-  selectedStageId, 
+export function ProjectsTree({
+  selectedManagerId,
+  selectedProjectId,
+  selectedStageId,
   selectedObjectId,
   selectedDepartmentId,
   selectedTeamId,
   selectedEmployeeId,
   selectedStatusIds = [],
+  selectedProjectStatuses = [],
   urlSectionId,
   urlTab,
   externalSearchQuery,
-  onOpenProjectDashboard
+  onOpenProjectDashboard,
+  statuses
 }: ProjectsTreeProps) {
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const latestTreeRef = useRef<ProjectNode[]>([])
   const [rootParent, enableRootAnimations] = useAutoAnimate()
-  const { 
-    expandedNodes, 
+  const {
+    expandedNodes,
     toggleNode: toggleNodeInStore,
     highlightedSectionId,
     clearHighlight,
@@ -876,13 +889,17 @@ export function ProjectsTree({
     clearFocus,
     focusProjectId,
     clearProjectFocus,
+    focusStageId,
+    clearStageFocus,
+    focusObjectId,
+    clearObjectFocus,
     showManagers,
     toggleShowManagers,
     groupByClient,
     toggleGroupByClient
   } = useProjectsStore()
-  const { statuses } = useSectionStatuses()
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [showOnlySections, setShowOnlySections] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   // Удалены локальные refs и dropdown для статусов; управление сверху
@@ -898,6 +915,7 @@ export function ProjectsTree({
   const [selectedObject, setSelectedObject] = useState<ProjectNode | null>(null)
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const [selectedSectionForPanel, setSelectedSectionForPanel] = useState<ProjectNode | null>(null)
+  const [sectionPanelInitialTab, setSectionPanelInitialTab] = useState<'overview' | 'details' | 'comments' | 'decomposition'>('overview')
   const [showCreateStageModal, setShowCreateStageModal] = useState(false)
   const [selectedProjectForStage, setSelectedProjectForStage] = useState<ProjectNode | null>(null)
   const [showCreateObjectModal, setShowCreateObjectModal] = useState(false)
@@ -961,7 +979,7 @@ export function ProjectsTree({
 
   // Глобальное событие для принудительной перезагрузки дерева (после создания проекта и т.п.)
   useEffect(() => {
-    const reload = () => loadTreeData()
+    const reload = () => loadTreeData(true) // true = это обновление, не первая загрузка
     const handleCreated = async (e: any) => {
       // После создания сразу перезагружаем дерево и фокусируемся на созданном узле
       const prevExpanded = new Set(expandedNodes)
@@ -1199,13 +1217,14 @@ export function ProjectsTree({
   useEffect(() => {
     if (!loading && highlightedSectionId && treeData.length > 0) {
       console.log('🎯 Открываем раздел с комментариями:', highlightedSectionId)
-      
+
       const section = findSectionById(highlightedSectionId)
       if (section) {
         console.log('✅ Найден раздел:', section)
         setSelectedSectionForPanel(section)
+        setSectionPanelInitialTab('comments') // Запоминаем, что нужно открыть вкладку комментариев
         setShowSectionPanel(true)
-        
+
         // Очищаем подсветку через 3 секунды
         setTimeout(() => {
           clearHighlight()
@@ -1305,15 +1324,112 @@ export function ProjectsTree({
     }
   }, [loading, focusProjectId, treeData, expandedNodes, toggleNodeInStore, clearProjectFocus])
 
+  // Обработка фокусировки стадии в дереве
+  useEffect(() => {
+    if (!loading && focusStageId && treeData.length > 0) {
+      console.log('🎯 Фокусируем стадию в дереве:', focusStageId)
+      const findNodeById = (nodes: ProjectNode[], targetId: string, targetType: 'stage'): ProjectNode | null => {
+        for (const node of nodes) {
+          if (node.type === targetType && node.id === targetId) return node
+          if (node.children) {
+            const found = findNodeById(node.children, targetId, targetType)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      const stage = findNodeById(treeData, focusStageId, 'stage')
+      if (stage) {
+        const expandPath = (nodes: ProjectNode[], targetId: string, path: string[] = []): string[] | null => {
+          for (const node of nodes) {
+            const newPath = [...path, node.id]
+            if (node.type === 'stage' && node.id === targetId) return newPath
+            if (node.children) {
+              const found = expandPath(node.children, targetId, newPath)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const path = expandPath(treeData, focusStageId) || []
+        path.slice(0, -1).forEach(nodeId => {
+          if (!expandedNodes.has(nodeId)) {
+            toggleNodeInStore(nodeId)
+          }
+        })
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${focusStageId}"]`) as HTMLElement | null
+          if (el) {
+            const HEADER_OFFSET = 88
+            const rect = el.getBoundingClientRect()
+            const targetTop = Math.max(window.scrollY + rect.top - HEADER_OFFSET, 0)
+            window.scrollTo({ top: targetTop, behavior: 'smooth' })
+          }
+        })
+        setTimeout(() => clearStageFocus(), 1200)
+      }
+    }
+  }, [loading, focusStageId, treeData, expandedNodes, toggleNodeInStore, clearStageFocus])
+
+  // Обработка фокусировки объекта в дереве
+  useEffect(() => {
+    if (!loading && focusObjectId && treeData.length > 0) {
+      console.log('🎯 Фокусируем объект в дереве:', focusObjectId)
+      const findNodeById = (nodes: ProjectNode[], targetId: string, targetType: 'object'): ProjectNode | null => {
+        for (const node of nodes) {
+          if (node.type === targetType && node.id === targetId) return node
+          if (node.children) {
+            const found = findNodeById(node.children, targetId, targetType)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      const object = findNodeById(treeData, focusObjectId, 'object')
+      if (object) {
+        const expandPath = (nodes: ProjectNode[], targetId: string, path: string[] = []): string[] | null => {
+          for (const node of nodes) {
+            const newPath = [...path, node.id]
+            if (node.type === 'object' && node.id === targetId) return newPath
+            if (node.children) {
+              const found = expandPath(node.children, targetId, newPath)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const path = expandPath(treeData, focusObjectId) || []
+        path.slice(0, -1).forEach(nodeId => {
+          if (!expandedNodes.has(nodeId)) {
+            toggleNodeInStore(nodeId)
+          }
+        })
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-tree-node-id="${focusObjectId}"]`) as HTMLElement | null
+          if (el) {
+            const HEADER_OFFSET = 88
+            const rect = el.getBoundingClientRect()
+            const targetTop = Math.max(window.scrollY + rect.top - HEADER_OFFSET, 0)
+            window.scrollTo({ top: targetTop, behavior: 'smooth' })
+          }
+        })
+        setTimeout(() => clearObjectFocus(), 1200)
+      }
+    }
+  }, [loading, focusObjectId, treeData, expandedNodes, toggleNodeInStore, clearObjectFocus])
+
   // Обработка URL параметров для прямой навигации к разделу (fallback)
   useEffect(() => {
     if (!loading && urlSectionId && urlTab && treeData.length > 0 && !highlightedSectionId) {
       console.log('🎯 Обрабатываем URL навигацию (fallback):', { urlSectionId, urlTab })
-      
+
       const section = findSectionById(urlSectionId)
       if (section) {
         console.log('✅ Найден раздел по URL:', section)
         setSelectedSectionForPanel(section)
+        setSectionPanelInitialTab(urlTab as any) // Запоминаем вкладку из URL
         setShowSectionPanel(true)
       } else {
         console.warn('⚠️ Раздел не найден по URL:', urlSectionId)
@@ -1321,7 +1437,7 @@ export function ProjectsTree({
     }
   }, [loading, urlSectionId, urlTab, treeData, highlightedSectionId])
 
-  const loadTreeData = async () => {
+  const loadTreeData = async (isRefresh = false) => {
     return Sentry.startSpan(
       {
         op: "projects.load_tree_data",
@@ -1346,8 +1462,17 @@ export function ProjectsTree({
         span.setAttribute("filters.department_id", selectedDepartmentId || "none")
         span.setAttribute("filters.team_id", selectedTeamId || "none")
         span.setAttribute("filters.employee_id", selectedEmployeeId || "none")
-        
-        setLoading(true)
+
+        // При обновлении используем isRefreshing, при первой загрузке - loading
+        if (isRefresh) {
+          setIsRefreshing(true)
+          // Отправляем событие о начале обновления
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('projectsTree:refreshStart'))
+          }
+        } else {
+          setLoading(true)
+        }
         // [DEBUG:PROJECTS] входные фильтры загрузки дерева
         console.log('[DEBUG:PROJECTS] tree:load:inputs', {
           selectedManagerId,
@@ -1359,6 +1484,7 @@ export function ProjectsTree({
           selectedEmployeeId,
           externalSearchQuery,
           selectedStatusIds,
+          selectedProjectStatuses,
         })
         try {
           // Функция построения базового запроса с фильтрами
@@ -1388,6 +1514,10 @@ export function ProjectsTree({
             }
             if (selectedEmployeeId) {
               q = q.eq('section_responsible_id', selectedEmployeeId)
+            }
+            // Фильтр по статусам проектов на уровне запроса, если выбраны
+            if (selectedProjectStatuses && selectedProjectStatuses.length > 0) {
+              q = q.in('project_status', selectedProjectStatuses)
             }
             return q
           }
@@ -1429,12 +1559,11 @@ export function ProjectsTree({
 
           console.log('📊 Данные из view_project_tree с фильтрацией:', data)
 
-          // Дополнительно включаем проекты текущего менеджера без разделов, если активны орг-фильтры
           try {
             const currentUserId = useUserStore.getState().id || null
             const orgFiltersActive = Boolean(selectedDepartmentId || selectedTeamId || selectedEmployeeId)
             const managerFilterAllowsSelf = !selectedManagerId || selectedManagerId === currentUserId
-            if (currentUserId && orgFiltersActive && managerFilterAllowsSelf) {
+            if (currentUserId && !orgFiltersActive && managerFilterAllowsSelf) {
               const { data: ownProjectsNoSections, error: extraErr } = await supabase
                 .from('view_project_tree')
                 .select('*')
@@ -1455,6 +1584,43 @@ export function ProjectsTree({
             }
           } catch (e) {
             console.warn('[DEBUG:PROJECTS] tree:merge own projects failed', e)
+          }
+
+          // Добавляем проекты в статусе draft для гарантированной видимости,
+          // НО только если фильтр статусов проектов пуст ИЛИ явно включает 'draft'.
+          // Исключение: если выбран конкретный проект (selectedProjectId) — не вмешиваемся.
+          try {
+            if (!selectedProjectId) {
+              const allowDrafts = !selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')
+              if (allowDrafts) {
+                let draftQuery = supabase
+                  .from('view_project_tree')
+                  .select('*')
+                  .eq('project_status', 'draft')
+                if (selectedManagerId && selectedManagerId !== 'no-manager') {
+                  draftQuery = draftQuery.eq('manager_id', selectedManagerId)
+                } else if (selectedManagerId === 'no-manager') {
+                  draftQuery = draftQuery.is('manager_id', null)
+                }
+                const { data: draftRows, error: draftErr } = await draftQuery
+
+                if (!draftErr && draftRows && draftRows.length > 0) {
+                  const seen = new Set((data || []).map((r: any) => `${r.project_id}:${r.section_id || 'null'}`))
+                  let added = 0
+                  draftRows.forEach((r: any) => {
+                    const key = `${r.project_id}:${r.section_id || 'null'}`
+                    if (!seen.has(key)) {
+                      data.push(r)
+                      seen.add(key)
+                      added += 1
+                    }
+                  })
+                  console.log('[DEBUG:PROJECTS] tree:merged_drafts', { added })
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[DEBUG:PROJECTS] tree:merge drafts failed', e)
           }
 
       // [DEBUG:PROJECTS] итоги сырого ответа
@@ -1491,7 +1657,15 @@ export function ProjectsTree({
     } catch (error) {
       console.error('❌ Error:', error)
     } finally {
-      setLoading(false)
+      if (isRefresh) {
+        setIsRefreshing(false)
+        // Отправляем событие об окончании обновления
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('projectsTree:refreshEnd'))
+        }
+      } else {
+        setLoading(false)
+      }
     }
     }
     );
@@ -1913,12 +2087,140 @@ export function ProjectsTree({
     console.log('[DEBUG:PROJECTS] tree:filter:start', {
       treeNodes: treeData.length,
       statusFilter: selectedStatusIds,
+      projectStatusFilter: selectedProjectStatuses,
       showOnlySections,
       searchQuery,
     })
 
-    // Сначала применяем фильтр по статусам
+    // Сначала применяем фильтр по статусам проектов (если заданы)
+    const filterByProjectStatus = (nodes: ProjectNode[]): ProjectNode[] => {
+      if (!selectedProjectStatuses || selectedProjectStatuses.length === 0) return nodes
+      const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+        const filtered: ProjectNode[] = []
+        for (const node of nodeList) {
+          let shouldInclude = false
+          let filteredChildren: ProjectNode[] = []
+          if (node.type === 'project') {
+            const nodeStatus = node.projectStatus ? normalizeProjectStatus(node.projectStatus) : undefined
+            shouldInclude = nodeStatus ? selectedProjectStatuses.includes(nodeStatus) : false
+            // даже если проект не проходит, у него могут быть дети; но для чистоты убираем ветку целиком
+          } else if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+          if (shouldInclude) {
+            filtered.push({ ...node, children: node.type === 'project' ? node.children : filteredChildren })
+          }
+        }
+        return filtered
+      }
+      return filterRecursive(nodes)
+    }
+
+    data = filterByProjectStatus(data)
+
+    // Затем применяем фильтр по статусам разделов
     data = filterNodesByStatus(data, selectedStatusIds)
+
+    // Видимость проектов-черновиков (draft) при пустом фильтре статусов проектов
+    // или если фильтр статусов проектов явно включает 'draft'.
+    // Исключения: явный выбор projectId и поиск/onlyFavorites учитываются как раньше.
+    if (!selectedProjectId && (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft'))) {
+      const reintegrateDrafts = (original: ProjectNode[], filtered: ProjectNode[]): ProjectNode[] => {
+        const isDraftProject = (n: ProjectNode) => n.type === 'project' && (normalizeProjectStatus(n.projectStatus) === 'draft')
+
+        // Индексация текущего отфильтрованного дерева по id
+        const filteredIds = new Set<string>()
+        const collectIds = (nodes: ProjectNode[]) => {
+          nodes.forEach(n => {
+            filteredIds.add(n.id)
+            if (n.children && n.children.length > 0) collectIds(n.children)
+          })
+        }
+        collectIds(filtered)
+
+        // Условия включения черновиков
+        const draftsShouldBeIncluded = (p: ProjectNode): boolean => {
+          if (!isDraftProject(p)) return false
+          if (showOnlyFavorites && !p.isFavorite) return false
+          if (selectedManagerId && selectedManagerId !== 'no-manager') {
+            return p.managerId === selectedManagerId
+          }
+          if (selectedManagerId === 'no-manager') {
+            return !p.managerId
+          }
+          return true
+        }
+
+        const matchesSearch = (node: ProjectNode): boolean => {
+          if (!searchQuery || !searchQuery.trim()) return true
+          const q = searchQuery.toLowerCase()
+          const hay = [node.name, node.projectName, node.stageName, node.responsibleName, node.departmentName]
+            .filter(Boolean)
+            .map(s => (s as string).toLowerCase())
+          return hay.some(h => h.includes(q))
+        }
+
+        // Рекурсивное объединение: строим новое поддерево, добавляя недостающие draft-проекты
+        const mergeBranch = (origSiblings: ProjectNode[], filteredSiblings: ProjectNode[]): ProjectNode[] => {
+          // быстрый доступ к узлам filtered по id
+          const filteredMap = new Map<string, ProjectNode>(filteredSiblings.map(n => [n.id, n]))
+          const result: ProjectNode[] = []
+
+          for (const origNode of origSiblings) {
+            const existing = filteredMap.get(origNode.id)
+
+            // Рекурсивно мержим детей (если есть)
+            const existingChildren = existing?.children || []
+            const origChildren = origNode.children || []
+            const mergedChildren = (origChildren.length > 0 || existingChildren.length > 0)
+              ? mergeBranch(origChildren, existingChildren || [])
+              : []
+
+            if (existing) {
+              // Узел уже есть в отфильтрованном дереве — возвращаем его, но с обновлёнными детьми
+              result.push({
+                ...existing,
+                children: mergedChildren.length > 0 ? mergedChildren : existing.children
+              })
+              continue
+            }
+
+            // Узла нет: решаем, включать ли его
+            let shouldInclude = false
+            if (origNode.type === 'project') {
+              shouldInclude = draftsShouldBeIncluded(origNode) && matchesSearch(origNode) && !filteredIds.has(origNode.id)
+            } else {
+              shouldInclude = mergedChildren.length > 0
+            }
+
+            if (shouldInclude) {
+              // Клонируем оригинальный узел, приклеиваем соответствующие (уже смерженные) дочерние
+              const cloned: ProjectNode = {
+                ...origNode,
+                children: origNode.type === 'project' ? origNode.children : (mergedChildren.length > 0 ? mergedChildren : undefined)
+              }
+              result.push(cloned)
+
+              // Обновим множество id, чтобы не допустить последующих дублей
+              const stack: ProjectNode[] = [cloned]
+              while (stack.length) {
+                const cur = stack.pop()!
+                filteredIds.add(cur.id)
+                if (cur.children && cur.children.length > 0) stack.push(...cur.children)
+              }
+            }
+          }
+
+          return result
+        }
+
+        const merged = mergeBranch(original, filtered)
+        return merged
+      }
+
+      data = reintegrateDrafts(treeData, data)
+    }
 
     // Затем применяем фильтр "только разделы"
     if (showOnlySections) {
@@ -2002,6 +2304,7 @@ export function ProjectsTree({
   const handleOpenSection = (section: ProjectNode, e: React.MouseEvent) => {
     e.stopPropagation() // Предотвращаем раскрытие узла
     setSelectedSectionForPanel(section)
+    setSectionPanelInitialTab('overview') // По умолчанию открываем вкладку "Общее"
     setShowSectionPanel(true)
   }
 
@@ -2031,7 +2334,8 @@ export function ProjectsTree({
     setShowCreateAssignmentModal(true)
   }
 
-  if (loading) {
+  // Показываем индикатор загрузки только при первой загрузке, не при обновлении
+  if (loading && !isRefreshing) {
     return (
       <div className="bg-white dark:bg-slate-900 border-b dark:border-b-slate-700 border-b-slate-200 overflow-hidden">
         <div className="p-8 text-center">
@@ -2164,9 +2468,11 @@ export function ProjectsTree({
           onClose={() => {
             setShowSectionPanel(false)
             setSelectedSectionForPanel(null)
+            setSectionPanelInitialTab('overview') // Сбрасываем при закрытии
           }}
           sectionId={selectedSectionForPanel.id}
-          initialTab={highlightedSectionId ? 'comments' : (urlTab || 'overview')}
+          initialTab={sectionPanelInitialTab}
+          statuses={statuses}
         />
       )}
 
@@ -2216,6 +2522,7 @@ export function ProjectsTree({
           onSuccess={() => {
             loadTreeData() // Перезагружаем данные после создания раздела
           }}
+          statuses={statuses}
         />
       )}
 

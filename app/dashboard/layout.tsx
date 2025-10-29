@@ -14,6 +14,7 @@ import { UserPermissionsSyncProvider, useUserPermissionsSync } from "@/modules/p
 import { PermissionsErrorBoundary } from "@/modules/permissions/components/PermissionsErrorBoundary"
 import { NotificationsProvider } from "@/modules/notifications/components/NotificationsProvider"
 import { useSidebarState } from "@/hooks/useSidebarState"
+import { setSentryUser, clearSentryUser } from "@/utils/sentry"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
@@ -21,8 +22,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mounted, setMounted] = useState(false)
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarState()
+  const userId = useUserStore((state) => state.id)
   const name = useUserStore((state) => state.name)
   const email = useUserStore((state) => state.email)
+  const profile = useUserStore((state) => state.profile)
   const isAuthenticated = useUserStore((state) => state.isAuthenticated)
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
@@ -190,6 +193,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setMounted(true)
     }
   }, [mounted, fetchUser])
+
+  // Устанавливаем пользователя в Sentry при изменении данных
+  useEffect(() => {
+    if (mounted && isAuthenticated && userId && email) {
+      const firstName = profile?.firstName || profile?.first_name
+      const lastName = profile?.lastName || profile?.last_name
+      setSentryUser(userId, email, firstName, lastName)
+    } else if (mounted && !isAuthenticated) {
+      // Очищаем данные пользователя при выходе
+      clearSentryUser()
+    }
+  }, [mounted, isAuthenticated, userId, email, profile])
 
   if (!mounted) {
     return (

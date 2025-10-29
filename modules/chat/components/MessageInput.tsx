@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send } from 'lucide-react'
+import { Send, Sparkles } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface MessageInputProps {
   onSendMessage: (message: string) => void
@@ -36,6 +43,42 @@ export function MessageInput({ onSendMessage, isLoading, input, setInput }: Mess
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 rounded-b-xl">
       <div className="flex items-center space-x-2">
+        {/* Меню быстрых операций */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="p-2 rounded-lg border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
+              title="Быстрые операции"
+              aria-label="Быстрые операции"
+              disabled={isLoading}
+            >
+              <Sparkles size={16} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" sideOffset={6}>
+            <DropdownMenuLabel>Быстрые операции</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => {
+                if (!isLoading) {
+                  onSendMessage('план на день')
+                  setInput('')
+                }
+              }}
+            >
+              План на день
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                if (!isLoading) {
+                  onSendMessage('собрать отчёт')
+                  setInput('')
+                }
+              }}
+            >
+              Собрать отчёт
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <textarea
           ref={textareaRef}
           value={input}

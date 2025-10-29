@@ -6,6 +6,7 @@ import { AlertTriangle, Trash2 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
+import * as Sentry from "@sentry/nextjs"
 
 interface DeleteConfirmModalProps {
   open: boolean
@@ -16,6 +17,7 @@ interface DeleteConfirmModalProps {
   idField: string
   entityId: string
   onSuccess: () => void
+  onConfirm?: () => Promise<void>
 }
 
 export default function DeleteConfirmModal({
@@ -26,7 +28,8 @@ export default function DeleteConfirmModal({
   table,
   idField,
   entityId,
-  onSuccess
+  onSuccess,
+  onConfirm
 }: DeleteConfirmModalProps) {
   const [loading, setLoading] = useState(false)
 
@@ -34,20 +37,23 @@ export default function DeleteConfirmModal({
     setLoading(true)
 
     try {
-      const supabase = createClient()
-      
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq(idField, entityId)
-
-      if (error) throw error
+      if (onConfirm) {
+        await onConfirm()
+      } else {
+        const supabase = createClient()
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq(idField, entityId)
+        if (error) throw error
+      }
 
       toast.success("Запись успешно удалена")
       onSuccess()
       onOpenChange(false)
     } catch (error) {
       console.error("Error deleting:", error instanceof Error ? error.message : error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'DeleteConfirmModal', action: 'delete_entity', error_type: 'unexpected' }, extra: { table, idField, entityId } })
       toast.error("Произошла ошибка при удалении")
     } finally {
       setLoading(false)

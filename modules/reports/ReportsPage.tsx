@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye, Search, RotateCcw, Lock } from "lucide-react"
+import { Filter, Users, Building2, FolderOpen, Calendar as CalendarIcon, Tag, FileDown, Eye, Lock, Info } from "lucide-react"
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from "@/components/ui/button"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts"
 import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
@@ -87,7 +88,7 @@ export default function ReportsPage() {
     setObject,
     setSection
   } = useReportsProjectFiltersStore()
-  const [projectSearch, setProjectSearch] = useState<string>("")
+  // Поиск по проекту удалён
   const [periodPreset, setPeriodPreset] = useState<"m"|"w"|"pm"|"y"|"custom">("m")
   const [dateFrom, setDateFrom] = useState<string>("")
   const [dateTo, setDateTo] = useState<string>("")
@@ -139,7 +140,7 @@ export default function ReportsPage() {
     setPeriodPreset('m')
     setDateFrom("")
     setDateTo("")
-    setProjectSearch("")
+    // Поиск по проектам удалён — сбрасывать нечего
     // Сброс пагинации/состояний списка
     setRows([])
     setOffset(0)
@@ -406,6 +407,7 @@ export default function ReportsPage() {
   }, []);
 
   return (
+    <TooltipProvider>
     <div className="px-0 pt-0 pb-0 h-screen overflow-y-auto overscroll-y-none">
       <FilterBar title="Отчёты" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg">
           {/* Кнопка: Автор */}
@@ -421,19 +423,19 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[260px] p-0">
-              <div className="p-2 space-y-2">
+            <DropdownMenuContent align="start" className="min-w-[260px] p-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="p-2 space-y-2 bg-white dark:bg-slate-800">
                 <input
                   type="text"
                   value={authorSearch}
                   onChange={e => setAuthorSearch(e.target.value)}
                   placeholder="Поиск автора..."
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 dark:text-white"
                 />
                 <select
                   value={authorId}
                   onChange={e => setAuthorId(e.target.value)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 dark:text-white"
                   size={8}
                 >
                   <option value="">Все</option>
@@ -463,13 +465,25 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[320px] p-0">
+            <DropdownMenuContent align="start" className="w-[320px] p-0 dark:bg-slate-800 dark:border-slate-700">
               <div className="p-2 space-y-2">
                 {/* Отдел */}
                 <div>
                   <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                     <span>Отдел</span>
-                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('department') && <Lock className="h-3 w-3 text-slate-400" />}
+                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('department') && (
+                      <>
+                        <Lock className="h-3 w-3 text-slate-400" />
+                        <UiTooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                            Недостаточно прав для изменения отдела
+                          </TooltipContent>
+                        </UiTooltip>
+                      </>
+                    )}
                   </div>
 
                   <select
@@ -489,7 +503,19 @@ export default function ReportsPage() {
                 <div>
                   <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
                     <span>Команда</span>
-                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('team') && <Lock className="h-3 w-3 text-slate-400" />}
+                    {(useReportsOrgFiltersStore.getState() as any).lockedFilters?.includes('team') && (
+                      <>
+                        <Lock className="h-3 w-3 text-slate-400" />
+                        <UiTooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                            Недостаточно прав для изменения команды
+                          </TooltipContent>
+                        </UiTooltip>
+                      </>
+                    )}
                   </div>
                   <select
                     value={selectedTeamId || ""}
@@ -539,24 +565,14 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[340px] p-0">
+            <DropdownMenuContent align="start" className="w-[340px] p-0 dark:bg-slate-800 dark:border-slate-700">
               <div className="p-2 space-y-2">
                 {/* Заголовок панели */}
                 <div className="flex items-center justify-between">
                   <div className="text-[10px] text-slate-500">Проектная иерархия</div>
                 </div>
 
-                {/* Поиск по структуре */}
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Поиск по структуре..."
-                    value={projectSearch}
-                    onChange={e => setProjectSearch(e.target.value)}
-                    className="w-full pl-7 pr-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
-                  />
-                </div>
+                {/* Поиск по структуре удалён по требованию */}
 
                 {/* Проект */}
                 <div>
@@ -573,10 +589,8 @@ export default function ReportsPage() {
                     disabled={isLoadingProjects}
                   >
                     <option value="">Все</option>
-                    {projects
-                      .filter(p => p.name.toLowerCase().includes(projectSearch.trim().toLowerCase()))
-                      .map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
                 </div>
@@ -661,27 +675,18 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[280px] p-0">
-              <div className="p-2 space-y-2">
-                <input
-                  type="text"
-                  value={categorySearch}
-                  onChange={e => setCategorySearch(e.target.value)}
-                  placeholder="Поиск категории..."
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
-                />
+            <DropdownMenuContent align="start" className="min-w-[280px] p-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="p-2 space-y-2 bg-white dark:bg-slate-800">
                 <select
                   value={categoryId}
                   onChange={e => setCategoryId(e.target.value)}
-                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-700 rounded-md dark:bg-slate-900 dark:text-white"
+                  className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 dark:text-white"
                   size={8}
                 >
                   <option value="">Все</option>
-                  {categories
-                    .filter(c => c.name.toLowerCase().includes(categorySearch.trim().toLowerCase()))
-                    .map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
                 </select>
               </div>
             </DropdownMenuContent>
@@ -702,7 +707,7 @@ export default function ReportsPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[340px] p-0">
+            <DropdownMenuContent align="start" className="min-w-[340px] p-0 dark:bg-slate-800 dark:border-slate-700">
               <div className="p-2 space-y-2">
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -758,11 +763,18 @@ export default function ReportsPage() {
               )}
             </span>
           )}
-            {/* Кнопка сброса в стиле планирования */}
+            {/* Кнопка сброса — стиль как в Проектах: перевёрнутая колба + текст */}
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetFilters} title="Сбросить фильтры">
-              <RotateCcw className="h-4 w-4" />
-            </Button>
+            <button
+              onClick={resetFilters}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-300 ease-in-out"
+              title="Сбросить фильтры"
+            >
+              <Filter className="h-4 w-4 rotate-180" />
+              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Сбросить
+              </span>
+            </button>
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
             <button
               onClick={() => {
@@ -1216,6 +1228,7 @@ export default function ReportsPage() {
         )}
       </div>
     </div>
+    </TooltipProvider>
   )
 }
 

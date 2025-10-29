@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { createClient } from '@/utils/supabase/client'
 import type { VacationManagementState, Employee, VacationEvent, Department } from './types'
+import * as Sentry from "@sentry/nextjs"
 
 const supabase = createClient()
 
@@ -69,6 +70,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           set({ departments: data || [] })
         } catch (error) {
           console.error('Ошибка загрузки отделов:', error)
+          Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'load_departments', error_type: 'db_error' } })
           set({ error: 'Не удалось загрузить список отделов' })
         } finally {
           set({ isLoading: false })
@@ -171,6 +173,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
               departmentId,
               requestToken
             })
+            Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'load_employees', error_type: 'db_error' }, extra: { department_id: departmentId } })
             set({ error: 'Не удалось загрузить список сотрудников' })
           }
         } finally {
@@ -263,6 +266,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
               employeeIds,
               requestToken
             })
+            Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'load_vacations', error_type: 'db_error' }, extra: { employee_ids_count: employeeIds.length } })
             set({ error: 'Не удалось загрузить данные об отпусках' })
           }
         } finally {
@@ -300,6 +304,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           }
         } catch (error) {
           console.error('Ошибка создания отпуска:', error)
+          Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'create_vacation', error_type: 'db_error' }, extra: { user_id: userId } })
           set({ error: 'Не удалось создать отпуск' })
           throw error
         } finally {
@@ -332,6 +337,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           }
         } catch (error) {
           console.error('Ошибка обновления отпуска:', error)
+          Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'update_vacation', error_type: 'db_error' }, extra: { vacation_id: vacationId } })
           set({ error: 'Не удалось обновить отпуск' })
           throw error
         } finally {
@@ -356,6 +362,7 @@ export const useVacationManagementStore = create<VacationManagementStore>()(
           set({ vacations: vacations.filter(v => v.calendar_event_id !== vacationId) })
         } catch (error) {
           console.error('Ошибка удаления отпуска:', error)
+          Sentry.captureException(error, { tags: { module: 'vacation-management', store: 'useVacationManagementStore', action: 'delete_vacation', error_type: 'db_error' }, extra: { vacation_id: vacationId } })
           set({ error: 'Не удалось удалить отпуск' })
           throw error
         } finally {

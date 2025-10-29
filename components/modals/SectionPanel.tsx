@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
-import { X, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { X, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
-import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
@@ -13,12 +13,14 @@ import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
+import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
 
 interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
   initialTab?: 'overview' | 'details' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'
+  statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
 interface SectionData {
@@ -35,13 +37,14 @@ interface SectionData {
   responsible_name?: string | null
   responsible_avatar?: string
   object_name?: string
+  object_id?: string
   stage_name?: string
+  stage_id?: string
   project_name?: string
+  project_id?: string
   manager_name?: string | null
   status_name?: string | null
   status_color?: string | null
-  objects?: any
-  responsible?: any
 }
 
 type HierarchyData = {
@@ -61,63 +64,81 @@ interface Profile {
 
 const supabase = createClient()
 
-export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview' }: SectionPanelProps) {
+export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overview', statuses }: SectionPanelProps) {
   // initialTab теперь приходит уже готовый: 'comments' при навигации из уведомлений, иначе 'overview'
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(initialTab === 'details' ? 'overview' : initialTab as any)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(
+    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab)
+  )
   const initializedRef = useRef(false)
-  
+
   // Состояние для inline редактирования отдельных полей
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<Partial<SectionData>>({})
   const [savingField, setSavingField] = useState<string | null>(null)
   const [searchResponsible, setSearchResponsible] = useState('')
   const [showResponsibleDropdown, setShowResponsibleDropdown] = useState(false)
-  
-  //
-  
+
   // Состояние для выбора статуса
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
-  
+
+  // Состояние для модалки удаления
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const router = useRouter()
   const { setNotification } = useUiStore()
-  const { statuses } = useSectionStatuses()
-  const { updateSectionStatus: updateSectionStatusInStore } = useProjectsStore()
+  const {
+    updateSectionStatus: updateSectionStatusInStore,
+    updateSectionResponsible: updateSectionResponsibleInStore,
+    focusProject,
+    focusStage,
+    focusObject
+  } = useProjectsStore()
 
   // useSectionStatuses хук уже автоматически обновляется при всех событиях статусов
   // Убираем дублирующие обработчики событий
 
-  useEffect(() => {
-    if (isOpen && sectionId) {
-      loadSectionData()
-      loadProfiles()
-    }
-  }, [isOpen, sectionId])
+  // Функции для навигации к проекту/стадии/объекту
+  const navigateToProject = () => {
+    if (!sectionData?.project_id) return
 
-  // Устанавливаем активную вкладку только при первой инициализации
-  useEffect(() => {
-    if (isOpen && !initializedRef.current) {
-      setActiveTab((initialTab === 'details' ? 'overview' : initialTab) as any)
-      initializedRef.current = true
-    }
-  }, [isOpen, initialTab])
+    onClose() // Закрываем модальное окно
+    focusProject(sectionData.project_id) // Фокусируем проект в дереве
 
-  useEffect(() => {
-    if (!isOpen) {
-      setEditingField(null)
-      setEditValues({})
-      setSectionData(null)
-      setSavingField(null)
-      
-      setShowStatusDropdown(false)
-      setUpdatingStatus(false)
-      initializedRef.current = false // Сбрасываем флаг инициализации
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
     }
-  }, [isOpen])
+  }
 
-  const loadSectionData = async () => {
+  const navigateToStage = () => {
+    if (!sectionData?.stage_id) return
+
+    onClose() // Закрываем модальное окно
+    focusStage(sectionData.stage_id) // Фокусируем стадию в дереве
+
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
+    }
+  }
+
+  const navigateToObject = () => {
+    if (!sectionData?.object_id) return
+
+    onClose() // Закрываем модальное окно
+    focusObject(sectionData.object_id) // Фокусируем объект в дереве
+
+    // Переходим на страницу проектов если мы не на ней
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+      router.push('/dashboard/projects')
+    }
+  }
+
+  const loadSectionData = useCallback(async () => {
     setLoading(true)
     try {
       // Загружаем основные данные раздела с информацией о статусе
@@ -149,19 +170,18 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
         if (!profileError && profileData) {
           responsibleName = `${profileData.first_name} ${profileData.last_name}`.trim() || profileData.email
-          // @ts-ignore
-          responsibleAvatar = (profileData as any).avatar_url || null
+          responsibleAvatar = (profileData as { avatar_url?: string }).avatar_url || null
         }
       }
 
       // Загружаем иерархию проекта
       console.log('Загружаем иерархию для раздела:', sectionId)
       let hierarchyData = null
-      
+
       // Сначала пробуем загрузить через представление
       const { data: viewData, error: viewError } = await supabase
         .from('view_section_hierarchy')
-        .select('object_name, stage_name, project_name, project_manager_name:manager_name')
+        .select('object_id, object_name, stage_id, stage_name, project_id, project_name, project_manager_name:manager_name')
         .eq('section_id', sectionId)
         .single()
 
@@ -170,15 +190,15 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         console.log('Иерархия загружена через представление:', hierarchyData)
       } else {
         console.log('Представление не работает, загружаем через таблицы:', viewError)
-        
+
         // Загружаем иерархию через обычные таблицы
         try {
           console.log('Загружаем объект для section_object_id:', sectionData.section_object_id)
-          
+
           // Получаем данные объекта
           const { data: objectData, error: objectError } = await supabase
             .from('objects')
-            .select('object_name, object_stage_id')
+            .select('object_id, object_name, object_stage_id')
             .eq('object_id', sectionData.section_object_id)
             .single()
 
@@ -199,7 +219,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           // Получаем данные стадии
           const { data: stageData, error: stageError } = await supabase
             .from('stages')
-            .select('stage_name, stage_project_id')
+            .select('stage_id, stage_name, stage_project_id')
             .eq('stage_id', objectData.object_stage_id)
             .single()
 
@@ -220,7 +240,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           // Получаем данные проекта
           const { data: projectData, error: projectError } = await supabase
             .from('projects')
-            .select('project_name, project_manager')
+            .select('project_id, project_name, project_manager')
             .eq('project_id', stageData.stage_project_id)
             .single()
 
@@ -240,7 +260,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           let managerName = null
           if (projectData.project_manager) {
             console.log('Загружаем менеджера для project_manager:', projectData.project_manager)
-            
+
             const { data: managerData, error: managerError } = await supabase
               .from('profiles')
               .select('first_name, last_name, email')
@@ -255,8 +275,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           }
 
           hierarchyData = {
+            object_id: objectData.object_id,
             object_name: objectData.object_name,
+            stage_id: stageData.stage_id,
             stage_name: stageData.stage_name,
+            project_id: projectData.project_id,
             project_name: projectData.project_name,
             manager_name: managerName
           }
@@ -267,11 +290,14 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           console.error('Полная ошибка:', error)
           console.error('Тип ошибки:', typeof error)
           console.error('JSON ошибки:', JSON.stringify(error, null, 2))
-          
+
           // Устанавливаем пустые значения, чтобы интерфейс не сломался
           hierarchyData = {
+            object_id: undefined,
             object_name: 'Не удалось загрузить',
+            stage_id: undefined,
             stage_name: 'Не удалось загрузить',
+            project_id: undefined,
             project_name: 'Не удалось загрузить',
             manager_name: 'Не удалось загрузить'
           }
@@ -294,7 +320,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       }
 
       console.log('Итоговые данные раздела:', formattedData)
-      
+
       setSectionData(formattedData)
     } catch (error) {
       console.error('Ошибка загрузки данных раздела:', error)
@@ -302,9 +328,9 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     } finally {
       setLoading(false)
     }
-  }
+  }, [sectionId, setNotification])
 
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -316,7 +342,35 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     } catch (error) {
       console.error('Ошибка загрузки профилей:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen && sectionId) {
+      loadSectionData()
+      loadProfiles()
+    }
+  }, [isOpen, sectionId, loadSectionData, loadProfiles])
+
+  // Устанавливаем активную вкладку только при первой инициализации
+  useEffect(() => {
+    if (isOpen && !initializedRef.current) {
+      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab))
+      initializedRef.current = true
+    }
+  }, [isOpen, initialTab])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setEditingField(null)
+      setEditValues({})
+      setSectionData(null)
+      setSavingField(null)
+      setShowStatusDropdown(false)
+      setUpdatingStatus(false)
+      setShowDeleteModal(false)
+      initializedRef.current = false // Сбрасываем флаг инициализации
+    }
+  }, [isOpen])
 
   const updateSectionStatus = async (statusId: string | null): Promise<void> => {
     if (!sectionData) return
@@ -411,22 +465,14 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
   // удаление выполняется через DeleteSectionModal
 
+  const handleDeleteSuccess = () => {
+    setShowDeleteModal(false)
+    onClose()
+  }
+
   const getProfileName = (profile: Profile) => {
     return `${profile.first_name} ${profile.last_name}`.trim() || profile.email
   }
-
-  const getSelectedResponsibleName = () => {
-    const selectedId = editValues.section_responsible
-    if (!selectedId) return 'Не назначен'
-    
-    const profile = profiles.find(p => p.user_id === selectedId)
-    return profile ? getProfileName(profile) : 'Не найден'
-  }
-
-  const filteredResponsible = profiles.filter(profile =>
-    getProfileName(profile).toLowerCase().includes(searchResponsible.toLowerCase()) ||
-    profile.email.toLowerCase().includes(searchResponsible.toLowerCase())
-  )
 
   const formatDate = (date: string | null | undefined) => {
     if (!date) return 'Не указана'
@@ -490,8 +536,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const renderEditableField = (
     fieldName: keyof SectionData,
     label: string,
-    value: any,
-    type: 'text' | 'textarea' | 'date' | 'responsible' = 'text'
+    value: string | null | undefined,
+    type: 'text' | 'textarea' | 'date' = 'text'
   ) => {
     const isEditing = editingField === fieldName
     const isSaving = savingField === fieldName
@@ -512,55 +558,6 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                 placeholder={`Введите ${label.toLowerCase()}`}
                 disabled={isSaving}
               />
-            ) : type === 'responsible' ? (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchResponsible || getSelectedResponsibleName()}
-                  onChange={(e) => {
-                    setSearchResponsible(e.target.value)
-                    setShowResponsibleDropdown(true)
-                  }}
-                  onFocus={() => setShowResponsibleDropdown(true)}
-                  className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Поиск ответственного..."
-                  disabled={isSaving}
-                />
-                {showResponsibleDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    <div
-                      onClick={() => {
-                        setEditValues({ ...editValues, [fieldName]: null })
-                        setSearchResponsible('')
-                        setShowResponsibleDropdown(false)
-                      }}
-                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600"
-                    >
-                      <div className="font-medium text-gray-500 dark:text-slate-400">
-                        Не назначен
-                      </div>
-                    </div>
-                    {filteredResponsible.map((profile) => (
-                      <div
-                        key={profile.user_id}
-                        onClick={() => {
-                          setEditValues({ ...editValues, [fieldName]: profile.user_id })
-                          setSearchResponsible('')
-                          setShowResponsibleDropdown(false)
-                        }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
-                      >
-                        <div className="font-medium dark:text-white">
-                          {getProfileName(profile)}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-slate-400">
-                          {profile.email}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             ) : (
               <input
                 type="text"
@@ -571,45 +568,34 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                 disabled={isSaving}
               />
             )}
-            
+
             {/* Кнопки управления */}
-            {type !== 'responsible' && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleFieldSave(fieldName)}
-                  disabled={isSaving}
-                  className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                >
-                  {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                  Сохранить
-                </button>
-                <button
-                  onClick={handleFieldCancel}
-                  disabled={isSaving}
-                  className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
-                >
-                  Отмена
-                </button>
-              </div>
-            )}
-            
-            {/* Индикатор состояния больше не нужен для дат, так как используется DateRangePicker */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleFieldSave(fieldName)}
+                disabled={isSaving}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Сохранить
+              </button>
+              <button
+                onClick={handleFieldCancel}
+                disabled={isSaving}
+                className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+              >
+                Отмена
+              </button>
+            </div>
           </div>
         ) : (
-          <div 
+          <div
             className="group cursor-pointer p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             onClick={() => handleFieldEdit(fieldName)}
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                {type === 'responsible' ? (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-slate-500" />
-                    <span className="dark:text-slate-300 text-slate-600">
-                      {sectionData?.responsible_name || 'Не назначен'}
-                    </span>
-                  </div>
-                ) : type === 'date' ? (
+                {type === 'date' ? (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-slate-500" />
                     <span className="dark:text-slate-300 text-slate-600">
@@ -656,7 +642,10 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
         style={{ position: 'fixed', top: '0px', left: '0px', right: '0px', bottom: '0px', margin: '0px', padding: '16px' }}
       >
-        <div className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden">
+        <div
+          className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Заголовок прилегает к верху */}
         <div 
           className="flex items-start justify-between px-6 pt-5 pb-4 border-b dark:border-slate-700 bg-white dark:bg-slate-900"
@@ -685,21 +674,39 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                     {sectionData.project_name && (
                       <>
                         <Package className="h-3 w-3 text-green-600 dark:text-green-400" />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">{sectionData.project_name}</span>
+                        <span
+                          onClick={navigateToProject}
+                          className="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer hover:text-green-600 dark:hover:text-green-400 hover:underline transition-colors"
+                          title="Перейти к проекту"
+                        >
+                          {sectionData.project_name}
+                        </span>
                         <span className="text-slate-400 dark:text-slate-500">/</span>
                       </>
                     )}
                     {sectionData.stage_name && (
                       <>
                         <Building className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                        <span>{sectionData.stage_name}</span>
+                        <span
+                          onClick={navigateToStage}
+                          className="cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors"
+                          title="Перейти к стадии"
+                        >
+                          {sectionData.stage_name}
+                        </span>
                         <span className="text-slate-400 dark:text-slate-500">/</span>
                       </>
                     )}
                     {sectionData.object_name && (
                       <>
                         <Package className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-                        <span>{sectionData.object_name}</span>
+                        <span
+                          onClick={navigateToObject}
+                          className="cursor-pointer hover:text-orange-600 dark:hover:text-orange-400 hover:underline transition-colors"
+                          title="Перейти к объекту"
+                        >
+                          {sectionData.object_name}
+                        </span>
                       </>
                     )}
                   </div>
@@ -907,7 +914,171 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
                     {/* Ответственный */}
                     <div>
-                      {renderEditableField('section_responsible', 'Ответственный', sectionData.section_responsible, 'responsible')}
+                      <label className="block text-sm font-medium mb-2 dark:text-slate-300 text-slate-700">
+                        Ответственный
+                      </label>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingField('section_responsible')
+                            setShowResponsibleDropdown(!showResponsibleDropdown)
+                          }}
+                          disabled={savingField === 'section_responsible'}
+                          className="flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 w-full"
+                          onBlur={(e) => {
+                            const relatedTarget = e.relatedTarget as HTMLElement
+                            const currentTarget = e.currentTarget
+                            const dropdownContainer = currentTarget.parentElement
+                            if (!relatedTarget || !dropdownContainer?.contains(relatedTarget)) {
+                              setTimeout(() => {
+                                setShowResponsibleDropdown(false)
+                                setEditingField(null)
+                                setSearchResponsible('')
+                              }, 200)
+                            }
+                          }}
+                        >
+                          {savingField === 'section_responsible' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                          ) : sectionData.responsible_name ? (
+                            <>
+                              <User className="w-4 h-4 text-emerald-600" />
+                              <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                {sectionData.responsible_name}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <User className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-500 dark:text-slate-400">
+                                Не назначен
+                              </span>
+                            </>
+                          )}
+                          <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
+                        </button>
+
+                        {showResponsibleDropdown && editingField === 'section_responsible' && (
+                          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-lg max-h-64 overflow-y-auto">
+                            {/* Поле поиска */}
+                            <div className="sticky top-0 bg-white dark:bg-slate-700 p-2 border-b dark:border-slate-600">
+                              <input
+                                type="text"
+                                value={searchResponsible}
+                                onChange={(e) => setSearchResponsible(e.target.value)}
+                                placeholder="Поиск..."
+                                className="w-full px-2 py-1 text-sm border rounded dark:bg-slate-800 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                              />
+                            </div>
+
+                            {/* Опция "Не назначен" */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setShowResponsibleDropdown(false)
+                                setEditingField(null)
+                                setSearchResponsible('')
+
+                                if (!sectionData) return
+                                setSavingField('section_responsible')
+                                try {
+                                  const { error } = await supabase
+                                    .from('sections')
+                                    .update({ section_responsible: null })
+                                    .eq('section_id', sectionId)
+
+                                  if (error) throw error
+
+                                  setSectionData({
+                                    ...sectionData,
+                                    section_responsible: null,
+                                    responsible_name: null,
+                                    responsible_avatar: undefined
+                                  })
+
+                                  updateSectionResponsibleInStore(sectionId, {
+                                    responsibleName: undefined,
+                                    responsibleAvatarUrl: undefined
+                                  })
+
+                                  setNotification('Ответственный снят')
+                                  await loadSectionData()
+                                } catch (error) {
+                                  console.error('Ошибка снятия ответственного:', error)
+                                  setNotification('Ошибка при снятии ответственного')
+                                } finally {
+                                  setSavingField(null)
+                                }
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer border-b dark:border-slate-600 flex items-center gap-2 focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                            >
+                              <User className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-500 dark:text-slate-400">
+                                Не назначен
+                              </span>
+                            </button>
+
+                            {/* Список сотрудников */}
+                            {(searchResponsible ? profiles.filter(profile =>
+                              getProfileName(profile).toLowerCase().includes(searchResponsible.toLowerCase()) ||
+                              profile.email.toLowerCase().includes(searchResponsible.toLowerCase())
+                            ) : profiles).map((profile) => (
+                              <button
+                                key={profile.user_id}
+                                type="button"
+                                onClick={async () => {
+                                  setShowResponsibleDropdown(false)
+                                  setEditingField(null)
+                                  setSearchResponsible('')
+
+                                  if (!sectionData) return
+                                  setSavingField('section_responsible')
+                                  try {
+                                    const { error } = await supabase
+                                      .from('sections')
+                                      .update({ section_responsible: profile.user_id })
+                                      .eq('section_id', sectionId)
+
+                                    if (error) throw error
+
+                                    setSectionData({
+                                      ...sectionData,
+                                      section_responsible: profile.user_id,
+                                      responsible_name: getProfileName(profile),
+                                      responsible_avatar: (profile as { avatar_url?: string }).avatar_url || undefined
+                                    })
+
+                                    updateSectionResponsibleInStore(sectionId, {
+                                      responsibleName: getProfileName(profile),
+                                      responsibleAvatarUrl: (profile as { avatar_url?: string }).avatar_url || undefined
+                                    })
+
+                                    setNotification('Ответственный успешно назначен')
+                                    await loadSectionData()
+                                  } catch (error) {
+                                    console.error('Ошибка сохранения ответственного:', error)
+                                    setNotification('Ошибка при назначении ответственного')
+                                  } finally {
+                                    setSavingField(null)
+                                  }
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer focus:outline-none focus:bg-gray-100 dark:focus:bg-slate-600"
+                              >
+                                <div>
+                                  <div className="text-sm font-medium dark:text-white">
+                                    {getProfileName(profile)}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-slate-400">
+                                    {profile.email}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Сроки (единый выбор периода, как в отпускном календаре) */}
@@ -977,7 +1148,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                         {isEditing ? (
                           <div className="space-y-2">
                             <textarea
-                              value={(editValues as any).section_description || ''}
+                              value={(editValues.section_description as string | undefined) || ''}
                               onChange={(e) => setEditValues({ ...editValues, section_description: e.target.value })}
                               className="w-full p-3 border rounded-lg dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-slate-900 bg-white border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               rows={3}
@@ -1019,11 +1190,20 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                     )
                   })()}
 
-                  
+                  {/* Кнопка удаления раздела */}
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center gap-1.5 border border-red-200 dark:border-red-800 text-sm"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Удалить раздел</span>
+                    </button>
+                  </div>
                 </>
               )}
 
-              
+
 
               {activeTab === 'comments' && (
                 <CommentsPanel sectionId={sectionId} />
@@ -1051,9 +1231,17 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           )}
         </div>
 
-        
       </div>
       </div>
+
+      {/* Модальное окно удаления раздела */}
+      <DeleteSectionModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        sectionId={sectionId}
+        sectionName={sectionData?.section_name || ''}
+        onSuccess={handleDeleteSuccess}
+      />
     </>
   )
 } 

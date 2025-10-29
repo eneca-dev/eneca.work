@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Upload } from "lucide-react"
-import { AvatarUploadDialog } from "./avatar-upload-dialog"
+import AvatarUploadDialog from "./avatar-upload-dialog"
 
 interface AvatarUploaderProps {
   avatarUrl?: string | null

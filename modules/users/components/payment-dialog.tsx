@@ -14,6 +14,7 @@ import type { User } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { DollarSign, Clock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import * as Sentry from "@sentry/nextjs"
 
 interface PaymentDialogProps {
   open: boolean
@@ -22,7 +23,7 @@ interface PaymentDialogProps {
   onUserUpdated?: () => void
 }
 
-export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialogProps) {
+function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialogProps) {
   const [formData, setFormData] = useState<Partial<User>>({})
   const [isLoading, setIsLoading] = useState(false)
 
@@ -50,7 +51,8 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
     try {
       // Обновление пользователя
       if (user) {
-        await updateUser(user.id, formData)
+        Sentry.addBreadcrumb({ category: 'ui.submit', level: 'info', message: 'PaymentDialog: submit', data: { user_id: user.id } })
+        await Sentry.startSpan({ name: 'Users/PaymentDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, formData))
         toast({
           title: "Успешно",
           description: "Информация об оплате успешно обновлена",
@@ -229,3 +231,5 @@ export function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: Payme
     </TooltipProvider>
   )
 }
+
+export default Sentry.withProfiler(PaymentDialog, { name: 'PaymentDialog' })

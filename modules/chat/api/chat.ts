@@ -26,7 +26,7 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
     const payload = {
       message: request.message,
       conversationHistory: conversationHistory,
-      conversationId: request.conversationId
+      conversationId: request.conversationId,
     }
     console.debug('sendChatMessage payload → /api/chat', payload)
     const response = await fetch('/api/chat', {
@@ -42,14 +42,17 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
       let errorMessage = `Ошибка сервера: ${response.status}`
       try {
         const errorData = await response.json()
-        if (errorData && typeof errorData.message === 'string') {
-          errorMessage = errorData.message
-        } else if (errorData && typeof errorData.error === 'string') {
-          errorMessage = errorData.error
-        }
+        const serverMsg = (errorData?.message || errorData?.error || '').toString()
+        if (serverMsg) errorMessage = serverMsg
       } catch (e) {
-        // Если не удалось распарсить JSON, используем статус код
         console.warn('Не удалось распарсить ошибку сервера:', e)
+      }
+      // Санитизация: убираем HTML из ошибок, маппим таймауты
+      if (/<!DOCTYPE|<html/i.test(errorMessage)) {
+        errorMessage = 'Сервис временно недоступен. Попробуйте позже.'
+      }
+      if (response.status === 504 || /таймаут|timeout/i.test(errorMessage)) {
+        errorMessage = 'Таймаут: сервис не ответил вовремя. Попробуйте позже.'
       }
       Sentry.captureException(new Error(errorMessage), {
         tags: { module: 'chat', endpoint: 'gateway-client' },

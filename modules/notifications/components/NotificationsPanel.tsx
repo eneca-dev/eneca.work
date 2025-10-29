@@ -689,10 +689,11 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
             ) : (
               <div className="p-2 space-y-2">
                 {filteredNotifications.map((notification) => (
-                  <NotificationItem 
-                    key={notification.id} 
+                  <NotificationItem
+                    key={notification.id}
                     notification={notification}
                     onEditAnnouncement={handleEditAnnouncement}
+                    onClosePanel={handleClose}
                   />
                 ))}
                 

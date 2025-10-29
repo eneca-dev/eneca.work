@@ -665,7 +665,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       initializeRealtime: () => {
         const state = get()
         if (!state.currentUserId) {
-          console.warn('Нет текущего пользователя для подписки на уведомления')
+          console.warn('NOTIFICATIONS Нет текущего пользователя для подписки на уведомления')
           return
         }
         
@@ -675,7 +675,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       subscribeToNotifications: () => {
         const state = get()
         if (!state.currentUserId) {
-          console.log('⚠️ Нет currentUserId для подписки на Realtime')
+          console.log('⚠️ NOTIFICATIONS Нет currentUserId для подписки на Realtime')
           return
         }
 
@@ -683,11 +683,11 @@ export const useNotificationsStore = create<NotificationsState>()(
         
         // Отписываемся от предыдущего канала
         if (state.realtimeChannel) {
-          console.log('🔄 Отписываемся от предыдущего Realtime канала')
+          console.log('🔄 NOTIFICATIONS Отписываемся от предыдущего Realtime канала')
           state.realtimeChannel.unsubscribe()
         }
 
-        console.log('📡 Подписываемся на Realtime для пользователя:', state.currentUserId)
+        console.log('📡 NOTIFICATIONS Подписываемся на Realtime для пользователя:', state.currentUserId)
 
         // Создаем новый канал
         const channel = supabase
@@ -719,7 +719,7 @@ export const useNotificationsStore = create<NotificationsState>()(
             }
           )
           .subscribe((status) => {
-            console.log('📡 Realtime статус подписки:', status)
+            console.log('📡 NOTIFICATIONS Realtime статус подписки:', status)
           })
 
         set({ realtimeChannel: channel })
@@ -728,7 +728,7 @@ export const useNotificationsStore = create<NotificationsState>()(
       unsubscribeFromNotifications: () => {
         const state = get()
         if (state.realtimeChannel) {
-          console.log('🔌 Отписываемся от Realtime уведомлений')
+          console.log('🔌 NOTIFICATIONS Отписываемся от Realtime уведомлений')
           state.realtimeChannel.unsubscribe()
           set({ realtimeChannel: null })
         }

@@ -2,13 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { createClient } from '@/utils/supabase/server'
 
-interface ProfileWithRole {
-  role_id: string | null
-  roles: {
-    name: string
-  }[] | null
-}
-
 export async function DELETE(request: NextRequest) {
   try {
     // Получаем ID пользователя из URL или body
@@ -50,109 +43,35 @@ export async function DELETE(request: NextRequest) {
     // Проверяем, удаляет ли пользователь свой собственный профиль
     const isDeletingOwnProfile = currentUser.id === userId
 
-    // Если пользователь не удаляет свой профиль, проверяем права доступа
+    // Если пользователь не удаляет свой профиль, проверяем права доступа через новую систему
     if (!isDeletingOwnProfile) {
-      // Сначала достаем роль текущего пользователя
-      console.log('Looking up profile for user:', currentUser.id)
-      
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role_id, roles!profiles_role_id_fkey(name)')
-        .eq('user_id', currentUser.id)
-        .single()
-        
-      console.log('Profile lookup result:', {
-        hasProfile: !!profile,
-        profileData: profile,
-        profileError: profileError?.message
-      })
+      console.log('Checking permission via RPC user_has_permission for user:', currentUser.id)
 
-      // Проверяем ошибку запроса
-      if (profileError) {
-        console.error('Ошибка получения профиля текущего пользователя:', {
-          userId: currentUser.id,
-          error: profileError,
-          errorCode: profileError.code,
-          errorDetails: profileError.details,
-          errorHint: profileError.hint
+      // Разрешаем при наличии любого из указанных пермишенов
+      const permissionsToCheck = ['users.delete', 'user.delete', 'users_can_edit_all', 'hierarchy.is_admin']
+
+      let hasPermission = false
+      // Проверяем по одному, чтобы быть совместимыми с различиями в именах
+      for (const perm of permissionsToCheck) {
+        const { data: allowed, error: rpcError } = await supabase.rpc('user_has_permission', {
+          p_user_id: currentUser.id,
+          p_permission_name: perm,
         })
-        
-        // Более детальная ошибка для отладки
-        let errorMessage = 'Ошибка получения профиля пользователя'
-        if (profileError.code === 'PGRST116') {
-          errorMessage = 'Профиль пользователя не найден в базе данных'
-        } else if (profileError.code === 'PGRST301') {
-          errorMessage = 'Ошибка подключения к базе данных'
+
+        if (rpcError) {
+          console.error('Ошибка RPC user_has_permission:', { perm, rpcError })
+          // Не прерываем — пробуем другие варианты имен пермишена
+          continue
         }
-        
-        return NextResponse.json(
-          { error: errorMessage, details: profileError.message },
-          { status: 500 }
-        )
-      }
-
-      // Проверяем, что профиль существует
-      if (!profile) {
-        console.error('Профиль не найден для пользователя:', {
-          userId: currentUser.id
-        })
-        return NextResponse.json(
-          { error: 'Профиль пользователя не найден' },
-          { status: 404 }
-        )
-      }
-
-      const typedProfile = profile as ProfileWithRole
-      const roleId = typedProfile.role_id ?? null
-      const roleName = typedProfile.roles?.[0]?.name ?? null
-
-      let permissions: string[] = []
-      if (roleId) {
-        const { data: rolePerms, error: rolePermsError } = await supabase
-          .from('role_permissions')
-          .select('permissions!role_permissions_permission_id_fkey(name)')
-          .eq('role_id', roleId)
-
-        if (rolePermsError) {
-          console.error('Ошибка получения разрешений роли:', {
-            roleId,
-            userId: currentUser.id,
-            error: rolePermsError,
-            errorCode: rolePermsError.code,
-            errorDetails: rolePermsError.details
-          })
-          return NextResponse.json(
-            { error: 'Ошибка проверки прав доступа', details: rolePermsError.message },
-            { status: 500 }
-          )
+        if (allowed) {
+          hasPermission = true
+          break
         }
-
-              permissions = (rolePerms || [])
-        .map((rp: any) => rp?.permissions?.name)
-        .filter(Boolean)
-        
-      console.log('Permissions lookup result:', {
-        roleId,
-        rolePerms,
-        extractedPermissions: permissions
-      })
       }
 
-      // Проверяем, есть ли разрешение на удаление других пользователей
-      // Поддерживаем оба варианта названия пермишена на случай расхождений в данных
-      const canDeleteUsers = permissions.includes('users.delete') ||
-                            permissions.includes('user.delete') ||
-                            permissions.includes('users_can_edit_all') ||
-                            roleName === 'admin'
-                            
-      console.log('Permission check result:', {
-        roleName,
-        permissions,
-        canDeleteUsers,
-        isDeletingOwnProfile
-      })
+      console.log('Permission RPC result:', { hasPermission, isDeletingOwnProfile })
 
-      if (!canDeleteUsers) {
+      if (!hasPermission) {
         return NextResponse.json(
           { error: 'Недостаточно прав для удаления других пользователей' },
           { status: 403 }
@@ -163,7 +82,22 @@ export async function DELETE(request: NextRequest) {
     // Создаем admin клиент для удаления
     const adminClient = createAdminClient()
 
-    // Сначала удаляем профиль из таблицы profiles
+    // Сначала удаляем назначения ролей пользователя (если FK без CASCADE)
+    const { error: rolesDeleteError } = await adminClient
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+
+    if (rolesDeleteError) {
+      console.error('Ошибка очистки ролей пользователя перед удалением профиля:', rolesDeleteError)
+      // Не критично, если настроен CASCADE, но лучше вернуть ошибку, чтобы избежать зависаний FK
+      return NextResponse.json(
+        { error: `Ошибка очистки ролей пользователя: ${rolesDeleteError.message}` },
+        { status: 500 }
+      )
+    }
+
+    // Затем удаляем профиль из таблицы profiles
     const { error: profileError } = await adminClient
       .from('profiles')
       .delete()

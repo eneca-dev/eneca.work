@@ -20,9 +20,10 @@ import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { useUserPermissions } from "../hooks/useUserPermissions"
-import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { useUserPermissionsSync } from "@/modules/permissions"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import * as Sentry from "@sentry/nextjs"
 
 interface UserDialogProps {
   open: boolean
@@ -32,7 +33,7 @@ interface UserDialogProps {
   isSelfEdit?: boolean
 }
 
-export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
+function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = false }: UserDialogProps) {
   const [formData, setFormData] = useState<Partial<User & { firstName?: string; lastName?: string }>>({
     firstName: "",
     lastName: "",
@@ -93,15 +94,19 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   const currentUserId = useUserStore((state) => state.id)
   const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole, isAdmin } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
-  const { reloadPermissions } = usePermissionsLoader()
+  const { reloadPermissions } = useUserPermissionsSync()
 
   // Определяем, может ли пользователь редактировать роли
   const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole || canAssignRoles)
 
-  // Определяем, может ли пользователь редактировать организационные поля
-  // При самостоятельном редактировании все пользователи могут редактировать все поля своего профиля
+  // Определяем, может ли пользователь редактировать отдел и команду
+  // Только администраторы могут менять отдел и команду (даже при редактировании своего профиля)
+  const canEditDepartmentAndTeam = isAdmin || canEditAllUsers
+
+  // Определяем, может ли пользователь редактировать остальные организационные поля (должность, категория)
+  // При самостоятельном редактировании все пользователи могут редактировать должность и категорию
   // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей
   const canEditOrganizationalFields = isSelfEdit ? true : canEditAllUsers
 
@@ -122,13 +127,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   useEffect(() => {
     async function loadReferenceData() {
       try {
-        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Promise.all([
+        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Sentry.startSpan({ name: 'Users/UserDialog loadReferenceData', op: 'ui.load' }, async () => Promise.all([
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
           getAllRoles()
-        ])
+        ]))
         
         console.log("=== UserDialog: Загружены справочные данные ===")
         console.log("departments:", departmentsData)
@@ -175,7 +180,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
   // Функция для загрузки ролей пользователя
   const loadUserRoles = async (userId: string) => {
     try {
-      const result = await getUserRoles(userId)
+      const result = await Sentry.startSpan({ name: 'Users/UserDialog loadUserRoles', op: 'ui.load', attributes: { user_id: userId } }, async () => getUserRoles(userId))
       if (result.error) {
         console.error("Ошибка загрузки ролей пользователя:", result.error)
         return
@@ -408,6 +413,8 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     if (!user?.id) return
     
     setIsSavingRoles(true)
+    let addedCount = 0
+    let removedCount = 0
     try {
       // Получаем текущие роли пользователя
       const currentRoleIds = userRoles.map(ur => ur.roleId)
@@ -436,12 +443,10 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       console.log("rolesToRemove:", rolesToRemove)
       
       let success = true
-      let addedCount = 0
-      let removedCount = 0
       
       // Добавляем новые роли
       for (const roleId of rolesToAdd) {
-        const result = await assignRoleToUser(user.id, roleId, currentUserId || undefined)
+        const result = await Sentry.startSpan({ name: 'Users/UserDialog assignRole', op: 'db.write', attributes: { role_id: roleId, user_id: user.id } }, async () => assignRoleToUser(user.id, roleId, currentUserId || undefined))
         if (result) {
           addedCount++
         } else {
@@ -452,7 +457,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       
       // Удаляем роли
       for (const roleId of rolesToRemove) {
-        const result = await revokeRoleFromUser(user.id, roleId)
+        const result = await Sentry.startSpan({ name: 'Users/UserDialog revokeRole', op: 'db.write', attributes: { role_id: roleId, user_id: user.id } }, async () => revokeRoleFromUser(user.id, roleId))
         if (result) {
           removedCount++
         } else {
@@ -527,17 +532,23 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           updateData.email = trimmedEmail
         }
         
-        // Добавляем организационные поля только если пользователь может их редактировать
-        if (canEditOrganizationalFields) {
+        // Добавляем отдел и команду только если пользователь может их редактировать
+        if (canEditDepartmentAndTeam) {
           // Отдел - может быть пустым (null)
           updateData.department = formData.department && formData.department !== "" ? formData.department : null
 
           // Команда - может быть пустой (null) независимо от отдела
           updateData.team = formData.team && formData.team !== "" ? formData.team : null
+        }
 
+        // Добавляем должность и категорию если пользователь может редактировать организационные поля
+        if (canEditOrganizationalFields) {
           if (formData.position) updateData.position = formData.position
           if (formData.category) updateData.category = formData.category
-        } else if (canEditOnlyTeam) {
+        }
+
+        // Обработка для пользователей с users.edit.team (они могут редактировать только команду)
+        if (canEditOnlyTeam && !canEditDepartmentAndTeam) {
           // Для пользователей с users.edit.team сохраняем только команду с валидацией департамента
           if (formData.team && formData.team !== "") {
             // Находим команду в списке доступных команд
@@ -592,7 +603,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
         
         console.log("Итоговые данные для updateUser:", updateData);
         
-        await updateUser(user.id, updateData)
+        await Sentry.startSpan({ name: 'Users/UserDialog updateUser', op: 'db.write', attributes: { user_id: user.id } }, async () => updateUser(user.id, updateData))
         console.log("updateUser завершен успешно");
         
         // Обновляем Zustand ТОЛЬКО если пользователь редактирует свой профиль
@@ -600,11 +611,13 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
           console.log("Обновляем Zustand для собственного профиля");
           // Получаем свежие данные пользователя из базы
           const freshSupabase = createClient();
-          const { data: freshProfile, error: profileError } = await freshSupabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", user.id)
-            .single()
+          const { data: freshProfile, error: profileError } = await Sentry.startSpan({ name: 'Users/UserDialog loadFreshProfile', op: 'db.read', attributes: { user_id: user.id } }, async () =>
+            freshSupabase
+              .from("profiles")
+              .select("*")
+              .eq("user_id", user.id)
+              .single()
+          )
           
           if (profileError) {
             console.error("Ошибка получения обновленного профиля:", profileError);
@@ -671,12 +684,12 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     setIsDeleting(true)
     try {
       // Используем API endpoint для безопасного удаления
-      const response = await fetch(`/api/admin/delete-user?userId=${user.id}`, {
+      const response = await Sentry.startSpan({ name: 'Users/UserDialog deleteProfile', op: 'http', attributes: { user_id: user.id } }, async () => fetch(`/api/admin/delete-user?userId=${user.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-      })
+      }))
 
       const result = await response.json()
 
@@ -696,7 +709,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
       // Если пользователь удалил свой собственный профиль, выходим из системы
       if (isEditingOwnProfile) {
         const supabase = createClient()
-        await supabase.auth.signOut()
+        await Sentry.startSpan({ name: 'Users/UserDialog signOut', op: 'auth' }, async () => supabase.auth.signOut())
         window.location.href = '/auth/login'
       } else if (onUserUpdated) {
         onUserUpdated()
@@ -846,7 +859,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.department}
                   onValueChange={(value) => handleChange("department", value)}
-                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
+                  disabled={!canEditDepartmentAndTeam || canEditOnlyTeam}
                 >
                   <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
@@ -874,7 +887,7 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
                 <Select
                   value={formData.team}
                   onValueChange={(value) => handleChange("team", value)}
-                  disabled={(!canEditOrganizationalFields && !canEditOnlyTeam) || !formData.department}
+                  disabled={(!canEditDepartmentAndTeam && !canEditOnlyTeam) || !formData.department}
                 >
                   <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
@@ -1316,3 +1329,6 @@ export function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit
     </Modal>
   )
 }
+
+export { UserDialog }
+export default Sentry.withProfiler(UserDialog, { name: 'UserDialog' })

@@ -21,6 +21,7 @@ interface NotificationItemProps {
   notification: Notification
   isVisible?: boolean // Для отслеживания видимости
   onEditAnnouncement?: (announcementId: string) => void // Функция для редактирования объявлений
+  onClosePanel?: () => void // Функция для закрытия панели уведомлений
 }
 
 // Убраны иконки типов уведомлений по требованиям дизайна
@@ -47,7 +48,7 @@ function getNotificationTag(entityType?: string) {
   return notificationTags[entityType as keyof typeof notificationTags]
 }
 
-export function NotificationItem({ notification, isVisible = false, onEditAnnouncement }: NotificationItemProps) {
+export function NotificationItem({ notification, isVisible = false, onEditAnnouncement, onClosePanel }: NotificationItemProps) {
   const notificationTag = getNotificationTag(notification.entityType)
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -294,16 +295,24 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     // Если это уведомление о комментарии, подсвечиваем раздел
     if (notification.entityType === 'section_comment') {
       const sectionId = notification.payload?.section_comment?.section_id
-      
+
       if (sectionId) {
         // Подсвечиваем раздел (всегда открывает комментарии)
         highlightSection(sectionId)
-        
-        // Переходим на страницу проектов (чистый URL!)
-        router.push('/dashboard/projects')
+
+        // Закрываем панель уведомлений
+        if (onClosePanel) {
+          onClosePanel()
+        }
+
+        // Переходим на страницу проектов только если мы не на ней
+        // Это предотвращает ненужную перезагрузку компонентов
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/dashboard/projects')) {
+          router.push('/dashboard/projects')
+        }
       }
     }
-  }, [notification, highlightAnnouncement, router, highlightSection])
+  }, [notification, highlightAnnouncement, router, highlightSection, onClosePanel])
 
   return (
     <div

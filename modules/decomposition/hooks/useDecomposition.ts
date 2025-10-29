@@ -8,7 +8,7 @@ import { useUserStore } from "@/stores/useUserStore"
 import { supabase } from "../utils"
 import type { SectionHierarchy } from "../types"
 import { getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
-import { usePermissionsLoader } from "@/modules/permissions/hooks/usePermissionsLoader"
+import { useUserPermissionsSync } from "@/modules/permissions"
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore"
 
 export const useDecomposition = () => {
@@ -16,7 +16,7 @@ export const useDecomposition = () => {
   const userStore = useUserStore()
   const { id, name, profile, isAuthenticated } = userStore
 
-  usePermissionsLoader()
+  useUserPermissionsSync()
   const hasPermission = usePermissionsStore(state => state.hasPermission)
 
   const [departmentName, setDepartmentName] = useState<string>("")

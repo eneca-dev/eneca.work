@@ -20,6 +20,10 @@ interface ProjectsState {
   focusSectionId: string | null;
   // Фокусировка проекта в дереве (без открытия панели)
   focusProjectId: string | null;
+  // Фокусировка стадии в дереве (без открытия панели)
+  focusStageId: string | null;
+  // Фокусировка объекта в дереве (без открытия панели)
+  focusObjectId: string | null;
   
   // Уведомления
   notification: string | null;
@@ -49,6 +53,10 @@ interface ProjectsState {
   clearFocus: () => void;
   focusProject: (projectId: string) => void;
   clearProjectFocus: () => void;
+  focusStage: (stageId: string) => void;
+  clearStageFocus: () => void;
+  focusObject: (objectId: string) => void;
+  clearObjectFocus: () => void;
   
   // Действия для уведомлений
   setNotification: (message: string) => void;
@@ -86,6 +94,8 @@ export const useProjectsStore = create<ProjectsState>()(
       highlightedSectionId: null,
       focusSectionId: null,
       focusProjectId: null,
+      focusStageId: null,
+      focusObjectId: null,
       notification: null,
       projects: [],
       stages: [],
@@ -179,7 +189,27 @@ export const useProjectsStore = create<ProjectsState>()(
         set({
           focusProjectId: null,
         }),
-        
+
+      focusStage: (stageId) =>
+        set({
+          focusStageId: stageId,
+        }),
+
+      clearStageFocus: () =>
+        set({
+          focusStageId: null,
+        }),
+
+      focusObject: (objectId) =>
+        set({
+          focusObjectId: objectId,
+        }),
+
+      clearObjectFocus: () =>
+        set({
+          focusObjectId: null,
+        }),
+
       setProjects: (projects) => set(() => ({ projects })),
       setStages: (stages) => set(() => ({ stages })),
       setObjects: (objects) => set(() => ({ objects })),
