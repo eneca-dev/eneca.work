@@ -12,7 +12,7 @@ type Props = {
 export default function SectionDecomposition2Tab(props: Props) {
   return (
     <ToastProvider>
-      <div className="p-2">
+      <div className="pt-0 px-2 pb-2">
         <StagesManagement sectionId={props.sectionId} />
       </div>
       <Toaster />

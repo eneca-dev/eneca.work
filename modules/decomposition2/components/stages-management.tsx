@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2 } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -122,6 +122,8 @@ function SortableStage({
   statusOptions,
   employees,
   formatProfileLabel,
+  isCollapsed,
+  onToggleCollapse,
 }: {
   stage: Stage;
   selectedStages: Set<string>;
@@ -144,6 +146,8 @@ function SortableStage({
   statusOptions: string[];
   employees: Employee[];
   formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
+  isCollapsed: boolean;
+  onToggleCollapse: (stageId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
@@ -212,11 +216,11 @@ function SortableStage({
     <Card
       ref={setNodeRef}
       style={style}
-      className={`relative p-3 shadow-sm border-border/40 ${
+      className={`relative ${isCollapsed ? "p-2" : "p-3"} shadow-sm border-border/40 ${
         selectedStages.has(stage.id) ? "ring-1 ring-primary/20 border-primary/40 bg-muted/40" : ""
       }`}
     >
-      <div className="mb-2 flex items-center gap-3">
+      <div className={`flex items-center ${isCollapsed ? "mb-1 gap-2" : "mb-2 gap-3"}`}>
         <div
           {...attributes}
           {...listeners}
@@ -242,18 +246,28 @@ function SortableStage({
             onBlur={() => setIsEditingName(false)}
             placeholder="Новый этап"
             rows={1}
-            className={`text-lg font-semibold border-0 outline-none px-3 py-1 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden min-h-9 ${
+            className={`${isCollapsed ? "text-base min-h-7 py-0.5" : "text-lg min-h-9 py-1"} font-semibold border-0 outline-none px-3 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden ${
               isEditingName
                 ? "bg-primary/5 ring-2 ring-primary/40 ring-offset-1 ring-offset-background"
                 : "bg-transparent hover:bg-muted/40"
             }`}
           />
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground/70">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleCollapse(stage.id)}
+          className={`${isCollapsed ? "h-7" : "h-8"} px-2`}
+          title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+          <span className="hidden sm:inline">{isCollapsed ? "Развернуть" : "Свернуть"}</span>
+        </Button>
+        <div className={`flex items-center text-xs text-muted-foreground/70 ${isCollapsed ? "gap-2" : "gap-3"}`}>
           <DatePicker
             value={stage.startDate ?? ""}
             onChange={(val) => updateStage(stage.id, { startDate: val })}
-            triggerClassName="h-6 px-2"
+            triggerClassName={isCollapsed ? "h-5 px-1.5" : "h-6 px-2"}
             openOnToday
             plainTrigger
           />
@@ -261,7 +275,7 @@ function SortableStage({
           <DatePicker
             value={stage.endDate ?? ""}
             onChange={(val) => updateStage(stage.id, { endDate: val })}
-            triggerClassName="h-6 px-2"
+            triggerClassName={isCollapsed ? "h-5 px-1.5" : "h-6 px-2"}
             openOnToday
             plainTrigger
           />
@@ -270,22 +284,22 @@ function SortableStage({
           variant="ghost"
           size="sm"
           onClick={copyStage}
-          className={`h-8 px-3 hover:bg-primary/10 transition-all active:scale-95 ${isCopying ? "scale-95" : ""}`}
+          className={`${isCollapsed ? "h-7" : "h-8"} px-3 hover:bg-primary/10 transition-all active:scale-95 ${isCopying ? "scale-95" : ""}`}
         >
           <Copy className="h-4 w-4 mr-1.5" />
-          Копировать
+          <span className={`${isCollapsed ? "hidden md:inline" : "inline"}`}>Копировать</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => deleteStage(stage.id)}
-          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive transition-all"
+          className={`${isCollapsed ? "h-7 w-7" : "h-8 w-8"} p-0 hover:bg-destructive/10 hover:text-destructive transition-all`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 
-      {stage.decompositions.length > 0 && (
+      {stage.decompositions.length > 0 && !isCollapsed && (
         <div
           className={`absolute top-2 left-2 transition-opacity ${
             hasAnySelectedInStage ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -302,84 +316,88 @@ function SortableStage({
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={(event) => onDecompositionDragEnd(stage.id, event)}
-      >
-        <div className="overflow-x-auto -mx-2">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border/30">
-                <th className="w-8 pb-2 pt-0"></th>
-                <th className="w-8 pb-2 pt-0"></th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Описание
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Тип работ
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Сложность
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Ответственный
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Часы
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Прогресс
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Статус
-                </th>
-                <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                  Дата
-                </th>
-                <th className="w-8 pb-2 pt-0"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <SortableContext items={stage.decompositions.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-                {stage.decompositions.map((decomp) => (
-                  <SortableDecompositionRow
-                    key={decomp.id}
-                    decomposition={decomp}
-                    stageId={stage.id}
-                    isChecked={selectedStages.has(stage.id) || selectedDecompositions.has(decomp.id)}
-                    isHighlighted={selectedStages.has(stage.id) || selectedDecompositions.has(decomp.id)}
-                    selectionDisabled={selectedStages.has(stage.id)}
-                    onToggleSelection={toggleDecompositionSelection}
-                    onDelete={deleteDecomposition}
-                    onUpdate={updateDecomposition}
-                    autoFocus={focusedDecompositionId === decomp.id}
-                    onDateConfirmed={(val) => addDecomposition(stage.id, { pending: true, initialCompletionDate: val })}
-                    onInteract={onDecompositionInteract}
-                    isPendingNew={pendingNewDecompositionId === decomp.id}
-                    typeOfWorkOptions={typeOfWorkOptions}
-                    difficultyOptions={difficultyOptions}
-                    responsibleOptions={responsibleOptions}
-                    statusOptions={statusOptions}
-                    employees={employees}
-                    formatProfileLabel={formatProfileLabel}
-                  />
-                ))}
-              </SortableContext>
-            </tbody>
-          </table>
-        </div>
-      </DndContext>
+      {!isCollapsed && (
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => onDecompositionDragEnd(stage.id, event)}
+          >
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border/30">
+                    <th className="w-8 pb-2 pt-0"></th>
+                    <th className="w-8 pb-2 pt-0"></th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Описание
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Тип работ
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Сложность
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Ответственный
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Часы
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Прогресс
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Статус
+                    </th>
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Дата
+                    </th>
+                    <th className="w-8 pb-2 pt-0"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <SortableContext items={stage.decompositions.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                    {stage.decompositions.map((decomp) => (
+                      <SortableDecompositionRow
+                        key={decomp.id}
+                        decomposition={decomp}
+                        stageId={stage.id}
+                        isChecked={selectedStages.has(stage.id) || selectedDecompositions.has(decomp.id)}
+                        isHighlighted={selectedStages.has(stage.id) || selectedDecompositions.has(decomp.id)}
+                        selectionDisabled={selectedStages.has(stage.id)}
+                        onToggleSelection={toggleDecompositionSelection}
+                        onDelete={deleteDecomposition}
+                        onUpdate={updateDecomposition}
+                        autoFocus={focusedDecompositionId === decomp.id}
+                        onDateConfirmed={(val) => addDecomposition(stage.id, { pending: true, initialCompletionDate: val })}
+                        onInteract={onDecompositionInteract}
+                        isPendingNew={pendingNewDecompositionId === decomp.id}
+                        typeOfWorkOptions={typeOfWorkOptions}
+                        difficultyOptions={difficultyOptions}
+                        responsibleOptions={responsibleOptions}
+                        statusOptions={statusOptions}
+                        employees={employees}
+                        formatProfileLabel={formatProfileLabel}
+                      />
+                    ))}
+                  </SortableContext>
+                </tbody>
+              </table>
+            </div>
+          </DndContext>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => addDecomposition(stage.id)}
-        className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Добавить декомпозицию
-      </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => addDecomposition(stage.id)}
+            className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Добавить декомпозицию
+          </Button>
+        </>
+      )}
     </Card>
   );
 }
@@ -991,6 +1009,7 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
   const [pendingNewDecomposition, setPendingNewDecomposition] = useState<{ stageId: string; decompId: string } | null>(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1188,17 +1207,39 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
   const deleteStage = async (stageId: string) => {
     try {
       if (stageId === '__no_stage__') return;
-      const { error } = await supabase
+      // Сначала удаляем все декомпозиции этого этапа, затем сам этап
+      const { error: itemsErr } = await supabase
+        .from('decomposition_items')
+        .delete()
+        .eq('decomposition_item_stage_id', stageId);
+      if (itemsErr) throw itemsErr;
+
+      const { error: stageErr } = await supabase
         .from('decomposition_stages')
         .delete()
         .eq('decomposition_stage_id', stageId);
-      if (error) throw error;
-      setStages(stages.filter((s) => s.id !== stageId));
+      if (stageErr) throw stageErr;
+
+      // Обновляем локальное состояние и снимаем выбор с удалённых сущностей
+      const removedDecompIds = new Set<string>();
+      const nextStages = stages.filter((s) => s.id !== stageId);
+      const deletedStage = stages.find((s) => s.id === stageId);
+      if (deletedStage) {
+        deletedStage.decompositions.forEach((d) => removedDecompIds.add(d.id));
+      }
+      setStages(nextStages);
       setSelectedStages((prev) => {
         const newSet = new Set(prev);
         newSet.delete(stageId);
         return newSet;
       });
+      if (removedDecompIds.size > 0) {
+        setSelectedDecompositions((prev) => {
+          const next = new Set(prev);
+          removedDecompIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления этапа:', e);
@@ -1641,7 +1682,7 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
     }
   };
 
-  const bulkDeleteStages = () => {
+  const bulkDeleteStages = async () => {
     if (selectedStages.size === 0) {
       toast({
         title: "Ошибка",
@@ -1651,32 +1692,72 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
       return;
     }
 
-    setStages(stages.filter((s) => !selectedStages.has(s.id)));
-    setSelectedStages(new Set());
+    const ids = Array.from(selectedStages).filter((id) => id !== "__no_stage__");
+    if (ids.length === 0) {
+      // Нечего удалять (выбран только спец. этап безэтапных элементов)
+      return;
+    }
 
-    toast({
-      title: "Успешно",
-      description: `Удалено этапов: ${selectedStages.size}`,
-    });
+    try {
+      // 1) Удаляем все декомпозиции этих этапов
+      const { error: itemsErr } = await supabase
+        .from('decomposition_items')
+        .delete()
+        .in('decomposition_item_stage_id', ids);
+      if (itemsErr) throw itemsErr;
+
+      // 2) Удаляем сами этапы
+      const { error: stagesErr } = await supabase
+        .from('decomposition_stages')
+        .delete()
+        .in('decomposition_stage_id', ids);
+      if (stagesErr) throw stagesErr;
+
+      setStages((prev) => prev.filter((s) => !selectedStages.has(s.id)));
+      setSelectedStages(new Set());
+      setSelectedDecompositions(new Set());
+
+      toast({
+        title: "Успешно",
+        description: `Удалено этапов: ${ids.length}`,
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка пакетного удаления этапов:', e);
+      toast({ title: "Ошибка", description: "Не удалось удалить этапы", variant: "destructive" });
+    }
   };
 
-  const bulkDeleteDecompositions = () => {
+  const bulkDeleteDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
       toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
       return;
     }
 
-    const count = selectedDecompositions.size;
+    const ids = Array.from(selectedDecompositions);
+    const count = ids.length;
 
-    setStages(
-      stages.map((stage) => ({
-        ...stage,
-        decompositions: stage.decompositions.filter((d) => !selectedDecompositions.has(d.id)),
-      }))
-    );
-    setSelectedDecompositions(new Set());
+    try {
+      const { error } = await supabase
+        .from('decomposition_items')
+        .delete()
+        .in('decomposition_item_id', ids);
+      if (error) throw error;
 
-    toast({ title: "Успешно", description: `Удалено декомпозиций: ${count}` });
+      setStages((prev) =>
+        prev.map((stage) => ({
+          ...stage,
+          decompositions: stage.decompositions.filter((d) => !selectedDecompositions.has(d.id)),
+        }))
+      );
+      setSelectedDecompositions(new Set());
+
+      toast({ title: "Успешно", description: `Удалено декомпозиций: ${count}` });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Ошибка пакетного удаления декомпозиций:', e);
+      toast({ title: "Ошибка", description: "Не удалось удалить декомпозиции", variant: "destructive" });
+    }
   };
 
   const selectAllStages = () => {
@@ -1812,12 +1893,40 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
     toast({ title: "Успешно", description: "Этапы продублированы" });
   };
 
+  const toggleStageCollapsed = (stageId: string) => {
+    setCollapsedStageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(stageId)) next.delete(stageId);
+      else next.add(stageId);
+      return next;
+    });
+  };
+
+  const collapseAllStages = () => {
+    setCollapsedStageIds(new Set(stages.map((s) => s.id)));
+  };
+
+  const expandAllStages = () => {
+    setCollapsedStageIds(new Set());
+  };
+
   return (
-    <div className="min-h-[60vh] bg-background p-4 relative">
+    <div className="min-h-[60vh] bg-background relative px-4 pb-4 pt-2">
       <div className="w-full">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">Управление этапами</h1>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const allCollapsed = stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id));
+                allCollapsed ? expandAllStages() : collapseAllStages();
+              }}
+              className="h-9"
+            >
+              {stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id)) ? "Развернуть все" : "Свернуть все"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowPasteDialog(true)} className="h-9">
               <ClipboardPaste className="mr-2 h-4 w-4" />
               Вставить
@@ -1941,6 +2050,8 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
                   statusOptions={statusOptions}
                   employees={employees}
                   formatProfileLabel={formatProfileLabel}
+                isCollapsed={collapsedStageIds.has(stage.id)}
+                onToggleCollapse={toggleStageCollapsed}
                 />
               ))}
             </div>
