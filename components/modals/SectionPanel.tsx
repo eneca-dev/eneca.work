@@ -656,15 +656,23 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           }}
         >
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800" style={{ margin: '0px' }}>
-              {sectionData?.section_name || 'Информация о разделе'}
-            </h2>
-            
-            {sectionData && (
-              <>
-                {/* Иерархия проекта */}
-                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              {sectionData?.responsible_name && (
+                <div className="flex-shrink-0" title={sectionData.responsible_name || undefined}>
+                  <Avatar className="h-7 w-7">
+                    <AvatarImage src={sectionData.responsible_avatar || undefined} alt={sectionData.responsible_name || undefined} />
+                    <AvatarFallback>
+                      {sectionData.responsible_name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+              )}
+              <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800 truncate" style={{ margin: '0px' }}>
+                {sectionData?.section_name || 'Информация о разделе'}
+              </h2>
+              {sectionData && (
+                <>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2 translate-y-[2px]">
                     {sectionData.manager_name && (
                       <>
                         <User className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -711,35 +719,18 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                       </>
                     )}
                   </div>
-                </div>
-
-                {/* Ответственный */}
-                {sectionData.responsible_name && (
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={sectionData.responsible_avatar || undefined} alt={sectionData.responsible_name || undefined} />
-                      <AvatarFallback>
-                        {sectionData.responsible_name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-slate-600 dark:text-slate-400">Ответственный:</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.responsible_name}</span>
-                  </div>
-                )}
-
-                {/* Статус секции */}
-                {sectionData.status_name && (
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
-                    />
-                    <span className="text-slate-600 dark:text-slate-400">Статус:</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.status_name}</span>
-                  </div>
-                )}
-              </>
-            )}
+                  {sectionData.status_name && (
+                    <div className="flex items-center gap-2 text-sm ml-auto">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
+                      />
+                      <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.status_name}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
           
           <button
