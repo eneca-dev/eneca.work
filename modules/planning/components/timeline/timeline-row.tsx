@@ -3,7 +3,8 @@
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2 } from "lucide-react"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
@@ -691,6 +692,7 @@ export function TimelineRow({
                     stickyColumnShadow={stickyColumnShadow}
                     totalFixedWidth={totalFixedWidth}
                     sectionResponsibleId={(section as any)?.responsibleId || null}
+                    stageName={stage.id === "__no_stage__" ? "Без этапа" : (stage.name || "Этап")}
                   />
                 ))}
               </React.Fragment>
@@ -722,6 +724,7 @@ interface LoadingRowProps {
   stickyColumnShadow: string
   totalFixedWidth: number
   sectionResponsibleId?: string | null
+  stageName?: string
 }
 
 // Компонент строки плановой загрузки временно скрыт
@@ -739,9 +742,11 @@ function LoadingRow({
   stickyColumnShadow,
   totalFixedWidth,
   sectionResponsibleId,
+  stageName,
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
@@ -921,7 +926,41 @@ function LoadingRow({
               </div>
 
               {/* Правая часть со ставкой */}
-              <div>
+              <div className="flex items-center gap-1">
+                <ConfirmDialog
+                  title="Удалить загрузку?"
+                  description={(
+                    <span>
+                      Вы уверены, что хотите удалить загрузку по этапу <strong>{stageName || "Этап"}</strong> сотрудника <strong>{loading.responsibleName || "Не указан"}</strong> со ставкой <strong>{loading.rate}</strong> за период <strong>{formatShortDate(loading.startDate)} — {formatShortDate(loading.endDate)}</strong>? Это действие нельзя отменить.
+                    </span>
+                  )}
+                  confirmLabel="Удалить"
+                  cancelLabel="Отмена"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    try {
+                      const result = await deleteLoadingInStore(loading.id)
+                      if (!result?.success) {
+                        console.error("Не удалось удалить загрузку", result?.error)
+                      }
+                    } catch (err) {
+                      console.error("Ошибка удаления загрузки", err)
+                    }
+                  }}
+                >
+                  <button
+                    className={cn(
+                      "inline-flex items-center justify-center h-6 w-6 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
+                      theme === "dark"
+                        ? "hover:bg-red-900/30 hover:text-red-300"
+                        : "hover:bg-red-100 hover:text-red-600"
+                    )}
+                    title="Удалить загрузку"
+                    onClick={(e) => { e.stopPropagation() }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </ConfirmDialog>
                 <span
                   className={cn(
                     "text-xs font-medium px-2 py-0.5 rounded",
@@ -1253,6 +1292,19 @@ function StageRow({
     ? (Number.isInteger(avgRatePerDay) ? `${avgRatePerDay} ст/д` : `${avgRatePerDay.toFixed(2)} ст/д`)
     : ""
 
+  // Плановый диапазон (по датам этапа), чтобы рисовать красную линию даже без загрузок
+  const hasStageDates = Boolean(stage.start && stage.finish)
+  const firstStageIdx = timeUnits.findIndex((u) => isDateInStage(u.date))
+  const lastStageIdx = (() => {
+    for (let i = timeUnits.length - 1; i >= 0; i--) {
+      if (isDateInStage(timeUnits[i].date)) return i
+    }
+    return -1
+  })()
+  const hasPlannedRange = hasStageDates && avgRatePerDay > 0 && firstStageIdx !== -1 && lastStageIdx !== -1
+  const plannedX1 = firstStageIdx >= 0 ? firstStageIdx * cellWidth : 0
+  const plannedX2 = lastStageIdx >= 0 ? (lastStageIdx + 1) * cellWidth : 0
+
   return (
     <div className="group/stage w-full">
       <div className="flex transition-colors w-full" style={{ height: `${reducedRowHeight}px` }}>
@@ -1343,7 +1395,7 @@ function StageRow({
         {/* Ячейки таймлайна для этапа + sparkline поверх */}
         <div className="flex-1 flex w-full" style={{ position: "relative" }}>
           {/* Sparkline суммарной загрузки этапа */}
-          {graphWidth > 0 && segments.length > 0 && (
+          {graphWidth > 0 && (segments.length > 0 || hasPlannedRange) && (
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
               <svg width={graphWidth} height={reducedRowHeight}>
                 {segments.map((seg, idx) => (
@@ -1353,23 +1405,22 @@ function StageRow({
                   </g>
                 ))}
 
-                {/* Красная линия средней ставки по этапу — только на участках, где есть загрузка */}
-                {avgRatePerDay > 0 && segments.map((seg, idx) => (
+                {/* Красная линия средней плановой ставки по всему диапазону этапа */}
+                {hasPlannedRange && (
                   <line
-                    key={`avg-${idx}`}
-                    x1={seg.x1}
+                    x1={plannedX1}
                     y1={avgY}
-                    x2={seg.x2}
+                    x2={plannedX2}
                     y2={avgY}
                     stroke="rgb(239, 68, 68)"
                     strokeWidth={1.5}
                   />
-                ))}
+                )}
 
-                {/* Подпись значения ставки у начала первого сегмента */}
-                {avgRatePerDay > 0 && segments[0] && (
+                {/* Подпись значения ставки у начала этапа */}
+                {hasPlannedRange && (
                   <text
-                    x={segments[0].x1 + 4}
+                    x={plannedX1 + 4}
                     y={avgY - 4}
                     fill="rgb(239, 68, 68)"
                     fontSize="10"

@@ -151,7 +151,6 @@ function SortableStage({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
-  const [isCopying, setIsCopying] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const stageNameRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -184,9 +183,6 @@ function SortableStage({
   );
 
   const copyStage = async () => {
-    setIsCopying(true);
-    setTimeout(() => setIsCopying(false), 200);
-
     try {
       let stageData = `Этап: ${stage.name}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
       stageData += "Декомпозиции:\n";
@@ -220,7 +216,7 @@ function SortableStage({
         selectedStages.has(stage.id) ? "ring-1 ring-primary/20 border-primary/40 bg-muted/40" : ""
       }`}
     >
-      <div className={`flex items-center ${isCollapsed ? "mb-1 gap-2" : "mb-2 gap-3"}`}>
+      <div className={`flex items-center ${isCollapsed ? "mb-1 gap-1" : "mb-2 gap-2"}`}>
         <div
           {...attributes}
           {...listeners}
@@ -234,6 +230,15 @@ function SortableStage({
           onChange={() => toggleStageSelection(stage.id)}
           className="h-4 w-4 rounded"
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleCollapse(stage.id)}
+          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0`}
+          title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
         <div className="flex-1">
           <Textarea
             ref={stageNameRef}
@@ -246,23 +251,13 @@ function SortableStage({
             onBlur={() => setIsEditingName(false)}
             placeholder="Новый этап"
             rows={1}
-            className={`${isCollapsed ? "text-base min-h-7 py-0.5" : "text-lg min-h-9 py-1"} font-semibold border-0 outline-none px-3 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden ${
+            className={`${isCollapsed ? "text-base min-h-7 py-0.5 translate-y-[3px]" : "text-lg min-h-9 py-1"} font-semibold border-0 outline-none px-3 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden ${
               isEditingName
                 ? "bg-primary/5 ring-2 ring-primary/40 ring-offset-1 ring-offset-background"
                 : "bg-transparent hover:bg-muted/40"
             }`}
           />
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onToggleCollapse(stage.id)}
-          className={`${isCollapsed ? "h-7" : "h-8"} px-2`}
-          title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-          <span className="hidden sm:inline">{isCollapsed ? "Развернуть" : "Свернуть"}</span>
-        </Button>
         <div className={`flex items-center text-xs text-muted-foreground/70 ${isCollapsed ? "gap-2" : "gap-3"}`}>
           <DatePicker
             value={stage.startDate ?? ""}
@@ -284,7 +279,7 @@ function SortableStage({
           variant="ghost"
           size="sm"
           onClick={copyStage}
-          className={`${isCollapsed ? "h-7" : "h-8"} px-3 hover:bg-primary/10 transition-all active:scale-95 ${isCopying ? "scale-95" : ""}`}
+          className={`${isCollapsed ? "h-7" : "h-8"} px-3 hover:bg-primary/10 transition-all active:scale-95`}
         >
           <Copy className="h-4 w-4 mr-1.5" />
           <span className={`${isCollapsed ? "hidden md:inline" : "inline"}`}>Копировать</span>
@@ -292,7 +287,7 @@ function SortableStage({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => deleteStage(stage.id)}
+          onClick={(e) => { e.stopPropagation(); deleteStage(stage.id); }}
           className={`${isCollapsed ? "h-7 w-7" : "h-8 w-8"} p-0 hover:bg-destructive/10 hover:text-destructive transition-all`}
         >
           <Trash2 className="h-4 w-4" />
@@ -1004,7 +999,6 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
   const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const { toast } = useToast();
-  const [isCopying, setIsCopying] = useState(false);
   const [focusedDecompositionId, setFocusedDecompositionId] = useState<string | null>(null);
   const [pendingNewDecomposition, setPendingNewDecomposition] = useState<{ stageId: string; decompId: string } | null>(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
@@ -1094,8 +1088,6 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
         setProfiles(profs);
         // Построим локальные этапы
         const stageMap = new Map<string, Stage>();
-        // Добавим специальный этап для безэтапных элементов
-        stageMap.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
         stgsRaw.forEach(s => {
           stageMap.set(s.decomposition_stage_id, {
             id: s.decomposition_stage_id,
@@ -1107,6 +1099,9 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
         });
         itemsRaw.forEach(it => {
           const stageId = it.decomposition_item_stage_id || '__no_stage__';
+          if (stageId === '__no_stage__' && !stageMap.has('__no_stage__')) {
+            stageMap.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
+          }
           const stage = stageMap.get(stageId);
           if (!stage) return;
           const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
@@ -1206,19 +1201,28 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
 
   const deleteStage = async (stageId: string) => {
     try {
-      if (stageId === '__no_stage__') return;
-      // Сначала удаляем все декомпозиции этого этапа, затем сам этап
-      const { error: itemsErr } = await supabase
-        .from('decomposition_items')
-        .delete()
-        .eq('decomposition_item_stage_id', stageId);
-      if (itemsErr) throw itemsErr;
+      if (stageId === '__no_stage__') {
+        // Удаляем все элементы без этапа в рамках текущего раздела, самого этапа в БД нет
+        const { error: noStageItemsErr } = await supabase
+          .from('decomposition_items')
+          .delete()
+          .eq('decomposition_item_section_id', sectionId)
+          .is('decomposition_item_stage_id', null);
+        if (noStageItemsErr) throw noStageItemsErr;
+      } else {
+        // Сначала удаляем все декомпозиции этого этапа, затем сам этап
+        const { error: itemsErr } = await supabase
+          .from('decomposition_items')
+          .delete()
+          .eq('decomposition_item_stage_id', stageId);
+        if (itemsErr) throw itemsErr;
 
-      const { error: stageErr } = await supabase
-        .from('decomposition_stages')
-        .delete()
-        .eq('decomposition_stage_id', stageId);
-      if (stageErr) throw stageErr;
+        const { error: stageErr } = await supabase
+          .from('decomposition_stages')
+          .delete()
+          .eq('decomposition_stage_id', stageId);
+        if (stageErr) throw stageErr;
+      }
 
       // Обновляем локальное состояние и снимаем выбор с удалённых сущностей
       const removedDecompIds = new Set<string>();
@@ -1240,9 +1244,11 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
           return next;
         });
       }
+      toast({ title: 'Успешно', description: 'Этап удалён' });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления этапа:', e);
+      toast({ title: 'Ошибка', description: 'Не удалось удалить этап', variant: 'destructive' });
     }
   };
 
@@ -1471,7 +1477,7 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
     }
   };
 
-  const handlePaste = () => {
+  const handlePaste = async () => {
     if (!pasteText.trim()) {
       toast({
         title: "Ошибка",
@@ -1482,6 +1488,12 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
     }
 
     try {
+      // Значения по умолчанию на случай пустых полей в вставке
+      const defaultCategoryId = categories[0]?.work_category_id ?? null;
+      const defaultDifficultyId = difficulties[0]?.difficulty_id ?? null;
+      const defaultStatusId =
+        (statuses.find((s) => /план/i.test(s.name))?.id) ?? statuses[0]?.id ?? null;
+
       const lines = pasteText.trim().split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
 
       const today = new Date().toISOString().split("T")[0];
@@ -1584,48 +1596,172 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
         }
       }
 
-      const newStages = [...stages];
-      let createdStagesCount = 0;
-      let importedDecompsCount = 0;
+      // 1) Построим карту существующих этапов по названию (только реальные, без "__no_stage__")
+      const existingByName = new Map<string, { id: string; startDate: string | null; endDate: string | null; decompositionsCount: number }>();
+      stages.filter((s) => s.id !== "__no_stage__").forEach((s) => {
+        existingByName.set(s.name, { id: s.id, startDate: s.startDate ?? null, endDate: s.endDate ?? null, decompositionsCount: s.decompositions.length });
+      });
 
-      for (const row of stageRows) {
-        const existing = newStages.find((s) => s.name === row.name);
-        if (existing) {
-          if (row.startDate) existing.startDate = row.startDate;
-          if (row.endDate) existing.endDate = row.endDate;
-        } else {
-          newStages.push({
-            id: Date.now().toString() + Math.random(),
-            name: row.name,
-            startDate: row.startDate ?? today,
-            endDate: row.endDate ?? today,
-            decompositions: [],
-          });
-          createdStagesCount += 1;
+      // Соберём список имён этапов из вставки
+      const stageNamesFromPaste = new Set<string>();
+      stageRows.forEach((r) => stageNamesFromPaste.add(r.name));
+      stageMap.forEach((_, name) => stageNamesFromPaste.add(name));
+
+      // 2) Создадим недостающие этапы
+      const toCreate: Array<{ name: string; start: string; finish: string; order: number }> = [];
+      const realStagesCount = stages.filter((s) => s.id !== "__no_stage__").length;
+      let orderBase = realStagesCount;
+      for (const name of stageNamesFromPaste) {
+        if (!existingByName.has(name)) {
+          const row = stageRows.find((r) => r.name === name);
+          toCreate.push({ name, start: row?.startDate ?? today, finish: row?.endDate ?? today, order: ++orderBase });
         }
       }
 
-      stageMap.forEach((data, stageName) => {
-        const existingStage = newStages.find((s) => s.name === stageName);
-        if (existingStage) {
-          existingStage.decompositions.push(...data.decompositions);
-        } else {
-          newStages.push({
-            id: Date.now().toString() + Math.random(),
-            name: stageName,
-            startDate: today,
-            endDate: today,
-            decompositions: data.decompositions,
+      if (toCreate.length > 0) {
+        const { data: created, error: createErr } = await supabase
+          .from('decomposition_stages')
+          .insert(toCreate.map((x) => ({
+            decomposition_stage_section_id: sectionId,
+            decomposition_stage_name: x.name,
+            decomposition_stage_start: x.start,
+            decomposition_stage_finish: x.finish,
+            decomposition_stage_order: x.order,
+          })))
+          .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish');
+        if (createErr) throw createErr;
+        (created as any[]).forEach((row) => {
+          existingByName.set(row.decomposition_stage_name, {
+            id: row.decomposition_stage_id,
+            startDate: row.decomposition_stage_start || null,
+            endDate: row.decomposition_stage_finish || null,
+            decompositionsCount: 0,
           });
-          createdStagesCount += 1;
-        }
-        importedDecompsCount += data.decompositions.length;
+        });
+      }
+
+      // 3) Обновим даты этапов, если пришли изменения
+      const updates = stageRows
+        .map((r) => ({
+          id: existingByName.get(r.name)?.id,
+          start: r.startDate,
+          end: r.endDate,
+        }))
+        .filter((u) => Boolean(u.id)) as Array<{ id: string; start?: string; end?: string }>;
+
+      await Promise.all(
+        updates.map((u) =>
+          supabase
+            .from('decomposition_stages')
+            .update({
+              ...(u.start ? { decomposition_stage_start: u.start } : {}),
+              ...(u.end ? { decomposition_stage_finish: u.end } : {}),
+            })
+            .eq('decomposition_stage_id', u.id!)
+        )
+      );
+
+      // 4) Подготовим и вставим декомпозиции
+      type PendingItem = { stageId: string | null; payload: any };
+      const itemsToInsert: PendingItem[] = [];
+      const perStageOrder = new Map<string, number>();
+      stages.forEach((s) => {
+        if (s.id === "__no_stage__") return;
+        perStageOrder.set(s.id, s.decompositions.length);
       });
 
-      setStages(newStages);
+      stageMap.forEach((data, stageName) => {
+        const info = existingByName.get(stageName);
+        const targetStageId = info?.id ?? null; // теоретически всегда есть после создавания
+        let order = targetStageId ? (perStageOrder.get(targetStageId) ?? 0) : 0;
+        for (const d of data.decompositions) {
+          const categoryId = (d.typeOfWork ? (categoryNameToId.get(d.typeOfWork) || null) : null) ?? defaultCategoryId;
+          const difficultyId = (d.difficulty ? (difficultyNameToId.get(d.difficulty) || null) : null) ?? defaultDifficultyId;
+          const statusId = (d.status ? (statusNameToId.get(d.status) || null) : null) ?? defaultStatusId;
+          const responsibleId = d.responsible ? (profileNameToId.get(d.responsible) || null) : null;
+
+          const payload: any = {
+            decomposition_item_section_id: sectionId,
+            decomposition_item_description: d.description || '',
+            decomposition_item_work_category_id: categoryId,
+            decomposition_item_planned_hours: Number(d.plannedHours) || 0,
+            decomposition_item_order: order++,
+            decomposition_item_planned_due_date: d.completionDate || today,
+            decomposition_item_responsible: responsibleId,
+            decomposition_item_status_id: statusId,
+            decomposition_item_progress: Number(d.progress) || 0,
+            decomposition_item_stage_id: targetStageId, // null означает "без этапа"
+            decomposition_item_difficulty_id: difficultyId,
+          };
+          itemsToInsert.push({ stageId: targetStageId, payload });
+        }
+        if (targetStageId) perStageOrder.set(targetStageId, order);
+      });
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemsErr } = await supabase
+          .from('decomposition_items')
+          .insert(itemsToInsert.map((i) => i.payload));
+        if (itemsErr) throw itemsErr;
+      }
+
+      // 5) Обновим локальное состояние, перезагрузив из БД, чтобы гарантировать корректные id и данные
+      try {
+        const { data, error } = await supabase.rpc('get_decomposition_bootstrap', { p_section_id: sectionId });
+        if (error) throw error;
+        const json: any = data as any;
+        const cats = json?.categories || [];
+        const diffs = json?.difficultyLevels || [];
+        const stats = json?.statuses || [];
+        const profs = json?.profiles || [];
+        const stgsRaw = (json?.stages || []) as any[];
+        const itemsRaw = (json?.items || []) as any[];
+        setCategories(cats);
+        setDifficulties(diffs);
+        setStatuses(stats);
+        setProfiles(profs);
+        const stageMapReload = new Map<string, Stage>();
+        stgsRaw.forEach(s => {
+          stageMapReload.set(s.decomposition_stage_id, {
+            id: s.decomposition_stage_id,
+            name: s.decomposition_stage_name,
+            startDate: s.decomposition_stage_start || null,
+            endDate: s.decomposition_stage_finish || null,
+            decompositions: [],
+          });
+        });
+        itemsRaw.forEach(it => {
+          const stageId = it.decomposition_item_stage_id || '__no_stage__';
+          if (stageId === '__no_stage__' && !stageMapReload.has('__no_stage__')) {
+            stageMapReload.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
+          }
+          const stage = stageMapReload.get(stageId);
+          if (!stage) return;
+          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
+          const statusName = it.section_statuses ? it.section_statuses.name : '';
+          const decomp: Decomposition = {
+            id: it.decomposition_item_id,
+            description: it.decomposition_item_description || '',
+            typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
+            difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
+            responsible: respName,
+            plannedHours: Number(it.decomposition_item_planned_hours || 0),
+            progress: Number(it.decomposition_item_progress || 0),
+            status: statusName || '',
+            completionDate: it.decomposition_item_planned_due_date || new Date().toISOString().split('T')[0],
+          };
+          stage.decompositions.push(decomp);
+        });
+        setStages(Array.from(stageMapReload.values()));
+      } catch {
+        // Если перезагрузка не удалась, оставим текущее состояние как есть
+      }
+
       setPasteText("");
       setShowPasteDialog(false);
 
+      const importedDecompsCount = Array.from(stageMap.values()).reduce((acc, v) => acc + v.decompositions.length, 0);
+      const createdStagesCount = toCreate.length;
       const descParts = [] as string[];
       if (importedDecompsCount > 0) descParts.push(`декомпозиций: ${importedDecompsCount}`);
       if (createdStagesCount > 0 || stageRows.length > 0) descParts.push(`этапов создано/обновлено: ${createdStagesCount}`);
@@ -1644,9 +1780,6 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
   };
 
   const handleCopy = async () => {
-    setIsCopying(true);
-    setTimeout(() => setIsCopying(false), 200);
-
     try {
       let decompositionTable =
         "| Название этапа | Описание декомпозиции (название) | Тип работ | Сложность | Отвественный | Плановые часы | Статус | Дата (декомпозиции) |\n";
@@ -1692,34 +1825,47 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
       return;
     }
 
-    const ids = Array.from(selectedStages).filter((id) => id !== "__no_stage__");
-    if (ids.length === 0) {
-      // Нечего удалять (выбран только спец. этап безэтапных элементов)
-      return;
-    }
+    const allIds = Array.from(selectedStages);
+    const realIds = allIds.filter((id) => id !== "__no_stage__");
+    const includeNoStage = allIds.includes("__no_stage__");
 
     try {
-      // 1) Удаляем все декомпозиции этих этапов
-      const { error: itemsErr } = await supabase
-        .from('decomposition_items')
-        .delete()
-        .in('decomposition_item_stage_id', ids);
-      if (itemsErr) throw itemsErr;
+      // 1) Удаляем декомпозиции реальных этапов
+      if (realIds.length > 0) {
+        const { error: itemsErr } = await supabase
+          .from('decomposition_items')
+          .delete()
+          .in('decomposition_item_stage_id', realIds);
+        if (itemsErr) throw itemsErr;
+      }
 
-      // 2) Удаляем сами этапы
-      const { error: stagesErr } = await supabase
-        .from('decomposition_stages')
-        .delete()
-        .in('decomposition_stage_id', ids);
-      if (stagesErr) throw stagesErr;
+      // 1b) Удаляем элементы без этапа для текущего раздела, если выбран "Без этапа"
+      if (includeNoStage) {
+        const { error: noStageItemsErr } = await supabase
+          .from('decomposition_items')
+          .delete()
+          .eq('decomposition_item_section_id', sectionId)
+          .is('decomposition_item_stage_id', null);
+        if (noStageItemsErr) throw noStageItemsErr;
+      }
+
+      // 2) Удаляем сами этапы (только реальные)
+      if (realIds.length > 0) {
+        const { error: stagesErr } = await supabase
+          .from('decomposition_stages')
+          .delete()
+          .in('decomposition_stage_id', realIds);
+        if (stagesErr) throw stagesErr;
+      }
 
       setStages((prev) => prev.filter((s) => !selectedStages.has(s.id)));
       setSelectedStages(new Set());
       setSelectedDecompositions(new Set());
 
+      const deletedCount = realIds.length + (includeNoStage ? 1 : 0);
       toast({
         title: "Успешно",
-        description: `Удалено этапов: ${ids.length}`,
+        description: `Удалено этапов: ${deletedCount}`,
       });
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -1935,7 +2081,7 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
               variant="outline"
               size="sm"
               onClick={handleCopy}
-              className={`h-9 bg-transparent transition-transform active:scale-95 ${isCopying ? "scale-95" : ""}`}
+              className={`h-9 bg-transparent transition-transform active:scale-95`}
             >
               <Copy className="mr-2 h-4 w-4" />
               Копировать
