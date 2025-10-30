@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Input } from "./ui/input";
 import { DatePicker } from "./ui/date-picker";
 import { useToast } from "../hooks/use-toast";
+import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
 
 // Типы данных
 type Decomposition = {
@@ -1041,6 +1042,19 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
   const statusOptions = useMemo(() => statuses.map(s => s.name), [statuses]);
   // responsibleOptions формируются вместе с profileNameToId, чтобы метки были уникальны
 
+  const chartStages = useMemo(() =>
+    stages
+      .filter((s) => s.id !== "__no_stage__")
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        start: s.startDate,
+        finish: s.endDate,
+        description: null as string | null,
+      })),
+    [stages]
+  );
+
   // Загрузка данных из БД
   useEffect(() => {
     if (!sectionId) return;
@@ -1932,6 +1946,10 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
             </div>
           </SortableContext>
         </DndContext>
+
+        <div className="mt-6">
+          <DecompositionStagesChart stages={chartStages} />
+        </div>
 
         <Dialog open={showPasteDialog} onOpenChange={setShowPasteDialog}>
           <DialogContent className="max-w-3xl">
