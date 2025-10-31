@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/client"
-import type { Section, Loading } from "@/modules/planning/types"
+import type { Section, Loading, PlannedLoading, DecompositionStage } from "@/modules/planning/types"
 
 // Используем единый клиент Supabase вместо создания нового
 export const supabase = createClient()
@@ -40,6 +40,7 @@ export interface LoadingData {
   responsible_name?: string | null
   responsible_avatar: string | null
   loading_section: string
+  loading_stage?: string | null
   loading_start: string | null
   loading_finish: string | null
   loading_rate: number | null
@@ -70,6 +71,7 @@ export interface SectionWithLoadings {
   has_loadings: boolean
   loading_id: string | null
   loading_responsible: string | null
+  loading_stage?: string | null
   loading_start: string | null
   loading_finish: string | null
   loading_rate: number | null
@@ -80,6 +82,9 @@ export interface SectionWithLoadings {
   responsible_last_name: string | null
   responsible_avatar: string | null
   responsible_team_name: string | null
+  // Этапы декомпозиции раздела (подгружаются отдельным запросом)
+  decompositionStages?: DecompositionStage[] | null
+  // Доп. поля для плановых загрузок (nullable в view не гарантируется) — получим из отдельного запроса
 }
 
 // Добавляем новый интерфейс для данных о загрузке сотрудников
@@ -142,6 +147,7 @@ export interface ShortageLoadingRow {
   loading_status: "active" | "archived"
 }
 
+
 // Функция для получения разделов из представления view_section_hierarchy
 export async function fetchSectionHierarchy(): Promise<SectionHierarchy[] | StructuredError> {
   try {
@@ -176,6 +182,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
         loading_id,
         loading_responsible,
         section_id,
+        loading_stage,
         loading_start,
         loading_finish,
         loading_rate,
@@ -210,6 +217,7 @@ export async function fetchLoadings(sectionId: string, checkOnly = false): Promi
       loading_id: item.loading_id,
       loading_responsible: item.loading_responsible,
       loading_section: item.section_id, // Маппим section_id в loading_section
+      loading_stage: item.loading_stage ?? null,
       loading_start: item.loading_start,
       loading_finish: item.loading_finish,
       loading_rate: item.loading_rate,
@@ -336,7 +344,7 @@ export async function fetchSectionsWithLoadings(
     console.log("📊 Получено записей из view_sections_with_loadings:", data?.length || 0)
 
     // Группируем данные по разделам и загрузкам
-    const sectionsMap = new Map<string, Section>()
+    const sectionsMap = new Map<string, Section & { decompositionStages: DecompositionStage[] }>()
     const loadingsMap: Record<string, Loading[]> = {}
 
     data?.forEach((item) => {
@@ -365,6 +373,7 @@ export async function fetchSectionsWithLoadings(
           endDate: sectionItem.section_end_date ? new Date(sectionItem.section_end_date) : new Date(),
           status: sectionItem.latest_plan_loading_status || undefined,
           hasLoadings: sectionItem.has_loadings,
+          decompositionStages: [], // Будет заполнено ниже
         })
 
         // Инициализируем массив загрузок для этого раздела
@@ -375,6 +384,7 @@ export async function fetchSectionsWithLoadings(
       if (sectionItem.loading_id && sectionItem.loading_status === "active") {
         loadingsMap[sectionItem.section_id].push({
           id: sectionItem.loading_id,
+          stageId: sectionItem.loading_stage || undefined,
           responsibleId: sectionItem.loading_responsible || "",
           responsibleName:
             sectionItem.responsible_first_name && sectionItem.responsible_last_name
@@ -392,6 +402,73 @@ export async function fetchSectionsWithLoadings(
         })
       }
     })
+
+    // Загружаем этапы декомпозиции и плановые загрузки для всех разделов одним набором запросов
+    const sectionIds = Array.from(sectionsMap.keys())
+    if (sectionIds.length > 0) {
+      const [stagesQ] = await Promise.all([
+        supabase
+          .from('decomposition_stages')
+          .select('decomposition_stage_id, decomposition_stage_section_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_order')
+          .in('decomposition_stage_section_id', sectionIds)
+          .order('decomposition_stage_order', { ascending: true })
+      ])
+
+      const stagesData = stagesQ.data
+      const stagesError = stagesQ.error
+
+      if (!stagesError && stagesData) {
+        const stagesBySectionId: Record<string, any[]> = {}
+        const allStageIds: string[] = []
+        stagesData.forEach((stage: any) => {
+          const sectionId = stage.decomposition_stage_section_id
+          if (!stagesBySectionId[sectionId]) stagesBySectionId[sectionId] = []
+          const stageObj = {
+            id: stage.decomposition_stage_id,
+            name: stage.decomposition_stage_name,
+            start: stage.decomposition_stage_start ? new Date(stage.decomposition_stage_start) : null,
+            finish: stage.decomposition_stage_finish ? new Date(stage.decomposition_stage_finish) : null,
+          }
+          stagesBySectionId[sectionId].push(stageObj)
+          if (stageObj.id) allStageIds.push(stageObj.id)
+        })
+
+        // Загружаем статистику сложностей по этапам из представления и раскладываем по этапам
+        let statsByStageId: Record<string, any[]> = {}
+        if (allStageIds.length > 0) {
+          const { data: statsData, error: statsError } = await supabase
+            .from('view_stage_difficulty_stats')
+            .select('stage_id, difficulty_id, difficulty_abbr, difficulty_definition, difficulty_weight, items_count, planned_hours, weighted_hours')
+            .in('stage_id', allStageIds)
+
+          if (!statsError && Array.isArray(statsData)) {
+            for (const row of statsData) {
+              const sId = row.stage_id as string
+              ;(statsByStageId[sId] ||= []).push({
+                difficulty_id: row.difficulty_id,
+                difficulty_abbr: row.difficulty_abbr,
+                difficulty_definition: row.difficulty_definition,
+                difficulty_weight: Number(row.difficulty_weight ?? 0),
+                items_count: Number(row.items_count ?? 0),
+                planned_hours: Number(row.planned_hours ?? 0),
+                weighted_hours: Number(row.weighted_hours ?? 0),
+              })
+            }
+          } else if (statsError) {
+            console.warn('Не удалось загрузить view_stage_difficulty_stats:', statsError)
+          }
+        }
+
+        sectionsMap.forEach((section, sectionId) => {
+          const stages = stagesBySectionId[sectionId] || []
+          // Прикрепляем статистику сложностей к каждому этапу
+          stages.forEach((st: any) => {
+            st.difficultyStats = statsByStageId[st.id] || []
+          })
+          section.decompositionStages = stages
+        })
+      }
+    }
 
     return {
       sections: Array.from(sectionsMap.values()),
@@ -651,6 +728,7 @@ export async function createLoading(loadingData: {
   rate: number
   // Необязательный комментарий (если в БД нет колонки, запрос упадет — обработаем фолбэком)
   comment?: string
+  stageId?: string
 }): Promise<{ success: boolean; error?: string; loadingId?: string }> {
   try {
     console.log("Создание новой загрузки:", loadingData)
@@ -662,6 +740,7 @@ export async function createLoading(loadingData: {
       loading_start: loadingData.startDate,
       loading_finish: loadingData.endDate,
       loading_rate: loadingData.rate,
+      loading_stage: loadingData.stageId ?? null,
       loading_status: "active",
       loading_created: new Date().toISOString(),
       loading_updated: new Date().toISOString(),

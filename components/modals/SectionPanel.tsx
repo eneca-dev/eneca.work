@@ -2,24 +2,24 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Trash2, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import { X, Loader2, Calendar, User, Building, Package, Edit3, Check, AlertTriangle, ChevronDown, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/utils/supabase/client'
 import { useUiStore } from '@/stores/useUiStore'
 import { useProjectsStore } from '@/modules/projects/store'
 import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
-import { SectionDecompositionTab } from '@/modules/projects/components/SectionDecompositionTab'
 import SectionReportsTab from '@/modules/projects/components/SectionReportsTab'
 import SectionLoadingsTab from '@/modules/projects/components/SectionLoadingsTab'
 import SectionTasksPreview from '@/modules/projects/components/SectionTasksPreview'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
 import { DeleteSectionModal } from '@/modules/projects/components/DeleteSectionModal'
+import SectionDecomposition2Tab from '@/modules/decomposition2/components/SectionDecomposition2Tab'
 
 interface SectionPanelProps {
   isOpen: boolean
   onClose: () => void
   sectionId: string
-  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition'
+  initialTab?: 'overview' | 'details' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'
   statuses: Array<{id: string, name: string, color: string, description?: string}>
 }
 
@@ -47,6 +47,14 @@ interface SectionData {
   status_color?: string | null
 }
 
+type HierarchyData = {
+  object_name: string | null
+  stage_name?: string | null
+  project_name?: string | null
+  manager_name?: string | null
+  project_manager_name?: string | null
+}
+
 interface Profile {
   user_id: string
   first_name: string
@@ -61,8 +69,8 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const [sectionData, setSectionData] = useState<SectionData | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings'>(
-    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab)
+  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'decomposition2' | 'tasks' | 'reports' | 'loadings'>(
+    initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : initialTab)
   )
   const initializedRef = useRef(false)
 
@@ -173,7 +181,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       // Сначала пробуем загрузить через представление
       const { data: viewData, error: viewError } = await supabase
         .from('view_section_hierarchy')
-        .select('object_id, object_name, stage_id, stage_name, project_id, project_name, manager_name')
+        .select('object_id, object_name, stage_id, stage_name, project_id, project_name, project_manager_name:manager_name')
         .eq('section_id', sectionId)
         .single()
 
@@ -296,19 +304,18 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         }
       }
 
+      // Приведение типов и формирование итоговых данных
+      const hierarchy = hierarchyData as HierarchyData | null
       // Формируем итоговые данные
       const formattedData = {
         ...sectionData,
         responsible_name: responsibleName,
-        object_id: hierarchyData?.object_id ?? sectionData.section_object_id,
-        object_name: hierarchyData?.object_name ?? null,
-        stage_id: hierarchyData?.stage_id ?? null,
-        stage_name: hierarchyData?.stage_name ?? null,
-        project_id: hierarchyData?.project_id ?? null,
-        project_name: hierarchyData?.project_name ?? null,
-        manager_name: hierarchyData?.manager_name ?? null,
-        status_name: sectionData.section_statuses?.name ?? null,
-        status_color: sectionData.section_statuses?.color ?? null,
+        object_name: hierarchyData?.object_name || null,
+        stage_name: hierarchy?.stage_name || null,
+        project_name: hierarchy?.project_name || null,
+        manager_name: hierarchy?.manager_name ?? hierarchy?.project_manager_name ?? null,
+        status_name: sectionData.section_statuses?.name || null,
+        status_color: sectionData.section_statuses?.color || null,
         responsible_avatar: responsibleAvatar
       }
 
@@ -347,7 +354,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   // Устанавливаем активную вкладку только при первой инициализации
   useEffect(() => {
     if (isOpen && !initializedRef.current) {
-      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition' : initialTab))
+      setActiveTab(initialTab === 'details' ? 'overview' : (initialTab === 'decomposition' ? 'decomposition2' : initialTab))
       initializedRef.current = true
     }
   }, [isOpen, initialTab])
@@ -456,9 +463,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
     setShowResponsibleDropdown(false)
   }
 
+  // удаление выполняется через DeleteSectionModal
+
   const handleDeleteSuccess = () => {
-    onClose() // Закрываем модальное окно
-    window.location.reload() // Обновляем страницу или список проектов
+    setShowDeleteModal(false)
+    onClose()
   }
 
   const getProfileName = (profile: Profile) => {
@@ -630,10 +639,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       {/* Центрированное модальное окно, шире прежнего */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
         style={{ position: 'fixed', top: '0px', left: '0px', right: '0px', bottom: '0px', margin: '0px', padding: '16px' }}
       >
         <div
-          className="w-full max-w-[1200px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
+          className="w-full max-w-[1400px] h-[90vh] bg-white dark:bg-slate-900 shadow-2xl border border-gray-200 dark:border-slate-700 rounded-none flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Заголовок прилегает к верху */}
@@ -645,15 +655,23 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
           }}
         >
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800" style={{ margin: '0px' }}>
-              {sectionData?.section_name || 'Информация о разделе'}
-            </h2>
-            
-            {sectionData && (
-              <>
-                {/* Иерархия проекта */}
-                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              {sectionData?.responsible_name && (
+                <div className="flex-shrink-0" title={sectionData.responsible_name || undefined}>
+                  <Avatar className="h-7 w-7">
+                    <AvatarImage src={sectionData.responsible_avatar || undefined} alt={sectionData.responsible_name || undefined} />
+                    <AvatarFallback>
+                      {sectionData.responsible_name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+              )}
+              <h2 className="text-xl font-semibold dark:text-slate-200 text-slate-800 truncate" style={{ margin: '0px' }}>
+                {sectionData?.section_name || 'Информация о разделе'}
+              </h2>
+              {sectionData && (
+                <>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2 translate-y-[2px]">
                     {sectionData.manager_name && (
                       <>
                         <User className="h-3 w-3 text-blue-600 dark:text-blue-400" />
@@ -700,35 +718,18 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                       </>
                     )}
                   </div>
-                </div>
-
-                {/* Ответственный */}
-                {sectionData.responsible_name && (
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={sectionData.responsible_avatar || undefined} alt={sectionData.responsible_name || undefined} />
-                      <AvatarFallback>
-                        {sectionData.responsible_name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-slate-600 dark:text-slate-400">Ответственный:</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.responsible_name}</span>
-                  </div>
-                )}
-
-                {/* Статус секции */}
-                {sectionData.status_name && (
-                  <div className="mt-2 flex items-center gap-2 text-sm">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
-                    />
-                    <span className="text-slate-600 dark:text-slate-400">Статус:</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.status_name}</span>
-                  </div>
-                )}
-              </>
-            )}
+                  {sectionData.status_name && (
+                    <div className="flex items-center gap-2 text-sm ml-auto">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: sectionData.status_color || '#6B7280' }}
+                      />
+                      <span className="font-medium text-slate-700 dark:text-slate-300">{sectionData.status_name}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
           
           <button
@@ -753,15 +754,16 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               Общее
             </button>
             <button
-              onClick={() => setActiveTab('decomposition')}
+              onClick={() => setActiveTab('decomposition2')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-                activeTab === 'decomposition'
+                activeTab === 'decomposition2'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
               Декомпозиция
             </button>
+            
             <button
               onClick={() => setActiveTab('tasks')}
               className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
@@ -1180,7 +1182,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   })()}
 
                   {/* Кнопка удаления раздела */}
-                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                     <button
                       onClick={() => setShowDeleteModal(true)}
                       className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center gap-1.5 border border-red-200 dark:border-red-800 text-sm"
@@ -1197,9 +1199,10 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
               {activeTab === 'comments' && (
                 <CommentsPanel sectionId={sectionId} />
               )}
-              {activeTab === 'decomposition' && (
-                <SectionDecompositionTab sectionId={sectionId} compact />
-              )}
+          {activeTab === 'decomposition2' && (
+            <SectionDecomposition2Tab sectionId={sectionId} compact />
+          )}
+              
               {activeTab === 'tasks' && (
                 <div>
                   <SectionTasksPreview sectionId={sectionId} />

@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { create } from "zustand" 
 import { devtools, persist } from "zustand/middleware"
 import * as Sentry from "@sentry/nextjs"
 import type { Section, Loading, Department, Team, Employee } from "../types"
@@ -24,8 +24,12 @@ interface PlanningState {
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
   expandedTeams: Record<string, boolean> // Отслеживание раскрытых команд
+  expandedEmployees: Record<string, boolean> // Отслеживание раскрытых сотрудников
   showSections: boolean // Флаг для показа/скрытия разделов
   showDepartments: boolean // Флаг для показа/скрытия отделов
+  // Группировка
+  groupByProject: boolean
+  expandedProjectGroups: Record<string, boolean>
 
   // Пагинация
   currentPage: number
@@ -92,6 +96,7 @@ interface PlanningState {
     startDate: Date
     endDate: Date
     rate: number
+    stageId?: string
     projectName?: string
     sectionName?: string
     responsibleName?: string
@@ -106,13 +111,22 @@ interface PlanningState {
   toggleSectionExpanded: (sectionId: string) => void
   toggleDepartmentExpanded: (departmentId: string) => void
   toggleTeamExpanded: (teamId: string) => void
+  toggleEmployeeExpanded: (employeeId: string) => void
   expandAllSections: () => Promise<void>
   collapseAllSections: () => void
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
+  expandAllTeams: () => void
+  collapseAllTeams: () => void
+  expandAllEmployees: () => void
+  collapseAllEmployees: () => void
   setCurrentPage: (page: number) => void
   toggleShowSections: () => void
   toggleShowDepartments: () => void
+  toggleGroupByProject: () => void
+  toggleProjectGroup: (projectName: string) => void
+  expandAllProjectGroups: () => void
+  collapseAllProjectGroups: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
 
@@ -192,8 +206,11 @@ export const usePlanningStore = create<PlanningState>()(
         expandedSections: {},
         expandedDepartments: {},
         expandedTeams: {},
-        showSections: true, // По умолчанию разделы показываются
-        showDepartments: false,
+        expandedEmployees: {},
+        showSections: false, // По умолчанию разделы скрыты
+        showDepartments: true, // По умолчанию отделы показываются
+        groupByProject: true,
+        expandedProjectGroups: {},
         currentPage: 1,
         sectionsPerPage: 20,
         loadingsMap: {},
@@ -859,7 +876,9 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleId: item.loading_responsible,
               responsibleName: item.responsible_name || undefined,
               responsibleAvatarUrl: item.responsible_avatar || undefined,
-              sectionId: item.section_id, // Исправлено: используем section_id из view_sections_with_loadings
+              // Берём корректные поля из ответа fetchLoadings (view_sections_with_loadings)
+              sectionId: item.section_id,
+              stageId: item.loading_stage || null,
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
@@ -933,6 +952,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate.toISOString().split("T")[0],
               endDate: loadingData.endDate.toISOString().split("T")[0],
               rate: loadingData.rate,
+              stageId: loadingData.stageId,
             }
 
             // Вызываем API
@@ -956,6 +976,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
               rate: loadingData.rate,
+              stageId: loadingData.stageId,
               comment: (loadingData as any).comment,
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -1637,8 +1658,10 @@ export const usePlanningStore = create<PlanningState>()(
           // Находим раздел
           const section = sections.find((s) => s.id === sectionId)
 
-          // Если раздел не найден или у него нет загрузок, ничего не делаем
-          if (!section || !section.hasLoadings) return
+          // Раздел должен иметь потомков: либо загрузки, либо этапы
+          const hasStages = section && Array.isArray(section.decompositionStages) && section.decompositionStages.length > 0
+          const hasChildren = section && (section.hasLoadings || hasStages)
+          if (!section || !hasChildren) return
 
           // Обновляем состояние раскрытия
           set((state) => ({
@@ -1696,32 +1719,49 @@ export const usePlanningStore = create<PlanningState>()(
           }))
         },
 
+        // Переключение состояния раскрытия сотрудника (для показа его детальных загрузок)
+        toggleEmployeeExpanded: (employeeId: string) => {
+          set((state) => ({
+            expandedEmployees: {
+              ...state.expandedEmployees,
+              [employeeId]: !state.expandedEmployees[employeeId],
+            },
+          }))
+        },
+
         // Развернуть все разделы
         expandAllSections: async () => {
           const { sections, loadingsMap } = get()
-          const sectionsWithLoadings = sections.filter((section) => section.hasLoadings)
+          const sectionsToExpand = sections.filter((section) => {
+            const hasStages = Array.isArray(section.decompositionStages) && section.decompositionStages.length > 0
+            return section.hasLoadings || hasStages
+          })
 
-          // Создаем объект с состоянием раскрытия для всех разделов с загрузками
+          // Создаем объект с состоянием раскрытия для всех разделов с потомками
           const newExpandedSections: Record<string, boolean> = {}
-          sectionsWithLoadings.forEach((section) => {
+          sectionsToExpand.forEach((section) => {
             newExpandedSections[section.id] = true
           })
+
+          const idsToExpand = new Set(sectionsToExpand.map((s) => s.id))
 
           // Обновляем состояние
           set((state) => ({
             expandedSections: newExpandedSections,
             sections: state.sections.map((s) => {
-              if (s.hasLoadings) {
+              if (idsToExpand.has(s.id)) {
                 return {
                   ...s,
                   isExpanded: true,
-                  // Объединяем загрузки из раздела и карты загрузок, избегая дубликатов
-                  loadings: mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[s.id] || []),
+                  // Для разделов с загрузками — актуализируем список загрузок из карты
+                  loadings: s.hasLoadings
+                    ? mergeLoadingsWithoutDuplicates(s.loadings || [], loadingsMap[s.id] || [])
+                    : s.loadings,
                 }
               }
               return s
             }),
-            allSections: state.allSections.map((s) => (s.hasLoadings ? { ...s, isExpanded: true } : s)),
+            allSections: state.allSections.map((s) => (idsToExpand.has(s.id) ? { ...s, isExpanded: true } : s)),
           }))
         },
 
@@ -1757,6 +1797,46 @@ export const usePlanningStore = create<PlanningState>()(
           }))
         },
 
+        // Развернуть все команды во всех отделах
+        expandAllTeams: () => {
+          const { departments } = get()
+          const newExpandedTeams: Record<string, boolean> = {}
+          departments.forEach((dept) => {
+            dept.teams.forEach((team) => {
+              newExpandedTeams[team.id] = true
+            })
+          })
+          set((state) => ({
+            expandedTeams: newExpandedTeams,
+          }))
+        },
+
+        // Свернуть все команды во всех отделах
+        collapseAllTeams: () => {
+          set({ expandedTeams: {} })
+        },
+
+        // Развернуть всех сотрудников (детали) у кого есть загрузки
+        expandAllEmployees: () => {
+          const { departments } = get()
+          const newExpandedEmployees: Record<string, boolean> = {}
+          departments.forEach((dept) => {
+            dept.teams.forEach((team) => {
+              team.employees.forEach((emp) => {
+                if (emp.loadings && emp.loadings.length > 0) {
+                  newExpandedEmployees[emp.id] = true
+                }
+              })
+            })
+          })
+          set({ expandedEmployees: newExpandedEmployees })
+        },
+
+        // Свернуть всех сотрудников (детали)
+        collapseAllEmployees: () => {
+          set({ expandedEmployees: {} })
+        },
+
         // Добавляем функцию переключения показа разделов
         toggleShowSections: () => {
           const { showSections } = get()
@@ -1774,6 +1854,44 @@ export const usePlanningStore = create<PlanningState>()(
           }
 
           set({ showDepartments: newShowDepartments })
+        },
+
+        // Переключатель группировки по проектам
+        toggleGroupByProject: () => {
+          const { groupByProject } = get()
+          set({ groupByProject: !groupByProject })
+        },
+
+        // Переключить конкретную проектную группу
+        toggleProjectGroup: (projectName: string) => {
+          set((state) => ({
+            expandedProjectGroups: {
+              ...state.expandedProjectGroups,
+              [projectName]: !state.expandedProjectGroups[projectName],
+            },
+          }))
+        },
+
+        // Развернуть все проектные группы
+        expandAllProjectGroups: () => {
+          const { sections } = get()
+          const all: Record<string, boolean> = {}
+          sections.forEach((s) => {
+            const key = s.projectName || "Без проекта"
+            all[key] = true
+          })
+          set({ expandedProjectGroups: all })
+        },
+
+        // Свернуть все проектные группы
+        collapseAllProjectGroups: () => {
+          const { sections } = get()
+          const all: Record<string, boolean> = {}
+          sections.forEach((s) => {
+            const key = s.projectName || "Без проекта"
+            all[key] = false
+          })
+          set({ expandedProjectGroups: all })
         },
 
         // Добавление нового раздела
@@ -2411,10 +2529,23 @@ export const usePlanningStore = create<PlanningState>()(
       }),
       {
         name: "planning-data-storage",
+        version: 2,
+        migrate: (persistedState: any, version: number) => {
+          try {
+            // До v2 мы сохраняли showDepartments и могли зафиксировать false,
+            // что сбивает дефолт при первой загрузке. Принудительно включаем.
+            if (version < 2 && persistedState) {
+              const { showDepartments: _oldShowDepartments, ...rest } = persistedState as any
+              return { ...rest, showDepartments: true }
+            }
+          } catch (_) {
+            // no-op, вернём как есть ниже
+          }
+          return persistedState as any
+        },
         partialize: (state) => ({
           expandedSections: state.expandedSections,
           expandedDepartments: state.expandedDepartments,
-          showDepartments: state.showDepartments,
           currentPage: state.currentPage,
         }),
       },

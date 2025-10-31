@@ -1,4 +1,4 @@
-"use client"
+"use client" 
 
 import type React from "react"
 import type { JSX } from "react"
@@ -28,9 +28,17 @@ interface CreateLoadingBySectionModalProps {
   section: Section
   setShowModal: (show: boolean) => void
   theme: string
+  // Дополнительные параметры предзаполнения
+  defaultStartDate?: Date | string
+  defaultEndDate?: Date | string
+  defaultRate?: number
+  // Привязка к этапу
+  stageId?: string | null
+  stageName?: string | null
+
 }
 
-export function CreateLoadingBySectionModal({ section, setShowModal, theme }: CreateLoadingBySectionModalProps): JSX.Element {
+export function CreateLoadingBySectionModal({ section, setShowModal, theme, defaultStartDate, defaultEndDate, defaultRate, stageId, stageName }: CreateLoadingBySectionModalProps): JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -40,12 +48,39 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
+  const fetchSections = usePlanningStore((state) => state.fetchSections)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
+  const formatLocalYMD = (date: Date): string | null => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const normalizeDateValue = (val?: Date | string) => {
+    if (!val) return null
+    try {
+      if (typeof val === "string") {
+        // Ожидаем YYYY-MM-DD или ISO/дата-время строки
+        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
+        const d = new Date(val)
+        const formatted = formatLocalYMD(d)
+        return formatted
+      }
+      const formatted = formatLocalYMD(val)
+      return formatted
+    } catch {
+      return null
+    }
+  }
+
   const [formData, setFormData] = useState({
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    rate: 1,
+    startDate: normalizeDateValue(defaultStartDate) || (formatLocalYMD(new Date()) as string),
+    endDate:
+      normalizeDateValue(defaultEndDate) || (formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) as string),
+    rate: defaultRate ?? 1,
     comment: "",
   })
 
@@ -219,6 +254,7 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
             responsibleAvatarUrl: selectedEmployee!.avatar_url,
             responsibleTeamName: selectedEmployee!.team_name,
             comment: formData.comment?.trim() || undefined,
+            stageId: stageId ?? undefined,
           })
 
           if (!result.success) {
@@ -232,8 +268,12 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
 
           setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} в разделе "${section.name}" успешно создана`)
 
-          // Автоматически раскрываем раздел, чтобы показать новую загрузку
-          toggleSectionExpanded(section.id)
+          
+          // Гарантируем, что раздел раскрыт, не закрывая уже открытые
+          const { expandedSections } = usePlanningStore.getState()
+          if (!expandedSections[section.id]) {
+            toggleSectionExpanded(section.id)
+          }
 
           successTimeoutRef.current = setTimeout(() => {
             clearNotification()
@@ -309,7 +349,8 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme }: Cr
               <div className={cn("mt-2 text-sm", theme === "dark" ? "text-teal-300" : "text-teal-700")}>
                 <p className="mb-1"><strong>Раздел:</strong> {section.name}</p>
                 <p className="mb-1"><strong>Проект:</strong> {section.projectName || "Не указан"}</p>
-                <p><strong>Отдел:</strong> {section.departmentName || "Не указан"}</p>
+                <p className="mb-1"><strong>Отдел:</strong> {section.departmentName || "Не указан"}</p>
+                <p><strong>Этап:</strong> {stageName || "-"}</p>
               </div>
             </div>
           </div>

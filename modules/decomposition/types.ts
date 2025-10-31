@@ -6,6 +6,7 @@ export interface DecompositionItem {
   duration_days: number
   execution_period: number
   complexity_level?: string | number
+  decomposition_item_stage_id?: string | null
 }
 
 export interface DecompositionData {
@@ -49,4 +50,14 @@ export interface SectionHierarchy {
   responsible_department_name: string
 }
 
-export type TabType = "view" | "create" | "templates"
+export interface DecompositionStage {
+  decomposition_stage_id: string
+  decomposition_stage_section_id: string
+  decomposition_stage_name: string
+  decomposition_stage_description: string | null
+  decomposition_stage_start: string | null // date ISO
+  decomposition_stage_finish: string | null // date ISO
+  decomposition_stage_order: number
+}
+
+export type TabType = "view" | "create" | "templates" | "stages"

@@ -28,6 +28,13 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { HelpCircle } from "lucide-react"
 
+type DecompositionStage = {
+  decomposition_stage_id: string
+  decomposition_stage_name: string
+  decomposition_stage_start?: string | null
+  decomposition_stage_finish?: string | null
+}
+
 const DecompositionPage = () => {
   const router = useRouter()
   // Получаем данные напрямую из userStore для отладки
@@ -92,6 +99,17 @@ const DecompositionPage = () => {
     handleSaveAsTemplate,
     handleLoadFromTemplate,
     handleDeleteTemplate,
+
+    // Новые: работа с этапами
+    decompositionStages: managementStages,
+    stageItems,
+    fetchStages,
+    fetchStageItems,
+    createStage,
+    updateStage,
+    deleteStage,
+    reorderStages,
+    assignItemToStage,
   } = useDecomposition()
 
   // Проверяем аутентификацию
@@ -141,6 +159,14 @@ const DecompositionPage = () => {
 
     fetchAllSections()
   }, [isLoaded, viewMode])
+
+  // Подгружаем этапы и элементы при выборе раздела в режиме "Этапы"
+  useEffect(() => {
+    if (activeTab === "stages" && selectedSectionId) {
+      fetchStages(selectedSectionId)
+      fetchStageItems(selectedSectionId)
+    }
+  }, [activeTab, selectedSectionId, fetchStages, fetchStageItems])
 
   // Обрабатываем данные всех разделов
   useEffect(() => {
@@ -200,26 +226,35 @@ const DecompositionPage = () => {
 
     setIsLoadingAllSections(true)
     try {
-      // Загружаем декомпозицию для выбранного раздела
+      // Загружаем строки декомпозиции для выбранного раздела из decomposition_items
       const { data, error } = await supabase
-        .from("decompositions")
-        .select("decomposition_content, decomposition_creator_id")
-        .eq("decomposition_section_id", sectionId)
-        .single()
+        .from("decomposition_items")
+        .select(`
+          decomposition_item_description,
+          decomposition_item_planned_hours,
+          decomposition_item_work_category_id,
+          work_categories:decomposition_item_work_category_id(work_category_name)
+        `)
+        .eq("decomposition_item_section_id", sectionId)
+        .order("decomposition_item_order", { ascending: true })
 
-      if (error && error.code !== "PGRST116") {
-        console.error("Error loading decomposition:", error)
+      if (error) {
+        console.error("Error loading decomposition items:", error)
         setViewItems([])
         return
       }
 
-      if (data && data.decomposition_content) {
-        console.log(`Loaded decomposition for section ${sectionId} created by ${data.decomposition_creator_id}`)
-        setViewItems(data.decomposition_content)
-      } else {
-        console.log(`No decomposition found for section ${sectionId}`)
-        setViewItems([])
-      }
+      const mapped = (data || []).map((row: any) => ({
+        work_type: row?.work_categories?.work_category_name || "",
+        work_content: row?.decomposition_item_description || "",
+        complexity_level: "",
+        labor_costs: Number(row?.decomposition_item_planned_hours) || 0,
+        duration_days: 0,
+        execution_period: 0,
+      }))
+
+      console.log(`Loaded ${mapped.length} decomposition items for section ${sectionId}`)
+      setViewItems(mapped)
     } catch (error) {
       console.error("Error:", error)
       setViewItems([])
@@ -610,6 +645,98 @@ document.body.removeChild(link)
                   handleSaveAsTemplate={handleSaveAsTemplate}
                   handleLoadFromTemplate={handleLoadFromTemplate}
                 />
+              </TabsContent>
+
+              <TabsContent value="stages" className="mt-0">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium">Этапы раздела</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (selectedSectionId) {
+                          createStage(selectedSectionId, { name: "Новый этап" })
+                        }
+                      }}
+                      disabled={!selectedSectionId}
+                    >
+                      Добавить этап
+                    </Button>
+                  </div>
+
+                  {/* Простое дерево: этап → его строки */}
+                  <div className="border rounded-md">
+                    <div className="divide-y">
+                      {managementStages.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground">Этапы отсутствуют</div>
+                      ) : (
+                        managementStages.map((stage: DecompositionStage) => (
+                          <div key={stage.decomposition_stage_id} className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className="font-medium">
+                                  {stage.decomposition_stage_name}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {stage.decomposition_stage_start || "—"} → {stage.decomposition_stage_finish || "—"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    updateStage(stage.decomposition_stage_id, {
+                                      decomposition_stage_name: `${stage.decomposition_stage_name} *`,
+                                    })
+                                  }
+                                >
+                                  Переименовать
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => deleteStage(stage.decomposition_stage_id)}
+                                >
+                                  Удалить
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Декомпозиции этапа */}
+                            <div className="mt-3 border rounded-md overflow-hidden">
+                              <div className="overflow-x-auto">
+                                <table className="w-full min-w-[600px]">
+                                  <thead className="bg-muted">
+                                    <tr>
+                                      <th className="px-2 sm:px-4 py-2 text-left font-medium">#</th>
+                                      <th className="px-4 py-2 text-left font-medium">Группа работ</th>
+                                      <th className="px-4 py-2 text-left font-medium">Наименование задачи</th>
+                                      <th className="px-4 py-2 text-left font-medium">Часов</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {stageItems
+                                      .filter((it) => it.decomposition_item_stage_id === stage.decomposition_stage_id)
+                                      .map((it, idx) => (
+                                        <tr key={`${stage.decomposition_stage_id}-${it.id}-${idx}`} className="border-t">
+                                          <td className="px-2 sm:px-4 py-2">{idx + 1}</td>
+                                          <td className="px-4 py-2">{it.work_type}</td>
+                                          <td className="px-4 py-2">{it.work_content}</td>
+                                          <td className="px-4 py-2">{it.labor_costs}</td>
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="templates" className="mt-0">

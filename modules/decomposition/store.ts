@@ -1,6 +1,8 @@
 import { create } from "zustand"
-import type { DecompositionItem, DecompositionTemplate, SectionHierarchy, TabType } from "./types"
-import { supabase } from "./utils"
+import type { DecompositionItem, DecompositionTemplate, SectionHierarchy, TabType, DecompositionStage } from "./types"
+import { createClient } from "@/utils/supabase/client"
+
+const supabase = createClient()
 
 interface DecompositionStore {
   // UI State
@@ -30,6 +32,17 @@ interface DecompositionStore {
   saveAsTemplate: (templateName: string, userId: string, departmentId: string) => Promise<void>
   loadFromTemplate: (templateId: string, userId: string | null, sectionId: string | null) => Promise<void>
   deleteTemplate: (templateId: string) => Promise<void>
+
+  // Stages
+  stages: DecompositionStage[]
+  stageItems: DecompositionItem[]
+  fetchStages: (sectionId: string) => Promise<void>
+  createStage: (sectionId: string, payload: { name: string; description?: string | null; start?: string | null; finish?: string | null }) => Promise<void>
+  updateStage: (stageId: string, patch: Partial<Omit<DecompositionStage, "decomposition_stage_id" | "decomposition_stage_section_id" | "decomposition_stage_order">>) => Promise<void>
+  deleteStage: (stageId: string) => Promise<void>
+  reorderStages: (orders: { stageId: string; order: number }[]) => Promise<void>
+  fetchStageItems: (sectionId: string) => Promise<void>
+  assignItemToStage: (itemId: string, stageId: string | null) => Promise<void>
 }
 
 export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
@@ -44,6 +57,10 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
   templates: [],
   isLoading: false,
   error: null,
+
+  // Stages
+  stages: [],
+  stageItems: [],
 
   // Actions
   fetchSections: async (userId) => {
@@ -366,6 +383,214 @@ export const useDecompositionStore = create<DecompositionStore>((set, get) => ({
     } catch (error) {
       console.error("Error deleting template:", error)
       throw error
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  // ===== Stages CRUD and loading =====
+  fetchStages: async (sectionId) => {
+    if (!sectionId) return
+    set({ isLoading: true, error: null })
+    try {
+      const { data, error } = await supabase
+        .from("decomposition_stages")
+        .select("*")
+        .eq("decomposition_stage_section_id", sectionId)
+        .order("decomposition_stage_order", { ascending: true })
+        // .order("created_at", { ascending: true }) // created_at может отсутствовать
+
+      if (error) throw error
+
+      const stages: DecompositionStage[] = (data || []).map((row: any) => ({
+        decomposition_stage_id: row.decomposition_stage_id,
+        decomposition_stage_section_id: row.decomposition_stage_section_id,
+        decomposition_stage_name: row.decomposition_stage_name,
+        decomposition_stage_description: row.decomposition_stage_description ?? null,
+        decomposition_stage_start: row.decomposition_stage_start ?? null,
+        decomposition_stage_finish: row.decomposition_stage_finish ?? null,
+        decomposition_stage_order: row.decomposition_stage_order ?? 0,
+      }))
+
+      set({ stages })
+    } catch (error) {
+      console.error("Error fetching stages:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  createStage: async (sectionId, payload) => {
+    set({ isLoading: true, error: null })
+    try {
+      // Определяем следующий order
+      const current = get().stages.filter((s) => s.decomposition_stage_section_id === sectionId)
+      const nextOrder = current.length > 0 ? Math.max(...current.map((s) => s.decomposition_stage_order)) + 1 : 1
+
+      const { error } = await supabase.from("decomposition_stages").insert({
+        decomposition_stage_section_id: sectionId,
+        decomposition_stage_name: payload.name,
+        decomposition_stage_description: payload.description ?? null,
+        decomposition_stage_start: payload.start ?? null,
+        decomposition_stage_finish: payload.finish ?? null,
+        decomposition_stage_order: nextOrder,
+      })
+
+      if (error) throw error
+
+      await get().fetchStages(sectionId)
+    } catch (error) {
+      console.error("Error creating stage:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  updateStage: async (stageId, patch) => {
+    set({ isLoading: true, error: null })
+    try {
+      const { error } = await supabase
+        .from("decomposition_stages")
+        .update({
+          decomposition_stage_name: patch.decomposition_stage_name,
+          decomposition_stage_description: patch.decomposition_stage_description,
+          decomposition_stage_start: patch.decomposition_stage_start,
+          decomposition_stage_finish: patch.decomposition_stage_finish,
+        })
+        .eq("decomposition_stage_id", stageId)
+
+      if (error) throw error
+
+      // Обновляем локально
+      set((state) => ({
+        stages: state.stages.map((s) =>
+          s.decomposition_stage_id === stageId ? { ...s, ...patch } as DecompositionStage : s,
+        ),
+      }))
+    } catch (error) {
+      console.error("Error updating stage:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  deleteStage: async (stageId) => {
+    set({ isLoading: true, error: null })
+    try {
+      // Освобождаем элементы
+      const { error: updErr } = await supabase
+        .from("decomposition_items")
+        .update({ decomposition_item_stage_id: null })
+        .eq("decomposition_item_stage_id", stageId)
+
+      if (updErr) throw updErr
+
+      const { error } = await supabase
+        .from("decomposition_stages")
+        .delete()
+        .eq("decomposition_stage_id", stageId)
+
+      if (error) throw error
+
+      set((state) => ({ stages: state.stages.filter((s) => s.decomposition_stage_id !== stageId) }))
+    } catch (error) {
+      console.error("Error deleting stage:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  reorderStages: async (orders) => {
+    set({ isLoading: true, error: null })
+    try {
+      for (const { stageId, order } of orders) {
+        const { error } = await supabase
+          .from("decomposition_stages")
+          .update({ decomposition_stage_order: order })
+          .eq("decomposition_stage_id", stageId)
+        if (error) throw error
+      }
+      // Обновляем локально
+      set((state) => ({
+        stages: state.stages
+          .map((s) => {
+            const found = orders.find((o) => o.stageId === s.decomposition_stage_id)
+            return found ? { ...s, decomposition_stage_order: found.order } : s
+          })
+          .sort((a, b) => a.decomposition_stage_order - b.decomposition_stage_order),
+      }))
+    } catch (error) {
+      console.error("Error reordering stages:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  fetchStageItems: async (sectionId) => {
+    if (!sectionId) return
+    set({ isLoading: true, error: null })
+    try {
+      const { data, error } = await supabase
+        .from("decomposition_items")
+        .select(`
+          decomposition_item_id,
+          decomposition_item_section_id,
+          decomposition_item_description,
+          decomposition_item_planned_hours,
+          decomposition_item_planned_due_date,
+          decomposition_item_stage_id,
+          decomposition_item_work_category_id,
+          work_categories:decomposition_item_work_category_id(work_category_name)
+        `)
+        .eq("decomposition_item_section_id", sectionId)
+        .order("decomposition_item_order", { ascending: true })
+
+      if (error) throw error
+
+      const items: DecompositionItem[] = (data || []).map((row: any) => ({
+        id: row.decomposition_item_id,
+        work_type: row?.work_categories?.work_category_name || "",
+        work_content: row?.decomposition_item_description || "",
+        complexity_level: "",
+        labor_costs: Number(row?.decomposition_item_planned_hours) || 0,
+        duration_days: 0,
+        execution_period: 0,
+        decomposition_item_stage_id: row?.decomposition_item_stage_id || null,
+      }))
+
+      set({ stageItems: items })
+    } catch (error) {
+      console.error("Error fetching stage items:", error)
+      set({ error: (error as Error).message })
+    } finally {
+      set({ isLoading: false })
+    }
+  },
+
+  assignItemToStage: async (itemId, stageId) => {
+    set({ isLoading: true, error: null })
+    try {
+      const { error } = await supabase
+        .from("decomposition_items")
+        .update({ decomposition_item_stage_id: stageId })
+        .eq("decomposition_item_id", itemId)
+
+      if (error) throw error
+
+      // Обновляем локально
+      set((state) => ({
+        stageItems: state.stageItems.map((it) =>
+          it.id === itemId ? { ...it, decomposition_item_stage_id: stageId || null } : it,
+        ),
+      }))
+    } catch (error) {
+      console.error("Error assigning item to stage:", error)
+      set({ error: (error as Error).message })
     } finally {
       set({ isLoading: false })
     }

@@ -5,6 +5,7 @@ export interface Loading {
   projectStatus?: string
   sectionId: string | null
   sectionName?: string
+  stageId?: string | null
   employeeId?: string
   responsibleId?: string
   responsibleName?: string
@@ -18,6 +19,20 @@ export interface Loading {
   comment?: string
   createdAt: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt: Date // Приходит как ISO строка, преобразуется в Date
+}
+
+export interface PlannedLoading {
+  id: string
+  sectionId: string | null
+  startDate: Date
+  endDate: Date
+  rate: number
+  categoryId: string | null
+  categoryName?: string
+  stageId?: string | null
+  status?: string
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface Team {
@@ -66,6 +81,27 @@ export interface Employee {
   shortageDescription?: string | null
 }
 
+export interface DecompositionStage {
+  id: string
+  name: string
+  start: Date | null
+  finish: Date | null
+  color?: string
+  // Статистика уровней сложности для этапа (агрегирована в БД)
+  difficultyStats?: StageDifficultyStat[]
+}
+
+// Агрегированная статистика по уровням сложности этапа
+export interface StageDifficultyStat {
+  difficulty_id: string | null
+  difficulty_abbr: string
+  difficulty_definition: string
+  difficulty_weight: number
+  items_count: number
+  planned_hours: number
+  weighted_hours: number
+}
+
 export interface Section {
   id: string
   name: string
@@ -87,6 +123,10 @@ export interface Section {
   responsibleAvatarUrl?: string
   hasLoadings?: boolean
   loadings?: Loading[]
+  // Этапы декомпозиции раздела
+  decompositionStages?: DecompositionStage[]
+  // Плановые загрузки (по категориям специалистов)
+  plannedLoadings?: PlannedLoading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date
 }
