@@ -388,7 +388,60 @@ export function TimelineGrid({
                     })()}
                   </div>
                   {/* Заполнитель для правой части, чтобы выровнять сетку */}
-                  <div className="flex-1" />
+                  <div className="flex-1 flex items-center">
+                    {/* Саммари на сетке при свернутой группе проекта */}
+                    {!(expandedProjectGroups[projectName] ?? true) && (() => {
+                      const sectionsCount = projectSections.length
+                      const stagesCount = projectSections.reduce((sum, s) => sum + ((s.decompositionStages?.length) || 0), 0)
+                      const loadings = projectSections.flatMap((s) => s.loadings || [])
+                      const loadingsCount = loadings.length
+                      const totalRate = loadings.reduce((sum, ld) => sum + (Number(ld.rate) || 0), 0)
+                      const uniqueEmployees = (() => {
+                        const ids = new Set<string>()
+                        for (const ld of loadings) {
+                          const id = (ld as any).responsibleId || null
+                          if (id) ids.add(id)
+                        }
+                        return ids.size
+                      })()
+                      const formatter = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" })
+                      const dates: Date[] = []
+                      for (const s of projectSections) {
+                        if (s.startDate) dates.push(new Date(s.startDate as any))
+                        if (s.endDate) dates.push(new Date(s.endDate as any))
+                      }
+                      const minDate = dates.length ? new Date(Math.min(...dates.map(d => d.getTime()))) : null
+                      const maxDate = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : null
+                      const periodLabel = minDate && maxDate ? `${formatter.format(minDate)}—${formatter.format(maxDate)}` : "—"
+
+                      const chipClass = cn(
+                        "ml-2 text-xs px-2 py-0.5 rounded whitespace-nowrap",
+                        theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                      )
+                      const rateLabel = totalRate > 0
+                        ? (Number.isInteger(totalRate) ? `${totalRate} ставки` : `${totalRate.toFixed(1)} ставки`)
+                        : null
+
+                      return (
+                        <div className="flex items-center pl-2">
+                          <span className={chipClass} title="Количество разделов">Разделы: {sectionsCount}</span>
+                          {stagesCount > 0 && (
+                            <span className={chipClass} title="Количество этапов">Этапы: {stagesCount}</span>
+                          )}
+                          {loadingsCount > 0 && (
+                            <span className={chipClass} title="Количество загрузок">Загрузки: {loadingsCount}</span>
+                          )}
+                          {rateLabel && (
+                            <span className={chipClass} title="Суммарные ставки по загрузкам">{rateLabel}</span>
+                          )}
+                          {uniqueEmployees > 0 && (
+                            <span className={chipClass} title="Число сотрудников в загрузках">Сотр: {uniqueEmployees}</span>
+                          )}
+                          <span className={chipClass} title="Период по датам разделов">Период: {periodLabel}</span>
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
                 {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
                   const index = sectionIndexMap.get(section) ?? 0
