@@ -341,16 +341,16 @@ export function TimelineGrid({
                 {/* Заголовок группы проекта */}
                 <div
                   className={cn(
-                    "sticky left-0 z-10 flex items-center font-semibold border-b cursor-pointer select-none",
-                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                    "flex items-center font-semibold border-b cursor-pointer select-none",
+                    theme === "dark" ? "border-slate-700" : "border-slate-200"
                   )}
                   style={{ height: `${HEADER_HEIGHT}px` }}
                   onClick={() => toggleProjectGroup(projectName)}
                 >
                   <div
                     className={cn(
-                      "border-r flex items-center",
-                      theme === "dark" ? "border-slate-700" : "border-slate-200"
+                      "sticky left-0 z-30 border-r flex items-center",
+                      theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
                     )}
                     style={{
                       width: `${totalFixedWidth}px`,
