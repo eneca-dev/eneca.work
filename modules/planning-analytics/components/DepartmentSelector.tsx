@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, RefreshCw, BarChart3 } from "lucide-react"
+import { ChevronDown, RefreshCw, BarChart3, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -77,16 +77,28 @@ export function DepartmentSelector({
     return `Выбрано: ${selectedCount}`
   }
 
-  // Обработчик переключения на "Общая"
+  // Обработчик переключения на "Все отделы"
   const handleSelectAll = () => {
     onChange(["all"])
+  }
+
+  // Обработчик выбора всех отделов планирования (все отделы с загрузками)
+  const handleSelectPlanningDepartments = () => {
+    const allDepartmentIds = filteredOptions.map(opt => opt.id)
+    onChange(allDepartmentIds)
   }
 
   // Фильтруем опции - убираем "Общее" из списка
   const filteredOptions = options.filter(opt => opt.type !== "all")
 
-  // Проверяем, активна ли кнопка "Общая"
+  // Проверяем, активна ли кнопка "Все отделы"
   const isAllActive = selectedIds.includes("all") && selectedIds.length === 1
+
+  // Проверяем, выбраны ли все отделы планирования
+  const allDepartmentIds = filteredOptions.map(opt => opt.id)
+  const isPlanningDepartmentsActive = allDepartmentIds.length > 0 &&
+    allDepartmentIds.every(id => selectedIds.includes(id)) &&
+    selectedIds.length === allDepartmentIds.length
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -102,30 +114,45 @@ export function DepartmentSelector({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[280px] bg-white dark:bg-[rgb(15_23_42)]">
         {/* Кнопки управления */}
-        <div className="flex items-center justify-between px-2 py-2 gap-2">
+        <div className="flex flex-col gap-2 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelectAll()
+              }}
+              variant={isAllActive ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs px-3 gap-1.5 flex-1"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Общая аналитика
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRefresh()
+              }}
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+              className="h-7 w-7 p-0"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
           <Button
             onClick={(e) => {
               e.stopPropagation()
-              handleSelectAll()
+              handleSelectPlanningDepartments()
             }}
-            variant={isAllActive ? "default" : "outline"}
+            variant={isPlanningDepartmentsActive ? "default" : "outline"}
             size="sm"
-            className="h-7 text-xs px-3 gap-1.5 flex-1"
+            className="h-7 text-xs px-3 gap-1.5 w-full"
+            disabled={filteredOptions.length === 0}
           >
-            <BarChart3 className="h-3.5 w-3.5" />
-            Общая аналитика
-          </Button>
-          <Button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRefresh()
-            }}
-            variant="outline"
-            size="sm"
-            disabled={isLoading}
-            className="h-7 w-7 p-0"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <Building2 className="h-3.5 w-3.5" />
+            Все отделы (с загрузками)
           </Button>
         </div>
 

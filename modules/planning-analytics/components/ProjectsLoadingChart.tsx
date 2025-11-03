@@ -228,20 +228,22 @@ export function ProjectsLoadingChart({
             {description}
           </p>
         )}
-        {/* Отображение меток выбранных отделов */}
-        {!isAllSelected && selectedDepartmentNames.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {selectedDepartmentNames.map((name, index) => (
-              <Badge
-                key={index}
-                variant="secondary"
-                className="text-xs px-2.5 py-0.5"
-              >
-                {name}
-              </Badge>
-            ))}
-          </div>
-        )}
+        {/* Зарезервированное место для меток отделов - предотвращает прыжки графика */}
+        <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
+          {!isAllSelected && selectedDepartmentNames.length > 0 && (
+            <>
+              {selectedDepartmentNames.map((name, index) => (
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className="text-xs px-2.5 py-0.5"
+                >
+                  {name}
+                </Badge>
+              ))}
+            </>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div>
@@ -300,6 +302,9 @@ export function ProjectsLoadingChart({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Количество загрузок: <span className="font-bold text-sky-500">{data.count}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Общая ставка: <span className="font-bold text-emerald-500">{data.loadingRate}</span>
                       </p>
                     </div>
                   )

@@ -369,9 +369,9 @@ export function aggregateProjectsByDepartments(
     }
   })
 
-  // Сортируем по количеству загрузок и берём топ-10
+  // Сортируем по коэффициенту загрузки (total_loading_rate) как в SQL view и берём топ-10
   const projects = Array.from(projectMap.values())
-    .sort((a, b) => b.total_loadings_count - a.total_loadings_count)
+    .sort((a, b) => b.total_loading_rate - a.total_loading_rate)
     .slice(0, 10)
     .map((project, index) => ({
       ...project,

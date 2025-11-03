@@ -69,7 +69,7 @@ export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
             {stats.sections_in_work_today}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            на {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString() : 'сегодня'}
+            {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString('ru-RU') : new Date().toLocaleDateString('ru-RU')}
           </p>
         </CardContent>
       </Card>
@@ -86,7 +86,7 @@ export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
             {stats.projects_in_work_today}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            на {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString() : 'сегодня'}
+            {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString('ru-RU') : new Date().toLocaleDateString('ru-RU')}
           </p>
         </CardContent>
       </Card>
