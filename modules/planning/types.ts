@@ -188,3 +188,28 @@ export interface ProjectObject {
   createdAt?: Date
   updatedAt?: Date
 }
+
+// Агрегированное саммари проекта из представления view_project_summary
+export interface ProjectSummary {
+  projectId: string
+  projectName: string
+  projectStatus?: string | null
+  projectCreated?: Date | null
+  clientId?: string | null
+  clientName?: string | null
+  managerId?: string | null
+  managerName?: string | null
+  projectStartDate?: Date | null
+  projectEndDate?: Date | null
+  sectionsCount: number
+  // Метрики на сегодня
+  employeesWithLoadingsToday: number
+  loadingsCountToday: number
+  totalLoadingRateToday: number
+  // Метрики по всем активным загрузкам
+  employeesWithLoadingsActive: number
+  loadingsCountActive: number
+  totalLoadingRateActive: number
+  // Суммарная вовлеченность
+  engagedEmployeesTotal: number
+}

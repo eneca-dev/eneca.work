@@ -1,7 +1,7 @@
 import { create } from "zustand" 
 import { devtools, persist } from "zustand/middleware"
 import * as Sentry from "@sentry/nextjs"
-import type { Section, Loading, Department, Team, Employee } from "../types"
+import type { Section, Loading, Department, Team, Employee, ProjectSummary } from "../types"
 // Обновляем импорты, добавляя новые функции
 import {
   fetchLoadings,
@@ -19,6 +19,11 @@ interface PlanningState {
   sections: Section[]
   allSections: Section[] // Все загруженные разделы
   departments: Department[] // Добавляем отделы
+  // Саммари по проектам (ленивая загрузка секций при раскрытии)
+  projectSummaries: ProjectSummary[]
+  isLoadingProjectSummaries: boolean
+  // Флаги загрузки секций по проектам
+  projectSectionsLoading: Record<string, boolean>
   isLoadingSections: boolean
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
@@ -69,6 +74,8 @@ interface PlanningState {
   projectSearchQuery: string
 
   // Действия
+  fetchProjectSummaries: () => Promise<void>
+  ensureProjectSectionsLoaded: (projectId: string) => Promise<void>
   fetchSections: () => Promise<void>
   fetchDepartments: () => Promise<void>
   fetchSectionLoadings: (sectionId: string) => Promise<Loading[]>
@@ -125,6 +132,7 @@ interface PlanningState {
   toggleShowDepartments: () => void
   toggleGroupByProject: () => void
   toggleProjectGroup: (projectName: string) => void
+  toggleProjectGroupById: (projectId: string) => void
   expandAllProjectGroups: () => void
   collapseAllProjectGroups: () => void
   filterSectionsByName: (query: string) => void
@@ -201,13 +209,16 @@ export const usePlanningStore = create<PlanningState>()(
         sections: [],
         allSections: [],
         departments: [],
+        projectSummaries: [],
+        isLoadingProjectSummaries: false,
+        projectSectionsLoading: {},
         isLoadingSections: false,
         isLoadingDepartments: false,
         expandedSections: {},
         expandedDepartments: {},
         expandedTeams: {},
         expandedEmployees: {},
-        showSections: false, // По умолчанию разделы скрыты
+        showSections: true, // По умолчанию показываем разделы (группы проектов)
         showDepartments: true, // По умолчанию отделы показываются
         groupByProject: true,
         expandedProjectGroups: {},
@@ -326,6 +337,75 @@ export const usePlanningStore = create<PlanningState>()(
           })
 
           set({ sections: sectionsWithLoadings })
+        },
+
+        // Загрузка саммари по проектам
+        fetchProjectSummaries: async () => {
+          set({ isLoadingProjectSummaries: true })
+          try {
+            const { fetchProjectSummaries } = await import("@/lib/supabase-client")
+            const summaries = await fetchProjectSummaries()
+            set({ projectSummaries: summaries, isLoadingProjectSummaries: false })
+          } catch (error) {
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'fetch_project_summaries',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                timestamp: new Date().toISOString()
+              }
+            })
+            set({ isLoadingProjectSummaries: false })
+          }
+        },
+
+        // Лениво подгружаем секции/загрузки для конкретного проекта
+        ensureProjectSectionsLoaded: async (projectId: string) => {
+          const { allSections, loadingsMap, projectSectionsLoading } = get()
+          const alreadyLoaded = allSections.some((s) => s.projectId === projectId)
+          if (alreadyLoaded) return
+          try {
+            // set loading flag
+            set({ projectSectionsLoading: { ...projectSectionsLoading, [projectId]: true } })
+            const { fetchSectionsWithLoadings } = await import("@/lib/supabase-client")
+            const result = await fetchSectionsWithLoadings(projectId, null, null, null, null, null, null)
+            if ('success' in result && !(result as any).sections) {
+              console.error("ensureProjectSectionsLoaded: unexpected result", result)
+              return
+            }
+            const { sections: newSections, loadingsMap: newLoadingsMap } = result as { sections: Section[]; loadingsMap: Record<string, Loading[]> }
+
+            const existingById = new Map(allSections.map(s => [s.id, s]))
+            const mergedSections: Section[] = [...allSections]
+            newSections.forEach(s => { if (!existingById.has(s.id)) mergedSections.push(s) })
+
+            const mergedLoadingsMap: Record<string, Loading[]> = { ...loadingsMap }
+            Object.entries(newLoadingsMap).forEach(([sectionId, arr]) => {
+              const existing = mergedLoadingsMap[sectionId] || []
+              const existingIds = new Set(existing.map(l => l.id))
+              mergedLoadingsMap[sectionId] = [...existing, ...arr.filter(l => !existingIds.has(l.id))]
+            })
+
+            set({ allSections: mergedSections, loadingsMap: mergedLoadingsMap })
+          } catch (error) {
+            Sentry.captureException(error, {
+              tags: { 
+                module: 'planning', 
+                action: 'ensure_project_sections_loaded',
+                store: 'usePlanningStore'
+              },
+              extra: {
+                projectId
+              }
+            })
+          } finally {
+            const cur = get().projectSectionsLoading
+            const next = { ...cur }
+            delete next[projectId]
+            set({ projectSectionsLoading: next })
+          }
         },
 
         // Обновляем метод fetchSections для учета фильтра по команде
@@ -1870,6 +1950,20 @@ export const usePlanningStore = create<PlanningState>()(
               [projectName]: !state.expandedProjectGroups[projectName],
             },
           }))
+        },
+        // Переключение группы по projectId с ленивой подгрузкой при раскрытии
+        toggleProjectGroupById: (projectId: string) => {
+          const { expandedProjectGroups, ensureProjectSectionsLoaded } = get()
+          const willExpand = !(expandedProjectGroups[projectId] === true)
+          set({
+            expandedProjectGroups: {
+              ...expandedProjectGroups,
+              [projectId]: willExpand,
+            },
+          })
+          if (willExpand) {
+            void ensureProjectSectionsLoaded(projectId)
+          }
         },
 
         // Развернуть все проектные группы

@@ -12,7 +12,7 @@ import { DepartmentRow } from "./timeline/department-row" // Новый комп
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useProjectsStore } from "@/modules/projects/store"
 
@@ -83,7 +83,11 @@ export function TimelineGrid({
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
   const groupByProject = usePlanningStore((state) => state.groupByProject)
   const expandedProjectGroups = usePlanningStore((state) => state.expandedProjectGroups)
-  const toggleProjectGroup = usePlanningStore((state) => state.toggleProjectGroup)
+  const projectSummaries = usePlanningStore((state) => state.projectSummaries)
+  const toggleProjectGroupById = usePlanningStore((state) => state.toggleProjectGroupById)
+  const ensureProjectSectionsLoaded = usePlanningStore((state) => state.ensureProjectSectionsLoaded)
+  const allSectionsStore = usePlanningStore((state) => state.allSections)
+  const projectSectionsLoading = usePlanningStore((state) => state.projectSectionsLoading)
   
   // Получаем функции переключения видимости
   const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
@@ -154,6 +158,9 @@ export function TimelineGrid({
   const sectionIndexMap = useMemo(() => {
     return new Map(sections.map((s, i) => [s, i] as const))
   }, [sections])
+  const allSectionIndexMap = useMemo(() => {
+    return new Map((allSectionsStore || []).map((s, i) => [s, i] as const))
+  }, [allSectionsStore])
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(ROW_HEIGHT * 0.75)
@@ -328,123 +335,101 @@ export function TimelineGrid({
               />
             ))
           ) : (
-            // Группировка по названию проекта
-            Object.entries(
-              sections.reduce((acc, s) => {
-                const key = s.projectName || "Без проекта"
-                if (!acc[key]) acc[key] = [] as typeof sections
-                acc[key].push(s)
-                return acc
-              }, {} as Record<string, typeof sections>)
-            ).sort((a, b) => a[0].localeCompare(b[0])).map(([projectName, projectSections]) => (
-              <div key={projectName}>
+            // Группировка по проектам из саммари (ленивая подзагрузка секций)
+            (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
+              const projectIdForGroup = summary.projectId
+              const projectName = summary.projectName || 'Без проекта'
+              const isExpanded = expandedProjectGroups[projectIdForGroup] === true
+              const projectSections = (allSectionsStore || []).filter(s => s.projectId === projectIdForGroup)
+              return (
+              <div key={projectIdForGroup}>
                 {/* Заголовок группы проекта */}
-                <div
+                  <div
                   className={cn(
                     "flex items-center font-semibold border-b cursor-pointer select-none",
                     theme === "dark" ? "border-slate-700" : "border-slate-200"
                   )}
                   style={{ height: `${HEADER_HEIGHT}px` }}
-                  onClick={() => toggleProjectGroup(projectName)}
+                  onClick={() => toggleProjectGroupById(projectIdForGroup)}
                 >
                   <div
                     className={cn(
-                      "sticky left-0 z-30 border-r flex items-center",
-                      theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                    "sticky left-0 z-30 border-r border-b flex items-center",
+                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
                     )}
                     style={{
+                      height: `${HEADER_HEIGHT}px`,
                       width: `${totalFixedWidth}px`,
                       minWidth: `${totalFixedWidth}px`,
                       padding: `${PADDING}px`,
+                  borderBottom: "0.25px solid",
+                    borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderTop: "0.25px solid",
+                  borderTopColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                     }}
                   >
                     <span className="mr-2">
-                      {expandedProjectGroups[projectName] ? (
+                      {isExpanded ? (
                         <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                       ) : (
                         <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                       )}
                     </span>
-                    {(() => {
-                      const projectIdForGroup = (projectSections.find(s => s.projectId)?.projectId) || null
-                      return (
-                        <span
-                          className={cn(
-                            "text-sm cursor-pointer hover:underline",
-                            theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
-                          )}
-                          title={projectIdForGroup ? "Перейти к проекту" : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (projectIdForGroup) {
-                              focusProject(projectIdForGroup)
-                              router.push("/dashboard/projects")
-                            }
-                          }}
-                        >
-                          {projectName}
-                        </span>
-                      )
-                    })()}
+                    {projectSectionsLoading[projectIdForGroup] && (
+                      <Loader2 className={cn("h-4 w-4 mr-2 animate-spin", theme === "dark" ? "text-slate-400" : "text-slate-500")} />
+                    )}
+                    <span
+                      className={cn(
+                        "text-sm cursor-pointer hover:underline",
+                        theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                      )}
+                      title={projectIdForGroup ? "Перейти к проекту" : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (projectIdForGroup) {
+                          focusProject(projectIdForGroup)
+                          router.push("/dashboard/projects")
+                        }
+                      }}
+                    >
+                      {projectName}
+                    </span>
                   </div>
                   {/* Заполнитель для правой части, чтобы выровнять сетку */}
                   <div className="flex-1 flex items-center">
-                    {/* Саммари на сетке при свернутой группе проекта */}
-                    {!(expandedProjectGroups[projectName] ?? true) && (() => {
-                      const sectionsCount = projectSections.length
-                      const stagesCount = projectSections.reduce((sum, s) => sum + ((s.decompositionStages?.length) || 0), 0)
-                      const loadings = projectSections.flatMap((s) => s.loadings || [])
-                      const loadingsCount = loadings.length
-                      const totalRate = loadings.reduce((sum, ld) => sum + (Number(ld.rate) || 0), 0)
-                      const uniqueEmployees = (() => {
-                        const ids = new Set<string>()
-                        for (const ld of loadings) {
-                          const id = (ld as any).responsibleId || null
-                          if (id) ids.add(id)
-                        }
-                        return ids.size
-                      })()
-                      const formatter = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" })
-                      const dates: Date[] = []
-                      for (const s of projectSections) {
-                        if (s.startDate) dates.push(new Date(s.startDate as any))
-                        if (s.endDate) dates.push(new Date(s.endDate as any))
-                      }
-                      const minDate = dates.length ? new Date(Math.min(...dates.map(d => d.getTime()))) : null
-                      const maxDate = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : null
-                      const periodLabel = minDate && maxDate ? `${formatter.format(minDate)}—${formatter.format(maxDate)}` : "—"
-
+                    {/* Саммари на сетке при свернутой группе проекта (из view_project_summary) */}
+                    {!isExpanded && (() => {
                       const chipClass = cn(
                         "ml-2 text-xs px-2 py-0.5 rounded whitespace-nowrap",
                         theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
                       )
-                      const rateLabel = totalRate > 0
-                        ? (Number.isInteger(totalRate) ? `${totalRate} ставки` : `${totalRate.toFixed(1)} ставки`)
+                      const fmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" })
+                      const periodLabel = summary.projectStartDate && summary.projectEndDate
+                        ? `${fmt.format(summary.projectStartDate)}—${fmt.format(summary.projectEndDate)}`
+                        : "—"
+                      const rateLabel = summary.totalLoadingRateActive > 0
+                        ? (Number.isInteger(summary.totalLoadingRateActive) ? `${summary.totalLoadingRateActive} ставки` : `${summary.totalLoadingRateActive.toFixed(1)} ставки`)
                         : null
-
                       return (
                         <div className="flex items-center pl-2">
-                          <span className={chipClass} title="Количество разделов">Разделы: {sectionsCount}</span>
-                          {stagesCount > 0 && (
-                            <span className={chipClass} title="Количество этапов">Этапы: {stagesCount}</span>
-                          )}
-                          {loadingsCount > 0 && (
-                            <span className={chipClass} title="Количество загрузок">Загрузки: {loadingsCount}</span>
+                          <span className={chipClass} title="Количество разделов">Разделы: {summary.sectionsCount}</span>
+                          {summary.loadingsCountActive > 0 && (
+                            <span className={chipClass} title="Количество активных загрузок">Загрузки: {summary.loadingsCountActive}</span>
                           )}
                           {rateLabel && (
-                            <span className={chipClass} title="Суммарные ставки по загрузкам">{rateLabel}</span>
+                            <span className={chipClass} title="Суммарные активные ставки">{rateLabel}</span>
                           )}
-                          {uniqueEmployees > 0 && (
-                            <span className={chipClass} title="Число сотрудников в загрузках">Сотр: {uniqueEmployees}</span>
+                          {summary.employeesWithLoadingsActive > 0 && (
+                            <span className={chipClass} title="Сотрудников в активных загрузках">Сотр: {summary.employeesWithLoadingsActive}</span>
                           )}
-                          <span className={chipClass} title="Период по датам разделов">Период: {periodLabel}</span>
+                          <span className={chipClass} title="Период по разделам">Период: {periodLabel}</span>
                         </div>
                       )
                     })()}
                   </div>
                 </div>
-                {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
-                  const index = sectionIndexMap.get(section) ?? 0
+                {isExpanded && projectSections.map((section) => {
+                  const index = (allSectionIndexMap.get(section) ?? 0)
                   return (
                     <TimelineRow
                       key={section.id}
@@ -460,13 +445,14 @@ export function TimelineGrid({
                       cellWidth={cellWidth}
                       stickyColumnShadow={stickyColumnShadow}
                       totalExpandedSections={totalExpandedSections}
-                      totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                      totalLoadingsBeforeSection={0}
                       onOpenSectionPanel={onOpenSectionPanel}
                     />
                   )
                 })}
               </div>
-            ))
+            )
+            })
           ))}
 
           {/* Если нет разделов или идет загрузка */}
