@@ -110,6 +110,8 @@ export function TimelineRow({
   // Получаем функцию для переключения состояния раскрытия
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
   const expandedSections = usePlanningStore((state) => state.expandedSections)
+  // Резервный источник загрузок из стора на случай, если в section.loadings ещё пусто
+  const loadingsFromMap = usePlanningStore((state) => (state as any).loadingsMap?.[section.id] || [])
 
   // Проверяем, раскрыт ли раздел
   const isExpanded = expandedSections[section.id] || false
@@ -159,8 +161,8 @@ export function TimelineRow({
     setShowAssignResponsibleModal(true)
   }
 
-  // Получаем загрузки раздела
-  const loadings = section.loadings || []
+  // Получаем загрузки раздела (с резервом из loadingsMap стора)
+  const loadings = (section.loadings && section.loadings.length > 0) ? section.loadings : loadingsFromMap
   
   // Фильтруем дубликаты загрузок по ID для избежания проблем с React ключами
   // Убираем дубликаты и сортируем загрузки так, чтобы записи одного человека шли рядом
