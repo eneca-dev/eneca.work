@@ -344,7 +344,21 @@ export const usePlanningStore = create<PlanningState>()(
           set({ isLoadingProjectSummaries: true })
           try {
             const { fetchProjectSummaries } = await import("@/lib/supabase-client")
-            const summaries = await fetchProjectSummaries()
+            const { useFilterStore } = await import('../filters/store')
+            const {
+              selectedProjectId,
+              selectedManagerId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedEmployeeId,
+            } = useFilterStore.getState()
+            const summaries = await fetchProjectSummaries({
+              projectId: selectedProjectId || undefined,
+              managerId: selectedManagerId || undefined,
+              departmentId: selectedDepartmentId || undefined,
+              teamId: selectedTeamId || undefined,
+              employeeId: selectedEmployeeId || undefined,
+            })
             set({ projectSummaries: summaries, isLoadingProjectSummaries: false })
           } catch (error) {
             Sentry.captureException(error, {
@@ -370,7 +384,26 @@ export const usePlanningStore = create<PlanningState>()(
             // set loading flag
             set({ projectSectionsLoading: { ...projectSectionsLoading, [projectId]: true } })
             const { fetchSectionsWithLoadings } = await import("@/lib/supabase-client")
-            const result = await fetchSectionsWithLoadings(projectId, null, null, null, null, null, null)
+            // Подтягиваем актуальные фильтры из стора фильтров, чтобы не игнорировать организационные/этапные фильтры при раскрытии группы проекта
+            const { useFilterStore } = await import("../filters/store")
+            const {
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId,
+            } = useFilterStore.getState()
+
+            const result = await fetchSectionsWithLoadings(
+              projectId,
+              selectedDepartmentId,
+              selectedTeamId,
+              selectedManagerId,
+              selectedEmployeeId,
+              selectedStageId,
+              selectedObjectId,
+            )
             if ('success' in result && !(result as any).sections) {
               console.error("ensureProjectSectionsLoaded: unexpected result", result)
               return

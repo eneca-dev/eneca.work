@@ -485,35 +485,65 @@ export async function fetchSectionsWithLoadings(
 }
 
 // Загрузка саммари проектов из представления view_project_summary
-export async function fetchProjectSummaries(): Promise<import("@/modules/planning/types").ProjectSummary[]> {
+export async function fetchProjectSummaries(filters?: {
+  projectId?: string | null
+  managerId?: string | null
+  departmentId?: string | null
+  teamId?: string | null
+  employeeId?: string | null
+}): Promise<import("@/modules/planning/types").ProjectSummary[]> {
   const { supabase } = await import("@/lib/supabase-client")
-  const { data, error } = await supabase.from("view_project_summary").select("*").order("project_name", { ascending: true })
-  if (error) {
-    console.error("Ошибка загрузки view_project_summary:", error)
+
+  try {
+    let query = supabase.from("view_project_summary").select("*")
+
+    if (filters?.projectId) {
+      query = query.eq("project_id", filters.projectId)
+    }
+    if (filters?.managerId) {
+      query = query.eq("manager_id", filters.managerId)
+    }
+    if (filters?.departmentId) {
+      // uuid[] колонка department_ids позволяет contains([id])
+      query = query.contains("department_ids", [filters.departmentId])
+    }
+    if (filters?.teamId) {
+      query = query.contains("team_ids", [filters.teamId])
+    }
+    if (filters?.employeeId) {
+      query = query.contains("employee_ids", [filters.employeeId])
+    }
+
+    const { data, error } = await query.order("project_name", { ascending: true })
+    if (error) {
+      console.error("Ошибка загрузки view_project_summary:", error)
+      return []
+    }
+
+    return (data || []).map((row: any) => ({
+      projectId: row.project_id,
+      projectName: row.project_name,
+      projectStatus: row.project_status ?? null,
+      projectCreated: row.project_created ? new Date(row.project_created) : null,
+      clientId: row.client_id ?? null,
+      clientName: row.client_name ?? null,
+      managerId: row.manager_id ?? null,
+      managerName: row.manager_name ?? null,
+      projectStartDate: row.project_start_date ? new Date(row.project_start_date) : null,
+      projectEndDate: row.project_end_date ? new Date(row.project_end_date) : null,
+      sectionsCount: Number(row.sections_count) || 0,
+      employeesWithLoadingsToday: Number(row.employees_with_loadings_today) || 0,
+      loadingsCountToday: Number(row.loadings_count_today) || 0,
+      totalLoadingRateToday: Number(row.total_loading_rate_today) || 0,
+      employeesWithLoadingsActive: Number(row.employees_with_loadings_active) || 0,
+      loadingsCountActive: Number(row.loadings_count_active) || 0,
+      totalLoadingRateActive: Number(row.total_loading_rate_active) || 0,
+      engagedEmployeesTotal: Number(row.engaged_employees_total) || 0,
+    }))
+  } catch (e) {
+    console.error("Неожиданная ошибка при загрузке view_project_summary:", e)
     return []
   }
-
-  // Приводим поля к типам фронта
-  return (data || []).map((row: any) => ({
-    projectId: row.project_id,
-    projectName: row.project_name,
-    projectStatus: row.project_status ?? null,
-    projectCreated: row.project_created ? new Date(row.project_created) : null,
-    clientId: row.client_id ?? null,
-    clientName: row.client_name ?? null,
-    managerId: row.manager_id ?? null,
-    managerName: row.manager_name ?? null,
-    projectStartDate: row.project_start_date ? new Date(row.project_start_date) : null,
-    projectEndDate: row.project_end_date ? new Date(row.project_end_date) : null,
-    sectionsCount: Number(row.sections_count) || 0,
-    employeesWithLoadingsToday: Number(row.employees_with_loadings_today) || 0,
-    loadingsCountToday: Number(row.loadings_count_today) || 0,
-    totalLoadingRateToday: Number(row.total_loading_rate_today) || 0,
-    employeesWithLoadingsActive: Number(row.employees_with_loadings_active) || 0,
-    loadingsCountActive: Number(row.loadings_count_active) || 0,
-    totalLoadingRateActive: Number(row.total_loading_rate_active) || 0,
-    engagedEmployeesTotal: Number(row.engaged_employees_total) || 0,
-  }))
 }
 
 // Создание дефицитной загрузки (без ответственного сотрудника)

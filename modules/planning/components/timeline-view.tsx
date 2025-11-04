@@ -149,6 +149,11 @@ useEffect(() => {
     fetchProjectSummaries()
   }, [fetchProjectSummaries])
 
+  // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
+  useEffect(() => {
+    fetchProjectSummaries()
+  }, [fetchProjectSummaries, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+
   // Применяем фильтры только при их изменении (если действительно заданы)
   useEffect(() => {
     if (activeFiltersCount > 0) {
