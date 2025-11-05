@@ -24,8 +24,7 @@ const mockDocumentationStructure: DocumentationFile[] = [
     { name: 'Комментарии', path: 'projects/kommentarii.md', type: 'file' },
   ]},
   { name: 'Планирование', path: 'planirovanie', type: 'folder', children: [
-    { name: 'Пользователи', path: 'planirovanie/polzovateli.md', type: 'file' },
-    { name: 'Руководители', path: 'planirovanie/rukovoditeli.md', type: 'file' },
+    { name: 'Общая информация', path: 'planirovanie/planirovanie.md', type: 'file' },
   ]},
 ]
 
