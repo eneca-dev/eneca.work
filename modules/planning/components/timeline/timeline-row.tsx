@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"

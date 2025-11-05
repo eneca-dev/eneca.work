@@ -12,7 +12,7 @@ import { DepartmentRow } from "./timeline/department-row" // Новый комп
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2, Milestone, Building2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useProjectsStore } from "@/modules/projects/store"
 
@@ -428,28 +428,137 @@ export function TimelineGrid({
                     })()}
                   </div>
                 </div>
-                {isExpanded && projectSections.map((section) => {
-                  const index = (allSectionIndexMap.get(section) ?? 0)
-                  return (
-                    <TimelineRow
-                      key={section.id}
-                      section={section}
-                      sectionIndex={index}
-                      timeUnits={timeUnits}
-                      theme={theme}
-                      rowHeight={ROW_HEIGHT}
-                      headerHeight={HEADER_HEIGHT}
-                      columnWidth={COLUMN_WIDTHS.section}
-                      padding={PADDING}
-                      leftOffset={LEFT_OFFSET}
-                      cellWidth={cellWidth}
-                      stickyColumnShadow={stickyColumnShadow}
-                      totalExpandedSections={totalExpandedSections}
-                      totalLoadingsBeforeSection={0}
-                      onOpenSectionPanel={onOpenSectionPanel}
-                    />
-                  )
-                })}
+                {isExpanded && (() => {
+                  // Группируем разделы проекта по стадии → объекту
+                  type ObjGroup = { objectId: string; objectName: string; sections: Section[] }
+                  type StageGroup = { stageId: string; stageName: string; objects: ObjGroup[] }
+                  const stageMap = new Map<string, { name: string; objects: Map<string, { name: string; sections: Section[] }> }>()
+
+                  projectSections.forEach(s => {
+                    const sId = s.stageId || "__no_stage__"
+                    const sName = s.stageName || "Без стадии"
+                    if (!stageMap.has(sId)) stageMap.set(sId, { name: sName, objects: new Map() })
+                    const objectMap = stageMap.get(sId)!.objects
+
+                    const oId = s.objectId || "__no_object__"
+                    const oName = s.objectName || "Без объекта"
+                    if (!objectMap.has(oId)) objectMap.set(oId, { name: oName, sections: [] })
+                    objectMap.get(oId)!.sections.push(s)
+                  })
+
+                  const stageGroups: StageGroup[] = Array.from(stageMap.entries()).map(([stageId, data]) => ({
+                    stageId,
+                    stageName: data.name,
+                    objects: Array.from(data.objects.entries()).map(([objectId, obj]) => ({
+                      objectId,
+                      objectName: obj.name,
+                      sections: obj.sections,
+                    })),
+                  }))
+
+                  // Рендер
+                  return stageGroups.flatMap((stage) => {
+                    const stageHeader = (
+                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="flex w-full">
+                        {/* Фиксированные столбцы */}
+                        <div
+                          className={cn("sticky left-0 z-20", "flex")}
+                          style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                        >
+                          <div
+                            className={cn(
+                              "p-2 font-medium border-r flex items-center transition-colors h-full",
+                              theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                            )}
+                            style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                          >
+                            <div className="flex items-center w-full">
+                              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                                <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                              </div>
+                              <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{stage.stageName}</div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Полотно таймлайна */}
+                        <div className="flex-1 flex w-full">
+                          {timeUnits.map((unit, i) => {
+                            const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "border-r border-b relative",
+                                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                                  isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "",
+                                )}
+                                style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+
+                    const objectBlocks = stage.objects.flatMap((obj) => {
+                      const objectHeader = (
+                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="flex w-full">
+                          <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}>
+                            <div
+                              className={cn(
+                                "p-2 font-medium border-r flex items-center transition-colors h-full",
+                                theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                              )}
+                              style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                            >
+                              <div className="flex items-center w-full">
+                                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                                  <Building2 className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                </div>
+                                <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{obj.objectName}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-1 flex w-full">
+                            {timeUnits.map((unit, i) => {
+                              const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                              return (
+                                <div key={i} className={cn("border-r border-b relative", theme === "dark" ? "border-slate-700" : "border-slate-200", isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "")} style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }} />
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+
+                      const sectionRows = obj.sections.map((section) => {
+                        const index = (allSectionIndexMap.get(section) ?? 0)
+                        return (
+                          <TimelineRow
+                            key={section.id}
+                            section={section}
+                            sectionIndex={index}
+                            timeUnits={timeUnits}
+                            theme={theme}
+                            rowHeight={ROW_HEIGHT}
+                            headerHeight={HEADER_HEIGHT}
+                            columnWidth={COLUMN_WIDTHS.section}
+                            padding={PADDING}
+                            leftOffset={LEFT_OFFSET}
+                            cellWidth={cellWidth}
+                            stickyColumnShadow={stickyColumnShadow}
+                            totalExpandedSections={totalExpandedSections}
+                            totalLoadingsBeforeSection={0}
+                            onOpenSectionPanel={onOpenSectionPanel}
+                          />
+                        )
+                      })
+
+                      return [objectHeader, ...sectionRows]
+                    })
+
+                    return [stageHeader, ...objectBlocks]
+                  })
+                })()}
               </div>
             )
             })
