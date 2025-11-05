@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useEffect } from "react"
+import { useMemo, useRef, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { Section, Department } from "../types"
 import { useSettingsStore } from "@/stores/useSettingsStore"
@@ -89,6 +89,15 @@ export function TimelineGrid({
   const allSectionsStore = usePlanningStore((state) => state.allSections)
   const projectSectionsLoading = usePlanningStore((state) => state.projectSectionsLoading)
   
+  // Локальные раскрытия для уровней стадия и объект
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
+  const [expandedObjects, setExpandedObjects] = useState<Record<string, boolean>>({})
+
+  const toggleStageExpanded = (key: string) =>
+    setExpandedStages((prev) => ({ ...prev, [key]: !prev[key] }))
+  const toggleObjectExpanded = (key: string) =>
+    setExpandedObjects((prev) => ({ ...prev, [key]: !prev[key] }))
+
   // Получаем функции переключения видимости
   const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
   const toggleShowDepartments = usePlanningStore((state) => state.toggleShowDepartments)
@@ -456,10 +465,12 @@ export function TimelineGrid({
                     })),
                   }))
 
-                  // Рендер
+                  // Рендер: выпадающий список стадий
                   return stageGroups.flatMap((stage) => {
+                    const stageKey = `${projectIdForGroup}:${stage.stageId}`
+                    const isStageExpanded = expandedStages[stageKey] ?? false
                     const stageHeader = (
-                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="flex w-full">
+                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleStageExpanded(stageKey)}>
                         {/* Фиксированные столбцы */}
                         <div
                           className={cn("sticky left-0 z-20", "flex")}
@@ -473,6 +484,13 @@ export function TimelineGrid({
                             style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                           >
                             <div className="flex items-center w-full">
+                              <span className="mr-2">
+                                {isStageExpanded ? (
+                                  <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                ) : (
+                                  <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                )}
+                              </span>
                               <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                                 <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                               </div>
@@ -500,9 +518,11 @@ export function TimelineGrid({
                       </div>
                     )
 
-                    const objectBlocks = stage.objects.flatMap((obj) => {
+                    const objectBlocks = isStageExpanded ? stage.objects.flatMap((obj) => {
+                      const objectKey = `${projectIdForGroup}:${stage.stageId}:${obj.objectId}`
+                      const isObjectExpanded = expandedObjects[objectKey] ?? false
                       const objectHeader = (
-                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="flex w-full">
+                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleObjectExpanded(objectKey)}>
                           <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}>
                             <div
                               className={cn(
@@ -512,6 +532,13 @@ export function TimelineGrid({
                               style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                             >
                               <div className="flex items-center w-full">
+                                <span className="mr-2">
+                                  {isObjectExpanded ? (
+                                    <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                  ) : (
+                                    <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                  )}
+                                </span>
                                 <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                                   <Building2 className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                                 </div>
@@ -530,7 +557,7 @@ export function TimelineGrid({
                         </div>
                       )
 
-                      const sectionRows = obj.sections.map((section) => {
+                      const sectionRows = isObjectExpanded ? obj.sections.map((section) => {
                         const index = (allSectionIndexMap.get(section) ?? 0)
                         return (
                           <TimelineRow
@@ -551,10 +578,10 @@ export function TimelineGrid({
                             onOpenSectionPanel={onOpenSectionPanel}
                           />
                         )
-                      })
+                      }) : []
 
                       return [objectHeader, ...sectionRows]
-                    })
+                    }) : []
 
                     return [stageHeader, ...objectBlocks]
                   })
