@@ -5,7 +5,8 @@ export interface Loading {
   projectStatus?: string
   sectionId: string | null
   sectionName?: string
-  stageId?: string | null
+  stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
+  stageName?: string // Название этапа для отображения
   employeeId?: string
   responsibleId?: string
   responsibleName?: string

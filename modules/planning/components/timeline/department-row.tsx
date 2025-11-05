@@ -7,7 +7,7 @@ import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useUiStore } from "@/stores/useUiStore"
-import { useState } from "react"
+import { useState, Fragment } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { EditLoadingModal } from "./edit-loading-modal"
 import { AddLoadingModal } from "./add-loading-modal"
@@ -552,6 +552,10 @@ function EmployeeRow({
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
 
+  // Состояния для раскрытия разделов и этапов в иерархии загрузок
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set())
+
   // Получаем видимость столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
 
@@ -610,6 +614,82 @@ function EmployeeRow({
     }
     return 0
   }
+
+  // Функция для группировки загрузок по разделам и этапам
+  const groupLoadingsByHierarchy = (loadings: Loading[]) => {
+    const sections = new Map<string, {
+      sectionId: string
+      sectionName: string
+      stages: Map<string, { stageId: string, stageName: string, loadings: Loading[] }>
+    }>()
+
+    for (const loading of loadings) {
+      const sectionId = loading.sectionId || 'unknown'
+      const sectionName = loading.sectionName || 'Раздел не указан'
+      const stageId = loading.stageId
+      // Берём имя этапа из загрузки, если есть; иначе — из уже созданной записи этапа; иначе — плейсхолдер
+      const existingStage = sections.get(sectionId)?.stages.get(stageId)
+      const stageNameFromLoading = loading.stageName && loading.stageName.trim() ? loading.stageName : undefined
+      const stageName = stageNameFromLoading ?? existingStage?.stageName ?? 'Этап не указан'
+
+      if (!sections.has(sectionId)) {
+        sections.set(sectionId, {
+          sectionId,
+          sectionName,
+          stages: new Map()
+        })
+      }
+
+      const section = sections.get(sectionId)!
+      if (!section.stages.has(stageId)) {
+        section.stages.set(stageId, {
+          stageId,
+          stageName,
+          loadings: []
+        })
+      } else if (stageNameFromLoading) {
+        // Если ранее имя этапа было неизвестно, а теперь появилось — обновим
+        const stageRef = section.stages.get(stageId)!
+        if (!stageRef.stageName || stageRef.stageName === 'Этап не указан') {
+          stageRef.stageName = stageNameFromLoading
+        }
+      }
+
+      section.stages.get(stageId)!.loadings.push(loading)
+    }
+
+    return sections
+  }
+
+  // Функции для переключения раскрытия разделов и этапов
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId)
+      } else {
+        newSet.add(sectionId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleStage = (stageId: string) => {
+    setExpandedStages(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(stageId)) {
+        newSet.delete(stageId)
+      } else {
+        newSet.add(stageId)
+      }
+      return newSet
+    })
+  }
+
+  // Группируем загрузки по разделам и этапам
+  const groupedLoadings = hasLoadings && employee.loadings
+    ? groupLoadingsByHierarchy(employee.loadings)
+    : new Map<string, { sectionId: string; sectionName: string; stages: Map<string, { stageId: string; stageName: string; loadings: Loading[] }> }>()
 
   // Добавить после строки с editingLoading
   const [showAddModal, setShowAddModal] = useState(false)
@@ -963,240 +1043,361 @@ function EmployeeRow({
 
 
 
-      {/* Отображаем детали загрузок, если сотрудник раскрыт */}
+      {/* Отображаем детали загрузок в трехуровневой иерархии, если сотрудник раскрыт */}
       {isExpanded && employee.loadings && employee.loadings.length > 0 && (
         <>
-          {employee.loadings.map((loading) => (
-            <div
-              key={loading.id}
-              className="relative w-full flex cursor-pointer"
-              style={{ height: `${reducedRowHeight}px` }}
-              title="Открыть информацию о загрузке"
-              onClick={() => setEditingLoading(loading)}
-              role="button"
-            >
-              {/* Фиксированные столбцы с sticky позиционированием */}
-              <div
-                className={cn("sticky left-0 z-20", "flex")}
-                style={{
-                  height: `${reducedRowHeight}px`,
-                  width: `${totalFixedWidth}px`,
-                  borderBottom: "1px solid",
-                  borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                  // Удаляем или комментируем borderRight
-                  // borderRight: "1px solid",
-                  // borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                }}
-              >
-                {/* Столбец с информацией о загрузке */}
+          {Array.from(groupedLoadings.values()).map((section) => (
+              <div key={section.sectionId}>
+                {/* Заголовок раздела */}
                 <div
-                  className={cn(
-                    "p-2 flex items-center transition-colors h-full border-b border-r-[0.5px]", // Добавлена border-b
-                    theme === "dark"
-                      ? "border-slate-700 bg-slate-900 hover:bg-slate-800"
-                      : "border-slate-200 bg-slate-50 hover:bg-white",
-                  )}
-                  style={{
-                    width: `${totalFixedWidth}px`,
-                    minWidth: `${totalFixedWidth}px`,
-                    padding: `${padding - 1}px`,
-                    // borderRight: "1px solid",
-                    // borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                  }}
+                  className="relative w-full flex cursor-pointer"
+                  style={{ height: `${reducedRowHeight}px` }}
+                  onClick={() => toggleSection(section.sectionId)}
+                  role="button"
                 >
-                  <div className="flex items-center justify-between w-full">
-                    {/* Левая часть с информацией о проекте и разделе */}
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                        {/* Кнопка удаления/архивирования */}
-                        <button
-                          className={cn(
-                            "w-5 h-5 rounded-full flex items-center justify-center transition-opacity",
-                            theme === "dark"
-                              ? "bg-slate-800 text-slate-500 hover:text-red-400 hover:bg-slate-700"
-                              : "bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-slate-200",
-                            "opacity-70 group-hover:opacity-100",
-                          )}
-                          title={loading.responsibleName === "Дефицит" ? "Удалить дефицит" : "Архивировать"}
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            if (loading.responsibleName === "Дефицит") {
-                              // Удаляем запись дефицита
-                              const { deleteLoading: deleteLoadingFromStore } = usePlanningStore.getState()
-                              await deleteLoadingFromStore(loading.id)
-                            } else {
-                              setLoadingToArchive(loading)
-                              setShowArchiveConfirm(true)
-                            }
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="21,8 21,21 3,21 3,8"></polyline>
-                            <rect x="1" y="3" width="22" height="5"></rect>
-                            <line x1="10" y1="12" x2="14" y2="12"></line>
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="ml-2">
-                        {/* Название проекта */}
-                        <div
-                          className={cn(
-                            "text-[11px] font-medium truncate whitespace-nowrap overflow-hidden max-w-[220px]",
-                            theme === "dark" ? "text-slate-300" : "text-slate-800",
-                          )}
-                          title={loading.projectName || "Проект не указан"}
-                        >
-                          {loading.projectName || "Проект не указан"}
-                        </div>
-                        {/* Название раздела */}
-                        <div
-                          className={cn(
-                            "text-[10px] truncate whitespace-nowrap overflow-hidden max-w-[220px]",
-                            theme === "dark" ? "text-slate-400" : "text-slate-500",
-                          )}
-                          title={loading.sectionName || "Раздел не указан"}
-                        >
-                          {loading.sectionName || "Раздел не указан"}
-                        </div>
-                      </div>
-
-                      {/* Период загрузки */}
-                      <div className="ml-4 flex items-center">
-                        <span className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-600")}>
-                          {formatShortDate(new Date(loading.startDate))} — {formatShortDate(new Date(loading.endDate))}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Правая часть с кнопкой редактирования и ставкой */}
-                    <div className="flex items-center gap-2">
-                      {/* Кнопка редактирования загрузки - появляется при наведении */}
-                      <button
-                        className={cn(
-                          "w-5 h-5 rounded-full flex items-center justify-center transition-opacity mr-2",
-                          theme === "dark"
-                            ? "bg-slate-800 text-slate-500 hover:text-amber-400 hover:bg-slate-700"
-                            : "bg-slate-100 text-slate-400 hover:text-amber-500 hover:bg-slate-200",
-                          "opacity-70 group-hover:opacity-100",
-                        )}
-                        title="Редактировать загрузку"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setEditingLoading(loading)
-                        }}
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-                        </svg>
-                      </button>
-
-                      <span
-                        className={cn(
-                          "text-[10px] font-medium px-1.5 py-0 rounded",
-                          theme === "dark" ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700",
-                        )}
-                        title="Ставка"
-                      >
-                        {(() => {
-                          const v = Number(loading.rate || 0)
-                          return Number.isInteger(v) ? v : v.toFixed(2).replace(/\.00$/, "").replace(/0$/, "")
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ячейки для каждого периода - сдвигаем влево */}
-              <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
-                {timeUnits.map((unit) => {
-                  const isWeekendDay = unit.isWeekend
-                  const isTodayDate = isToday(unit.date)
-
-                  // Получаем загрузку для конкретной даты и конкретной загрузки
-                  const loadingRate = getLoadingRateForDate(loading, unit.date)
-
-                  // Создаем стабильный ключ на основе даты и ID загрузки
-                  const stableKey = `${loading.id}-${unit.date.toISOString().split('T')[0]}`
-
-                  return (
+                  <div
+                    className={cn("sticky left-0 z-20 flex")}
+                    style={{
+                      height: `${reducedRowHeight}px`,
+                      width: `${totalFixedWidth}px`,
+                      borderBottom: "1px solid",
+                      borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                    }}
+                  >
                     <div
-                      key={stableKey}
                       className={cn(
-                        "border-r relative border-b", // Добавлена border-b
-                        theme === "dark" ? "border-slate-700" : "border-slate-200",
-                        // Базовый фон для ячеек
-                        isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                        isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
-                        // Фон для ячеек с загрузкой
-                        loadingRate > 0 && !isWeekendDay && !isTodayDate 
-                          ? theme === "dark" ? "bg-blue-900/20" : "bg-blue-50/80"
-                          : "",
-                        isFirstDayOfMonth(unit.date)
-                          ? theme === "dark"
-                            ? "border-l border-l-slate-600"
-                            : "border-l border-l-slate-300"
-                          : "",
+                        "p-2 flex items-center transition-colors h-full border-b border-r-[0.5px]",
+                        theme === "dark"
+                          ? "border-slate-700 bg-slate-800 hover:bg-slate-700"
+                          : "border-slate-200 bg-slate-100 hover:bg-slate-50",
                       )}
                       style={{
-                        height: `${reducedRowHeight}px`,
-                        width: `${cellWidth}px`,
-                        minWidth: `${cellWidth}px`,
-                        flexShrink: 0,
-                        borderRight: "1px solid",
-                        borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                        borderLeft: isFirstDayOfMonth(unit.date) ? "1px solid" : "none",
-                        borderLeftColor: isFirstDayOfMonth(unit.date)
-                          ? theme === "dark"
-                            ? "rgb(71, 85, 105)"
-                            : "rgb(203, 213, 225)"
-                          : "transparent",
+                        width: `${totalFixedWidth}px`,
+                        minWidth: `${totalFixedWidth}px`,
+                        padding: `${padding - 1}px`,
                       }}
                     >
-                      {loadingRate > 0 && (
-                        <div 
-                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                          title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки`}
+                      <div className="flex items-center w-full">
+                        {expandedSections.has(section.sectionId) ? (
+                          <ChevronDown className="w-4 h-4 mr-2 flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 mr-2 flex-shrink-0" />
+                        )}
+                        <div
+                          className={cn(
+                            "text-xs font-medium truncate",
+                            theme === "dark" ? "text-slate-300" : "text-slate-700",
+                          )}
+                          title={section.sectionName}
                         >
-                          <div
-                            className={cn(
-                              "flex items-center justify-center text-xs font-medium pointer-events-auto",
-                              // Оставляем только цвет текста
-                              loadingRate > 0
-                                ? (() => {
-                                    const employmentRate = employee.employmentRate || 1
-                                    const relativeLoad = loadingRate / employmentRate
+                          {section.sectionName}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-                                    if (relativeLoad <= 0.5) return theme === "dark" ? "text-blue-400" : "text-blue-500"
-                                    if (relativeLoad <= 1.0)
-                                      return theme === "dark" ? "text-green-400" : "text-green-500"
-                                    if (relativeLoad <= 1.5)
-                                      return theme === "dark" ? "text-yellow-400" : "text-yellow-500"
-                                    return theme === "dark" ? "text-red-400" : "text-red-500"
-                                  })()
-                                : "",
+                  {/* Пустые ячейки для раздела */}
+                  <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
+                    {timeUnits.map((unit) => (
+                      <div
+                        key={`section-${section.sectionId}-${unit.date.toISOString()}`}
+                        className={cn(
+                          "border-r border-b",
+                          theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100",
+                        )}
+                        style={{
+                          height: `${reducedRowHeight}px`,
+                          width: `${cellWidth}px`,
+                          minWidth: `${cellWidth}px`,
+                          flexShrink: 0,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Этапы раздела */}
+                {expandedSections.has(section.sectionId) && (
+                  <>
+                    {Array.from(section.stages.values()).map((stage) => (
+                      <div key={stage.stageId}>
+                    {/* Заголовок этапа */}
+                    <div
+                      className="relative w-full flex cursor-pointer"
+                      style={{ height: `${reducedRowHeight}px` }}
+                      onClick={() => toggleStage(stage.stageId)}
+                      role="button"
+                    >
+                      <div
+                        className={cn("sticky left-0 z-20 flex")}
+                        style={{
+                          height: `${reducedRowHeight}px`,
+                          width: `${totalFixedWidth}px`,
+                          borderBottom: "1px solid",
+                          borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                        }}
+                      >
+                        <div
+                          className={cn(
+                            "p-2 flex items-center transition-colors h-full border-b border-r-[0.5px]",
+                            theme === "dark"
+                              ? "border-slate-700 bg-slate-850 hover:bg-slate-750"
+                              : "border-slate-200 bg-slate-50 hover:bg-white",
+                          )}
+                          style={{
+                            width: `${totalFixedWidth}px`,
+                            minWidth: `${totalFixedWidth}px`,
+                            padding: `${padding - 1}px`,
+                            paddingLeft: `${padding + 16}px`, // Отступ для вложенности
+                          }}
+                        >
+                          <div className="flex items-center w-full">
+                            {expandedStages.has(stage.stageId) ? (
+                              <ChevronDown className="w-3 h-3 mr-2 flex-shrink-0" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 mr-2 flex-shrink-0" />
                             )}
-                            title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки на ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
-                          >
-                            {loadingRate === 1 ? "1" : loadingRate.toFixed(1)}
+                            <div
+                              className={cn(
+                                "text-[11px] font-medium truncate",
+                                theme === "dark" ? "text-slate-400" : "text-slate-600",
+                              )}
+                              title={stage.stageName}
+                            >
+                              {stage.stageName}
+                            </div>
                           </div>
                         </div>
-                      )}
+                      </div>
+
+                      {/* Пустые ячейки для этапа */}
+                      <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
+                        {timeUnits.map((unit) => (
+                          <div
+                            key={`stage-${stage.stageId}-${unit.date.toISOString()}`}
+                            className={cn(
+                              "border-r border-b",
+                              theme === "dark" ? "border-slate-700 bg-slate-850" : "border-slate-200 bg-slate-50",
+                            )}
+                            style={{
+                              height: `${reducedRowHeight}px`,
+                              width: `${cellWidth}px`,
+                              minWidth: `${cellWidth}px`,
+                              flexShrink: 0,
+                            }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  )
-                })}
+
+                    {/* Загрузки этапа */}
+                    {expandedStages.has(stage.stageId) && (
+                      <Fragment key={`${stage.stageId}-loadings`}>
+                        {stage.loadings.map((loading) => (
+                          <div
+                        key={loading.id}
+                        className="relative w-full flex cursor-pointer"
+                        style={{ height: `${reducedRowHeight}px` }}
+                        title="Открыть информацию о загрузке"
+                        onClick={() => setEditingLoading(loading)}
+                        role="button"
+                      >
+                        {/* Фиксированные столбцы с sticky позиционированием */}
+                        <div
+                          className={cn("sticky left-0 z-20", "flex")}
+                          style={{
+                            height: `${reducedRowHeight}px`,
+                            width: `${totalFixedWidth}px`,
+                            borderBottom: "1px solid",
+                            borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                          }}
+                        >
+                          {/* Столбец с информацией о загрузке */}
+                          <div
+                            className={cn(
+                              "p-2 flex items-center transition-colors h-full border-b border-r-[0.5px]",
+                              theme === "dark"
+                                ? "border-slate-700 bg-slate-900 hover:bg-slate-800"
+                                : "border-slate-200 bg-slate-50 hover:bg-white",
+                            )}
+                            style={{
+                              width: `${totalFixedWidth}px`,
+                              minWidth: `${totalFixedWidth}px`,
+                              padding: `${padding - 1}px`,
+                              paddingLeft: `${padding + 32}px`, // Двойной отступ для загрузок (раздел + этап)
+                            }}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              {/* Левая часть с информацией о проекте */}
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                                  {/* Кнопка удаления/архивирования */}
+                                  <button
+                                    className={cn(
+                                      "w-5 h-5 rounded-full flex items-center justify-center transition-opacity",
+                                      theme === "dark"
+                                        ? "bg-slate-800 text-slate-500 hover:text-red-400 hover:bg-slate-700"
+                                        : "bg-slate-100 text-slate-400 hover:text-red-500 hover:bg-slate-200",
+                                      "opacity-70 group-hover:opacity-100",
+                                    )}
+                                    title={loading.responsibleName === "Дефицит" ? "Удалить дефицит" : "Архивировать"}
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      if (loading.responsibleName === "Дефицит") {
+                                        const { deleteLoading: deleteLoadingFromStore } = usePlanningStore.getState()
+                                        await deleteLoadingFromStore(loading.id)
+                                      } else {
+                                        setLoadingToArchive(loading)
+                                        setShowArchiveConfirm(true)
+                                      }
+                                    }}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="21,8 21,21 3,21 3,8"></polyline>
+                                      <rect x="1" y="3" width="22" height="5"></rect>
+                                      <line x1="10" y1="12" x2="14" y2="12"></line>
+                                    </svg>
+                                  </button>
+                                </div>
+                                <div className="ml-2">
+                                  {/* Название проекта */}
+                                  <div
+                                    className={cn(
+                                      "text-[11px] font-medium truncate whitespace-nowrap overflow-hidden max-w-[180px]",
+                                      theme === "dark" ? "text-slate-300" : "text-slate-800",
+                                    )}
+                                    title={loading.projectName || "Проект не указан"}
+                                  >
+                                    {loading.projectName || "Проект не указан"}
+                                  </div>
+                                  {/* Период загрузки */}
+                                  <div className="flex items-center mt-0.5">
+                                    <span className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-600")}>
+                                      {formatShortDate(new Date(loading.startDate))} — {formatShortDate(new Date(loading.endDate))}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Правая часть с кнопкой редактирования и ставкой */}
+                              <div className="flex items-center gap-2">
+                                {/* Кнопка редактирования загрузки */}
+                                <button
+                                  className={cn(
+                                    "w-5 h-5 rounded-full flex items-center justify-center transition-opacity mr-2",
+                                    theme === "dark"
+                                      ? "bg-slate-800 text-slate-500 hover:text-amber-400 hover:bg-slate-700"
+                                      : "bg-slate-100 text-slate-400 hover:text-amber-500 hover:bg-slate-200",
+                                    "opacity-70 group-hover:opacity-100",
+                                  )}
+                                  title="Редактировать загрузку"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setEditingLoading(loading)
+                                  }}
+                                >
+                                  <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                                  </svg>
+                                </button>
+
+                                <span
+                                  className={cn(
+                                    "text-[10px] font-medium px-1.5 py-0 rounded",
+                                    theme === "dark" ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700",
+                                  )}
+                                  title="Ставка"
+                                >
+                                  {(() => {
+                                    const v = Number(loading.rate || 0)
+                                    return Number.isInteger(v) ? v : v.toFixed(2).replace(/\.00$/, "").replace(/0$/, "")
+                                  })()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ячейки для каждого периода */}
+                        <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
+                          {timeUnits.map((unit) => {
+                            const isWeekendDay = unit.isWeekend
+                            const isTodayDate = isToday(unit.date)
+                            const loadingRate = getLoadingRateForDate(loading, unit.date)
+                            const stableKey = `${loading.id}-${unit.date.toISOString().split('T')[0]}`
+
+                            return (
+                              <div
+                                key={stableKey}
+                                className={cn(
+                                  "border-r relative border-b",
+                                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                                  isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
+                                  isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                                  loadingRate > 0 && !isWeekendDay && !isTodayDate
+                                    ? theme === "dark" ? "bg-blue-900/20" : "bg-blue-50/80"
+                                    : "",
+                                  isFirstDayOfMonth(unit.date)
+                                    ? theme === "dark"
+                                      ? "border-l border-l-slate-600"
+                                      : "border-l border-l-slate-300"
+                                    : "",
+                                )}
+                                style={{
+                                  height: `${reducedRowHeight}px`,
+                                  width: `${cellWidth}px`,
+                                  minWidth: `${cellWidth}px`,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {loadingRate > 0 && (
+                                  <div
+                                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                    title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки`}
+                                  >
+                                    <div
+                                      className={cn(
+                                        "flex items-center justify-center text-xs font-medium pointer-events-auto",
+                                        loadingRate > 0
+                                          ? (() => {
+                                              const employmentRate = employee.employmentRate || 1
+                                              const relativeLoad = loadingRate / employmentRate
+                                              if (relativeLoad <= 0.5) return theme === "dark" ? "text-blue-400" : "text-blue-500"
+                                              if (relativeLoad <= 1.0) return theme === "dark" ? "text-green-400" : "text-green-500"
+                                              if (relativeLoad <= 1.5) return theme === "dark" ? "text-yellow-400" : "text-yellow-500"
+                                              return theme === "dark" ? "text-red-400" : "text-red-500"
+                                            })()
+                                          : "",
+                                      )}
+                                      title={`Загрузка: ${loadingRate === 1 ? "1" : loadingRate.toFixed(1)} ставки на ${new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(unit.date)}`}
+                                    >
+                                      {loadingRate === 1 ? "1" : loadingRate.toFixed(1)}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                        ))}
+                      </Fragment>
+                    )}
+                  </div>
+                    ))}
+                  </>
+                )}
               </div>
-            </div>
-          ))}
+            ))}
         </>
       )}
       {/* Модальное окно подтверждения архивирования */}

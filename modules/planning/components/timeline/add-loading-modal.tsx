@@ -64,6 +64,11 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   const [selectedStageId, setSelectedStageId] = useState<string>("")
   const [selectedObjectId, setSelectedObjectId] = useState<string>("")
 
+  // Состояния для этапов декомпозиции раздела
+  const [decompositionStages, setDecompositionStages] = useState<{ id: string; name: string }[]>([])
+  const [selectedDecompositionStageId, setSelectedDecompositionStageId] = useState<string>("")
+  const [isLoadingDecompositionStages, setIsLoadingDecompositionStages] = useState(false)
+
   // Состояния для поиска проектов - упрощенные
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
@@ -256,6 +261,67 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     )
   }
 
+  // Загрузка этапов декомпозиции для выбранного раздела
+  const fetchDecompositionStages = async (sectionId: string) => {
+    if (!sectionId) {
+      setDecompositionStages([])
+      return
+    }
+
+    setIsLoadingDecompositionStages(true)
+    try {
+      const { data, error } = await supabase
+        .from("decomposition_stages")
+        .select("decomposition_stage_id, decomposition_stage_name")
+        .eq("decomposition_stage_section_id", sectionId)
+        .order("decomposition_stage_name")
+
+      if (error) {
+        console.error("Ошибка при загрузке этапов декомпозиции:", error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'planning',
+            action: 'fetch_decomposition_stages',
+            modal: 'add_loading_modal'
+          },
+          extra: {
+            section_id: sectionId,
+            employee_id: employee.id,
+            timestamp: new Date().toISOString()
+          }
+        })
+        setNotification("Ошибка при загрузке этапов раздела")
+        errorTimeoutRef.current = setTimeout(() => {
+          clearNotification()
+        }, 5000)
+        return
+      }
+
+      const stages = (data || []).map((s: any) => ({
+        id: s.decomposition_stage_id,
+        name: s.decomposition_stage_name
+      }))
+      setDecompositionStages(stages)
+    } catch (error) {
+      console.error("Ошибка при загрузке этапов декомпозиции:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'planning',
+          action: 'fetch_decomposition_stages',
+          error_type: 'unexpected_error',
+          modal: 'add_loading_modal'
+        },
+        extra: {
+          section_id: sectionId,
+          employee_id: employee.id,
+          timestamp: new Date().toISOString()
+        }
+      })
+    } finally {
+      setIsLoadingDecompositionStages(false)
+    }
+  }
+
   // Загрузка проектов при открытии модального окна
   useEffect(() => {
     fetchProjects()
@@ -358,6 +424,8 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     if (name === "projectId" && value !== formData.projectId) {
       setSelectedStageId("")
       setSelectedObjectId("")
+      setSelectedDecompositionStageId("")
+      setDecompositionStages([])
       fetchSections(value)
       setFormData((prev) => ({
         ...prev,
@@ -370,6 +438,14 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     } else if (name === "objectId") {
       setSelectedObjectId(value)
       fetchSections(formData.projectId, selectedStageId || undefined, value || undefined)
+    } else if (name === "sectionId") {
+      // При выборе раздела загружаем этапы декомпозиции
+      setSelectedDecompositionStageId("")
+      fetchDecompositionStages(value)
+      setFormData((prev) => ({
+        ...prev,
+        sectionId: value,
+      }))
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -420,6 +496,11 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
       newErrors.sectionId = "Необходимо выбрать раздел"
     }
 
+    // Проверка этапа декомпозиции (ОБЯЗАТЕЛЬНО)
+    if (!selectedDecompositionStageId) {
+      newErrors.decompositionStageId = "Необходимо выбрать этап декомпозиции"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -441,12 +522,13 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         setIsSaving(true)
 
         try {
-          // Получаем названия проекта и раздела
+          // Получаем названия проекта, раздела и этапа
           const selectedProject = projects.find((p) => p.project_id === formData.projectId)
           const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
+          const selectedDecompositionStage = decompositionStages.find((s) => s.id === selectedDecompositionStageId)
 
-          if (!selectedProject || !selectedSection) {
-            throw new Error("Не удалось найти выбранный проект или раздел")
+          if (!selectedProject || !selectedSection || !selectedDecompositionStage) {
+            throw new Error("Не удалось найти выбранный проект, раздел или этап")
           }
 
           // Устанавливаем атрибуты spans
@@ -456,6 +538,8 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           span.setAttribute("project.name", selectedProject.project_name)
           span.setAttribute("section.id", formData.sectionId)
           span.setAttribute("section.name", selectedSection.section_name)
+          span.setAttribute("stage.id", selectedDecompositionStageId)
+          span.setAttribute("stage.name", selectedDecompositionStage.name)
           span.setAttribute("loading.start_date", formData.startDate)
           span.setAttribute("loading.end_date", formData.endDate)
           span.setAttribute("loading.rate", formData.rate)
@@ -464,11 +548,13 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           const result = await createLoadingInStore({
             responsibleId: employee.id,
             sectionId: formData.sectionId,
+            stageId: selectedDecompositionStageId,
             startDate: new Date(formData.startDate),
             endDate: new Date(formData.endDate),
             rate: formData.rate,
             projectName: selectedProject?.project_name,
             sectionName: selectedSection?.section_name,
+            stageName: selectedDecompositionStage.name,
             responsibleName: employee.fullName || employee.name,
             responsibleAvatarUrl: employee.avatarUrl,
             responsibleTeamName: employee.teamName,
@@ -763,6 +849,48 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
             {errors.sectionId && <p className="text-xs text-red-500 mt-1">{errors.sectionId}</p>}
             {isLoadingSections && <p className="text-xs text-slate-500 mt-1">Загрузка разделов...</p>}
             {!formData.projectId && <p className="text-xs text-slate-500 mt-1">Сначала выберите проект</p>}
+          </div>
+
+          {/* Этап декомпозиции */}
+          <div>
+            <label
+              className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}
+            >
+              Этап декомпозиции
+            </label>
+            <select
+              value={selectedDecompositionStageId}
+              onChange={(e) => {
+                setSelectedDecompositionStageId(e.target.value)
+                // Очищаем ошибку при выборе этапа
+                if (errors.decompositionStageId) {
+                  setErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.decompositionStageId
+                    return newErrors
+                  })
+                }
+              }}
+              disabled={isSaving || isLoadingDecompositionStages || !formData.sectionId}
+              className={cn(
+                "w-full text-sm rounded border px-3 py-2",
+                theme === "dark"
+                  ? "bg-slate-700 border-slate-600 text-slate-200"
+                  : "bg-white border-slate-300 text-slate-800",
+                errors.decompositionStageId ? "border-red-500" : "",
+                isSaving || isLoadingDecompositionStages || !formData.sectionId ? "opacity-50 cursor-not-allowed" : "",
+              )}
+            >
+              <option value="">Выберите этап</option>
+              {decompositionStages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </select>
+            {errors.decompositionStageId && <p className="text-xs text-red-500 mt-1">{errors.decompositionStageId}</p>}
+            {isLoadingDecompositionStages && <p className="text-xs text-slate-500 mt-1">Загрузка этапов...</p>}
+            {!formData.sectionId && <p className="text-xs text-slate-500 mt-1">Сначала выберите раздел</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
