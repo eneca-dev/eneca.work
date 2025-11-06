@@ -5,7 +5,8 @@ export interface Loading {
   projectStatus?: string
   sectionId: string | null
   sectionName?: string
-  stageId?: string | null
+  stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
+  stageName?: string // Название этапа для отображения
   employeeId?: string
   responsibleId?: string
   responsibleName?: string
@@ -187,4 +188,29 @@ export interface ProjectObject {
   endDate?: Date
   createdAt?: Date
   updatedAt?: Date
+}
+
+// Агрегированное саммари проекта из представления view_project_summary
+export interface ProjectSummary {
+  projectId: string
+  projectName: string
+  projectStatus?: string | null
+  projectCreated?: Date | null
+  clientId?: string | null
+  clientName?: string | null
+  managerId?: string | null
+  managerName?: string | null
+  projectStartDate?: Date | null
+  projectEndDate?: Date | null
+  sectionsCount: number
+  // Метрики на сегодня
+  employeesWithLoadingsToday: number
+  loadingsCountToday: number
+  totalLoadingRateToday: number
+  // Метрики по всем активным загрузкам
+  employeesWithLoadingsActive: number
+  loadingsCountActive: number
+  totalLoadingRateActive: number
+  // Суммарная вовлеченность
+  engagedEmployeesTotal: number
 }

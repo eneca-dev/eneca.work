@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useState } from "react";
 import StagesManagement from "./stages-management";
 import { ToastProvider, Toaster } from "../hooks/use-toast";
+import AddWorkLogModal from "@/modules/projects/components/AddWorkLogModal";
 
 type Props = {
   sectionId: string;
@@ -10,12 +12,31 @@ type Props = {
 };
 
 export default function SectionDecomposition2Tab(props: Props) {
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [selectedForLog, setSelectedForLog] = useState<string | null>(null);
+
+  const handleOpenLogModal = (itemId: string) => {
+    setSelectedForLog(itemId);
+    setIsLogModalOpen(true);
+  };
+
   return (
     <ToastProvider>
       <div className="pt-0 px-2 pb-2">
-        <StagesManagement sectionId={props.sectionId} />
+        <StagesManagement
+          sectionId={props.sectionId}
+          onOpenLog={handleOpenLogModal}
+        />
       </div>
       <Toaster />
+
+      <AddWorkLogModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
+        sectionId={props.sectionId}
+        defaultItemId={selectedForLog}
+        key={isLogModalOpen ? `add-log-${selectedForLog || 'none'}` : 'add-log-hidden'}
+      />
     </ToastProvider>
   );
 }

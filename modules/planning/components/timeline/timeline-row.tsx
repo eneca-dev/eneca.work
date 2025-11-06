@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
@@ -73,7 +73,7 @@ export function TimelineRow({
     stages.forEach((s) => ids.add(s.id))
     // этапы из загрузок, которые могли появиться раньше, и специальный __no_stage__
     let hasNoStage = false
-    uniqueLoadings.forEach((ld) => {
+    uniqueLoadings.forEach((ld: Loading) => {
       const sid = (ld as any).stageId || null
       if (sid) ids.add(sid)
       else hasNoStage = true
@@ -110,6 +110,8 @@ export function TimelineRow({
   // Получаем функцию для переключения состояния раскрытия
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
   const expandedSections = usePlanningStore((state) => state.expandedSections)
+  // Резервный источник загрузок из стора на случай, если в section.loadings ещё пусто
+  const loadingsFromMap = usePlanningStore((state) => (state as any).loadingsMap?.[section.id] || [])
 
   // Проверяем, раскрыт ли раздел
   const isExpanded = expandedSections[section.id] || false
@@ -159,14 +161,14 @@ export function TimelineRow({
     setShowAssignResponsibleModal(true)
   }
 
-  // Получаем загрузки раздела
-  const loadings = section.loadings || []
+  // Получаем загрузки раздела (с резервом из loadingsMap стора)
+  const loadings = (section.loadings && section.loadings.length > 0) ? section.loadings : loadingsFromMap
   
   // Фильтруем дубликаты загрузок по ID для избежания проблем с React ключами
   // Убираем дубликаты и сортируем загрузки так, чтобы записи одного человека шли рядом
   const uniqueLoadings = loadings
-    .filter((loading, index, array) => array.findIndex(l => l.id === loading.id) === index)
-    .sort((a, b) => {
+    .filter((loading: Loading, index: number, array: Loading[]) => array.findIndex((l: Loading) => l.id === loading.id) === index)
+    .sort((a: Loading, b: Loading) => {
       // Сначала ответственный за раздел
       const aIsSectionResponsible = a.responsibleId && section && (a.responsibleId === (section as any).responsibleId)
       const bIsSectionResponsible = b.responsibleId && section && (b.responsibleId === (section as any).responsibleId)
@@ -187,7 +189,7 @@ export function TimelineRow({
   // Функция для расчета суммы ставок по загрузкам в разделе
   const calculateTotalRate = (): number => {
     if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
-    return uniqueLoadings.reduce((total, loading) => total + (loading.rate || 0), 0)
+    return uniqueLoadings.reduce((total: number, loading: Loading) => total + (loading.rate || 0), 0)
   }
 
   // Вычисляем суммарную ставку
@@ -219,7 +221,7 @@ export function TimelineRow({
   const getSectionWorkloadForDate = (date: Date): number => {
     if (!uniqueLoadings || uniqueLoadings.length === 0) return 0
     
-    return uniqueLoadings.reduce((total, loading) => {
+    return uniqueLoadings.reduce((total: number, loading: Loading) => {
       if (isLoadingActiveInPeriod(loading, date)) {
         return total + (loading.rate || 0)
       }
@@ -628,7 +630,7 @@ export function TimelineRow({
             // Группируем фактические загрузки по stageId
             const loadingsByStage: Record<string, Loading[]> = {}
 
-            uniqueLoadings.forEach((ld) => {
+            uniqueLoadings.forEach((ld: Loading) => {
               const key = (ld as any).stageId || "__no_stage__"
               ;(loadingsByStage[key] ||= []).push(ld)
             })
@@ -674,6 +676,7 @@ export function TimelineRow({
                   onOpenSectionPanel={onOpenSectionPanel}
                   isCollapsed={isStageCollapsed(stage.id)}
                   onToggleCollapse={() => toggleStageCollapsed(stage.id)}
+                  allLoadings={uniqueLoadings}
                 />
 
                 {/* Фактические загрузки для этого этапа */}
@@ -1055,6 +1058,7 @@ interface StageRowProps {
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void
   isCollapsed: boolean
   onToggleCollapse: () => void
+  allLoadings: Loading[]
 }
 
 function StageRow({
@@ -1073,6 +1077,7 @@ function StageRow({
   onOpenSectionPanel,
   isCollapsed,
   onToggleCollapse,
+  allLoadings,
 }: StageRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   const [createOpen, setCreateOpen] = useState(false)
@@ -1116,14 +1121,13 @@ function StageRow({
   // Часы в день
   const hoursPerDay: number = activeDaysCount > 0 ? totalPlannedHours / activeDaysCount : 0
 
-  // Загрузки, относящиеся к данному этапу (включая специальный этап "без этапа")
-  const stageLoadings: Loading[] = Array.isArray((section as any).loadings)
-    ? (section as any).loadings.filter((ld: Loading) => {
-        const ldStageId = (ld as any).stageId || null
-        if (stage.id === "__no_stage__") return !ldStageId
-        return ldStageId === stage.id
-      })
-    : []
+  // Загрузки, относящиеся к данному этапу (включая специальный этап "без этапа").
+  // Используем актуальный источник загрузок, переданный сверху (uniqueLoadings с резервом из стора).
+  const stageLoadings: Loading[] = (allLoadings || []).filter((ld: Loading) => {
+    const ldStageId = (ld as any).stageId || null
+    if (stage.id === "__no_stage__") return !ldStageId
+    return ldStageId === stage.id
+  })
 
   // Проверка активности загрузки в конкретный день
   const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
@@ -1143,7 +1147,7 @@ function StageRow({
   // Сумма ставок этапа в конкретную дату
   const getStageWorkloadForDate = (date: Date): number => {
     if (!stageLoadings.length) return 0
-    return stageLoadings.reduce((sum, ld) => {
+    return stageLoadings.reduce((sum: number, ld: Loading) => {
       return isLoadingActiveInPeriod(ld, date) ? sum + (ld.rate || 0) : sum
     }, 0)
   }

@@ -42,6 +42,7 @@ export function TimelineView() {
     departments,
     isLoadingSections,
     isLoadingDepartments,
+    fetchProjectSummaries,
     fetchSections,
     fetchDepartments,
     setFilters,
@@ -143,23 +144,26 @@ useEffect(() => {
   // Проверяем, есть ли активные фильтры
   const hasActiveFilters = activeFiltersCount > 0
 
-  // Загружаем проекты и отделы при монтировании компонента
+  // Загружаем саммари проектов при монтировании
   useEffect(() => {
-    fetchSections()
-  }, [fetchSections])
+    fetchProjectSummaries()
+  }, [fetchProjectSummaries])
 
-  // Применяем фильтры при их изменении или при монтировании компонента
+  // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
   useEffect(() => {
-    // Устанавливаем состояние загрузки перед применением фильтров
-    setLoading(true)
+    fetchProjectSummaries()
+  }, [fetchProjectSummaries, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
 
-    // Применяем фильтры из нового стора
-    setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId)
-
-    // Сбрасываем состояние загрузки после небольшой задержки
-    const timer = setTimeout(() => setLoading(false), 300)
-    return () => clearTimeout(timer)
-  }, [selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
+  // Применяем фильтры только при их изменении (если действительно заданы)
+  useEffect(() => {
+    if (activeFiltersCount > 0) {
+      setLoading(true)
+      setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId)
+      const timer = setTimeout(() => setLoading(false), 300)
+      return () => clearTimeout(timer)
+    }
+    // если фильтров нет — работаем в режиме саммари проектов, ничего не тянем
+  }, [activeFiltersCount, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
 
   // Дополнительная подписка на изменения фильтров для немедленного обновления данных
   useEffect(() => {

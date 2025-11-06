@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useEffect } from "react"
+import { useMemo, useRef, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { Section, Department } from "../types"
 import { useSettingsStore } from "@/stores/useSettingsStore"
@@ -12,7 +12,7 @@ import { DepartmentRow } from "./timeline/department-row" // Новый комп
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2, Milestone, Building2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useProjectsStore } from "@/modules/projects/store"
 
@@ -83,8 +83,21 @@ export function TimelineGrid({
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
   const groupByProject = usePlanningStore((state) => state.groupByProject)
   const expandedProjectGroups = usePlanningStore((state) => state.expandedProjectGroups)
-  const toggleProjectGroup = usePlanningStore((state) => state.toggleProjectGroup)
+  const projectSummaries = usePlanningStore((state) => state.projectSummaries)
+  const toggleProjectGroupById = usePlanningStore((state) => state.toggleProjectGroupById)
+  const ensureProjectSectionsLoaded = usePlanningStore((state) => state.ensureProjectSectionsLoaded)
+  const allSectionsStore = usePlanningStore((state) => state.allSections)
+  const projectSectionsLoading = usePlanningStore((state) => state.projectSectionsLoading)
   
+  // Локальные раскрытия для уровней стадия и объект
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
+  const [expandedObjects, setExpandedObjects] = useState<Record<string, boolean>>({})
+
+  const toggleStageExpanded = (key: string) =>
+    setExpandedStages((prev) => ({ ...prev, [key]: !prev[key] }))
+  const toggleObjectExpanded = (key: string) =>
+    setExpandedObjects((prev) => ({ ...prev, [key]: !prev[key] }))
+
   // Получаем функции переключения видимости
   const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
   const toggleShowDepartments = usePlanningStore((state) => state.toggleShowDepartments)
@@ -154,6 +167,9 @@ export function TimelineGrid({
   const sectionIndexMap = useMemo(() => {
     return new Map(sections.map((s, i) => [s, i] as const))
   }, [sections])
+  const allSectionIndexMap = useMemo(() => {
+    return new Map((allSectionsStore || []).map((s, i) => [s, i] as const))
+  }, [allSectionsStore])
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(ROW_HEIGHT * 0.75)
@@ -328,92 +344,251 @@ export function TimelineGrid({
               />
             ))
           ) : (
-            // Группировка по названию проекта
-            Object.entries(
-              sections.reduce((acc, s) => {
-                const key = s.projectName || "Без проекта"
-                if (!acc[key]) acc[key] = [] as typeof sections
-                acc[key].push(s)
-                return acc
-              }, {} as Record<string, typeof sections>)
-            ).sort((a, b) => a[0].localeCompare(b[0])).map(([projectName, projectSections]) => (
-              <div key={projectName}>
+            // Группировка по проектам из саммари (ленивая подзагрузка секций)
+            (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
+              const projectIdForGroup = summary.projectId
+              const projectName = summary.projectName || 'Без проекта'
+              const isExpanded = expandedProjectGroups[projectIdForGroup] === true
+              const projectSections = (allSectionsStore || []).filter(s => s.projectId === projectIdForGroup)
+              return (
+              <div key={projectIdForGroup}>
                 {/* Заголовок группы проекта */}
-                <div
+                  <div
                   className={cn(
-                    "sticky left-0 z-10 flex items-center font-semibold border-b cursor-pointer select-none",
-                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                    "flex items-center font-semibold border-b cursor-pointer select-none",
+                    theme === "dark" ? "border-slate-700" : "border-slate-200"
                   )}
                   style={{ height: `${HEADER_HEIGHT}px` }}
-                  onClick={() => toggleProjectGroup(projectName)}
+                  onClick={() => toggleProjectGroupById(projectIdForGroup)}
                 >
                   <div
                     className={cn(
-                      "border-r flex items-center",
-                      theme === "dark" ? "border-slate-700" : "border-slate-200"
+                    "sticky left-0 z-30 border-r border-b flex items-center",
+                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
                     )}
                     style={{
+                      height: `${HEADER_HEIGHT}px`,
                       width: `${totalFixedWidth}px`,
                       minWidth: `${totalFixedWidth}px`,
                       padding: `${PADDING}px`,
+                  borderBottom: "0.25px solid",
+                    borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderTop: "0.25px solid",
+                  borderTopColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                     }}
                   >
                     <span className="mr-2">
-                      {expandedProjectGroups[projectName] ? (
+                      {isExpanded ? (
                         <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                       ) : (
                         <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
                       )}
                     </span>
-                    {(() => {
-                      const projectIdForGroup = (projectSections.find(s => s.projectId)?.projectId) || null
+                    {projectSectionsLoading[projectIdForGroup] && (
+                      <Loader2 className={cn("h-4 w-4 mr-2 animate-spin", theme === "dark" ? "text-slate-400" : "text-slate-500")} />
+                    )}
+                    <span
+                      className={cn(
+                        "text-sm cursor-pointer hover:underline",
+                        theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                      )}
+                      title={projectIdForGroup ? "Перейти к проекту" : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (projectIdForGroup) {
+                          focusProject(projectIdForGroup)
+                          router.push("/dashboard/projects")
+                        }
+                      }}
+                    >
+                      {projectName}
+                    </span>
+                  </div>
+                  {/* Заполнитель для правой части, чтобы выровнять сетку */}
+                  <div className="flex-1 flex items-center">
+                    {/* Саммари на сетке при свернутой группе проекта (из view_project_summary) */}
+                    {!isExpanded && (() => {
+                      const chipClass = cn(
+                        "ml-2 text-xs px-2 py-0.5 rounded whitespace-nowrap",
+                        theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
+                      )
+                      const fmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" })
+                      const periodLabel = summary.projectStartDate && summary.projectEndDate
+                        ? `${fmt.format(summary.projectStartDate)}—${fmt.format(summary.projectEndDate)}`
+                        : "—"
+                      const rateLabel = summary.totalLoadingRateActive > 0
+                        ? (Number.isInteger(summary.totalLoadingRateActive) ? `${summary.totalLoadingRateActive} ставки` : `${summary.totalLoadingRateActive.toFixed(1)} ставки`)
+                        : null
                       return (
-                        <span
-                          className={cn(
-                            "text-sm cursor-pointer hover:underline",
-                            theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                        <div className="flex items-center pl-2">
+                          <span className={chipClass} title="Количество разделов">Разделы: {summary.sectionsCount}</span>
+                          {summary.loadingsCountActive > 0 && (
+                            <span className={chipClass} title="Количество активных загрузок">Загрузки: {summary.loadingsCountActive}</span>
                           )}
-                          title={projectIdForGroup ? "Перейти к проекту" : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (projectIdForGroup) {
-                              focusProject(projectIdForGroup)
-                              router.push("/dashboard/projects")
-                            }
-                          }}
-                        >
-                          {projectName}
-                        </span>
+                          {rateLabel && (
+                            <span className={chipClass} title="Суммарные активные ставки">{rateLabel}</span>
+                          )}
+                          {summary.employeesWithLoadingsActive > 0 && (
+                            <span className={chipClass} title="Сотрудников в активных загрузках">Сотр: {summary.employeesWithLoadingsActive}</span>
+                          )}
+                          <span className={chipClass} title="Период по разделам">Период: {periodLabel}</span>
+                        </div>
                       )
                     })()}
                   </div>
-                  {/* Заполнитель для правой части, чтобы выровнять сетку */}
-                  <div className="flex-1" />
                 </div>
-                {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
-                  const index = sectionIndexMap.get(section) ?? 0
-                  return (
-                    <TimelineRow
-                      key={section.id}
-                      section={section}
-                      sectionIndex={index}
-                      timeUnits={timeUnits}
-                      theme={theme}
-                      rowHeight={ROW_HEIGHT}
-                      headerHeight={HEADER_HEIGHT}
-                      columnWidth={COLUMN_WIDTHS.section}
-                      padding={PADDING}
-                      leftOffset={LEFT_OFFSET}
-                      cellWidth={cellWidth}
-                      stickyColumnShadow={stickyColumnShadow}
-                      totalExpandedSections={totalExpandedSections}
-                      totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
-                      onOpenSectionPanel={onOpenSectionPanel}
-                    />
-                  )
-                })}
+                {isExpanded && (() => {
+                  // Группируем разделы проекта по стадии → объекту
+                  type ObjGroup = { objectId: string; objectName: string; sections: Section[] }
+                  type StageGroup = { stageId: string; stageName: string; objects: ObjGroup[] }
+                  const stageMap = new Map<string, { name: string; objects: Map<string, { name: string; sections: Section[] }> }>()
+
+                  projectSections.forEach(s => {
+                    const sId = s.stageId || "__no_stage__"
+                    const sName = s.stageName || "Без стадии"
+                    if (!stageMap.has(sId)) stageMap.set(sId, { name: sName, objects: new Map() })
+                    const objectMap = stageMap.get(sId)!.objects
+
+                    const oId = s.objectId || "__no_object__"
+                    const oName = s.objectName || "Без объекта"
+                    if (!objectMap.has(oId)) objectMap.set(oId, { name: oName, sections: [] })
+                    objectMap.get(oId)!.sections.push(s)
+                  })
+
+                  const stageGroups: StageGroup[] = Array.from(stageMap.entries()).map(([stageId, data]) => ({
+                    stageId,
+                    stageName: data.name,
+                    objects: Array.from(data.objects.entries()).map(([objectId, obj]) => ({
+                      objectId,
+                      objectName: obj.name,
+                      sections: obj.sections,
+                    })),
+                  }))
+
+                  // Рендер: выпадающий список стадий
+                  return stageGroups.flatMap((stage) => {
+                    const stageKey = `${projectIdForGroup}:${stage.stageId}`
+                    const isStageExpanded = expandedStages[stageKey] ?? false
+                    const stageHeader = (
+                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleStageExpanded(stageKey)}>
+                        {/* Фиксированные столбцы */}
+                        <div
+                          className={cn("sticky left-0 z-20", "flex")}
+                          style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                        >
+                          <div
+                            className={cn(
+                              "p-2 font-medium border-r flex items-center transition-colors h-full",
+                              theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                            )}
+                            style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                          >
+                            <div className="flex items-center w-full">
+                              <span className="mr-2">
+                                {isStageExpanded ? (
+                                  <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                ) : (
+                                  <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                )}
+                              </span>
+                              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                                <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                              </div>
+                              <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{stage.stageName}</div>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Полотно таймлайна */}
+                        <div className="flex-1 flex w-full">
+                          {timeUnits.map((unit, i) => {
+                            const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "border-r border-b relative",
+                                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                                  isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "",
+                                )}
+                                style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+
+                    const objectBlocks = isStageExpanded ? stage.objects.flatMap((obj) => {
+                      const objectKey = `${projectIdForGroup}:${stage.stageId}:${obj.objectId}`
+                      const isObjectExpanded = expandedObjects[objectKey] ?? false
+                      const objectHeader = (
+                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleObjectExpanded(objectKey)}>
+                          <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}>
+                            <div
+                              className={cn(
+                                "p-2 font-medium border-r flex items-center transition-colors h-full",
+                                theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                              )}
+                              style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                            >
+                              <div className="flex items-center w-full">
+                                <span className="mr-2">
+                                  {isObjectExpanded ? (
+                                    <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                  ) : (
+                                    <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                  )}
+                                </span>
+                                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                                  <Building2 className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                                </div>
+                                <div className={cn("text-xs font-medium", theme === "dark" ? "text-slate-200" : "text-slate-700")}>{obj.objectName}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-1 flex w-full">
+                            {timeUnits.map((unit, i) => {
+                              const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                              return (
+                                <div key={i} className={cn("border-r border-b relative", theme === "dark" ? "border-slate-700" : "border-slate-200", isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "")} style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }} />
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+
+                      const sectionRows = isObjectExpanded ? obj.sections.map((section) => {
+                        const index = (allSectionIndexMap.get(section) ?? 0)
+                        return (
+                          <TimelineRow
+                            key={section.id}
+                            section={section}
+                            sectionIndex={index}
+                            timeUnits={timeUnits}
+                            theme={theme}
+                            rowHeight={ROW_HEIGHT}
+                            headerHeight={HEADER_HEIGHT}
+                            columnWidth={COLUMN_WIDTHS.section}
+                            padding={PADDING}
+                            leftOffset={LEFT_OFFSET}
+                            cellWidth={cellWidth}
+                            stickyColumnShadow={stickyColumnShadow}
+                            totalExpandedSections={totalExpandedSections}
+                            totalLoadingsBeforeSection={0}
+                            onOpenSectionPanel={onOpenSectionPanel}
+                          />
+                        )
+                      }) : []
+
+                      return [objectHeader, ...sectionRows]
+                    }) : []
+
+                    return [stageHeader, ...objectBlocks]
+                  })
+                })()}
               </div>
-            ))
+            )
+            })
           ))}
 
           {/* Если нет разделов или идет загрузка */}

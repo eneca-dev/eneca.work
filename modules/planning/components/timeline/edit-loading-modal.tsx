@@ -42,9 +42,13 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
   // Локальное состояние для формы
   const [formData, setFormData] = useState({
-    startDate: loading.startDate.toISOString().split("T")[0],
-    endDate: loading.endDate.toISOString().split("T")[0],
-    rate: loading.rate,
+    startDate: loading.startDate instanceof Date
+      ? loading.startDate.toISOString().split("T")[0]
+      : new Date(loading.startDate).toISOString().split("T")[0],
+    endDate: loading.endDate instanceof Date
+      ? loading.endDate.toISOString().split("T")[0]
+      : new Date(loading.endDate).toISOString().split("T")[0],
+    rate: loading.rate || 1,
     projectId: loading.projectId || "",
     sectionId: loading.sectionId || "",
     comment: loading.comment || "",
