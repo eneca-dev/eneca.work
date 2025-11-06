@@ -1,6 +1,6 @@
-"use client" 
+"use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
@@ -13,6 +13,303 @@ import { usePlanningStore } from '@/modules/planning/stores/usePlanningStore'
 import { useTimelineUiStore } from '@/modules/planning/stores/useTimelineUiStore'
 import { Button } from '@/components/ui/button'
 import { applyPlanningLocks } from '@/modules/planning/integration/apply-planning-locks'
+
+// ========================= DatePicker Component =========================
+const RU_MONTHS = [
+  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+]
+const RU_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+function toISODate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+function getMonthMatrix(year: number, month: number): Date[] {
+  const firstOfMonth = new Date(year, month, 1)
+  const weekday = firstOfMonth.getDay()
+  const mondayIndex = (weekday + 6) % 7
+  const start = new Date(year, month, 1 - mondayIndex)
+  const days: Date[] = []
+  for (let i = 0; i < 42; i++) {
+    const dt = new Date(start)
+    dt.setDate(start.getDate() + i)
+    days.push(dt)
+  }
+  return days
+}
+
+function cn(...classes: (string | undefined | false)[]) {
+  return classes.filter(Boolean).join(' ')
+}
+
+type DatePickerProps = {
+  value: Date
+  onChange: (date: Date) => void
+  triggerClassName?: string
+  daysToShow?: number
+}
+
+function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 180 }: DatePickerProps) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState<number>(value.getFullYear())
+  const [viewMonth, setViewMonth] = useState<number>(value.getMonth())
+  const [focusedISO, setFocusedISO] = useState<string>(toISODate(value))
+
+  const triggerElRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const prevOpenRef = useRef<boolean>(false)
+
+  const updatePosition = useCallback(() => {
+    const el = triggerElRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const width = 300
+    // Размещаем еще левее - выравниваем правый край календаря по левому краю триггера
+    const left = Math.max(rect.left + window.scrollX - width, 8)
+    // Размещаем снизу от триггера
+    const top = rect.bottom + window.scrollY + 6
+    setPos({ top, left })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    updatePosition()
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node | null
+      if (!t) return
+      if (popoverRef.current?.contains(t)) return
+      if (triggerElRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    const onWin = () => updatePosition()
+    document.addEventListener("mousedown", onDocClick)
+    window.addEventListener("resize", onWin)
+    window.addEventListener("scroll", onWin, true)
+    window.addEventListener("keydown", onEsc)
+    return () => {
+      document.removeEventListener("mousedown", onDocClick)
+      window.removeEventListener("resize", onWin)
+      window.removeEventListener("scroll", onWin, true)
+      window.removeEventListener("keydown", onEsc)
+    }
+  }, [open, updatePosition])
+
+  useEffect(() => {
+    if (!open) return
+    const justOpened = !prevOpenRef.current && open
+    if (!justOpened) return
+    const d = value
+    setViewYear(d.getFullYear())
+    setViewMonth(d.getMonth())
+    const id = window.setTimeout(() => {
+      gridRef.current?.focus()
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [open, value])
+
+  useEffect(() => {
+    prevOpenRef.current = open
+  }, [open])
+
+  const days = getMonthMatrix(viewYear, viewMonth)
+  const todayISO = toISODate(new Date())
+  const selectedISO = toISODate(value)
+
+  const goPrevMonth = () => {
+    const d = new Date(viewYear, viewMonth, 1)
+    d.setMonth(d.getMonth() - 1)
+    setViewYear(d.getFullYear())
+    setViewMonth(d.getMonth())
+  }
+  const goNextMonth = () => {
+    const d = new Date(viewYear, viewMonth, 1)
+    d.setMonth(d.getMonth() + 1)
+    setViewYear(d.getFullYear())
+    setViewMonth(d.getMonth())
+  }
+
+  const goToday = () => {
+    const now = new Date()
+    setViewYear(now.getFullYear())
+    setViewMonth(now.getMonth())
+    setFocusedISO(toISODate(now))
+    gridRef.current?.focus()
+  }
+
+  const selectDate = (d: Date) => {
+    onChange(d)
+    setOpen(false)
+  }
+
+  const isCurrentMonth = (d: Date) => d.getMonth() === viewMonth && d.getFullYear() === viewYear
+
+  const formatDisplay = (date: Date) => {
+    const start = date
+    const end = new Date(date)
+    end.setDate(end.getDate() + Math.max(daysToShow - 1, 0))
+    const fmt = (d: Date) => d.toLocaleDateString()
+    return `${fmt(start)} — ${fmt(end)}`
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerElRef}
+        type="button"
+        role="combobox"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={cn(
+          "hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] md:text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors",
+          triggerClassName
+        )}
+        onClick={() => {
+          setOpen(true)
+          setFocusedISO(toISODate(value))
+          setViewYear(value.getFullYear())
+          setViewMonth(value.getMonth())
+        }}
+        title="Выбрать дату начала"
+      >
+        <CalendarIcon className="h-3.5 w-3.5" />
+        <span className="tabular-nums select-none">{formatDisplay(value)}</span>
+      </button>
+
+      {open && pos && (
+        <div
+          ref={popoverRef}
+          className="fixed z-50 w-[300px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-1.5"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          <div className="flex items-center justify-between px-1 py-1">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+                onClick={goPrevMonth}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+                onClick={goToday}
+                aria-label="Сегодня"
+                title="Сегодня"
+              >
+                <CalendarIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="text-[13px] font-medium dark:text-white">
+              {RU_MONTHS[viewMonth]} {viewYear}
+            </div>
+            <div className="flex items-center">
+              <button
+                type="button"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+                onClick={goNextMonth}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-[3px] px-1">
+            {RU_WEEKDAYS.map((d) => (
+              <div key={d} className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 text-center py-[2px]">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div
+            className="grid grid-cols-7 gap-[3px] p-1"
+            ref={gridRef}
+            onKeyDown={(e) => {
+              const current = new Date(focusedISO)
+              if (e.key === "ArrowLeft") {
+                e.preventDefault()
+                const d = new Date(current)
+                d.setDate(d.getDate() - 1)
+                setFocusedISO(toISODate(d))
+                setViewYear(d.getFullYear())
+                setViewMonth(d.getMonth())
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault()
+                const d = new Date(current)
+                d.setDate(d.getDate() + 1)
+                setFocusedISO(toISODate(d))
+                setViewYear(d.getFullYear())
+                setViewMonth(d.getMonth())
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault()
+                const d = new Date(current)
+                d.setDate(d.getDate() - 7)
+                setFocusedISO(toISODate(d))
+                setViewYear(d.getFullYear())
+                setViewMonth(d.getMonth())
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault()
+                const d = new Date(current)
+                d.setDate(d.getDate() + 7)
+                setFocusedISO(toISODate(d))
+                setViewYear(d.getFullYear())
+                setViewMonth(d.getMonth())
+              } else if (e.key === "Enter") {
+                e.preventDefault()
+                const d = new Date(focusedISO)
+                selectDate(d)
+              }
+            }}
+            tabIndex={0}
+          >
+            {days.map((d) => {
+              const iso = toISODate(d)
+              const isSel = iso === selectedISO
+              const isToday = iso === todayISO
+              const isOut = !isCurrentMonth(d)
+              const isFocus = iso === focusedISO
+              const isPast = iso < todayISO
+
+              return (
+                <button
+                  key={iso + (isOut ? "-out" : "")}
+                  type="button"
+                  className={cn(
+                    "h-7 w-7 rounded-full text-[11px] inline-flex items-center justify-center transition-colors",
+                    isPast ? "text-slate-400 dark:text-slate-600" : "text-slate-900 dark:text-slate-100",
+                    !isSel && !isOut && "hover:bg-slate-100 dark:hover:bg-slate-700",
+                    isSel && "bg-indigo-500 text-white hover:bg-indigo-600",
+                    !isSel && isToday && "ring-1 ring-indigo-500",
+                    isFocus && "ring-2 ring-slate-400 dark:ring-slate-500"
+                  )}
+                  onClick={() => selectDate(d)}
+                  onMouseEnter={() => setFocusedISO(iso)}
+                >
+                  {d.getDate()}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Подсказка о диапазоне */}
+          <div className="px-2 py-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-700 mt-1">
+            Конец диапазона задаётся автоматически: через 180 дней после выбранной даты
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+// ========================= End DatePicker Component =========================
 
 export default function PlanningTopFilters() {
   const filterStore = useFilterStore()
@@ -118,14 +415,6 @@ export default function PlanningTopFilters() {
       filterStore.loadObjects(filterStore.selectedStageId)
     }
   }, [filterStore.selectedStageId, filterStore.objects.length, filterStore.loadObjects])
-
-  const rangeChip = useMemo(() => {
-    const start = new Date(startDate)
-    const end = new Date(startDate)
-    end.setDate(end.getDate() + Math.max(daysToShow - 1, 0))
-    const fmt = (d: Date) => d.toLocaleDateString()
-    return `${fmt(start)} — ${fmt(end)}`
-  }, [startDate, daysToShow])
 
   const goToday = () => {
     const d = new Date()
@@ -247,9 +536,11 @@ export default function PlanningTopFilters() {
     <TooltipProvider>
     <FilterBar title="Планирование" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg" right={(
       <div className="flex items-center gap-1">
-        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] md:text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800" title="Текущий диапазон">
-          <CalendarIcon className="h-3.5 w-3.5" /> {rangeChip}
-        </span>
+        <DatePickerCalendar
+          value={startDate}
+          onChange={setStartDate}
+          daysToShow={daysToShow}
+        />
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={scrollBackward} title="Назад на 2 недели">
           <ChevronLeft className="h-4 w-4" />
         </Button>
