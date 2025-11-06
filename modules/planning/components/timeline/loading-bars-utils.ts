@@ -1,0 +1,352 @@
+/**
+ * Утилиты для работы с полосками загрузок сотрудников
+ */
+
+import type { Loading } from "../../types"
+
+/**
+ * Интерфейс для периода (загрузка или отпуск)
+ */
+export interface BarPeriod {
+  id: string
+  type: "loading" | "vacation"
+  startDate: Date
+  endDate: Date
+  rate: number
+  projectId?: string
+  projectName?: string
+  sectionName?: string
+  stageId?: string
+  stageName?: string
+  loading?: Loading // Исходная загрузка для доступа к полным данным
+}
+
+/**
+ * Интерфейс для отрисовки полоски
+ */
+export interface BarRender {
+  period: BarPeriod
+  startIdx: number
+  endIdx: number
+  left: number
+  width: number
+  layer: number // Слой для вертикального стакинга (0, 1, 2, ...)
+  color: string
+}
+
+/**
+ * Генерирует стабильный цвет для этапа на основе его ID
+ */
+export function getStageColor(stageId: string | undefined, isDark: boolean): string {
+  // Палитра цветов для этапов (яркие, насыщенные цвета)
+  const darkColors = [
+    "rgb(59, 130, 246)",  // blue-500
+    "rgb(34, 197, 94)",   // green-500
+    "rgb(168, 85, 247)",  // purple-500
+    "rgb(249, 115, 22)",  // orange-500
+    "rgb(236, 72, 153)",  // pink-500
+    "rgb(99, 102, 241)",  // indigo-500
+    "rgb(20, 184, 166)",  // teal-500
+    "rgb(234, 179, 8)",   // yellow-500
+    "rgb(239, 68, 68)",   // red-500
+    "rgb(14, 165, 233)",  // sky-500
+  ]
+
+  const lightColors = [
+    "rgb(37, 99, 235)",   // blue-600
+    "rgb(22, 163, 74)",   // green-600
+    "rgb(147, 51, 234)",  // purple-600
+    "rgb(234, 88, 12)",   // orange-600
+    "rgb(219, 39, 119)",  // pink-600
+    "rgb(79, 70, 229)",   // indigo-600
+    "rgb(13, 148, 136)",  // teal-600
+    "rgb(202, 138, 4)",   // yellow-600
+    "rgb(220, 38, 38)",   // red-600
+    "rgb(2, 132, 199)",   // sky-600
+  ]
+
+  const colors = isDark ? darkColors : lightColors
+
+  if (!stageId) {
+    // Для загрузок без этапа возвращаем первый цвет (синий)
+    return colors[0]
+  }
+
+  // Простой хеш от stageId
+  let hash = 0
+  for (let i = 0; i < stageId.length; i++) {
+    hash = ((hash << 5) - hash) + stageId.charCodeAt(i)
+    hash = hash & hash // Convert to 32bit integer
+  }
+
+  const index = Math.abs(hash) % colors.length
+  return colors[index]
+}
+
+/**
+ * Цвет для отпусков
+ */
+export function getVacationColor(isDark: boolean): string {
+  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400
+}
+
+/**
+ * Проверяет, пересекаются ли два периода
+ */
+function periodsOverlap(period1: BarPeriod, period2: BarPeriod): boolean {
+  const start1 = new Date(period1.startDate).getTime()
+  const end1 = new Date(period1.endDate).getTime()
+  const start2 = new Date(period2.startDate).getTime()
+  const end2 = new Date(period2.endDate).getTime()
+
+  return start1 <= end2 && start2 <= end1
+}
+
+/**
+ * Находит первый свободный слой для размещения периода с учетом перекрытий
+ */
+function findFreeLayer(period: BarPeriod, placedPeriods: Array<{ period: BarPeriod; layer: number }>): number {
+  const occupiedLayers = new Set<number>()
+
+  // Проверяем все уже размещенные периоды
+  for (const placed of placedPeriods) {
+    if (periodsOverlap(period, placed.period)) {
+      occupiedLayers.add(placed.layer)
+    }
+  }
+
+  // Находим первый свободный слой
+  let layer = 0
+  while (occupiedLayers.has(layer)) {
+    layer++
+  }
+
+  return layer
+}
+
+/**
+ * Вычисляет слои для всех периодов с учетом перекрытий
+ */
+export function calculateLayers(periods: BarPeriod[]): number[] {
+  const layers: number[] = []
+  const placedPeriods: Array<{ period: BarPeriod; layer: number }> = []
+
+  // Сортируем периоды по дате начала
+  const sortedIndices = periods
+    .map((period, index) => ({ period, index }))
+    .sort((a, b) => new Date(a.period.startDate).getTime() - new Date(b.period.startDate).getTime())
+
+  // Для каждого периода находим свободный слой
+  for (const { period, index } of sortedIndices) {
+    const layer = findFreeLayer(period, placedPeriods)
+    layers[index] = layer
+    placedPeriods.push({ period, layer })
+  }
+
+  return layers
+}
+
+/**
+ * Группирует последовательные даты отпусков в периоды
+ */
+export function groupVacationPeriods(vacationsDaily: Record<string, number> | undefined): BarPeriod[] {
+  if (!vacationsDaily) return []
+
+  // Сортируем даты
+  const dates = Object.keys(vacationsDaily)
+    .filter((dateKey) => vacationsDaily[dateKey] > 0)
+    .sort()
+
+  if (dates.length === 0) return []
+
+  const periods: BarPeriod[] = []
+  let currentStart = new Date(dates[0])
+  let currentEnd = new Date(dates[0])
+
+  for (let i = 1; i < dates.length; i++) {
+    const currentDate = new Date(dates[i])
+    const prevDate = new Date(dates[i - 1])
+
+    // Проверяем, является ли текущая дата последовательной (следующий день)
+    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (dayDiff === 1) {
+      // Продолжаем текущий период
+      currentEnd = currentDate
+    } else {
+      // Сохраняем текущий период и начинаем новый
+      periods.push({
+        id: `vacation-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+        type: "vacation",
+        startDate: currentStart,
+        endDate: currentEnd,
+        rate: 1,
+      })
+      currentStart = currentDate
+      currentEnd = currentDate
+    }
+  }
+
+  // Добавляем последний период
+  periods.push({
+    id: `vacation-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+    type: "vacation",
+    startDate: currentStart,
+    endDate: currentEnd,
+    rate: 1,
+  })
+
+  return periods
+}
+
+/**
+ * Нормализует дату (обнуляет время)
+ */
+function normalizeDate(date: Date): Date {
+  const normalized = new Date(date)
+  normalized.setHours(0, 0, 0, 0)
+  return normalized
+}
+
+/**
+ * Проверяет, совпадают ли две даты (игнорируя время)
+ */
+function isSameDay(date1: Date, date2: Date): boolean {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  )
+}
+
+/**
+ * Преобразует загрузки сотрудника в периоды для отрисовки
+ */
+export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] {
+  if (!loadings || loadings.length === 0) return []
+
+  return loadings.map((loading) => ({
+    id: loading.id,
+    type: "loading",
+    startDate: new Date(loading.startDate),
+    endDate: new Date(loading.endDate),
+    rate: loading.rate || 1,
+    projectId: loading.projectId,
+    projectName: loading.projectName,
+    sectionName: loading.sectionName,
+    stageId: loading.stageId,
+    stageName: loading.stageName,
+    loading,
+  }))
+}
+
+/**
+ * Вычисляет параметры отрисовки для всех периодов
+ */
+export function calculateBarRenders(
+  periods: BarPeriod[],
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean }>,
+  cellWidth: number,
+  isDark: boolean
+): BarRender[] {
+  if (periods.length === 0) return []
+
+  // Вычисляем слои для стакинга
+  const layers = calculateLayers(periods)
+
+  const renders: BarRender[] = []
+
+  for (let i = 0; i < periods.length; i++) {
+    const period = periods[i]
+    const layer = layers[i]
+
+    // Находим индексы начальной и конечной даты в timeUnits
+    const startDate = normalizeDate(period.startDate)
+    const endDate = normalizeDate(period.endDate)
+
+    const startIdx = timeUnits.findIndex((unit) => isSameDay(normalizeDate(unit.date), startDate))
+    const endIdx = timeUnits.findIndex((unit) => isSameDay(normalizeDate(unit.date), endDate))
+
+    // Если период не попадает в видимый диапазон, пропускаем
+    if (startIdx === -1 && endIdx === -1) continue
+
+    // Если начало или конец выходят за границы, обрезаем
+    const actualStartIdx = Math.max(0, startIdx === -1 ? 0 : startIdx)
+    const actualEndIdx = Math.min(timeUnits.length - 1, endIdx === -1 ? timeUnits.length - 1 : endIdx)
+
+    // Вычисляем позицию и ширину
+    const left = actualStartIdx * cellWidth
+    const width = (actualEndIdx - actualStartIdx + 1) * cellWidth
+
+    // Определяем цвет
+    const color = period.type === "vacation"
+      ? getVacationColor(isDark)
+      : getStageColor(period.stageId, isDark)
+
+    renders.push({
+      period,
+      startIdx: actualStartIdx,
+      endIdx: actualEndIdx,
+      left,
+      width,
+      layer,
+      color,
+    })
+  }
+
+  return renders
+}
+
+/**
+ * Вычисляет максимальное количество слоев (для определения высоты строки)
+ */
+export function getMaxLayers(periods: BarPeriod[]): number {
+  if (periods.length === 0) return 0
+  const layers = calculateLayers(periods)
+  return Math.max(...layers) + 1
+}
+
+/**
+ * Форматирует текст для отображения на полоске
+ */
+export function formatBarLabel(period: BarPeriod): string {
+  if (period.type === "vacation") {
+    return "Отпуск"
+  }
+
+  const parts: string[] = []
+  if (period.stageName) parts.push(period.stageName)
+  if (period.sectionName) parts.push(period.sectionName)
+  if (period.projectName) parts.push(period.projectName)
+
+  return parts.join(" • ") || "Загрузка"
+}
+
+/**
+ * Форматирует дату в формате ДД.ММ.ГГГГ
+ */
+function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date)
+}
+
+/**
+ * Форматирует tooltip для полоски
+ */
+export function formatBarTooltip(period: BarPeriod): string {
+  if (period.type === "vacation") {
+    return `Отпуск\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
+  }
+
+  const lines: string[] = []
+  if (period.projectName) lines.push(`Проект: ${period.projectName}`)
+  if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)
+  if (period.stageName) lines.push(`Этап: ${period.stageName}`)
+  lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
+  lines.push(`Ставка: ${period.rate}`)
+
+  return lines.join("\n")
+}
