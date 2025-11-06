@@ -72,7 +72,10 @@ type Employee = {
 };
 
 // Пропсы
-type StagesManagementProps = { sectionId: string };
+type StagesManagementProps = {
+  sectionId: string;
+  onOpenLog?: (itemId: string) => void;
+};
 
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, string> = {
@@ -138,6 +141,7 @@ function SortableStage({
   formatProfileLabel,
   isCollapsed,
   onToggleCollapse,
+  onOpenLog,
 }: {
   stage: Stage;
   selectedStages: Set<string>;
@@ -162,6 +166,7 @@ function SortableStage({
   formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
   isCollapsed: boolean;
   onToggleCollapse: (stageId: string) => void;
+  onOpenLog?: (itemId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
@@ -338,6 +343,7 @@ function SortableStage({
                   <tr className="border-b border-border/30">
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
+                    <th className="w-8 pb-2 pt-0"></th>
                     <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Описание
                     </th>
@@ -388,6 +394,7 @@ function SortableStage({
                         statusOptions={statusOptions}
                         employees={employees}
                         formatProfileLabel={formatProfileLabel}
+                        onOpenLog={onOpenLog}
                       />
                     ))}
                   </SortableContext>
@@ -430,6 +437,7 @@ function SortableDecompositionRow({
   statusOptions,
   employees,
   formatProfileLabel,
+  onOpenLog,
 }: {
   decomposition: Decomposition;
   stageId: string;
@@ -449,6 +457,7 @@ function SortableDecompositionRow({
   statusOptions: string[];
   employees: Employee[];
   formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
+  onOpenLog?: (itemId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: decomposition.id,
@@ -640,6 +649,18 @@ function SortableDecompositionRow({
         />
       </td>
       <td className="py-1.5 px-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenLog?.(decomposition.id);
+          }}
+          className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 transition-colors"
+          title="Добавить отчет"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </td>
+      <td className="py-1.5 px-2">
         <Textarea
           ref={descriptionRef}
           value={decomposition.description}
@@ -729,7 +750,7 @@ function SortableDecompositionRow({
           }}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[100px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "difficulty") {
@@ -860,7 +881,7 @@ function SortableDecompositionRow({
             markInteracted();
           }}
           onKeyDown={handleKeyDown}
-          className="h-6 w-[80px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-3 text-xs"
+          className="h-6 w-[60px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center"
           ref={plannedHoursInputRef}
         />
       </td>
@@ -999,7 +1020,7 @@ function SortableDecompositionRow({
   );
 }
 
-export default function StagesManagement({ sectionId }: StagesManagementProps) {
+export default function StagesManagement({ sectionId, onOpenLog }: StagesManagementProps) {
   const supabase = useMemo(() => createClient(), []);
   const [stages, setStages] = useState<Stage[]>([]);
   const [categories, setCategories] = useState<WorkCategory[]>([]);
@@ -2210,8 +2231,9 @@ export default function StagesManagement({ sectionId }: StagesManagementProps) {
                   statusOptions={statusOptions}
                   employees={employees}
                   formatProfileLabel={formatProfileLabel}
-                isCollapsed={collapsedStageIds.has(stage.id)}
-                onToggleCollapse={toggleStageCollapsed}
+                  isCollapsed={collapsedStageIds.has(stage.id)}
+                  onToggleCollapse={toggleStageCollapsed}
+                  onOpenLog={onOpenLog}
                 />
               ))}
             </div>
