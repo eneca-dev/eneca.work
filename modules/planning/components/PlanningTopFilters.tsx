@@ -1,12 +1,14 @@
-"use client"
+"use client" 
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, Lock, Network, Layers, Info, BarChart3 } from 'lucide-react'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw, Loader2, Info } from 'lucide-react'
 import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
+import { useHasPermission } from '@/modules/permissions/hooks/usePermissions'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
 import { usePlanningStore } from '@/modules/planning/stores/usePlanningStore'
@@ -310,8 +312,10 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
   )
 }
 // ========================= End DatePicker Component =========================
+import { useRouter } from 'next/navigation'
 
 export default function PlanningTopFilters() {
+  const router = useRouter()
   const filterStore = useFilterStore()
   const statuses = useSectionStatusesStore(state => state.statuses)
   const loadStatuses = useSectionStatusesStore(state => state.loadStatuses)
@@ -339,6 +343,9 @@ export default function PlanningTopFilters() {
   } = usePlanningStore()
   const expandedSections = usePlanningStore(s => s.expandedSections)
   const expandedProjectGroups = usePlanningStore(s => s.expandedProjectGroups)
+
+  // Проверяем разрешение на просмотр аналитики планирования
+  const canViewPlanningAnalytics = useHasPermission('planning.analytics_view')
 
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [statusSearch, setStatusSearch] = useState('')
@@ -566,6 +573,16 @@ export default function PlanningTopFilters() {
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCollapseAll} title="Свернуть все">
           <ChevronsUp className="h-4 w-4" />
         </Button>
+        {/* Аналитика - показывается только пользователям с разрешением planning.analytics_view */}
+        {canViewPlanningAnalytics && (
+          <>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => router.push('/dashboard/planning-analytics')} title="Аналитика планирования">
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+        {/* Кнопка сброса перенесена в блок фильтров слева */}
       </div>
     )}>
       {/* Организация */}

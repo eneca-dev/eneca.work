@@ -32,6 +32,7 @@ interface TimelineRowProps {
   totalExpandedSections: number // Добавляем счетчик раскрытых разделов
   totalLoadingsBeforeSection: number // Добавляем счетчик загрузок перед текущим разделом
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
 }
 
 export function TimelineRow({
