@@ -578,6 +578,31 @@ export function EmployeeRow({
     return calculateBarRenders(allPeriods, timeUnits, cellWidth, theme === "dark")
   }, [allPeriods, timeUnits, cellWidth, theme])
 
+  // Вычисляем максимальную суммарную загрузку для определения режима отображения
+  const maxTotalRate = useMemo(() => {
+    if (allPeriods.length === 0) return 0
+
+    // Фильтруем только загрузки (не отпуска)
+    const loadingPeriods = allPeriods.filter(p => p.type === "loading")
+    if (loadingPeriods.length === 0) return 0
+
+    // Для каждого периода проверяем, какие другие периоды с ним пересекаются
+    let maxRate = 0
+
+    for (const period of loadingPeriods) {
+      // Находим все периоды, пересекающиеся с текущим
+      const overlapping = loadingPeriods.filter(p => {
+        return p.startDate <= period.endDate && p.endDate >= period.startDate
+      })
+
+      // Суммируем их ставки
+      const totalRate = overlapping.reduce((sum, p) => sum + (p.rate || 0), 0)
+      maxRate = Math.max(maxRate, totalRate)
+    }
+
+    return maxRate
+  }, [allPeriods])
+
   // Базовая высота полоски для 1 ставки и зазор между ними
   const BASE_BAR_HEIGHT = 30 // Высота для полной ставки (rate = 1) - увеличена на 50%
   const BAR_GAP = 1 // Минимальное расстояние между полосками
@@ -725,66 +750,121 @@ export function EmployeeRow({
             {/* Overlay с полосками загрузок */}
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
               {(() => {
-                // Рассчитываем позиции полосок с учетом их реальных высот
-                const layerTops: number[] = []
+                // Определяем режим отображения на основе максимальной загрузки
+                const shouldStack = maxTotalRate > 1
 
-                return barRenders.map((bar, idx) => {
-                  // Вычисляем высоту полоски пропорционально ставке
-                  const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+                if (shouldStack) {
+                  // РЕЖИМ НАЛОЖЕНИЯ: Перегрузка (> 1 ставки) - полоски накладываются
+                  return barRenders.map((bar, idx) => {
+                    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+                    const top = 8 // Единый начальный отступ для всех полосок
 
-                  // Рассчитываем top для текущего слоя
-                  let top = 8 // Начальный отступ
-                  for (let i = 0; i < bar.layer; i++) {
-                    top += (layerTops[i] || BASE_BAR_HEIGHT) + BAR_GAP
-                  }
-
-                  // Сохраняем максимальную высоту для этого слоя
-                  layerTops[bar.layer] = Math.max(layerTops[bar.layer] || 0, barHeight)
-
-                  return (
-                    <div
-                      key={`${bar.period.id}-${idx}`}
-                      className={cn(
-                        "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
-                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
-                      )}
-                      style={{
-                        left: `${bar.left}px`,
-                        width: `${bar.width}px`,
-                        height: `${barHeight}px`,
-                        top: `${top}px`,
-                        backgroundColor: bar.color,
-                        opacity: 0.9,
-                        border: `2px solid ${bar.color}`,
-                        paddingLeft: "6px",
-                        paddingRight: "6px",
-                        overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
-                        filter: "brightness(1.1)",
-                      }}
-                      title={formatBarTooltip(bar.period)}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (bar.period.type === "loading" && bar.period.loading) {
-                          setEditingLoading(bar.period.loading)
-                        }
-                      }}
-                    >
-                      <span
+                    return (
+                      <div
+                        key={`${bar.period.id}-${idx}`}
                         className={cn(
-                          "text-[10px] font-semibold leading-none",
-                          theme === "dark" ? "text-white" : "text-white"
+                          "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
+                          bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
                         )}
                         style={{
-                          textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                          left: `${bar.left}px`,
+                          width: `${bar.width}px`,
+                          height: `${barHeight}px`,
+                          top: `${top}px`,
+                          zIndex: bar.layer, // Используем layer для z-index
+                          backgroundColor: bar.color,
+                          opacity: 0.85, // Больше прозрачности для видимости наложения
+                          border: `2px solid ${bar.color}`,
+                          paddingLeft: "6px",
+                          paddingRight: "6px",
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
+                          filter: "brightness(1.1)",
+                        }}
+                        title={formatBarTooltip(bar.period)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (bar.period.type === "loading" && bar.period.loading) {
+                            setEditingLoading(bar.period.loading)
+                          }
                         }}
                       >
-                        {formatBarLabel(bar.period)}
-                      </span>
-                    </div>
-                  )
-                })
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold leading-none",
+                            theme === "dark" ? "text-white" : "text-white"
+                          )}
+                          style={{
+                            textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                          }}
+                        >
+                          {formatBarLabel(bar.period)}
+                        </span>
+                      </div>
+                    )
+                  })
+                } else {
+                  // РЕЖИМ ВЕРТИКАЛЬНОГО РАЗМЕЩЕНИЯ: Нормальная загрузка (≤ 1 ставки)
+                  const layerTops: number[] = []
+
+                  return barRenders.map((bar, idx) => {
+                    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+
+                    // Рассчитываем top для текущего слоя
+                    let top = 8 // Начальный отступ
+                    for (let i = 0; i < bar.layer; i++) {
+                      top += (layerTops[i] || BASE_BAR_HEIGHT) + BAR_GAP
+                    }
+
+                    // Сохраняем максимальную высоту для этого слоя
+                    layerTops[bar.layer] = Math.max(layerTops[bar.layer] || 0, barHeight)
+
+                    return (
+                      <div
+                        key={`${bar.period.id}-${idx}`}
+                        className={cn(
+                          "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
+                          bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
+                        )}
+                        style={{
+                          left: `${bar.left}px`,
+                          width: `${bar.width}px`,
+                          height: `${barHeight}px`,
+                          top: `${top}px`,
+                          backgroundColor: bar.color,
+                          opacity: 0.9, // Меньше прозрачности для вертикального размещения
+                          border: `2px solid ${bar.color}`,
+                          paddingLeft: "6px",
+                          paddingRight: "6px",
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
+                          filter: "brightness(1.1)",
+                        }}
+                        title={formatBarTooltip(bar.period)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (bar.period.type === "loading" && bar.period.loading) {
+                            setEditingLoading(bar.period.loading)
+                          }
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold leading-none",
+                            theme === "dark" ? "text-white" : "text-white"
+                          )}
+                          style={{
+                            textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                          }}
+                        >
+                          {formatBarLabel(bar.period)}
+                        </span>
+                      </div>
+                    )
+                  })
+                }
               })()}
             </div>
 
