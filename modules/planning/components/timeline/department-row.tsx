@@ -555,6 +555,7 @@ export function EmployeeRow({
   // Состояния для модальных окон
   const [showAddModal, setShowAddModal] = useState(false)
   const [showAddShortage, setShowAddShortage] = useState(false)
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
 
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -743,7 +744,10 @@ export function EmployeeRow({
                   return (
                     <div
                       key={`${bar.period.id}-${idx}`}
-                      className="absolute rounded transition-all duration-200 pointer-events-auto cursor-default flex items-center"
+                      className={cn(
+                        "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
+                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
+                      )}
                       style={{
                         left: `${bar.left}px`,
                         width: `${bar.width}px`,
@@ -760,6 +764,12 @@ export function EmployeeRow({
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (bar.period.type === "loading" && bar.period.loading) {
+                          setEditingLoading(bar.period.loading)
+                        }
+                      }}
                     >
                       <span
                         className={cn(
@@ -830,6 +840,14 @@ export function EmployeeRow({
           departmentName={employee.departmentName}
           theme={theme}
           onClose={() => setShowAddShortage(false)}
+        />
+      )}
+      {/* Модальное окно редактирования загрузки */}
+      {editingLoading && (
+        <EditLoadingModal
+          loading={editingLoading}
+          setEditingLoading={setEditingLoading}
+          theme={theme}
         />
       )}
     </>
