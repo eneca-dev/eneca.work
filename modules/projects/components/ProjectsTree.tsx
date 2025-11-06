@@ -1318,8 +1318,8 @@ export function ProjectsTree({
             window.scrollTo({ top: targetTop, behavior: 'smooth' })
           }
         })
-        // Сбросим фокус
-        setTimeout(() => clearProjectFocus(), 1200)
+        // Сбросим фокус чуть позже, чтобы подсветка была заметнее
+        setTimeout(() => clearProjectFocus(), 3000)
       }
     }
   }, [loading, focusProjectId, treeData, expandedNodes, toggleNodeInStore, clearProjectFocus])

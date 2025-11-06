@@ -138,6 +138,7 @@ export async function fetchSectionLoadings(sectionId: string): Promise<Loading[]
           .select(`
             loading_id,
             loading_responsible,
+            loading_stage,
             profiles:loading_responsible (
               first_name,
               last_name
@@ -183,6 +184,7 @@ export async function fetchSectionLoadings(sectionId: string): Promise<Loading[]
             responsibleId: item.loading_responsible,
             responsibleName: profile ? `${profile.first_name} ${profile.last_name}` : "Не указан",
             sectionId: item.loading_section,
+            stageId: item.loading_stage ?? null,
             startDate: new Date(item.loading_start),
             endDate: new Date(item.loading_finish),
             rate: item.loading_rate || 1,

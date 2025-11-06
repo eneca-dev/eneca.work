@@ -1,4 +1,4 @@
-import { create } from "zustand"
+import { create } from "zustand" 
 import { devtools, persist } from "zustand/middleware"
 import { supabase } from "@/lib/supabase-client"
 import type { Department, Employee, Team } from "../types"

@@ -30,7 +30,6 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
   const [isLoading, setIsLoading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteStats, setDeleteStats] = useState<DeleteStats | null>(null)
-  const [confirmationText, setConfirmationText] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
   
   const { setNotification } = useUiStore()
@@ -38,7 +37,6 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
   useEffect(() => {
     if (isOpen) {
       loadDeleteStats()
-      setConfirmationText('')
       setShowConfirmation(false)
     }
   }, [isOpen, sectionId])
@@ -211,7 +209,8 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
       deleteStats.tasks_count
     : 0
 
-  const isConfirmationValid = confirmationText === sectionName
+  // Подтверждение теперь происходит без ввода текста, в два шага
+  // Кнопка удаления активна, когда не идет процесс удаления
 
   if (!isOpen) return null
 
@@ -295,22 +294,14 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
               <div></div>
             ) : (
               <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Для подтверждения введите точное название раздела:
-                  </label>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                    <strong>{sectionName}</strong>
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                  <p className="text-sm text-red-800 dark:text-red-200">
+                    Вы уверены, что хотите удалить раздел <strong>"{sectionName}"</strong>? Это действие необратимо.
                   </p>
-                  <input
-                    type="text"
-                    value={confirmationText}
-                    onChange={(e) => setConfirmationText(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
-                    placeholder="Введите название раздела"
-                    disabled={isDeleting}
-                  />
                 </div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Пожалуйста, подтвердите удаление ещё раз, нажав кнопку «Удалить раздел» ниже.
+                </p>
               </div>
             )}
           </div>
@@ -342,7 +333,7 @@ export function DeleteSectionModal({ isOpen, onClose, sectionId, sectionName, on
             <ModalButton
               variant="danger"
               onClick={handleDelete}
-              disabled={!isConfirmationValid || isDeleting}
+              disabled={isDeleting}
               icon={isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             >
               {isDeleting ? 'Удаление...' : 'Удалить раздел'}

@@ -1,4 +1,4 @@
-"use client"
+"use client" 
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react"
@@ -58,14 +58,11 @@ export function DepartmentRow({
   // Проверяем, раскрыт ли отдел
   const isDepartmentExpanded = expandedDepartments[department.id] || false
 
-  // Состояния для модальных окон и раскрытых сотрудников/команд
-  const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({})
-  const [expandedTeams, setExpandedTeams] = useState<Record<string, boolean>>({})
+  // Состояния для модальных окон
 
   // Канонические ширины колонок - должны соответствовать timeline-grid.tsx
   const COLUMN_WIDTHS = {
     section: 430,  // Ширина для раздела (уменьшена на 10px)
-    project: 170,  // Ширина для проекта (увеличена на 10px)
     object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
@@ -73,7 +70,6 @@ export function DepartmentRow({
   // Также упрощаем расчет общей ширины фиксированных столбцов
   const totalFixedWidth =
     COLUMN_WIDTHS.section + 
-    (columnVisibility.project ? COLUMN_WIDTHS.project : 0) + 
     (columnVisibility.object ? COLUMN_WIDTHS.object : 0)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
@@ -87,19 +83,10 @@ export function DepartmentRow({
   // Добавим функцию для переключения состояния раскрытия сотрудника
   // Добавьте следующую функцию после handleToggleExpand:
 
-  const toggleEmployeeExpanded = (employeeId: string) => {
-    setExpandedEmployees((prev) => ({
-      ...prev,
-      [employeeId]: !prev[employeeId],
-    }))
-  }
-
-  const toggleTeamExpanded = (teamId: string) => {
-    setExpandedTeams((prev) => ({
-      ...prev,
-      [teamId]: !prev[teamId],
-    }))
-  }
+  const expandedTeams = usePlanningStore((s) => s.expandedTeams)
+  const expandedEmployees = usePlanningStore((s) => s.expandedEmployees)
+  const toggleTeamExpanded = usePlanningStore((s) => s.toggleTeamExpanded)
+  const toggleEmployeeExpanded = usePlanningStore((s) => s.toggleEmployeeExpanded)
 
   // Получаем всех сотрудников отдела из всех команд (исключая строку дефицита)
   const allEmployees = department.teams.flatMap((team) => team.employees.filter((e) => !(e as any).isShortage))
@@ -177,33 +164,7 @@ export function DepartmentRow({
               </div>
             </div>
 
-            {/* Остальные столбцы оставляем пустыми */}
-            {columnVisibility.project && (
-              <div
-                className={cn(
-                  "p-3 transition-colors h-full border-b flex items-center justify-center border-r-[0.5px]", // Добавлены flex items-center justify-center
-                  theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
-                )}
-                style={{
-                  width: `${COLUMN_WIDTHS.project}px`,
-                  minWidth: `${COLUMN_WIDTHS.project}px`,
-                  height: `${rowHeight}px`,
-                  padding: `${padding}px`,
-                }}
-              >
-                {/* Удаляем внутренний div, так как центрирование теперь на родительском элементе */}
-                <span
-                  className={cn(
-                    "text-xs px-2 py-0.5 rounded-full",
-                    theme === "dark" ? "bg-slate-600 text-slate-300" : "bg-slate-200 text-slate-600",
-                  )}
-                >
-                  {department.totalEmployees} сотрудников
-                </span>
-              </div>
-            )}
+            
 
             {/* Столбец "Объект" (может быть скрыт) */}
             {columnVisibility.object && (

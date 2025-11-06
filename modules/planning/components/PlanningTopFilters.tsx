@@ -1,16 +1,18 @@
-"use client"
+"use client" 
 
 import { useEffect, useMemo, useState } from 'react'
 import FilterBar from '@/components/filter-bar/FilterBar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, Columns3, ChevronsDown, ChevronsUp, Lock, Network, Layers, Info, BarChart3 } from 'lucide-react'
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Eye, EyeOff, ChevronsDown, ChevronsUp, Lock, Network, Layers, RotateCcw, Loader2, Info } from 'lucide-react'
 import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
 import { useHasPermission } from '@/modules/permissions/hooks/usePermissions'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
 import { usePlanningStore } from '@/modules/planning/stores/usePlanningStore'
+import { useTimelineUiStore } from '@/modules/planning/stores/useTimelineUiStore'
 import { Button } from '@/components/ui/button'
 import { applyPlanningLocks } from '@/modules/planning/integration/apply-planning-locks'
 import { useRouter } from 'next/navigation'
@@ -26,9 +28,24 @@ export default function PlanningTopFilters() {
     showDepartments,
     toggleShowSections,
     toggleShowDepartments,
+    expandAllSections,
+    collapseAllSections,
+    expandAllProjectGroups,
+    collapseAllProjectGroups,
     expandAllDepartments,
     collapseAllDepartments,
+    expandAllTeams,
+    collapseAllTeams,
+    expandAllEmployees,
+    collapseAllEmployees,
+    groupByProject,
+    fetchSections,
+    fetchDepartments,
+    toggleSectionExpanded,
+    toggleDepartmentExpanded,
   } = usePlanningStore()
+  const expandedSections = usePlanningStore(s => s.expandedSections)
+  const expandedProjectGroups = usePlanningStore(s => s.expandedProjectGroups)
 
   // Проверяем разрешение на просмотр аналитики планирования
   const canViewPlanningAnalytics = useHasPermission('planning.analytics_view')
@@ -36,6 +53,20 @@ export default function PlanningTopFilters() {
   const [isCompactMode, setIsCompactMode] = useState(false)
   const [statusSearch, setStatusSearch] = useState('')
   const [projectSearch, setProjectSearch] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Гарантируем дефолт: отделы включены, разделы выключены при первом монтировании
+  const [initialized, setInitialized] = useState(false)
+  useEffect(() => {
+    if (initialized) return
+    if (!showDepartments) {
+      toggleShowDepartments()
+    }
+    if (showSections) {
+      toggleShowSections()
+    }
+    setInitialized(true)
+  }, [initialized, showDepartments, showSections, toggleShowDepartments, toggleShowSections])
 
   useEffect(() => {
     const checkCompactMode = () => setIsCompactMode(window.innerWidth < 1200)
@@ -109,6 +140,116 @@ export default function PlanningTopFilters() {
     setStartDate(d)
   }
 
+  // Универсальные функции для разворачивания/сворачивания всех групп
+  const handleExpandAll = async () => {
+    // 0-й уровень: загрузки внутри этапов (если показываются разделы)
+    if (showSections) {
+      const { stageLoadingsCollapsed, setStageLoadingsCollapsed } = useTimelineUiStore.getState()
+      if (stageLoadingsCollapsed !== false) {
+        setStageLoadingsCollapsed(false)
+        return
+      }
+    }
+    // Если показываются только отделы — двухшагово: 1) команды, 2) сотрудники
+    if (showDepartments && !showSections) {
+      // Если есть свернутые команды — сначала команды
+      const hasCollapsedTeams = Object.values(usePlanningStore.getState().expandedTeams).some((v) => v === false) || Object.keys(usePlanningStore.getState().expandedTeams).length === 0
+      if (hasCollapsedTeams) {
+        expandAllTeams()
+        return
+      }
+      // Иначе — раскрываем сотрудников
+      expandAllEmployees()
+      return
+    }
+
+    // Если показываются и разделы, и отделы — второй шаг: раскрываем разделы, третий — проекты/команды
+    if (showSections && showDepartments) {
+      const anySectionCollapsed = Object.values(expandedSections).some(v => !v) || Object.keys(expandedSections).length === 0
+      if (anySectionCollapsed) {
+        await expandAllSections()
+        return
+      }
+      const hasCollapsedProjectGroups = groupByProject && Object.values(expandedProjectGroups).some(v => v === false)
+      const expandedTeamsMap = usePlanningStore.getState().expandedTeams
+      const hasCollapsedTeams = Object.values(expandedTeamsMap).some((v) => v === false) || Object.keys(expandedTeamsMap).length === 0
+      if (hasCollapsedProjectGroups) {
+        expandAllProjectGroups()
+        return
+      }
+      if (hasCollapsedTeams) {
+        expandAllTeams()
+        return
+      }
+      // Последним шагом — сотрудники
+      expandAllEmployees()
+      return
+    }
+
+    // Иначе (только разделы): 2-й шаг — разделы, 3-й — проекты
+    const anySectionCollapsed = Object.values(expandedSections).some(v => !v) || Object.keys(expandedSections).length === 0
+    if (anySectionCollapsed) {
+      await expandAllSections()
+      return
+    }
+    const hasCollapsedProjectGroups = groupByProject && Object.values(expandedProjectGroups).some(v => v === false)
+    if (hasCollapsedProjectGroups) {
+      expandAllProjectGroups()
+      return
+    }
+  }
+
+  const handleCollapseAll = () => {
+    // 0-й уровень: загрузки внутри этапов (если показываются разделы)
+    if (showSections) {
+      const { stageLoadingsCollapsed, setStageLoadingsCollapsed } = useTimelineUiStore.getState()
+      if (stageLoadingsCollapsed !== true) {
+        setStageLoadingsCollapsed(true)
+        return
+      }
+    }
+    // Если показываются только отделы — двухшагово: 1) сотрудники внутрь команд, 2) команды внутрь отделов
+    if (showDepartments && !showSections) {
+      const anyEmployeeExpanded = Object.values(usePlanningStore.getState().expandedEmployees).some(Boolean)
+      if (anyEmployeeExpanded) {
+        collapseAllEmployees()
+        return
+      }
+      collapseAllTeams()
+      return
+    }
+
+    // Если показываются и разделы, и отделы — второй шаг: сворачиваем разделы, затем сотрудники/проекты/команды
+    if (showSections && showDepartments) {
+      const anySectionExpanded = Object.values(expandedSections).some(Boolean)
+      if (anySectionExpanded) {
+        collapseAllSections()
+        return
+      }
+      const anyEmployeeExpanded = Object.values(usePlanningStore.getState().expandedEmployees).some(Boolean)
+      if (anyEmployeeExpanded) {
+        collapseAllEmployees()
+        return
+      }
+      if (groupByProject) {
+        collapseAllProjectGroups()
+        return
+      }
+      collapseAllTeams()
+      return
+    }
+
+    // Иначе (только разделы): 2-й шаг — разделы, 3-й — проекты
+    const anySectionExpanded = Object.values(expandedSections).some(Boolean)
+    if (anySectionExpanded) {
+      collapseAllSections()
+      return
+    }
+    if (groupByProject) {
+      collapseAllProjectGroups()
+    }
+  }
+
   return (
     <TooltipProvider>
     <FilterBar title="Планирование" titleClassName="hidden min-[1340px]:block min-[1340px]:text-base xl:text-lg" right={(
@@ -116,10 +257,10 @@ export default function PlanningTopFilters() {
         <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] md:text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800" title="Текущий диапазон">
           <CalendarIcon className="h-3.5 w-3.5" /> {rangeChip}
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollBackward()} title="Назад на 2 недели">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={scrollBackward} title="Назад на 2 недели">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => scrollForward()} title="Вперёд на 2 недели">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={scrollForward} title="Вперёд на 2 недели">
           <ChevronRight className="h-4 w-4" />
         </Button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goToday} title="Сегодня">
@@ -134,13 +275,11 @@ export default function PlanningTopFilters() {
         <Button variant="ghost" size="icon" className={`h-7 w-7 ${showSections ? 'text-teal-600 dark:text-teal-400' : ''}`} onClick={toggleShowSections} title={showSections ? 'Скрыть разделы' : 'Показать разделы'}>
           {showSections ? <Layers className="h-4 w-4" /> : <Layers className="h-4 w-4 opacity-50" />}
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.dispatchEvent(new CustomEvent('planning:toggleProjectColumn'))} title="Показать/скрыть колонку Проект">
-          <Columns3 className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={expandAllDepartments} title="Развернуть все">
+        {/* Развернуть/Свернуть все */}
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleExpandAll} title="Развернуть все">
           <ChevronsDown className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={collapseAllDepartments} title="Свернуть все">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCollapseAll} title="Свернуть все">
           <ChevronsUp className="h-4 w-4" />
         </Button>
         {/* Аналитика - показывается только пользователям с разрешением planning.analytics_view */}
@@ -253,40 +392,6 @@ export default function PlanningTopFilters() {
 
       <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
 
-      {/* Статусы */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
-            <FilterIcon className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
-            <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              Статусы
-            </span>
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
-          <div className="p-2 space-y-2">
-            <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам</div>
-            <div className="space-y-0.5">
-              {(statuses || []).map(s => (
-                <label key={s.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
-                  <input
-                    type="checkbox"
-                    className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
-                  />
-                  <div className="w-2.5 h-2.5" style={{ backgroundColor: s.color }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-medium dark:text-slate-200 truncate">{s.name}</div>
-                    {s.description && <div className="text-xs text-slate-400 dark:text-slate-400 truncate">{s.description}</div>}
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-
       {/* Проектная иерархия */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -387,7 +492,71 @@ export default function PlanningTopFilters() {
       >
         <FilterIcon className="h-3.5 w-3.5 rotate-180 text-slate-600 dark:text-slate-300" />
         <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-          Сбросить
+          Сбросить фильтры
+        </span>
+      </button>
+
+      {/* Обновить данные таблицы (фильтры сохраняются) */}
+      <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+      <button
+        onClick={async () => {
+          if (isRefreshing) return
+          setIsRefreshing(true)
+          try {
+            // Сохраняем текущее положение прокрутки страницы
+            const scrollY = typeof window !== 'undefined' ? window.scrollY : 0
+
+            // Сохраняем раскрытые идентификаторы разделов и отделов
+            const stateBefore = usePlanningStore.getState()
+            const expandedSectionIds = Object.keys(stateBefore.expandedSections).filter((id) => stateBefore.expandedSections[id])
+            const expandedDepartmentIds = Object.keys(stateBefore.expandedDepartments).filter((id) => stateBefore.expandedDepartments[id])
+
+            // Обновляем данные с сохранением текущих фильтров
+            await fetchSections()
+            if (showDepartments) {
+              await fetchDepartments()
+            }
+
+            // Детерминированно восстанавливаем раскрытые разделы и отделы (не переворачиваем уже корректные)
+            const stateAfter = usePlanningStore.getState()
+            expandedSectionIds.forEach((id) => {
+              if (!stateAfter.expandedSections[id]) {
+                toggleSectionExpanded(id)
+              }
+            })
+            if (showDepartments) {
+              expandedDepartmentIds.forEach((id) => {
+                if (!stateAfter.expandedDepartments[id]) {
+                  toggleDepartmentExpanded(id)
+                }
+              })
+            }
+
+            // Восстанавливаем позицию прокрутки после перерисовки
+            if (typeof window !== 'undefined') {
+              requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollY, behavior: 'auto' })
+              })
+            }
+          } catch (e) {
+            console.error('Не удалось обновить данные планирования', e)
+          } finally {
+            setIsRefreshing(false)
+          }
+        }}
+        className={`inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md ${isRefreshing ? 'opacity-60 cursor-not-allowed' : ''}`}
+        title="Обновить данные"
+        disabled={isRefreshing}
+        aria-busy={isRefreshing}
+      >
+        {isRefreshing ? (
+          <Loader2 className="h-4 w-4 animate-spin text-slate-600 dark:text-slate-300" />
+        ) : (
+          <RotateCcw className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+        )}
+        <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Обновить
         </span>
       </button>
     </FilterBar>

@@ -12,6 +12,9 @@ import { DepartmentRow } from "./timeline/department-row" // Новый комп
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
+import { ChevronDown, ChevronRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useProjectsStore } from "@/modules/projects/store"
 
 
 // Обновляем интерфейс TimelineGridProps, добавляя отделы
@@ -30,9 +33,9 @@ interface TimelineGridProps {
   cellWidth?: number
   windowWidth?: number // Добавляем ширину окна для перерисовки
   hasActiveFilters?: boolean // Добавляем новый пропс
-  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
-  collapseAllDepartments: () => void
+  collapseAllDepartments: () => void 
   refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния
 }
 
@@ -59,6 +62,8 @@ export function TimelineGrid({
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
   const { resolvedTheme } = useTheme()
+  const router = useRouter()
+  const focusProject = useProjectsStore((s) => s.focusProject)
   
   // Определяем эффективную тему
   const getEffectiveTheme = (resolvedTheme: string | null) => {
@@ -76,6 +81,9 @@ export function TimelineGrid({
   // Получаем состояние раскрытия разделов и отделов
   const expandedSections = usePlanningStore((state) => state.expandedSections)
   const expandedDepartments = usePlanningStore((state) => state.expandedDepartments)
+  const groupByProject = usePlanningStore((state) => state.groupByProject)
+  const expandedProjectGroups = usePlanningStore((state) => state.expandedProjectGroups)
+  const toggleProjectGroup = usePlanningStore((state) => state.toggleProjectGroup)
   
   // Получаем функции переключения видимости
   const toggleShowSections = usePlanningStore((state) => state.toggleShowSections)
@@ -91,7 +99,6 @@ export function TimelineGrid({
   // Канонические ширины колонок - единый источник истины
   const COLUMN_WIDTHS = {
     section: 430,  // Ширина для раздела (уменьшена на 10px)
-    project: 170,  // Ширина для проекта (увеличена на 10px)
     object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
     stage: 80,     // Фиксированная ширина для стадии
   } as const
@@ -133,26 +140,32 @@ export function TimelineGrid({
   const totalFixedWidth = useMemo(() => {
     return (
       COLUMN_WIDTHS.section + 
-      (columnVisibility.project ? COLUMN_WIDTHS.project : 0) + 
       (columnVisibility.object ? COLUMN_WIDTHS.object : 0)
       // Убираем отсюда stage, startDate, endDate и sectionResponsible, так как они теперь в ячейке раздела
     )
-  }, [columnVisibility.project, columnVisibility.object])
+  }, [columnVisibility.object])
 
   // Вычисляем общую ширину таблицы
   const totalWidth = useMemo(() => {
     return totalFixedWidth + cellWidth * daysToShow
   }, [totalFixedWidth, cellWidth, daysToShow])
 
+  // Предвычисляем индексы разделов для O(1) доступа вместо sections.indexOf(section)
+  const sectionIndexMap = useMemo(() => {
+    return new Map(sections.map((s, i) => [s, i] as const))
+  }, [sections])
+
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(ROW_HEIGHT * 0.75)
 
-  // Вычисляем количество загрузок для каждого раздела
+  // Вычисляем количество вложенных строк (этапы + фактические загрузки) для каждого раздела
   const loadingCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     sections.forEach((section) => {
-      if (expandedSections[section.id] && section.loadings) {
-        counts[section.id] = section.loadings.length
+      if (expandedSections[section.id]) {
+        const loadingsCount = section.loadings ? section.loadings.length : 0
+        const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
+        counts[section.id] = loadingsCount + stagesCount
       } else {
         counts[section.id] = 0
       }
@@ -174,15 +187,17 @@ export function TimelineGrid({
     return counts
   }, [departments, expandedDepartments])
 
-  // Вычисляем общее количество загрузок перед каждым разделом
+  // Вычисляем общее количество вложенных строк перед каждым разделом (этапы + фактические загрузки)
   const loadingsBeforeSection = useMemo(() => {
     const counts: Record<number, number> = {}
     let totalLoadings = 0
 
     sections.forEach((section, index) => {
       counts[index] = totalLoadings
-      if (expandedSections[section.id] && section.loadings) {
-        totalLoadings += section.loadings.length
+      if (expandedSections[section.id]) {
+        const loadingsCount = section.loadings ? section.loadings.length : 0
+        const stagesCount = section.decompositionStages ? section.decompositionStages.length : 0
+        totalLoadings += loadingsCount + stagesCount
       }
     })
 
@@ -291,25 +306,114 @@ export function TimelineGrid({
             collapseAllDepartments={collapseAllDepartments}
           />
 
-          {/* Строки с разделами */}
-          {showSections && sections.map((section, index) => (
-            <TimelineRow
-              key={section.id}
-              section={section}
-              sectionIndex={index}
-              timeUnits={timeUnits}
-              theme={theme}
-              rowHeight={ROW_HEIGHT}
-              headerHeight={HEADER_HEIGHT}
-              columnWidth={COLUMN_WIDTHS.section}
-              padding={PADDING}
-              leftOffset={LEFT_OFFSET}
-              cellWidth={cellWidth}
-              stickyColumnShadow={stickyColumnShadow}
-              totalExpandedSections={totalExpandedSections}
-              totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
-              onOpenSectionPanel={onOpenSectionPanel}
-            />
+          {/* Строки с разделами (возможна группировка по проектам) */}
+          {showSections && (!groupByProject ? (
+            sections.map((section, index) => (
+              <TimelineRow
+                key={section.id}
+                section={section}
+                sectionIndex={index}
+                timeUnits={timeUnits}
+                theme={theme}
+                rowHeight={ROW_HEIGHT}
+                headerHeight={HEADER_HEIGHT}
+                columnWidth={COLUMN_WIDTHS.section}
+                padding={PADDING}
+                leftOffset={LEFT_OFFSET}
+                cellWidth={cellWidth}
+                stickyColumnShadow={stickyColumnShadow}
+                totalExpandedSections={totalExpandedSections}
+                totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                onOpenSectionPanel={onOpenSectionPanel}
+              />
+            ))
+          ) : (
+            // Группировка по названию проекта
+            Object.entries(
+              sections.reduce((acc, s) => {
+                const key = s.projectName || "Без проекта"
+                if (!acc[key]) acc[key] = [] as typeof sections
+                acc[key].push(s)
+                return acc
+              }, {} as Record<string, typeof sections>)
+            ).sort((a, b) => a[0].localeCompare(b[0])).map(([projectName, projectSections]) => (
+              <div key={projectName}>
+                {/* Заголовок группы проекта */}
+                <div
+                  className={cn(
+                    "sticky left-0 z-10 flex items-center font-semibold border-b cursor-pointer select-none",
+                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                  )}
+                  style={{ height: `${HEADER_HEIGHT}px` }}
+                  onClick={() => toggleProjectGroup(projectName)}
+                >
+                  <div
+                    className={cn(
+                      "border-r flex items-center",
+                      theme === "dark" ? "border-slate-700" : "border-slate-200"
+                    )}
+                    style={{
+                      width: `${totalFixedWidth}px`,
+                      minWidth: `${totalFixedWidth}px`,
+                      padding: `${PADDING}px`,
+                    }}
+                  >
+                    <span className="mr-2">
+                      {expandedProjectGroups[projectName] ? (
+                        <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                      ) : (
+                        <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                      )}
+                    </span>
+                    {(() => {
+                      const projectIdForGroup = (projectSections.find(s => s.projectId)?.projectId) || null
+                      return (
+                        <span
+                          className={cn(
+                            "text-sm cursor-pointer hover:underline",
+                            theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                          )}
+                          title={projectIdForGroup ? "Перейти к проекту" : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (projectIdForGroup) {
+                              focusProject(projectIdForGroup)
+                              router.push("/dashboard/projects")
+                            }
+                          }}
+                        >
+                          {projectName}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                  {/* Заполнитель для правой части, чтобы выровнять сетку */}
+                  <div className="flex-1" />
+                </div>
+                {(expandedProjectGroups[projectName] ?? true) && projectSections.map((section) => {
+                  const index = sectionIndexMap.get(section) ?? 0
+                  return (
+                    <TimelineRow
+                      key={section.id}
+                      section={section}
+                      sectionIndex={index}
+                      timeUnits={timeUnits}
+                      theme={theme}
+                      rowHeight={ROW_HEIGHT}
+                      headerHeight={HEADER_HEIGHT}
+                      columnWidth={COLUMN_WIDTHS.section}
+                      padding={PADDING}
+                      leftOffset={LEFT_OFFSET}
+                      cellWidth={cellWidth}
+                      stickyColumnShadow={stickyColumnShadow}
+                      totalExpandedSections={totalExpandedSections}
+                      totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                      onOpenSectionPanel={onOpenSectionPanel}
+                    />
+                  )
+                })}
+              </div>
+            ))
           ))}
 
           {/* Если нет разделов или идет загрузка */}

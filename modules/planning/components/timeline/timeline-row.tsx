@@ -1,18 +1,21 @@
-"use client"
+"use client" 
 
-import type React from "react"
+import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp } from "lucide-react"
-import type { Section, Loading } from "../../types"
+import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2 } from "lucide-react"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
-import { useState } from "react"
+import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
+// useState уже импортирован выше
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
+ 
 
 interface TimelineRowProps {
   section: Section
@@ -28,7 +31,7 @@ interface TimelineRowProps {
   stickyColumnShadow: string
   totalExpandedSections: number // Добавляем счетчик раскрытых разделов
   totalLoadingsBeforeSection: number // Добавляем счетчик загрузок перед текущим разделом
-  onOpenSectionPanel?: (sectionId: string) => void // Добавляем обработчик открытия панели раздела
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела с выбором вкладки
 }
 
 export function TimelineRow({
@@ -47,12 +50,59 @@ export function TimelineRow({
   totalLoadingsBeforeSection,
   onOpenSectionPanel,
 }: TimelineRowProps) {
+  
   // Состояние для отслеживания наведения на аватары
   const [hoveredSpecialist, setHoveredSpecialist] = useState(false)
   const [hoveredAddButton, setHoveredAddButton] = useState(false)
-  const [hoveredLoadingCounter, setHoveredLoadingCounter] = useState(false)
+  // Убрали ховер для создания по разделу
+  const [hoveredStagesCounter, setHoveredStagesCounter] = useState(false)
   const [showAssignResponsibleModal, setShowAssignResponsibleModal] = useState(false)
-  const [showCreateLoadingModal, setShowCreateLoadingModal] = useState(false)
+  // Создание перенесено на уровень этапа/плана
+  // Состояние сворачивания загрузок по этапам
+  const [collapsedStages, setCollapsedStages] = useState<Record<string, boolean>>({})
+  const globalCollapsed = useTimelineUiStore((s) => s.stageLoadingsCollapsed)
+  const toggleStageCollapsed = (stageId: string) => {
+    setCollapsedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }))
+  }
+  const isStageCollapsed = (stageId: string) => Boolean(collapsedStages[stageId])
+
+  // Вспомогательные функции для массового сворачивания/разворачивания по разделу
+  const getSectionStageIds = (): string[] => {
+    const ids = new Set<string>()
+    // существующие этапы раздела
+    stages.forEach((s) => ids.add(s.id))
+    // этапы из загрузок, которые могли появиться раньше, и специальный __no_stage__
+    let hasNoStage = false
+    uniqueLoadings.forEach((ld) => {
+      const sid = (ld as any).stageId || null
+      if (sid) ids.add(sid)
+      else hasNoStage = true
+    })
+    if (hasNoStage) ids.add("__no_stage__")
+    return Array.from(ids)
+  }
+  const areAllSectionStagesCollapsed = (): boolean => {
+    const ids = getSectionStageIds()
+    if (ids.length === 0) return false
+    return ids.every((id) => Boolean(collapsedStages[id]))
+  }
+  const setSectionStagesCollapsed = (collapsed: boolean) => {
+    const ids = getSectionStageIds()
+    if (ids.length === 0) return
+    setCollapsedStages((prev) => {
+      const next = { ...prev }
+      ids.forEach((id) => {
+        next[id] = collapsed
+      })
+      return next
+    })
+  }
+
+  // Реакция на глобальную команду сворачивания/разворачивания загрузок (первый уровень кнопок)
+  React.useEffect(() => {
+    if (globalCollapsed === null) return
+    setSectionStagesCollapsed(Boolean(globalCollapsed))
+  }, [globalCollapsed])
 
   // Получаем видимость и ширину столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
@@ -64,18 +114,18 @@ export function TimelineRow({
   // Проверяем, раскрыт ли раздел
   const isExpanded = expandedSections[section.id] || false
 
-  // Проверяем, есть ли у раздела загрузки
-  const hasLoadings = section.hasLoadings || false
+  // Проверяем, есть ли у раздела загрузки и/или этапы
+  const hasLoadings = section.hasLoadings || (section.loadings && section.loadings.length > 0) || false
+  const stages: DecompositionStage[] = section.decompositionStages || []
+  const hasStages = stages.length > 0
+  const hasChildren = hasLoadings || hasStages
 
   // На фиксированные значения:
   const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
-  const projectWidth = 170 // Ширина для проекта (увеличена на 10px)
   const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
-  const stageWidth = 80 // Фиксированная ширина для стадии
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
-  const totalFixedWidth =
-    sectionWidth + (columnVisibility.project ? projectWidth : 0) + (columnVisibility.object ? objectWidth : 0)
+  const totalFixedWidth = sectionWidth + (columnVisibility.object ? objectWidth : 0)
   const startDateWidth = 100 // Фиксированная ширина для даты начала
   const endDateWidth = 100 // Фиксированная ширина для даты окончания
   const sectionResponsibleWidth = 120 // Фиксированная ширина для ответственного
@@ -98,7 +148,7 @@ export function TimelineRow({
 
   // Обработчик клика по разделу для раскрытия/скрытия
   const handleToggleExpand = () => {
-    if (hasLoadings) {
+    if (hasChildren) {
       toggleSectionExpanded(section.id)
     }
   }
@@ -143,6 +193,8 @@ export function TimelineRow({
   // Вычисляем суммарную ставку
   const totalRate = calculateTotalRate()
 
+  // Удалена логика подсветки перерасходов относительно этапов
+
   // Функция для проверки, активна ли загрузка в указанную дату
   const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
     try {
@@ -173,6 +225,36 @@ export function TimelineRow({
       }
       return total
     }, 0)
+  }
+
+  // Функция для получения этапов активных в указанную дату
+  const getActiveStagesForDate = (date: Date) => {
+    const stages = section.decompositionStages || []
+    if (stages.length === 0) return []
+
+    return stages.filter(stage => {
+      if (!stage.start || !stage.finish) return false
+      
+      const stageStart = new Date(stage.start)
+      const stageFinish = new Date(stage.finish)
+      
+      stageStart.setHours(0, 0, 0, 0)
+      stageFinish.setHours(23, 59, 59, 999)
+      
+      const checkDate = new Date(date)
+      checkDate.setHours(0, 0, 0, 0)
+      
+      return checkDate >= stageStart && checkDate <= stageFinish
+    })
+  }
+
+  // Генерируем цвет для этапа по его индексу
+  const getStageColor = (stageIndex: number, isDark: boolean): string => {
+    const colors = isDark
+      ? ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#f97316', '#14b8a6']
+      : ['#2563eb', '#059669', '#7c3aed', '#d97706', '#db2777', '#0891b2', '#ea580c', '#0d9488']
+    
+    return colors[stageIndex % colors.length]
   }
 
   // Вычисляем позицию строки раздела с учетом загрузок предыдущих разделов
@@ -261,38 +343,53 @@ export function TimelineRow({
                   )}
                 </div>
 
-                {/* Счетчик загрузок справа от аватара */}
-                <div
-                  className="cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowCreateLoadingModal(true)
-                  }}
-                  onMouseEnter={() => setHoveredLoadingCounter(true)}
-                  onMouseLeave={() => setHoveredLoadingCounter(false)}
-                >
-                  <Tooltip 
-                    content="Создать загрузку в этом разделе" 
-                    isVisible={hoveredLoadingCounter}
-                    position="top"
+                {/* Счетчик загрузок справа от аватара (без кнопки создания на уровне раздела) */}
+                <div>
+                  <span
+                    className={cn(
+                      "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0",
+                      theme === "dark" 
+                        ? "text-slate-400 bg-slate-600" 
+                        : "text-slate-500 bg-slate-200"
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0 transition-colors",
-                        theme === "dark" 
-                          ? "text-slate-400 bg-slate-600 hover:text-slate-200 hover:bg-slate-500" 
-                          : "text-slate-500 bg-slate-200 hover:text-slate-700 hover:bg-slate-300"
-                      )}
-                    >
-                      {uniqueLoadings.length}
-                    </span>
-                  </Tooltip>
+                    {uniqueLoadings.length}
+                  </span>
                 </div>
+
+                {/* Счетчик этапов (показываем только когда раздел свернут) */}
+                {hasStages && !isExpanded && (
+                  <div
+                    className="cursor-default"
+                    onMouseEnter={() => setHoveredStagesCounter(true)}
+                    onMouseLeave={() => setHoveredStagesCounter(false)}
+                  >
+                    <Tooltip 
+                      content={`Этапов: ${stages.length}`} 
+                      isVisible={hoveredStagesCounter}
+                      position="top"
+                    >
+                      <span
+                        className={cn(
+                          "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 inline-flex items-center gap-1 flex-shrink-0 transition-colors",
+                          theme === "dark" 
+                            ? "text-slate-400 bg-slate-600" 
+                            : "text-slate-500 bg-slate-200"
+                        )}
+                      >
+                        <Milestone size={10} className={cn(theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                        {stages.length}
+                      </span>
+                    </Tooltip>
+                  </div>
+                )}
+
+                {/* Индикатор перерасходов удалён */}
 
                 {/* Иконка раскрытия и название раздела */}
                 <div className="flex items-center mr-3">
                   <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-1">
-                    {hasLoadings ? (
+                    {hasChildren ? (
                       isExpanded ? (
                         <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
                       ) : (
@@ -315,6 +412,29 @@ export function TimelineRow({
                   >
                     {section.name}
                   </span>
+
+                {/* Кнопка сворачивания/разворачивания загрузок всех этапов раздела */}
+                {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
+                  <button
+                    className={cn(
+                      "ml-2 w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
+                      theme === "dark"
+                        ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20"
+                        : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20",
+                    )}
+                    title={areAllSectionStagesCollapsed() ? "Развернуть загрузки этапов" : "Свернуть загрузки этапов"}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSectionStagesCollapsed(!areAllSectionStagesCollapsed())
+                    }}
+                  >
+                    {areAllSectionStagesCollapsed() ? (
+                      <ChevronRight size={12} />
+                    ) : (
+                      <ChevronDown size={12} />
+                    )}
+                  </button>
+                )}
                 </div>
 
                 {/* Дополнительная информация в две строки */}
@@ -384,33 +504,7 @@ export function TimelineRow({
               </div>
             </div>
 
-            {/* Столбец "Проект" (может быть скрыт) */}
-            {columnVisibility.project && (
-              <div
-                className={cn(
-                  "p-3 border-r transition-colors h-full flex flex-col justify-center",
-                  theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
-                )}
-                style={{
-                  width: `${projectWidth}px`,
-                  minWidth: `${projectWidth}px`,
-                  padding: `${padding}px`,
-                  borderRight: "1px solid",
-                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-                }}
-              >
-                {/* Первая строка - проект */}
-                <span className={cn("text-xs truncate block", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
-                  {section.projectName || "-"}
-                </span>
-                {/* Вторая строка - объект */}
-                <span className={cn("text-xs truncate block mt-0.5 opacity-75", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                  {section.objectName || "-"}
-                </span>
-              </div>
-            )}
+            
 
             {/* Столбец "Объект" (может быть скрыт) */}
             {columnVisibility.object && (
@@ -488,31 +582,38 @@ export function TimelineRow({
                     ></div>
                   )}
                   
-                  {/* Графическое отображение суммарной нагрузки */}
-                  {sectionWorkload > 0 && (
-                    <div className="absolute inset-0 flex items-end justify-center p-1">
-                      <div
-                        className={cn(
-                          "rounded-t-sm transition-all duration-200",
-                          theme === "dark" ? "bg-blue-400" : "bg-blue-500"  // Нейтральный синий цвет
-                        )}
-                        style={{
-                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы (почти на всю ячейку)
-                          height: `${Math.max(
-                            Math.min(
-                              (sectionWorkload / 3) * (rowHeight - 10),  // Высота пропорционально нагрузке (3 ставки = полная высота)
-                              rowHeight - 6  // Максимальная высота
-                            ),
-                            3  // Минимальная высота для видимости
-                          )}px`,
-                          opacity: theme === "dark" ? 0.8 : 0.7
-                        }}
-                        title={`Нагрузка: ${sectionWorkload === Math.floor(sectionWorkload) 
-                          ? sectionWorkload.toString() 
-                          : sectionWorkload.toFixed(1)} ставки`}
-                      ></div>
-                    </div>
-                  )}
+                  {/* Отображение этапов декомпозиции */}
+                  {(() => {
+                    const activeStages = getActiveStagesForDate(unit.date)
+                    const allStages = section.decompositionStages || []
+                    
+                    if (activeStages.length === 0) return null
+                    
+                    const barHeight = Math.floor(rowHeight / Math.max(allStages.length, 1)) - 2
+                    
+                    return (
+                      <div className="absolute inset-0 flex flex-col justify-center gap-0.5 p-1">
+                        {activeStages.map((stage) => {
+                          const stageIndex = allStages.findIndex(s => s.id === stage.id)
+                          const color = getStageColor(stageIndex, theme === "dark")
+                          
+                          return (
+                            <div
+                              key={stage.id}
+                              className="rounded-sm transition-all duration-200"
+                              style={{
+                                backgroundColor: color,
+                                height: `${barHeight}px`,
+                                minHeight: '3px',
+                                opacity: theme === "dark" ? 0.8 : 0.7,
+                              }}
+                              title={`${stage.name}`}
+                            />
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
@@ -520,38 +621,91 @@ export function TimelineRow({
         </div>
       </div>
 
-      {/* Отображаем загрузки, если раздел раскрыт */}
-      {isExpanded &&
-        uniqueLoadings.map((loading, loadingIndex) => (
-          <LoadingRow
-            key={`${loading.id}-${loadingIndex}`}
-            loading={loading}
-            sectionPosition={sectionPosition}
-            loadingIndex={loadingIndex}
-            timeUnits={timeUnits}
-            theme={theme}
-            rowHeight={rowHeight}
-            padding={padding}
-            leftOffset={leftOffset}
-            cellWidth={cellWidth}
-            stickyColumnShadow={stickyColumnShadow}
-            totalFixedWidth={totalFixedWidth}
-            sectionResponsibleId={(section as any)?.responsibleId || null}
-          />
-        ))}
+      {/* Отображаем этапы и загрузки, если раздел раскрыт */}
+      {isExpanded && (
+        <>
+          {(() => {
+            // Группируем фактические загрузки по stageId
+            const loadingsByStage: Record<string, Loading[]> = {}
+
+            uniqueLoadings.forEach((ld) => {
+              const key = (ld as any).stageId || "__no_stage__"
+              ;(loadingsByStage[key] ||= []).push(ld)
+            })
+
+            // Подготавливаем список этапов, включая:
+            // 1) псевдо-этап "Без этапа", если есть записи без stageId
+            // 2) синтетические этапы для stageId из загрузок, которых ещё нет в section.decompositionStages (например, сразу после перезагрузки)
+            const hasNoStageItems = Boolean(loadingsByStage["__no_stage__"]?.length)
+
+            const existingStageIds = new Set((stages || []).map((s) => s.id))
+            const stageIdsFromLoadings = Object.keys(loadingsByStage).filter((k) => k !== "__no_stage__")
+            const missingStageIds = stageIdsFromLoadings.filter((id) => id && !existingStageIds.has(id))
+
+            // Создаём синтетические этапы для недостающих идентификаторов (без дат, с базовым именем)
+            const syntheticStages: DecompositionStage[] = missingStageIds.map((id) => ({
+              id,
+              name: "Этап",
+              start: null,
+              finish: null,
+            }))
+
+            const baseStages = [...stages, ...syntheticStages]
+            const stagesWithNoStage = hasNoStageItems
+              ? [...baseStages, { id: "__no_stage__", name: "Без этапа", start: null, finish: null } as DecompositionStage]
+              : baseStages
+
+            return stagesWithNoStage.map((stage, stageIndex) => (
+              <React.Fragment key={`${stage.id}-${stageIndex}`}>
+                {/* Строка этапа */}
+                <StageRow
+                  stage={stage}
+                  sectionPosition={sectionPosition}
+                  stageIndex={stageIndex}
+                  timeUnits={timeUnits}
+                  theme={theme}
+                  rowHeight={rowHeight}
+                  padding={padding}
+                  leftOffset={leftOffset}
+                  cellWidth={cellWidth}
+                  stickyColumnShadow={stickyColumnShadow}
+                  totalFixedWidth={totalFixedWidth}
+                  section={section}
+                  onOpenSectionPanel={onOpenSectionPanel}
+                  isCollapsed={isStageCollapsed(stage.id)}
+                  onToggleCollapse={() => toggleStageCollapsed(stage.id)}
+                />
+
+                {/* Фактические загрузки для этого этапа */}
+                {!isStageCollapsed(stage.id) && (loadingsByStage[stage.id] || []).map((loading, loadingIndex) => (
+                  <LoadingRow
+                    key={`loading-${stage.id}-${loading.id}-${loadingIndex}`}
+                    loading={loading}
+                    sectionPosition={sectionPosition}
+                    loadingIndex={loadingIndex}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={rowHeight}
+                    padding={padding}
+                    leftOffset={leftOffset}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalFixedWidth={totalFixedWidth}
+                    sectionResponsibleId={(section as any)?.responsibleId || null}
+                    stageName={stage.id === "__no_stage__" ? "Без этапа" : (stage.name || "Этап")}
+                  />
+                ))}
+              </React.Fragment>
+            ))
+          })()}
+        </>
+      )}
       {/* Модальное окно назначения ответственного */}
       {showAssignResponsibleModal && (
         <AssignResponsibleModal section={section} setShowAssignModal={setShowAssignResponsibleModal} theme={theme} />
       )}
 
-      {/* Модальное окно создания загрузки по разделу */}
-      {showCreateLoadingModal && (
-        <CreateLoadingBySectionModal 
-          section={section} 
-          setShowModal={setShowCreateLoadingModal} 
-          theme={theme} 
-        />
-      )}
+      {/* Создание загрузки перенесено на этап и план */}
     </>
   )
 }
@@ -570,7 +724,10 @@ interface LoadingRowProps {
   stickyColumnShadow: string
   totalFixedWidth: number
   sectionResponsibleId?: string | null
+  stageName?: string
 }
+
+// Компонент строки плановой загрузки временно скрыт
 
 function LoadingRow({
   loading,
@@ -585,9 +742,11 @@ function LoadingRow({
   stickyColumnShadow,
   totalFixedWidth,
   sectionResponsibleId,
+  stageName,
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
@@ -627,6 +786,8 @@ function LoadingRow({
     }
   }
 
+  // Удалена логика проверки перерасхода относительно этапа
+
   // Функция для получения стилей прямоугольника в зависимости от ставки
   const getLoadingBarStyles = (rate: number) => {
     let backgroundColor = ""
@@ -665,21 +826,15 @@ function LoadingRow({
     }
   }
 
-  // Вычисляем позицию строки загрузки
-  // Базовая позиция раздела + высота раздела + (индекс загрузки * уменьшенная высота строки)
-  const topPosition = sectionPosition + rowHeight + loadingIndex * reducedRowHeight
+  // Вертикальное расположение обеспечивается потоком DOM, без абсолютного позиционирования
 
   return (
     <div className="group/loading w-full">
       <div className="flex transition-colors w-full" style={{ height: `${reducedRowHeight}px` }}>
-        {/* Пустое пространство для фиксированных столбцов */}
-        <div style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px` }}></div>
-
-        {/* Абсолютно позиционированные фиксированные столбцы */}
+        {/* Фиксированные столбцы со sticky позиционированием */}
         <div
-          className={cn("absolute left-0 z-20", "flex")}
+          className={cn("sticky left-0 z-20", "flex")}
           style={{
-            top: `${topPosition}px`,
             height: `${reducedRowHeight}px`,
             width: `${totalFixedWidth}px`,
             borderBottom: "1px solid",
@@ -771,7 +926,41 @@ function LoadingRow({
               </div>
 
               {/* Правая часть со ставкой */}
-              <div>
+              <div className="flex items-center gap-1">
+                <ConfirmDialog
+                  title="Удалить загрузку?"
+                  description={(
+                    <span>
+                      Вы уверены, что хотите удалить загрузку по этапу <strong>{stageName || "Этап"}</strong> сотрудника <strong>{loading.responsibleName || "Не указан"}</strong> со ставкой <strong>{loading.rate}</strong> за период <strong>{formatShortDate(loading.startDate)} — {formatShortDate(loading.endDate)}</strong>? Это действие нельзя отменить.
+                    </span>
+                  )}
+                  confirmLabel="Удалить"
+                  cancelLabel="Отмена"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    try {
+                      const result = await deleteLoadingInStore(loading.id)
+                      if (!result?.success) {
+                        console.error("Не удалось удалить загрузку", result?.error)
+                      }
+                    } catch (err) {
+                      console.error("Ошибка удаления загрузки", err)
+                    }
+                  }}
+                >
+                  <button
+                    className={cn(
+                      "inline-flex items-center justify-center h-6 w-6 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
+                      theme === "dark"
+                        ? "hover:bg-red-900/30 hover:text-red-300"
+                        : "hover:bg-red-100 hover:text-red-600"
+                    )}
+                    title="Удалить загрузку"
+                    onClick={(e) => { e.stopPropagation() }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </ConfirmDialog>
                 <span
                   className={cn(
                     "text-xs font-medium px-2 py-0.5 rounded",
@@ -785,7 +974,7 @@ function LoadingRow({
           </div>
         </div>
 
-        {/* Ячейки для каждого периода - сдвигаем влево */}
+        {/* Ячейки для каждого периода */}
         <div className="flex-1 flex w-full">
           {timeUnits.map((unit, i) => {
             const isWeekendDay = unit.isWeekend
@@ -839,11 +1028,585 @@ function LoadingRow({
                     }}
                   ></div>
                 )}
+                {/* Красные оверлеи удалены */}
               </div>
             )
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Компонент строки этапа
+interface StageRowProps {
+  stage: DecompositionStage
+  sectionPosition: number
+  stageIndex: number
+  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  theme: string
+  rowHeight: number
+  padding: number
+  leftOffset: number
+  cellWidth: number
+  stickyColumnShadow: string
+  totalFixedWidth: number
+  section: Section
+  onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void
+  isCollapsed: boolean
+  onToggleCollapse: () => void
+}
+
+function StageRow({
+  stage,
+  sectionPosition,
+  stageIndex,
+  timeUnits,
+  theme,
+  rowHeight,
+  padding,
+  leftOffset,
+  cellWidth,
+  stickyColumnShadow,
+  totalFixedWidth,
+  section,
+  onOpenSectionPanel,
+  isCollapsed,
+  onToggleCollapse,
+}: StageRowProps) {
+  const reducedRowHeight = Math.floor(rowHeight * 0.75)
+  const [createOpen, setCreateOpen] = useState(false)
+
+  // Форматирование даты ДД.ММ
+  const formatShortDate = (date: Date | string | null | undefined): string => {
+    if (!date) return "-"
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date
+      return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(d)
+    } catch {
+      return "-"
+    }
+  }
+
+  const isDateInStage = (date: Date): boolean => {
+    if (!stage.start || !stage.finish) return false
+    const start = new Date(stage.start)
+    const finish = new Date(stage.finish)
+    start.setHours(0, 0, 0, 0)
+    finish.setHours(23, 59, 59, 999)
+    const d = new Date(date)
+    d.setHours(0, 0, 0, 0)
+    return d >= start && d <= finish
+  }
+
+  // Суммарные плановые часы по этапу из декомпозиции
+  const totalPlannedHours: number = Array.isArray((stage as any).difficultyStats)
+    ? (stage as any).difficultyStats.reduce(
+        (sum: number, stat: any) => sum + (Number(stat?.planned_hours) || 0),
+        0,
+      )
+    : 0
+
+  // Количество дней в этапе по видимым единицам времени (инклюзивно)
+  const activeDaysCount: number = timeUnits.reduce(
+    (count, unit) => count + (isDateInStage(unit.date) ? 1 : 0),
+    0,
+  )
+
+  // Часы в день
+  const hoursPerDay: number = activeDaysCount > 0 ? totalPlannedHours / activeDaysCount : 0
+
+  // Загрузки, относящиеся к данному этапу (включая специальный этап "без этапа")
+  const stageLoadings: Loading[] = Array.isArray((section as any).loadings)
+    ? (section as any).loadings.filter((ld: Loading) => {
+        const ldStageId = (ld as any).stageId || null
+        if (stage.id === "__no_stage__") return !ldStageId
+        return ldStageId === stage.id
+      })
+    : []
+
+  // Проверка активности загрузки в конкретный день
+  const isLoadingActiveInPeriod = (loading: Loading, date: Date): boolean => {
+    try {
+      const loadingStart = new Date(loading.startDate)
+      const loadingEnd = new Date(loading.endDate)
+      loadingStart.setHours(0, 0, 0, 0)
+      loadingEnd.setHours(23, 59, 59, 999)
+      const d = new Date(date)
+      d.setHours(0, 0, 0, 0)
+      return d >= loadingStart && d <= loadingEnd
+    } catch {
+      return false
+    }
+  }
+
+  // Сумма ставок этапа в конкретную дату
+  const getStageWorkloadForDate = (date: Date): number => {
+    if (!stageLoadings.length) return 0
+    return stageLoadings.reduce((sum, ld) => {
+      return isLoadingActiveInPeriod(ld, date) ? sum + (ld.rate || 0) : sum
+    }, 0)
+  }
+
+  // Вспомогательная функция: строит слои переполнения для ставок > 1
+  const buildOverflowLayers = (rate: number) => {
+    const safeRate = Math.max(0, Number(rate) || 0)
+    const basePct = Math.min(safeRate, 1) * 100
+    const remainder = Math.max(0, safeRate - 1)
+    const extraCount = Math.ceil(remainder)
+    const extras: number[] = []
+    for (let i = 0; i < extraCount; i++) {
+      const pct = Math.max(0, Math.min(1, remainder - i)) * 100
+      extras.push(pct)
+    }
+    return { basePct, extras }
+  }
+
+  // Цвет заливки столбиков нагрузки этапа
+  const stageBarColor = (stage as any).color || (theme === 'dark' ? 'rgb(56, 189, 248)' : 'rgb(14, 165, 233)')  
+
+  // Парсинг и смешивание цветов для получения заметно иного оттенка того же цвета
+  const parseRgb = (rgb: string): [number, number, number] => {
+    const m = rgb.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
+    if (!m) return [56, 189, 248]
+    return [Number(m[1]), Number(m[2]), Number(m[3])]
+  }
+  const blendRgb = (base: [number, number, number], target: [number, number, number], amount: number): [number, number, number] => {
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
+    return [
+      clamp(base[0] * (1 - amount) + target[0] * amount),
+      clamp(base[1] * (1 - amount) + target[1] * amount),
+      clamp(base[2] * (1 - amount) + target[2] * amount),
+    ]
+  }
+  const rgbToString = (rgb: [number, number, number]): string => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  const getOverflowShadeColor = (index: number): string => {
+    const base = parseRgb(stageBarColor)
+    // Сильные сдвиги по светлоте для высокой заметности различий
+    const amountsLight = [0.15, 0.25, 0.35, 0.45, 0.55] // светлая тема — мягко затемняем к чёрному
+    const amountsDark = [0.15, 0.25, 0.35, 0.45, 0.55] // тёмная тема — больший разрыв между 2-м и 3-м слоями
+    const arr = theme === 'dark' ? amountsDark : amountsLight
+    const amount = arr[Math.min(index, arr.length - 1)]
+    const target: [number, number, number] = theme === 'dark' ? [255, 255, 255] : [0, 0, 0]
+    return rgbToString(blendRgb(base, target, amount))
+  }
+
+  // Преобразование rgb(...) в rgba(..., a)
+  const toRgba = (rgbStr: string, alpha: number): string => {
+    const [r, g, b] = parseRgb(rgbStr)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
+  // Нормализованные даты старта/конца этапа (для вертикальных линий в строке этапа)
+  const stageStartDate = (() => {
+    if (!stage.start) return null
+    const d = new Date(stage.start)
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+  const stageFinishDate = (() => {
+    if (!stage.finish) return null
+    const d = new Date(stage.finish)
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+
+  // Данные для sparkline-графика суммарной загрузки этапа
+  const series: number[] = timeUnits.map((u) => getStageWorkloadForDate(u.date))
+  const maxRateForGraph = Math.max(1, ...series)
+  const graphPadding = 3
+  const graphWidth = cellWidth * timeUnits.length
+  const graphHeight = Math.max(0, Math.floor(reducedRowHeight) - graphPadding * 2)
+  const baselineY = graphPadding + graphHeight
+  // Разбиваем график на сегменты только там, где v > 0, чтобы не показывать линии в пустых местах
+  type Point = [number, number]
+  const graphLeftShift = cellWidth / 2
+  const makePoint = (idx: number, value: number): Point => {
+    const x = idx * cellWidth + cellWidth / 2 - graphLeftShift
+    const y = baselineY - (value / maxRateForGraph) * graphHeight
+    return [x, y]
+  }
+  const segments: { line: string; area: string; x1: number; x2: number }[] = []
+  let current: Point[] = []
+  for (let i = 0; i < series.length; i++) {
+    const v = series[i]
+    if (v > 0) {
+      current.push(makePoint(i, v))
+    } else if (current.length) {
+      const firstX = current[0][0]
+      const firstY = current[0][1]
+      const lastX = current[current.length - 1][0]
+      const lastY = current[current.length - 1][1]
+      // Продлеваем последний сегмент на ширину ячейки, чтобы покрыть весь последний день
+      const extendedLastX = lastX + cellWidth
+      // Ступенчатая линия: чередуем горизонтальные и вертикальные отрезки
+      let line = `M ${firstX} ${firstY}`
+      for (let k = 1; k < current.length; k++) {
+        const [x, y] = current[k]
+        const prevY = current[k - 1][1]
+        line += ` L ${x} ${prevY} L ${x} ${y}`
+      }
+      line += ` L ${extendedLastX} ${lastY}`
+
+      // Ступенчатая заливка под линией
+      let area = `M ${firstX} ${baselineY} L ${firstX} ${firstY}`
+      for (let k = 1; k < current.length; k++) {
+        const [x, y] = current[k]
+        const prevY = current[k - 1][1]
+        area += ` L ${x} ${prevY} L ${x} ${y}`
+      }
+      area += ` L ${extendedLastX} ${lastY} L ${extendedLastX} ${baselineY} Z`
+      segments.push({ line, area, x1: firstX, x2: extendedLastX })
+      current = []
+    }
+  }
+  if (current.length) {
+    const firstX = current[0][0]
+    const firstY = current[0][1]
+    const lastX = current[current.length - 1][0]
+    const lastY = current[current.length - 1][1]
+    const extendedLastX = lastX + cellWidth
+    let line = `M ${firstX} ${firstY}`
+    for (let k = 1; k < current.length; k++) {
+      const [x, y] = current[k]
+      const prevY = current[k - 1][1]
+      line += ` L ${x} ${prevY} L ${x} ${y}`
+    }
+    line += ` L ${extendedLastX} ${lastY}`
+
+    let area = `M ${firstX} ${baselineY} L ${firstX} ${firstY}`
+    for (let k = 1; k < current.length; k++) {
+      const [x, y] = current[k]
+      const prevY = current[k - 1][1]
+      area += ` L ${x} ${prevY} L ${x} ${y}`
+    }
+    area += ` L ${extendedLastX} ${lastY} L ${extendedLastX} ${baselineY} Z`
+    segments.push({ line, area, x1: firstX, x2: extendedLastX })
+  }
+
+  // Средняя ставка по этапу из средних часов в день (8 ч = 1 ставка)
+  const avgRatePerDay = hoursPerDay > 0 ? hoursPerDay / 8 : 0
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+  const avgY = clamp(baselineY - (avgRatePerDay / maxRateForGraph) * graphHeight, graphPadding, baselineY)
+  const avgRateLabel = avgRatePerDay
+    ? (Number.isInteger(avgRatePerDay) ? `${avgRatePerDay} ст/д` : `${avgRatePerDay.toFixed(2)} ст/д`)
+    : ""
+
+  // Плановый диапазон (по датам этапа), чтобы рисовать красную линию даже без загрузок
+  const hasStageDates = Boolean(stage.start && stage.finish)
+  const firstStageIdx = timeUnits.findIndex((u) => isDateInStage(u.date))
+  const lastStageIdx = (() => {
+    for (let i = timeUnits.length - 1; i >= 0; i--) {
+      if (isDateInStage(timeUnits[i].date)) return i
+    }
+    return -1
+  })()
+  const hasPlannedRange = hasStageDates && avgRatePerDay > 0 && firstStageIdx !== -1 && lastStageIdx !== -1
+  const plannedX1 = firstStageIdx >= 0 ? firstStageIdx * cellWidth : 0
+  const plannedX2 = lastStageIdx >= 0 ? (lastStageIdx + 1) * cellWidth : 0
+
+  return (
+    <div className="group/stage w-full">
+      <div className="flex transition-colors w-full" style={{ height: `${reducedRowHeight}px` }}>
+        {/* Фиксированные столбцы со sticky позиционированием */}
+        <div
+          className={cn("sticky left-0 z-20", "flex")}
+          style={{
+            height: `${reducedRowHeight}px`,
+            width: `${totalFixedWidth}px`,
+            borderBottom: "1px solid",
+            borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+          }}
+        >
+          <div
+            className={cn(
+              "p-2 font-medium border-r flex items-center transition-colors h-full",
+              theme === "dark"
+                ? "border-slate-700 bg-slate-800 group-hover/stage:bg-emerald-900"
+                : "border-slate-200 bg-white group-hover/stage:bg-emerald-50",
+            )}
+            style={{
+              width: `${totalFixedWidth}px`,
+              minWidth: `${totalFixedWidth}px`,
+              padding: `${padding - 1}px`,
+              borderRight: "1px solid",
+              borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+            }}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center">
+              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                <button
+                  className={cn(
+                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md mr-1",
+                    theme === "dark" 
+                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
+                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
+                  )}
+                  title={isCollapsed ? "Развернуть загрузки" : "Свернуть загрузки"}
+                  onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
+                >
+                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                </button>
+                <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+              </div>
+                <div
+                  className={cn("text-xs font-medium cursor-pointer hover:underline", theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-700 hover:text-teal-600")}
+                  onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
+                  title="Открыть декомпозицию раздела"
+                >{stage.name || "Этап"}</div>
+                {(stage.start || stage.finish) && (
+                  <div className={cn("ml-2 text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                    {formatShortDate(stage.start)}
+                    <span className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}>—</span>
+                    {formatShortDate(stage.finish)}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {totalPlannedHours > 0 && activeDaysCount > 0 && (
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded",
+                      theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
+                    )}
+                    title={`План: ${totalPlannedHours} ч на ${activeDaysCount} дн`}
+                  >
+                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} час/день` : `${hoursPerDay.toFixed(1)} час/день`}
+                  </span>
+                )}
+                <button
+                  className={cn(
+                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
+                    theme === "dark" 
+                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
+                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
+                  )}
+                  title="Создать загрузку в этом этапе"
+                  onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
+                >
+                  <PlusCircle size={12} /> 
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Ячейки таймлайна для этапа + sparkline поверх */}
+        <div className="flex-1 flex w-full" style={{ position: "relative" }}>
+          {/* Sparkline суммарной загрузки этапа */}
+          {graphWidth > 0 && (segments.length > 0 || hasPlannedRange) && (
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
+              <svg width={graphWidth} height={reducedRowHeight}>
+                {segments.map((seg, idx) => (
+                  <g key={idx}>
+                    <path d={seg.area} fill={toRgba(stageBarColor, 0.25)} stroke="none" />
+                    <path d={seg.line} fill="none" stroke={stageBarColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                  </g>
+                ))}
+
+                {/* Красная линия средней плановой ставки по всему диапазону этапа */}
+                {hasPlannedRange && (
+                  <line
+                    x1={plannedX1}
+                    y1={avgY}
+                    x2={plannedX2}
+                    y2={avgY}
+                    stroke="rgb(239, 68, 68)"
+                    strokeWidth={1.5}
+                  />
+                )}
+
+                {/* Подпись значения ставки у начала этапа */}
+                {hasPlannedRange && (
+                  <text
+                    x={plannedX1 + 4}
+                    y={avgY - 4}
+                    fill="rgb(239, 68, 68)"
+                    fontSize="10"
+                    fontWeight="600"
+                  >
+                    {avgRateLabel}
+                  </text>
+                )}
+              </svg>
+            </div>
+          )}
+          {timeUnits.map((unit, i) => {
+            const isMonthStart = isFirstDayOfMonth(unit.date)
+            // Совпадение дня с датами старта/окончания этапа
+            const day = new Date(unit.date)
+            day.setHours(0, 0, 0, 0)
+            const isStartDay = stageStartDate ? day.getTime() === stageStartDate.getTime() : false
+            const isEndDay = stageFinishDate ? day.getTime() === stageFinishDate.getTime() : false
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "border-r border-b relative",
+                  theme === "dark" ? "border-slate-700" : "border-slate-200",
+                  theme === "dark" ? "group-hover/stage:bg-emerald-900/20" : "group-hover/stage:bg-emerald-50",
+                  isMonthStart
+                    ? theme === "dark"
+                      ? "border-l border-l-slate-600"
+                      : "border-l border-l-slate-300"
+                    : "",
+                )}
+                style={{
+                  height: `${reducedRowHeight}px`,
+                  width: `${cellWidth}px`,
+                  borderRight: "1px solid",
+                  borderBottom: "1px solid",
+                  borderLeft: isMonthStart ? "1px solid" : "none",
+                  borderLeftColor: isMonthStart
+                    ? theme === "dark"
+                      ? "rgb(71, 85, 105)"
+                      : "rgb(203, 213, 225)"
+                    : "transparent",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                }}
+              >
+                {/* Вертикальные линии начала/конца этапа поверх графика */}
+                {(isStartDay || isEndDay) && (
+                    <>
+                      {isStartDay && (
+                        <div
+                          title="Старт этапа"
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            bottom: '2px',
+                            left: '0px',
+                            width: '2px',
+                          backgroundColor: 'rgba(34,197,94,0.9)',
+                          zIndex: 3,
+                          }}
+                        />
+                      )}
+                      {isStartDay && (
+                        <>
+                          {/* Горизонтальные линии для формирования скобки [ */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              left: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(34,197,94,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              left: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(34,197,94,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          {/* Подпись даты старта */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: 'calc(100% + 6px)',
+                              color: 'rgba(34,197,94,0.9)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              lineHeight: 1,
+                              zIndex: 4,
+                              whiteSpace: 'nowrap',
+                              pointerEvents: 'none',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {formatShortDate(stage.start)}
+                          </div>
+                        </>
+                      )}
+                      {isEndDay && (
+                        <div
+                          title="Конец этапа"
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            bottom: '2px',
+                            right: '0px',
+                            width: '2px',
+                          backgroundColor: 'rgba(5,150,105,0.9)',
+                          zIndex: 3,
+                          }}
+                        />
+                      )}
+                      {isEndDay && (
+                        <>
+                          {/* Горизонтальные линии для формирования скобки ] */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              right: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(5,150,105,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '2px',
+                              right: '0px',
+                              height: '2px',
+                              width: '8px',
+                              backgroundColor: 'rgba(5,150,105,0.9)',
+                              zIndex: 3,
+                            }}
+                          />
+                          {/* Подпись даты окончания */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '2px',
+                              left: 'calc(100% + 6px)',
+                              color: 'rgba(5,150,105,0.9)',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              lineHeight: 1,
+                              zIndex: 4,
+                              whiteSpace: 'nowrap',
+                              pointerEvents: 'none',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {formatShortDate(stage.finish)}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {createOpen && (
+        <CreateLoadingBySectionModal
+          section={section}
+          setShowModal={setCreateOpen}
+          theme={theme}
+          stageId={stage.id}
+          stageName={stage.name}
+          defaultStartDate={stage.start || undefined}
+          defaultEndDate={stage.finish || undefined}
+          defaultRate={1}
+        />
+      )}
     </div>
   )
 }
