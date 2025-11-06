@@ -50,7 +50,7 @@ const supabase = createClient()
 export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProjectModalProps) {
   const [projectName, setProjectName] = useState('')
   const [projectDescription, setProjectDescription] = useState<string | null>('')
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('active')
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('draft')
   const [projectManager, setProjectManager] = useState<string | null>(null)
   const [projectLeadEngineer, setProjectLeadEngineer] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
@@ -209,26 +209,12 @@ export function CreateProjectModal({ isOpen, onClose, onSuccess }: CreateProject
               <div className="relative">
                 <input
                   type="text"
-                  value={showStatusDropdown ? searchStatus : selectedStatusName()}
-                  onChange={(e) => { setSearchStatus(e.target.value); setShowStatusDropdown(true) }}
-                  onFocus={() => { setSearchStatus(''); setShowStatusDropdown(true) }}
-                  onBlur={() => { setTimeout(() => setShowStatusDropdown(false), 200) }}
+                  value={selectedStatusName()}
+                  disabled
+                  title="Статус нового проекта нельзя поменять"
                   placeholder={selectedStatusName() || 'Выберите статус проекта...'}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-not-allowed"
                 />
-                {showStatusDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {filteredStatuses.map((status) => (
-                      <div
-                        key={status}
-                        onClick={() => { setProjectStatus(status); setSearchStatus(''); setShowStatusDropdown(false) }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-600 cursor-pointer"
-                      >
-                        <div className="font-medium dark:text-white">{getStatusName(status)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 

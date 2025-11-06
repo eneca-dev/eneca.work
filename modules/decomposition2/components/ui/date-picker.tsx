@@ -243,51 +243,38 @@ export function DatePicker({
       {open && pos && (
         <div
           ref={popoverRef}
-          className="fixed z-50 w-[300px] rounded-2xl border border-border/40 bg-popover shadow-lg p-1.5"
+          className="fixed z-50 w-[260px] rounded-lg border border-border bg-background dark:bg-slate-700 dark:border-slate-500 shadow-lg p-2"
           style={{ top: pos.top, left: pos.left }}
         >
-          <div className="flex items-center justify-between px-1 py-1">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-muted"
-                onClick={goPrevMonth}
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-muted"
-                onClick={goToday}
-                aria-label="Сегодня"
-                title="Сегодня"
-              >
-                <CalendarIcon className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="text-[13px] font-medium">
+          <div className="flex items-center justify-between mb-1">
+            <button
+              type="button"
+              className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+              onClick={goPrevMonth}
+            >
+              ←
+            </button>
+            <div className="text-center font-bold text-foreground text-sm px-2 flex-1">
               {RU_MONTHS[viewMonth]} {viewYear}
             </div>
-            <div className="flex items-center">
-              <button
-                type="button"
-                className="h-6 w-6 inline-flex items-center justify-center rounded-full hover:bg-muted"
-                onClick={goNextMonth}
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+              onClick={goNextMonth}
+            >
+              →
+            </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-[3px] px-1">
+          <div className="grid grid-cols-7 text-center mb-1">
             {RU_WEEKDAYS.map((d) => (
-              <div key={d} className="text-[10px] uppercase tracking-wide text-muted-foreground text-center py-[2px]">
+              <div key={d} className="w-6 h-6 flex items-center justify-center rounded font-bold text-xs text-muted-foreground m-0.5">
                 {d}
               </div>
             ))}
           </div>
           <div
-            className="grid grid-cols-7 gap-[3px] p-1"
+            className="grid grid-cols-7 text-center"
             ref={gridRef}
             onKeyDown={(e) => {
               const current = parseISODate(focusedISO) ?? new Date();
@@ -333,25 +320,20 @@ export function DatePicker({
               const isToday = iso === todayISO;
               const isOut = !isCurrentMonth(d);
               const isFocus = iso === focusedISO;
-              const isPast = iso < todayISO;
 
               return (
-                <button
+                <div
                   key={iso + (isOut ? "-out" : "")}
-                  type="button"
                   className={cn(
-                    "h-7 w-7 rounded-full text-[11px] inline-flex items-center justify-center transition-colors",
-                    isPast ? "text-muted-foreground/50" : "text-foreground",
-                    !isSel && !isOut && "hover:bg-muted",
-                    isSel && "bg-primary text-primary-foreground hover:bg-primary",
-                    !isSel && isToday && "ring-1 ring-primary",
-                    isFocus && "ring-2 ring-ring"
+                    "w-6 h-6 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-xs m-0.5 transition-colors hover:bg-accent/50",
+                    isSel && "bg-primary text-primary-foreground border-primary shadow-sm",
+                    isOut && "opacity-40"
                   )}
                   onClick={() => selectDate(d)}
                   onMouseEnter={() => setFocusedISO(iso)}
                 >
                   {d.getDate()}
-                </button>
+                </div>
               );
             })}
           </div>

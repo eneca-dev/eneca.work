@@ -142,6 +142,7 @@ function SortableStage({
   isCollapsed,
   onToggleCollapse,
   onOpenLog,
+  actualByItemId,
 }: {
   stage: Stage;
   selectedStages: Set<string>;
@@ -167,6 +168,7 @@ function SortableStage({
   isCollapsed: boolean;
   onToggleCollapse: (stageId: string) => void;
   onOpenLog?: (itemId: string) => void;
+  actualByItemId: Record<string, number>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
@@ -395,6 +397,7 @@ function SortableStage({
                         employees={employees}
                         formatProfileLabel={formatProfileLabel}
                         onOpenLog={onOpenLog}
+                        actualByItemId={actualByItemId}
                       />
                     ))}
                   </SortableContext>
@@ -438,6 +441,7 @@ function SortableDecompositionRow({
   employees,
   formatProfileLabel,
   onOpenLog,
+  actualByItemId,
 }: {
   decomposition: Decomposition;
   stageId: string;
@@ -458,6 +462,7 @@ function SortableDecompositionRow({
   employees: Employee[];
   formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
   onOpenLog?: (itemId: string) => void;
+  actualByItemId: Record<string, number>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: decomposition.id,
@@ -648,7 +653,7 @@ function SortableDecompositionRow({
           disabled={selectionDisabled}
         />
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1.5 px-1">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -660,7 +665,7 @@ function SortableDecompositionRow({
           <Plus className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1.5 px-1">
         <Textarea
           ref={descriptionRef}
           value={decomposition.description}
@@ -873,17 +878,23 @@ function SortableDecompositionRow({
         </div>
       </td>
       <td className="py-1.5 px-2">
-        <Input
-          type="number"
-          value={decomposition.plannedHours}
-          onChange={(e) => {
-            onUpdate(stageId, decomposition.id, { plannedHours: Number.parseInt((e.target as HTMLInputElement).value) || 0 });
-            markInteracted();
-          }}
-          onKeyDown={handleKeyDown}
-          className="h-6 w-[60px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center"
-          ref={plannedHoursInputRef}
-        />
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground tabular-nums min-w-[24px] text-right">
+            {Number(actualByItemId[decomposition.id] || 0).toFixed(2)}
+          </span>
+          <span className="text-xs text-muted-foreground/50">/</span>
+          <Input
+            type="number"
+            value={decomposition.plannedHours}
+            onChange={(e) => {
+              onUpdate(stageId, decomposition.id, { plannedHours: Number.parseInt((e.target as HTMLInputElement).value) || 0 });
+              markInteracted();
+            }}
+            onKeyDown={handleKeyDown}
+            className="h-6 w-[45px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center"
+            ref={plannedHoursInputRef}
+          />
+        </div>
       </td>
       <td className="py-1.5 px-2">
         <Select
@@ -993,7 +1004,7 @@ function SortableDecompositionRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1.5 px-0.5">
         <DatePicker
           value={decomposition.completionDate}
           onChange={(val) => {
@@ -1006,7 +1017,7 @@ function SortableDecompositionRow({
           triggerRef={completionDateTriggerRef as unknown as React.Ref<HTMLButtonElement>}
         />
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1.5 px-0.5">
         <Button
           variant="ghost"
           size="sm"
@@ -1039,6 +1050,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
+  const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1166,6 +1178,35 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
+
+  // Загрузка фактических часов из work_logs
+  useEffect(() => {
+    const loadActuals = async () => {
+      if (stages.length === 0) {
+        setActualByItemId({});
+        return;
+      }
+      const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
+      if (allItemIds.length === 0) {
+        setActualByItemId({});
+        return;
+      }
+      try {
+        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: allItemIds });
+        if (error) throw error;
+        const hoursById: Record<string, number> = {};
+        for (const row of (data as any[]) || []) {
+          const key = row.decomposition_item_id as string;
+          hoursById[key] = Number(row.actual_hours || 0);
+        }
+        setActualByItemId(hoursById);
+      } catch (e) {
+        console.error('Ошибка агрегации work_logs:', e);
+        setActualByItemId({});
+      }
+    };
+    loadActuals();
+  }, [stages, supabase]);
 
   // Загрузка сотрудников для поиска (view_users)
   useEffect(() => {
@@ -2234,6 +2275,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
                   isCollapsed={collapsedStageIds.has(stage.id)}
                   onToggleCollapse={toggleStageCollapsed}
                   onOpenLog={onOpenLog}
+                  actualByItemId={actualByItemId}
                 />
               ))}
             </div>
