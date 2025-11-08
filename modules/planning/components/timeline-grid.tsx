@@ -483,7 +483,7 @@ export function TimelineGrid({
                             )}
                             style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                           >
-                            <div className="flex items-center w-full">
+                            <div className="flex items-center w-full" style={{ paddingLeft: '20px' }}>
                               <span className="mr-2">
                                 {isStageExpanded ? (
                                   <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
@@ -531,7 +531,7 @@ export function TimelineGrid({
                               )}
                               style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                             >
-                              <div className="flex items-center w-full">
+                              <div className="flex items-center w-full" style={{ paddingLeft: '40px' }}>
                                 <span className="mr-2">
                                   {isObjectExpanded ? (
                                     <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />

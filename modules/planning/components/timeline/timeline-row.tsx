@@ -123,7 +123,7 @@ export function TimelineRow({
   const hasChildren = hasLoadings || hasStages
 
   // На фиксированные значения:
-  const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
+  const sectionWidth = 430 // Ширина для раздела (увеличена для иерархических отступов)
   const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
 
   // Также упрощаем расчет общей ширины фиксированных столбцов
@@ -297,7 +297,7 @@ export function TimelineRow({
               }}
             >
               {/* Компактное отображение в одну строку с аватаром слева */}
-              <div className="flex items-center w-full">
+              <div className="flex items-center w-full" style={{ paddingLeft: '60px' }}>
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
                   {section.responsibleName ? (
@@ -860,12 +860,9 @@ function LoadingRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '100px' }}>
               {/* Левая часть с аватаром, именем и датами */}
               <div className="flex items-center">
-                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                  {/* Пустое место для отступа */}
-                </div>
                 <div
                   className="flex items-center justify-center h-full"
                   onMouseEnter={() => setHoveredAvatar(true)}
@@ -1337,7 +1334,7 @@ function StageRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '80px' }}>
               <div className="flex items-center">
               <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                 <button
