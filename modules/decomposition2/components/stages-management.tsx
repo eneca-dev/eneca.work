@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -662,7 +662,7 @@ function SortableDecompositionRow({
           className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 transition-colors"
           title="Добавить отчет"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Clock className="h-3.5 w-3.5" />
         </button>
       </td>
       <td className="py-1.5 px-1">
