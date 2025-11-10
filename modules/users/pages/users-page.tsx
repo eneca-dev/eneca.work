@@ -215,7 +215,10 @@ export default function UsersPage() {
             <Tabs value={adminTab} onValueChange={handleTabChange} className="w-full">
               <TabsList className="flex-wrap h-auto items-start py-2 gap-y-1">
                 <TabsTrigger value="list">Список пользователей</TabsTrigger>
-                <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
+                {/* Показываем кнопку "Ручное добавление" только при users.manual_addition */}
+                <PermissionGuard permission="users.manual_addition">
+                  <TabsTrigger value="add-user">Ручное добавление</TabsTrigger>
+                </PermissionGuard>
                 <TabsTrigger value="analytics">Аналитика</TabsTrigger>
                 {/* Показываем кнопку "Администратор" только при users.admin_panel */}
                 <PermissionGuard permission="users.admin_panel">
@@ -231,7 +234,9 @@ export default function UsersPage() {
               </TabsContent>
               
               <TabsContent value="add-user" className="space-y-4">
-                <AddUserForm onUserAdded={handleUserUpdated} />
+                <PermissionGuard permission="users.manual_addition">
+                  <AddUserForm onUserAdded={handleUserUpdated} />
+                </PermissionGuard>
               </TabsContent>
               
               

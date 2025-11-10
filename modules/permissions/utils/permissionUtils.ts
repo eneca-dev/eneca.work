@@ -160,12 +160,22 @@ export const getModulePermissions = (userPermissions: string[], module: string):
 export const canAssignRole = (currentUserPermissions: string[], targetRole: string): boolean => {
   // Проверяем есть ли право назначать роли
   if (!currentUserPermissions.includes('users.assign_roles')) return false
-  
+
   // Администраторскую роль может назначать только тот, у кого есть специальное право
   if (targetRole === 'admin') {
     return currentUserPermissions.includes('users.assign_admin_role')
   }
-  
+
+  // Роль начальника отдела может назначать только администратор
+  if (targetRole === 'department_head') {
+    return currentUserPermissions.includes('users.assign_admin_role')
+  }
+
+  // Роль руководителя проекта может назначать только администратор
+  if (targetRole === 'project_manager') {
+    return currentUserPermissions.includes('users.assign_admin_role')
+  }
+
   return true
 }
 

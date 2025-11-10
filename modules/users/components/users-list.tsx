@@ -111,7 +111,6 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
   const { profile, id: viewerId } = useUserStore()
   const {
     canEditAllUsers,
-    canEditSelf,
     canEditTeam,
     canEditDepartment,
     canViewRateSelf,
@@ -124,9 +123,11 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
   const viewerTeamId = profile?.teamId || profile?.team_id || null
 
   const canEditUser = (u: User) => {
+    // Запрещаем редактирование своего профиля через список пользователей
+    // Свой профиль редактируется только через "Настройки профиля"
+    if (u.id === viewerId) return false
+
     if (canEditAllUsers) return true
-    // self по id email не всегда надёжен: ожидаем, что users-page передал id = profiles.user_id
-    if (canEditSelf && u.id === viewerId) return true
     // Для users.edit.team: проверяем, что пользователь в том же отделе
     if (canEditTeam && viewerDeptId && u.departmentId && u.departmentId === viewerDeptId) return true
     if (canEditDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true

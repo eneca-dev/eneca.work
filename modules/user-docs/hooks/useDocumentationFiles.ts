@@ -27,12 +27,20 @@ const mockDocumentationStructure: DocumentationFile[] = [
     { name: 'Пользователи', path: 'planirovanie/polzovateli.md', type: 'file' },
     { name: 'Руководители', path: 'planirovanie/rukovoditeli.md', type: 'file' },
   ]},
+  { name: 'Пользователи', path: 'users', type: 'folder', children: [
+    { name: 'Общая информация', path: 'users/index.md', type: 'file' },
+    { name: 'Администратор', path: 'users/administrator.md', type: 'file' },
+    { name: 'Руководитель отдела', path: 'users/department-head.md', type: 'file' },
+    { name: 'Руководитель проекта', path: 'users/project-manager.md', type: 'file' },
+    { name: 'Руководитель команды', path: 'users/team-lead.md', type: 'file' },
+    { name: 'Пользователь', path: 'users/user.md', type: 'file' },
+  ]},
 ]
 
 export function useDocumentationFiles() {
   const [files] = useState<DocumentationFile[]>(mockDocumentationStructure)
   const [selectedFile, setSelectedFile] = useState<string | null>('my-work/glavnaya-stranitsa.md')
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my-work', 'projects']))
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['my-work', 'projects', 'users']))
   const [searchQuery, setSearchQuery] = useState<string>('')
   
   // FlexSearch состояния
