@@ -76,6 +76,10 @@ type StagesManagementProps = {
   sectionId: string;
   onOpenLog?: (itemId: string) => void;
 };
+type StagesManagementProps = {
+  sectionId: string;
+  onOpenLog?: (itemId: string) => void;
+};
 
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, string> = {
@@ -87,6 +91,13 @@ const getDifficultyColor = (difficulty: string) => {
 };
 
 const getProgressColor = (progress: number) => {
+  if (progress === 0)
+    return "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-100";
+  if (progress <= 30)
+    return "bg-red-100 hover:bg-red-200 text-red-900 dark:bg-red-900/30 dark:hover:bg-red-900/40 dark:text-red-200";
+  if (progress <= 70)
+    return "bg-yellow-100 hover:bg-yellow-200 text-yellow-900 dark:bg-yellow-900/30 dark:hover:bg-yellow-900/40 dark:text-yellow-200";
+  return "bg-green-100 hover:bg-green-200 text-green-900 dark:bg-green-900/30 dark:hover:bg-green-900/40 dark:text-green-200";
   if (progress === 0)
     return "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-100";
   if (progress <= 30)
@@ -113,7 +124,23 @@ const getStatusColor = (status: string) => {
     "Завершено": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
     "Готово": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
     "Сделано": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
+    "Не начато": "bg-slate-100 hover:bg-slate-200 text-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200",
+    "План": "bg-blue-100 hover:bg-blue-200 text-blue-900 dark:bg-blue-900/30 dark:hover:bg-blue-900/40 dark:text-blue-200",
+    "Планируется": "bg-blue-100 hover:bg-blue-200 text-blue-900 dark:bg-blue-900/30 dark:hover:bg-blue-900/40 dark:text-blue-200",
+    "Запланировано": "bg-blue-100 hover:bg-blue-200 text-blue-900 dark:bg-blue-900/30 dark:hover:bg-blue-900/40 dark:text-blue-200",
+    "В работе": "bg-sky-100 hover:bg-sky-200 text-sky-900 dark:bg-sky-900/30 dark:hover:bg-sky-900/40 dark:text-sky-200",
+    "На проверке": "bg-violet-100 hover:bg-violet-200 text-violet-900 dark:bg-violet-900/30 dark:hover:bg-violet-900/40 dark:text-violet-200",
+    "В ожидании": "bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 dark:text-amber-200",
+    "Ожидание": "bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 dark:text-amber-200",
+    "Приостановлено": "bg-orange-100 hover:bg-orange-200 text-orange-900 dark:bg-orange-900/30 dark:hover:bg-orange-900/40 dark:text-orange-200",
+    "Пауза": "bg-orange-100 hover:bg-orange-200 text-orange-900 dark:bg-orange-900/30 dark:hover:bg-orange-900/40 dark:text-orange-200",
+    "Заблокировано": "bg-red-100 hover:bg-red-200 text-red-900 dark:bg-red-900/30 dark:hover:bg-red-900/40 dark:text-red-200",
+    "Отменено": "bg-rose-100 hover:bg-rose-200 text-rose-900 dark:bg-rose-900/30 dark:hover:bg-rose-900/40 dark:text-rose-200",
+    "Завершено": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
+    "Готово": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
+    "Сделано": "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:text-emerald-200",
   };
+  return colors[status] || "bg-muted/60 hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/40";
   return colors[status] || "bg-muted/60 hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/40";
 };
 
@@ -235,6 +262,8 @@ function SortableStage({
       style={style}
       className={`relative ${isCollapsed ? "p-2" : "p-3"} shadow border border-border/60 bg-card/90 dark:bg-muted/20 ${
         selectedStages.has(stage.id) ? "ring-1 ring-primary/20 border-primary/40 bg-muted/40 dark:bg-muted/35" : ""
+      className={`relative ${isCollapsed ? "p-2" : "p-3"} shadow border border-border/60 bg-card/90 dark:bg-muted/20 ${
+        selectedStages.has(stage.id) ? "ring-1 ring-primary/20 border-primary/40 bg-muted/40 dark:bg-muted/35" : ""
       }`}
     >
       <div className={`flex items-center ${isCollapsed ? "mb-1 gap-1" : "mb-2 gap-2"}`}>
@@ -343,6 +372,7 @@ function SortableStage({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/30">
+                    <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
@@ -621,6 +651,8 @@ function SortableDecompositionRow({
       style={style}
       className={`group border-b border-border/20 last:border-0 hover:bg-muted/30 dark:hover:bg-muted/20 transition-colors ${
         isHighlighted ? "bg-primary/5 hover:bg-primary/10 dark:bg-primary/15 dark:hover:bg-primary/20" : ""
+      className={`group border-b border-border/20 last:border-0 hover:bg-muted/30 dark:hover:bg-muted/20 transition-colors ${
+        isHighlighted ? "bg-primary/5 hover:bg-primary/10 dark:bg-primary/15 dark:hover:bg-primary/20" : ""
       }`}
       onFocus={() => {
         markInteracted();
@@ -755,6 +787,7 @@ function SortableDecompositionRow({
           }}
         >
           <SelectTrigger
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
@@ -1031,6 +1064,7 @@ function SortableDecompositionRow({
   );
 }
 
+export default function StagesManagement({ sectionId, onOpenLog }: StagesManagementProps) {
 export default function StagesManagement({ sectionId, onOpenLog }: StagesManagementProps) {
   const supabase = useMemo(() => createClient(), []);
   const [stages, setStages] = useState<Stage[]>([]);
@@ -2134,6 +2168,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   return (
     <div className="min-h-[60vh] bg-background dark:bg-slate-900 relative px-4 pb-4 pt-2">
+    <div className="min-h-[60vh] bg-background dark:bg-slate-900 relative px-4 pb-4 pt-2">
       <div className="w-full">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">Управление этапами</h1>
@@ -2146,9 +2181,11 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
                 allCollapsed ? expandAllStages() : collapseAllStages();
               }}
               className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90"
+              className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90"
             >
               {stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id)) ? "Развернуть все" : "Свернуть все"}
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowPasteDialog(true)} className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90">
             <Button variant="outline" size="sm" onClick={() => setShowPasteDialog(true)} className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90">
               <ClipboardPaste className="mr-2 h-4 w-4" />
               Вставить
