@@ -215,6 +215,25 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme, con
           span.setAttribute("employee.name", selectedEmployee!.full_name)
           span.setAttribute("employee.email", selectedEmployee!.email)
 
+          // Вызываем функцию обновления ответственного в БД
+          const result = await updateSectionResponsible(sectionId, selectedEmployee!.user_id)
+
+          if (!result.success) {
+            throw new Error(result.error || "Не удалось обновить ответственного в базе данных")
+          }
+
+          // Обновляем раздел в сторе с новыми данными ответственного
+          updateSectionInStore(sectionId, {
+            responsibleId: selectedEmployee!.user_id,
+            responsibleName: selectedEmployee!.full_name,
+            responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
+          })
+
+          span.setAttribute("operation.success", true)
+
+          // Показываем уведомление об успехе
+          setNotification(`Ответственный успешно назначен: ${selectedEmployee!.full_name}`)
+
           // Автоматически скрываем уведомление через 3 секунды
           setTimeout(() => {
             clearNotification()
