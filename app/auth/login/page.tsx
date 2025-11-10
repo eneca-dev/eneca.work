@@ -256,7 +256,8 @@ export default function LoginPage() {
           </AuthButton>
         </form>
 
-        <div className="relative">
+        {/* Регистрация отключена */}
+        {/* <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t dark:border-gray-700" />
           </div>
@@ -272,7 +273,7 @@ export default function LoginPage() {
               Регистрация
             </Link>
           </p>
-        </div>
+        </div> */}
       </div>
 
       {loading && <LoginAnimation isLoading={loading} onComplete={() => {}} />}

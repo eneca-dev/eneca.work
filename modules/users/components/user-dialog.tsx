@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Country, City } from "country-state-city"
 import { Modal, ModalButton } from '@/components/modals'
-import { Save, Trash2, Plus, Building2, Users } from 'lucide-react'
+import { Save, Plus, Building2, Users } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -45,6 +45,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     workLocation: "office",
     country: "",
     city: "",
+    salary: 0,
+    employmentRate: 1,
   })
 
   const [departments, setDepartments] = useState<Department[]>([])
@@ -85,43 +87,52 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const countrySearchRef = useRef<HTMLInputElement | null>(null)
   const citySearchRef = useRef<HTMLInputElement | null>(null)
 
-  // Состояния для удаления профиля
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState("")
-  const [isDeleting, setIsDeleting] = useState(false)
-
   const setUser = useUserStore((state) => state.setUser)
   const currentUserId = useUserStore((state) => state.id)
-  const currentUserEmail = useUserStore((state) => state.email)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures, canEditTeam, canAssignRoles, canAssignAdminRole, isAdmin } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canEditDepartment, canAssignRoles, canAssignAdminRole, isAdmin, isUser } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
   const { reloadPermissions } = useUserPermissionsSync()
 
   // Определяем, может ли пользователь редактировать роли
-  const canEditRoles = !isSelfEdit && (canChangeRoles || canAddAdminRole || canAssignRoles)
+  // Для редактирования чужих ролей нужно разрешение users.assign_roles (canAssignRoles)
+  // Для редактирования своих ролей нужно быть администратором
+  const canEditRoles = isSelfEdit
+    ? isAdmin  // Только администраторы могут менять свои роли
+    : canAssignRoles  // Для других пользователей нужно разрешение users.assign_roles
 
-  // Определяем, может ли пользователь редактировать отдел и команду
-  // Только администраторы могут менять отдел и команду (даже при редактировании своего профиля)
-  const canEditDepartmentAndTeam = isAdmin || canEditAllUsers
+  // Определяем, может ли пользователь редактировать отдел
+  // Только администраторы могут менять отдел (даже при редактировании своего профиля)
+  const canEditDepartmentField = isAdmin || canEditAllUsers
 
-  // Определяем, может ли пользователь редактировать остальные организационные поля (должность, категория)
-  // При самостоятельном редактировании все пользователи могут редактировать должность и категорию
-  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей
-  const canEditOrganizationalFields = isSelfEdit ? true : canEditAllUsers
+  // Определяем, может ли пользователь редактировать команду
+  // Администраторы и руководители отделов могут менять команду
+  const canEditTeamField = isAdmin || canEditAllUsers || canEditDepartment
+
+  // Определяем, может ли пользователь редактировать должность и категорию
+  // При самостоятельном редактировании только роли выше user могут редактировать должность и категорию
+  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей или отдела
+  const canEditPositionAndCategory = isSelfEdit ? !isUser : (canEditAllUsers || canEditDepartment)
+
+  // Определяем, может ли пользователь редактировать местоположение (расположение, страна, город)
+  // При самостоятельном редактировании все пользователи могут редактировать местоположение
+  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей или отдела
+  const canEditLocationFields = isSelfEdit ? true : (canEditAllUsers || canEditDepartment)
 
   // Определяем, может ли пользователь редактировать только команду (для users.edit.team)
-  const canEditOnlyTeam = !isSelfEdit && canEditTeam && !canEditAllUsers
+  // Если есть users.edit.department или users.edit.all, то это не "только команда"
+  const canEditOnlyTeam = !isSelfEdit && canEditTeam && !canEditAllUsers && !canEditDepartment
 
   // Определяем, может ли пользователь редактировать структуры (команды, отделы, должности, категории)
   // Это разрешение позволяет создавать новые структуры в процессе редактирования
   const canEditStructureData = canEditStructures
 
+  // Определяем, может ли пользователь редактировать ставку и загруженность
+  // Только администраторы могут редактировать эти поля (и для себя, и для других)
+  const canEditSalaryFields = isAdmin
+
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
-
-  // Текст для подтверждения удаления
-  const deleteConfirmationPhrase = `Я хочу удалить навсегда профиль ${currentUserEmail}`
 
   // Загрузка справочных данных
   useEffect(() => {
@@ -308,6 +319,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         workLocation: user.workLocation || "office",
         country: user.country || "",
         city: user.city || "",
+        salary: user.salary || 0,
+        employmentRate: user.employmentRate || 1,
       })
       
       console.log("=== UserDialog: Установлены данные формы ===")
@@ -512,7 +525,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         console.log("=== UserDialog: handleSubmit ===");
         console.log("isSelfEdit:", isSelfEdit);
         console.log("canEditAllUsers:", canEditAllUsers);
-        console.log("canEditOrganizationalFields:", canEditOrganizationalFields);
+        console.log("canEditPositionAndCategory:", canEditPositionAndCategory);
+        console.log("canEditLocationFields:", canEditLocationFields);
         console.log("isEditingOwnProfile:", isEditingOwnProfile);
         console.log("Отправляемые данные формы:", formData);
         
@@ -532,25 +546,17 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
           updateData.email = trimmedEmail
         }
         
-        // Добавляем отдел и команду только если пользователь может их редактировать
-        if (canEditDepartmentAndTeam) {
+        // Добавляем отдел если пользователь может его редактировать
+        if (canEditDepartmentField) {
           // Отдел - может быть пустым (null)
           updateData.department = formData.department && formData.department !== "" ? formData.department : null
-
-          // Команда - может быть пустой (null) независимо от отдела
-          updateData.team = formData.team && formData.team !== "" ? formData.team : null
         }
 
-        // Добавляем должность и категорию если пользователь может редактировать организационные поля
-        if (canEditOrganizationalFields) {
-          if (formData.position) updateData.position = formData.position
-          if (formData.category) updateData.category = formData.category
-        }
-
-        // Обработка для пользователей с users.edit.team (они могут редактировать только команду)
-        if (canEditOnlyTeam && !canEditDepartmentAndTeam) {
-          // Для пользователей с users.edit.team сохраняем только команду с валидацией департамента
-          if (formData.team && formData.team !== "") {
+        // Добавляем команду если пользователь может её редактировать
+        if (canEditTeamField) {
+          // Если пользователь не может редактировать отдел (department_head или team_lead),
+          // нужна валидация, что команда принадлежит отделу пользователя
+          if (!canEditDepartmentField && formData.team && formData.team !== "") {
             // Находим команду в списке доступных команд
             const selectedTeam = teams.find(team => team.name === formData.team)
 
@@ -565,7 +571,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               return
             }
 
-            // Находим департамент пользователя
+            // Находим департамент редактируемого пользователя
             const userDepartment = departments.find(dept => dept.name === user.department)
 
             if (!userDepartment) {
@@ -579,7 +585,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               return
             }
 
-            // Проверяем, что команда принадлежит тому же департаменту, что и пользователь
+            // Проверяем, что команда принадлежит тому же департаменту, что и редактируемый пользователь
             if (selectedTeam.departmentId !== userDepartment.id) {
               console.error("UserDialog: Попытка кросс-департаментного назначения команды")
               toast({
@@ -590,15 +596,24 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               setIsLoading(false)
               return
             }
-
-            // Если все проверки пройдены, устанавливаем команду
-            updateData.team = formData.team
-          } else {
-            // Пустая команда - это допустимо
-            updateData.team = null
           }
+
+          // Команда - может быть пустой (null) независимо от отдела
+          updateData.team = formData.team && formData.team !== "" ? formData.team : null
         }
-        
+
+        // Добавляем должность и категорию если пользователь может редактировать эти поля
+        if (canEditPositionAndCategory) {
+          if (formData.position) updateData.position = formData.position
+          if (formData.category) updateData.category = formData.category
+        }
+
+        // Добавляем ставку и загруженность только если пользователь администратор
+        if (canEditSalaryFields) {
+          if (formData.salary !== undefined) updateData.salary = formData.salary
+          if (formData.employmentRate !== undefined) updateData.employmentRate = formData.employmentRate
+        }
+
         // Роли управляются через модальное окно
         
         console.log("Итоговые данные для updateUser:", updateData);
@@ -677,56 +692,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     }
   }
 
-  // Функция для обработки удаления профиля
-  const handleDeleteProfile = async () => {
-    if (!user) return
-    
-    setIsDeleting(true)
-    try {
-      // Используем API endpoint для безопасного удаления
-      const response = await Sentry.startSpan({ name: 'Users/UserDialog deleteProfile', op: 'http', attributes: { user_id: user.id } }, async () => fetch(`/api/admin/delete-user?userId=${user.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }))
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Ошибка удаления пользователя')
-      }
-      
-      toast({
-        title: "Успешно",
-        description: "Профиль успешно удален",
-      })
-      
-      // Закрываем все модальные окна
-      setShowDeleteConfirmation(false)
-      onOpenChange(false)
-      
-      // Если пользователь удалил свой собственный профиль, выходим из системы
-      if (isEditingOwnProfile) {
-        const supabase = createClient()
-        await Sentry.startSpan({ name: 'Users/UserDialog signOut', op: 'auth' }, async () => supabase.auth.signOut())
-        window.location.href = '/auth/login'
-      } else if (onUserUpdated) {
-        onUserUpdated()
-      }
-      
-    } catch (error) {
-      console.error("Ошибка при удалении профиля:", error)
-      toast({
-        title: "Ошибка",
-        description: `Не удалось удалить профиль: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
   // Функция для сброса поиска
   const resetSearch = () => {
     setCountrySearch("")
@@ -734,19 +699,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     setCountrySelectOpen(false)
     setCitySelectOpen(false)
   }
-
-  // Функция для обработки ввода в поле подтверждения (блокируем вставку)
-  const handleDeleteConfirmationInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDeleteConfirmationText(e.target.value)
-  }
-
-  // Блокируем вставку в поле подтверждения
-  const handleDeleteConfirmationPaste = (e: React.ClipboardEvent) => {
-    e.preventDefault()
-  }
-
-  // Проверяем, совпадает ли введенный текст с требуемой фразой
-  const isDeleteConfirmationValid = deleteConfirmationText === deleteConfirmationPhrase
 
   return (
     <Modal isOpen={open} onClose={() => {
@@ -774,7 +726,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onChange={(e) => handleChange("firstName", e.target.value)}
                   placeholder="Имя"
                   required
-                  disabled={canEditOnlyTeam}
+                  disabled={!isSelfEdit && !canEditAllUsers && !canEditDepartment && !canEditTeam}
                   className="h-9"
                 />
                 <Input
@@ -783,7 +735,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onChange={(e) => handleChange("lastName", e.target.value)}
                   placeholder="Фамилия"
                   required
-                  disabled={canEditOnlyTeam}
+                  disabled={!isSelfEdit && !canEditAllUsers && !canEditDepartment && !canEditTeam}
                   className="h-9"
                 />
               </div>
@@ -839,9 +791,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                       setTempSelectedRoles(currentRoleIds)
                       setIsRolesModalOpen(true)
                     }}
-                    disabled={!canAssignRoles}
+                    disabled={!canEditRoles}
                     className="h-8 w-8 p-0 flex-shrink-0 self-start sm:self-center"
-                    title={!canAssignRoles ? "У вас нет прав на назначение ролей" : "Добавить роли"}
+                    title={!canEditRoles ? (isSelfEdit ? "Только администраторы могут менять свои роли" : "У вас нет прав на назначение ролей") : "Управление ролями"}
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -859,7 +811,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 <Select
                   value={formData.department}
                   onValueChange={(value) => handleChange("department", value)}
-                  disabled={!canEditDepartmentAndTeam || canEditOnlyTeam}
+                  disabled={!canEditDepartmentField}
                 >
                   <SelectTrigger className={!formData.department ? "border-orange-200 bg-orange-50" : ""}>
                     <SelectValue placeholder="Выберите отдел" />
@@ -883,11 +835,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     )}
                   </SelectContent>
                 </Select>
-                
+
                 <Select
                   value={formData.team}
                   onValueChange={(value) => handleChange("team", value)}
-                  disabled={(!canEditDepartmentAndTeam && !canEditOnlyTeam) || !formData.department}
+                  disabled={!canEditTeamField || !formData.department}
                 >
                   <SelectTrigger className={!formData.team ? "border-blue-200 bg-blue-50" : ""}>
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
@@ -934,7 +886,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 <Select
                   value={formData.position}
                   onValueChange={(value) => handleChange("position", value)}
-                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
+                  disabled={!canEditPositionAndCategory}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите должность" />
@@ -949,11 +901,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     )}
                   </SelectContent>
                 </Select>
-                
+
                 <Select
                   value={formData.category}
                   onValueChange={(value) => handleChange("category", value)}
-                  disabled={!canEditOrganizationalFields || canEditOnlyTeam}
+                  disabled={!canEditPositionAndCategory}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите категорию" />
@@ -970,9 +922,49 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 </Select>
               </div>
             </div>
-            
 
-            
+            {/* Ставка и Загруженность в одну строку */}
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Ставка и Загруженность</Label>
+              <div className="md:col-span-3 col-span-full grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Input
+                    id="salary"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.salary || 0}
+                    onChange={(e) => handleChange("salary", parseFloat(e.target.value) || 0)}
+                    placeholder="Введите ставку"
+                    disabled={!canEditSalaryFields}
+                    className="h-9"
+                    title={!canEditSalaryFields ? "Только администраторы могут редактировать ставку" : ""}
+                  />
+                  <p className="text-xs text-gray-500">Ставка {!canEditSalaryFields && <span className="text-orange-600">(только для админов)</span>}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Select
+                    value={formData.employmentRate?.toString() || "1"}
+                    onValueChange={(value) => handleChange("employmentRate", parseFloat(value))}
+                    disabled={!canEditSalaryFields}
+                  >
+                    <SelectTrigger title={!canEditSalaryFields ? "Только администраторы могут редактировать загруженность" : ""}>
+                      <SelectValue placeholder="Выберите загруженность" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0.25">25% (0.25)</SelectItem>
+                      <SelectItem value="0.5">50% (0.5)</SelectItem>
+                      <SelectItem value="0.75">75% (0.75)</SelectItem>
+                      <SelectItem value="1">100% (1.0)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">Процент загруженности {!canEditSalaryFields && <span className="text-orange-600">(только для админов)</span>}</p>
+                </div>
+              </div>
+            </div>
+
+
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
               <Label htmlFor="workLocation" className="text-right md:col-span-1 col-span-full pt-2">
                 Расположение
@@ -980,7 +972,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               <Select
                 value={formData.workLocation}
                 onValueChange={(value) => handleChange("workLocation", value as "office" | "remote" | "hybrid")}
-                disabled={canEditOnlyTeam}
+                disabled={!canEditLocationFields}
               >
                 <SelectTrigger id="workLocation" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите расположение" />
@@ -1009,7 +1001,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                 }}
                 open={countrySelectOpen}
                 onOpenChange={setCountrySelectOpen}
-                disabled={canEditOnlyTeam}
+                disabled={!canEditLocationFields}
               >
                 <SelectTrigger id="country" className="md:col-span-3 col-span-full">
                   <SelectValue placeholder="Выберите страну" />
@@ -1060,7 +1052,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   setCitySearch("")
                   setCitySelectOpen(false)
                 }}
-                disabled={!selectedCountryCode || canEditOnlyTeam}
+                disabled={!selectedCountryCode || !canEditLocationFields}
                 open={citySelectOpen}
                 onOpenChange={setCitySelectOpen}
               >
@@ -1109,22 +1101,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         
         <Modal.Footer className="flex-shrink-0">
           <div className="flex flex-col sm:flex-row justify-between w-full gap-3">
-            {/* Кнопка удаления профиля слева (только для самостоятельного редактирования) */}
-            {isSelfEdit ? (
-              <ModalButton 
-                type="button" 
-                variant="danger"
-                onClick={() => setShowDeleteConfirmation(true)}
-                disabled={isLoading}
-                icon={<Trash2 />}
-                className="w-full sm:w-auto"
-              >
-                Удалить профиль
-              </ModalButton>
-            ) : (
-              <div></div>
-            )}
-            
+            <div></div>
+
             {/* Кнопки управления справа */}
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <ModalButton 
@@ -1187,14 +1165,23 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   const isAdminRole = role.name.toLowerCase().includes('admin')
                   // Отключаем чекбокс admin роли, если нет разрешения
                   const isAdminRoleDisabled = isAdminRole && !canAssignAdminRole
+                  // Определяем, является ли роль department_head
+                  const isDepartmentHeadRole = role.name === 'department_head'
+                  // Отключаем чекбокс department_head роли, если нет разрешения (только админы могут назначать)
+                  const isDepartmentHeadRoleDisabled = isDepartmentHeadRole && !canAssignAdminRole
+
+                  // Определяем, является ли роль project_manager
+                  const isProjectManagerRole = role.name === 'project_manager'
+                  // Отключаем чекбокс project_manager роли, если нет разрешения (только админы могут назначать)
+                  const isProjectManagerRoleDisabled = isProjectManagerRole && !canAssignAdminRole
 
                   return (
-                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${(isLastRole || isAdminRoleDisabled) ? 'opacity-50' : ''}`}>
+                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${(isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'opacity-50' : ''}`}>
                       <input
                         type="checkbox"
                         id={`modal-role-${role.id}`}
                         checked={isSelected}
-                        disabled={isLastRole || isAdminRoleDisabled}
+                        disabled={isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setTempSelectedRoles(prev => [...prev, role.id])
@@ -1204,7 +1191,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         }}
                         className="mt-1 rounded flex-shrink-0"
                       />
-                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${(isLastRole || isAdminRoleDisabled) ? 'cursor-not-allowed' : ''}`}>
+                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${(isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'cursor-not-allowed' : ''}`}>
                         <span className="font-medium block truncate">{role.name}</span>
                         {role.description && (
                           <span className="text-xs text-gray-500 block mt-1 overflow-hidden text-ellipsis line-clamp-2">{role.description}</span>
@@ -1214,6 +1201,12 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         )}
                         {isAdminRoleDisabled && (
                           <span className="text-xs text-red-600 block mt-1">Нет прав на назначение admin роли</span>
+                        )}
+                        {isDepartmentHeadRoleDisabled && (
+                          <span className="text-xs text-red-600 block mt-1">Нет прав на назначение роли начальника отдела</span>
+                        )}
+                        {isProjectManagerRoleDisabled && (
+                          <span className="text-xs text-red-600 block mt-1">Нет прав на назначение роли руководителя проекта</span>
                         )}
                       </label>
                     </div>
@@ -1250,78 +1243,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               className="w-full sm:w-auto"
             >
               {isSavingRoles ? 'Сохранение...' : 'Сохранить'}
-            </ModalButton>
-          </div>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Модальное окно подтверждения удаления */}
-      <Modal isOpen={showDeleteConfirmation} onClose={() => setShowDeleteConfirmation(false)} size="lg">
-        <Modal.Header 
-          title="Подтверждение удаления профиля"
-          subtitle="Это действие нельзя отменить. Ваш профиль и все связанные данные будут удалены навсегда."
-        />
-        <Modal.Body>
-          <div className="space-y-4">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800 font-medium mb-2">
-                Внимание! Это действие необратимо.
-              </p>
-              <p className="text-sm text-red-700">
-                Для подтверждения удаления введите в одну строку следующую фразу:
-              </p>
-              <p className="text-sm font-mono bg-red-100 p-2 rounded mt-2 text-red-900 break-all">
-                {deleteConfirmationPhrase}
-              </p>
-            </div>
-            
-            <div>
-              <Label htmlFor="deleteConfirmation" className="text-sm font-medium">
-                Введите фразу подтверждения:
-              </Label>
-              <Input
-                id="deleteConfirmation"
-                type="text"
-                value={deleteConfirmationText}
-                onChange={handleDeleteConfirmationInput}
-                onPaste={handleDeleteConfirmationPaste}
-                placeholder="Введите фразу для подтверждения"
-                className="mt-1 w-full"
-                autoComplete="off"
-              />
-              {deleteConfirmationText && !isDeleteConfirmationValid && (
-                <p className="text-xs text-red-600 mt-1">
-                  Фраза не совпадает. Проверьте правильность ввода.
-                </p>
-              )}
-            </div>
-          </div>
-        </Modal.Body>
-        
-        <Modal.Footer className="flex-shrink-0">
-          <div className="flex flex-col sm:flex-row gap-2 w-full">
-            <ModalButton 
-              type="button" 
-              variant="cancel"
-              onClick={() => {
-                setShowDeleteConfirmation(false)
-                setDeleteConfirmationText("")
-              }}
-              disabled={isDeleting}
-              className="w-full sm:w-auto"
-            >
-              Отмена
-            </ModalButton>
-            <ModalButton 
-              type="button" 
-              variant="danger"
-              onClick={handleDeleteProfile}
-              disabled={!isDeleteConfirmationValid || isDeleting}
-              loading={isDeleting}
-              icon={<Trash2 />}
-              className="w-full sm:w-auto"
-            >
-              {isDeleting ? "Удаление..." : "Удалить навсегда"}
             </ModalButton>
           </div>
         </Modal.Footer>

@@ -63,8 +63,6 @@ export const getRoleDisplayName = (roleName: string): string => {
     project_manager: 'Руководитель проекта',
     department_head: 'Руководитель отдела',
     team_lead: 'Руководитель команды',
-    specialist: 'Специалист',
-    junior_specialist: 'Младший специалист',
     user: 'Пользователь'
   }
   
