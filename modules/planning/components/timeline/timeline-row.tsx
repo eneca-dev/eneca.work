@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
@@ -15,7 +15,8 @@ import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
- 
+import { EditLoadingModal } from "./edit-loading-modal"
+
 
 interface TimelineRowProps {
   section: Section
@@ -297,7 +298,20 @@ export function TimelineRow({
               }}
             >
               {/* Компактное отображение в одну строку с аватаром слева */}
-              <div className="flex items-center w-full" style={{ paddingLeft: '60px' }}>
+              <div className="flex items-center w-full" style={{ paddingLeft: '40px' }}>
+                {/* Иконка раскрытия */}
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-2">
+                  {hasChildren ? (
+                    isExpanded ? (
+                      <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                    ) : (
+                      <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                    )
+                  ) : (
+                    <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
+                  )}
+                </div>
+
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
                   {section.responsibleName ? (
@@ -388,41 +402,26 @@ export function TimelineRow({
 
                 {/* Индикатор перерасходов удалён */}
 
-                {/* Иконка раскрытия и название раздела */}
-                <div className="flex items-center mr-3">
-                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-1">
-                    {hasChildren ? (
-                      isExpanded ? (
-                        <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
-                      ) : (
-                        <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
-                      )
-                    ) : (
-                      <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
-                    )}
-                  </div>
-                  
-                  <span
-                    className={cn(
-                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline",
-                      theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onOpenSectionPanel?.(section.id)
-                    }}
-                  >
-                    {section.name}
-                  </span>
+                {/* Название раздела (без иконки раскрытия, она теперь перед аватаром) */}
+                <span
+                  className={cn(
+                    "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline mr-3",
+                    theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenSectionPanel?.(section.id)
+                  }}
+                >
+                  {section.name}
+                </span>
 
                 {/* Кнопка сворачивания/разворачивания загрузок всех этапов раздела */}
                 {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
                   <button
                     className={cn(
-                      "ml-2 w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
-                      theme === "dark"
-                        ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20"
-                        : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20",
+                      "ml-2 inline-flex items-center justify-center transition-colors hover:opacity-70",
+                      theme === "dark" ? "text-slate-300" : "text-slate-600",
                     )}
                     title={areAllSectionStagesCollapsed() ? "Развернуть загрузки этапов" : "Свернуть загрузки этапов"}
                     onClick={(e) => {
@@ -431,13 +430,12 @@ export function TimelineRow({
                     }}
                   >
                     {areAllSectionStagesCollapsed() ? (
-                      <ChevronRight size={12} />
+                      <ChevronsDown className="h-4 w-4" />
                     ) : (
-                      <ChevronDown size={12} />
+                      <ChevronsUp className="h-4 w-4" />
                     )}
                   </button>
                 )}
-                </div>
 
                 {/* Дополнительная информация в две строки */}
                 <div className="flex flex-col gap-1 ml-auto text-xs justify-center">
@@ -749,6 +747,7 @@ function LoadingRow({
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
@@ -860,7 +859,7 @@ function LoadingRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '100px' }}>
+            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '40px' }}>
               {/* Левая часть с аватаром, именем и датами */}
               <div className="flex items-center">
                 <div
@@ -873,7 +872,7 @@ function LoadingRow({
                       name={loading.responsibleName}
                       avatarUrl={loading.responsibleAvatarUrl}
                       theme={theme === "dark" ? "dark" : "light"}
-                      size="md"
+                      size="sm"
                     />
                   </Tooltip>
                   <div className="ml-2">
@@ -927,6 +926,21 @@ function LoadingRow({
 
               {/* Правая часть со ставкой */}
               <div className="flex items-center gap-1">
+                <button
+                  className={cn(
+                    "inline-flex items-center justify-center h-6 w-6 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
+                    theme === "dark"
+                      ? "hover:bg-emerald-900/30 hover:text-emerald-300"
+                      : "hover:bg-emerald-100 hover:text-emerald-600"
+                  )}
+                  title="Редактировать загрузку"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingLoading(loading)
+                  }}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
                 <ConfirmDialog
                   title="Удалить загрузку?"
                   description={(
@@ -1034,6 +1048,13 @@ function LoadingRow({
           })}
         </div>
       </div>
+      {editingLoading && (
+        <EditLoadingModal
+          loading={editingLoading}
+          setEditingLoading={setEditingLoading}
+          theme={theme}
+        />
+      )}
     </div>
   )
 }
@@ -1334,20 +1355,20 @@ function StageRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '80px' }}>
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
               <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                 <button
                   className={cn(
-                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md mr-1",
-                    theme === "dark" 
-                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
-                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
+                    "inline-flex items-center justify-center transition-colors mr-1",
+                    theme === "dark"
+                      ? "text-slate-400 hover:text-slate-200"
+                      : "text-slate-500 hover:text-slate-700"
                   )}
                   title={isCollapsed ? "Развернуть загрузки" : "Свернуть загрузки"}
                   onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
                 >
-                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                  {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                 </button>
                 <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
               </div>
@@ -1373,7 +1394,7 @@ function StageRow({
                     )}
                     title={`План: ${totalPlannedHours} ч на ${activeDaysCount} дн`}
                   >
-                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} час/день` : `${hoursPerDay.toFixed(1)} час/день`}
+                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} ч/дн` : `${hoursPerDay.toFixed(1)} ч/дн`}
                   </span>
                 )}
                 <button

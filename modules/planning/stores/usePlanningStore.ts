@@ -13,6 +13,9 @@ import {
 } from "@/lib/supabase-client"
 import { supabase } from "@/lib/supabase-client"
 
+// Переменная для хранения текущего Promise запроса саммари проектов
+let fetchProjectSummariesPromise: Promise<void> | null = null
+
 // Обновляем интерфейс PlanningState, добавляя функции архивирования
 interface PlanningState {
   // Данные
@@ -341,38 +344,51 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Загрузка саммари по проектам
         fetchProjectSummaries: async () => {
-          set({ isLoadingProjectSummaries: true })
-          try {
-            const { fetchProjectSummaries } = await import("@/lib/supabase-client")
-            const { useFilterStore } = await import('../filters/store')
-            const {
-              selectedProjectId,
-              selectedManagerId,
-              selectedDepartmentId,
-              selectedTeamId,
-              selectedEmployeeId,
-            } = useFilterStore.getState()
-            const summaries = await fetchProjectSummaries({
-              projectId: selectedProjectId || undefined,
-              managerId: selectedManagerId || undefined,
-              departmentId: selectedDepartmentId || undefined,
-              teamId: selectedTeamId || undefined,
-              employeeId: selectedEmployeeId || undefined,
-            })
-            set({ projectSummaries: summaries, isLoadingProjectSummaries: false })
-          } catch (error) {
-            Sentry.captureException(error, {
-              tags: { 
-                module: 'planning', 
-                action: 'fetch_project_summaries',
-                store: 'usePlanningStore'
-              },
-              extra: {
-                timestamp: new Date().toISOString()
-              }
-            })
-            set({ isLoadingProjectSummaries: false })
+          // Если запрос уже выполняется, возвращаем существующий Promise
+          if (fetchProjectSummariesPromise) {
+            return fetchProjectSummariesPromise
           }
+
+          // Создаём новый Promise и сохраняем его
+          fetchProjectSummariesPromise = (async () => {
+            set({ isLoadingProjectSummaries: true })
+            try {
+              const { fetchProjectSummaries } = await import("@/lib/supabase-client")
+              const { useFilterStore } = await import('../filters/store')
+              const {
+                selectedProjectId,
+                selectedManagerId,
+                selectedDepartmentId,
+                selectedTeamId,
+                selectedEmployeeId,
+              } = useFilterStore.getState()
+              const summaries = await fetchProjectSummaries({
+                projectId: selectedProjectId || undefined,
+                managerId: selectedManagerId || undefined,
+                departmentId: selectedDepartmentId || undefined,
+                teamId: selectedTeamId || undefined,
+                employeeId: selectedEmployeeId || undefined,
+              })
+              set({ projectSummaries: summaries, isLoadingProjectSummaries: false })
+            } catch (error) {
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'planning',
+                  action: 'fetch_project_summaries',
+                  store: 'usePlanningStore'
+                },
+                extra: {
+                  timestamp: new Date().toISOString()
+                }
+              })
+              set({ isLoadingProjectSummaries: false })
+            } finally {
+              // Очищаем Promise после завершения
+              fetchProjectSummariesPromise = null
+            }
+          })()
+
+          return fetchProjectSummariesPromise
         },
 
         // Лениво подгружаем секции/загрузки для конкретного проекта
@@ -1769,10 +1785,10 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Переключение состояния раскрытия раздела
         toggleSectionExpanded: async (sectionId: string) => {
-          const { sections, expandedSections, loadingsMap } = get()
+          const { sections, allSections, expandedSections, loadingsMap } = get()
 
-          // Находим раздел
-          const section = sections.find((s) => s.id === sectionId)
+          // Находим раздел в sections или allSections (для группировки по проектам)
+          const section = sections.find((s) => s.id === sectionId) || allSections.find((s) => s.id === sectionId)
 
           // Раздел должен иметь потомков: либо загрузки, либо этапы
           const hasStages = section && Array.isArray(section.decompositionStages) && section.decompositionStages.length > 0
