@@ -859,7 +859,7 @@ function LoadingRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '40px' }}>
+            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '100px' }}>
               {/* Левая часть с аватаром, именем и датами */}
               <div className="flex items-center">
                 <div
@@ -1355,7 +1355,7 @@ function StageRow({
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-between w-full" style={{ paddingLeft: '70px' }}>
               <div className="flex items-center">
               <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                 <button
