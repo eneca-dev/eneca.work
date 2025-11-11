@@ -15,6 +15,7 @@ export interface BarPeriod {
   rate: number
   projectId?: string
   projectName?: string
+  sectionId?: string | null
   sectionName?: string
   stageId?: string
   stageName?: string
@@ -35,10 +36,15 @@ export interface BarRender {
 }
 
 /**
- * Генерирует стабильный цвет для этапа на основе его ID
+ * Генерирует стабильный цвет на основе комбинации проекта и раздела
  */
-export function getStageColor(stageId: string | undefined, isDark: boolean): string {
-  // Палитра цветов для этапов (яркие, насыщенные цвета)
+export function getSectionColor(
+  projectId: string | undefined,
+  sectionId: string | null | undefined,
+  stageId: string | undefined,
+  isDark: boolean
+): string {
+  // Палитра цветов для загрузок (яркие, насыщенные цвета)
   const darkColors = [
     "rgb(59, 130, 246)",  // blue-500
     "rgb(34, 197, 94)",   // green-500
@@ -67,20 +73,47 @@ export function getStageColor(stageId: string | undefined, isDark: boolean): str
 
   const colors = isDark ? darkColors : lightColors
 
-  if (!stageId) {
-    // Для загрузок без этапа возвращаем первый цвет (синий)
+  // Определяем строку для хеширования по приоритету:
+  // 1. projectId + sectionId (наивысший приоритет)
+  // 2. sectionId
+  // 3. projectId
+  // 4. stageId (fallback для обратной совместимости)
+  let hashString = ""
+
+  if (projectId && sectionId) {
+    // Комбинация проект + раздел (основной случай)
+    hashString = `${projectId}-${sectionId}`
+  } else if (sectionId) {
+    // Только раздел
+    hashString = sectionId
+  } else if (projectId) {
+    // Только проект
+    hashString = projectId
+  } else if (stageId) {
+    // Fallback на этап
+    hashString = stageId
+  } else {
+    // Если ничего нет, возвращаем первый цвет (синий)
     return colors[0]
   }
 
-  // Простой хеш от stageId
+  // Простой хеш от строки
   let hash = 0
-  for (let i = 0; i < stageId.length; i++) {
-    hash = ((hash << 5) - hash) + stageId.charCodeAt(i)
+  for (let i = 0; i < hashString.length; i++) {
+    hash = ((hash << 5) - hash) + hashString.charCodeAt(i)
     hash = hash & hash // Convert to 32bit integer
   }
 
   const index = Math.abs(hash) % colors.length
   return colors[index]
+}
+
+/**
+ * @deprecated Используйте getSectionColor вместо этой функции
+ * Оставлено для обратной совместимости
+ */
+export function getStageColor(stageId: string | undefined, isDark: boolean): string {
+  return getSectionColor(undefined, undefined, stageId, isDark)
 }
 
 /**
@@ -233,6 +266,7 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     rate: loading.rate || 1,
     projectId: loading.projectId,
     projectName: loading.projectName,
+    sectionId: loading.sectionId,
     sectionName: loading.sectionName,
     stageId: loading.stageId,
     stageName: loading.stageName,
@@ -282,10 +316,10 @@ export function calculateBarRenders(
     const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
     const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
 
-    // Определяем цвет
+    // Определяем цвет на основе комбинации проект + раздел
     const color = period.type === "vacation"
       ? getVacationColor(isDark)
-      : getStageColor(period.stageId, isDark)
+      : getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
 
     renders.push({
       period,
