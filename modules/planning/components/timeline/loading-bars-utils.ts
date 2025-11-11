@@ -251,6 +251,9 @@ export function calculateBarRenders(
 ): BarRender[] {
   if (periods.length === 0) return []
 
+  // Горизонтальный отступ между соседними полосками (в пикселях)
+  const HORIZONTAL_GAP = 3
+
   // Вычисляем слои для стакинга
   const layers = calculateLayers(periods)
 
@@ -274,9 +277,10 @@ export function calculateBarRenders(
     const actualStartIdx = Math.max(0, startIdx === -1 ? 0 : startIdx)
     const actualEndIdx = Math.min(timeUnits.length - 1, endIdx === -1 ? timeUnits.length - 1 : endIdx)
 
-    // Вычисляем позицию и ширину
-    const left = actualStartIdx * cellWidth
-    const width = (actualEndIdx - actualStartIdx + 1) * cellWidth
+    // Вычисляем позицию и ширину с учетом горизонтальных отступов
+    // Добавляем половину зазора слева, вычитаем половину справа
+    const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
+    const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
 
     // Определяем цвет
     const color = period.type === "vacation"
