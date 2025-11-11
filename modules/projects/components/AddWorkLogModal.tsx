@@ -187,6 +187,29 @@ export function AddWorkLogModal({ isOpen, onClose, sectionId, defaultItemId = nu
     setSelectedItemId(defaultItemId || "")
   }, [defaultItemId])
 
+  // Автоматическая подгрузка ставки при выборе пользователя
+  useEffect(() => {
+    if (!selectedUserId || !canEditExecutor) return
+
+    const loadUserRate = async () => {
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('salary')
+          .eq('user_id', selectedUserId)
+          .single()
+
+        if (profileData && profileData.salary != null) {
+          setRate(String(profileData.salary))
+        }
+      } catch (error) {
+        console.error("Ошибка при загрузке ставки пользователя:", error)
+      }
+    }
+
+    loadUserRate()
+  }, [selectedUserId, canEditExecutor])
+
   const categoryById = useMemo(() => {
     const map = new Map<string, string>()
     categories.forEach(c => map.set(c.work_category_id, c.work_category_name))

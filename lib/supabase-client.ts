@@ -494,8 +494,6 @@ export async function fetchProjectSummaries(filters?: {
   teamId?: string | null
   employeeId?: string | null
 }): Promise<import("@/modules/planning/types").ProjectSummary[]> {
-  const { supabase } = await import("@/lib/supabase-client")
-
   try {
     let query = supabase.from("view_project_summary").select("*")
 
@@ -727,7 +725,7 @@ export async function updateLoading(
       .from("view_sections_with_loadings")
       .select(`
         loading_id,
-        loading_section,
+        section_id,
         section_name,
         project_id,
         project_name,
@@ -746,7 +744,7 @@ export async function updateLoading(
 
     const updatedLoading = {
       id: loadingData.loading_id,
-      sectionId: loadingData.loading_section,
+      sectionId: loadingData.section_id,
       sectionName: loadingData.section_name,
       projectId: loadingData.project_id,
       projectName: loadingData.project_name,
