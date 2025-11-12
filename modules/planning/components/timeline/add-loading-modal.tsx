@@ -1,13 +1,17 @@
-"use client" 
+"use client"
 
 import type React from "react"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import type { Employee } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
+import { useProjectsStore } from "@/modules/projects/store"
 import { supabase } from "@/lib/supabase-client"
+import { SectionPanel } from "@/components/modals/SectionPanel"
+import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
 
 interface Project {
   project_id: string
@@ -27,6 +31,10 @@ interface AddLoadingModalProps {
 }
 
 export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoadingModalProps) {
+  // Хуки для навигации
+  const router = useRouter()
+  const selectSection = useProjectsStore((state) => state.selectSection)
+
   // Состояние для отслеживания процесса сохранения
   const [isSaving, setIsSaving] = useState(false)
   // Состояние для отслеживания ошибок валидации
@@ -68,10 +76,18 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   const [decompositionStages, setDecompositionStages] = useState<{ id: string; name: string }[]>([])
   const [selectedDecompositionStageId, setSelectedDecompositionStageId] = useState<string>("")
   const [isLoadingDecompositionStages, setIsLoadingDecompositionStages] = useState(false)
+  const [isCreatingStage, setIsCreatingStage] = useState(false)
 
   // Состояния для поиска проектов - упрощенные
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+
+  // Состояние для SectionPanel
+  const [showSectionPanel, setShowSectionPanel] = useState(false)
+  const [selectedSectionForPanel, setSelectedSectionForPanel] = useState<string | null>(null)
+
+  // Загружаем статусы разделов для SectionPanel
+  const { statuses } = useSectionStatuses()
 
   // Очистка таймеров при размонтировании компонента
   useEffect(() => {
@@ -322,6 +338,95 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     }
   }
 
+  // Создание базового этапа декомпозиции
+  const createBasicStage = async () => {
+    if (!formData.sectionId) return
+
+    await Sentry.startSpan(
+      {
+        op: "db.mutation",
+        name: "Создание базового этапа декомпозиции",
+      },
+      async (span) => {
+        setIsCreatingStage(true)
+        try {
+          const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
+          if (!selectedSection) {
+            throw new Error("Раздел не найден")
+          }
+
+          span.setAttribute("section.id", formData.sectionId)
+          span.setAttribute("section.name", selectedSection.section_name)
+          span.setAttribute("employee.id", employee.id)
+
+          // Вычисляем следующий порядок
+          const { data: existingStages } = await supabase
+            .from("decomposition_stages")
+            .select("decomposition_stage_order")
+            .eq("decomposition_stage_section_id", formData.sectionId)
+            .order("decomposition_stage_order", { ascending: false })
+            .limit(1)
+
+          const nextOrder = existingStages && existingStages.length > 0 ? (existingStages[0].decomposition_stage_order || 0) + 1 : 1
+
+          const stageName = `Этап ${selectedSection.section_name}`
+
+          const { data, error } = await supabase
+            .from("decomposition_stages")
+            .insert({
+              decomposition_stage_section_id: formData.sectionId,
+              decomposition_stage_name: stageName,
+              decomposition_stage_order: nextOrder,
+            })
+            .select("decomposition_stage_id, decomposition_stage_name")
+            .single()
+
+          if (error) {
+            span.setAttribute("db.success", false)
+            span.setAttribute("db.error", error.message)
+            throw error
+          }
+
+          span.setAttribute("db.success", true)
+          span.setAttribute("stage.id", data.decomposition_stage_id)
+          span.setAttribute("stage.name", data.decomposition_stage_name)
+
+          // Обновляем список этапов
+          await fetchDecompositionStages(formData.sectionId)
+
+          setNotification(`Этап "${stageName}" успешно создан`)
+          successTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 3000)
+        } catch (error) {
+          span.setAttribute("db.success", false)
+          span.setAttribute("db.error", error instanceof Error ? error.message : "Неизвестная ошибка")
+
+          Sentry.captureException(error, {
+            tags: {
+              module: 'planning',
+              action: 'create_basic_stage',
+              modal: 'add_loading_modal'
+            },
+            extra: {
+              section_id: formData.sectionId,
+              employee_id: employee.id,
+              employee_name: employee.fullName,
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          setNotification(`Ошибка при создании этапа: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          setIsCreatingStage(false)
+        }
+      }
+    )
+  }
+
   // Загрузка проектов при открытии модального окна
   useEffect(() => {
     fetchProjects()
@@ -554,7 +659,8 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
             rate: formData.rate,
             projectName: selectedProject?.project_name,
             sectionName: selectedSection?.section_name,
-            stageName: selectedDecompositionStage.name,
+            decompositionStageId: selectedDecompositionStageId,
+            decompositionStageName: selectedDecompositionStage.name,
             responsibleName: employee.fullName || employee.name,
             responsibleAvatarUrl: employee.avatarUrl,
             responsibleTeamName: employee.teamName,
@@ -638,6 +744,15 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     setProjectSearchTerm(project.project_name)
     setShowProjectDropdown(false)
     fetchSections(project.project_id)
+  }
+
+  // Переход в декомпозицию раздела
+  const navigateToDecomposition = () => {
+    if (!formData.sectionId) return
+
+    // Открываем SectionPanel с вкладкой декомпозиции
+    setSelectedSectionForPanel(formData.sectionId)
+    setShowSectionPanel(true)
   }
 
   return (
@@ -820,11 +935,36 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           </div>
 
           <div>
-            <label
-              className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}
-            >
-              Раздел
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label
+                className={cn("block text-sm font-medium", theme === "dark" ? "text-slate-300" : "text-slate-700")}
+              >
+                Раздел
+              </label>
+              <button
+                type="button"
+                onClick={navigateToDecomposition}
+                disabled={isSaving || !formData.sectionId}
+                className={cn(
+                  "text-xs px-2 py-1 rounded border flex items-center gap-1",
+                  theme === "dark"
+                    ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                  isSaving || !formData.sectionId ? "opacity-50 cursor-not-allowed" : "",
+                )}
+                title="Перейти в декомпозицию раздела"
+              >
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Перейти в декомпозицию
+              </button>
+            </div>
             <select
               name="sectionId"
               value={formData.sectionId}
@@ -853,11 +993,56 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
 
           {/* Этап декомпозиции */}
           <div>
-            <label
-              className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}
-            >
-              Этап декомпозиции
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label
+                className={cn("block text-sm font-medium", theme === "dark" ? "text-slate-300" : "text-slate-700")}
+              >
+                Этап декомпозиции
+              </label>
+              <button
+                type="button"
+                onClick={createBasicStage}
+                disabled={isSaving || isCreatingStage || !formData.sectionId}
+                className={cn(
+                  "text-xs px-2 py-1 rounded border flex items-center gap-1",
+                  theme === "dark"
+                    ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                  isSaving || isCreatingStage || !formData.sectionId ? "opacity-50 cursor-not-allowed" : "",
+                )}
+              >
+                {isCreatingStage ? (
+                  <>
+                    <svg
+                      className="animate-spin h-3 w-3"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Создание...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Создать базовый этап
+                  </>
+                )}
+              </button>
+            </div>
             <select
               value={selectedDecompositionStageId}
               onChange={(e) => {
@@ -1019,6 +1204,20 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           </button>
         </div>
       </div>
+
+      {/* SectionPanel для декомпозиции */}
+      {showSectionPanel && selectedSectionForPanel && (
+        <SectionPanel
+          isOpen={showSectionPanel}
+          onClose={() => {
+            setShowSectionPanel(false)
+            setSelectedSectionForPanel(null)
+          }}
+          sectionId={selectedSectionForPanel}
+          initialTab="decomposition"
+          statuses={statuses}
+        />
+      )}
     </div>
   )
 }

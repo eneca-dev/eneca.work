@@ -1,15 +1,19 @@
-"use client" 
+"use client"
 
 import type React from "react"
 import type { JSX } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import type { Section } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
+import { useProjectsStore } from "@/modules/projects/store"
 import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
+import { SectionPanel } from "@/components/modals/SectionPanel"
+import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
 
 interface Employee {
   user_id: string
@@ -39,6 +43,10 @@ interface CreateLoadingBySectionModalProps {
 }
 
 export function CreateLoadingBySectionModal({ section, setShowModal, theme, defaultStartDate, defaultEndDate, defaultRate, stageId, stageName }: CreateLoadingBySectionModalProps): JSX.Element {
+  // Хуки для навигации
+  const router = useRouter()
+  const selectSection = useProjectsStore((state) => state.selectSection)
+
   const [isSaving, setIsSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -90,11 +98,163 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
 
+  // Состояния для этапов декомпозиции
+  const [decompositionStages, setDecompositionStages] = useState<{ id: string; name: string }[]>([])
+  const [selectedDecompositionStageId, setSelectedDecompositionStageId] = useState<string>(stageId || "")
+  const [isLoadingDecompositionStages, setIsLoadingDecompositionStages] = useState(false)
+  const [isCreatingStage, setIsCreatingStage] = useState(false)
+
+  // Состояние для SectionPanel
+  const [showSectionPanel, setShowSectionPanel] = useState(false)
+
+  // Загружаем статусы разделов для SectionPanel
+  const { statuses } = useSectionStatuses()
+
   useEffect(() => {
     return () => {
       if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current)
       if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
     }
+  }, [])
+
+  // Загрузка этапов декомпозиции для раздела
+  const fetchDecompositionStages = async () => {
+    setIsLoadingDecompositionStages(true)
+    try {
+      const { data, error } = await supabase
+        .from("decomposition_stages")
+        .select("decomposition_stage_id, decomposition_stage_name")
+        .eq("decomposition_stage_section_id", section.id)
+        .order("decomposition_stage_order")
+
+      if (error) {
+        console.error("Ошибка при загрузке этапов декомпозиции:", error)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'planning',
+            action: 'fetch_decomposition_stages',
+            modal: 'create_loading_by_section_modal'
+          },
+          extra: {
+            section_id: section.id,
+            section_name: section.name,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return
+      }
+
+      const stages = (data || []).map((s: any) => ({
+        id: s.decomposition_stage_id,
+        name: s.decomposition_stage_name
+      }))
+      setDecompositionStages(stages)
+    } catch (error) {
+      console.error("Ошибка при загрузке этапов декомпозиции:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: 'planning',
+          action: 'fetch_decomposition_stages',
+          error_type: 'unexpected_error',
+          modal: 'create_loading_by_section_modal'
+        },
+        extra: {
+          section_id: section.id,
+          section_name: section.name,
+          timestamp: new Date().toISOString()
+        }
+      })
+    } finally {
+      setIsLoadingDecompositionStages(false)
+    }
+  }
+
+  // Создание базового этапа декомпозиции
+  const createBasicStage = async () => {
+    await Sentry.startSpan(
+      {
+        op: "db.mutation",
+        name: "Создание базового этапа декомпозиции",
+      },
+      async (span) => {
+        setIsCreatingStage(true)
+        try {
+          span.setAttribute("section.id", section.id)
+          span.setAttribute("section.name", section.name)
+
+          // Вычисляем следующий порядок
+          const { data: existingStages } = await supabase
+            .from("decomposition_stages")
+            .select("decomposition_stage_order")
+            .eq("decomposition_stage_section_id", section.id)
+            .order("decomposition_stage_order", { ascending: false })
+            .limit(1)
+
+          const nextOrder = existingStages && existingStages.length > 0 ? (existingStages[0].decomposition_stage_order || 0) + 1 : 1
+
+          const stageName = `Этап ${section.name}`
+
+          const { data, error } = await supabase
+            .from("decomposition_stages")
+            .insert({
+              decomposition_stage_section_id: section.id,
+              decomposition_stage_name: stageName,
+              decomposition_stage_order: nextOrder,
+            })
+            .select("decomposition_stage_id, decomposition_stage_name")
+            .single()
+
+          if (error) {
+            span.setAttribute("db.success", false)
+            span.setAttribute("db.error", error.message)
+            throw error
+          }
+
+          span.setAttribute("db.success", true)
+          span.setAttribute("stage.id", data.decomposition_stage_id)
+          span.setAttribute("stage.name", data.decomposition_stage_name)
+
+          // Обновляем список этапов
+          await fetchDecompositionStages()
+
+          // Автоматически выбираем созданный этап
+          setSelectedDecompositionStageId(data.decomposition_stage_id)
+
+          setNotification(`Этап "${stageName}" успешно создан`)
+          successTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 3000)
+        } catch (error) {
+          span.setAttribute("db.success", false)
+          span.setAttribute("db.error", error instanceof Error ? error.message : "Неизвестная ошибка")
+
+          Sentry.captureException(error, {
+            tags: {
+              module: 'planning',
+              action: 'create_basic_stage',
+              modal: 'create_loading_by_section_modal'
+            },
+            extra: {
+              section_id: section.id,
+              section_name: section.name,
+              timestamp: new Date().toISOString()
+            }
+          })
+
+          setNotification(`Ошибка при создании этапа: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+          errorTimeoutRef.current = setTimeout(() => {
+            clearNotification()
+          }, 5000)
+        } finally {
+          setIsCreatingStage(false)
+        }
+      }
+    )
+  }
+
+  // Загрузка этапов при открытии модального окна
+  useEffect(() => {
+    fetchDecompositionStages()
   }, [])
 
   useEffect(() => {
@@ -217,6 +377,10 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
       newErrors.employee = "Необходимо выбрать сотрудника"
     }
 
+    if (!selectedDecompositionStageId) {
+      newErrors.decompositionStageId = "Необходимо выбрать этап декомпозиции"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -242,6 +406,8 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
           span.setAttribute("loading.end_date", formData.endDate)
           span.setAttribute("loading.rate", formData.rate)
 
+          const selectedDecompositionStage = decompositionStages.find((s) => s.id === selectedDecompositionStageId)
+
           const result = await createLoadingInStore({
             responsibleId: selectedEmployee!.user_id,
             sectionId: section.id,
@@ -254,7 +420,9 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
             responsibleAvatarUrl: selectedEmployee!.avatar_url,
             responsibleTeamName: selectedEmployee!.team_name,
             comment: formData.comment?.trim() || undefined,
-            stageId: stageId ?? undefined,
+            decompositionStageId: selectedDecompositionStageId,
+            decompositionStageName: selectedDecompositionStage?.name,
+            stageId: selectedDecompositionStageId,
           })
 
           if (!result.success) {
@@ -328,6 +496,12 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
     }
   }
 
+  // Переход в декомпозицию раздела
+  const navigateToDecomposition = () => {
+    // Открываем SectionPanel с вкладкой декомпозиции
+    setShowSectionPanel(true)
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className={cn("rounded-lg p-6 w-96 max-w-[90vw]", theme === "dark" ? "bg-slate-800" : "bg-white")}>
@@ -357,6 +531,115 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
         </div>
 
         <div className="space-y-4">
+          {/* Кнопки управления */}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={navigateToDecomposition}
+              disabled={isSaving}
+              className={cn(
+                "text-xs px-2 py-1 rounded border flex items-center gap-1",
+                theme === "dark"
+                  ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                isSaving ? "opacity-50 cursor-not-allowed" : "",
+              )}
+              title="Перейти в декомпозицию раздела"
+            >
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Перейти в декомпозицию
+            </button>
+            <button
+              type="button"
+              onClick={createBasicStage}
+              disabled={isSaving || isCreatingStage}
+              className={cn(
+                "text-xs px-2 py-1 rounded border flex items-center gap-1",
+                theme === "dark"
+                  ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                  : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                isSaving || isCreatingStage ? "opacity-50 cursor-not-allowed" : "",
+              )}
+            >
+              {isCreatingStage ? (
+                <>
+                  <svg
+                    className="animate-spin h-3 w-3"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Создание...
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Создать базовый этап
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Этап декомпозиции */}
+          <div>
+            <label className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}>
+              Этап декомпозиции
+            </label>
+            <select
+              value={selectedDecompositionStageId}
+              onChange={(e) => {
+                setSelectedDecompositionStageId(e.target.value)
+                // Очищаем ошибку при выборе этапа
+                if (errors.decompositionStageId) {
+                  setErrors((prev) => {
+                    const newErrors = { ...prev }
+                    delete newErrors.decompositionStageId
+                    return newErrors
+                  })
+                }
+              }}
+              disabled={isSaving || isLoadingDecompositionStages}
+              className={cn(
+                "w-full text-sm rounded border px-3 py-2",
+                theme === "dark"
+                  ? "bg-slate-700 border-slate-600 text-slate-200"
+                  : "bg-white border-slate-300 text-slate-800",
+                errors.decompositionStageId ? "border-red-500" : "",
+                isSaving || isLoadingDecompositionStages ? "opacity-50 cursor-not-allowed" : "",
+              )}
+            >
+              <option value="">Выберите этап</option>
+              {decompositionStages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </select>
+            {errors.decompositionStageId && <p className="text-xs text-red-500 mt-1">{errors.decompositionStageId}</p>}
+            {isLoadingDecompositionStages && <p className="text-xs text-slate-500 mt-1">Загрузка этапов...</p>}
+          </div>
+
           <div className="employee-search-container relative">
             <label className={cn("block text-sm font-medium mb-1", theme === "dark" ? "text-slate-300" : "text-slate-700")}>
               Сотрудник
@@ -552,6 +835,17 @@ export function CreateLoadingBySectionModal({ section, setShowModal, theme, defa
           </button>
         </div>
       </div>
+
+      {/* SectionPanel для декомпозиции */}
+      {showSectionPanel && (
+        <SectionPanel
+          isOpen={showSectionPanel}
+          onClose={() => setShowSectionPanel(false)}
+          sectionId={section.id}
+          initialTab="decomposition"
+          statuses={statuses}
+        />
+      )}
     </div>
   )
 }
