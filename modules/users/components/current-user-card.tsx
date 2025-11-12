@@ -82,8 +82,8 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
               "office",
             country: userData.country_name || "",
             city: userData.city_name || "",
-            employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) * 100 : 100,
-            salary: userData.salary || 0,
+            employmentRate: userData.employment_rate ? parseFloat(userData.employment_rate) : 1,
+            salary: userData.salary ? parseFloat(userData.salary) : 0,
             isHourly: userData.is_hourly || false
           }
           
@@ -119,14 +119,14 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
         role: "",
 
         dateJoined: "",
-        workLocation: 
-          userState.profile?.workFormat === "Гибридный" ? "hybrid" : 
-          userState.profile?.workFormat === "В офисе" ? "office" : 
-          userState.profile?.workFormat === "Удаленно" ? "remote" : 
+        workLocation:
+          userState.profile?.workFormat === "Гибридный" ? "hybrid" :
+          userState.profile?.workFormat === "В офисе" ? "office" :
+          userState.profile?.workFormat === "Удаленно" ? "remote" :
           "office",
         country: userState.profile?.country || "",
         city: userState.profile?.city || "",
-        employmentRate: userState.profile?.employmentRate || 100,
+        employmentRate: userState.profile?.employmentRate || 1,
         salary: userState.profile?.salary || 0,
         isHourly: userState.profile?.isHourly || false
       }

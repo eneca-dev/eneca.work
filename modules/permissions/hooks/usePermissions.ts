@@ -74,15 +74,14 @@ export const useUsersPermissions = () => {
     canEditAll: hasPermission('users.edit.all'),
     canEditDepartment: hasPermission('users.edit.department'),
     canEditTeam: hasPermission('users.edit.team'),
-    canEditSelf: hasPermission('users.edit.self'),
     canCreate: hasPermission('users.create'),
     canDelete: hasPermission('users.delete'),
     canAccessAdminPanel: hasPermission('users.admin_panel'),
     canAssignRoles: hasPermission('users.assign_roles'),
     canAssignAdminRole: hasPermission('users.assign_admin_role'),
-    
+
     // Логические комбинации
-    canViewUsers: hasPermission('users.view.all') || 
+    canViewUsers: hasPermission('users.view.all') ||
                   hasPermission('users.view.department') ||
                   hasPermission('users.view.team'),
     canEditUsers: hasPermission('users.edit.all') ||

@@ -12,10 +12,12 @@ import EntityModal from "./EntityModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 import TeamHeadModal from "./TeamHeadModal"
 import RemoveHeadConfirmModal from "./RemoveHeadConfirmModal"
+import AssignToTeamModal from "./AssignToTeamModal"
 import LoadingState from "./LoadingState"
 import EmptyState from "./EmptyState"
 import { toast } from "sonner"
 import { useAdminPermissions } from "../hooks/useAdminPermissions"
+import { useUserStore } from "@/stores/useUserStore"
 import * as Sentry from "@sentry/nextjs"
 
 // Типы для сущностей
@@ -53,18 +55,45 @@ export default function TeamsTab(props: TeamsTabProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [headModalOpen, setHeadModalOpen] = useState(false)
   const [removeHeadModalOpen, setRemoveHeadModalOpen] = useState(false)
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<"create" | "edit">("create")
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const perms = useAdminPermissions()
+  const currentUserId = useUserStore(state => state.id)
 
   // Определяем, должны ли быть видны элементы управления
   const canManageAllTeams = perms.canManageTeams
+  const canEditDepartment = perms.canEditDepartment
   const canEditTeams = perms.canEditTeam
+  const canDeleteTeam = perms.canDeleteTeam
+  const canManageTeamLead = perms.canManageTeamLead
   const isTeamScoped = scope === 'department'
   const showManagementControls = canManageAllTeams && !isTeamScoped
-  const canViewTeams = canManageAllTeams || canEditTeams
+  // Создавать команды могут: admin (manage.teams) и department_head (edit.department)
+  const canCreateTeam = canManageAllTeams || canEditDepartment
+  // Редактировать команды могут: admin, department_head и team_lead (edit.team)
+  const canModifyTeams = canManageAllTeams || canEditDepartment || canEditTeams
+  // Удалять команды могут: только те, у кого есть разрешение delete.team (admin и department_head)
+  const canDelete = canDeleteTeam
+  // Управлять руководителями команд могут: только те, у кого есть разрешение manage.team_lead (admin и department_head)
+  const canManageHead = canManageTeamLead
+
+  // Проверяет, может ли текущий пользователь управлять данной командой
+  const canManageTeam = useCallback((team: Team) => {
+    // Admin может управлять всеми командами
+    if (canManageAllTeams || canEditDepartment) {
+      return true
+    }
+
+    // Team_lead может управлять только своей командой
+    if (canEditTeams && currentUserId && team.team_lead_id === currentUserId) {
+      return true
+    }
+
+    return false
+  }, [canManageAllTeams, canEditDepartment, canEditTeams, currentUserId])
 
   const fetchData = useCallback(async () => {
     try {
@@ -195,8 +224,8 @@ export default function TeamsTab(props: TeamsTabProps) {
 
   // Скоуп-версия extraFields (перенесено из JSX, чтобы не нарушать порядок хуков)
   const scopedExtraFields = useMemo(() => {
-    // Для пользователей с edit.team всегда ограничиваем отдел их собственным
-    if (canEditTeams && !canManageAllTeams && departmentId) {
+    // Для team_lead (edit.team без edit.department) ограничиваем отдел их собственным
+    if (canEditTeams && !canManageAllTeams && !canEditDepartment && departmentId) {
       const theOnly = departments
         .filter(d => d.id === departmentId)
         .map(d => ({ value: d.id, label: d.name }))
@@ -226,7 +255,7 @@ export default function TeamsTab(props: TeamsTabProps) {
       ]
     }
     return extraFields
-  }, [extraFields, scope, departmentId, departments, canEditTeams, canManageAllTeams])
+  }, [extraFields, scope, departmentId, departments, canEditTeams, canManageAllTeams, canEditDepartment])
 
   // Мемоизируем entity для EntityModal
   const entityData = useMemo(() => {
@@ -265,27 +294,25 @@ export default function TeamsTab(props: TeamsTabProps) {
   }, [])
 
   const handleEditTeam = useCallback((team: Team) => {
-    // Проверяем права на редактирование
-    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
-      // Пользователь с edit.team пытается редактировать команду из другого отдела
+    // Проверяем права на управление этой командой
+    if (!canManageTeam(team)) {
       return
     }
 
     setModalMode("edit")
     setSelectedTeam(team)
     setModalOpen(true)
-  }, [canEditTeams, canManageAllTeams, departmentId])
+  }, [canManageTeam])
 
   const handleDeleteTeamClick = useCallback((team: Team) => {
-    // Проверяем права на удаление
-    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
-      // Пользователь с edit.team пытается удалить команду из другого отдела
+    // Проверяем наличие разрешения на удаление команд
+    if (!canDeleteTeam) {
       return
     }
 
     setSelectedTeam(team)
     setDeleteModalOpen(true)
-  }, [canEditTeams, canManageAllTeams, departmentId])
+  }, [canDeleteTeam])
 
   const handleModalOpenChange = useCallback((open: boolean) => {
     setModalOpen(open)
@@ -297,26 +324,34 @@ export default function TeamsTab(props: TeamsTabProps) {
 
   // Обработчики для управления руководителями
   const handleAssignHead = useCallback((team: Team) => {
-    // Проверяем права на управление руководителем
-    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
-      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+    // Проверяем наличие разрешения на управление руководителями команд
+    if (!canManageTeamLead) {
       return
     }
 
     setSelectedTeam(team)
     setHeadModalOpen(true)
-  }, [canEditTeams, canManageAllTeams, departmentId])
+  }, [canManageTeamLead])
 
   const handleRemoveHeadClick = useCallback((team: Team) => {
-    // Проверяем права на управление руководителем
-    if (canEditTeams && !canManageAllTeams && departmentId && team.departmentId !== departmentId) {
-      // Пользователь с edit.team пытается управлять руководителем команды из другого отдела
+    // Проверяем наличие разрешения на управление руководителями команд
+    if (!canManageTeamLead) {
       return
     }
 
     setSelectedTeam(team)
     setRemoveHeadModalOpen(true)
-  }, [canEditTeams, canManageAllTeams, departmentId])
+  }, [canManageTeamLead])
+
+  const handleAssignToTeam = useCallback((team: Team) => {
+    // Проверяем права на управление этой командой
+    if (!canManageTeam(team)) {
+      return
+    }
+
+    setSelectedTeam(team)
+    setAssignModalOpen(true)
+  }, [canManageTeam])
 
   // Если данные загружаются, показываем индикатор загрузки
   if (isLoading) {
@@ -327,13 +362,17 @@ export default function TeamsTab(props: TeamsTabProps) {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <CardTitle className="text-xl font-semibold">Управление командами</CardTitle>
               <div className="flex justify-end gap-2">
-                <Input
-                  placeholder="Поиск команд..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="max-w-xs"
-                />
-                <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+                {showManagementControls && (
+                  <Input
+                    placeholder="Поиск команд..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="max-w-xs"
+                  />
+                )}
+                {canCreateTeam && (
+                  <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
+                )}
               </div>
             </div>
             
@@ -383,7 +422,7 @@ export default function TeamsTab(props: TeamsTabProps) {
                   className="max-w-xs"
                 />
               )}
-              {canViewTeams && (
+              {canCreateTeam && (
                 <Button size="default" onClick={handleCreateTeam}>Создать команду</Button>
               )}
             </div>
@@ -460,7 +499,7 @@ export default function TeamsTab(props: TeamsTabProps) {
                             <div className="font-medium">{team.headFullName}</div>
                             <div className="text-sm text-muted-foreground">{team.headEmail}</div>
                           </div>
-                          {canViewTeams && (
+                          {canManageHead && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
@@ -493,7 +532,7 @@ export default function TeamsTab(props: TeamsTabProps) {
                       ) : (
                         <div className="flex items-center gap-3">
                           <span className="text-muted-foreground">Не назначен</span>
-                          {canViewTeams && (
+                          {canManageHead && (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
@@ -519,23 +558,32 @@ export default function TeamsTab(props: TeamsTabProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {canViewTeams && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditTeam(team)}
-                            >
-                              Изменить
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteTeamClick(team)}
-                            >
-                              Удалить
-                            </Button>
-                          </>
+                        {canManageTeam(team) && team.departmentId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAssignToTeam(team)}
+                          >
+                            Назначить в команду
+                          </Button>
+                        )}
+                        {canManageTeam(team) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditTeam(team)}
+                          >
+                            Изменить
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteTeamClick(team)}
+                          >
+                            Удалить
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -550,8 +598,8 @@ export default function TeamsTab(props: TeamsTabProps) {
                           ? "Команды по вашему запросу не найдены"
                           : "Команды не созданы"
                       }
-                      buttonText={canViewTeams ? "Создать первую команду" : undefined}
-                      onButtonClick={canViewTeams ? handleCreateTeam : undefined}
+                      buttonText={canCreateTeam ? "Создать первую команду" : undefined}
+                      onButtonClick={canCreateTeam ? handleCreateTeam : undefined}
                     />
                   </TableCell>
                 </TableRow>
@@ -607,6 +655,22 @@ export default function TeamsTab(props: TeamsTabProps) {
           type="team"
           entityName={selectedTeam.name}
           entityId={selectedTeam.id}
+          onSuccess={fetchData}
+        />
+      )}
+
+      {/* Модальное окно для назначения сотрудников в команду */}
+      {selectedTeam && selectedTeam.departmentId && (
+        <AssignToTeamModal
+          open={assignModalOpen}
+          onOpenChange={setAssignModalOpen}
+          team={{
+            id: selectedTeam.id,
+            name: selectedTeam.name,
+            departmentId: selectedTeam.departmentId,
+            departmentName: selectedTeam.departmentName || "",
+            team_lead_id: selectedTeam.team_lead_id
+          }}
           onSuccess={fetchData}
         />
       )}

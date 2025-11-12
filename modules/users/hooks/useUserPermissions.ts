@@ -5,7 +5,6 @@ export interface UserPermissions {
   canDeleteUsers: boolean
   canEditStructures: boolean
   // Новые детальные права редактирования
-  canEditSelf: boolean
   canEditTeam: boolean
   canEditDepartment: boolean
   // Права на назначение ролей
@@ -32,7 +31,6 @@ export function useUserPermissions(): UserPermissions {
     canDeleteUsers: hasPermission('users.delete'),
     canEditStructures: hasPermission('users.edit.structure'),
 
-    canEditSelf: hasPermission('users.edit.self'),
     canEditTeam: hasPermission('users.edit.team'),
     canEditDepartment: hasPermission('users.edit.department'),
 

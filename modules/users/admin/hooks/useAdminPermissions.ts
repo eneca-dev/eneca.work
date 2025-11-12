@@ -14,6 +14,8 @@ export function useAdminPermissions(): AdminPermissions {
     // Редакторские права уровня отдела/команды
     canEditDepartment: hasPermission('users.edit.department'),
     canEditTeam: hasPermission('users.edit.team'),
+    canDeleteTeam: hasPermission('users.delete.team'),
+    canManageTeamLead: hasPermission('users.manage.team_lead'),
     canChangeRoles: hasPermission('users.assign_roles'),
     canAddAdminRole: hasPermission('users.assign_admin_role'),
   }

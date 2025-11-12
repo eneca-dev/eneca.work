@@ -370,6 +370,7 @@ function SortableStage({
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
+                    <th className="w-8 pb-2 pt-0"></th>
                     <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Описание
                     </th>

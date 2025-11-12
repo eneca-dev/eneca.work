@@ -20,6 +20,8 @@ export function useChat() {
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
   // Флаг ожидания финального ответа текущего запроса
   const awaitingFinalRef = useRef<boolean>(false)
+  // Ref для блокировки множественных отправок
+  const isLoadingRef = useRef<boolean>(false)
   // Безопасный таймер авто-сброса индикатора печати
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
@@ -62,16 +64,19 @@ export function useChat() {
     return [...prev, incoming]
   }, [areMessagesEquivalentForDedupe])
 
-  // Запуск/сброс страховочного таймера индикатора печати (~5 мин)
+  // Запуск/сброс страховочного таймера индикатора печати (~1.5 мин)
   const startTypingSafetyTimer = useCallback(() => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
     }
     typingTimeoutRef.current = setTimeout(() => {
       // Авто-очистка на случай отсутствия финального события
+      console.warn('[useChat] Safety timeout: финальное событие не получено, принудительно снимаем блокировку')
       setIsTyping(false)
       awaitingFinalRef.current = false
-    }, 300000)
+      isLoadingRef.current = false
+      setIsLoading(false)
+    }, 90000)
   }, [])
 
   const clearTypingSafetyTimer = useCallback(() => {
@@ -126,22 +131,24 @@ export function useChat() {
           setLastEventKind(kind ?? 'message')
           // Индикатор печати после HTTP: thinking/tool → включаем, observation → выключаем, message → выключаем
           if (role === 'assistant') {
-            if (kind === 'observation') {
+            if (kind === 'observation' || kind === 'message') {
+              // Финальное событие от n8n - снимаем все блокировки
               setIsTyping(false)
               awaitingFinalRef.current = false
+              isLoadingRef.current = false
+              setIsLoading(false)
               clearTypingSafetyTimer()
+              console.debug('[useChat] Финальное событие получено:', kind)
             } else if (kind === 'thinking' || kind === 'tool') {
               setIsTyping(true)
               awaitingFinalRef.current = true
               startTypingSafetyTimer()
-            } else if (kind === 'message') {
-              setIsTyping(false)
-              awaitingFinalRef.current = false
-              clearTypingSafetyTimer()
             } else {
               // Непредвиденный тип события — явно сбрасываем индикатор, чтобы не зависал
               setIsTyping(false)
               awaitingFinalRef.current = false
+              isLoadingRef.current = false
+              setIsLoading(false)
               clearTypingSafetyTimer()
             }
           }
@@ -253,7 +260,15 @@ export function useChat() {
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading || !userId) return
+    // Защита от множественных отправок - проверяем и ref, и state
+    if (!content.trim() || isLoadingRef.current || !userId) {
+      console.debug('[useChat] Отправка заблокирована:', {
+        isEmpty: !content.trim(),
+        isLoading: isLoadingRef.current,
+        hasUserId: !!userId
+      })
+      return
+    }
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -266,6 +281,9 @@ export function useChat() {
     saveMessage(userMessage, userId)
     // Дедупликация локального добавления: если предыдущее сообщение эквивалентно, заменяем его
     setMessages(prev => replaceLastIfDuplicateElseAppend(prev, userMessage))
+    
+    // Устанавливаем флаги загрузки
+    isLoadingRef.current = true
     setIsLoading(true)
     setIsTyping(true)
     awaitingFinalRef.current = true
@@ -293,11 +311,12 @@ export function useChat() {
       saveMessage(botMessage, userId)
       // Дедупликация: если последнее локальное сообщение совпадает, заменяем вместо добавления
       setMessages(prev => replaceLastIfDuplicateElseAppend(prev, botMessage))
-      // После успешного HTTP-ответа включаем индикатор,
-      // он погаснет при получении 'observation' из realtime
+      // После успешного HTTP-ответа продолжаем ждать финального события из realtime
+      // НЕ сбрасываем isLoading/isLoadingRef - они будут сброшены при получении 'observation' или 'message'
       setIsTyping(true)
       awaitingFinalRef.current = true
       startTypingSafetyTimer()
+      console.debug('[useChat] HTTP-ответ получен, ожидаем финальное событие от n8n')
     } catch (error) {
       console.error('Chat error:', error)
       if (error instanceof Error) {
@@ -331,11 +350,13 @@ export function useChat() {
       setMessages(prev => replaceLastIfDuplicateElseAppend(prev, errorMessage))
       setIsTyping(false)
       awaitingFinalRef.current = false
-      clearTypingSafetyTimer()
-    } finally {
+      // При ошибке сбрасываем блокировку сразу
+      isLoadingRef.current = false
       setIsLoading(false)
+      clearTypingSafetyTimer()
     }
-  }, [isLoading, userId, conversationId, ensureConversation])
+    // НЕ используем finally - isLoading сбросится только при получении финального события или ошибке
+  }, [userId, conversationId, ensureConversation])
 
   const clearMessages = useCallback(() => {
     if (!userId) return
@@ -343,7 +364,14 @@ export function useChat() {
     // Очищаем и кеш, и состояние с userId
     clearHistory(userId)
     setMessages([])
-  }, [userId])
+
+    // Сбрасываем все флаги блокировки
+    isLoadingRef.current = false
+    setIsLoading(false)
+    setIsTyping(false)
+    awaitingFinalRef.current = false
+    clearTypingSafetyTimer()
+  }, [userId, clearTypingSafetyTimer])
 
   return {
     messages,
