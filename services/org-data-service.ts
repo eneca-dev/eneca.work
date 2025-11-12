@@ -2,6 +2,7 @@ import type { User, UserWithRoles, Department, Team, Position, Category, WorkFor
 import { createClient } from "@/utils/supabase/client"
 import { createAdminClient } from "@/utils/supabase/admin"
 import * as Sentry from "@sentry/nextjs"
+import { getUserPermissions } from "@/modules/permissions/supabase/supabasePermissions"
 
 // Функция для преобразования формата работы из БД в формат приложения
 function mapWorkFormat(format: WorkFormatType | null): "office" | "remote" | "hybrid" {
@@ -429,12 +430,111 @@ export async function updateUser(
       try {
         console.log("=== updateUser function ===");
         console.log("updateUser вызван с данными:", { userId, userData });
-        
+
         span.setAttribute("user.id", userId)
         span.setAttribute("table", "profiles")
         span.setAttribute("operation", "update_user")
-        
+
         const supabase = createClient();
+
+        // Проверка разрешений для редактирования ставки и загруженности
+        const isSalaryFieldsUpdate =
+          userData.salary !== undefined ||
+          userData.employmentRate !== undefined ||
+          userData.isHourly !== undefined
+
+        if (isSalaryFieldsUpdate) {
+          console.log("🔐 Обнаружена попытка изменения полей зарплаты, проверяем разрешения...")
+
+          // Получаем текущего пользователя
+          const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
+
+          if (authError || !currentUser) {
+            const error = new Error("Не удалось получить данные текущего пользователя")
+            Sentry.captureException(error)
+            throw error
+          }
+
+          // Получаем разрешения текущего пользователя
+          const { permissions } = await getUserPermissions(currentUser.id)
+          const hasEditSalaryAll = permissions.includes('users.edit_salary.all')
+          const hasEditSalaryDepartment = permissions.includes('users.edit_salary.department')
+
+          // Проверяем, есть ли у пользователя право редактировать зарплату
+          if (!hasEditSalaryAll && !hasEditSalaryDepartment) {
+            const error = new Error("Недостаточно прав для редактирования ставки и загруженности")
+            Sentry.captureException(error, {
+              tags: {
+                module: 'org_data_service',
+                action: 'update_user_check_salary_permissions',
+                user_id: userId
+              },
+              extra: {
+                current_user_id: currentUser.id,
+                target_user_id: userId,
+                permissions: permissions,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
+
+          // Если есть только разрешение для отдела, проверяем, что пользователи в одном отделе
+          if (!hasEditSalaryAll && hasEditSalaryDepartment) {
+            console.log("🔐 Проверяем, что пользователи в одном отделе...")
+
+            // Получаем отдел текущего пользователя
+            const { data: currentUserProfile, error: currentProfileError } = await supabase
+              .from('profiles')
+              .select('department_id')
+              .eq('user_id', currentUser.id)
+              .single()
+
+            if (currentProfileError) {
+              const error = new Error("Не удалось получить профиль текущего пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Получаем отдел целевого пользователя
+            const { data: targetUserProfile, error: targetProfileError } = await supabase
+              .from('profiles')
+              .select('department_id')
+              .eq('user_id', userId)
+              .single()
+
+            if (targetProfileError) {
+              const error = new Error("Не удалось получить профиль целевого пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Проверяем, что отделы совпадают
+            if (currentUserProfile.department_id !== targetUserProfile.department_id) {
+              const error = new Error("Невозможно редактировать ставку пользователя из другого отдела")
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'org_data_service',
+                  action: 'update_user_check_department',
+                  user_id: userId
+                },
+                extra: {
+                  current_user_id: currentUser.id,
+                  current_department_id: currentUserProfile.department_id,
+                  target_user_id: userId,
+                  target_department_id: targetUserProfile.department_id,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              throw error
+            }
+
+            console.log("✅ Пользователи в одном отделе, разрешение предоставлено")
+          }
+
+          console.log("✅ Разрешение на редактирование полей зарплаты предоставлено")
+        }
+
         const updates: any = {}
 
   if (userData.firstName !== undefined) {

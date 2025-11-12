@@ -66,7 +66,7 @@ export const usePermissionLevel = (module: string): 'none' | 'view' | 'edit' | '
  */
 export const useUsersPermissions = () => {
   const { hasPermission } = usePermissions()
-  
+
   return {
     canViewAll: hasPermission('users.view.all'),
     canViewDepartment: hasPermission('users.view.department'),
@@ -80,13 +80,29 @@ export const useUsersPermissions = () => {
     canAssignRoles: hasPermission('users.assign_roles'),
     canAssignAdminRole: hasPermission('users.assign_admin_role'),
 
+    // Разрешения на редактирование ставки и загруженности
+    canEditSalaryAll: hasPermission('users.edit_salary.all'),
+    canEditSalaryDepartment: hasPermission('users.edit_salary.department'),
+
+    // Разрешения на просмотр ставок
+    canViewRatesAll: hasPermission('users.rates.view.all'),
+    canViewRatesDepartment: hasPermission('users.rates.view.department'),
+    canViewRatesTeam: hasPermission('users.rates.view.team'),
+    canViewRatesSelf: hasPermission('users.rates.view.self'),
+
     // Логические комбинации
     canViewUsers: hasPermission('users.view.all') ||
                   hasPermission('users.view.department') ||
                   hasPermission('users.view.team'),
     canEditUsers: hasPermission('users.edit.all') ||
                   hasPermission('users.edit.department') ||
-                  hasPermission('users.edit.team')
+                  hasPermission('users.edit.team'),
+    canEditSalary: hasPermission('users.edit_salary.all') ||
+                   hasPermission('users.edit_salary.department'),
+    canViewRates: hasPermission('users.rates.view.all') ||
+                  hasPermission('users.rates.view.department') ||
+                  hasPermission('users.rates.view.team') ||
+                  hasPermission('users.rates.view.self')
   }
 }
 
