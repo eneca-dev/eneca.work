@@ -563,8 +563,8 @@ export function EmployeeRow({
   // Получаем видимость столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
 
-  // Вычисляем уменьшенную высоту строки (примерно на 25%)
-  const reducedRowHeight = Math.floor(rowHeight * 0.75)
+  // Базовая высота строки сотрудника (90% от rowHeight)
+  const reducedRowHeight = Math.floor(rowHeight * 0.9)
 
   // Преобразуем загрузки и отпуска в периоды для отрисовки
   const allPeriods = useMemo(() => {
@@ -604,11 +604,50 @@ export function EmployeeRow({
   }, [allPeriods])
 
   // Базовая высота полоски для 1 ставки и зазор между ними
-  const BASE_BAR_HEIGHT = 30 // Высота для полной ставки (rate = 1) - увеличена на 50%
-  const BAR_GAP = 1 // Минимальное расстояние между полосками
+  // Рассчитано так, чтобы при 0.25 ставки текст 8px был читаемым (56 * 0.25 = 14px)
+  const BASE_BAR_HEIGHT = 56 // Высота для полной ставки (rate = 1)
+  const BAR_GAP = 3 // Минимальное расстояние между полосками
 
-  // Высота строки всегда фиксированная, независимо от количества загрузок
-  const actualRowHeight = reducedRowHeight
+  // Динамический расчёт высоты строки на основе загрузок
+  const actualRowHeight = useMemo(() => {
+    if (barRenders.length === 0) return reducedRowHeight
+
+    // Рассчитываем необходимую высоту для вертикального размещения всех полосок
+    let maxBottom = 0
+
+    barRenders.forEach(bar => {
+      const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+
+      // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
+      const overlappingBars = barRenders.filter(other =>
+        other.period.startDate <= bar.period.endDate &&
+        other.period.endDate >= bar.period.startDate &&
+        other.layer < bar.layer
+      )
+
+      // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
+      let top = 8 // начальный отступ
+      if (overlappingBars.length > 0) {
+        const layersMap = new Map<number, number>()
+        overlappingBars.forEach(other => {
+          const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
+          layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
+        })
+
+        // Суммируем высоты только тех слоёв, которые реально пересекаются
+        for (let i = 0; i < bar.layer; i++) {
+          if (layersMap.has(i)) {
+            top += layersMap.get(i)! + BAR_GAP
+          }
+        }
+      }
+
+      maxBottom = Math.max(maxBottom, top + barHeight)
+    })
+
+    // Возвращаем максимум из минимальной высоты и требуемой высоты + отступ снизу
+    return Math.max(reducedRowHeight, maxBottom + 8)
+  }, [barRenders, reducedRowHeight])
 
   return (
     <>
@@ -750,121 +789,79 @@ export function EmployeeRow({
             {/* Overlay с полосками загрузок */}
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4 }}>
               {(() => {
-                // Определяем режим отображения на основе максимальной загрузки
-                const shouldStack = maxTotalRate > 1
+                // ВЕРТИКАЛЬНОЕ РАЗМЕЩЕНИЕ: загрузки размещаются одна под другой только при пересечении во времени
 
-                if (shouldStack) {
-                  // РЕЖИМ НАЛОЖЕНИЯ: Перегрузка (> 1 ставки) - полоски накладываются
-                  return barRenders.map((bar, idx) => {
-                    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
-                    const top = 8 // Единый начальный отступ для всех полосок
+                return barRenders.map((bar, idx) => {
+                  const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
 
-                    return (
-                      <div
-                        key={`${bar.period.id}-${idx}`}
-                        className={cn(
-                          "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
-                          bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
-                        )}
-                        style={{
-                          left: `${bar.left}px`,
-                          width: `${bar.width}px`,
-                          height: `${barHeight}px`,
-                          top: `${top}px`,
-                          zIndex: bar.layer, // Используем layer для z-index
-                          backgroundColor: bar.color,
-                          opacity: 0.85, // Больше прозрачности для видимости наложения
-                          border: `2px solid ${bar.color}`,
-                          paddingLeft: "6px",
-                          paddingRight: "6px",
-                          overflow: "hidden",
-                          whiteSpace: "nowrap",
-                          textOverflow: "ellipsis",
-                          filter: "brightness(1.1)",
-                        }}
-                        title={formatBarTooltip(bar.period)}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (bar.period.type === "loading" && bar.period.loading) {
-                            setEditingLoading(bar.period.loading)
-                          }
-                        }}
-                      >
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold leading-none",
-                            theme === "dark" ? "text-white" : "text-white"
-                          )}
-                          style={{
-                            textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-                          }}
-                        >
-                          {formatBarLabel(bar.period)}
-                        </span>
-                      </div>
-                    )
-                  })
-                } else {
-                  // РЕЖИМ ВЕРТИКАЛЬНОГО РАЗМЕЩЕНИЯ: Нормальная загрузка (≤ 1 ставки)
-                  const layerTops: number[] = []
+                  // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
+                  const overlappingBars = barRenders.filter(other =>
+                    other.period.startDate <= bar.period.endDate &&
+                    other.period.endDate >= bar.period.startDate &&
+                    other.layer < bar.layer
+                  )
 
-                  return barRenders.map((bar, idx) => {
-                    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+                  // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
+                  let top = 8 // Начальный отступ
+                  if (overlappingBars.length > 0) {
+                    const layersMap = new Map<number, number>()
+                    overlappingBars.forEach(other => {
+                      const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
+                      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
+                    })
 
-                    // Рассчитываем top для текущего слоя
-                    let top = 8 // Начальный отступ
+                    // Суммируем высоты только тех слоёв, которые реально пересекаются
                     for (let i = 0; i < bar.layer; i++) {
-                      top += (layerTops[i] || BASE_BAR_HEIGHT) + BAR_GAP
+                      if (layersMap.has(i)) {
+                        top += layersMap.get(i)! + BAR_GAP
+                      }
                     }
+                  }
 
-                    // Сохраняем максимальную высоту для этого слоя
-                    layerTops[bar.layer] = Math.max(layerTops[bar.layer] || 0, barHeight)
-
-                    return (
-                      <div
-                        key={`${bar.period.id}-${idx}`}
+                  return (
+                    <div
+                      key={`${bar.period.id}-${idx}`}
+                      className={cn(
+                        "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
+                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
+                      )}
+                      style={{
+                        left: `${bar.left}px`,
+                        width: `${bar.width}px`,
+                        height: `${barHeight}px`,
+                        top: `${top}px`,
+                        backgroundColor: bar.color,
+                        opacity: 0.9,
+                        border: `2px solid ${bar.color}`,
+                        paddingLeft: "6px",
+                        paddingRight: "6px",
+                        overflow: "hidden",
+                        whiteSpace: "nowrap",
+                        textOverflow: "ellipsis",
+                        filter: "brightness(1.1)",
+                      }}
+                      title={formatBarTooltip(bar.period)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (bar.period.type === "loading" && bar.period.loading) {
+                          setEditingLoading(bar.period.loading)
+                        }
+                      }}
+                    >
+                      <span
                         className={cn(
-                          "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
-                          bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
+                          "text-[9px] font-semibold leading-none",
+                          theme === "dark" ? "text-white" : "text-white"
                         )}
                         style={{
-                          left: `${bar.left}px`,
-                          width: `${bar.width}px`,
-                          height: `${barHeight}px`,
-                          top: `${top}px`,
-                          backgroundColor: bar.color,
-                          opacity: 0.9, // Меньше прозрачности для вертикального размещения
-                          border: `2px solid ${bar.color}`,
-                          paddingLeft: "6px",
-                          paddingRight: "6px",
-                          overflow: "hidden",
-                          whiteSpace: "nowrap",
-                          textOverflow: "ellipsis",
-                          filter: "brightness(1.1)",
-                        }}
-                        title={formatBarTooltip(bar.period)}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (bar.period.type === "loading" && bar.period.loading) {
-                            setEditingLoading(bar.period.loading)
-                          }
+                          textShadow: "0 1px 2px rgba(0,0,0,0.5)",
                         }}
                       >
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold leading-none",
-                            theme === "dark" ? "text-white" : "text-white"
-                          )}
-                          style={{
-                            textShadow: "0 1px 3px rgba(0,0,0,0.5)",
-                          }}
-                        >
-                          {formatBarLabel(bar.period)}
-                        </span>
-                      </div>
-                    )
-                  })
-                }
+                        {formatBarLabel(bar.period)}
+                      </span>
+                    </div>
+                  )
+                })
               })()}
             </div>
 
