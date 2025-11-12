@@ -432,12 +432,12 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     fetchProjects()
   }, [])
 
-  // При смене проекта подгружаем список стадий и объектов
+  // При смене проекта подгружаем список стадий
   useEffect(() => {
-    const loadStageAndObjects = async () => {
+    const loadStages = async () => {
       try {
         if (!formData.projectId) {
-          setStages([]); setObjects([])
+          setStages([])
           return
         }
         // Стадии
@@ -447,14 +447,36 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
           .eq("stage_project_id", formData.projectId)
           .order("stage_name")
         setStages(stageRows || [])
+      } catch (e) {
+        console.error("Ошибка загрузки стадий:", e)
+      }
+    }
+    loadStages()
+  }, [formData.projectId])
 
-        // Объекты проекта
-        const { data: objectRows } = await supabase
+  // При смене проекта или стадии подгружаем объекты
+  useEffect(() => {
+    const loadObjects = async () => {
+      try {
+        if (!formData.projectId) {
+          setObjects([])
+          return
+        }
+        // Объекты проекта с учетом выбранной стадии
+        let query = supabase
           .from("view_section_hierarchy")
-          .select("object_id, object_name")
+          .select("object_id, object_name, stage_id")
           .eq("project_id", formData.projectId)
           .not("object_id", "is", null)
           .not("object_name", "is", null)
+
+        // Фильтруем по стадии если выбрана
+        if (selectedStageId) {
+          query = query.eq("stage_id", selectedStageId)
+        }
+
+        const { data: objectRows } = await query
+
         // Уникализируем
         const map = new Map<string, { object_id: string; object_name: string }>()
         ;(objectRows || []).forEach((r: any) => {
@@ -464,11 +486,11 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         })
         setObjects(Array.from(map.values()).sort((a, b) => a.object_name.localeCompare(b.object_name)))
       } catch (e) {
-        console.error("Ошибка загрузки стадий/объектов:", e)
+        console.error("Ошибка загрузки объектов:", e)
       }
     }
-    loadStageAndObjects()
-  }, [formData.projectId])
+    loadObjects()
+  }, [formData.projectId, selectedStageId])
 
   // Если модалка открыта из конкретного раздела (employee может содержать sectionId в расширенных данных)
   // или ранее выбранный sectionId присутствует, автоматически подтягиваем проект по разделу
@@ -525,7 +547,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
 
-    // Если изменился проект, обновляем список разделов и сбрасываем выбранный раздел
+    // Если изменился проект, сбрасываем всю иерархию: стадия -> объект -> раздел -> этап
     if (name === "projectId" && value !== formData.projectId) {
       setSelectedStageId("")
       setSelectedObjectId("")
@@ -538,19 +560,65 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
         sectionId: "", // Сбрасываем выбранный раздел
       }))
     } else if (name === "stageId") {
+      // При изменении стадии сбрасываем: объект -> раздел -> этап (стадия фильтрует объекты)
       setSelectedStageId(value)
-      fetchSections(formData.projectId, value || undefined, selectedObjectId || undefined)
+      setSelectedObjectId("") // Сбрасываем объект (будет загружен новый список через useEffect)
+      setSelectedDecompositionStageId("")
+      setDecompositionStages([])
+      setFormData((prev) => ({
+        ...prev,
+        sectionId: "",
+      }))
+      // Загружаем разделы с учетом только стадии (объект сброшен)
+      fetchSections(formData.projectId, value || undefined, undefined)
+
+      // Очищаем ошибки для сброшенных полей
+      if (errors.sectionId || errors.decompositionStageId) {
+        setErrors((prev) => {
+          const newErrors = { ...prev }
+          delete newErrors.sectionId
+          delete newErrors.decompositionStageId
+          return newErrors
+        })
+      }
     } else if (name === "objectId") {
+      // При изменении объекта сбрасываем только: раздел -> этап (стадия НЕ сбрасывается)
       setSelectedObjectId(value)
+      setSelectedDecompositionStageId("")
+      setDecompositionStages([])
+      setFormData((prev) => ({
+        ...prev,
+        sectionId: "",
+      }))
+      // Загружаем разделы с учетом стадии и объекта
       fetchSections(formData.projectId, selectedStageId || undefined, value || undefined)
+
+      // Очищаем ошибки для сброшенных полей
+      if (errors.sectionId || errors.decompositionStageId) {
+        setErrors((prev) => {
+          const newErrors = { ...prev }
+          delete newErrors.sectionId
+          delete newErrors.decompositionStageId
+          return newErrors
+        })
+      }
     } else if (name === "sectionId") {
-      // При выборе раздела загружаем этапы декомпозиции
+      // При выборе раздела загружаем этапы декомпозиции и сбрасываем выбранный этап
       setSelectedDecompositionStageId("")
       fetchDecompositionStages(value)
       setFormData((prev) => ({
         ...prev,
         sectionId: value,
       }))
+
+      // Очищаем ошибку этапа при выборе раздела
+      if (errors.decompositionStageId) {
+        setErrors((prev) => {
+          const newErrors = { ...prev }
+          delete newErrors.decompositionStageId
+          return newErrors
+        })
+      }
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -740,10 +808,26 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
   }
 
   const handleProjectSelect = (project: Project) => {
-    setFormData((prev) => ({ ...prev, projectId: project.project_id }))
+    // Сбрасываем всю иерархию при выборе проекта: стадия -> объект -> раздел -> этап
+    setSelectedStageId("")
+    setSelectedObjectId("")
+    setSelectedDecompositionStageId("")
+    setDecompositionStages([])
+    setFormData((prev) => ({ ...prev, projectId: project.project_id, sectionId: "" }))
     setProjectSearchTerm(project.project_name)
     setShowProjectDropdown(false)
     fetchSections(project.project_id)
+
+    // Очищаем ошибки
+    if (errors.projectId || errors.sectionId || errors.decompositionStageId) {
+      setErrors((prev) => {
+        const newErrors = { ...prev }
+        delete newErrors.projectId
+        delete newErrors.sectionId
+        delete newErrors.decompositionStageId
+        return newErrors
+      })
+    }
   }
 
   // Переход в декомпозицию раздела
