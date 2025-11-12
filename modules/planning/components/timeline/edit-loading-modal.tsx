@@ -41,14 +41,21 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Локальное состояние для формы
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    startDate: string
+    endDate: string
+    rate: number | ""
+    projectId: string
+    sectionId: string
+    comment: string
+  }>({
     startDate: loading.startDate instanceof Date
       ? loading.startDate.toISOString().split("T")[0]
       : new Date(loading.startDate).toISOString().split("T")[0],
     endDate: loading.endDate instanceof Date
       ? loading.endDate.toISOString().split("T")[0]
       : new Date(loading.endDate).toISOString().split("T")[0],
-    rate: loading.rate || 1,
+    rate: loading.rate ?? 1,
     projectId: loading.projectId || "",
     sectionId: loading.sectionId || "",
     comment: loading.comment || "",
@@ -64,6 +71,13 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
   const [objects, setObjects] = useState<{ object_id: string; object_name: string }[]>([])
   const [selectedStageId, setSelectedStageId] = useState<string>("")
   const [selectedObjectId, setSelectedObjectId] = useState<string>("")
+  // Состояния для этапов декомпозиции
+  const [decompositionStages, setDecompositionStages] = useState<{
+    decomposition_stage_id: string
+    decomposition_stage_name: string
+  }[]>([])
+  const [selectedDecompositionStageId, setSelectedDecompositionStageId] = useState<string>("")
+  const [isLoadingDecompositionStages, setIsLoadingDecompositionStages] = useState(false)
 
   // Состояния для поиска проектов - упрощенные
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
@@ -148,6 +162,35 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     }
   }
 
+  // Загрузка этапов декомпозиции для выбранного раздела
+  const fetchDecompositionStages = async (sectionId: string) => {
+    if (!sectionId) {
+      setDecompositionStages([])
+      return
+    }
+
+    setIsLoadingDecompositionStages(true)
+    try {
+      const { data, error } = await supabase
+        .from("decomposition_stages")
+        .select("decomposition_stage_id, decomposition_stage_name")
+        .eq("decomposition_stage_section_id", sectionId)
+        .order("decomposition_stage_order", { ascending: true })
+        .order("decomposition_stage_name")
+
+      if (error) {
+        console.error("Ошибка при загрузке этапов декомпозиции:", error)
+        return
+      }
+
+      setDecompositionStages(data || [])
+    } catch (error) {
+      console.error("Ошибка при загрузке этапов декомпозиции:", error)
+    } finally {
+      setIsLoadingDecompositionStages(false)
+    }
+  }
+
   // Загрузка проектов при открытии модального окна
   useEffect(() => {
     const cleanup = fetchProjects()
@@ -209,6 +252,17 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
 
     resolveProjectBySection()
   }, [loading.projectId, loading.sectionId])
+
+  // Загрузка этапов декомпозиции при выборе раздела и предзаполнение из loading.stageId
+  useEffect(() => {
+    if (loading.sectionId) {
+      fetchDecompositionStages(loading.sectionId)
+    }
+    // Устанавливаем выбранный этап из загрузки
+    if (loading.stageId) {
+      setSelectedDecompositionStageId(loading.stageId)
+    }
+  }, [loading.sectionId, loading.stageId])
 
   // Устанавливаем название проекта в поле поиска после загрузки проектов
   useEffect(() => {
@@ -280,16 +334,29 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
         projectId: value,
         sectionId: "",
       }))
+      // Сбрасываем этап декомпозиции при смене проекта
+      setSelectedDecompositionStageId("")
+      setDecompositionStages([])
     } else if (name === "stageId") {
       setSelectedStageId(value)
       fetchSections(formData.projectId, value || undefined, selectedObjectId || undefined)
     } else if (name === "objectId") {
       setSelectedObjectId(value)
       fetchSections(formData.projectId, selectedStageId || undefined, value || undefined)
+    } else if (name === "sectionId") {
+      setFormData((prev) => ({
+        ...prev,
+        sectionId: value,
+      }))
+      // При смене раздела загружаем этапы и сбрасываем выбранный этап
+      setSelectedDecompositionStageId("")
+      fetchDecompositionStages(value)
+    } else if (name === "decompositionStageId") {
+      setSelectedDecompositionStageId(value)
     } else {
       setFormData((prev) => ({
         ...prev,
-        [name]: name === "rate" ? Number.parseFloat(value) : value,
+        [name]: name === "rate" ? (value === "" ? "" : Number.parseFloat(value)) : value,
       }))
     }
 
@@ -322,15 +389,20 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
     // Проверка ставки с явной проверкой на конечное число
     if (!Number.isFinite(formData.rate)) {
       newErrors.rate = "Ставка должна быть числом"
-    } else if (formData.rate <= 0) {
+    } else if (typeof formData.rate === "number" && formData.rate <= 0) {
       newErrors.rate = "Ставка должна быть больше 0"
-    } else if (formData.rate > 2) {
+    } else if (typeof formData.rate === "number" && formData.rate > 2) {
       newErrors.rate = "Ставка не может быть больше 2"
     }
 
     // Проверка: если выбран проект, то должен быть выбран и раздел
     if (formData.projectId && !formData.sectionId) {
       newErrors.sectionId = "При выборе проекта необходимо выбрать раздел"
+    }
+
+    // Проверка: если выбран раздел, то должен быть выбран этап декомпозиции (обязательное поле в БД)
+    if (formData.sectionId && !selectedDecompositionStageId) {
+      newErrors.decompositionStageId = "Необходимо выбрать этап декомпозиции"
     }
 
     setErrors(newErrors)
@@ -352,7 +424,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
       const updatedLoading: Partial<Loading> = {
         startDate: new Date(formData.startDate),
         endDate: new Date(formData.endDate),
-        rate: formData.rate,
+        rate: typeof formData.rate === "number" ? formData.rate : 1,
         comment: formData.comment,
       }
 
@@ -367,6 +439,13 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
         const selectedSection = sections.find((s) => s.section_id === formData.sectionId)
         updatedLoading.sectionId = formData.sectionId
         updatedLoading.sectionName = selectedSection?.section_name
+      }
+
+      // Добавляем этап декомпозиции, если он был изменен
+      if (selectedDecompositionStageId && selectedDecompositionStageId !== loading.stageId) {
+        const selectedStage = decompositionStages.find((s) => s.decomposition_stage_id === selectedDecompositionStageId)
+        updatedLoading.stageId = selectedDecompositionStageId
+        updatedLoading.stageName = selectedStage?.decomposition_stage_name
       }
 
       // Вызываем функцию обновления из стора
@@ -559,65 +638,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
         ) : (
           <>
             <div className="space-y-4">
-              {/* Стадия и объект */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className={cn(
-                      "block text-sm font-medium mb-1",
-                      theme === "dark" ? "text-slate-300" : "text-slate-700",
-                    )}
-                  >
-                    Стадия
-                  </label>
-                  <select
-                    name="stageId"
-                    value={selectedStageId}
-                    onChange={handleChange}
-                    disabled={isSaving || !formData.projectId}
-                    className={cn(
-                      "w-full text-sm rounded border px-3 py-2",
-                      theme === "dark"
-                        ? "bg-slate-700 border-slate-600 text-slate-200"
-                        : "bg-white border-slate-300 text-slate-800",
-                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
-                    )}
-                  >
-                    <option value="">Любая</option>
-                    {stages.map((s) => (
-                      <option key={s.stage_id} value={s.stage_id}>{s.stage_name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label
-                    className={cn(
-                      "block text-sm font-medium mb-1",
-                      theme === "dark" ? "text-slate-300" : "text-slate-700",
-                    )}
-                  >
-                    Объект
-                  </label>
-                  <select
-                    name="objectId"
-                    value={selectedObjectId}
-                    onChange={handleChange}
-                    disabled={isSaving || !formData.projectId}
-                    className={cn(
-                      "w-full text-sm rounded border px-3 py-2",
-                      theme === "dark"
-                        ? "bg-slate-700 border-slate-600 text-slate-200"
-                        : "bg-white border-slate-300 text-slate-800",
-                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
-                    )}
-                  >
-                    <option value="">Любой</option>
-                    {objects.map((o) => (
-                      <option key={o.object_id} value={o.object_id}>{o.object_name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              {/* Проект */}
               <div className="project-search-container relative">
                 <label
                   className={cn(
@@ -677,6 +698,66 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
                 {isLoadingProjects && <p className="text-xs text-slate-500 mt-1">Загрузка проектов...</p>}
               </div>
 
+              {/* Стадия и объект */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    className={cn(
+                      "block text-sm font-medium mb-1",
+                      theme === "dark" ? "text-slate-300" : "text-slate-700",
+                    )}
+                  >
+                    Стадия
+                  </label>
+                  <select
+                    name="stageId"
+                    value={selectedStageId}
+                    onChange={handleChange}
+                    disabled={isSaving || !formData.projectId}
+                    className={cn(
+                      "w-full text-sm rounded border px-3 py-2",
+                      theme === "dark"
+                        ? "bg-slate-700 border-slate-600 text-slate-200"
+                        : "bg-white border-slate-300 text-slate-800",
+                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
+                    )}
+                  >
+                    <option value="">Любая</option>
+                    {stages.map((s) => (
+                      <option key={s.stage_id} value={s.stage_id}>{s.stage_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className={cn(
+                      "block text-sm font-medium mb-1",
+                      theme === "dark" ? "text-slate-300" : "text-slate-700",
+                    )}
+                  >
+                    Объект
+                  </label>
+                  <select
+                    name="objectId"
+                    value={selectedObjectId}
+                    onChange={handleChange}
+                    disabled={isSaving || !formData.projectId}
+                    className={cn(
+                      "w-full text-sm rounded border px-3 py-2",
+                      theme === "dark"
+                        ? "bg-slate-700 border-slate-600 text-slate-200"
+                        : "bg-white border-slate-300 text-slate-800",
+                      isSaving || !formData.projectId ? "opacity-50 cursor-not-allowed" : "",
+                    )}
+                  >
+                    <option value="">Любой</option>
+                    {objects.map((o) => (
+                      <option key={o.object_id} value={o.object_id}>{o.object_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label
                   className={cn(
@@ -710,6 +791,42 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
                 {errors.sectionId && <p className="text-xs text-red-500 mt-1">{errors.sectionId}</p>}
                 {isLoadingSections && <p className="text-xs text-slate-500 mt-1">Загрузка разделов...</p>}
                 {!formData.projectId && <p className="text-xs text-slate-500 mt-1">Сначала выберите проект</p>}
+              </div>
+
+              {/* Этап декомпозиции */}
+              <div>
+                <label
+                  className={cn(
+                    "block text-sm font-medium mb-1",
+                    theme === "dark" ? "text-slate-300" : "text-slate-700",
+                  )}
+                >
+                  Этап
+                </label>
+                <select
+                  name="decompositionStageId"
+                  value={selectedDecompositionStageId}
+                  onChange={handleChange}
+                  disabled={isSaving || isLoadingDecompositionStages || !formData.sectionId}
+                  className={cn(
+                    "w-full text-sm rounded border px-3 py-2",
+                    theme === "dark"
+                      ? "bg-slate-700 border-slate-600 text-slate-200"
+                      : "bg-white border-slate-300 text-slate-800",
+                    errors.decompositionStageId ? "border-red-500" : "",
+                    isSaving || isLoadingDecompositionStages || !formData.sectionId ? "opacity-50 cursor-not-allowed" : "",
+                  )}
+                >
+                  <option value="">Выберите этап</option>
+                  {decompositionStages.map((stage) => (
+                    <option key={stage.decomposition_stage_id} value={stage.decomposition_stage_id}>
+                      {stage.decomposition_stage_name}
+                    </option>
+                  ))}
+                </select>
+                {errors.decompositionStageId && <p className="text-xs text-red-500 mt-1">{errors.decompositionStageId}</p>}
+                {isLoadingDecompositionStages && <p className="text-xs text-slate-500 mt-1">Загрузка этапов...</p>}
+                {!formData.sectionId && <p className="text-xs text-slate-500 mt-1">Сначала выберите раздел</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -783,7 +900,7 @@ export function EditLoadingModal({ loading, setEditingLoading, theme }: EditLoad
                   step="0.1"
                   min="0.1"
                   max="2"
-                  value={formData.rate}
+                  value={formData.rate === "" ? "" : formData.rate}
                   onChange={handleChange}
                   disabled={isSaving}
                   className={cn(
