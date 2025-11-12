@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Section, Loading, DecompositionStage } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
@@ -15,7 +15,8 @@ import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
 import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
- 
+import { EditLoadingModal } from "./edit-loading-modal"
+
 
 interface TimelineRowProps {
   section: Section
@@ -298,6 +299,19 @@ export function TimelineRow({
             >
               {/* Компактное отображение в одну строку с аватаром слева */}
               <div className="flex items-center w-full" style={{ paddingLeft: '60px' }}>
+                {/* Иконка раскрытия */}
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-2">
+                  {hasChildren ? (
+                    isExpanded ? (
+                      <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                    ) : (
+                      <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                    )
+                  ) : (
+                    <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
+                  )}
+                </div>
+
                 {/* Аватар или кнопка добавления */}
                 <div className="flex-shrink-0 mr-2">
                   {section.responsibleName ? (
@@ -345,13 +359,27 @@ export function TimelineRow({
                   )}
                 </div>
 
-                {/* Счетчик загрузок справа от аватара (без кнопки создания на уровне раздела) */}
+                {/* Название раздела (без иконки раскрытия, она теперь перед аватаром) */}
+                <span
+                  className={cn(
+                    "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline mr-2",
+                    theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenSectionPanel?.(section.id)
+                  }}
+                >
+                  {section.name}
+                </span>
+
+                {/* Счетчик загрузок после названия раздела */}
                 <div>
                   <span
                     className={cn(
                       "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 flex-shrink-0",
-                      theme === "dark" 
-                        ? "text-slate-400 bg-slate-600" 
+                      theme === "dark"
+                        ? "text-slate-400 bg-slate-600"
                         : "text-slate-500 bg-slate-200"
                     )}
                   >
@@ -366,16 +394,16 @@ export function TimelineRow({
                     onMouseEnter={() => setHoveredStagesCounter(true)}
                     onMouseLeave={() => setHoveredStagesCounter(false)}
                   >
-                    <Tooltip 
-                      content={`Этапов: ${stages.length}`} 
+                    <Tooltip
+                      content={`Этапов: ${stages.length}`}
                       isVisible={hoveredStagesCounter}
                       position="top"
                     >
                       <span
                         className={cn(
                           "text-xs mr-2 px-1 py-0.5 rounded bg-opacity-20 inline-flex items-center gap-1 flex-shrink-0 transition-colors",
-                          theme === "dark" 
-                            ? "text-slate-400 bg-slate-600" 
+                          theme === "dark"
+                            ? "text-slate-400 bg-slate-600"
                             : "text-slate-500 bg-slate-200"
                         )}
                       >
@@ -388,41 +416,12 @@ export function TimelineRow({
 
                 {/* Индикатор перерасходов удалён */}
 
-                {/* Иконка раскрытия и название раздела */}
-                <div className="flex items-center mr-3">
-                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mr-1">
-                    {hasChildren ? (
-                      isExpanded ? (
-                        <ChevronDown className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
-                      ) : (
-                        <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
-                      )
-                    ) : (
-                      <ChevronRight className={cn("h-4 w-4", theme === "dark" ? "text-slate-400" : "text-slate-300")} />
-                    )}
-                  </div>
-                  
-                  <span
-                    className={cn(
-                      "text-sm font-medium truncate whitespace-nowrap overflow-hidden max-w-[165px] cursor-pointer hover:underline",
-                      theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onOpenSectionPanel?.(section.id)
-                    }}
-                  >
-                    {section.name}
-                  </span>
-
                 {/* Кнопка сворачивания/разворачивания загрузок всех этапов раздела */}
                 {isExpanded && (hasStages || uniqueLoadings.length > 0) && (
                   <button
                     className={cn(
-                      "ml-2 w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
-                      theme === "dark"
-                        ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20"
-                        : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20",
+                      "ml-2 inline-flex items-center justify-center transition-colors hover:opacity-70",
+                      theme === "dark" ? "text-slate-300" : "text-slate-600",
                     )}
                     title={areAllSectionStagesCollapsed() ? "Развернуть загрузки этапов" : "Свернуть загрузки этапов"}
                     onClick={(e) => {
@@ -431,13 +430,12 @@ export function TimelineRow({
                     }}
                   >
                     {areAllSectionStagesCollapsed() ? (
-                      <ChevronRight size={12} />
+                      <ChevronsDown className="h-4 w-4" />
                     ) : (
-                      <ChevronDown size={12} />
+                      <ChevronsUp className="h-4 w-4" />
                     )}
                   </button>
                 )}
-                </div>
 
                 {/* Дополнительная информация в две строки */}
                 <div className="flex flex-col gap-1 ml-auto text-xs justify-center">
@@ -749,6 +747,7 @@ function LoadingRow({
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
@@ -861,10 +860,10 @@ function LoadingRow({
             }}
           >
             <div className="flex items-center justify-between w-full" style={{ paddingLeft: '100px' }}>
-              {/* Левая часть с аватаром, именем и датами */}
-              <div className="flex items-center">
+              {/* Левый блок: Аватар + Имя (flex, занимает оставшееся место) */}
+              <div className="flex items-center flex-1 min-w-0">
                 <div
-                  className="flex items-center justify-center h-full"
+                  className="flex-shrink-0"
                   onMouseEnter={() => setHoveredAvatar(true)}
                   onMouseLeave={() => setHoveredAvatar(false)}
                 >
@@ -873,60 +872,63 @@ function LoadingRow({
                       name={loading.responsibleName}
                       avatarUrl={loading.responsibleAvatarUrl}
                       theme={theme === "dark" ? "dark" : "light"}
-                      size="md"
+                      size="sm"
                     />
                   </Tooltip>
-                  <div className="ml-2">
-                    {/* Имя ответственного - уменьшаем размер шрифта */}
-                    <div className={cn("text-xs font-medium flex items-center gap-1", theme === "dark" ? "text-slate-200" : "text-slate-700")}> 
-                      {loading.responsibleName || "Не указан"}
-                      {/* Маркер ответственного за раздел */}
-                      {sectionResponsibleId && (loading.responsibleId === sectionResponsibleId) && (
-                        <span
-                          className={cn(
-                            "inline-flex items-center justify-center rounded-sm text-[10px] px-1 py-0.5",
-                            theme === "dark" ? "bg-amber-900/60 text-amber-300" : "bg-amber-100 text-amber-700"
-                          )}
-                          title="Ответственный за раздел"
-                        >
-                          ★
-                        </span>
-                      )}
-                    </div>
-                    {/* Команда ответственного - еще меньший размер */}
-                    <div className={cn("text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                      {loading.responsibleTeamName || "Без команды"}
-                    </div>
-                  </div>
                 </div>
-
-                {/* Даты - перемещаем сюда, сразу после имени */}
-                <div className="flex items-center ml-4">
-                  <span className={cn("text-xs", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
-                    {formatShortDate(loading.startDate)}
-                  </span>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}
-                  >
-                    <path d="M5 12h14"></path>
-                    <path d="m12 5 7 7-7 7"></path>
-                  </svg>
-                  <span className={cn("text-xs", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
-                    {formatShortDate(loading.endDate)}
-                  </span>
+                <div className="ml-2 min-w-0 flex-1">
+                  {/* Имя ответственного - 2 строки если длинное, меньший шрифт */}
+                  <div className={cn("text-[11px] font-medium flex items-center gap-1 line-clamp-2 break-words", theme === "dark" ? "text-slate-200" : "text-slate-700")}>
+                    <span className="break-words">{loading.responsibleName || "Не указан"}</span>
+                    {/* Маркер ответственного за раздел */}
+                    {sectionResponsibleId && (loading.responsibleId === sectionResponsibleId) && (
+                      <span
+                        className={cn(
+                          "inline-flex items-center justify-center rounded-sm text-[9px] px-1 py-0.5 flex-shrink-0",
+                          theme === "dark" ? "bg-amber-900/60 text-amber-300" : "bg-amber-100 text-amber-700"
+                        )}
+                        title="Ответственный за раздел"
+                      >
+                        ★
+                      </span>
+                    )}
+                  </div>
+                  {/* Команда ответственного - меньший размер */}
+                  <div className={cn("text-[9px] truncate", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                    {loading.responsibleTeamName || "Без команды"}
+                  </div>
                 </div>
               </div>
 
-              {/* Правая часть со ставкой */}
-              <div className="flex items-center gap-1">
+              {/* Правый блок: Даты + Кнопки + Ставка (как в StageRow) */}
+              <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                {/* Даты */}
+                <div className="flex items-center gap-1">
+                  <span className={cn("text-[10px] whitespace-nowrap", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
+                    {formatShortDate(loading.startDate)}
+                  </span>
+                  <span className={cn("text-[10px]", theme === "dark" ? "text-slate-500" : "text-slate-400")}>—</span>
+                  <span className={cn("text-[10px] whitespace-nowrap", theme === "dark" ? "text-slate-300" : "text-slate-600")}>
+                    {formatShortDate(loading.endDate)}
+                  </span>
+                </div>
+
+                {/* Кнопки редактирования и удаления */}
+                <button
+                  className={cn(
+                    "inline-flex items-center justify-center h-5 w-5 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
+                    theme === "dark"
+                      ? "hover:bg-emerald-900/30 hover:text-emerald-300"
+                      : "hover:bg-emerald-100 hover:text-emerald-600"
+                  )}
+                  title="Редактировать загрузку"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingLoading(loading)
+                  }}
+                >
+                  <Edit3 className="h-3 w-3" />
+                </button>
                 <ConfirmDialog
                   title="Удалить загрузку?"
                   description={(
@@ -950,7 +952,7 @@ function LoadingRow({
                 >
                   <button
                     className={cn(
-                      "inline-flex items-center justify-center h-6 w-6 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
+                      "inline-flex items-center justify-center h-5 w-5 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
                       theme === "dark"
                         ? "hover:bg-red-900/30 hover:text-red-300"
                         : "hover:bg-red-100 hover:text-red-600"
@@ -958,16 +960,20 @@ function LoadingRow({
                     title="Удалить загрузку"
                     onClick={(e) => { e.stopPropagation() }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 </ConfirmDialog>
+
+                {/* Ставка - фиксированная ширина для выравнивания */}
                 <span
                   className={cn(
-                    "text-xs font-medium px-2 py-0.5 rounded",
+                    "text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap inline-block text-center",
                     theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
                   )}
+                  style={{ minWidth: '40px' }}
+                  title="Ставка"
                 >
-                  {loading.rate} ставка
+                  {loading.rate}
                 </span>
               </div>
             </div>
@@ -1034,6 +1040,13 @@ function LoadingRow({
           })}
         </div>
       </div>
+      {editingLoading && (
+        <EditLoadingModal
+          loading={editingLoading}
+          setEditingLoading={setEditingLoading}
+          theme={theme}
+        />
+      )}
     </div>
   )
 }
@@ -1323,8 +1336,8 @@ function StageRow({
             className={cn(
               "p-2 font-medium border-r flex items-center transition-colors h-full",
               theme === "dark"
-                ? "border-slate-700 bg-slate-800 group-hover/stage:bg-emerald-900"
-                : "border-slate-200 bg-white group-hover/stage:bg-emerald-50",
+                ? "border-slate-700 bg-slate-900 group-hover/stage:bg-emerald-900"
+                : "border-slate-200 bg-slate-100 group-hover/stage:bg-emerald-50",
             )}
             style={{
               width: `${totalFixedWidth}px`,
@@ -1335,58 +1348,60 @@ function StageRow({
             }}
           >
             <div className="flex items-center justify-between w-full" style={{ paddingLeft: '80px' }}>
-              <div className="flex items-center">
-              <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
-                <button
-                  className={cn(
-                    "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md mr-1",
-                    theme === "dark" 
-                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
-                      : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
-                  )}
-                  title={isCollapsed ? "Развернуть загрузки" : "Свернуть загрузки"}
-                  onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
-                >
-                  {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                </button>
-                <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
+                  <button
+                    className={cn(
+                      "inline-flex items-center justify-center transition-colors mr-1",
+                      theme === "dark"
+                        ? "text-slate-400 hover:text-slate-200"
+                        : "text-slate-500 hover:text-slate-700"
+                    )}
+                    title={isCollapsed ? "Развернуть загрузки" : "Свернуть загрузки"}
+                    onClick={(e) => { e.stopPropagation(); onToggleCollapse() }}
+                  >
+                    {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  <Milestone className={cn("h-4 w-4", theme === "dark" ? "text-slate-300" : "text-slate-600")} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={cn("text-xs font-medium cursor-pointer hover:underline break-words line-clamp-2", theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-700 hover:text-teal-600")}
+                    onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
+                    title="Открыть декомпозицию раздела"
+                  >{stage.name || "Этап"}</div>
+                </div>
               </div>
-                <div
-                  className={cn("text-xs font-medium cursor-pointer hover:underline", theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-700 hover:text-teal-600")}
-                  onClick={(e) => { e.stopPropagation(); onOpenSectionPanel?.(section.id, 'decomposition') }}
-                  title="Открыть декомпозицию раздела"
-                >{stage.name || "Этап"}</div>
+              <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                 {(stage.start || stage.finish) && (
-                  <div className={cn("ml-2 text-[10px]", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+                  <div className={cn("text-[10px] whitespace-nowrap", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
                     {formatShortDate(stage.start)}
                     <span className={cn("mx-1", theme === "dark" ? "text-slate-500" : "text-slate-400")}>—</span>
                     {formatShortDate(stage.finish)}
                   </div>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
                 {totalPlannedHours > 0 && activeDaysCount > 0 && (
                   <span
                     className={cn(
-                      "text-xs font-medium px-2 py-0.5 rounded",
+                      "text-xs font-medium px-2 py-0.5 rounded whitespace-nowrap",
                       theme === "dark" ? "bg-teal-900/50 text-teal-300" : "bg-teal-100 text-teal-700",
                     )}
                     title={`План: ${totalPlannedHours} ч на ${activeDaysCount} дн`}
                   >
-                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} час/день` : `${hoursPerDay.toFixed(1)} час/день`}
+                    {Number.isInteger(hoursPerDay) ? `${hoursPerDay} ч/дн` : `${hoursPerDay.toFixed(1)} ч/дн`}
                   </span>
                 )}
                 <button
                   className={cn(
                     "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
-                    theme === "dark" 
-                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20" 
+                    theme === "dark"
+                      ? "bg-slate-700 text-slate-200 hover:bg-slate-600 hover:shadow-slate-500/20"
                       : "bg-slate-200 text-slate-700 hover:bg-slate-300 hover:shadow-slate-400/20"
                   )}
                   title="Создать загрузку в этом этапе"
                   onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
                 >
-                  <PlusCircle size={12} /> 
+                  <PlusCircle size={12} />
                 </button>
               </div>
             </div>

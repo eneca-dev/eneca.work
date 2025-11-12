@@ -127,7 +127,7 @@ export function DepartmentRow({
             {/* Столбец с названием отдела */}
             <div
               className={cn(
-                "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]",
+                "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r",
                 theme === "dark"
                   ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
                   : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
@@ -140,7 +140,7 @@ export function DepartmentRow({
               }}
             >
               {/* Левая часть с названием отдела */}
-              <div className="flex items-center">
+              <div className="flex items-center" style={{ paddingLeft: '0px' }}>
                 <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                   {isDepartmentExpanded ? (
                     <ChevronDown className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
@@ -178,7 +178,7 @@ export function DepartmentRow({
             {columnVisibility.object && (
               <div
                 className={cn(
-                  "p-3 transition-colors h-full flex items-center justify-center border-b border-r-[0.5px]", // Добавлена border-b
+                  "p-3 transition-colors h-full flex items-center justify-center border-b border-r",
                   theme === "dark"
                     ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
                     : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
@@ -302,7 +302,7 @@ export function DepartmentRow({
       {isDepartmentExpanded && (
         <>
           {department.teams.map((team, teamIndex) => (
-            <div key={team.id}>
+            <Fragment key={team.id}>
               <TeamRow
                 team={team}
                 timeUnits={timeUnits}
@@ -342,7 +342,7 @@ export function DepartmentRow({
                   />
                 ))
               })()}
-            </div>
+            </Fragment>
           ))}
         </>
       )}
@@ -381,19 +381,19 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
           "flex transition-colors cursor-pointer w-full border-b",
           theme === "dark" ? "border-slate-700" : "border-slate-200",
         )}
-        style={{ height: `${rowHeight}px` }}
+        style={{ height: `${reducedRowHeight}px` }}
         onClick={onToggleExpand}
       >
         {/* Фиксированные столбцы */}
-        <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${rowHeight}px`, width: `${totalFixedWidth}px` }}>
+        <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px` }}>
           <div
             className={cn(
-              "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r-[0.5px]",
+              "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r",
               theme === "dark" ? "border-slate-700 bg-slate-900 group-hover/row:bg-slate-800" : "border-slate-200 bg-slate-50 group-hover/row:bg-white",
             )}
             style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${padding}px` }}
           >
-            <div className="flex items-center">
+            <div className="flex items-center" style={{ paddingLeft: '20px' }}>
               <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center mr-2">
                 {isExpanded ? (
                   <ChevronDown className={cn("h-5 w-5", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
@@ -457,7 +457,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   i === timeUnits.length - 1 ? "border-r-0" : "",
                 )}
                 style={{
-                  height: `${rowHeight}px`,
+                  height: `${reducedRowHeight}px`,
                   width: `${cellWidth}px`,
                   minWidth: `${cellWidth}px`,
                   flexShrink: 0,
@@ -474,7 +474,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
-                        height: `${rowHeight - 10}px`,
+                        height: `${reducedRowHeight - 10}px`,
                         opacity: 0.9
                       }}
                       title={`Загрузка команды: ${loadPct}%`}
@@ -492,7 +492,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                                 : (theme === "dark" ? "bg-emerald-400" : "bg-emerald-500")
                         )}
                         style={{
-                          height: `${Math.max(Math.min((loadPct / 100) * (rowHeight - 14), rowHeight - 14), 2)}px`,
+                          height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
                           opacity: theme === "dark" ? 0.8 : 0.7
                         }}
                       />
@@ -630,7 +630,7 @@ export function EmployeeRow({
             {/* Столбец с информацией о сотруднике */}
             <div
               className={cn(
-                "p-2 flex items-center transition-colors h-full border-b-[0.5px] border-r-[0.5px]",
+                "p-2 flex items-center transition-colors h-full border-b border-r",
                 theme === "dark"
                   ? "border-slate-700 bg-slate-800 group-hover/employee:bg-slate-700"
                   : "border-slate-200 bg-white group-hover/employee:bg-slate-50",
@@ -643,7 +643,7 @@ export function EmployeeRow({
             >
               <div className="flex items-center justify-between w-full">
                 {/* Левая часть с аватаром, именем и должностью */}
-                <div className="flex items-center">
+                <div className="flex items-center" style={{ paddingLeft: '40px' }}>
                   <div
                     className="flex items-center"
                     onMouseEnter={() => setHoveredAvatar(true)}

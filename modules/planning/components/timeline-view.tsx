@@ -312,8 +312,8 @@ useEffect(() => {
 
  const handleTodayPeriod = () => {
    const today = new Date()
-   // Отступаем на 30 дней назад от текущей даты
-   today.setDate(today.getDate() - 30)
+   // Отступаем на 7 дней назад от текущей даты
+   today.setDate(today.getDate() - 7)
    setStartDate(today)
  }
 

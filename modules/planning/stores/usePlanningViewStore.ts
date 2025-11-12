@@ -33,11 +33,11 @@ interface PlanningViewState {
   setCurrentMonthDate: (date: Date) => void
 }
 
-// Функция возвращает дату на 30 дней назад от текущей
-const getDate30DaysAgo = () => {
+// Функция возвращает дату на 7 дней назад от текущей
+const getDate7DaysAgo = () => {
   const today = new Date()
-  // Отступаем на 30 дней назад от текущей даты
-  today.setDate(today.getDate() - 30)
+  // Отступаем на 7 дней назад от текущей даты
+  today.setDate(today.getDate() - 7)
   return today
 }
 
@@ -53,7 +53,7 @@ export const usePlanningViewStore = create<PlanningViewState>()(
         zoomLevel: 1,
 
         // Настройки таймлайна
-        startDate: getDate30DaysAgo(),
+        startDate: getDate7DaysAgo(),
         daysToShow: 180,
         scale: "day" as TimelineScale,
         cellWidth: 22, // Фиксированная ширина ячейки в 22px
@@ -126,7 +126,7 @@ export const usePlanningViewStore = create<PlanningViewState>()(
         },
       }),
       {
-        name: "planning-view-storage",
+        name: "planning-view-storage-v2",
         partialize: (state) => {
           // Проверяем, что startDate является объектом Date перед вызовом toISOString
           const startDateString =

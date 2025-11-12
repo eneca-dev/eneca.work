@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Input } from "./ui/input";
 import { DatePicker } from "./ui/date-picker";
+import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
 
@@ -77,6 +78,20 @@ type StagesManagementProps = {
   onOpenLog?: (itemId: string) => void;
 };
 
+// Вспомогательные функции для работы с датами
+function parseISODateString(iso: string | null): Date | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function formatISODateString(date: Date | null): string | null {
+  if (!date) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, string> = {
@@ -287,22 +302,23 @@ function SortableStage({
             }`}
           />
         </div>
-        <div className={`flex items-center text-xs text-muted-foreground/70 ${isCollapsed ? "gap-2" : "gap-3"}`}>
-          <DatePicker
-            value={stage.startDate ?? ""}
-            onChange={(val) => updateStage(stage.id, { startDate: val })}
-            triggerClassName={isCollapsed ? "h-5 px-1.5" : "h-6 px-2"}
-            openOnToday
-            plainTrigger
+        <div className="ml-auto mr-2 relative">
+          <DateRangePicker
+            value={{
+              from: parseISODateString(stage.startDate),
+              to: parseISODateString(stage.endDate)
+            }}
+            onChange={(range: DateRange) => {
+              updateStage(stage.id, {
+                startDate: formatISODateString(range.from),
+                endDate: formatISODateString(range.to)
+              });
+            }}
+            calendarWidth="500px"
+            inputWidth="200px"
+            inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
           />
-          <span className="text-muted-foreground/40">→</span>
-          <DatePicker
-            value={stage.endDate ?? ""}
-            onChange={(val) => updateStage(stage.id, { endDate: val })}
-            triggerClassName={isCollapsed ? "h-5 px-1.5" : "h-6 px-2"}
-            openOnToday
-            plainTrigger
-          />
+          <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         </div>
         <Button
           variant="ghost"
