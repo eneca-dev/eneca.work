@@ -109,6 +109,8 @@ interface PlanningState {
     stageId?: string
     projectName?: string
     sectionName?: string
+    decompositionStageId?: string
+    decompositionStageName?: string
     responsibleName?: string
     responsibleAvatarUrl?: string | null
     responsibleTeamName?: string | null
@@ -827,6 +829,7 @@ export const usePlanningStore = create<PlanningState>()(
                     startDate: new Date(row.loading_start as string),
                     endDate: new Date(row.loading_finish as string),
                     rate: Number(row.loading_rate) || 0,
+                    stageId: "",
                     createdAt: new Date(),
                     updatedAt: new Date(),
                     responsibleName: "Дефицит",
@@ -1108,7 +1111,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
               rate: loadingData.rate,
-              stageId: loadingData.stageId,
+              stageId: loadingData.stageId || "",
               comment: (loadingData as any).comment,
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -1759,6 +1762,7 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleAvatarUrl: item.responsible_avatar || undefined,
               sectionId: item.loading_section,
               startDate: parseTimestampTz(item.loading_start) || new Date(),
+              stageId: "",
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
               createdAt: parseTimestampTz(item.loading_created) || new Date(),
