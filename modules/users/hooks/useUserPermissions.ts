@@ -10,6 +10,9 @@ export interface UserPermissions {
   // Права на назначение ролей
   canAssignRoles: boolean
   canAssignAdminRole: boolean
+  // Права на редактирование ставки и загруженности
+  canEditSalaryAll: boolean
+  canEditSalaryDepartment: boolean
   // Права на просмотр ставок
   canViewRateSelf: boolean
   canViewRateTeam: boolean
@@ -37,6 +40,10 @@ export function useUserPermissions(): UserPermissions {
     // Права на назначение ролей
     canAssignRoles: hasPermission('users.assign_roles'),
     canAssignAdminRole: hasPermission('users.assign_admin_role'),
+
+    // Права на редактирование ставки и загруженности
+    canEditSalaryAll: hasPermission('users.edit_salary.all'),
+    canEditSalaryDepartment: hasPermission('users.edit_salary.department'),
 
     canViewRateSelf: hasPermission('users.rates.view.self'),
     canViewRateTeam: hasPermission('users.rates.view.team'),

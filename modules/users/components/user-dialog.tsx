@@ -89,8 +89,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
   const setUser = useUserStore((state) => state.setUser)
   const currentUserId = useUserStore((state) => state.id)
+  const currentUserProfile = useUserStore((state) => state.profile)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures, canEditTeam, canEditDepartment, canAssignRoles, canAssignAdminRole, isAdmin, isUser } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canEditDepartment, canAssignRoles, canAssignAdminRole, isAdmin, isUser, canEditSalaryAll, canEditSalaryDepartment, isDepartmentHead } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
   const { reloadPermissions } = useUserPermissionsSync()
 
@@ -128,8 +129,25 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const canEditStructureData = canEditStructures
 
   // Определяем, может ли пользователь редактировать ставку и загруженность
-  // Только администраторы могут редактировать эти поля (и для себя, и для других)
-  const canEditSalaryFields = isAdmin
+  // Админ с полными правами может редактировать всех
+  // Руководитель отдела может редактировать только сотрудников своего отдела
+  const canEditSalaryFields = React.useMemo(() => {
+    // Админ с полными правами может редактировать всех
+    if (canEditSalaryAll) return true
+
+    // Руководитель отдела может редактировать только своего отдела
+    if (canEditSalaryDepartment) {
+      const currentDepartmentId = currentUserProfile?.departmentId
+      const targetDepartmentId = user?.departmentId
+
+      // Если не известны ID отделов, запрещаем редактирование
+      if (!currentDepartmentId || !targetDepartmentId) return false
+
+      return currentDepartmentId === targetDepartmentId
+    }
+
+    return false
+  }, [canEditSalaryAll, canEditSalaryDepartment, currentUserProfile, user])
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
@@ -938,9 +956,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     placeholder="Введите ставку"
                     disabled={!canEditSalaryFields}
                     className="h-9"
-                    title={!canEditSalaryFields ? "Только администраторы могут редактировать ставку" : ""}
+                    title={!canEditSalaryFields ? "Недостаточно прав для редактирования ставки" : ""}
                   />
-                  <p className="text-xs text-gray-500">Ставка {!canEditSalaryFields && <span className="text-orange-600">(только для админов)</span>}</p>
+                  <p className="text-xs text-gray-500">Ставка {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
                 </div>
 
                 <div className="space-y-1">
@@ -949,7 +967,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     onValueChange={(value) => handleChange("employmentRate", parseFloat(value))}
                     disabled={!canEditSalaryFields}
                   >
-                    <SelectTrigger title={!canEditSalaryFields ? "Только администраторы могут редактировать загруженность" : ""}>
+                    <SelectTrigger title={!canEditSalaryFields ? "Недостаточно прав для редактирования загруженности" : ""}>
                       <SelectValue placeholder="Выберите загруженность" />
                     </SelectTrigger>
                     <SelectContent>
@@ -959,7 +977,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                       <SelectItem value="1">100% (1.0)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500">Процент загруженности {!canEditSalaryFields && <span className="text-orange-600">(только для админов)</span>}</p>
+                  <p className="text-xs text-gray-500">Процент загруженности {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
                 </div>
               </div>
             </div>
