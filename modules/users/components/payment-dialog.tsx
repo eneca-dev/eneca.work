@@ -1,20 +1,21 @@
 "use client"
 
 import type React from "react"
-import { Button } from "@/components/ui/button"
 import { Modal, ModalButton } from '@/components/modals'
 import { Save } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { updateUser } from "@/services/org-data-service"
 import type { User } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { DollarSign, Clock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import * as Sentry from "@sentry/nextjs"
+import { useUserPermissions } from "../hooks/useUserPermissions"
+import { useUserStore } from "@/stores/useUserStore"
 
 interface PaymentDialogProps {
   open: boolean
@@ -26,6 +27,29 @@ interface PaymentDialogProps {
 function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialogProps) {
   const [formData, setFormData] = useState<Partial<User>>({})
   const [isLoading, setIsLoading] = useState(false)
+
+  // Получаем разрешения и данные текущего пользователя
+  const { canEditSalaryAll, canEditSalaryDepartment } = useUserPermissions()
+  const currentUserProfile = useUserStore((state) => state.profile)
+
+  // Определяем, может ли текущий пользователь редактировать ставку и загруженность
+  const canEditSalaryFields = useMemo(() => {
+    // Админ с полными правами может редактировать всех
+    if (canEditSalaryAll) return true
+
+    // Руководитель отдела может редактировать только своего отдела
+    if (canEditSalaryDepartment) {
+      const currentDepartmentId = currentUserProfile?.departmentId
+      const targetDepartmentId = user?.departmentId
+
+      // Если не известны ID отделов, запрещаем редактирование
+      if (!currentDepartmentId || !targetDepartmentId) return false
+
+      return currentDepartmentId === targetDepartmentId
+    }
+
+    return false
+  }, [canEditSalaryAll, canEditSalaryDepartment, currentUserProfile, user])
 
   // Установка данных пользователя при открытии диалога
   useEffect(() => {
@@ -46,6 +70,17 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Проверяем права перед сохранением
+    if (!canEditSalaryFields) {
+      toast({
+        title: "Ошибка",
+        description: "Недостаточно прав для редактирования информации об оплате",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -92,7 +127,7 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
     <TooltipProvider>
       <Modal isOpen={open} onClose={() => onOpenChange(false)} size="lg">
         <form onSubmit={handleSubmit}>
-          <Modal.Header 
+          <Modal.Header
             title="Редактирование оплаты"
             subtitle={
               <>
@@ -103,7 +138,11 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                     <span className="text-gray-500">{user.position}</span>
                   </div>
                 )}
-                Измените информацию об оплате и нажмите Сохранить, когда закончите.
+                {canEditSalaryFields ? (
+                  "Измените информацию об оплате и нажмите Сохранить, когда закончите."
+                ) : (
+                  <span className="text-orange-600">Недостаточно прав для редактирования информации об оплате.</span>
+                )}
               </>
             }
           />
@@ -116,6 +155,7 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                 <Select
                   value={formData.employmentRate !== undefined ? String(formData.employmentRate) : undefined}
                   onValueChange={(value) => handleChange("employmentRate", Number.parseFloat(value))}
+                  disabled={!canEditSalaryFields}
                 >
                   <SelectTrigger id="employmentRate" className="col-span-3">
                     <SelectValue placeholder="Выберите ставку" />
@@ -140,6 +180,7 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                     id="isHourly"
                     checked={!!formData.isHourly}
                     onCheckedChange={(checked) => handleChange("isHourly", checked)}
+                    disabled={!canEditSalaryFields}
                   />
                   <Label htmlFor="isHourly" className="flex items-center">
                     {formData.isHourly ? (
@@ -184,6 +225,7 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
                     className="pl-8"
                     min={0}
                     step={formData.isHourly ? 0.01 : 10}
+                    disabled={!canEditSalaryFields}
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">Br</span>
                 </div>
@@ -217,10 +259,11 @@ function PaymentDialog({ open, onOpenChange, user, onUserUpdated }: PaymentDialo
             >
               Отмена
             </ModalButton>
-            <ModalButton 
-              type="submit" 
+            <ModalButton
+              type="submit"
               variant="success"
               loading={isLoading}
+              disabled={!canEditSalaryFields || isLoading}
               icon={<Save />}
             >
               {isLoading ? "Сохранение..." : "Сохранить"}

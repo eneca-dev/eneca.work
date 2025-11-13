@@ -226,6 +226,12 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
     return { "": filteredUsers }
   }, [filteredUsers, groupBy])
 
+  // Проверяем, будет ли показана колонка действий для хотя бы одного пользователя
+  const shouldShowActionsColumn = useMemo(() => {
+    if (canEditAllUsers) return true
+    return filteredUsers.some(user => canEditUser(user))
+  }, [canEditAllUsers, filteredUsers, canEditUser])
+
   // ОПТИМИЗАЦИЯ: Мемоизируем обработчики
   const handleEditUser = useCallback((user: User) => {
     setSelectedUser(user)
@@ -1000,7 +1006,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                           <Home className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
+                      {shouldShowActionsColumn && <TableHead className="w-12 px-1"></TableHead>}
                     </>
                   ) : (
                     // Заголовки для режима "Без группировки"
@@ -1039,7 +1045,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                           <Home className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      {canEditAllUsers && <TableHead className="w-12 px-1"></TableHead>}
+                      {shouldShowActionsColumn && <TableHead className="w-12 px-1"></TableHead>}
                     </>
                   )}
                   </TableRow>
@@ -1181,7 +1187,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
                           <TableRow className="bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-50/70 hover:dark:bg-slate-800/50">
-                              <TableCell colSpan={canEditAllUsers ? 9 : 8} className="py-2 px-4">
+                              <TableCell colSpan={shouldShowActionsColumn ? 9 : 8} className="py-2 px-4">
                                 <div
                                 className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
                                   onClick={() => toggleGroup(department)}
@@ -1203,7 +1209,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                 <React.Fragment key={`${department}-${team}`}>
                                   {/* Заголовок команды */}
                                 <TableRow className="bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-100/50 hover:dark:bg-slate-800/30">
-                                  <TableCell colSpan={canEditAllUsers ? 9 : 8} className="py-1.5 pl-8 pr-4">
+                                  <TableCell colSpan={shouldShowActionsColumn ? 9 : 8} className="py-1.5 pl-8 pr-4">
                                     <div className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300">
                                       <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
                                       <span>{team}</span>
@@ -1289,37 +1295,39 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                                           )}
                                         </div>
                                       </TableCell>
-                                        {canEditAllUsers && (
-                                          <TableCell className="text-center text-xs sm:text-sm lg:text-base hidden lg:table-cell py-1">
-                                            <DropdownMenu>
-                                              <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                  <MoreHorizontal className="h-4 w-4" />
-                                                  <span className="sr-only">Меню</span>
-                                                </Button>
-                                              </DropdownMenuTrigger>
-                                              <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => {
-                                                  Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
-                                                  handleEditUser(user)
-                                                }}>
-                                                  <Edit className="mr-2 h-4 w-4" />
-                                                  Редактировать
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                  className="text-red-600 dark:text-red-400"
-                                                  onClick={() => {
-                                                    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
-                                                    openDeleteDialog(user)
-                                                  }}
-                                                  disabled={isDeleting === user.id}
-                                                >
-                                                  <Trash className="mr-2 h-4 w-4" />
-                                                  {isDeleting === user.id ? "Удаление..." : "Удалить"}
-                                                </DropdownMenuItem>
-                                              </DropdownMenuContent>
-                                            </DropdownMenu>
+                                        {(canEditAllUsers || canEditUser(user)) && (
+                                          <TableCell className="w-12 px-1 py-1">
+                                            <div className="flex justify-end">
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                    <span className="sr-only">Меню</span>
+                                                  </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                  <DropdownMenuItem onClick={() => {
+                                                    Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
+                                                    handleEditUser(user)
+                                                  }}>
+                                                    <Edit className="mr-2 h-4 w-4" />
+                                                    Редактировать
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuSeparator />
+                                                  <DropdownMenuItem
+                                                    className="text-red-600 dark:text-red-400"
+                                                    onClick={() => {
+                                                      Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
+                                                      openDeleteDialog(user)
+                                                    }}
+                                                    disabled={isDeleting === user.id}
+                                                  >
+                                                    <Trash className="mr-2 h-4 w-4" />
+                                                    {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
                                           </TableCell>
                                         )}
                                       </TableRow>
