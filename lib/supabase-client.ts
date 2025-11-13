@@ -386,7 +386,7 @@ export async function fetchSectionsWithLoadings(
       if (sectionItem.loading_id && sectionItem.loading_status === "active") {
         loadingsMap[sectionItem.section_id].push({
           id: sectionItem.loading_id,
-          stageId: sectionItem.loading_stage || undefined,
+          stageId: sectionItem.loading_stage || "",
           responsibleId: sectionItem.loading_responsible || "",
           responsibleName:
             sectionItem.responsible_first_name && sectionItem.responsible_last_name

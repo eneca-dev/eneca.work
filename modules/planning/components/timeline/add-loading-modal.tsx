@@ -622,7 +622,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     } else {
       setFormData((prev) => ({
         ...prev,
-        [name]: name === "rate" ? Number.parseFloat(value) : value,
+        [name]: name === "rate" ? (value === "" ? 0 : Number.parseFloat(value) || 0) : value,
       }))
     }
 
@@ -653,7 +653,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
     }
 
     // Проверка ставки
-    if (formData.rate <= 0) {
+    if (Number.isNaN(formData.rate) || formData.rate <= 0) {
       newErrors.rate = "Ставка должна быть больше 0"
     } else if (formData.rate > 2) {
       newErrors.rate = "Ставка не может быть больше 2"
@@ -1224,7 +1224,7 @@ export function AddLoadingModal({ employee, setShowAddModal, theme }: AddLoading
               step="0.1"
               min="0.1"
               max="2"
-              value={formData.rate}
+              value={Number.isNaN(formData.rate) ? "" : formData.rate}
               onChange={handleChange}
               disabled={isSaving}
               className={cn(
