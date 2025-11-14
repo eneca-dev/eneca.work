@@ -35,8 +35,9 @@ interface TimelineGridProps {
   hasActiveFilters?: boolean // Добавляем новый пропс
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
-  collapseAllDepartments: () => void 
+  collapseAllDepartments: () => void
   refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния
+  hideHeader?: boolean // Флаг для скрытия встроенного заголовка (когда используется внешний sticky header)
 }
 
 export function TimelineGrid({
@@ -58,6 +59,7 @@ export function TimelineGrid({
   expandAllDepartments,
   collapseAllDepartments,
   refreshCounter = 0, // Добавляем с значением по умолчанию
+  hideHeader = false, // По умолчанию заголовок показываем (для обратной совместимости)
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -289,38 +291,34 @@ export function TimelineGrid({
 
   return (
     <div
-      className="w-full overflow-x-auto scrollbar-thin"
+      className="w-full"
       ref={timelineContainerRef}
       style={{
-        scrollbarWidth: "thin" /* Firefox */,
-        scrollbarColor:
-          theme === "dark"
-            ? "rgba(51, 65, 85, 0.5) rgba(30, 41, 59, 0.2)"
-            : "rgba(203, 213, 225, 0.5) rgba(241, 245, 249, 0.2)" /* Firefox */,
         borderCollapse: "collapse" /* Добавляем для лучшего отображения границ */,
         minWidth: "100%" /* Гарантируем, что контейнер не будет меньше 100% ширины */,
       }}
     >
-      <ScrollbarStyles theme={theme} />
       <div className="w-full" style={{ minWidth: `${totalWidth}px` }}>
         <div style={{ borderCollapse: "collapse" }}>
-          {/* Заголовок таблицы */}
-          <TimelineHeader
-            timeUnits={timeUnits}
-            theme={theme}
-            headerHeight={HEADER_HEIGHT}
-            columnWidth={COLUMN_WIDTHS.section}
-            padding={PADDING}
-            leftOffset={LEFT_OFFSET}
-            cellWidth={cellWidth}
-            stickyColumnShadow={stickyColumnShadow}
-            showDepartments={showDepartments}
-            showSections={showSections}
-            toggleShowSections={toggleShowSections}
-            toggleShowDepartments={toggleShowDepartments}
-            expandAllDepartments={expandAllDepartments}
-            collapseAllDepartments={collapseAllDepartments}
-          />
+          {/* Заголовок таблицы - скрываем если используется внешний sticky header */}
+          {!hideHeader && (
+            <TimelineHeader
+              timeUnits={timeUnits}
+              theme={theme}
+              headerHeight={HEADER_HEIGHT}
+              columnWidth={COLUMN_WIDTHS.section}
+              padding={PADDING}
+              leftOffset={LEFT_OFFSET}
+              cellWidth={cellWidth}
+              stickyColumnShadow={stickyColumnShadow}
+              showDepartments={showDepartments}
+              showSections={showSections}
+              toggleShowSections={toggleShowSections}
+              toggleShowDepartments={toggleShowDepartments}
+              expandAllDepartments={expandAllDepartments}
+              collapseAllDepartments={collapseAllDepartments}
+            />
+          )}
 
           {/* Строки с разделами (возможна группировка по проектам) */}
           {showSections && (!groupByProject ? (

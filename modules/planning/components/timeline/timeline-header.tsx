@@ -101,12 +101,17 @@ export function TimelineHeader({
   }, [timeUnits])
 
   return (
-    <>
+    <div
+      className={cn(
+        "sticky top-0 z-40",
+        theme === "dark" ? "bg-slate-900" : "bg-white"
+      )}
+    >
       {/* Строка с названиями месяцев и заголовками столбцов */}
       <div className={cn("flex", theme === "dark" ? "" : "")}>
         {/* Фиксированные заголовки столбцов */}
         <div
-          className={cn("sticky left-0 z-20 flex", theme === "dark" ? "border-slate-700" : "border-slate-200")}
+          className={cn("sticky left-0 z-30 flex", theme === "dark" ? "border-slate-700" : "border-slate-200")}
           style={{ height: `${headerHeight}px` }}
         >
           {/* Заголовок "Раздел" (всегда видимый) */}
@@ -204,7 +209,7 @@ export function TimelineHeader({
       <div className={cn("flex", theme === "dark" ? "" : "")}>
         {/* Фиксированные заголовки для поиска */}
         <div
-          className={cn("sticky left-0 z-10 flex", stickyColumnShadow)}
+          className={cn("sticky left-0 z-30 flex", stickyColumnShadow)}
           style={{
             height: `${headerHeight}px`,
           }}
@@ -344,6 +349,6 @@ export function TimelineHeader({
           })}
         </div>
       </div>
-    </>
+    </div>
   )
 }
