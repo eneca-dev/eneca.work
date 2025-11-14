@@ -337,6 +337,7 @@ export default function PlanningTopFilters() {
     groupByProject,
     fetchSections,
     fetchDepartments,
+    loadVacations,
     toggleSectionExpanded,
     toggleDepartmentExpanded,
   } = usePlanningStore()
@@ -805,6 +806,8 @@ export default function PlanningTopFilters() {
             // Обновляем данные с сохранением текущих фильтров
             await fetchSections()
             if (showDepartments) {
+              // Форсируем обновление отпусков (игнорируя кэш)
+              await loadVacations(true)
               await fetchDepartments()
             }
 

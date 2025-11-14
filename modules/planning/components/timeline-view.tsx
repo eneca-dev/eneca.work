@@ -45,6 +45,7 @@ export function TimelineView() {
     fetchProjectSummaries,
     fetchSections,
     fetchDepartments,
+    loadVacations,
     setFilters,
     expandedSections,
     expandedDepartments,
@@ -112,6 +113,16 @@ useEffect(() => {
 
   // Ссылка на контейнер для измерения ширины
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Стабильные ссылки на функции из store (для useEffect без изменения размера deps)
+  const fetchDepartmentsRef = useRef(fetchDepartments)
+  const loadVacationsRef = useRef(loadVacations)
+
+  // Обновляем ссылки при каждом рендере
+  useEffect(() => {
+    fetchDepartmentsRef.current = fetchDepartments
+    loadVacationsRef.current = loadVacations
+  })
 
   // Состояние для отслеживания размера окна
   const [windowSize, setWindowSize] = useState({
@@ -183,12 +194,25 @@ useEffect(() => {
     }
   }, [selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
 
-  // Загружаем отделы при переключении showDepartments
+  // Загружаем отделы при переключении showDepartments или изменении организационных фильтров
+  // Это обеспечивает автоматическую перезагрузку отделов когда:
+  // 1. Пользователь включает показ отделов (showDepartments = true)
+  // 2. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
+  // 3. Пользователь изменяет фильтр по команде (selectedTeamId)
+  // 4. Пользователь сбрасывает фильтры (selectedDepartmentId/selectedTeamId → null)
   useEffect(() => {
-    if (showDepartments && departments.length === 0) {
-      fetchDepartments()
+    if (showDepartments) {
+      fetchDepartmentsRef.current()
     }
-  }, [showDepartments, departments.length, fetchDepartments])
+  }, [showDepartments, selectedDepartmentId, selectedTeamId])
+
+  // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
+  // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
+  useEffect(() => {
+    if (showDepartments) {
+      loadVacationsRef.current(false) // false = не форсировать, проверить кэш
+    }
+  }, [startDate, daysToShow, showDepartments])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -322,19 +346,10 @@ useEffect(() => {
 
   // Обработчик изменения страницы
   const handlePageChange = (page: number) => {
-    // При изменении страницы подгружаем отделы, если они должны быть показаны
     setCurrentPage(page)
-    if (showDepartments) {
-      fetchDepartments()
-    }
+    // Отпуска уже в кэше, не нужно перезагружать departments
   }
 
-  useEffect(() => {
-    // Если отделы должны быть показаны, но еще не загружены, загружаем их
-    if (showDepartments && departments.length === 0 && !isLoadingDepartments) {
-      fetchDepartments()
-    }
-  }, [showDepartments, departments.length, isLoadingDepartments, fetchDepartments])
 
   return (
     <div

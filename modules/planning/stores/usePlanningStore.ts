@@ -29,6 +29,7 @@ interface PlanningState {
   projectSectionsLoading: Record<string, boolean>
   isLoadingSections: boolean
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
+  isDepartmentsFetching: boolean // Флаг для защиты от одновременных вызовов fetchDepartments
   expandedSections: Record<string, boolean> // Отслеживание раскрытых разделов
   expandedDepartments: Record<string, boolean> // Отслеживание раскрытых отделов
   expandedTeams: Record<string, boolean> // Отслеживание раскрытых команд
@@ -75,6 +76,23 @@ interface PlanningState {
   // Поиск
   searchQuery: string
   projectSearchQuery: string
+
+  // Кэш отпусков (загружаем ВСЕ отпуска без фильтров, фильтруем на клиенте)
+  vacationsCache: {
+    // ВСЕ отпуска (без фильтрации по отделу/команде)
+    data: Record<string, Record<string, number>>  // userId -> { date -> rate }
+    // Метаданные по сотрудникам (для фильтрации на клиенте)
+    metadata: Record<string, {
+      departmentId: string | null
+      teamId: string | null
+    }>
+    // Границы загруженного диапазона (с буфером)
+    cacheStartDate: string | null
+    cacheEndDate: string | null
+    // Метаданные
+    lastLoaded: number | null
+    isLoading: boolean
+  }
 
   // Действия
   fetchProjectSummaries: () => Promise<void>
@@ -142,6 +160,10 @@ interface PlanningState {
   collapseAllProjectGroups: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
+
+  // Методы для работы с отпусками
+  loadVacations: (forceReload?: boolean) => Promise<void>
+  clearVacationsCache: () => void
 
   // Функции синхронизации
   generateFiltersKey: (filters: {
@@ -219,6 +241,7 @@ export const usePlanningStore = create<PlanningState>()(
         projectSectionsLoading: {},
         isLoadingSections: false,
         isLoadingDepartments: false,
+        isDepartmentsFetching: false,
         expandedSections: {},
         expandedDepartments: {},
         expandedTeams: {},
@@ -232,6 +255,16 @@ export const usePlanningStore = create<PlanningState>()(
         loadingsMap: {},
         searchQuery: "",
         projectSearchQuery: "",
+
+        // Начальное состояние кэша отпусков
+        vacationsCache: {
+          data: {},
+          metadata: {},
+          cacheStartDate: null,
+          cacheEndDate: null,
+          lastLoaded: null,
+          isLoading: false,
+        },
 
         // Состояние синхронизации фильтров и данных
         syncState: {
@@ -543,7 +576,18 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Обновляем функцию загрузки отделов для использования view_organizational_structure
         fetchDepartments: async () => {
-          set({ isLoadingDepartments: true })
+          // Защита от одновременных вызовов
+          const state = get()
+          if (state.isDepartmentsFetching) {
+            console.log("⏳ fetchDepartments уже выполняется, пропускаем дублирующий вызов")
+            return
+          }
+
+          // Логируем источник вызова для отладки
+          const stack = new Error().stack
+          console.log("🔄 fetchDepartments вызван из:", stack?.split('\n')[2]?.trim())
+
+          set({ isLoadingDepartments: true, isDepartmentsFetching: true })
           try {
             // Получаем текущие фильтры из новой системы фильтров
             const { useFilterStore } = await import('../filters/store')
@@ -594,33 +638,6 @@ export const usePlanningStore = create<PlanningState>()(
             }
 
             console.log("👥 Данные о сотрудниках:", employeeData?.length, "записей")
-
-            // Получаем видимый период таймлайна, чтобы подтянуть только нужные дни отпусков
-            const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
-            const { startDate, daysToShow } = usePlanningViewStore.getState()
-            const vacationsPeriodStart = new Date(startDate)
-            const vacationsPeriodEnd = new Date(startDate)
-            vacationsPeriodEnd.setDate(vacationsPeriodEnd.getDate() + daysToShow - 1)
-
-            // Формируем фильтры по отделу/команде для отпусков
-            // Выбираем через функцию (RLS-friendly)
-            const { data: vacationsDaily, error: vacationsError } = await supabase
-              .rpc("get_employee_vacations_daily", {
-                p_start: vacationsPeriodStart.toISOString().split("T")[0],
-                p_end: vacationsPeriodEnd.toISOString().split("T")[0],
-                p_department: selectedDepartmentId || null,
-                p_team: selectedTeamId || null,
-              })
-
-            if (vacationsError) {
-              console.error("Ошибка при загрузке отпусков:", vacationsError)
-              throw vacationsError
-            }
-
-            console.log("🏝️ Отпуска (дни):", vacationsDaily?.length, "период:", vacationsPeriodStart.toISOString().split("T")[0], "—", vacationsPeriodEnd.toISOString().split("T")[0])
-            if (vacationsDaily && vacationsDaily.length > 0) {
-              console.log("🏝️ Первые 3 отпуска:", vacationsDaily.slice(0, 3))
-            }
 
             // Группируем данные по отделам и командам
             const departmentsMap = new Map<string, Department>()
@@ -697,23 +714,29 @@ export const usePlanningStore = create<PlanningState>()(
               }
             })
 
-            // Вносим отпуска: считаем каждый день как 1.0 ставки и отмечаем для отрисовки
+            // Получаем отпуска ИЗ КЭША (фильтруем на клиенте по metadata)
+            const vacationsCache = get().vacationsCache.data
+            const vacationsMetadata = get().vacationsCache.metadata
+
             let vacationsProcessed = 0
-            vacationsDaily?.forEach((v: { user_id: string; vacation_date: string }) => {
-              const userId = v.user_id as string
-              const dateKey = new Date(v.vacation_date).toISOString().split("T")[0]
-              const employee = employeesMap.get(userId)
-              if (!employee) {
-                console.log("🚨 Сотрудник не найден для отпуска:", userId, dateKey)
-                return
+            employeesMap.forEach((employee) => {
+              const userId = employee.id
+
+              // Проверяем, должны ли отображаться отпуска этого сотрудника (фильтрация на клиенте)
+              const employeeMetadata = vacationsMetadata[userId]
+              const shouldIncludeVacations =
+                employeeMetadata &&
+                (!selectedDepartmentId || employeeMetadata.departmentId === selectedDepartmentId) &&
+                (!selectedTeamId || employeeMetadata.teamId === selectedTeamId)
+
+              if (shouldIncludeVacations && vacationsCache[userId]) {
+                employee.vacationsDaily = vacationsCache[userId]
+                vacationsProcessed += Object.keys(vacationsCache[userId]).length
+              } else {
+                employee.vacationsDaily = {}
               }
-              if (!employee.vacationsDaily) employee.vacationsDaily = {}
-              employee.vacationsDaily[dateKey] = 1
-              // Отпуск не влияет на расчёт workloadRate - оставляем оригинальную загрузку для правильного отображения
-              // employee.dailyWorkloads[dateKey] остается как есть
-              vacationsProcessed++
             })
-            console.log("🏝️ Обработано отпусков:", vacationsProcessed)
+            console.log("🏝️ Отпуска взяты из кэша (дни):", vacationsProcessed)
 
             // Теперь обрабатываем организационную структуру
             orgData?.forEach((item) => {
@@ -781,9 +804,16 @@ export const usePlanningStore = create<PlanningState>()(
 
             // Добавляем синтетическую строку "Дефицит ..." для каждой команды на основании дефицитных загрузок
             try {
+              // Получаем видимый период таймлайна для загрузки дефицитных загрузок
+              const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
+              const { startDate: timelineStartDate, daysToShow } = usePlanningViewStore.getState()
+              const periodStart = new Date(timelineStartDate)
+              const periodEnd = new Date(timelineStartDate)
+              periodEnd.setDate(periodEnd.getDate() + daysToShow - 1)
+
               const shortageParams = {
-                startDate: vacationsPeriodStart.toISOString().split("T")[0],
-                endDate: vacationsPeriodEnd.toISOString().split("T")[0],
+                startDate: periodStart.toISOString().split("T")[0],
+                endDate: periodEnd.toISOString().split("T")[0],
                 departmentId: selectedDepartmentId || null,
                 teamId: selectedTeamId || null,
               }
@@ -948,13 +978,14 @@ export const usePlanningStore = create<PlanningState>()(
             set({
               departments,
               isLoadingDepartments: false,
+              isDepartmentsFetching: false,
             })
 
             console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
           } catch (error) {
             Sentry.captureException(error, {
-              tags: { 
-                module: 'planning', 
+              tags: {
+                module: 'planning',
                 action: 'fetch_departments',
                 store: 'usePlanningStore'
               },
@@ -962,7 +993,7 @@ export const usePlanningStore = create<PlanningState>()(
                 timestamp: new Date().toISOString()
               }
             })
-            set({ isLoadingDepartments: false })
+            set({ isLoadingDepartments: false, isDepartmentsFetching: false })
           }
         },
 
@@ -2199,6 +2230,159 @@ export const usePlanningStore = create<PlanningState>()(
           set({ sections: sectionsWithLoadings })
         },
 
+        // Загрузка отпусков с буферным кэшированием
+        loadVacations: async (forceReload = false) => {
+          const cache = get().vacationsCache
+
+          // Защита от одновременных вызовов
+          if (!forceReload && cache.isLoading) {
+            console.log("⏳ loadVacations уже выполняется, пропускаем дублирующий вызов")
+            return
+          }
+
+          // Логируем источник вызова для отладки
+          const stack = new Error().stack
+          console.log("🔄 loadVacations вызван из:", stack?.split('\n')[2]?.trim())
+
+          // ✅ НЕМЕДЛЕННО устанавливаем флаг (до async операций!)
+          set({ vacationsCache: { ...cache, isLoading: true } })
+
+          const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
+
+          const { startDate, daysToShow } = usePlanningViewStore.getState()
+
+          // Вычисляем ВИДИМЫЙ диапазон
+          const visibleStart = new Date(startDate)
+          const visibleEnd = new Date(startDate)
+          visibleEnd.setDate(visibleEnd.getDate() + daysToShow)
+
+          // Константы кэширования
+          const CACHE_BUFFER_DAYS = 60        // Буфер с каждой стороны
+          const CACHE_TTL_MS = 10 * 60 * 1000 // 10 минут
+
+          // Проверяем кэш (только по датам, БЕЗ фильтров!)
+          if (!forceReload && cache.cacheStartDate && cache.cacheEndDate) {
+            const cacheStart = new Date(cache.cacheStartDate)
+            const cacheEnd = new Date(cache.cacheEndDate)
+
+            // Проверяем TTL
+            const isExpired = Date.now() - (cache.lastLoaded || 0) > CACHE_TTL_MS
+
+            // Проверяем буфер
+            const hasBuffer = visibleStart >= cacheStart && visibleEnd <= cacheEnd
+
+            // Проверяем запас в буфере (для предзагрузки)
+            const daysUntilCacheStart = Math.floor((visibleStart.getTime() - cacheStart.getTime()) / (1000 * 60 * 60 * 24))
+            const daysUntilCacheEnd = Math.floor((cacheEnd.getTime() - visibleEnd.getTime()) / (1000 * 60 * 60 * 24))
+            const RELOAD_THRESHOLD_DAYS = 30
+
+            if (!isExpired && hasBuffer && daysUntilCacheStart >= RELOAD_THRESHOLD_DAYS && daysUntilCacheEnd >= RELOAD_THRESHOLD_DAYS) {
+              console.log("✅ Используем кэш отпусков", {
+                кэш: `${cache.cacheStartDate} — ${cache.cacheEndDate}`,
+                видимо: `${visibleStart.toISOString().split("T")[0]} — ${visibleEnd.toISOString().split("T")[0]}`,
+                запасСлева: daysUntilCacheStart,
+                запасСправа: daysUntilCacheEnd
+              })
+              return
+            }
+
+            if (isExpired) {
+              console.log("🔄 Кэш отпусков устарел (TTL истёк)")
+            } else if (!hasBuffer) {
+              console.log("🔄 Видимый диапазон вышел за границы кэша")
+            } else {
+              console.log("🔄 Мало запаса в буфере, предзагрузка")
+            }
+          } else {
+            console.log("🔄 Кэш отпусков пуст, первая загрузка")
+          }
+
+          try {
+            // Вычисляем диапазон С БУФЕРОМ
+            const cacheStart = new Date(visibleStart)
+            cacheStart.setDate(cacheStart.getDate() - CACHE_BUFFER_DAYS)
+
+            const cacheEnd = new Date(visibleEnd)
+            cacheEnd.setDate(cacheEnd.getDate() + CACHE_BUFFER_DAYS)
+
+            const cacheStartStr = cacheStart.toISOString().split("T")[0]
+            const cacheEndStr = cacheEnd.toISOString().split("T")[0]
+
+            console.log(`🏝️ Загрузка ВСЕХ отпусков (без фильтров): ${cacheStartStr} — ${cacheEndStr}`)
+
+            // Загружаем ВСЕ отпуска из VIEW (БЕЗ ФИЛЬТРОВ по department/team!)
+            const { data: vacationsDaily, error } = await supabase
+              .from("view_employee_vacations_daily")
+              .select("vacation_id, user_id, department_id, team_id, vacation_date, rate")
+              .gte("vacation_date", cacheStartStr)
+              .lte("vacation_date", cacheEndStr)
+              // ← НЕТ .eq("department_id") и .eq("team_id")!
+
+            if (error) throw error
+
+            // Группируем по user_id
+            const vacationsMap: Record<string, Record<string, number>> = {}
+            const metadata: Record<string, { departmentId: string | null; teamId: string | null }> = {}
+
+            vacationsDaily?.forEach((v: any) => {
+              const userId = v.user_id
+              const dateKey = new Date(v.vacation_date).toISOString().split("T")[0]
+
+              if (!vacationsMap[userId]) {
+                vacationsMap[userId] = {}
+              }
+              vacationsMap[userId][dateKey] = 1
+
+              // Сохраняем метаданные для фильтрации на клиенте
+              if (!metadata[userId]) {
+                metadata[userId] = {
+                  departmentId: v.department_id,
+                  teamId: v.team_id,
+                }
+              }
+            })
+
+            set({
+              vacationsCache: {
+                data: vacationsMap,
+                metadata,
+                cacheStartDate: cacheStartStr,
+                cacheEndDate: cacheEndStr,
+                lastLoaded: Date.now(),
+                isLoading: false,
+              },
+            })
+
+            const totalDays = Math.floor((cacheEnd.getTime() - cacheStart.getTime()) / (1000 * 60 * 60 * 24))
+            console.log(`✅ Загружено ${Object.keys(vacationsMap).length} сотрудников с отпусками (${totalDays} дней в кэше)`)
+          } catch (error) {
+            console.error("❌ Ошибка загрузки отпусков:", error)
+            Sentry.captureException(error, {
+              tags: {
+                module: 'planning',
+                action: 'load_vacations',
+                store: 'usePlanningStore'
+              }
+            })
+            set({ vacationsCache: { ...get().vacationsCache, isLoading: false } })
+          }
+        },
+
+        // Очистка кэша отпусков
+        clearVacationsCache: () => {
+          console.log("🗑️ Очистка кэша отпусков")
+          set({
+            vacationsCache: {
+              data: {},
+              metadata: {},
+              cacheStartDate: null,
+              cacheEndDate: null,
+              lastLoaded: null,
+              isLoading: false,
+            },
+          })
+        },
+
         // Функции синхронизации с поддержкой AbortController
         fetchSectionsWithSync: async (abortController: AbortController) => {
           set({ isLoadingSections: true })
@@ -2441,6 +2625,31 @@ export const usePlanningStore = create<PlanningState>()(
                 })
               }
             })
+
+            // Получаем отпуска ИЗ КЭША (фильтруем на клиенте по metadata)
+            const vacationsCache = get().vacationsCache.data
+            const vacationsMetadata = get().vacationsCache.metadata
+
+            let vacationsProcessed = 0
+            employeesMap.forEach((employee) => {
+              const userId = employee.id
+
+              // Проверяем, должны ли отображаться отпуска этого сотрудника (фильтрация на клиенте)
+              const employeeMetadata = vacationsMetadata[userId]
+              const shouldIncludeVacations =
+                employeeMetadata &&
+                (!selectedDepartmentId || employeeMetadata.departmentId === selectedDepartmentId) &&
+                (!selectedTeamId || employeeMetadata.teamId === selectedTeamId) &&
+                (!selectedEmployeeId || userId === selectedEmployeeId)
+
+              if (shouldIncludeVacations && vacationsCache[userId]) {
+                employee.vacationsDaily = vacationsCache[userId]
+                vacationsProcessed += Object.keys(vacationsCache[userId]).length
+              } else {
+                employee.vacationsDaily = {}
+              }
+            })
+            console.log("🏝️ Отпуска взяты из кэша (дни):", vacationsProcessed)
 
             // Теперь обрабатываем организационную структуру
             orgData?.forEach((item) => {
