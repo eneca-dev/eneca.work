@@ -61,12 +61,6 @@ export function TimelineHeader({
     theme === "dark" ? "border-slate-700" : "border-slate-200",
   )
 
-  // Общие стили для ячеек с фиксированной шириной
-  const fixedColumnStyle = cn(
-    "p-3 border-r flex items-center justify-center",
-    theme === "dark" ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white",
-  )
-
   // Группируем даты по месяцам
   const monthGroups = useMemo(() => {
     return groupDatesByMonth(timeUnits)
@@ -76,104 +70,51 @@ export function TimelineHeader({
     <div className="flex">
       {/* ЛЕВАЯ ЧАСТЬ: Фиксированные столбцы (не скроллятся) */}
       <div className="flex-shrink-0">
-        {/* Строка 1: Заголовки "Раздел" и "Объект" */}
-        <div className="flex" style={{ height: `${headerHeight}px` }}>
-          {/* Заголовок "Раздел" */}
+        {/* Объединенный заголовок */}
+        <div className="flex" style={{ height: `${headerHeight * 2}px` }}>
+          {/* Заголовок "Проекты" или "Отделы и сотрудники" */}
           <div
             className={cn(
-              fixedColumnStyle,
-              theme === "dark" ? "bg-slate-800" : "bg-white",
-              "relative", // Для позиционирования overlay
+              "border-r border-b flex items-center px-3",
+              theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
             )}
             style={{
               width: `${sectionWidth}px`,
               minWidth: `${sectionWidth}px`,
-              height: `${headerHeight}px`,
-              padding: `${padding}px`,
+              height: `${headerHeight * 2}px`,
               borderRight: "1px solid",
               borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+              borderBottom: "1px solid",
+              borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
             }}
           >
-            <div className="flex items-center justify-between w-full">
-              <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                Раздел
+            <div className="flex items-center w-full">
+              <div className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                {!showSections && showDepartments ? "Отделы и сотрудники" : "Проекты"}
               </div>
             </div>
-            {/* Overlay для скрытия текста "Раздел" когда разделы выключены, а отделы включены */}
-            {!showSections && showDepartments && (
-              <div
-                className={cn(
-                  "absolute inset-0",
-                  theme === "dark" ? "bg-slate-800" : "bg-white",
-                )}
-              />
-            )}
           </div>
 
           {/* Заголовок "Объект" */}
           {columnVisibility.object && (
             <div
               className={cn(
-                fixedColumnStyle,
-                theme === "dark" ? "bg-slate-800" : "bg-white",
-              )}
-              style={{
-                width: `${objectWidth}px`,
-                minWidth: `${objectWidth}px`,
-                height: `${headerHeight}px`,
-                padding: `${padding}px`,
-                borderRight: "1px solid",
-                borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
-              }}
-            >
-              <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                Объект
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Строка 2: Поле поиска и пустая ячейка для объекта */}
-        <div className="flex" style={{ height: `${headerHeight}px` }}>
-          {/* Поле поиска */}
-          <div
-            className={cn(
-              "border-r border-b border-t flex items-center justify-between px-3",
-              theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
-              "relative", // Для позиционирования overlay
-            )}
-            style={{
-              width: `${sectionWidth}px`,
-              minWidth: `${sectionWidth}px`,
-              height: `${headerHeight}px`,
-            }}
-          >
-            {/* Пустой контейнер для сохранения layout */}
-            {/* Overlay для скрытия поля поиска когда разделы выключены, а отделы включены */}
-            {!showSections && showDepartments && (
-              <div
-                className={cn(
-                  "absolute inset-0",
-                  theme === "dark" ? "bg-slate-800" : "bg-white",
-                )}
-              />
-            )}
-          </div>
-
-          {/* Пустая ячейка для "Объект" */}
-          {columnVisibility.object && (
-            <div
-              className={cn(
-                "border-r border-b border-t flex items-center justify-center",
+                "border-r border-b flex items-center justify-center",
                 theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
               )}
               style={{
                 width: `${objectWidth}px`,
                 minWidth: `${objectWidth}px`,
-                height: `${headerHeight}px`,
+                height: `${headerHeight * 2}px`,
+                borderRight: "1px solid",
+                borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                borderBottom: "1px solid",
+                borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
               }}
             >
-              <span className="text-transparent">Объект</span>
+              <div className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                Объект
+              </div>
             </div>
           )}
         </div>

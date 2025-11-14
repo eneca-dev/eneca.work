@@ -605,37 +605,28 @@ export function TimelineGrid({
           )}
 
           {/* Разделитель между разделами и отделами, если показаны и разделы, и отделы */}
-          {showSections && showDepartments && sections.length > 0 && departments.length > 0 && (
+          {showSections && showDepartments && departments.length > 0 && (
             <div
               className={cn(
-                "relative border-b", // Убираем padding
+                "relative border-b",
                 theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
               )}
-              style={{ height: `${DIVIDER_HEIGHT}px` }} // Явно задаем высоту разделителя
+              style={{ height: `${DIVIDER_HEIGHT}px` }}
             >
-              {/* Фиксированный контейнер для надписи на всю высоту */}
+              {/* Фиксированный контейнер для надписи */}
               <div
                 className={cn(
-                  "sticky left-0 top-0 bottom-0 py-1 px-2 font-medium z-30 flex items-center",
-                  theme === "dark" ? "bg-slate-800 border-b border-slate-700" : "bg-white border-b border-slate-200",
+                  "sticky left-0 z-30 flex items-center px-3",
+                  theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
                 )}
                 style={{
                   width: `${totalFixedWidth}px`,
-                  height: "32px",
+                  height: `${DIVIDER_HEIGHT}px`,
                 }}
               >
-                <div className="flex items-center h-full">
-                  <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                    Отделы и сотрудники
-                  </span>
-                </div>
-              </div>
-
-              {/* Пустой контейнер для сохранения структуры */}
-              <div className="flex items-center justify-between h-full opacity-0">
-                <div className="flex items-center">
-                  <span className="font-semibold">Отделы и сотрудники</span>
-                </div>
+                <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                  Отделы и сотрудники
+                </span>
               </div>
             </div>
           )}
