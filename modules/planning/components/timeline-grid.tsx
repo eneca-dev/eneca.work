@@ -608,20 +608,25 @@ export function TimelineGrid({
           {showSections && showDepartments && departments.length > 0 && (
             <div
               className={cn(
-                "relative border-b",
-                theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
+                "relative",
+                theme === "dark" ? "bg-slate-800" : "bg-white",
               )}
-              style={{ height: `${DIVIDER_HEIGHT}px` }}
+              style={{ height: `${HEADER_HEIGHT * 2}px` }}
             >
               {/* Фиксированный контейнер для надписи */}
               <div
                 className={cn(
-                  "sticky left-0 z-30 flex items-center px-3",
+                  "sticky left-0 z-30 border-r border-b flex items-center px-3",
                   theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
                 )}
                 style={{
-                  width: `${totalFixedWidth}px`,
-                  height: `${DIVIDER_HEIGHT}px`,
+                  width: `${COLUMN_WIDTHS.section}px`,
+                  minWidth: `${COLUMN_WIDTHS.section}px`,
+                  height: `${HEADER_HEIGHT * 2}px`,
+                  borderRight: "1px solid",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderBottom: "1px solid",
+                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
                 <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
