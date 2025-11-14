@@ -34,3 +34,5 @@ ws-to-work-integration/
 .env.sentry-build-plugin
 
 docs/database/public_schema.md
+
+tsconfig.tsbuildinfo

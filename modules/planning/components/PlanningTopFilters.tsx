@@ -71,8 +71,8 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
     if (!el) return
     const rect = el.getBoundingClientRect()
     const width = 300
-    // Размещаем еще левее - выравниваем правый край календаря по левому краю триггера
-    const left = Math.max(rect.left + window.scrollX - width, 8)
+    // Размещаем правее: выравниваем правый край календаря по левому краю триггера + 300px
+    const left = Math.max(rect.left + window.scrollX - width + 300, 8)
     // Размещаем снизу от триггера
     const top = rect.bottom + window.scrollY + 6
     setPos({ top, left })
@@ -174,10 +174,14 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
           triggerClassName
         )}
         onClick={() => {
-          setOpen(true)
-          setFocusedISO(toISODate(value))
-          setViewYear(value.getFullYear())
-          setViewMonth(value.getMonth())
+          if (open) {
+            setOpen(false)
+          } else {
+            setOpen(true)
+            setFocusedISO(toISODate(value))
+            setViewYear(value.getFullYear())
+            setViewMonth(value.getMonth())
+          }
         }}
         title="Выбрать дату начала"
       >
@@ -185,10 +189,10 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
         <span className="tabular-nums select-none">{formatDisplay(value)}</span>
       </button>
 
-      {open && pos && (
+      {open && pos && typeof document !== 'undefined' && createPortal(
         <div
           ref={popoverRef}
-          className="fixed z-50 w-[300px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-1.5"
+          className="fixed z-[100] w-[300px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-1.5"
           style={{ top: pos.top, left: pos.left }}
         >
           <div className="flex items-center justify-between px-1 py-1">
@@ -305,13 +309,15 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
           <div className="px-2 py-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-700 mt-1">
             Конец диапазона задаётся автоматически: через 180 дней после выбранной даты
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
 }
 // ========================= End DatePicker Component =========================
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 
 export default function PlanningTopFilters() {
   const router = useRouter()

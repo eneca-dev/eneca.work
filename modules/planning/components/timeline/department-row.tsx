@@ -106,10 +106,10 @@ export function DepartmentRow({
 
   return (
     <>
-      <div className={cn("group/row w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}>
+      <div className={cn("group/row min-w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}>
         <div
           className={cn(
-            "flex transition-colors cursor-pointer w-full border-b", // Основная толстая нижняя граница для всей строки
+            "flex transition-colors cursor-pointer min-w-full border-b", // Основная толстая нижняя граница для всей строки
             theme === "dark" ? "border-slate-700" : "border-slate-200",
           )}
           style={{ height: `${rowHeight}px` }}
@@ -374,11 +374,11 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
   const [showAddShortage, setShowAddShortage] = useState(false)
 
   return (
-    <div className={cn("group/row w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}
+    <div className={cn("group/row min-w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}
     >
       <div
         className={cn(
-          "flex transition-colors cursor-pointer w-full border-b",
+          "flex transition-colors cursor-pointer min-w-full border-b",
           theme === "dark" ? "border-slate-700" : "border-slate-200",
         )}
         style={{ height: `${reducedRowHeight}px` }}
@@ -651,9 +651,9 @@ export function EmployeeRow({
 
   return (
     <>
-      <div className="group/employee w-full">
+      <div className="group/employee min-w-full">
         <div
-          className={cn("flex transition-colors w-full")}
+          className={cn("flex transition-colors min-w-full")}
           style={{ height: `${actualRowHeight}px` }}
         >
           {/* Фиксированные столбцы с sticky позиционированием */}
