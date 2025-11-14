@@ -45,6 +45,7 @@ export function TimelineView() {
     fetchProjectSummaries,
     fetchSections,
     fetchDepartments,
+    loadVacations,
     setFilters,
     expandedSections,
     expandedDepartments,
@@ -183,12 +184,29 @@ useEffect(() => {
     }
   }, [selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
 
-  // Загружаем отделы при переключении showDepartments
+  // Загружаем отделы при переключении showDepartments или изменении организационных фильтров
+  // Это обеспечивает автоматическую перезагрузку отделов когда:
+  // 1. Пользователь включает показ отделов (showDepartments = true)
+  // 2. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
+  // 3. Пользователь изменяет фильтр по команде (selectedTeamId)
+  // 4. Пользователь сбрасывает фильтры (selectedDepartmentId/selectedTeamId → null)
+  // Функция fetchDepartments в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isDepartmentsFetching флаг
   useEffect(() => {
-    if (showDepartments && departments.length === 0) {
+    if (showDepartments) {
       fetchDepartments()
     }
-  }, [showDepartments, departments.length, fetchDepartments])
+  }, [showDepartments, selectedDepartmentId, selectedTeamId, fetchDepartments])
+
+  // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
+  // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
+  // Функция loadVacations в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isLoading флаг + проверка валидности кэша
+  useEffect(() => {
+    if (showDepartments) {
+      loadVacations(false) // false = не форсировать, проверить кэш
+    }
+  }, [startDate, daysToShow, showDepartments, loadVacations])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -322,19 +340,10 @@ useEffect(() => {
 
   // Обработчик изменения страницы
   const handlePageChange = (page: number) => {
-    // При изменении страницы подгружаем отделы, если они должны быть показаны
     setCurrentPage(page)
-    if (showDepartments) {
-      fetchDepartments()
-    }
+    // Отпуска уже в кэше, не нужно перезагружать departments
   }
 
-  useEffect(() => {
-    // Если отделы должны быть показаны, но еще не загружены, загружаем их
-    if (showDepartments && departments.length === 0 && !isLoadingDepartments) {
-      fetchDepartments()
-    }
-  }, [showDepartments, departments.length, isLoadingDepartments, fetchDepartments])
 
   return (
     <div
