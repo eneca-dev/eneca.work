@@ -16,6 +16,9 @@ import { supabase } from "@/lib/supabase-client"
 // Переменная для хранения текущего Promise запроса саммари проектов
 let fetchProjectSummariesPromise: Promise<void> | null = null
 
+// Переменная для хранения текущего Promise загрузки отпусков
+let loadVacationsPromise: Promise<void> | null = null
+
 // Обновляем интерфейс PlanningState, добавляя функции архивирования
 interface PlanningState {
   // Данные
@@ -579,13 +582,8 @@ export const usePlanningStore = create<PlanningState>()(
           // Защита от одновременных вызовов
           const state = get()
           if (state.isDepartmentsFetching) {
-            console.log("⏳ fetchDepartments уже выполняется, пропускаем дублирующий вызов")
             return
           }
-
-          // Логируем источник вызова для отладки
-          const stack = new Error().stack
-          console.log("🔄 fetchDepartments вызван из:", stack?.split('\n')[2]?.trim())
 
           set({ isLoadingDepartments: true, isDepartmentsFetching: true })
           try {
@@ -736,7 +734,7 @@ export const usePlanningStore = create<PlanningState>()(
                 employee.vacationsDaily = {}
               }
             })
-            console.log("🏝️ Отпуска взяты из кэша (дни):", vacationsProcessed)
+            console.log("🏝️ Загрузка отпусков (cache):", vacationsProcessed)
 
             // Теперь обрабатываем организационную структуру
             orgData?.forEach((item) => {
@@ -2232,29 +2230,26 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Загрузка отпусков с буферным кэшированием
         loadVacations: async (forceReload = false) => {
-          const cache = get().vacationsCache
-
-          // Защита от одновременных вызовов
-          if (!forceReload && cache.isLoading) {
-            console.log("⏳ loadVacations уже выполняется, пропускаем дублирующий вызов")
-            return
+          // Если запрос уже выполняется, возвращаем существующий Promise
+          if (loadVacationsPromise) {
+            return loadVacationsPromise
           }
 
-          // Логируем источник вызова для отладки
-          const stack = new Error().stack
-          console.log("🔄 loadVacations вызван из:", stack?.split('\n')[2]?.trim())
+          // Создаём новый Promise и сохраняем его
+          loadVacationsPromise = (async () => {
+            const cache = get().vacationsCache
 
-          // ✅ НЕМЕДЛЕННО устанавливаем флаг (до async операций!)
-          set({ vacationsCache: { ...cache, isLoading: true } })
+            // ✅ НЕМЕДЛЕННО устанавливаем флаг
+            set({ vacationsCache: { ...cache, isLoading: true } })
 
-          const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
+            const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
 
-          const { startDate, daysToShow } = usePlanningViewStore.getState()
+            const { startDate, daysToShow } = usePlanningViewStore.getState()
 
-          // Вычисляем ВИДИМЫЙ диапазон
-          const visibleStart = new Date(startDate)
-          const visibleEnd = new Date(startDate)
-          visibleEnd.setDate(visibleEnd.getDate() + daysToShow)
+            // Вычисляем ВИДИМЫЙ диапазон (FIX: off-by-one error)
+            const visibleStart = new Date(startDate)
+            const visibleEnd = new Date(startDate)
+            visibleEnd.setDate(visibleEnd.getDate() + daysToShow - 1) // ← исправлено: -1
 
           // Константы кэширования
           const CACHE_BUFFER_DAYS = 60        // Буфер с каждой стороны
@@ -2283,6 +2278,8 @@ export const usePlanningStore = create<PlanningState>()(
                 запасСлева: daysUntilCacheStart,
                 запасСправа: daysUntilCacheEnd
               })
+              // Сбрасываем флаг isLoading перед возвратом
+              set({ vacationsCache: { ...cache, isLoading: false } })
               return
             }
 
@@ -2365,7 +2362,13 @@ export const usePlanningStore = create<PlanningState>()(
               }
             })
             set({ vacationsCache: { ...get().vacationsCache, isLoading: false } })
+          } finally {
+            // Очищаем Promise после завершения
+            loadVacationsPromise = null
           }
+          })()
+
+          return loadVacationsPromise
         },
 
         // Очистка кэша отпусков

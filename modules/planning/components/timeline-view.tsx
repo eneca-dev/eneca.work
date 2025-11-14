@@ -114,16 +114,6 @@ useEffect(() => {
   // Ссылка на контейнер для измерения ширины
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Стабильные ссылки на функции из store (для useEffect без изменения размера deps)
-  const fetchDepartmentsRef = useRef(fetchDepartments)
-  const loadVacationsRef = useRef(loadVacations)
-
-  // Обновляем ссылки при каждом рендере
-  useEffect(() => {
-    fetchDepartmentsRef.current = fetchDepartments
-    loadVacationsRef.current = loadVacations
-  })
-
   // Состояние для отслеживания размера окна
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== "undefined" ? window.innerWidth : 0,
@@ -200,19 +190,23 @@ useEffect(() => {
   // 2. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
   // 3. Пользователь изменяет фильтр по команде (selectedTeamId)
   // 4. Пользователь сбрасывает фильтры (selectedDepartmentId/selectedTeamId → null)
+  // Функция fetchDepartments в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isDepartmentsFetching флаг
   useEffect(() => {
     if (showDepartments) {
-      fetchDepartmentsRef.current()
+      fetchDepartments()
     }
-  }, [showDepartments, selectedDepartmentId, selectedTeamId])
+  }, [showDepartments, selectedDepartmentId, selectedTeamId, fetchDepartments])
 
   // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
   // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
+  // Функция loadVacations в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isLoading флаг + проверка валидности кэша
   useEffect(() => {
     if (showDepartments) {
-      loadVacationsRef.current(false) // false = не форсировать, проверить кэш
+      loadVacations(false) // false = не форсировать, проверить кэш
     }
-  }, [startDate, daysToShow, showDepartments])
+  }, [startDate, daysToShow, showDepartments, loadVacations])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
