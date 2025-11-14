@@ -589,8 +589,8 @@ export function TimelineGrid({
             })
           ))}
 
-          {/* Если нет разделов или идет загрузка */}
-          {showSections && sections.length === 0 && !isLoading && (
+          {/* Если нет разделов по критериям фильтрации */}
+          {showSections && sections.length === 0 && !isLoading && hasActiveFilters && (
             <div
               className={cn(
                 "flex justify-start items-center p-8 border-b",
@@ -598,7 +598,7 @@ export function TimelineGrid({
               )}
             >
               <p className={cn("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                {hasActiveFilters ? "Нет элементов, подходящих по критериям фильтрации" : "Разделы не найдены"}
+                Нет элементов, подходящих по критериям фильтрации
               </p>
             </div>
           )}

@@ -3,12 +3,10 @@
 import type React from "react"
 
 import { cn } from "@/lib/utils"
-import { useMemo, useState, useEffect } from "react"
+import { useMemo } from "react"
 // Обновляем импорт функций
 import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
-import { usePlanningStore } from "../../stores/usePlanningStore"
-import { Search, Eye, EyeOff, Expand, Minimize, Users, X } from "lucide-react"
 
 interface TimelineHeaderProps {
   timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
@@ -47,30 +45,6 @@ export function TimelineHeader({
   headerRightScrollRef,
   scrollbarWidth,
 }: TimelineHeaderProps) {
-  // Состояние для поискового запроса
-  const [searchQuery, setSearchQuery] = useState("")
-
-
-  // Получаем функцию для фильтрации разделов из стора
-  const filterSectionsByName = usePlanningStore((state) => state.filterSectionsByName)
-
-
-  // Обработчик изменения поискового запроса
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value
-    setSearchQuery(query)
-    filterSectionsByName(query)
-  }
-
-
-
-  // Сбрасываем поиск при размонтировании компонента
-  useEffect(() => {
-    return () => {
-      filterSectionsByName("")
-    }
-  }, [filterSectionsByName])
-
   // Получаем видимость столбцов из стора
   const { columnVisibility } = usePlanningColumnsStore()
 
@@ -174,46 +148,7 @@ export function TimelineHeader({
               height: `${headerHeight}px`,
             }}
           >
-            <div className="relative flex-1">
-              <div
-                className={cn(
-                  "absolute inset-y-0 left-0 flex items-center pl-2",
-                  theme === "dark" ? "text-slate-400" : "text-slate-500",
-                )}
-              >
-                <Search size={14} />
-              </div>
-              <input
-                type="text"
-                placeholder="Поиск раздела..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className={cn(
-                  "w-full py-1 pl-8 pr-6 text-xs rounded border",
-                  theme === "dark"
-                    ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400 focus:border-teal-500"
-                    : "bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-teal-500",
-                  "focus:outline-none focus:ring-1 focus:ring-teal-500",
-                )}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  aria-label="Очистить"
-                  title="Очистить"
-                  onClick={() => {
-                    setSearchQuery("")
-                    filterSectionsByName("")
-                  }}
-                  className={cn(
-                    "absolute inset-y-0 right-0 flex items-center pr-2",
-                    theme === "dark" ? "text-slate-400 hover:text-slate-300" : "text-slate-400 hover:text-slate-600",
-                  )}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+            {/* Пустой контейнер для сохранения layout */}
             {/* Overlay для скрытия поля поиска когда разделы выключены, а отделы включены */}
             {!showSections && showDepartments && (
               <div
