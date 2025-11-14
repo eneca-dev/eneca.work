@@ -136,6 +136,9 @@ useEffect(() => {
   // Счетчик для принудительных обновлений
   const [refreshCounter, setRefreshCounter] = useState(0)
 
+  // Состояние для ширины вертикального скроллбара
+  const [scrollbarWidth, setScrollbarWidth] = useState(0)
+
   // Хук для автоматического обновления timeline
   const { forceRefresh } = useTimelineAutoRefresh()
 
@@ -382,6 +385,33 @@ useEffect(() => {
     }
   }, [])
 
+  // Вычисляем ширину вертикального скроллбара контента
+  useEffect(() => {
+    const contentScroll = contentScrollRef.current
+    if (!contentScroll) return
+
+    // Вычисляем ширину скроллбара: offsetWidth (включая скроллбар) - clientWidth (без скроллбара)
+    const calculateScrollbarWidth = () => {
+      const scrollbarWidth = contentScroll.offsetWidth - contentScroll.clientWidth
+      setScrollbarWidth(scrollbarWidth)
+    }
+
+    // Вычисляем при монтировании
+    calculateScrollbarWidth()
+
+    // Пересчитываем при изменении размера окна
+    window.addEventListener('resize', calculateScrollbarWidth)
+
+    // Используем ResizeObserver для отслеживания изменений размера контента
+    const resizeObserver = new ResizeObserver(calculateScrollbarWidth)
+    resizeObserver.observe(contentScroll)
+
+    return () => {
+      window.removeEventListener('resize', calculateScrollbarWidth)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
   // Получаем данные для заголовка
   const { columnVisibility } = usePlanningColumnsStore()
 
@@ -424,7 +454,7 @@ useEffect(() => {
           <div
             ref={headerScrollRef}
             className={cn(
-              "sticky top-0 z-40",
+              "sticky top-0 z-40 relative",
               theme === "dark" ? "bg-slate-900" : "bg-white",
             )}
           >
@@ -444,6 +474,7 @@ useEffect(() => {
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
               headerRightScrollRef={headerRightScrollRef}
+              scrollbarWidth={scrollbarWidth}
             />
           </div>
 
