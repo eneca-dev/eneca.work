@@ -317,6 +317,7 @@ export function TimelineGrid({
               toggleShowDepartments={toggleShowDepartments}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
+              scrollbarWidth={14}
             />
           )}
 
