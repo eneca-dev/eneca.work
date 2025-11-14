@@ -9,6 +9,8 @@ import { generateTimeUnits } from "../utils/date-utils"
 import { TimelineHeader } from "./timeline/timeline-header"
 import { TimelineRow } from "./timeline/timeline-row"
 import { DepartmentRow } from "./timeline/department-row" // Новый компонент для отделов
+import { DepartmentLoadingSkeleton } from "./timeline/department-loading-skeleton"
+import { SectionLoadingSkeleton } from "./timeline/section-loading-skeleton"
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
@@ -323,28 +325,52 @@ export function TimelineGrid({
 
           {/* Строки с разделами (возможна группировка по проектам) */}
           {showSections && (!groupByProject ? (
-            sections.map((section, index) => (
-              <TimelineRow
-                key={section.id}
-                section={section}
-                sectionIndex={index}
-                timeUnits={timeUnits}
-                theme={theme}
-                rowHeight={ROW_HEIGHT}
-                headerHeight={HEADER_HEIGHT}
-                columnWidth={COLUMN_WIDTHS.section}
-                padding={PADDING}
-                leftOffset={LEFT_OFFSET}
-                cellWidth={cellWidth}
-                stickyColumnShadow={stickyColumnShadow}
-                totalExpandedSections={totalExpandedSections}
-                totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
-                onOpenSectionPanel={onOpenSectionPanel}
-              />
-            ))
+            <>
+              {isLoading && sections.length === 0 ? (
+                <SectionLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={5}
+                />
+              ) : (
+                sections.map((section, index) => (
+                  <TimelineRow
+                    key={section.id}
+                    section={section}
+                    sectionIndex={index}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={ROW_HEIGHT}
+                    headerHeight={HEADER_HEIGHT}
+                    columnWidth={COLUMN_WIDTHS.section}
+                    padding={PADDING}
+                    leftOffset={LEFT_OFFSET}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalExpandedSections={totalExpandedSections}
+                    totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                    onOpenSectionPanel={onOpenSectionPanel}
+                  />
+                ))
+              )}
+            </>
           ) : (
             // Группировка по проектам из саммари (ленивая подзагрузка секций)
-            (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
+            <>
+              {isLoading && (!projectSummaries || projectSummaries.length === 0) ? (
+                <SectionLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={3}
+                />
+              ) : (
+                (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
               const projectIdForGroup = summary.projectId
               const projectName = summary.projectName || 'Без проекта'
               const isExpanded = expandedProjectGroups[projectIdForGroup] === true
@@ -588,6 +614,8 @@ export function TimelineGrid({
               </div>
             )
             })
+              )}
+            </>
           ))}
 
           {/* Если нет разделов по критериям фильтрации */}
@@ -605,7 +633,7 @@ export function TimelineGrid({
           )}
 
           {/* Разделитель между разделами и отделами, если показаны и разделы, и отделы */}
-          {showSections && showDepartments && departments.length > 0 && (
+          {showSections && showDepartments && (departments.length > 0 || isLoadingDepartments) && (
             <div
               className={cn(
                 "relative",
@@ -632,30 +660,47 @@ export function TimelineGrid({
                 <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
                   Отделы и сотрудники
                 </span>
+                {isLoadingDepartments && (
+                  <Loader2 className={cn("ml-2 h-4 w-4 animate-spin", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                )}
               </div>
             </div>
           )}
 
           {/* Строки с отделами, если они должны быть показаны */}
-          {showDepartments &&
-            departments.map((department, index) => (
-              <DepartmentRow
-                key={department.id}
-                department={department}
-                departmentIndex={index}
-                timeUnits={timeUnits}
-                theme={theme}
-                rowHeight={ROW_HEIGHT}
-                headerHeight={HEADER_HEIGHT}
-                columnWidth={COLUMN_WIDTHS.section}
-                padding={PADDING}
-                leftOffset={LEFT_OFFSET}
-                cellWidth={cellWidth}
-                stickyColumnShadow={stickyColumnShadow}
-                totalExpandedDepartments={totalExpandedDepartments}
-                totalEmployeesBeforeDepartment={employeesBeforeDepartment[index] || 0}
-              />
-            ))}
+          {showDepartments && (
+            <>
+              {isLoadingDepartments && departments.length === 0 ? (
+                <DepartmentLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={3}
+                />
+              ) : (
+                departments.map((department, index) => (
+                  <DepartmentRow
+                    key={department.id}
+                    department={department}
+                    departmentIndex={index}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={ROW_HEIGHT}
+                    headerHeight={HEADER_HEIGHT}
+                    columnWidth={COLUMN_WIDTHS.section}
+                    padding={PADDING}
+                    leftOffset={LEFT_OFFSET}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalExpandedDepartments={totalExpandedDepartments}
+                    totalEmployeesBeforeDepartment={employeesBeforeDepartment[index] || 0}
+                  />
+                ))
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

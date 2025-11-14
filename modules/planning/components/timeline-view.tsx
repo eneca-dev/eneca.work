@@ -444,9 +444,12 @@ useEffect(() => {
 
       {/* Старая панель фильтров удалена — фильтры перенесены в верхний бар */}
 
-      {isLoadingSections ? (
-        <div className="flex justify-center items-center p-8">
-          <Loader2 className={cn("h-8 w-8 animate-spin", "text-teal-500")} />
+      {isLoadingSections && sections.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-8 space-y-4">
+          <Loader2 className={cn("h-10 w-10 animate-spin", "text-teal-500")} />
+          <p className={cn("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+            Загрузка данных...
+          </p>
         </div>
       ) : (
         <>
