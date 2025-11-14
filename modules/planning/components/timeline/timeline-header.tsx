@@ -109,6 +109,7 @@ export function TimelineHeader({
             className={cn(
               fixedColumnStyle,
               theme === "dark" ? "bg-slate-800" : "bg-white",
+              "relative", // Для позиционирования overlay
             )}
             style={{
               width: `${sectionWidth}px`,
@@ -124,6 +125,15 @@ export function TimelineHeader({
                 Раздел
               </div>
             </div>
+            {/* Overlay для скрытия текста "Раздел" когда разделы выключены, а отделы включены */}
+            {!showSections && showDepartments && (
+              <div
+                className={cn(
+                  "absolute inset-0",
+                  theme === "dark" ? "bg-slate-800" : "bg-white",
+                )}
+              />
+            )}
           </div>
 
           {/* Заголовок "Объект" */}
@@ -156,6 +166,7 @@ export function TimelineHeader({
             className={cn(
               "border-r border-b border-t flex items-center justify-between px-3",
               theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
+              "relative", // Для позиционирования overlay
             )}
             style={{
               width: `${sectionWidth}px`,
@@ -203,6 +214,15 @@ export function TimelineHeader({
                 </button>
               )}
             </div>
+            {/* Overlay для скрытия поля поиска когда разделы выключены, а отделы включены */}
+            {!showSections && showDepartments && (
+              <div
+                className={cn(
+                  "absolute inset-0",
+                  theme === "dark" ? "bg-slate-800" : "bg-white",
+                )}
+              />
+            )}
           </div>
 
           {/* Пустая ячейка для "Объект" */}
