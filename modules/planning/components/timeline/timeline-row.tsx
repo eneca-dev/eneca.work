@@ -14,8 +14,7 @@ import { useTimelineUiStore } from "../../stores/useTimelineUiStore"
 // useState уже импортирован выше
 import { Avatar, Tooltip } from "../avatar"
 import { AssignResponsibleModal } from "./assign-responsible-modal"
-import { CreateLoadingBySectionModal } from "./create-loading-by-section-modal"
-import { EditLoadingModal } from "./edit-loading-modal"
+import { LoadingModal } from "./loading-modal"
 
 
 interface TimelineRowProps {
@@ -747,6 +746,7 @@ function LoadingRow({
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
+  const [showLoadingModal, setShowLoadingModal] = useState(false)
   const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
@@ -925,6 +925,7 @@ function LoadingRow({
                   onClick={(e) => {
                     e.stopPropagation()
                     setEditingLoading(loading)
+                    setShowLoadingModal(true)
                   }}
                 >
                   <Edit3 className="h-3 w-3" />
@@ -1040,13 +1041,16 @@ function LoadingRow({
           })}
         </div>
       </div>
-      {editingLoading && (
-        <EditLoadingModal
-          loading={editingLoading}
-          setEditingLoading={setEditingLoading}
-          theme={theme}
-        />
-      )}
+      <LoadingModal
+        isOpen={showLoadingModal}
+        onClose={() => {
+          setShowLoadingModal(false)
+          setEditingLoading(null)
+        }}
+        theme={theme}
+        mode="edit"
+        loading={editingLoading || undefined}
+      />
     </div>
   )
 }
@@ -1611,18 +1615,18 @@ function StageRow({
           })}
         </div>
       </div>
-      {createOpen && (
-        <CreateLoadingBySectionModal
-          section={section}
-          setShowModal={setCreateOpen}
-          theme={theme}
-          stageId={stage.id}
-          stageName={stage.name}
-          defaultStartDate={stage.start || undefined}
-          defaultEndDate={stage.finish || undefined}
-          defaultRate={1}
-        />
-      )}
+      <LoadingModal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        theme={theme}
+        mode="create"
+        section={section}
+        stageId={stage.id}
+        stageName={stage.name}
+        defaultStartDate={stage.start || undefined}
+        defaultEndDate={stage.finish || undefined}
+        defaultRate={1}
+      />
     </div>
   )
 }
