@@ -119,6 +119,7 @@ useEffect(() => {
 
   // Ссылки для синхронизации прокрутки
   const headerScrollRef = useRef<HTMLDivElement>(null)
+  const headerRightScrollRef = useRef<HTMLDivElement>(null) // Новая ссылка для правой части заголовка
   const contentScrollRef = useRef<HTMLDivElement>(null)
 
   // Состояние для отслеживания размера окна
@@ -344,12 +345,12 @@ useEffect(() => {
     }
   }, [showDepartments, departments.length, isLoadingDepartments, fetchDepartments])
 
-  // Синхронизация горизонтальной прокрутки между заголовком и контентом
+  // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
   useEffect(() => {
-    const headerScroll = headerScrollRef.current
+    const headerRightScroll = headerRightScrollRef.current
     const contentScroll = contentScrollRef.current
 
-    if (!headerScroll || !contentScroll) return
+    if (!headerRightScroll || !contentScroll) return
 
     let isHeaderScrolling = false
     let isContentScrolling = false
@@ -357,7 +358,7 @@ useEffect(() => {
     const handleHeaderScroll = () => {
       if (isContentScrolling) return
       isHeaderScrolling = true
-      contentScroll.scrollLeft = headerScroll.scrollLeft
+      contentScroll.scrollLeft = headerRightScroll.scrollLeft
       requestAnimationFrame(() => {
         isHeaderScrolling = false
       })
@@ -366,17 +367,17 @@ useEffect(() => {
     const handleContentScroll = () => {
       if (isHeaderScrolling) return
       isContentScrolling = true
-      headerScroll.scrollLeft = contentScroll.scrollLeft
+      headerRightScroll.scrollLeft = contentScroll.scrollLeft
       requestAnimationFrame(() => {
         isContentScrolling = false
       })
     }
 
-    headerScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
+    headerRightScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
     contentScroll.addEventListener('scroll', handleContentScroll, { passive: true })
 
     return () => {
-      headerScroll.removeEventListener('scroll', handleHeaderScroll)
+      headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
       contentScroll.removeEventListener('scroll', handleContentScroll)
     }
   }, [])
@@ -419,24 +420,14 @@ useEffect(() => {
         </div>
       ) : (
         <>
-          {/* Sticky заголовок таймлайна с синхронизированной горизонтальной прокруткой */}
+          {/* Sticky заголовок таймлайна - БЕЗ горизонтального скролла */}
           <div
             ref={headerScrollRef}
             className={cn(
-              "sticky top-0 z-40 overflow-x-auto overflow-y-hidden",
+              "sticky top-0 z-40",
               theme === "dark" ? "bg-slate-900" : "bg-white",
             )}
-            style={{
-              scrollbarWidth: "none", // Firefox: скрываем скроллбар заголовка
-              msOverflowStyle: "none", // IE/Edge: скрываем скроллбар
-            }}
           >
-            {/* Скрываем скроллбар в Webkit через CSS */}
-            <style jsx>{`
-              div::-webkit-scrollbar {
-                display: none;
-              }
-            `}</style>
             <TimelineHeader
               timeUnits={timeUnits}
               theme={theme}
@@ -452,6 +443,7 @@ useEffect(() => {
               toggleShowDepartments={toggleShowDepartments}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
+              headerRightScrollRef={headerRightScrollRef}
             />
           </div>
 

@@ -1,4 +1,4 @@
-"use client" 
+"use client"
 
 import type React from "react"
 
@@ -25,6 +25,7 @@ interface TimelineHeaderProps {
   toggleShowDepartments: () => void
   expandAllDepartments: () => void
   collapseAllDepartments: () => void
+  headerRightScrollRef?: React.RefObject<HTMLDivElement> // Новый проп для скролла правой части
 }
 
 export function TimelineHeader({
@@ -42,14 +43,15 @@ export function TimelineHeader({
   toggleShowDepartments,
   expandAllDepartments,
   collapseAllDepartments,
+  headerRightScrollRef,
 }: TimelineHeaderProps) {
   // Состояние для поискового запроса
   const [searchQuery, setSearchQuery] = useState("")
-  
+
 
   // Получаем функцию для фильтрации разделов из стора
   const filterSectionsByName = usePlanningStore((state) => state.filterSectionsByName)
-  
+
 
   // Обработчик изменения поискового запроса
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,7 +60,7 @@ export function TimelineHeader({
     filterSectionsByName(query)
   }
 
-  
+
 
   // Сбрасываем поиск при размонтировании компонента
   useEffect(() => {
@@ -71,17 +73,11 @@ export function TimelineHeader({
   const { columnVisibility } = usePlanningColumnsStore()
 
 
-  // Заменяем сложные расчеты ширины на фиксированные значения
-  // Заменяем эти строки:
-  // const sectionWidth = columnWidth + 80
-  // const projectWidth = columnWidth * columnWidths.project
-  // const objectWidth = columnWidth * columnWidths.object
+  // Фиксированные значения ширины столбцов
+  const sectionWidth = 430 // Ширина для раздела
+  const objectWidth = 120 // Фиксированная ширина для объекта
 
-  // На фиксированные значения:
-  const sectionWidth = 430 // Ширина для раздела (уменьшена на 10px)
-  const objectWidth = 120 // Фиксированная ширина для объекта (скрыт по умолчанию)
 
-  
 
   // Общие стили для ячеек заголовка
   const headerCellStyle = cn(
@@ -101,20 +97,12 @@ export function TimelineHeader({
   }, [timeUnits])
 
   return (
-    <div
-      className={cn(
-        "sticky top-0 z-40",
-        theme === "dark" ? "bg-slate-900" : "bg-white"
-      )}
-    >
-      {/* Строка с названиями месяцев и заголовками столбцов */}
-      <div className={cn("flex", theme === "dark" ? "" : "")}>
-        {/* Фиксированные заголовки столбцов */}
-        <div
-          className={cn("sticky left-0 z-30 flex", theme === "dark" ? "border-slate-700" : "border-slate-200")}
-          style={{ height: `${headerHeight}px` }}
-        >
-          {/* Заголовок "Раздел" (всегда видимый) */}
+    <div className="flex">
+      {/* ЛЕВАЯ ЧАСТЬ: Фиксированные столбцы (не скроллятся) */}
+      <div className="flex-shrink-0">
+        {/* Строка 1: Заголовки "Раздел" и "Объект" */}
+        <div className="flex" style={{ height: `${headerHeight}px` }}>
+          {/* Заголовок "Раздел" */}
           <div
             className={cn(
               fixedColumnStyle,
@@ -133,13 +121,10 @@ export function TimelineHeader({
               <div className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
                 Раздел
               </div>
-              {/* Кнопки управления перенесены в верхнюю панель */}
             </div>
           </div>
 
-          
-
-          {/* Заголовок "Объект" (может быть скрыт) */}
+          {/* Заголовок "Объект" */}
           {columnVisibility.object && (
             <div
               className={cn(
@@ -162,59 +147,9 @@ export function TimelineHeader({
           )}
         </div>
 
-        {/* Названия месяцев */}
-        <div className="flex-1 flex">
-          {monthGroups.map((month, i) => {
-            const width = month.length * cellWidth
-            const isFirstMonth = i === 0
-
-            return (
-              <div
-                key={`month-${i}`}
-                className={cn(
-                  headerCellStyle,
-                  theme === "dark" ? "bg-slate-800" : "bg-slate-50",
-                  !isFirstMonth
-                    ? theme === "dark"
-                      ? "border-l border-l-slate-600"
-                      : "border-l border-l-slate-300"
-                    : "",
-                )}
-                style={{
-                  height: `${headerHeight}px`,
-                  width: `${width}px`,
-                  minWidth: 0, // Добавляем это, чтобы разрешить сжатие
-                  padding: `${Math.max(1, padding - 2)}px`, // Уменьшаем отступы при маленькой ширине
-                  borderBottom: "none",
-                }}
-              >
-                <span
-                  className={cn("font-medium", theme === "dark" ? "text-slate-300" : "text-slate-600")}
-                  style={{
-                    fontSize: "13px", // Увеличенный размер шрифта для ячеек шириной 22px
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {month.name}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Заголовок с датами */}
-      <div className={cn("flex", theme === "dark" ? "" : "")}>
-        {/* Фиксированные заголовки для поиска */}
-        <div
-          className={cn("sticky left-0 z-30 flex", stickyColumnShadow)}
-          style={{
-            height: `${headerHeight}px`,
-          }}
-        >
-          {/* Поле поиска для "Раздел" */}
+        {/* Строка 2: Поле поиска и пустая ячейка для объекта */}
+        <div className="flex" style={{ height: `${headerHeight}px` }}>
+          {/* Поле поиска */}
           <div
             className={cn(
               "border-r border-b border-t flex items-center justify-between px-3",
@@ -226,7 +161,6 @@ export function TimelineHeader({
               height: `${headerHeight}px`,
             }}
           >
-            {/* Добавляем поле поиска */}
             <div className="relative flex-1">
               <div
                 className={cn(
@@ -269,8 +203,6 @@ export function TimelineHeader({
             </div>
           </div>
 
-          
-
           {/* Пустая ячейка для "Объект" */}
           {columnVisibility.object && (
             <div
@@ -288,14 +220,72 @@ export function TimelineHeader({
             </div>
           )}
         </div>
+      </div>
 
-        {/* Даты */}
-        <div className="flex-1 flex">
+      {/* ПРАВАЯ ЧАСТЬ: Скроллящиеся столбцы (месяцы и даты) */}
+      <div
+        ref={headerRightScrollRef}
+        className="flex-1 overflow-x-auto overflow-y-hidden"
+        style={{
+          scrollbarWidth: "none", // Firefox: скрываем скроллбар
+          msOverflowStyle: "none", // IE/Edge: скрываем скроллбар
+        }}
+      >
+        {/* Скрываем скроллбар в Webkit через CSS */}
+        <style jsx>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+
+        {/* Строка 1: Названия месяцев */}
+        <div className="flex" style={{ height: `${headerHeight}px` }}>
+          {monthGroups.map((month, i) => {
+            const width = month.length * cellWidth
+            const isFirstMonth = i === 0
+
+            return (
+              <div
+                key={`month-${i}`}
+                className={cn(
+                  headerCellStyle,
+                  theme === "dark" ? "bg-slate-800" : "bg-slate-50",
+                  !isFirstMonth
+                    ? theme === "dark"
+                      ? "border-l border-l-slate-600"
+                      : "border-l border-l-slate-300"
+                    : "",
+                )}
+                style={{
+                  height: `${headerHeight}px`,
+                  width: `${width}px`,
+                  minWidth: `${width}px`,
+                  padding: `${Math.max(1, padding - 2)}px`,
+                  borderBottom: "none",
+                }}
+              >
+                <span
+                  className={cn("font-medium", theme === "dark" ? "text-slate-300" : "text-slate-600")}
+                  style={{
+                    fontSize: "13px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {month.name}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Строка 2: Даты */}
+        <div className="flex" style={{ height: `${headerHeight}px` }}>
           {timeUnits.map((unit, i) => {
             const isTodayDate = isToday(unit.date)
             const isMonthStart = isFirstDayOfMonth(unit.date)
 
-            // Обновляем стиль для выходных дней в заголовке с датами
             return (
               <div
                 key={i}
@@ -313,8 +303,8 @@ export function TimelineHeader({
                 style={{
                   height: `${headerHeight}px`,
                   width: `${cellWidth}px`,
-                  minWidth: 0, // Добавляем это, чтобы разрешить сжатие
-                  padding: `${Math.max(1, padding - 2)}px`, // Уменьшаем отступы при маленькой ширине
+                  minWidth: `${cellWidth}px`,
+                  padding: `${Math.max(1, padding - 2)}px`,
                   borderBottom: "none",
                   borderLeft: isMonthStart ? "1px solid" : "none",
                   borderLeftColor: isMonthStart
@@ -337,9 +327,9 @@ export function TimelineHeader({
                         : "text-slate-600",
                   )}
                   style={{
-                    width: "12px", // Увеличенный размер для ячеек шириной 22px
-                    height: "12px", // Увеличенный размер для ячеек шириной 22px
-                    fontSize: "11px", // Увеличенный размер шрифта для ячеек шириной 22px
+                    width: "12px",
+                    height: "12px",
+                    fontSize: "11px",
                   }}
                 >
                   {unit.label}

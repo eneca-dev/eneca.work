@@ -265,9 +265,9 @@ export function TimelineRow({
 
   return (
     <>
-      <div className="group/row w-full relative">
+      <div className="group/row min-w-full relative">
         <div
-          className={cn("flex transition-colors", hasLoadings ? "cursor-pointer" : "cursor-default", "w-full")}
+          className={cn("flex transition-colors", hasLoadings ? "cursor-pointer" : "cursor-default", "min-w-full")}
           style={{ height: `${rowHeight}px` }}
           onClick={handleToggleExpand}
         >
