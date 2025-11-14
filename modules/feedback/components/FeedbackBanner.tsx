@@ -133,7 +133,7 @@ export function FeedbackBanner({ userId, firstName, lastName, hasDbRecord, onClo
             <Button
               variant="outline"
               onClick={() => handleScheduleAction(
-                () => scheduleNextSurvey(userId!, 7),
+                () => scheduleNextSurvey(userId!, 7, { firstName, lastName }),
                 onSnooze
               )}
               disabled={isSubmitting}
@@ -143,7 +143,7 @@ export function FeedbackBanner({ userId, firstName, lastName, hasDbRecord, onClo
             <Button
               variant="outline"
               onClick={() => handleScheduleAction(
-                () => scheduleNeverSurvey(userId!),
+                () => scheduleNeverSurvey(userId!, { firstName, lastName }),
                 onClose
               )}
               disabled={isSubmitting}

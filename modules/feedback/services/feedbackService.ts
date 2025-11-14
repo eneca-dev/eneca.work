@@ -233,24 +233,83 @@ export async function submitUserFeedback(payload: SubmitPayload): Promise<void> 
   }
 }
 
-export async function scheduleNextSurvey(userId: string, days: number): Promise<void> {
+export async function scheduleNextSurvey(
+  userId: string,
+  days: number,
+  opts?: { firstName?: string; lastName?: string }
+): Promise<void> {
   const sb = createClient()
   const nextAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-  const { error } = await sb
+  const nowIso = new Date().toISOString()
+
+  // Сначала пробуем вставить новую запись
+  const { error: insertError } = await sb
     .from("user_feedback")
-    .update({ next_survey_at: nextAt, updated_at: new Date().toISOString() })
-    .eq("user_id", userId)
-  if (error) throw error
+    .insert({
+      user_id: userId,
+      first_name: opts?.firstName || "",
+      last_name: opts?.lastName || "",
+      show_count: 1,
+      next_survey_at: nextAt,
+      updated_at: nowIso,
+    })
+
+  // Если запись уже существует 
+  if (insertError?.code === '23505') {
+    // Обновляем существующую запись
+    const { error: updateError } = await sb
+      .from("user_feedback")
+      .update({
+        next_survey_at: nextAt,
+        updated_at: nowIso,
+        ...(opts?.firstName ? { first_name: opts.firstName } : {}),
+        ...(opts?.lastName ? { last_name: opts.lastName } : {}),
+      })
+      .eq("user_id", userId)
+
+    if (updateError) throw updateError
+  } else if (insertError) {
+    throw insertError
+  }
 }
 
 // Никогда больше не показывать (используем специальное значение PostgreSQL 'infinity')
-export async function scheduleNeverSurvey(userId: string): Promise<void> {
+export async function scheduleNeverSurvey(
+  userId: string,
+  opts?: { firstName?: string; lastName?: string }
+): Promise<void> {
   const sb = createClient()
-  const { error } = await sb
+  const nowIso = new Date().toISOString()
+
+  // Сначала пробуем вставить новую запись
+  const { error: insertError } = await sb
     .from("user_feedback")
-    .update({ next_survey_at: "infinity" as unknown as string, updated_at: new Date().toISOString() })
-    .eq("user_id", userId)
-  if (error) throw error
+    .insert({
+      user_id: userId,
+      first_name: opts?.firstName || "",
+      last_name: opts?.lastName || "",
+      show_count: 1,
+      next_survey_at: "infinity" as unknown as string,
+      updated_at: nowIso,
+    })
+
+  // Если запись уже существует
+  if (insertError?.code === '23505') {
+    // Обновляем существующую запись
+    const { error: updateError } = await sb
+      .from("user_feedback")
+      .update({
+        next_survey_at: "infinity" as unknown as string,
+        updated_at: nowIso,
+        ...(opts?.firstName ? { first_name: opts.firstName } : {}),
+        ...(opts?.lastName ? { last_name: opts.lastName } : {}),
+      })
+      .eq("user_id", userId)
+
+    if (updateError) throw updateError
+  } else if (insertError) {
+    throw insertError
+  }
 }
 
 
