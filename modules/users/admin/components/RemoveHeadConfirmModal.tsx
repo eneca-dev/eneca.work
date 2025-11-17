@@ -10,7 +10,7 @@ import * as Sentry from "@sentry/nextjs"
 interface RemoveHeadConfirmModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  type: "department" | "team"
+  type: "department" | "team" | "subdivision"
   entityName: string
   entityId: string
   onSuccess: () => void
@@ -31,7 +31,22 @@ export default function RemoveHeadConfirmModal({
       setIsRemoving(true)
       const supabase = createClient()
 
-      if (type === "department") {
+      if (type === "subdivision") {
+        // Убираем руководителя подразделения
+        const { error } = await supabase
+          .from("subdivisions")
+          .update({ subdivision_head_id: null })
+          .eq("subdivision_id", entityId)
+
+        if (error) {
+          console.error("Ошибка при удалении руководителя подразделения:", error)
+          Sentry.captureException(error, { tags: { module: 'users', component: 'RemoveHeadConfirmModal', action: 'remove_subdivision_head', error_type: 'db_error' }, extra: { entity_id: entityId } })
+          toast.error("Не удалось убрать руководителя подразделения")
+          return
+        }
+
+        toast.success("Руководитель подразделения убран")
+      } else if (type === "department") {
         // Убираем руководителя отдела через новую систему
         const { error } = await supabase
           .from("departments")
@@ -74,20 +89,26 @@ export default function RemoveHeadConfirmModal({
     }
   }
 
+  const getEntityLabel = () => {
+    if (type === "subdivision") return "подразделения"
+    if (type === "department") return "отдела"
+    return "команды"
+  }
+
   return (
     <Modal isOpen={open} onClose={() => onOpenChange(false)} size="sm">
-      <Modal.Header 
+      <Modal.Header
         title={
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-orange-500" />
-            Убрать руководителя {type === "department" ? "отдела" : "команды"}
+            Убрать руководителя {getEntityLabel()}
           </div>
         }
       />
-      
+
       <Modal.Body>
         <p className="text-gray-600 dark:text-slate-400">
-          Вы уверены, что хотите убрать руководителя {type === "department" ? "отдела" : "команды"} <strong>"{entityName}"</strong>? 
+          Вы уверены, что хотите убрать руководителя {getEntityLabel()} <strong>"{entityName}"</strong>?
           Это действие нельзя отменить.
         </p>
       </Modal.Body>

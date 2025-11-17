@@ -91,7 +91,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const currentUserId = useUserStore((state) => state.id)
   const currentUserProfile = useUserStore((state) => state.profile)
   const { canChangeRoles, canAddAdminRole } = useAdminPermissions()
-  const { canEditAllUsers, canEditStructures, canEditTeam, canEditDepartment, canAssignRoles, canAssignAdminRole, isAdmin, isUser, canEditSalaryAll, canEditSalaryDepartment, isDepartmentHead } = useUserPermissions()
+  const { canEditAllUsers, canEditStructures, canEditTeam, canEditDepartment, canEditSubdivision, canAssignRoles, canAssignAdminRole, isAdmin, isUser, isSubdivisionHead, canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, isDepartmentHead } = useUserPermissions()
   // Возможность перезагрузить permissions-store после изменения ролей
   const { reloadPermissions } = useUserPermissionsSync()
 
@@ -103,22 +103,22 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     : canAssignRoles  // Для других пользователей нужно разрешение users.assign_roles
 
   // Определяем, может ли пользователь редактировать отдел
-  // Только администраторы могут менять отдел (даже при редактировании своего профиля)
-  const canEditDepartmentField = isAdmin || canEditAllUsers
+  // Администраторы и руководители подразделений могут менять отдел
+  const canEditDepartmentField = isAdmin || canEditAllUsers || canEditSubdivision
 
   // Определяем, может ли пользователь редактировать команду
-  // Администраторы и руководители отделов могут менять команду
-  const canEditTeamField = isAdmin || canEditAllUsers || canEditDepartment
+  // Администраторы, руководители подразделений и руководители отделов могут менять команду
+  const canEditTeamField = isAdmin || canEditAllUsers || canEditSubdivision || canEditDepartment
 
   // Определяем, может ли пользователь редактировать должность и категорию
   // При самостоятельном редактировании только роли выше user могут редактировать должность и категорию
-  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей или отдела
-  const canEditPositionAndCategory = isSelfEdit ? !isUser : (canEditAllUsers || canEditDepartment)
+  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей, подразделения или отдела
+  const canEditPositionAndCategory = isSelfEdit ? !isUser : (canEditAllUsers || canEditSubdivision || canEditDepartment)
 
   // Определяем, может ли пользователь редактировать местоположение (расположение, страна, город)
   // При самостоятельном редактировании все пользователи могут редактировать местоположение
-  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей или отдела
-  const canEditLocationFields = isSelfEdit ? true : (canEditAllUsers || canEditDepartment)
+  // При редактировании других пользователей проверяем разрешение на редактирование всех пользователей, подразделения или отдела
+  const canEditLocationFields = isSelfEdit ? true : (canEditAllUsers || canEditSubdivision || canEditDepartment)
 
   // Определяем, может ли пользователь редактировать только команду (для users.edit.team)
   // Если есть users.edit.department или users.edit.all, то это не "только команда"
@@ -130,10 +130,22 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
   // Определяем, может ли пользователь редактировать ставку и загруженность
   // Админ с полными правами может редактировать всех
+  // Руководитель подразделения может редактировать сотрудников своего подразделения
   // Руководитель отдела может редактировать только сотрудников своего отдела
   const canEditSalaryFields = React.useMemo(() => {
     // Админ с полными правами может редактировать всех
     if (canEditSalaryAll) return true
+
+    // Руководитель подразделения может редактировать сотрудников своего подразделения
+    if (canEditSalarySubdivision) {
+      const currentSubdivisionId = currentUserProfile?.subdivisionId || (currentUserProfile as any)?.subdivision_id
+      const targetSubdivisionId = user?.subdivisionId
+
+      // Если не известны ID подразделений, запрещаем редактирование
+      if (!currentSubdivisionId || !targetSubdivisionId) return false
+
+      return currentSubdivisionId === targetSubdivisionId
+    }
 
     // Руководитель отдела может редактировать только своего отдела
     if (canEditSalaryDepartment) {
@@ -147,7 +159,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     }
 
     return false
-  }, [canEditSalaryAll, canEditSalaryDepartment, currentUserProfile, user])
+  }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user])
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
@@ -744,7 +756,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onChange={(e) => handleChange("firstName", e.target.value)}
                   placeholder="Имя"
                   required
-                  disabled={!isSelfEdit && !canEditAllUsers && !canEditDepartment && !canEditTeam}
+                  disabled={!isSelfEdit && !canEditAllUsers && !canEditSubdivision && !canEditDepartment && !canEditTeam}
                   className="h-9"
                 />
                 <Input
@@ -753,7 +765,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   onChange={(e) => handleChange("lastName", e.target.value)}
                   placeholder="Фамилия"
                   required
-                  disabled={!isSelfEdit && !canEditAllUsers && !canEditDepartment && !canEditTeam}
+                  disabled={!isSelfEdit && !canEditAllUsers && !canEditSubdivision && !canEditDepartment && !canEditTeam}
                   className="h-9"
                 />
               </div>
@@ -1183,10 +1195,16 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   const isAdminRole = role.name.toLowerCase().includes('admin')
                   // Отключаем чекбокс admin роли, если нет разрешения
                   const isAdminRoleDisabled = isAdminRole && !canAssignAdminRole
+
+                  // Определяем, является ли роль subdivision_head
+                  const isSubdivisionHeadRole = role.name === 'subdivision_head'
+                  // Отключаем чекбокс subdivision_head роли, если нет разрешения (только админы могут назначать)
+                  const isSubdivisionHeadRoleDisabled = isSubdivisionHeadRole && !canAssignAdminRole
+
                   // Определяем, является ли роль department_head
                   const isDepartmentHeadRole = role.name === 'department_head'
-                  // Отключаем чекбокс department_head роли, если нет разрешения (только админы могут назначать)
-                  const isDepartmentHeadRoleDisabled = isDepartmentHeadRole && !canAssignAdminRole
+                  // Отключаем чекбокс department_head роли, если нет разрешения (админы или subdivision_head могут назначать)
+                  const isDepartmentHeadRoleDisabled = isDepartmentHeadRole && !canAssignAdminRole && !isSubdivisionHead
 
                   // Определяем, является ли роль project_manager
                   const isProjectManagerRole = role.name === 'project_manager'
@@ -1194,12 +1212,12 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   const isProjectManagerRoleDisabled = isProjectManagerRole && !canAssignAdminRole
 
                   return (
-                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${(isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'opacity-50' : ''}`}>
+                    <div key={role.id} className={`flex items-start space-x-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 min-w-0 ${(isLastRole || isAdminRoleDisabled || isSubdivisionHeadRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'opacity-50' : ''}`}>
                       <input
                         type="checkbox"
                         id={`modal-role-${role.id}`}
                         checked={isSelected}
-                        disabled={isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled}
+                        disabled={isLastRole || isAdminRoleDisabled || isSubdivisionHeadRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setTempSelectedRoles(prev => [...prev, role.id])
@@ -1209,7 +1227,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         }}
                         className="mt-1 rounded flex-shrink-0"
                       />
-                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${(isLastRole || isAdminRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'cursor-not-allowed' : ''}`}>
+                      <label htmlFor={`modal-role-${role.id}`} className={`text-sm cursor-pointer flex-1 min-w-0 ${(isLastRole || isAdminRoleDisabled || isSubdivisionHeadRoleDisabled || isDepartmentHeadRoleDisabled || isProjectManagerRoleDisabled) ? 'cursor-not-allowed' : ''}`}>
                         <span className="font-medium block truncate">{role.name}</span>
                         {role.description && (
                           <span className="text-xs text-gray-500 block mt-1 overflow-hidden text-ellipsis line-clamp-2">{role.description}</span>
@@ -1219,6 +1237,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         )}
                         {isAdminRoleDisabled && (
                           <span className="text-xs text-red-600 block mt-1">Нет прав на назначение admin роли</span>
+                        )}
+                        {isSubdivisionHeadRoleDisabled && (
+                          <span className="text-xs text-red-600 block mt-1">Нет прав на назначение роли руководителя подразделения</span>
                         )}
                         {isDepartmentHeadRoleDisabled && (
                           <span className="text-xs text-red-600 block mt-1">Нет прав на назначение роли начальника отдела</span>

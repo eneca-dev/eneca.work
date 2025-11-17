@@ -124,6 +124,8 @@ export default function UsersPage() {
       email: user.email,
       avatar_url: user.avatar_url || undefined,
       position: user.position_name || "",
+      subdivision: user.subdivision_name || "",
+      subdivisionId: user.subdivision_id || undefined,
       department: user.department_name || "",
       departmentId: user.department_id || undefined,
       team: user.team_name || "",

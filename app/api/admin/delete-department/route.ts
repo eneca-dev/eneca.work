@@ -29,7 +29,7 @@ export async function DELETE(request: NextRequest) {
       }
 
       // Проверка права на удаление отдела
-      const permsToCheck = ['departments.delete', 'users_can_edit_all', 'hierarchy.is_admin']
+      const permsToCheck = ['departments.delete', 'users.delete.department', 'users_can_edit_all', 'hierarchy.is_admin']
       let allowed = false
       for (const perm of permsToCheck) {
         const { data: has, error } = await supabase.rpc('user_has_permission', {

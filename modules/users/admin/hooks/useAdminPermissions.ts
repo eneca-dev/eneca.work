@@ -6,11 +6,18 @@ export function useAdminPermissions(): AdminPermissions {
 
   return {
     canViewAdminPanel: hasPermission('users.admin_panel'),
+    isAdmin: hasPermission('hierarchy.is_admin'),
     canManageRoles: hasPermission('users.manage.roles'),
     canManageDepartments: hasPermission('users.manage.departments'),
     canManageTeams: hasPermission('users.manage.teams'),
     canManagePositions: hasPermission('users.manage.positions'),
     canManageCategories: hasPermission('users.manage.categories'),
+    // Редакторские права уровня подразделения
+    canEditSubdivision: hasPermission('users.edit.subdivision'),
+    canEditSalarySubdivision: hasPermission('users.edit_salary.subdivision'),
+    canViewRateSubdivision: hasPermission('users.view.rate.subdivision'),
+    canDeleteDepartment: hasPermission('users.delete.department'),
+    canManageDepartmentHead: hasPermission('users.manage.department_head'),
     // Редакторские права уровня отдела/команды
     canEditDepartment: hasPermission('users.edit.department'),
     canEditTeam: hasPermission('users.edit.team'),

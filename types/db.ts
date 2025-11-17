@@ -6,6 +6,8 @@ export type User = {
   email: string
   avatar_url?: string
   position: string
+  subdivision?: string
+  subdivisionId?: string
   department: string
   departmentId?: string
   team: string
@@ -33,6 +35,8 @@ export type UserWithRoles = {
   salary: string | null
   is_hourly: boolean | null
   avatar_url: string | null
+  subdivision_id: string | null
+  subdivision_name: string | null
   department_id: string | null
   department_name: string | null
   team_id: string | null

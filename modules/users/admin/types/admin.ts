@@ -2,11 +2,18 @@
 
 export interface AdminPermissions {
   canViewAdminPanel: boolean
+  isAdmin: boolean
   canManageRoles: boolean
   canManageDepartments: boolean
   canManageTeams: boolean
   canManagePositions: boolean
   canManageCategories: boolean
+  // Редакторские права уровня подразделения
+  canEditSubdivision: boolean
+  canEditSalarySubdivision: boolean
+  canViewRateSubdivision: boolean
+  canDeleteDepartment: boolean
+  canManageDepartmentHead: boolean
   // Редакторские права уровня отдела/команды
   canEditDepartment: boolean
   canEditTeam: boolean

@@ -8,6 +8,7 @@ export interface UserProfile {
   // camelCase поля (для обратной совместимости)
   firstName?: string | null
   lastName?: string | null
+  subdivisionId?: string | null
   departmentId?: string | null
   teamId?: string | null
   positionId?: string | null
@@ -20,10 +21,11 @@ export interface UserProfile {
   city?: string | null
   roleId?: string | null
   avatar_url?: string | null
-  
+
   // snake_case поля (из базы данных)
   first_name?: string | null
   last_name?: string | null
+  subdivision_id?: string | null
   department_id?: string | null
   team_id?: string | null
   position_id?: string | null
@@ -90,6 +92,7 @@ export const useUserStore = create<UserState>()(
             processedProfile = {
               firstName: user.profile.firstName || user.profile.first_name,
               lastName: user.profile.lastName || user.profile.last_name,
+              subdivisionId: user.profile.subdivisionId || user.profile.subdivision_id,
               departmentId: user.profile.departmentId || user.profile.department_id,
               teamId: user.profile.teamId || user.profile.team_id,
               positionId: user.profile.positionId || user.profile.position_id,
