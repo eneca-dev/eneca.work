@@ -386,7 +386,12 @@ export async function fetchSectionsWithLoadings(
       if (sectionItem.loading_id && sectionItem.loading_status === "active") {
         loadingsMap[sectionItem.section_id].push({
           id: sectionItem.loading_id,
+          projectId: sectionItem.project_id || undefined,
+          projectName: sectionItem.project_name || undefined,
+          sectionId: sectionItem.section_id,
+          sectionName: sectionItem.section_name || undefined,
           stageId: sectionItem.loading_stage || "",
+          stageName: sectionItem.stage_name || undefined,
           responsibleId: sectionItem.loading_responsible || "",
           responsibleName:
             sectionItem.responsible_first_name && sectionItem.responsible_last_name
@@ -394,7 +399,6 @@ export async function fetchSectionsWithLoadings(
               : undefined,
           responsibleAvatarUrl: sectionItem.responsible_avatar || undefined,
           responsibleTeamName: sectionItem.responsible_team_name || undefined,
-          sectionId: sectionItem.section_id,
           startDate: sectionItem.loading_start ? new Date(sectionItem.loading_start) : new Date(),
           endDate: sectionItem.loading_finish ? new Date(sectionItem.loading_finish) : new Date(),
           rate: sectionItem.loading_rate || 1,

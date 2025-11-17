@@ -13,7 +13,8 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Users } from "lucide-react"
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 // FileTree node structure
 interface FileTreeNode {
@@ -28,6 +29,7 @@ interface FileTreeNode {
   objectId?: string
   sectionId?: string
   decompositionStageId?: string
+  loadingId?: string // For loading nodes
 }
 
 interface LoadingModalProps {
@@ -167,6 +169,13 @@ export function LoadingModal({
   // SectionPanel state
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const { statuses } = useSectionStatuses()
+
+  // State for creating stages
+  const [isCreatingStage, setIsCreatingStage] = useState(false)
+
+  // State for refresh operations
+  const [refreshingProjects, setRefreshingProjects] = useState<Set<string>>(new Set())
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false)
 
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
@@ -323,58 +332,80 @@ export function LoadingModal({
               .eq("decomposition_stage_section_id", sect.section_id)
               .order("decomposition_stage_order")
 
-            const decompNodes: FileTreeNode[] = (decompStages || []).map((ds: any) => ({
-              id: `decomp-${ds.decomposition_stage_id}`,
-              name: ds.decomposition_stage_name,
-              type: "file" as const,
-              parentId: `section-${sect.section_id}`,
-              decompositionStageId: ds.decomposition_stage_id,
-              sectionId: sect.section_id,
-              objectId: obj.object_id,
-              stageId: stage.stage_id,
-              projectId: node.projectId,
-            }))
+            // Fetch loadings for this section
+            const sectionLoadings = await usePlanningStore.getState().fetchSectionLoadings(sect.section_id)
 
-            if (decompNodes.length > 0) {
-              sectionNodes.push({
-                id: `section-${sect.section_id}`,
-                name: sect.section_name,
+            const decompNodes: FileTreeNode[] = []
+
+            for (const ds of decompStages || []) {
+              // Filter loadings for this decomposition stage
+              const stageLoadings = sectionLoadings.filter(l => l.stageId === ds.decomposition_stage_id)
+
+              // Create loading nodes
+              const loadingNodes: FileTreeNode[] = stageLoadings.map(loading => ({
+                id: `loading-${loading.id}`,
+                name: `${loading.responsibleName || 'Без ответственного'} (${loading.rate})`,
+                type: "file" as const,
+                parentId: `decomp-${ds.decomposition_stage_id}`,
+                loadingId: loading.id,
+                decompositionStageId: ds.decomposition_stage_id,
+                sectionId: sect.section_id,
+                objectId: obj.object_id,
+                stageId: stage.stage_id,
+                projectId: node.projectId,
+              }))
+
+              decompNodes.push({
+                id: `decomp-${ds.decomposition_stage_id}`,
+                name: ds.decomposition_stage_name,
                 type: "folder" as const,
-                parentId: `object-${obj.object_id}`,
-                children: decompNodes,
+                parentId: `section-${sect.section_id}`,
+                children: loadingNodes,
+                decompositionStageId: ds.decomposition_stage_id,
                 sectionId: sect.section_id,
                 objectId: obj.object_id,
                 stageId: stage.stage_id,
                 projectId: node.projectId,
               })
             }
-          }
 
-          if (sectionNodes.length > 0) {
-            objectNodes.push({
-              id: `object-${obj.object_id}`,
-              name: obj.object_name,
+            // Always add section, even if it has no decomposition stages
+            sectionNodes.push({
+              id: `section-${sect.section_id}`,
+              name: sect.section_name,
               type: "folder" as const,
-              parentId: `stage-${stage.stage_id}`,
-              children: sectionNodes,
+              parentId: `object-${obj.object_id}`,
+              children: decompNodes,
+              sectionId: sect.section_id,
               objectId: obj.object_id,
               stageId: stage.stage_id,
               projectId: node.projectId,
             })
           }
-        }
 
-        if (objectNodes.length > 0) {
-          stageNodes.push({
-            id: `stage-${stage.stage_id}`,
-            name: stage.stage_name,
+          // Always add object, even if it has no sections
+          objectNodes.push({
+            id: `object-${obj.object_id}`,
+            name: obj.object_name,
             type: "folder" as const,
-            parentId: `project-${node.projectId}`,
-            children: objectNodes,
+            parentId: `stage-${stage.stage_id}`,
+            children: sectionNodes,
+            objectId: obj.object_id,
             stageId: stage.stage_id,
             projectId: node.projectId,
           })
         }
+
+        // Always add stage, even if it has no objects
+        stageNodes.push({
+          id: `stage-${stage.stage_id}`,
+          name: stage.stage_name,
+          type: "folder" as const,
+          parentId: `project-${node.projectId}`,
+          children: objectNodes,
+          stageId: stage.stage_id,
+          projectId: node.projectId,
+        })
       }
 
       // Update tree with loaded children
@@ -442,6 +473,191 @@ export function LoadingModal({
     }
   }, [])
 
+  // Create basic decomposition stage
+  const handleCreateBasicStage = useCallback(async (sectionNode: FileTreeNode, e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (!sectionNode.sectionId || isCreatingStage) return
+
+    setIsCreatingStage(true)
+    try {
+      // Get the count of existing stages
+      const { data: existingStages, error: countError } = await supabase
+        .from("decomposition_stages")
+        .select("decomposition_stage_id")
+        .eq("decomposition_stage_section_id", sectionNode.sectionId)
+
+      if (countError) throw countError
+
+      const stageOrder = (existingStages?.length || 0)
+
+      // Create new stage
+      const { data: newStage, error: createError } = await supabase
+        .from("decomposition_stages")
+        .insert({
+          decomposition_stage_section_id: sectionNode.sectionId,
+          decomposition_stage_name: `Этап ${sectionNode.name}`,
+          decomposition_stage_order: stageOrder,
+        })
+        .select()
+        .single()
+
+      if (createError) throw createError
+
+      setNotification(`Этап "${newStage.decomposition_stage_name}" успешно создан`)
+
+      // Find the parent project node to reload its children
+      const findProjectNode = (nodes: FileTreeNode[]): FileTreeNode | null => {
+        for (const node of nodes) {
+          if (node.id === `project-${sectionNode.projectId}`) {
+            return node
+          }
+          if (node.children) {
+            const found = findProjectNode(node.children)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      const projectNode = findProjectNode(treeData)
+      if (projectNode) {
+        // Reload the project's children to show the new stage
+        await loadNodeChildren(projectNode)
+
+        // Expand the section to show the new stage
+        setExpandedFolders((prev) => new Set(prev).add(sectionNode.id))
+      }
+
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+    } catch (error) {
+      console.error("Ошибка создания этапа:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "create_basic_stage",
+          modal: "loading_modal",
+        },
+        extra: {
+          section_id: sectionNode.sectionId,
+          section_name: sectionNode.name,
+        },
+      })
+      setNotification(`Ошибка при создании этапа: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setIsCreatingStage(false)
+    }
+  }, [isCreatingStage, treeData, loadNodeChildren, setNotification, clearNotification])
+
+  // Handle creating a new loading from tree (by selecting decomposition stage)
+  const handleCreateLoadingFromTree = useCallback((decompositionStageNode: FileTreeNode, e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (!decompositionStageNode.decompositionStageId) return
+
+    // Select the decomposition stage node to show the form on the right
+    setSelectedNode(decompositionStageNode)
+
+    // Build breadcrumbs
+    const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+      const path: FileTreeNode[] = [targetNode]
+      let current = targetNode
+
+      const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+        for (const n of nodes) {
+          if (n.children) {
+            for (const child of n.children) {
+              if (child.id === childId) return n
+            }
+            const found = findParentNode(n.children, childId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      while (current.parentId) {
+        const parent = findParentNode(treeData, current.id)
+        if (parent) {
+          path.unshift(parent)
+          current = parent
+        } else {
+          break
+        }
+      }
+
+      return path
+    }
+
+    setBreadcrumbs(buildBreadcrumbs(decompositionStageNode))
+  }, [treeData])
+
+  // Refresh a single project
+  const handleRefreshProject = useCallback(async (projectNode: FileTreeNode, e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (!projectNode.projectId) return
+
+    const projectId = projectNode.id
+    if (refreshingProjects.has(projectId)) return
+
+    setRefreshingProjects((prev) => new Set(prev).add(projectId))
+    try {
+      await loadNodeChildren(projectNode)
+      setNotification(`Проект "${projectNode.name}" обновлён`)
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+    } catch (error) {
+      console.error("Ошибка обновления проекта:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "refresh_project",
+          modal: "loading_modal",
+        },
+        extra: {
+          project_id: projectNode.projectId,
+          project_name: projectNode.name,
+        },
+      })
+      setNotification(`Ошибка при обновлении проекта: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setRefreshingProjects((prev) => {
+        const next = new Set(prev)
+        next.delete(projectId)
+        return next
+      })
+    }
+  }, [refreshingProjects, loadNodeChildren, setNotification, clearNotification])
+
+  // Refresh all projects
+  const handleRefreshAllProjects = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (isRefreshingAll) return
+
+    setIsRefreshingAll(true)
+    try {
+      await buildFileTree()
+      setNotification("Список проектов обновлён")
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+    } catch (error) {
+      console.error("Ошибка обновления списка проектов:", error)
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "refresh_all_projects",
+          modal: "loading_modal",
+        },
+      })
+      setNotification(`Ошибка при обновлении списка проектов: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setIsRefreshingAll(false)
+    }
+  }, [isRefreshingAll, buildFileTree, setNotification, clearNotification])
+
   // Load tree and employees on mount
   useEffect(() => {
     if (!hasLoadedTreeRef.current) {
@@ -469,9 +685,25 @@ export function LoadingModal({
       targetStageId = loading.stageId
       // Try to get project ID from loading or section
       targetProjectId = loading.projectId || section?.projectId
+
+      console.log("[LoadingModal] Режим редактирования - автовыбор этапа:", {
+        targetStageId,
+        targetProjectId,
+        loadingData: {
+          id: loading.id,
+          projectId: loading.projectId,
+          sectionId: loading.sectionId,
+          stageId: loading.stageId,
+        },
+      })
     } else if (mode === "create" && stageId) {
       targetStageId = stageId
       targetProjectId = section?.projectId
+
+      console.log("[LoadingModal] Режим создания - автовыбор этапа:", {
+        targetStageId,
+        targetProjectId,
+      })
     }
 
     if (targetStageId && targetProjectId) {
@@ -480,9 +712,11 @@ export function LoadingModal({
       const projectNode = treeData.find((n) => n.id === projectNodeId)
 
       if (projectNode) {
+        console.log(`[LoadingModal] Найден проект: ${projectNode.name} (${projectNodeId})`)
+
         // Load project data if not loaded yet
         if (projectNode.children?.length === 0) {
-          console.log(`[LoadingModal] Автоматическая загрузка проекта для stageId: ${targetStageId}`)
+          console.log(`[LoadingModal] Загрузка данных проекта для stageId: ${targetStageId}`)
           loadNodeChildren(projectNode).then(() => {
             // After loading, find and select the target node
             setTimeout(() => {
@@ -490,13 +724,54 @@ export function LoadingModal({
             }, 100)
           })
         } else {
+          console.log(`[LoadingModal] Данные проекта уже загружены, поиск этапа...`)
           // Data already loaded, just find and select
           findAndSelectNode(targetStageId)
         }
+      } else {
+        console.warn(`[LoadingModal] Проект не найден: ${projectNodeId}`)
+      }
+    } else if (targetStageId && !targetProjectId) {
+      console.warn("[LoadingModal] targetProjectId отсутствует, попытка получить из sectionId...")
+
+      // Fallback: fetch projectId from sectionId if missing
+      if (loading?.sectionId) {
+        supabase
+          .from("view_section_hierarchy")
+          .select("project_id")
+          .eq("section_id", loading.sectionId)
+          .limit(1)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (error) {
+              console.error("[LoadingModal] Ошибка при получении project_id:", error)
+              return
+            }
+            if (data?.project_id) {
+              console.log(`[LoadingModal] Получен project_id из БД: ${data.project_id}`)
+              targetProjectId = data.project_id
+
+              // Retry auto-expand with fetched projectId
+              const projectNodeId = `project-${targetProjectId}`
+              const projectNode = treeData.find((n) => n.id === projectNodeId)
+
+              if (projectNode) {
+                if (projectNode.children?.length === 0) {
+                  loadNodeChildren(projectNode).then(() => {
+                    setTimeout(() => findAndSelectNode(targetStageId!), 100)
+                  })
+                } else {
+                  findAndSelectNode(targetStageId!)
+                }
+              }
+            }
+          })
       }
     }
 
     function findAndSelectNode(decompositionStageId: string) {
+      console.log(`[LoadingModal] Поиск этапа декомпозиции: ${decompositionStageId}`)
+
       const findNodeById = (nodes: FileTreeNode[], id: string): FileTreeNode | null => {
         for (const node of nodes) {
           if (node.decompositionStageId === id) return node
@@ -510,6 +785,7 @@ export function LoadingModal({
 
       const targetNode = findNodeById(treeData, decompositionStageId)
       if (targetNode) {
+        console.log(`[LoadingModal] Этап найден: ${targetNode.name} (${targetNode.id})`)
         // Expand all parent folders
         const expandPath = (node: FileTreeNode) => {
           const path: string[] = []
@@ -540,8 +816,10 @@ export function LoadingModal({
         }
 
         const pathToExpand = expandPath(targetNode)
+        console.log(`[LoadingModal] Раскрытие папок: ${pathToExpand.length} уровней`)
         setExpandedFolders(new Set(pathToExpand))
         setSelectedNode(targetNode)
+        console.log(`[LoadingModal] Этап успешно выбран: ${targetNode.name}`)
 
         // Build breadcrumbs
         const buildBreadcrumbs = (node: FileTreeNode): FileTreeNode[] => {
@@ -575,6 +853,9 @@ export function LoadingModal({
         }
 
         setBreadcrumbs(buildBreadcrumbs(targetNode))
+      } else {
+        console.warn(`[LoadingModal] Этап декомпозиции не найден: ${decompositionStageId}`)
+        console.warn("[LoadingModal] Доступные узлы дерева:", treeData)
       }
     }
   }, [treeData, mode, loading, stageId, section, loadNodeChildren])
@@ -582,9 +863,17 @@ export function LoadingModal({
   // Pre-fill employee for edit mode
   useEffect(() => {
     if (mode === "edit" && loading && employees.length > 0) {
+      console.log("[LoadingModal] Предзаполнение сотрудника для режима редактирования:", {
+        responsibleId: loading.responsibleId,
+        employeesCount: employees.length,
+      })
+
       const emp = employees.find((e) => e.user_id === loading.responsibleId)
       if (emp) {
+        console.log(`[LoadingModal] Сотрудник найден: ${emp.full_name}`)
         setSelectedEmployee(emp)
+      } else {
+        console.warn(`[LoadingModal] Сотрудник не найден с ID: ${loading.responsibleId}`)
       }
     }
   }, [mode, loading, employees])
@@ -627,7 +916,30 @@ export function LoadingModal({
   // Handle node selection
   const handleNodeSelect = (node: FileTreeNode) => {
     if (node.type === "file") {
-      setSelectedNode(node)
+      // If it's a loading node, find its parent decomposition stage
+      let nodeToSelect = node
+      if (node.loadingId) {
+        // Find the parent decomposition stage node
+        const findParentDecompStage = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+          for (const n of nodes) {
+            if (n.children) {
+              for (const child of n.children) {
+                if (child.id === childId && n.decompositionStageId) return n
+              }
+              const found = findParentDecompStage(n.children, childId)
+              if (found) return found
+            }
+          }
+          return null
+        }
+
+        const parentStage = findParentDecompStage(treeData, node.id)
+        if (parentStage) {
+          nodeToSelect = parentStage
+        }
+      }
+
+      setSelectedNode(nodeToSelect)
 
       // Build breadcrumbs
       const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
@@ -660,7 +972,7 @@ export function LoadingModal({
         return path
       }
 
-      setBreadcrumbs(buildBreadcrumbs(node))
+      setBreadcrumbs(buildBreadcrumbs(nodeToSelect))
 
       // Clear error
       if (errors.decompositionStageId) {
@@ -679,12 +991,17 @@ export function LoadingModal({
     const isSelected = selectedNode?.id === node.id
     const hasChildren = node.children && node.children.length > 0
     const isLoading = loadingNodes.has(node.id)
+    const isSectionNode = node.type === "folder" && node.sectionId && !node.decompositionStageId
+    const isProjectNode = node.type === "folder" && node.projectId && !node.stageId
+    const isDecompositionStageNode = node.type === "folder" && node.decompositionStageId
+    const isLoadingNode = node.type === "file" && node.loadingId
+    const isRefreshingProject = refreshingProjects.has(node.id)
 
     return (
       <div key={node.id}>
         <div
           className={cn(
-            "flex items-center gap-1 py-1 px-2 text-sm cursor-pointer rounded-sm select-none transition-colors duration-150",
+            "group flex items-center gap-1 py-1 px-2 text-sm cursor-pointer rounded-sm select-none transition-colors duration-150",
             isSelected && "bg-primary/10 text-primary border-l-2 border-primary",
             !isSelected && "hover:bg-accent hover:text-accent-foreground",
           )}
@@ -714,6 +1031,11 @@ export function LoadingModal({
               </button>
               {isExpanded ? <FolderOpen className="h-4 w-4 text-blue-500" /> : <Folder className="h-4 w-4 text-blue-500" />}
             </>
+          ) : isLoadingNode ? (
+            <>
+              <div className="h-4 w-4" />
+              <Users className="h-4 w-4 text-teal-500" />
+            </>
           ) : (
             <>
               <div className="h-4 w-4" />
@@ -722,10 +1044,110 @@ export function LoadingModal({
           )}
           <span className="truncate flex-1">{node.name}</span>
           {isLoading && <span className="text-xs text-muted-foreground">Загрузка...</span>}
+
+          {/* Refresh icon for project nodes */}
+          {isProjectNode && (
+            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => handleRefreshProject(node, e)}
+                    disabled={isRefreshingProject}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("h-4 w-4 text-primary", isRefreshingProject && "animate-spin")} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Обновить проект</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+
+          {/* Hover action icons for section nodes */}
+          {isSectionNode && (
+            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Navigate to decomposition */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedNode(node)
+                      setShowSectionPanel(true)
+                    }}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4 text-primary" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Перейти к декомпозиции</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Create basic stage */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => handleCreateBasicStage(node, e)}
+                    disabled={isCreatingStage}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+                  >
+                    <FilePlus className="h-4 w-4 text-primary" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Создать базовый этап</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+
+          {/* Hover action icons for decomposition stage nodes */}
+          {isDecompositionStageNode && (
+            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Create loading */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => handleCreateLoadingFromTree(node, e)}
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                  >
+                    <FilePlus className="h-4 w-4 text-primary" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Создать загрузку</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
         </div>
 
         {node.type === "folder" && hasChildren && isExpanded && (
           <div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
+        )}
+
+        {/* Show message for empty folders (only if not loading) */}
+        {node.type === "folder" && !hasChildren && isExpanded && !isLoading && (
+          <div
+            className="text-xs text-muted-foreground italic px-2 py-1"
+            style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
+          >
+            {node.decompositionStageId
+              ? "Загрузки отсутствуют"
+              : node.sectionId && !node.decompositionStageId
+              ? "Этапы декомпозиции отсутствуют"
+              : node.objectId && !node.sectionId
+              ? "Разделы отсутствуют"
+              : node.stageId && !node.objectId
+              ? "Объекты отсутствуют"
+              : node.projectId && !node.stageId
+              ? "Стадии отсутствуют"
+              : "Нет данных"}
+          </div>
         )}
       </div>
     )
@@ -1072,26 +1494,42 @@ export function LoadingModal({
           <div className="flex-1 flex overflow-hidden">
             {/* Left side - Tree */}
             <div className="w-96 border-r dark:border-slate-700 overflow-y-auto">
-              <div className="p-2">
-                <div className="flex items-center justify-between p-2 mb-2">
-                  <span className="text-sm font-medium dark:text-slate-300">Проекты</span>
-                </div>
-                {isLoadingTree ? (
-                  <div className="p-4 text-center text-sm text-gray-500">Загрузка...</div>
-                ) : treeData.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-gray-500">
-                    <p className="mb-2">Нет доступных проектов</p>
-                    <button
-                      onClick={() => buildFileTree()}
-                      className="text-xs text-teal-500 hover:text-teal-600 underline"
-                    >
-                      Повторить загрузку
-                    </button>
+              <TooltipProvider>
+                <div className="p-2">
+                  <div className="flex items-center justify-between p-2 mb-2">
+                    <span className="text-sm font-medium dark:text-slate-300">Проекты</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleRefreshAllProjects}
+                          disabled={isRefreshingAll}
+                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw className={cn("h-4 w-4 text-primary", isRefreshingAll && "animate-spin")} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Обновить список проектов</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                ) : (
-                  <div className="p-1">{treeData.map((node) => renderNode(node))}</div>
-                )}
-              </div>
+                  {isLoadingTree ? (
+                    <div className="p-4 text-center text-sm text-gray-500">Загрузка...</div>
+                  ) : treeData.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-gray-500">
+                      <p className="mb-2">Нет доступных проектов</p>
+                      <button
+                        onClick={() => buildFileTree()}
+                        className="text-xs text-teal-500 hover:text-teal-600 underline"
+                      >
+                        Повторить загрузку
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-1">{treeData.map((node) => renderNode(node))}</div>
+                  )}
+                </div>
+              </TooltipProvider>
             </div>
 
             {/* Right side - Form */}
