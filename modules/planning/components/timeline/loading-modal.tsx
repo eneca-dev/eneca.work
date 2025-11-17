@@ -151,13 +151,13 @@ export function LoadingModal({
     mode === "create" && employee
       ? {
           user_id: employee.id,
-          first_name: "",
-          last_name: "",
-          full_name: employee.fullName || employee.name,
-          email: "",
-          position_name: employee.position,
-          avatar_url: employee.avatarUrl,
-          team_name: employee.teamName,
+          first_name: employee.firstName || "",
+          last_name: employee.lastName || "",
+          full_name: employee.fullName || employee.name || "",
+          email: employee.email || "",
+          position_name: employee.position ?? null,
+          avatar_url: employee.avatarUrl ?? null,
+          team_name: employee.teamName ?? null,
           department_name: null,
           employment_rate: null,
         }
@@ -848,8 +848,8 @@ export function LoadingModal({
               decompositionStageId: selectedNode!.decompositionStageId!,
               decompositionStageName: selectedNode!.name,
               responsibleName: selectedEmployee!.full_name,
-              responsibleAvatarUrl: selectedEmployee!.avatar_url,
-              responsibleTeamName: selectedEmployee!.team_name,
+              responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
+              responsibleTeamName: selectedEmployee!.team_name || undefined,
               comment: formData.comment?.trim() || undefined,
             })
 
@@ -889,8 +889,8 @@ export function LoadingModal({
             if (selectedEmployee!.user_id !== loading!.responsibleId) {
               updatedLoading.responsibleId = selectedEmployee!.user_id
               updatedLoading.responsibleName = selectedEmployee!.full_name
-              updatedLoading.responsibleAvatarUrl = selectedEmployee!.avatar_url
-              updatedLoading.responsibleTeamName = selectedEmployee!.team_name
+              updatedLoading.responsibleAvatarUrl = selectedEmployee!.avatar_url || undefined
+              updatedLoading.responsibleTeamName = selectedEmployee!.team_name || undefined
             }
 
             const result = await updateLoadingInStore(loading!.id, updatedLoading)
@@ -981,8 +981,20 @@ export function LoadingModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-slate-800 rounded-lg w-11/12 h-5/6 max-w-6xl flex flex-col">
+    <>
+      <div
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        onClick={(e) => {
+          // Закрывать только при клике на overlay, не на содержимое модалки
+          if (e.target === e.currentTarget && !isSaving && !isDeleting) {
+            onClose();
+          }
+        }}
+      >
+      <div
+        className="bg-white dark:bg-slate-800 rounded-lg w-11/12 h-5/6 max-w-6xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
           <h2 className="text-lg font-semibold dark:text-slate-200">
@@ -1320,6 +1332,7 @@ export function LoadingModal({
           </div>
         )}
       </div>
+      </div>
 
       {/* SectionPanel for decomposition */}
       {showSectionPanel && selectedNode?.sectionId && (
@@ -1331,6 +1344,6 @@ export function LoadingModal({
           statuses={statuses}
         />
       )}
-    </div>
+    </>
   )
 }
