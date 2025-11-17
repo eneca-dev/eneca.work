@@ -29,6 +29,7 @@ import {
   Tag,
   RotateCcw,
   DollarSign,
+  Network,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -52,7 +53,7 @@ interface UsersListProps {
 }
 
 // Тип для группировки (восстановлен из оригинала)
-type GroupBy = "none" | "nested"
+type GroupBy = "none" | "nested" | "subdivisions"
 
 // Функция для получения информации о расположении (восстановлена из оригинала)
 const getWorkLocationInfo = (location: string | null) => {
@@ -111,16 +112,19 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
   const { profile, id: viewerId } = useUserStore()
   const {
     canEditAllUsers,
+    canEditSubdivision,
     canEditTeam,
     canEditDepartment,
     canViewRateSelf,
     canViewRateTeam,
     canViewRateDepartment,
+    canViewRateSubdivision,
     canViewRateAll,
   } = useUserPermissions()
 
   const viewerDeptId = profile?.departmentId || profile?.department_id || null
   const viewerTeamId = profile?.teamId || profile?.team_id || null
+  const viewerSubdivisionId = profile?.subdivisionId || (profile as any)?.subdivision_id || null
 
   const canEditUser = (u: User) => {
     // Запрещаем редактирование своего профиля через список пользователей
@@ -128,6 +132,8 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
     if (u.id === viewerId) return false
 
     if (canEditAllUsers) return true
+    // Для users.edit.subdivision: проверяем, что пользователь в том же подразделении
+    if (canEditSubdivision && viewerSubdivisionId && u.subdivisionId && u.subdivisionId === viewerSubdivisionId) return true
     // Для users.edit.team: проверяем, что пользователь в том же отделе
     if (canEditTeam && viewerDeptId && u.departmentId && u.departmentId === viewerDeptId) return true
     if (canEditDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true
@@ -137,6 +143,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
   const canViewRate = (u: User) => {
     if (canViewRateAll) return true
     if (canViewRateSelf && u.id === viewerId) return true
+    if (canViewRateSubdivision && viewerSubdivisionId && u.subdivisionId && u.subdivisionId === viewerSubdivisionId) return true
     if (canViewRateTeam && viewerTeamId && (u as any).teamId && (u as any).teamId === viewerTeamId) return true
     if (canViewRateDepartment && viewerDeptId && (u as any).departmentId && (u as any).departmentId === viewerDeptId) return true
     return false
@@ -221,6 +228,28 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
         nestedGroups[department][team].push(user)
       })
       return nestedGroups
+    }
+
+    if (groupBy === "subdivisions") {
+      // Трехуровневая группировка: Подразделения → Отделы → Команды
+      const threeLevel: Record<string, Record<string, Record<string, User[]>>> = {}
+      usersToGroup.forEach((user) => {
+        const subdivision = user.subdivision || "Без подразделения"
+        const department = user.department || "Без отдела"
+        const team = user.team || "Без команды"
+
+        if (!threeLevel[subdivision]) {
+          threeLevel[subdivision] = {}
+        }
+        if (!threeLevel[subdivision][department]) {
+          threeLevel[subdivision][department] = {}
+        }
+        if (!threeLevel[subdivision][department][team]) {
+          threeLevel[subdivision][department][team] = []
+        }
+        threeLevel[subdivision][department][team].push(user)
+      })
+      return threeLevel
     }
 
     return { "": filteredUsers }
@@ -333,7 +362,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
 
       if (hasAnyUrlState) {
         setSearchTerm(urlSearch)
-        if (urlGroup === 'none' || urlGroup === 'nested') {
+        if (urlGroup === 'none' || urlGroup === 'nested' || urlGroup === 'subdivisions') {
           setGroupBy(urlGroup)
         }
         setFilters({
@@ -353,7 +382,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
         const parsed = JSON.parse(raw)
         if (parsed) {
           if (typeof parsed.search === 'string') setSearchTerm(parsed.search)
-          if (parsed.groupBy === 'none' || parsed.groupBy === 'nested') {
+          if (parsed.groupBy === 'none' || parsed.groupBy === 'nested' || parsed.groupBy === 'subdivisions') {
             setGroupBy(parsed.groupBy as GroupBy)
           }
           if (parsed.filters && typeof parsed.filters === 'object') {
@@ -882,7 +911,7 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                {groupBy === "none" ? "Без группировки" : "Отделы → Команды"}
+                {groupBy === "none" ? "Без группировки" : groupBy === "nested" ? "Отделы → Команды" : "Подразделения → Отделы → Команды"}
                 <ChevronDown className="h-3 w-3 ml-1" />
               </Button>
             </DropdownMenuTrigger>
@@ -892,6 +921,9 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setGroupBy("nested")}>
                 Отделы → Команды
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("subdivisions")}>
+                Подразделения → Отделы → Команды
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -956,8 +988,8 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
             <Table className="table-auto w-full">
                 <TableHeader>
                   <TableRow>
-                  {groupBy === "nested" ? (
-                    // Заголовки для режима "Отделы → Команды"
+                  {groupBy === "nested" || groupBy === "subdivisions" ? (
+                    // Заголовки для режима "Отделы → Команды" и "Подразделения → Отделы → Команды"
                     <>
                       <TableHead className="text-xs px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 min-w-32">
                         <div className="flex items-center space-x-1">
@@ -1051,9 +1083,9 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                {groupBy === "none"
-                  ? // Без группировки
-                      Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
+                {groupBy === "none" ? (
+                  // Без группировки
+                  Object.entries(groupedUsers as Record<string, User[]>).map(([groupName, groupUsers]) => (
                       <React.Fragment key={groupName}>
                         {getPaginatedUsersFromGroup(groupUsers).map((user) => {
                             const workLocationInfo = getWorkLocationInfo(user.workLocation)
@@ -1181,8 +1213,9 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                           })}
                         </React.Fragment>
                       ))
-                    : // Вложенная группировка (отделы -> команды)
-                      Object.entries(groupedUsers as Record<string, Record<string, User[]>>).map(
+                ) : groupBy === "nested" ? (
+                  // Вложенная группировка (отделы -> команды)
+                  Object.entries(groupedUsers as Record<string, Record<string, User[]>>).map(
                         ([department, teams]) => (
                           <React.Fragment key={department}>
                             {/* Заголовок отдела */}
@@ -1337,7 +1370,195 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
                               ))}
                           </React.Fragment>
                       )
-                  )}
+                  )
+                ) : (
+                  // Трехуровневая группировка (подразделения -> отделы -> команды)
+                  Object.entries(groupedUsers as Record<string, Record<string, Record<string, User[]>>>).map(
+                    ([subdivision, departments]) => (
+                      <React.Fragment key={subdivision}>
+                        {/* Заголовок подразделения */}
+                        <TableRow className="bg-slate-100/80 dark:bg-slate-900/60 hover:bg-slate-100/80 hover:dark:bg-slate-900/60">
+                          <TableCell colSpan={shouldShowActionsColumn ? 9 : 8} className="py-2.5 px-4">
+                            <div
+                              className="flex items-center cursor-pointer font-bold text-slate-800 dark:text-slate-100"
+                              onClick={() => toggleGroup(subdivision)}
+                            >
+                              {expandedGroups[subdivision] ? (
+                                <ChevronDown className="h-4 w-4 mr-2" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 mr-2" />
+                              )}
+                              <Network className="h-4 w-4 mr-2 text-slate-600" />
+                              <span className="text-sm">{subdivision}</span>
+                              <span className="ml-2 text-[11px] text-slate-500">
+                                {Object.values(departments).reduce((sum, deptTeams) =>
+                                  sum + Object.values(deptTeams).reduce((teamSum, teamUsers) => teamSum + teamUsers.length, 0), 0
+                                )}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+
+                        {expandedGroups[subdivision] &&
+                          Object.entries(departments).map(([department, teams]) => (
+                            <React.Fragment key={`${subdivision}-${department}`}>
+                              {/* Заголовок отдела */}
+                              <TableRow className="bg-slate-50/70 dark:bg-slate-800/50 hover:bg-slate-50/70 hover:dark:bg-slate-800/50">
+                                <TableCell colSpan={shouldShowActionsColumn ? 9 : 8} className="py-2 pl-8 pr-4">
+                                  <div
+                                    className="flex items-center cursor-pointer font-semibold text-slate-700 dark:text-slate-200"
+                                    onClick={() => toggleGroup(`${subdivision}-${department}`)}
+                                  >
+                                    {expandedGroups[`${subdivision}-${department}`] ? (
+                                      <ChevronDown className="h-4 w-4 mr-2" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4 mr-2" />
+                                    )}
+                                    <Building2 className="h-4 w-4 mr-2 text-slate-500" />
+                                    <span className="text-sm">{department}</span>
+                                    <span className="ml-2 text-[11px] text-slate-500">
+                                      {Object.values(teams).reduce((sum, teamUsers) => sum + teamUsers.length, 0)}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+
+                              {expandedGroups[`${subdivision}-${department}`] &&
+                                Object.entries(teams).map(([team, teamUsers]) => (
+                                  <React.Fragment key={`${subdivision}-${department}-${team}`}>
+                                    {/* Заголовок команды */}
+                                    <TableRow className="bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-100/50 hover:dark:bg-slate-800/30">
+                                      <TableCell colSpan={shouldShowActionsColumn ? 9 : 8} className="py-1.5 pl-16 pr-4">
+                                        <div className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                                          <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
+                                          <span>{team}</span>
+                                          <span className="ml-2 text-[11px] text-slate-400">{teamUsers.length}</span>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+
+                                    {/* Пользователи команды */}
+                                    {getPaginatedUsersFromGroup(teamUsers).map((user) => {
+                                      const workLocationInfo = getWorkLocationInfo(user.workLocation)
+
+                                      return (
+                                        <TableRow key={user.id} className="pl-20 h-12">
+                                          {/* Пользователь */}
+                                          <TableCell className="pl-6 sm:pl-10 lg:pl-20 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                            <div className="flex items-center space-x-1">
+                                              <Avatar className="h-8 w-8">
+                                                <AvatarImage src={user.avatar_url || ""} alt={user.name} />
+                                                <AvatarFallback className="text-xs">
+                                                  {getInitials(user.name)}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                              <div className="min-w-0 flex-1">
+                                                <div className="font-medium text-xs sm:text-sm">
+                                                  <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
+                                                </div>
+                                                <div className="text-xs text-gray-400 hidden sm:block">
+                                                  <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </TableCell>
+                                          {/* Отдел */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                            <span className="block sm:truncate sm:max-w-14 md:max-w-20 lg:max-w-28 xl:max-w-36 2xl:max-w-none text-xs sm:text-sm">{user.department || '—'}</span>
+                                          </TableCell>
+                                          {/* Команда */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                            <span className="block sm:truncate sm:max-w-12 md:max-w-18 lg:max-w-24 xl:max-w-32 2xl:max-w-none text-xs sm:text-sm">{user.team || '—'}</span>
+                                          </TableCell>
+                                          {/* Должность */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                            <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
+                                          </TableCell>
+                                          {/* Категория */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                            <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
+                                          </TableCell>
+                                          {/* Ставка */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                            <div className="text-center">
+                                              <span className="text-xs sm:text-sm font-medium">
+                                                {canViewRate(user) && user.salary ? (
+                                                  <>
+                                                    <span>{user.salary}</span>
+                                                    <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
+                                                  </>
+                                                ) : '—'}
+                                              </span>
+                                            </div>
+                                          </TableCell>
+                                          {/* Роль */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                            <div className="flex flex-col items-start space-y-0.5">
+                                              {user.role ? (
+                                                <Badge variant="secondary" className="text-xs">
+                                                  {user.role}
+                                                </Badge>
+                                              ) : (
+                                                <Badge variant="secondary" className="text-xs">
+                                                  —
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </TableCell>
+                                          {/* Значок дома */}
+                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
+                                            <div className="flex justify-center">
+                                              {workLocationInfo?.icon || (
+                                                <span className="text-gray-400 text-xs">—</span>
+                                              )}
+                                            </div>
+                                          </TableCell>
+                                          {(canEditAllUsers || canEditUser(user)) && (
+                                            <TableCell className="w-12 px-1 py-1">
+                                              <div className="flex justify-end">
+                                                <DropdownMenu>
+                                                  <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                      <MoreHorizontal className="h-4 w-4" />
+                                                      <span className="sr-only">Меню</span>
+                                                    </Button>
+                                                  </DropdownMenuTrigger>
+                                                  <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => {
+                                                      Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
+                                                      handleEditUser(user)
+                                                    }}>
+                                                      <Edit className="mr-2 h-4 w-4" />
+                                                      Редактировать
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                      className="text-red-600 dark:text-red-400"
+                                                      onClick={() => {
+                                                        Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
+                                                        openDeleteDialog(user)
+                                                      }}
+                                                      disabled={isDeleting === user.id}
+                                                    >
+                                                      <Trash className="mr-2 h-4 w-4" />
+                                                      {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                                    </DropdownMenuItem>
+                                                  </DropdownMenuContent>
+                                                </DropdownMenu>
+                                              </div>
+                                            </TableCell>
+                                          )}
+                                        </TableRow>
+                                      )
+                                    })}
+                                  </React.Fragment>
+                                ))}
+                            </React.Fragment>
+                          ))}
+                      </React.Fragment>
+                    )
+                  )
+                )}
                 </TableBody>
               </Table>
             </div>

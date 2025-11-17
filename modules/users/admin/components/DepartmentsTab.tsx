@@ -45,10 +45,12 @@ interface Department {
 type DepartmentsTabProps =
   | { scope?: 'all' }
   | { scope: 'department'; departmentId: string }
+  | { scope: 'subdivision'; subdivisionId: string }
 
 function DepartmentsTab(props: DepartmentsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
+  const subdivisionId = 'subdivisionId' in props ? props.subdivisionId : null
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -62,7 +64,8 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   const perms = useAdminPermissions()
 
   // Определяем, должны ли быть видны элементы управления
-  const showManagementControls = perms.canManageDepartments && scope !== 'department'
+  // subdivision_head может управлять отделами своего подразделения
+  const showManagementControls = (perms.canManageDepartments && scope !== 'department') || (perms.canEditSubdivision && scope === 'subdivision')
 
   // Загрузка отделов из представления
   const fetchDepartments = useCallback(async () => {
@@ -102,15 +105,22 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         
         console.log("📊 Уникальные отделы:", uniqueData)
         // Применяем скоуп
-        const scoped = scope === 'department'
-          ? (departmentId
-              ? uniqueData.filter((d: Department) => d.department_id === departmentId)
-              : (() => {
-                  console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
-                  return []
-                })()
-            )
-          : uniqueData
+        let scoped = uniqueData
+        if (scope === 'department') {
+          scoped = departmentId
+            ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+            : (() => {
+                console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
+                return []
+              })()
+        } else if (scope === 'subdivision') {
+          scoped = subdivisionId
+            ? uniqueData.filter((d: any) => d.subdivision_id === subdivisionId)
+            : (() => {
+                console.warn("⚠️ Предупреждение: subdivisionId отсутствует при scope='subdivision', возвращаем пустой массив")
+                return []
+              })()
+        }
         setDepartments(scoped)
       } catch (error) {
         console.error("Ошибка при загрузке отделов:", error)
@@ -120,7 +130,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         setIsLoading(false)
       }
     })
-  }, [scope, departmentId])
+  }, [scope, departmentId, subdivisionId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -207,13 +217,21 @@ function DepartmentsTab(props: DepartmentsTabProps) {
 
   // Данные для EntityModal
   const entityData = useMemo(() => {
-    if (!selectedDepartment) return undefined
-    
+    if (!selectedDepartment) {
+      // При создании нового отдела в режиме subdivision добавляем subdivision_id
+      if (modalMode === "create" && scope === 'subdivision' && subdivisionId) {
+        return {
+          subdivision_id: subdivisionId
+        }
+      }
+      return undefined
+    }
+
     return {
       department_id: selectedDepartment.department_id,
       department_name: selectedDepartment.department_name
     }
-  }, [selectedDepartment])
+  }, [selectedDepartment, modalMode, scope, subdivisionId])
 
   if (isLoading) {
     return (

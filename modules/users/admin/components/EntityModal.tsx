@@ -56,7 +56,8 @@ export default function EntityModal({
     if (mode === "edit" && entity) {
       setFormData(entity)
     } else {
-      setFormData({})
+      // При создании также используем entity для дефолтных значений (например, subdivision_id)
+      setFormData(entity || {})
     }
     // Сбрасываем валидацию при открытии модала
     setValidation({ isValid: true, errors: [], normalizedValue: "" })
