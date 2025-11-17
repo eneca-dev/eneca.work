@@ -9,6 +9,8 @@ import { generateTimeUnits } from "../utils/date-utils"
 import { TimelineHeader } from "./timeline/timeline-header"
 import { TimelineRow } from "./timeline/timeline-row"
 import { DepartmentRow } from "./timeline/department-row" // Новый компонент для отделов
+import { DepartmentLoadingSkeleton } from "./timeline/department-loading-skeleton"
+import { SectionLoadingSkeleton } from "./timeline/section-loading-skeleton"
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
@@ -35,8 +37,9 @@ interface TimelineGridProps {
   hasActiveFilters?: boolean // Добавляем новый пропс
   onOpenSectionPanel?: (sectionId: string, initialTab?: 'overview' | 'comments' | 'decomposition' | 'tasks' | 'reports' | 'loadings') => void // Добавляем обработчик открытия панели раздела
   expandAllDepartments: () => void
-  collapseAllDepartments: () => void 
+  collapseAllDepartments: () => void
   refreshCounter?: number // Добавляем счетчик для обновления без сброса состояния
+  hideHeader?: boolean // Флаг для скрытия встроенного заголовка (когда используется внешний sticky header)
 }
 
 export function TimelineGrid({
@@ -58,6 +61,7 @@ export function TimelineGrid({
   expandAllDepartments,
   collapseAllDepartments,
   refreshCounter = 0, // Добавляем с значением по умолчанию
+  hideHeader = false, // По умолчанию заголовок показываем (для обратной совместимости)
 }: TimelineGridProps) {
   // Используем тему из useSettingsStore, если не передана через props
   const { theme: settingsTheme } = useSettingsStore()
@@ -289,63 +293,84 @@ export function TimelineGrid({
 
   return (
     <div
-      className="w-full overflow-x-auto scrollbar-thin"
+      className="w-full"
       ref={timelineContainerRef}
       style={{
-        scrollbarWidth: "thin" /* Firefox */,
-        scrollbarColor:
-          theme === "dark"
-            ? "rgba(51, 65, 85, 0.5) rgba(30, 41, 59, 0.2)"
-            : "rgba(203, 213, 225, 0.5) rgba(241, 245, 249, 0.2)" /* Firefox */,
         borderCollapse: "collapse" /* Добавляем для лучшего отображения границ */,
         minWidth: "100%" /* Гарантируем, что контейнер не будет меньше 100% ширины */,
       }}
     >
-      <ScrollbarStyles theme={theme} />
       <div className="w-full" style={{ minWidth: `${totalWidth}px` }}>
         <div style={{ borderCollapse: "collapse" }}>
-          {/* Заголовок таблицы */}
-          <TimelineHeader
-            timeUnits={timeUnits}
-            theme={theme}
-            headerHeight={HEADER_HEIGHT}
-            columnWidth={COLUMN_WIDTHS.section}
-            padding={PADDING}
-            leftOffset={LEFT_OFFSET}
-            cellWidth={cellWidth}
-            stickyColumnShadow={stickyColumnShadow}
-            showDepartments={showDepartments}
-            showSections={showSections}
-            toggleShowSections={toggleShowSections}
-            toggleShowDepartments={toggleShowDepartments}
-            expandAllDepartments={expandAllDepartments}
-            collapseAllDepartments={collapseAllDepartments}
-          />
+          {/* Заголовок таблицы - скрываем если используется внешний sticky header */}
+          {!hideHeader && (
+            <TimelineHeader
+              timeUnits={timeUnits}
+              theme={theme}
+              headerHeight={HEADER_HEIGHT}
+              columnWidth={COLUMN_WIDTHS.section}
+              padding={PADDING}
+              leftOffset={LEFT_OFFSET}
+              cellWidth={cellWidth}
+              stickyColumnShadow={stickyColumnShadow}
+              showDepartments={showDepartments}
+              showSections={showSections}
+              toggleShowSections={toggleShowSections}
+              toggleShowDepartments={toggleShowDepartments}
+              expandAllDepartments={expandAllDepartments}
+              collapseAllDepartments={collapseAllDepartments}
+              scrollbarWidth={14}
+            />
+          )}
 
           {/* Строки с разделами (возможна группировка по проектам) */}
           {showSections && (!groupByProject ? (
-            sections.map((section, index) => (
-              <TimelineRow
-                key={section.id}
-                section={section}
-                sectionIndex={index}
-                timeUnits={timeUnits}
-                theme={theme}
-                rowHeight={ROW_HEIGHT}
-                headerHeight={HEADER_HEIGHT}
-                columnWidth={COLUMN_WIDTHS.section}
-                padding={PADDING}
-                leftOffset={LEFT_OFFSET}
-                cellWidth={cellWidth}
-                stickyColumnShadow={stickyColumnShadow}
-                totalExpandedSections={totalExpandedSections}
-                totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
-                onOpenSectionPanel={onOpenSectionPanel}
-              />
-            ))
+            <>
+              {isLoading && sections.length === 0 ? (
+                <SectionLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={5}
+                />
+              ) : (
+                sections.map((section, index) => (
+                  <TimelineRow
+                    key={section.id}
+                    section={section}
+                    sectionIndex={index}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={ROW_HEIGHT}
+                    headerHeight={HEADER_HEIGHT}
+                    columnWidth={COLUMN_WIDTHS.section}
+                    padding={PADDING}
+                    leftOffset={LEFT_OFFSET}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalExpandedSections={totalExpandedSections}
+                    totalLoadingsBeforeSection={loadingsBeforeSection[index] || 0}
+                    onOpenSectionPanel={onOpenSectionPanel}
+                  />
+                ))
+              )}
+            </>
           ) : (
             // Группировка по проектам из саммари (ленивая подзагрузка секций)
-            (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
+            <>
+              {isLoading && (!projectSummaries || projectSummaries.length === 0) ? (
+                <SectionLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={3}
+                />
+              ) : (
+                (projectSummaries || []).slice().sort((a, b) => a.projectName.localeCompare(b.projectName, 'ru')).map((summary) => {
               const projectIdForGroup = summary.projectId
               const projectName = summary.projectName || 'Без проекта'
               const isExpanded = expandedProjectGroups[projectIdForGroup] === true
@@ -589,10 +614,12 @@ export function TimelineGrid({
               </div>
             )
             })
+              )}
+            </>
           ))}
 
-          {/* Если нет разделов или идет загрузка */}
-          {showSections && sections.length === 0 && !isLoading && (
+          {/* Если нет разделов по критериям фильтрации */}
+          {showSections && sections.length === 0 && !isLoading && hasActiveFilters && (
             <div
               className={cn(
                 "flex justify-start items-center p-8 border-b",
@@ -600,67 +627,80 @@ export function TimelineGrid({
               )}
             >
               <p className={cn("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                {hasActiveFilters ? "Нет элементов, подходящих по критериям фильтрации" : "Разделы не найдены"}
+                Нет элементов, подходящих по критериям фильтрации
               </p>
             </div>
           )}
 
           {/* Разделитель между разделами и отделами, если показаны и разделы, и отделы */}
-          {showSections && showDepartments && sections.length > 0 && departments.length > 0 && (
+          {showSections && showDepartments && (departments.length > 0 || isLoadingDepartments) && (
             <div
               className={cn(
-                "relative border-b", // Убираем padding
-                theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
+                "relative",
+                theme === "dark" ? "bg-slate-800" : "bg-white",
               )}
-              style={{ height: `${DIVIDER_HEIGHT}px` }} // Явно задаем высоту разделителя
+              style={{ height: `${HEADER_HEIGHT * 2}px` }}
             >
-              {/* Фиксированный контейнер для надписи на всю высоту */}
+              {/* Фиксированный контейнер для надписи */}
               <div
                 className={cn(
-                  "sticky left-0 top-0 bottom-0 py-1 px-2 font-medium z-30 flex items-center",
-                  theme === "dark" ? "bg-slate-800 border-b border-slate-700" : "bg-white border-b border-slate-200",
+                  "sticky left-0 z-30 border-r border-b flex items-center px-3",
+                  theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
                 )}
                 style={{
-                  width: `${totalFixedWidth}px`,
-                  height: "32px",
+                  width: `${COLUMN_WIDTHS.section}px`,
+                  minWidth: `${COLUMN_WIDTHS.section}px`,
+                  height: `${HEADER_HEIGHT * 2}px`,
+                  borderRight: "1px solid",
+                  borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                  borderBottom: "1px solid",
+                  borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
                 }}
               >
-                <div className="flex items-center h-full">
-                  <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
-                    Отделы и сотрудники
-                  </span>
-                </div>
-              </div>
-
-              {/* Пустой контейнер для сохранения структуры */}
-              <div className="flex items-center justify-between h-full opacity-0">
-                <div className="flex items-center">
-                  <span className="font-semibold">Отделы и сотрудники</span>
-                </div>
+                <span className={cn("font-semibold", theme === "dark" ? "text-slate-200" : "text-slate-800")}>
+                  Отделы и сотрудники
+                </span>
+                {isLoadingDepartments && (
+                  <Loader2 className={cn("ml-2 h-4 w-4 animate-spin", theme === "dark" ? "text-teal-400" : "text-teal-500")} />
+                )}
               </div>
             </div>
           )}
 
           {/* Строки с отделами, если они должны быть показаны */}
-          {showDepartments &&
-            departments.map((department, index) => (
-              <DepartmentRow
-                key={department.id}
-                department={department}
-                departmentIndex={index}
-                timeUnits={timeUnits}
-                theme={theme}
-                rowHeight={ROW_HEIGHT}
-                headerHeight={HEADER_HEIGHT}
-                columnWidth={COLUMN_WIDTHS.section}
-                padding={PADDING}
-                leftOffset={LEFT_OFFSET}
-                cellWidth={cellWidth}
-                stickyColumnShadow={stickyColumnShadow}
-                totalExpandedDepartments={totalExpandedDepartments}
-                totalEmployeesBeforeDepartment={employeesBeforeDepartment[index] || 0}
-              />
-            ))}
+          {showDepartments && (
+            <>
+              {isLoadingDepartments && departments.length === 0 ? (
+                <DepartmentLoadingSkeleton
+                  theme={theme}
+                  rowHeight={ROW_HEIGHT}
+                  cellWidth={cellWidth}
+                  totalFixedWidth={totalFixedWidth}
+                  timeUnitsCount={timeUnits.length}
+                  count={3}
+                />
+              ) : (
+                departments.map((department, index) => (
+                  <DepartmentRow
+                    key={department.id}
+                    department={department}
+                    departmentIndex={index}
+                    timeUnits={timeUnits}
+                    theme={theme}
+                    rowHeight={ROW_HEIGHT}
+                    headerHeight={HEADER_HEIGHT}
+                    columnWidth={COLUMN_WIDTHS.section}
+                    padding={PADDING}
+                    leftOffset={LEFT_OFFSET}
+                    cellWidth={cellWidth}
+                    stickyColumnShadow={stickyColumnShadow}
+                    totalExpandedDepartments={totalExpandedDepartments}
+                    totalEmployeesBeforeDepartment={employeesBeforeDepartment[index] || 0}
+                  />
+                ))
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
