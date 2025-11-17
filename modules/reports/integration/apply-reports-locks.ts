@@ -18,35 +18,23 @@ export async function applyReportsLocks(): Promise<{ locked: Set<FilterType> }> 
   const orgStore = useReportsOrgFiltersStore.getState()
   const projStore = useReportsProjectFiltersStore.getState()
 
-  if (Object.prototype.hasOwnProperty.call(defaults, 'department')) {
-    orgStore.setDepartment(defaults.department ?? null)
-    orgStore.setTeam(null)
-    orgStore.setEmployee(null)
-  }
-  if (Object.prototype.hasOwnProperty.call(defaults, 'team')) {
-    orgStore.setTeam(defaults.team ?? null)
-    orgStore.setEmployee(null)
-  }
-  if (Object.prototype.hasOwnProperty.call(defaults, 'manager')) {
-    // У нас нет явного менеджера как фильтра в отчётах, но используем его для ограничения проектов
-    projStore.setProject(null)
-    projStore.setStage(null)
-    projStore.setObject(null)
-    projStore.setSection(null)
-  }
+  // setSecurityDefaults автоматически применяет defaults к locked filters
+  // Это защищает от использования persisted значений из localStorage, которые нарушают права доступа
+  orgStore.setSecurityDefaults({
+    defaultDepartmentId: defaults.department ?? null,
+    defaultTeamId: defaults.team ?? null,
+    defaultEmployeeId: null, // обычно employee не локается
+    lockedFilters: lockedFilters.filter(f =>
+      ['department', 'team', 'employee'].includes(f)
+    ) as Array<'department' | 'team' | 'employee'>
+  })
 
-  // Догружаем проекты под PM, если есть лок по manager
-  if (defaults.manager) {
-    await useReportsProjectFiltersStore.getState().loadProjectsForManager?.(defaults.manager)
-  } else {
-    await useReportsProjectFiltersStore.getState().loadProjects?.()
-  }
-
-  // Проставим lockedFilters в оба стора для disable
-  // @ts-ignore храним в runtime
-  useReportsOrgFiltersStore.setState({ lockedFilters })
-  // @ts-ignore
-  useReportsProjectFiltersStore.setState({ lockedFilters })
+  projStore.setSecurityDefaults({
+    defaultProjectId: null, // обычно проекты не локаются по умолчанию
+    lockedFilters: lockedFilters.filter(f =>
+      ['manager', 'project', 'stage', 'object', 'section'].includes(f)
+    ) as Array<'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'>
+  })
 
   return { locked: new Set(lockedFilters) }
 }

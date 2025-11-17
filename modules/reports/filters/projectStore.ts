@@ -14,8 +14,6 @@ interface ProjectFiltersState {
   isLoadingStages: boolean
   isLoadingObjects: boolean
   isLoadingSections: boolean
-  // @ts-ignore runtime: для дизейблов и индикаторов
-  lockedFilters?: Array<'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'>
 
   projects: SimpleOption[]
   stages: SimpleOption[]
@@ -27,11 +25,23 @@ interface ProjectFiltersState {
   selectedObjectId: Id | null
   selectedSectionId: Id | null
 
+  // Безопасные значения по умолчанию, установленные на основе прав доступа
+  defaultProjectId: Id | null
+
+  // Список заблокированных фильтров
+  lockedFilters: Array<'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'>
+
   initialize: () => Promise<void>
   setProject: (projectId: Id | null) => void
   setStage: (stageId: Id | null) => void
   setObject: (objectId: Id | null) => void
   setSection: (sectionId: Id | null) => void
+
+  // Метод для установки безопасных defaults
+  setSecurityDefaults: (params: {
+    defaultProjectId?: Id | null
+    lockedFilters: Array<'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'>
+  }) => void
 }
 
 const supabase = createClient()
@@ -44,7 +54,6 @@ export const useReportsProjectFiltersStore = create<ProjectFiltersState>()(
         isLoadingStages: false,
         isLoadingObjects: false,
         isLoadingSections: false,
-        lockedFilters: [],
 
         projects: [],
         stages: [],
@@ -55,6 +64,10 @@ export const useReportsProjectFiltersStore = create<ProjectFiltersState>()(
         selectedStageId: null,
         selectedObjectId: null,
         selectedSectionId: null,
+
+        // Безопасные defaults (не сохраняются в persist, вычисляются при каждой загрузке)
+        defaultProjectId: null,
+        lockedFilters: [],
 
         initialize: async () => {
           // Загружаем список проектов при инициализации
@@ -139,6 +152,25 @@ export const useReportsProjectFiltersStore = create<ProjectFiltersState>()(
 
         setSection: (sectionId) => {
           set({ selectedSectionId: sectionId })
+        },
+
+        // Устанавливает безопасные defaults на основе прав доступа
+        // Автоматически применяет defaults к locked filters
+        setSecurityDefaults: (params) => {
+          const state = get()
+          set({
+            defaultProjectId: params.defaultProjectId ?? null,
+            lockedFilters: params.lockedFilters,
+            // CRITICAL: Применяем locked defaults к текущим selections
+            // Это защищает от использования persisted значений, которые нарушают security constraints
+            selectedProjectId: params.lockedFilters.includes('project')
+              ? (params.defaultProjectId ?? null)
+              : state.selectedProjectId,
+            // Если project locked, сбрасываем вложенные фильтры
+            selectedStageId: params.lockedFilters.includes('project') ? null : state.selectedStageId,
+            selectedObjectId: params.lockedFilters.includes('project') ? null : state.selectedObjectId,
+            selectedSectionId: params.lockedFilters.includes('project') ? null : state.selectedSectionId,
+          })
         }
       }),
       {

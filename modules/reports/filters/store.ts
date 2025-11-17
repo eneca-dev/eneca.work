@@ -21,10 +21,26 @@ interface OrgFiltersState {
   selectedTeamId: Id | null
   selectedEmployeeId: Id | null
 
+  // Безопасные значения по умолчанию, установленные на основе прав доступа
+  defaultDepartmentId: Id | null
+  defaultTeamId: Id | null
+  defaultEmployeeId: Id | null
+
+  // SECURITY: Список заблокированных фильтров (которые нельзя изменить)
+  lockedFilters: Array<'department' | 'team' | 'employee'>
+
   initialize: () => Promise<void>
   setDepartment: (departmentId: Id | null) => void
   setTeam: (teamId: Id | null) => void
   setEmployee: (employeeId: Id | null) => void
+
+  // Метод для установки безопасных defaults на основе прав доступа
+  setSecurityDefaults: (params: {
+    defaultDepartmentId?: Id | null
+    defaultTeamId?: Id | null
+    defaultEmployeeId?: Id | null
+    lockedFilters: Array<'department' | 'team' | 'employee'>
+  }) => void
 
   getTeamsForSelectedDepartment: () => OrgOption[]
   getEmployeesFiltered: () => OrgOption[]
@@ -37,8 +53,6 @@ export const useReportsOrgFiltersStore = create<OrgFiltersState>()(
     persist(
       (set, get) => ({
         isLoading: false,
-        // @ts-ignore runtime flag for UI disables
-        lockedFilters: [],
         departments: [],
         teams: [],
         employees: [],
@@ -46,6 +60,12 @@ export const useReportsOrgFiltersStore = create<OrgFiltersState>()(
         selectedDepartmentId: null,
         selectedTeamId: null,
         selectedEmployeeId: null,
+
+        // Безопасные defaults (не сохраняются в persist, вычисляются при каждой загрузке)
+        defaultDepartmentId: null,
+        defaultTeamId: null,
+        defaultEmployeeId: null,
+        lockedFilters: [],
 
         initialize: async () => {
           // Загружаем отделы/команды и сотрудников параллельно
@@ -129,6 +149,29 @@ export const useReportsOrgFiltersStore = create<OrgFiltersState>()(
 
         setEmployee: (employeeId) => {
           set({ selectedEmployeeId: employeeId })
+        },
+
+        // Устанавливает безопасные defaults на основе прав доступа
+        // Автоматически применяет defaults к locked filters
+        setSecurityDefaults: (params) => {
+          const state = get()
+          set({
+            defaultDepartmentId: params.defaultDepartmentId ?? null,
+            defaultTeamId: params.defaultTeamId ?? null,
+            defaultEmployeeId: params.defaultEmployeeId ?? null,
+            lockedFilters: params.lockedFilters,
+            // CRITICAL: Применяем locked defaults к текущим selections
+            // Это защищает от использования persisted значений, которые нарушают security constraints
+            selectedDepartmentId: params.lockedFilters.includes('department')
+              ? (params.defaultDepartmentId ?? null)
+              : state.selectedDepartmentId,
+            selectedTeamId: params.lockedFilters.includes('team')
+              ? (params.defaultTeamId ?? null)
+              : state.selectedTeamId,
+            selectedEmployeeId: params.lockedFilters.includes('employee')
+              ? (params.defaultEmployeeId ?? null)
+              : state.selectedEmployeeId,
+          })
         },
 
         getTeamsForSelectedDepartment: () => {
