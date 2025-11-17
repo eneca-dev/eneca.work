@@ -1,4 +1,4 @@
-"use client" 
+"use client"
 import { Loader2 } from "lucide-react"
 // Импортируем сторы напрямую из их файлов
 import { usePlanningStore } from "../stores/usePlanningStore"
@@ -10,6 +10,7 @@ import { useUiStore } from "@/stores/useUiStore"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { TimelineGrid } from "./timeline-grid"
+import { TimelineHeader } from "./timeline/timeline-header"
 import { getFiltersPermissionContextAsync } from "@/modules/permissions/integration/filters-permission-context"
 import * as Sentry from "@sentry/nextjs"
 import { TimelineHeaderTabs } from "./timeline/timeline-header-tabs"
@@ -22,6 +23,8 @@ import { SectionPanel } from "@/components/modals"
 import { useTimelineAutoRefresh } from "../hooks/useTimelineAutoRefresh"
 import { Pagination } from "./pagination"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
+import { generateTimeUnits } from "../utils/date-utils"
+import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
@@ -55,6 +58,7 @@ export function TimelineView() {
     expandAllDepartments,
     collapseAllDepartments,
     toggleShowDepartments,
+    toggleShowSections,
     showSections,
     showDepartments,
     currentPage,
@@ -113,6 +117,11 @@ useEffect(() => {
   // Ссылка на контейнер для измерения ширины
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Ссылки для синхронизации прокрутки
+  const headerScrollRef = useRef<HTMLDivElement>(null)
+  const headerRightScrollRef = useRef<HTMLDivElement>(null) // Новая ссылка для правой части заголовка
+  const contentScrollRef = useRef<HTMLDivElement>(null)
+
   // Состояние для отслеживания размера окна
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== "undefined" ? window.innerWidth : 0,
@@ -126,6 +135,9 @@ useEffect(() => {
 
   // Счетчик для принудительных обновлений
   const [refreshCounter, setRefreshCounter] = useState(0)
+
+  // Состояние для ширины вертикального скроллбара
+  const [scrollbarWidth, setScrollbarWidth] = useState(0)
 
   // Хук для автоматического обновления timeline
   const { forceRefresh } = useTimelineAutoRefresh()
@@ -336,6 +348,83 @@ useEffect(() => {
     }
   }, [showDepartments, departments.length, isLoadingDepartments, fetchDepartments])
 
+  // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
+  useEffect(() => {
+    const headerRightScroll = headerRightScrollRef.current
+    const contentScroll = contentScrollRef.current
+
+    if (!headerRightScroll || !contentScroll) return
+
+    let isHeaderScrolling = false
+    let isContentScrolling = false
+
+    const handleHeaderScroll = () => {
+      if (isContentScrolling) return
+      isHeaderScrolling = true
+      contentScroll.scrollLeft = headerRightScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isHeaderScrolling = false
+      })
+    }
+
+    const handleContentScroll = () => {
+      if (isHeaderScrolling) return
+      isContentScrolling = true
+      headerRightScroll.scrollLeft = contentScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isContentScrolling = false
+      })
+    }
+
+    headerRightScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
+    contentScroll.addEventListener('scroll', handleContentScroll, { passive: true })
+
+    return () => {
+      headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
+      contentScroll.removeEventListener('scroll', handleContentScroll)
+    }
+  }, [])
+
+  // Вычисляем ширину вертикального скроллбара контента
+  useEffect(() => {
+    const contentScroll = contentScrollRef.current
+    if (!contentScroll) return
+
+    // Вычисляем ширину скроллбара: offsetWidth (включая скроллбар) - clientWidth (без скроллбара)
+    const calculateScrollbarWidth = () => {
+      const scrollbarWidth = contentScroll.offsetWidth - contentScroll.clientWidth
+      setScrollbarWidth(scrollbarWidth)
+    }
+
+    // Вычисляем при монтировании
+    calculateScrollbarWidth()
+
+    // Пересчитываем при изменении размера окна
+    window.addEventListener('resize', calculateScrollbarWidth)
+
+    // Используем ResizeObserver для отслеживания изменений размера контента
+    const resizeObserver = new ResizeObserver(calculateScrollbarWidth)
+    resizeObserver.observe(contentScroll)
+
+    return () => {
+      window.removeEventListener('resize', calculateScrollbarWidth)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  // Получаем данные для заголовка
+  const { columnVisibility } = usePlanningColumnsStore()
+
+  // Генерируем timeUnits для заголовка
+  const timeUnits = generateTimeUnits(startDate, daysToShow)
+
+  // Константы для размеров (должны совпадать с timeline-grid.tsx)
+  const HEADER_HEIGHT = 40
+  const PADDING = 12
+  const LEFT_OFFSET = 0
+  const CELL_WIDTH = cellWidth || 22
+  const COLUMN_WIDTH = 430
+
   return (
     <div
       className={cn(
@@ -355,65 +444,96 @@ useEffect(() => {
 
       {/* Старая панель фильтров удалена — фильтры перенесены в верхний бар */}
 
-      {/* Main content area with improved styling - new approach with fixed columns */}
-      <div
-        className={cn(
-          "w-full overflow-hidden relative overflow-y-auto",
-          theme === "dark" ? "bg-slate-900" : "bg-white",
-        )}
-        style={{ 
-          height: "calc(100vh - (var(--topbar-height,60px)))",
-          borderCollapse: "collapse" 
-        }}
-      >
-        {isLoadingSections ? (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className={cn("h-8 w-8 animate-spin", "text-teal-500")} />
+      {isLoadingSections && sections.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-8 space-y-4">
+          <Loader2 className={cn("h-10 w-10 animate-spin", "text-teal-500")} />
+          <p className={cn("text-sm", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
+            Загрузка данных...
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Sticky заголовок таймлайна - БЕЗ горизонтального скролла */}
+          <div
+            ref={headerScrollRef}
+            className={cn(
+              "sticky top-0 z-40 relative",
+              theme === "dark" ? "bg-slate-900" : "bg-white",
+            )}
+          >
+            <TimelineHeader
+              timeUnits={timeUnits}
+              theme={theme}
+              headerHeight={HEADER_HEIGHT}
+              columnWidth={COLUMN_WIDTH}
+              padding={PADDING}
+              leftOffset={LEFT_OFFSET}
+              cellWidth={CELL_WIDTH}
+              stickyColumnShadow=""
+              showDepartments={showDepartments}
+              showSections={showSections}
+              toggleShowSections={toggleShowSections}
+              toggleShowDepartments={toggleShowDepartments}
+              expandAllDepartments={expandAllDepartments}
+              collapseAllDepartments={collapseAllDepartments}
+              headerRightScrollRef={headerRightScrollRef}
+              scrollbarWidth={scrollbarWidth}
+            />
           </div>
-        ) : (
-          <>
-            <div className="relative w-full overflow-x-auto" style={{ borderCollapse: "collapse" }}>
-              <TimelineGrid
-                sections={sections}
-                departments={departments}
-                showSections={showSections}
-                showDepartments={showDepartments}
-                startDate={startDate}
-                daysToShow={daysToShow}
+
+          {/* Main content area - scrolling контейнер */}
+          <div
+            ref={contentScrollRef}
+            className={cn(
+              "w-full relative overflow-y-auto overflow-x-auto",
+              theme === "dark" ? "bg-slate-900" : "bg-white",
+            )}
+            style={{
+              height: `calc(100vh - var(--topbar-height, 60px) - ${HEADER_HEIGHT * 2}px)`,
+              borderCollapse: "collapse"
+            }}
+          >
+            <TimelineGrid
+              sections={sections}
+              departments={departments}
+              showSections={showSections}
+              showDepartments={showDepartments}
+              startDate={startDate}
+              daysToShow={daysToShow}
+              theme={theme}
+              isLoading={isLoadingSections}
+              isLoadingDepartments={isLoadingDepartments}
+              enableShadow={true}
+              useAbsoluteColumns={false}
+              cellWidth={CELL_WIDTH}
+              windowWidth={windowSize.width}
+              hasActiveFilters={hasActiveFilters}
+              onOpenSectionPanel={handleOpenSectionPanel}
+              expandAllDepartments={expandAllDepartments}
+              collapseAllDepartments={collapseAllDepartments}
+              refreshCounter={refreshCounter}
+              hideHeader={true}
+            />
+          </div>
+
+          {/* Пагинация в самом низу страницы */}
+          {totalPages > 1 && (
+            <div
+              className={cn(
+                "flex justify-center items-center py-4 border-t",
+                theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
+              )}
+            >
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
                 theme={theme}
-                isLoading={isLoadingSections}
-                isLoadingDepartments={isLoadingDepartments}
-                enableShadow={true}
-                useAbsoluteColumns={false}
-                cellWidth={22}
-                windowWidth={windowSize.width}
-                hasActiveFilters={hasActiveFilters}
-                onOpenSectionPanel={handleOpenSectionPanel}
-                expandAllDepartments={expandAllDepartments}
-                collapseAllDepartments={collapseAllDepartments}
-                refreshCounter={refreshCounter}
               />
             </div>
-
-            {/* Пагинация в самом низу страницы */}
-            {totalPages > 1 && (
-              <div
-                className={cn(
-                  "flex justify-center items-center py-4 border-t",
-                  theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
-                )}
-              >
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                  theme={theme}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          )}
+        </>
+      )}
 
 
 
