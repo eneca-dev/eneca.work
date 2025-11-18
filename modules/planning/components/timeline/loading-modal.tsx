@@ -184,7 +184,9 @@ export function LoadingModal({
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false)
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false)
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeSearchResult | null>(
+
+  // Store original employee from props for restoration after creation
+  const originalEmployeeRef = useRef<EmployeeSearchResult | null>(
     mode === "create" && employee
       ? {
           user_id: employee.id,
@@ -199,6 +201,10 @@ export function LoadingModal({
           employment_rate: null,
         }
       : null,
+  )
+
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeSearchResult | null>(
+    originalEmployeeRef.current
   )
 
   // Dropdown positioning
@@ -1081,83 +1087,62 @@ export function LoadingModal({
 
   // Handle node selection
   const handleNodeSelect = (node: FileTreeNode) => {
-    if (node.type === "file") {
+    // Helper function to build breadcrumbs
+    const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+      const path: FileTreeNode[] = [targetNode]
+      let current = targetNode
+
+      const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+        for (const n of nodes) {
+          if (n.children) {
+            for (const child of n.children) {
+              if (child.id === childId) return n
+            }
+            const found = findParentNode(n.children, childId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+
+      while (current.parentId) {
+        const parent = findParentNode(treeData, current.id)
+        if (parent) {
+          path.unshift(parent)
+          current = parent
+        } else {
+          break
+        }
+      }
+
+      return path
+    }
+
+    // If it's a decomposition stage folder (for creating new loading)
+    if (node.type === "folder" && node.decompositionStageId) {
+      setEditingLoadingFromTree(null)
+      setSelectedNode(node)
+      setBreadcrumbs(buildBreadcrumbs(node))
+
+      // Clear error
+      if (errors.decompositionStageId) {
+        setErrors((prev) => {
+          const newErrors = { ...prev }
+          delete newErrors.decompositionStageId
+          return newErrors
+        })
+      }
+    } else if (node.type === "file") {
       // If it's a loading node with full loading object, open edit mode
       if (node.loadingId && node.loading) {
         // Set editing state
         setEditingLoadingFromTree(node.loading)
-
-        // Select the loading node itself (not the parent)
         setSelectedNode(node)
-
-        // Build breadcrumbs for the loading node
-        const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
-          const path: FileTreeNode[] = [targetNode]
-          let current = targetNode
-
-          const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-            for (const n of nodes) {
-              if (n.children) {
-                for (const child of n.children) {
-                  if (child.id === childId) return n
-                }
-                const found = findParentNode(n.children, childId)
-                if (found) return found
-              }
-            }
-            return null
-          }
-
-          while (current.parentId) {
-            const parent = findParentNode(treeData, current.id)
-            if (parent) {
-              path.unshift(parent)
-              current = parent
-            } else {
-              break
-            }
-          }
-
-          return path
-        }
-
         setBreadcrumbs(buildBreadcrumbs(node))
       } else {
         // Regular file node (not a loading) - just select it for create mode
         setEditingLoadingFromTree(null)
         setSelectedNode(node)
-
-        // Build breadcrumbs
-        const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
-          const path: FileTreeNode[] = [targetNode]
-          let current = targetNode
-
-          const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-            for (const n of nodes) {
-              if (n.children) {
-                for (const child of n.children) {
-                  if (child.id === childId) return n
-                }
-                const found = findParentNode(n.children, childId)
-                if (found) return found
-              }
-            }
-            return null
-          }
-
-          while (current.parentId) {
-            const parent = findParentNode(treeData, current.id)
-            if (parent) {
-              path.unshift(parent)
-              current = parent
-            } else {
-              break
-            }
-          }
-
-          return path
-        }
-
         setBreadcrumbs(buildBreadcrumbs(node))
       }
 
@@ -1196,7 +1181,13 @@ export function LoadingModal({
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => {
             if (node.type === "folder") {
-              toggleFolder(node.id)
+              // If it's a decomposition stage, select it for creating loading
+              if (node.decompositionStageId) {
+                handleNodeSelect(node)
+              } else {
+                // Otherwise, toggle folder expansion
+                toggleFolder(node.id)
+              }
             } else {
               handleNodeSelect(node)
             }
@@ -1506,7 +1497,23 @@ export function LoadingModal({
 
             successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
             setEditingLoadingFromTree(null)
-            onClose()
+
+            // Reset form for next loading creation instead of closing
+            setSelectedNode(null)
+            setBreadcrumbs([])
+            setFormData({
+              startDate: formatLocalYMD(new Date())!,
+              endDate: formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+              rate: 1,
+              comment: "",
+            })
+            // Restore original employee
+            if (originalEmployeeRef.current) {
+              setSelectedEmployee(originalEmployeeRef.current)
+              setEmployeeSearchTerm(originalEmployeeRef.current.full_name)
+            }
+            setErrors({})
+            // Don't call onClose() - keep modal open
           } else {
             // Edit mode
             const updatedLoading: Partial<Loading> = {
@@ -1804,14 +1811,30 @@ export function LoadingModal({
             <div className="flex-1 overflow-y-auto p-6">
               {selectedNode ? (
                 <div className="space-y-6">
-                  {/* Breadcrumbs */}
-                  <div className="flex items-center gap-2 text-sm flex-wrap">
-                    {breadcrumbs.map((item, index) => (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{item.name}</span>
-                        {index < breadcrumbs.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                      </div>
-                    ))}
+                  {/* Breadcrumbs with change stage button */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <button
+                        onClick={() => {
+                          setSelectedNode(null)
+                          setBreadcrumbs([])
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-sm rounded border transition-colors",
+                          theme === "dark"
+                            ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
+                            : "border-teal-500 text-teal-600 hover:bg-teal-50"
+                        )}
+                      >
+                        Сменить этап
+                      </button>
+                      {breadcrumbs.map((item, index) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Employee Selector */}
@@ -2056,13 +2079,30 @@ export function LoadingModal({
                       </button>
                       <button
                         onClick={handleSave}
-                        disabled={isSaving}
+                        disabled={
+                          isSaving ||
+                          !selectedEmployee ||
+                          !formData.startDate ||
+                          !formData.endDate ||
+                          new Date(formData.startDate) > new Date(formData.endDate) ||
+                          formData.rate <= 0 ||
+                          formData.rate > 2 ||
+                          !selectedNode?.decompositionStageId
+                        }
                         className={cn(
                           "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
                           theme === "dark"
                             ? "bg-teal-600 text-white hover:bg-teal-700"
                             : "bg-teal-500 text-white hover:bg-teal-600",
-                          isSaving ? "opacity-70 cursor-not-allowed" : "",
+                          (isSaving ||
+                            !selectedEmployee ||
+                            !formData.startDate ||
+                            !formData.endDate ||
+                            new Date(formData.startDate) > new Date(formData.endDate) ||
+                            formData.rate <= 0 ||
+                            formData.rate > 2 ||
+                            !selectedNode?.decompositionStageId) &&
+                            "opacity-50 cursor-not-allowed",
                         )}
                       >
                         {isSaving ? "Сохранение..." : mode === "create" ? "Создать" : "Сохранить"}
@@ -2071,8 +2111,15 @@ export function LoadingModal({
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  Выберите этап из дерева слева
+                <div className="flex items-center justify-center h-full">
+                  {originalEmployeeRef.current && (
+                    <p className="text-sm text-muted-foreground text-center max-w-md">
+                      Выберите этап из дерева слева для создания загрузки на сотрудника{" "}
+                      <span className="font-medium text-foreground">
+                        {originalEmployeeRef.current.full_name}
+                      </span>
+                    </p>
+                  )}
                 </div>
               )}
             </div>
