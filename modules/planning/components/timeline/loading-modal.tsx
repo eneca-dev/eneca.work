@@ -1881,21 +1881,8 @@ export function LoadingModal({
               })
             }
 
-            // Reset form for next loading creation instead of closing
-            // Keep selectedNode and breadcrumbs to preserve stage context
-            setFormData({
-              startDate: formatLocalYMD(new Date())!,
-              endDate: formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-              rate: 1,
-              comment: "",
-            })
-            // Restore original employee if creating from employee side
-            if (originalEmployeeRef.current) {
-              setSelectedEmployee(originalEmployeeRef.current)
-              setEmployeeSearchTerm(originalEmployeeRef.current.full_name)
-            }
-            setErrors({})
-            // Don't call onClose() - keep modal open for next loading
+            // Close modal after successful creation
+            onClose()
           } else {
             // Edit mode
             const updatedLoading: Partial<Loading> = {
