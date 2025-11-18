@@ -16,6 +16,33 @@ import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSe
 import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Users } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
+// View row structure
+interface ProjectTreeViewRow {
+  project_id: string
+  project_name: string
+  project_description: string | null
+  project_status: string
+  stage_id: string | null
+  stage_name: string | null
+  object_id: string | null
+  object_name: string | null
+  section_id: string | null
+  section_name: string | null
+  decomposition_stage_id: string | null
+  decomposition_stage_name: string | null
+  decomposition_stage_order: number | null
+  loading_id: string | null
+  loading_start: string | null
+  loading_finish: string | null
+  loading_rate: number | null
+  loading_status: string | null
+  loading_comment: string | null
+  loading_responsible_id: string | null
+  loading_responsible_full_name: string | null
+  loading_responsible_avatar: string | null
+  loading_responsible_team_name: string | null
+}
+
 // FileTree node structure
 interface FileTreeNode {
   id: string
@@ -30,6 +57,7 @@ interface FileTreeNode {
   sectionId?: string
   decompositionStageId?: string
   loadingId?: string // For loading nodes
+  loading?: Loading // Full loading object for edit mode
 }
 
 interface LoadingModalProps {
@@ -144,6 +172,12 @@ export function LoadingModal({
   const [selectedNode, setSelectedNode] = useState<FileTreeNode | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<FileTreeNode[]>([])
 
+  // Cache for project data from view
+  const [projectDataCache, setProjectDataCache] = useState<Map<string, ProjectTreeViewRow[]>>(new Map())
+
+  // State for editing loading from tree
+  const [editingLoadingFromTree, setEditingLoadingFromTree] = useState<Loading | null>(null)
+
   // Employee state
   const [employees, setEmployees] = useState<EmployeeSearchResult[]>([])
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false)
@@ -189,6 +223,18 @@ export function LoadingModal({
       if (dropdownTimeoutRef.current) clearTimeout(dropdownTimeoutRef.current)
     }
   }, [])
+
+  // Sync form data when editingLoadingFromTree changes
+  useEffect(() => {
+    if (editingLoadingFromTree) {
+      setFormData({
+        startDate: normalizeDateValue(editingLoadingFromTree.startDate) || formatLocalYMD(new Date())!,
+        endDate: normalizeDateValue(editingLoadingFromTree.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+        rate: editingLoadingFromTree.rate ?? 1,
+        comment: editingLoadingFromTree.comment || "",
+      })
+    }
+  }, [editingLoadingFromTree])
 
   // Track which nodes are currently loading
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set())
@@ -271,7 +317,139 @@ export function LoadingModal({
     )
   }, [mode, setNotification, clearNotification])
 
-  // Load children for a specific node (project)
+  // Helper: Build stage nodes from view data
+  const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
+    const stageMap = new Map<string, FileTreeNode>()
+
+    data.forEach((row) => {
+      if (row.stage_id && !stageMap.has(row.stage_id)) {
+        stageMap.set(row.stage_id, {
+          id: `stage-${row.stage_id}`,
+          name: row.stage_name!,
+          type: "folder",
+          parentId: `project-${projectId}`,
+          children: [],
+          stageId: row.stage_id,
+          projectId,
+        })
+      }
+    })
+
+    return Array.from(stageMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
+  // Helper: Build object nodes from view data
+  const buildObjectNodes = useCallback((data: ProjectTreeViewRow[], stageId: string, projectId: string): FileTreeNode[] => {
+    const objectMap = new Map<string, FileTreeNode>()
+
+    data.forEach((row) => {
+      if (row.stage_id === stageId && row.object_id && !objectMap.has(row.object_id)) {
+        objectMap.set(row.object_id, {
+          id: `object-${row.object_id}`,
+          name: row.object_name!,
+          type: "folder",
+          parentId: `stage-${stageId}`,
+          children: [],
+          objectId: row.object_id,
+          stageId,
+          projectId,
+        })
+      }
+    })
+
+    return Array.from(objectMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
+  // Helper: Build section nodes from view data
+  const buildSectionNodes = useCallback((data: ProjectTreeViewRow[], objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
+    const sectionMap = new Map<string, FileTreeNode>()
+
+    data.forEach((row) => {
+      if (row.object_id === objectId && row.section_id && !sectionMap.has(row.section_id)) {
+        sectionMap.set(row.section_id, {
+          id: `section-${row.section_id}`,
+          name: row.section_name!,
+          type: "folder",
+          parentId: `object-${objectId}`,
+          children: [],
+          sectionId: row.section_id,
+          objectId,
+          stageId,
+          projectId,
+        })
+      }
+    })
+
+    return Array.from(sectionMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
+  // Helper: Build decomposition stage nodes from view data
+  const buildDecompositionStageNodes = useCallback((data: ProjectTreeViewRow[], sectionId: string, objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
+    const decompMap = new Map<string, FileTreeNode>()
+
+    data.forEach((row) => {
+      if (row.section_id === sectionId && row.decomposition_stage_id && !decompMap.has(row.decomposition_stage_id)) {
+        decompMap.set(row.decomposition_stage_id, {
+          id: `decomp-${row.decomposition_stage_id}`,
+          name: row.decomposition_stage_name!,
+          type: "folder",
+          parentId: `section-${sectionId}`,
+          children: [],
+          decompositionStageId: row.decomposition_stage_id,
+          sectionId,
+          objectId,
+          stageId,
+          projectId,
+        })
+      }
+    })
+
+    return Array.from(decompMap.values()).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+  }, [])
+
+  // Helper: Build loading nodes from view data
+  const buildLoadingNodes = useCallback((data: ProjectTreeViewRow[], decompositionStageId: string, sectionId: string, objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
+    const loadingList: FileTreeNode[] = []
+
+    data.forEach((row) => {
+      if (row.decomposition_stage_id === decompositionStageId && row.loading_id) {
+        const loading: Loading = {
+          id: row.loading_id,
+          responsibleId: row.loading_responsible_id!,
+          responsibleName: row.loading_responsible_full_name || "Без ответственного",
+          responsibleAvatarUrl: row.loading_responsible_avatar || undefined,
+          responsibleTeamName: row.loading_responsible_team_name || undefined,
+          sectionId,
+          stageId: decompositionStageId,
+          startDate: new Date(row.loading_start!),
+          endDate: new Date(row.loading_finish!),
+          rate: row.loading_rate!,
+          status: row.loading_status as any,
+          comment: row.loading_comment || undefined,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+
+        loadingList.push({
+          id: `loading-${row.loading_id}`,
+          name: `${row.loading_responsible_full_name || "Без ответственного"} (${row.loading_rate})`,
+          type: "file",
+          parentId: `decomp-${decompositionStageId}`,
+          loadingId: row.loading_id,
+          loading,
+          decompositionStageId,
+          sectionId,
+          objectId,
+          stageId,
+          projectId,
+        })
+      }
+    })
+
+    return loadingList.sort((a, b) => a.name.localeCompare(b.name))
+  }, [])
+
+  // Load children for a specific node using optimized view
   const loadNodeChildren = useCallback(async (node: FileTreeNode) => {
     if (!node.projectId || loadingNodes.has(node.id)) {
       return
@@ -282,130 +460,65 @@ export function LoadingModal({
     try {
       console.log(`[LoadingModal] Загрузка данных для проекта: ${node.name}`)
 
-      // Fetch stages for this project
-      const { data: stages } = await supabase
-        .from("stages")
-        .select("stage_id, stage_name")
-        .eq("stage_project_id", node.projectId)
-        .order("stage_name")
+      // Check cache first
+      let projectData = projectDataCache.get(node.projectId)
 
-      const stageNodes: FileTreeNode[] = []
-
-      for (const stage of stages || []) {
-        // Fetch objects for this stage
-        const { data: objectRows } = await supabase
-          .from("view_section_hierarchy")
-          .select("object_id, object_name")
+      if (!projectData) {
+        // Fetch all project data from view in ONE query
+        const { data, error } = await supabase
+          .from("view_project_tree_with_loadings")
+          .select("*")
           .eq("project_id", node.projectId)
-          .eq("stage_id", stage.stage_id)
-          .not("object_id", "is", null)
-          .not("object_name", "is", null)
 
-        // Deduplicate objects
-        const objectMap = new Map<string, { object_id: string; object_name: string }>()
-        ;(objectRows || []).forEach((r: any) => {
-          if (r.object_id && r.object_name && !objectMap.has(r.object_id)) {
-            objectMap.set(r.object_id, { object_id: r.object_id, object_name: r.object_name })
-          }
-        })
-        const objects = Array.from(objectMap.values()).sort((a, b) => a.object_name.localeCompare(b.object_name))
+        if (error) throw error
 
-        const objectNodes: FileTreeNode[] = []
+        projectData = (data as ProjectTreeViewRow[]) || []
 
-        for (const obj of objects) {
-          // Fetch sections for this object
-          const { data: sections } = await supabase
-            .from("view_section_hierarchy")
-            .select("section_id, section_name")
-            .eq("project_id", node.projectId)
-            .eq("stage_id", stage.stage_id)
-            .eq("object_id", obj.object_id)
-            .order("section_name")
+        // Cache the result
+        setProjectDataCache((prev) => new Map(prev).set(node.projectId!, projectData!))
+        console.log(`[LoadingModal] Загружено ${projectData.length} строк из view для проекта`)
+      } else {
+        console.log(`[LoadingModal] Используются кэшированные данные (${projectData.length} строк)`)
+      }
 
-          const sectionNodes: FileTreeNode[] = []
+      // Build tree structure from cached data
+      const stageNodes = buildStageNodes(projectData, node.projectId)
 
-          for (const sect of sections || []) {
-            // Fetch decomposition stages for this section
-            const { data: decompStages } = await supabase
-              .from("decomposition_stages")
-              .select("decomposition_stage_id, decomposition_stage_name")
-              .eq("decomposition_stage_section_id", sect.section_id)
-              .order("decomposition_stage_order")
+      // Build full hierarchy
+      for (const stageNode of stageNodes) {
+        const objectNodes = buildObjectNodes(projectData, stageNode.stageId!, node.projectId)
 
-            // Fetch loadings for this section
-            const sectionLoadings = await usePlanningStore.getState().fetchSectionLoadings(sect.section_id)
+        for (const objectNode of objectNodes) {
+          const sectionNodes = buildSectionNodes(projectData, objectNode.objectId!, stageNode.stageId!, node.projectId)
 
-            const decompNodes: FileTreeNode[] = []
+          for (const sectionNode of sectionNodes) {
+            const decompNodes = buildDecompositionStageNodes(
+              projectData,
+              sectionNode.sectionId!,
+              objectNode.objectId!,
+              stageNode.stageId!,
+              node.projectId
+            )
 
-            for (const ds of decompStages || []) {
-              // Filter loadings for this decomposition stage
-              const stageLoadings = sectionLoadings.filter(l => l.stageId === ds.decomposition_stage_id)
-
-              // Create loading nodes
-              const loadingNodes: FileTreeNode[] = stageLoadings.map(loading => ({
-                id: `loading-${loading.id}`,
-                name: `${loading.responsibleName || 'Без ответственного'} (${loading.rate})`,
-                type: "file" as const,
-                parentId: `decomp-${ds.decomposition_stage_id}`,
-                loadingId: loading.id,
-                decompositionStageId: ds.decomposition_stage_id,
-                sectionId: sect.section_id,
-                objectId: obj.object_id,
-                stageId: stage.stage_id,
-                projectId: node.projectId,
-              }))
-
-              decompNodes.push({
-                id: `decomp-${ds.decomposition_stage_id}`,
-                name: ds.decomposition_stage_name,
-                type: "folder" as const,
-                parentId: `section-${sect.section_id}`,
-                children: loadingNodes,
-                decompositionStageId: ds.decomposition_stage_id,
-                sectionId: sect.section_id,
-                objectId: obj.object_id,
-                stageId: stage.stage_id,
-                projectId: node.projectId,
-              })
+            for (const decompNode of decompNodes) {
+              const loadingNodesForStage = buildLoadingNodes(
+                projectData,
+                decompNode.decompositionStageId!,
+                sectionNode.sectionId!,
+                objectNode.objectId!,
+                stageNode.stageId!,
+                node.projectId
+              )
+              decompNode.children = loadingNodesForStage
             }
 
-            // Always add section, even if it has no decomposition stages
-            sectionNodes.push({
-              id: `section-${sect.section_id}`,
-              name: sect.section_name,
-              type: "folder" as const,
-              parentId: `object-${obj.object_id}`,
-              children: decompNodes,
-              sectionId: sect.section_id,
-              objectId: obj.object_id,
-              stageId: stage.stage_id,
-              projectId: node.projectId,
-            })
+            sectionNode.children = decompNodes
           }
 
-          // Always add object, even if it has no sections
-          objectNodes.push({
-            id: `object-${obj.object_id}`,
-            name: obj.object_name,
-            type: "folder" as const,
-            parentId: `stage-${stage.stage_id}`,
-            children: sectionNodes,
-            objectId: obj.object_id,
-            stageId: stage.stage_id,
-            projectId: node.projectId,
-          })
+          objectNode.children = sectionNodes
         }
 
-        // Always add stage, even if it has no objects
-        stageNodes.push({
-          id: `stage-${stage.stage_id}`,
-          name: stage.stage_name,
-          type: "folder" as const,
-          parentId: `project-${node.projectId}`,
-          children: objectNodes,
-          stageId: stage.stage_id,
-          projectId: node.projectId,
-        })
+        stageNode.children = objectNodes
       }
 
       // Update tree with loaded children
@@ -424,13 +537,13 @@ export function LoadingModal({
         return updateNode(prevTree)
       })
 
-      console.log(`[LoadingModal] Данные для проекта "${node.name}" загружены`)
+      console.log(`[LoadingModal] Дерево построено для проекта "${node.name}"`)
     } catch (error) {
       console.error(`[LoadingModal] Ошибка при загрузке данных проекта:`, error)
       Sentry.captureException(error, {
         tags: {
           module: "planning",
-          action: "load_node_children",
+          action: "load_node_children_optimized",
           modal: "loading_modal",
         },
         extra: {
@@ -445,7 +558,17 @@ export function LoadingModal({
         return next
       })
     }
-  }, [loadingNodes])
+  }, [loadingNodes, projectDataCache, buildStageNodes, buildObjectNodes, buildSectionNodes, buildDecompositionStageNodes, buildLoadingNodes])
+
+  // Clear cache for a project and reload its data
+  const clearProjectCache = useCallback((projectId: string) => {
+    setProjectDataCache((prev) => {
+      const next = new Map(prev)
+      next.delete(projectId)
+      return next
+    })
+    console.log(`[LoadingModal] Кэш очищен для проекта: ${projectId}`)
+  }, [])
 
   // Fetch employees
   const fetchEmployees = useCallback(async () => {
@@ -521,8 +644,9 @@ export function LoadingModal({
       }
 
       const projectNode = findProjectNode(treeData)
-      if (projectNode) {
-        // Reload the project's children to show the new stage
+      if (projectNode && sectionNode.projectId) {
+        // Clear cache and reload the project's children to show the new stage
+        clearProjectCache(sectionNode.projectId)
         await loadNodeChildren(projectNode)
 
         // Expand the section to show the new stage
@@ -548,7 +672,7 @@ export function LoadingModal({
     } finally {
       setIsCreatingStage(false)
     }
-  }, [isCreatingStage, treeData, loadNodeChildren, setNotification, clearNotification])
+  }, [isCreatingStage, treeData, loadNodeChildren, clearProjectCache, setNotification, clearNotification])
 
   // Handle creating a new loading from tree (by selecting decomposition stage)
   const handleCreateLoadingFromTree = useCallback((decompositionStageNode: FileTreeNode, e: React.MouseEvent) => {
@@ -862,21 +986,25 @@ export function LoadingModal({
 
   // Pre-fill employee for edit mode
   useEffect(() => {
-    if (mode === "edit" && loading && employees.length > 0) {
+    // Use either external loading prop or internal editingLoadingFromTree
+    const loadingToEdit = editingLoadingFromTree || loading
+
+    if ((mode === "edit" || editingLoadingFromTree) && loadingToEdit && employees.length > 0) {
       console.log("[LoadingModal] Предзаполнение сотрудника для режима редактирования:", {
-        responsibleId: loading.responsibleId,
+        responsibleId: loadingToEdit.responsibleId,
         employeesCount: employees.length,
+        source: editingLoadingFromTree ? "tree" : "prop",
       })
 
-      const emp = employees.find((e) => e.user_id === loading.responsibleId)
+      const emp = employees.find((e) => e.user_id === loadingToEdit.responsibleId)
       if (emp) {
         console.log(`[LoadingModal] Сотрудник найден: ${emp.full_name}`)
         setSelectedEmployee(emp)
       } else {
-        console.warn(`[LoadingModal] Сотрудник не найден с ID: ${loading.responsibleId}`)
+        console.warn(`[LoadingModal] Сотрудник не найден с ID: ${loadingToEdit.responsibleId}`)
       }
     }
-  }, [mode, loading, employees])
+  }, [mode, loading, editingLoadingFromTree, employees])
 
   // Toggle folder expansion
   const toggleFolder = (folderId: string) => {
@@ -916,10 +1044,12 @@ export function LoadingModal({
   // Handle node selection
   const handleNodeSelect = (node: FileTreeNode) => {
     if (node.type === "file") {
-      // If it's a loading node, find its parent decomposition stage
-      let nodeToSelect = node
-      if (node.loadingId) {
-        // Find the parent decomposition stage node
+      // If it's a loading node with full loading object, open edit mode
+      if (node.loadingId && node.loading) {
+        // Set editing state
+        setEditingLoadingFromTree(node.loading)
+
+        // Find the parent decomposition stage node for tree display
         const findParentDecompStage = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
           for (const n of nodes) {
             if (n.children) {
@@ -935,44 +1065,79 @@ export function LoadingModal({
 
         const parentStage = findParentDecompStage(treeData, node.id)
         if (parentStage) {
-          nodeToSelect = parentStage
-        }
-      }
+          setSelectedNode(parentStage)
 
-      setSelectedNode(nodeToSelect)
+          // Build breadcrumbs for parent stage
+          const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+            const path: FileTreeNode[] = [targetNode]
+            let current = targetNode
 
-      // Build breadcrumbs
-      const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
-        const path: FileTreeNode[] = [targetNode]
-        let current = targetNode
-
-        const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-          for (const n of nodes) {
-            if (n.children) {
-              for (const child of n.children) {
-                if (child.id === childId) return n
+            const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+              for (const n of nodes) {
+                if (n.children) {
+                  for (const child of n.children) {
+                    if (child.id === childId) return n
+                  }
+                  const found = findParentNode(n.children, childId)
+                  if (found) return found
+                }
               }
-              const found = findParentNode(n.children, childId)
-              if (found) return found
+              return null
+            }
+
+            while (current.parentId) {
+              const parent = findParentNode(treeData, current.id)
+              if (parent) {
+                path.unshift(parent)
+                current = parent
+              } else {
+                break
+              }
+            }
+
+            return path
+          }
+
+          setBreadcrumbs(buildBreadcrumbs(parentStage))
+        }
+      } else {
+        // Regular file node (not a loading) - just select it for create mode
+        setEditingLoadingFromTree(null)
+        setSelectedNode(node)
+
+        // Build breadcrumbs
+        const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+          const path: FileTreeNode[] = [targetNode]
+          let current = targetNode
+
+          const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+            for (const n of nodes) {
+              if (n.children) {
+                for (const child of n.children) {
+                  if (child.id === childId) return n
+                }
+                const found = findParentNode(n.children, childId)
+                if (found) return found
+              }
+            }
+            return null
+          }
+
+          while (current.parentId) {
+            const parent = findParentNode(treeData, current.id)
+            if (parent) {
+              path.unshift(parent)
+              current = parent
+            } else {
+              break
             }
           }
-          return null
+
+          return path
         }
 
-        while (current.parentId) {
-          const parent = findParentNode(treeData, current.id)
-          if (parent) {
-            path.unshift(parent)
-            current = parent
-          } else {
-            break
-          }
-        }
-
-        return path
+        setBreadcrumbs(buildBreadcrumbs(node))
       }
-
-      setBreadcrumbs(buildBreadcrumbs(nodeToSelect))
 
       // Clear error
       if (errors.decompositionStageId) {
@@ -1232,16 +1397,20 @@ export function LoadingModal({
   const handleSave = async () => {
     if (!validateForm()) return
 
+    // Determine if we're in edit mode (either from prop or internal state)
+    const isEditMode = mode === "edit" || editingLoadingFromTree !== null
+    const loadingToEdit = editingLoadingFromTree || loading
+
     await Sentry.startSpan(
       {
         op: "ui.action",
-        name: mode === "create" ? "Создание загрузки" : "Обновление загрузки",
+        name: isEditMode ? "Обновление загрузки" : "Создание загрузки",
       },
       async (span) => {
         setIsSaving(true)
 
         try {
-          span.setAttribute("mode", mode)
+          span.setAttribute("mode", isEditMode ? "edit" : "create")
           span.setAttribute("employee.id", selectedEmployee!.user_id)
           span.setAttribute("employee.name", selectedEmployee!.full_name)
           span.setAttribute("decomposition_stage.id", selectedNode!.decompositionStageId!)
@@ -1249,7 +1418,7 @@ export function LoadingModal({
           span.setAttribute("loading.end_date", formData.endDate)
           span.setAttribute("loading.rate", formData.rate)
 
-          if (mode === "create") {
+          if (!isEditMode) {
             // Fetch project and section names
             const { data: sectionData } = await supabase
               .from("view_section_hierarchy")
@@ -1291,6 +1460,7 @@ export function LoadingModal({
             }
 
             successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+            setEditingLoadingFromTree(null)
             onClose()
           } else {
             // Edit mode
@@ -1302,20 +1472,20 @@ export function LoadingModal({
             }
 
             // Update stage if changed
-            if (selectedNode!.decompositionStageId !== loading!.stageId) {
+            if (selectedNode!.decompositionStageId !== loadingToEdit!.stageId) {
               updatedLoading.stageId = selectedNode!.decompositionStageId
               updatedLoading.stageName = selectedNode!.name
             }
 
             // Update employee if changed
-            if (selectedEmployee!.user_id !== loading!.responsibleId) {
+            if (selectedEmployee!.user_id !== loadingToEdit!.responsibleId) {
               updatedLoading.responsibleId = selectedEmployee!.user_id
               updatedLoading.responsibleName = selectedEmployee!.full_name
               updatedLoading.responsibleAvatarUrl = selectedEmployee!.avatar_url || undefined
               updatedLoading.responsibleTeamName = selectedEmployee!.team_name || undefined
             }
 
-            const result = await updateLoadingInStore(loading!.id, updatedLoading)
+            const result = await updateLoadingInStore(loadingToEdit!.id, updatedLoading)
 
             if (!result.success) {
               throw new Error(result.error || "Ошибка при обновлении загрузки")
@@ -1325,6 +1495,18 @@ export function LoadingModal({
 
             setNotification("Загрузка успешно обновлена")
             successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+            // Clear cache and reload tree if editing from tree
+            if (editingLoadingFromTree && selectedNode?.projectId) {
+              clearProjectCache(selectedNode.projectId)
+              const projectNodeId = `project-${selectedNode.projectId}`
+              const projectNode = treeData.find(n => n.id === projectNodeId)
+              if (projectNode) {
+                await loadNodeChildren(projectNode)
+              }
+            }
+
+            setEditingLoadingFromTree(null)
             onClose()
           }
         } catch (error) {
@@ -1360,12 +1542,13 @@ export function LoadingModal({
 
   // Handle delete
   const handleDelete = async () => {
-    if (mode !== "edit" || !loading) return
+    const loadingToDelete = editingLoadingFromTree || loading
+    if ((mode !== "edit" && !editingLoadingFromTree) || !loadingToDelete) return
 
     setIsDeleting(true)
 
     try {
-      const result = await deleteLoadingInStore(loading.id)
+      const result = await deleteLoadingInStore(loadingToDelete.id)
 
       if (!result.success) {
         throw new Error(result.error || "Ошибка при удалении загрузки")
@@ -1373,6 +1556,18 @@ export function LoadingModal({
 
       setNotification("Загрузка успешно удалена")
       successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+      // Clear cache and reload tree if deleting from tree
+      if (editingLoadingFromTree && selectedNode?.projectId) {
+        clearProjectCache(selectedNode.projectId)
+        const projectNodeId = `project-${selectedNode.projectId}`
+        const projectNode = treeData.find(n => n.id === projectNodeId)
+        if (projectNode) {
+          await loadNodeChildren(projectNode)
+        }
+      }
+
+      setEditingLoadingFromTree(null)
       onClose()
     } catch (error) {
       Sentry.captureException(error, {
@@ -1382,7 +1577,7 @@ export function LoadingModal({
           modal: "loading_modal",
         },
         extra: {
-          loading_id: loading.id,
+          loading_id: loadingToDelete.id,
           timestamp: new Date().toISOString(),
         },
       })
@@ -1400,6 +1595,12 @@ export function LoadingModal({
     setShowSectionPanel(true)
   }
 
+  // Wrapper for onClose to clear editing state
+  const handleClose = () => {
+    setEditingLoadingFromTree(null)
+    onClose()
+  }
+
   if (!isOpen) return null
 
   return (
@@ -1409,7 +1610,7 @@ export function LoadingModal({
         onClick={(e) => {
           // Закрывать только при клике на overlay, не на содержимое модалки
           if (e.target === e.currentTarget && !isSaving && !isDeleting) {
-            onClose();
+            handleClose();
           }
         }}
       >
@@ -1420,10 +1621,10 @@ export function LoadingModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
           <h2 className="text-lg font-semibold dark:text-slate-200">
-            {mode === "create" ? "Создание загрузки" : "Редактирование загрузки"}
+            {editingLoadingFromTree ? "Редактирование загрузки" : mode === "create" ? "Создание загрузки" : "Редактирование загрузки"}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSaving || isDeleting}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
@@ -1733,7 +1934,7 @@ export function LoadingModal({
 
                     <div className="flex gap-2">
                       <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         disabled={isSaving}
                         className={cn(
                           "px-4 py-2 text-sm rounded border",
