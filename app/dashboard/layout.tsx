@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import * as Sentry from "@sentry/nextjs"
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
@@ -18,9 +17,50 @@ import { setSentryUser, clearSentryUser } from "@/utils/sentry"
 
 // УДАЛЕНО: Константы retry логики - упрощение
 
+// Мемоизированный компонент для предотвращения ре-рендера провайдеров и children
+const ContentArea = memo(({ children }: { children: React.ReactNode }) => (
+  <UserPermissionsSyncProvider>
+    <PermissionsManager>
+      <NotificationsProvider>
+        {children}
+      </NotificationsProvider>
+    </PermissionsManager>
+  </UserPermissionsSyncProvider>
+))
+
+ContentArea.displayName = 'ContentArea'
+
+// Внутренний компонент PermissionsManager (будет использоваться внутри ContentArea)
+function PermissionsManager({ children }: { children: React.ReactNode }) {
+  const { isLoading, error, reloadPermissions } = useUserPermissionsSync()
+
+  // Если есть ошибка загрузки разрешений
+  if (error) {
+    return (
+      <PermissionsErrorBoundary
+        error={error}
+        onRetry={reloadPermissions}
+      />
+    )
+  }
+
+  // Если загружаем разрешения
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка прав доступа...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return children
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
-  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarState()
   const userId = useUserStore((state) => state.id)
   const name = useUserStore((state) => state.name)
@@ -30,7 +70,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
-  const pathname = usePathname()
   const isNotificationsOpen = useNotificationsStore((s) => s.isPanelOpen)
   const notificationsPanelWidth = useNotificationsStore((s) => s.panelWidthPx)
   
@@ -61,40 +100,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/auth/login')
   }, [router, email, name, isAuthenticated])
 
-  // Компонент для управления состоянием разрешений
-  function PermissionsManager({ children }: { children: React.ReactNode }) {
-    const { isLoading, error, hasPermissions, reloadPermissions } = useUserPermissionsSync()
-    
-    // Синхронизируем локальный флаг с состоянием permissions
-    useEffect(() => {
-      if (!mounted) return
-      setPermissionsLoaded(!isLoading && (hasPermissions || !!error))
-    }, [mounted, isLoading, hasPermissions, error])
-
-    // Если есть ошибка загрузки разрешений
-    if (error) {
-      return (
-        <PermissionsErrorBoundary 
-          error={error}
-          onRetry={reloadPermissions}
-        />
-      )
-    }
-
-    // Если загружаем разрешения
-    if (isLoading) {
-      return (
-        <div className="min-h-[60vh] flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Загрузка прав доступа...</p>
-          </div>
-        </div>
-      )
-    }
-
-    return children
-  }
+  // Мемоизированный стиль для контента - предотвращает создание нового объекта при каждом рендере
+  const contentStyle = useMemo(() => ({
+    marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0),
+    transition: 'margin-left 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+    willChange: 'margin-left' as const
+  }), [sidebarCollapsed, isNotificationsOpen, notificationsPanelWidth])
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {
@@ -173,20 +184,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // УДАЛЕНО: Legacy отслеживание permissions
   // Теперь permissions загружаются через modules/permissions
 
-  // Fallback timeout для случаев когда права не загрузятся
-  useEffect(() => {
-    if (mounted && !permissionsLoaded) {
-      const fallbackTimer = setTimeout(() => {
-        try {
-          Sentry.captureMessage?.("Timeout при загрузке прав, продолжаем без них")
-        } catch {}
-        setPermissionsLoaded(true)
-      }, 5000) // 5 секунд максимум
-
-      return () => clearTimeout(fallbackTimer)
-    }
-  }, [mounted, permissionsLoaded])
-
   useEffect(() => {
     if (!mounted) {
       fetchUser()
@@ -218,7 +215,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const sidebarWidth = sidebarCollapsed ? "w-20" : "w-64"
-  const marginLeft = sidebarCollapsed ? "ml-20" : "ml-64"
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
@@ -231,15 +227,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       </div>
       {/* Контент с отступом слева и динамическим отступом слева под панель уведомлений (панель раскрывается справа от сайдбара) */}
-      <div className={`flex-1 px-0 py-0 transition-all duration-300`}
-        style={{ marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0) }}>
-        <UserPermissionsSyncProvider>
-          <PermissionsManager>
-            <NotificationsProvider>
-              {children}
-            </NotificationsProvider>
-          </PermissionsManager>
-        </UserPermissionsSyncProvider>
+      <div className="flex-1 px-0 py-0" style={contentStyle}>
+        <ContentArea>{children}</ContentArea>
       </div>
       
       {/* Chat Interface */}
