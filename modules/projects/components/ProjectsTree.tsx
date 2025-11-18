@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import * as Sentry from '@sentry/nextjs'
 import { useUserStore } from '@/stores/useUserStore'
-import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star, LayoutDashboard } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { useTaskTransferStore } from '@/modules/task-transfer/store'
@@ -618,24 +618,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
             
             {/* Название */}
-            {node.type === 'project' && onOpenProjectDashboard ? (
-              <span 
-                className={cn(
-                  "font-medium text-sm dark:text-slate-200 text-slate-800 cursor-pointer hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                )}
-                onClick={(e) => onOpenProjectDashboard(node, e)}
-                title="Открыть дашборд проекта"
-              >
-                {node.name}
-              </span>
-            ) : (
-              <span className={cn(
-                "font-medium text-sm dark:text-slate-200 text-slate-800",
-                node.type === 'manager' && "font-semibold"
-              )}>
-                {node.name}
-              </span>
-            )}
+            <span className={cn(
+              "font-medium text-sm dark:text-slate-200 text-slate-800",
+              node.type === 'manager' && "font-semibold"
+            )}>
+              {node.name}
+            </span>
 
             {/* Звёздочка избранного для проектов */}
             {node.type === 'project' && (
@@ -728,6 +716,15 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     title="Удалить проект"
                   >
                     <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
+                  </button>
+                )}
+                {onOpenProjectDashboard && (
+                  <button
+                    onClick={(e) => onOpenProjectDashboard(node, e)}
+                    className="p-1 opacity-0 group-hover/row:opacity-100 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded transition-all ml-1"
+                    title="Открыть дашборд проекта"
+                  >
+                    <LayoutDashboard className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
                   </button>
                 )}
               </div>
