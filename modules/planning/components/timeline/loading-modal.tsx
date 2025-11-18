@@ -14,8 +14,9 @@ import { createClient } from "@/utils/supabase/client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Users } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Users, Search } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Input } from "@/components/ui/input"
 
 // View row structure
 interface ProjectTreeViewRow {
@@ -202,6 +203,9 @@ export function LoadingModal({
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false)
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false)
+
+  // Project search state
+  const [projectSearchTerm, setProjectSearchTerm] = useState("")
 
   // Store original employee from props for restoration after creation
   const originalEmployeeRef = useRef<EmployeeSearchResult | null>(
@@ -1434,6 +1438,25 @@ export function LoadingModal({
     return enrichTreeWithDrafts(treeData)
   }, [treeData, draftLoadings])
 
+  // Filter projects by search term
+  const filteredTreeData = useMemo(() => {
+    // If search is empty, return empty array (nothing to show)
+    if (!projectSearchTerm.trim()) {
+      return []
+    }
+
+    const searchLower = projectSearchTerm.toLowerCase()
+
+    // Filter only top-level projects (first level of tree)
+    return enrichedTreeData.filter((node) => {
+      // Only filter project nodes
+      if (node.projectId && !node.stageId) {
+        return node.name.toLowerCase().includes(searchLower)
+      }
+      return false
+    })
+  }, [enrichedTreeData, projectSearchTerm])
+
   // Auto-select draft when it's created
   useEffect(() => {
     if (!pendingDraftSelectionRef.current) return
@@ -2137,8 +2160,8 @@ export function LoadingModal({
             {/* Left side - Tree */}
             <div className="w-96 border-r dark:border-slate-700 overflow-y-auto">
               <TooltipProvider>
-                <div className="p-2">
-                  <div className="flex items-center justify-between p-2 mb-2">
+                <div className="p-2 space-y-3">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-medium dark:text-slate-300">Проекты</span>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2155,6 +2178,25 @@ export function LoadingModal({
                       </TooltipContent>
                     </Tooltip>
                   </div>
+
+                  {/* Search input */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Поиск проектов..."
+                      value={projectSearchTerm}
+                      onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      className="h-8 pl-8 text-sm"
+                    />
+                  </div>
+
+                  {/* Search results count */}
+                  {projectSearchTerm.trim() && (
+                    <div className="text-xs text-muted-foreground px-2">
+                      Найдено: {filteredTreeData.length}
+                    </div>
+                  )}
+
                   {isLoadingTree ? (
                     <div className="p-4 text-center text-sm text-gray-500">Загрузка...</div>
                   ) : treeData.length === 0 ? (
@@ -2167,8 +2209,16 @@ export function LoadingModal({
                         Повторить загрузку
                       </button>
                     </div>
+                  ) : !projectSearchTerm.trim() ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground italic">
+                      Введите название проекта для поиска
+                    </div>
+                  ) : filteredTreeData.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      Проекты не найдены
+                    </div>
                   ) : (
-                    <div className="p-1">{enrichedTreeData.map((node) => renderNode(node))}</div>
+                    <div className="p-1">{filteredTreeData.map((node) => renderNode(node))}</div>
                   )}
                 </div>
               </TooltipProvider>

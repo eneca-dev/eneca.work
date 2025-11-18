@@ -1395,7 +1395,7 @@ function StageRow({
                     {Number.isInteger(hoursPerDay) ? `${hoursPerDay} ч/дн` : `${hoursPerDay.toFixed(1)} ч/дн`}
                   </span>
                 )}
-                <button
+                {/* <button
                   className={cn(
                     "w-5 h-5 rounded-full inline-flex items-center justify-center transition-all duration-200 hover:scale-110 hover:shadow-md",
                     theme === "dark"
@@ -1406,7 +1406,7 @@ function StageRow({
                   onClick={(e) => { e.stopPropagation(); setCreateOpen(true) }}
                 >
                   <PlusCircle size={12} />
-                </button>
+                </button> */}
               </div>
             </div>
           </div>
