@@ -434,6 +434,83 @@ useEffect(() => {
   const CELL_WIDTH = cellWidth || 22
   const COLUMN_WIDTH = 430
 
+  // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
+  useEffect(() => {
+    const headerRightScroll = headerRightScrollRef.current
+    const contentScroll = contentScrollRef.current
+
+    if (!headerRightScroll || !contentScroll) return
+
+    let isHeaderScrolling = false
+    let isContentScrolling = false
+
+    const handleHeaderScroll = () => {
+      if (isContentScrolling) return
+      isHeaderScrolling = true
+      contentScroll.scrollLeft = headerRightScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isHeaderScrolling = false
+      })
+    }
+
+    const handleContentScroll = () => {
+      if (isHeaderScrolling) return
+      isContentScrolling = true
+      headerRightScroll.scrollLeft = contentScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isContentScrolling = false
+      })
+    }
+
+    headerRightScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
+    contentScroll.addEventListener('scroll', handleContentScroll, { passive: true })
+
+    return () => {
+      headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
+      contentScroll.removeEventListener('scroll', handleContentScroll)
+    }
+  }, [])
+
+  // Вычисляем ширину вертикального скроллбара контента
+  useEffect(() => {
+    const contentScroll = contentScrollRef.current
+    if (!contentScroll) return
+
+    // Вычисляем ширину скроллбара: offsetWidth (включая скроллбар) - clientWidth (без скроллбара)
+    const calculateScrollbarWidth = () => {
+      const scrollbarWidth = contentScroll.offsetWidth - contentScroll.clientWidth
+      setScrollbarWidth(scrollbarWidth)
+    }
+
+    // Вычисляем при монтировании
+    calculateScrollbarWidth()
+
+    // Пересчитываем при изменении размера окна
+    window.addEventListener('resize', calculateScrollbarWidth)
+
+    // Используем ResizeObserver для отслеживания изменений размера контента
+    const resizeObserver = new ResizeObserver(calculateScrollbarWidth)
+    resizeObserver.observe(contentScroll)
+
+    return () => {
+      window.removeEventListener('resize', calculateScrollbarWidth)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  // Получаем данные для заголовка
+  const { columnVisibility } = usePlanningColumnsStore()
+
+  // Генерируем timeUnits для заголовка
+  const timeUnits = generateTimeUnits(startDate, daysToShow)
+
+  // Константы для размеров (должны совпадать с timeline-grid.tsx)
+  const HEADER_HEIGHT = 40
+  const PADDING = 12
+  const LEFT_OFFSET = 0
+  const CELL_WIDTH = cellWidth || 22
+  const COLUMN_WIDTH = 430
+
   return (
     <div
       className={cn(

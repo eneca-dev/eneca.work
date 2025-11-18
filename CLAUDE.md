@@ -63,6 +63,22 @@ The application heavily relies on PostgreSQL views for data aggregation and busi
   - Centralized queries in `lib/supabase-client.ts`
 - **Schema Documentation:** See `supabase-db.sql` and `supabase-views.md`
 
+**Data Hierarchy Structure:**
+
+The planning module follows this hierarchical structure:
+```
+Проект (Project)
+  └─ Стадия (Stage)
+      └─ Объект (Object)
+          └─ Раздел (Section)
+              └─ Этап декомпозиции (Decomposition Stage)
+                  └─ Декомпозиция (Decomposition - not used in modals)
+```
+
+- **Loadings** (загрузки) are assigned at the **Decomposition Stage** level
+- Each loading connects: Employee + Decomposition Stage + Date Range + Rate
+- The decomposition layer exists in the data model but is not exposed in UI modals
+
 ### Permission System
 
 Dynamic, database-driven permission system:

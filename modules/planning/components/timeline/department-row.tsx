@@ -9,8 +9,7 @@ import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useUiStore } from "@/stores/useUiStore"
 import { useState, Fragment, useMemo } from "react"
 import { Avatar, Tooltip } from "../avatar"
-import { EditLoadingModal } from "./edit-loading-modal"
-import { AddLoadingModal } from "./add-loading-modal"
+import { LoadingModal } from "./loading-modal"
 import { AddShortageModal } from "./AddShortageModal"
 import {
   loadingsToPeriods,
@@ -553,9 +552,10 @@ export function EmployeeRow({
   isTeamLead,
 }: EmployeeRowProps) {
   // Состояния для модальных окон
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showAddShortage, setShowAddShortage] = useState(false)
+  const [showLoadingModal, setShowLoadingModal] = useState(false)
+  const [loadingModalMode, setLoadingModalMode] = useState<"create" | "edit">("create")
   const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
+  const [showAddShortage, setShowAddShortage] = useState(false)
 
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -750,7 +750,9 @@ export function EmployeeRow({
                       if (employee.isShortage) {
                         setShowAddShortage(true)
                       } else {
-                        setShowAddModal(true)
+                        setLoadingModalMode("create")
+                        setEditingLoading(null)
+                        setShowLoadingModal(true)
                       }
                     }}
                   >
@@ -844,7 +846,9 @@ export function EmployeeRow({
                       onClick={(e) => {
                         e.stopPropagation()
                         if (bar.period.type === "loading" && bar.period.loading) {
+                          setLoadingModalMode("edit")
                           setEditingLoading(bar.period.loading)
+                          setShowLoadingModal(true)
                         }
                       }}
                     >
@@ -907,8 +911,18 @@ export function EmployeeRow({
         </div>
       </div>
 
-      {/* Модальное окно добавления загрузки */}
-      {showAddModal && <AddLoadingModal employee={employee} setShowAddModal={setShowAddModal} theme={theme} />}
+      {/* Универсальное модальное окно для создания/редактирования загрузки */}
+      <LoadingModal
+        isOpen={showLoadingModal}
+        onClose={() => {
+          setShowLoadingModal(false)
+          setEditingLoading(null)
+        }}
+        theme={theme}
+        mode={loadingModalMode}
+        employee={loadingModalMode === "create" ? employee : undefined}
+        loading={loadingModalMode === "edit" ? editingLoading || undefined : undefined}
+      />
       {showAddShortage && (
         <AddShortageModal
           teamId={employee.teamId}
@@ -917,14 +931,6 @@ export function EmployeeRow({
           departmentName={employee.departmentName}
           theme={theme}
           onClose={() => setShowAddShortage(false)}
-        />
-      )}
-      {/* Модальное окно редактирования загрузки */}
-      {editingLoading && (
-        <EditLoadingModal
-          loading={editingLoading}
-          setEditingLoading={setEditingLoading}
-          theme={theme}
         />
       )}
     </>
