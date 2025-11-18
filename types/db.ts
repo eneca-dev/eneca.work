@@ -62,6 +62,7 @@ export type UserWithRoles = {
 export type Department = {
   id: string
   name: string
+  subdivisionId?: string
 }
 
 export type Team = {
@@ -76,6 +77,11 @@ export type Position = {
 }
 
 export type Category = {
+  id: string
+  name: string
+}
+
+export type Subdivision = {
   id: string
   name: string
 }
