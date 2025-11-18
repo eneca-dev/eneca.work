@@ -3,13 +3,14 @@
 import type React from "react"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import type { Loading, Employee, Section } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useProjectsStore } from "@/modules/projects/store"
 import { supabase } from "@/lib/supabase-client"
+import { createClient } from "@/utils/supabase/client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
@@ -58,6 +59,8 @@ interface FileTreeNode {
   decompositionStageId?: string
   loadingId?: string // For loading nodes
   loading?: Loading // Full loading object for edit mode
+  isDraft?: boolean // Flag to indicate this is a draft node
+  draftData?: DraftLoading // Draft loading data
 }
 
 interface LoadingModalProps {
@@ -88,6 +91,18 @@ interface EmployeeSearchResult {
   team_name: string | null
   department_name: string | null
   employment_rate: number | null
+}
+
+interface DraftLoading {
+  decompositionStageId: string
+  employeeId?: string
+  employeeName?: string
+  employeeAvatarUrl?: string
+  employeeTeamName?: string
+  startDate?: string
+  endDate?: string
+  rate?: number
+  comment?: string
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
@@ -176,6 +191,9 @@ export function LoadingModal({
   // Cache for project data from view
   const [projectDataCache, setProjectDataCache] = useState<Map<string, ProjectTreeViewRow[]>>(new Map())
 
+  // Draft loadings state - persists until modal closes
+  const [draftLoadings, setDraftLoadings] = useState<Map<string, DraftLoading>>(new Map())
+
   // State for editing loading from tree
   const [editingLoadingFromTree, setEditingLoadingFromTree] = useState<Loading | null>(null)
 
@@ -230,6 +248,9 @@ export function LoadingModal({
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
   const hasLoadedTreeRef = useRef(false)
+
+  // Ref to track newly created draft that should be auto-selected
+  const pendingDraftSelectionRef = useRef<string | null>(null)
 
   // Cleanup timeouts
   useEffect(() => {
@@ -427,8 +448,21 @@ export function LoadingModal({
   const buildLoadingNodes = useCallback((data: ProjectTreeViewRow[], decompositionStageId: string, sectionId: string, objectId: string, stageId: string, projectId: string): FileTreeNode[] => {
     const loadingList: FileTreeNode[] = []
 
+    console.log(`[buildLoadingNodes] Поиск загрузок для decomp stage: ${decompositionStageId}`)
+
+    // Log all rows with loading_id for debugging
+    const rowsWithLoadings = data.filter(row => row.loading_id)
+    console.log(`[buildLoadingNodes] Всего строк с loading_id: ${rowsWithLoadings.length}`)
+
+    if (rowsWithLoadings.length > 0) {
+      console.log(`[buildLoadingNodes] Decomposition stage IDs в данных:`,
+        [...new Set(rowsWithLoadings.map(r => r.decomposition_stage_id))])
+    }
+
     data.forEach((row) => {
       if (row.decomposition_stage_id === decompositionStageId && row.loading_id) {
+        console.log(`[buildLoadingNodes] ✓ Найдена загрузка: ${row.loading_responsible_full_name} (${row.loading_rate})`)
+
         const loading: Loading = {
           id: row.loading_id,
           responsibleId: row.loading_responsible_id!,
@@ -462,6 +496,7 @@ export function LoadingModal({
       }
     })
 
+    console.log(`[buildLoadingNodes] Создано узлов загрузок: ${loadingList.length}`)
     return loadingList.sort((a, b) => a.name.localeCompare(b.name))
   }, [])
 
@@ -493,6 +528,25 @@ export function LoadingModal({
         // Cache the result
         setProjectDataCache((prev) => new Map(prev).set(node.projectId!, projectData!))
         console.log(`[LoadingModal] Загружено ${projectData.length} строк из view для проекта`)
+
+        // DEBUG: Show sample rows
+        if (projectData.length > 0) {
+          console.log(`[LoadingModal] DEBUG: Первая строка из view:`, {
+            decomposition_stage_id: projectData[0].decomposition_stage_id,
+            decomposition_stage_name: projectData[0].decomposition_stage_name,
+            loading_id: projectData[0].loading_id,
+            loading_responsible_full_name: projectData[0].loading_responsible_full_name,
+            section_id: projectData[0].section_id,
+            section_name: projectData[0].section_name,
+          })
+
+          // Show rows with loading_id if any
+          const rowsWithLoadings = projectData.filter(r => r.loading_id)
+          console.log(`[LoadingModal] DEBUG: Строк с loading_id: ${rowsWithLoadings.length}`)
+          if (rowsWithLoadings.length > 0) {
+            console.log(`[LoadingModal] DEBUG: Первая строка с loading:`, rowsWithLoadings[0])
+          }
+        }
       } else {
         console.log(`[LoadingModal] Используются кэшированные данные (${projectData.length} строк)`)
       }
@@ -526,6 +580,7 @@ export function LoadingModal({
                 node.projectId
               )
               decompNode.children = loadingNodesForStage
+              console.log(`[loadNodeChildren] Этап "${decompNode.name}" получил ${loadingNodesForStage.length} загрузок`)
             }
 
             sectionNode.children = decompNodes
@@ -971,9 +1026,11 @@ export function LoadingModal({
 
         const pathToExpand = expandPath(targetNode)
         console.log(`[LoadingModal] Раскрытие папок: ${pathToExpand.length} уровней`)
-        setExpandedFolders(new Set(pathToExpand))
+        // Also expand the target node itself to show its loadings
+        const foldersToExpand = new Set([...pathToExpand, targetNode.id])
+        setExpandedFolders(foldersToExpand)
         setSelectedNode(targetNode)
-        console.log(`[LoadingModal] Этап успешно выбран: ${targetNode.name}`)
+        console.log(`[LoadingModal] Этап успешно выбран и развёрнут: ${targetNode.name}`)
 
         // Build breadcrumbs
         const buildBreadcrumbs = (node: FileTreeNode): FileTreeNode[] => {
@@ -1085,6 +1142,99 @@ export function LoadingModal({
     }
   }
 
+  // Save draft if needed when navigating away from current stage
+  const saveDraftIfNeeded = () => {
+    // Only save if we're in create mode and have a selected stage
+    if (mode !== "create" || !selectedNode?.decompositionStageId) {
+      return
+    }
+
+    // Check if at least one field is filled
+    const hasData =
+      selectedEmployee ||
+      formData.startDate !== formatLocalYMD(new Date()) ||
+      formData.endDate !== formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) ||
+      formData.rate !== 1 ||
+      formData.comment.trim() !== ""
+
+    if (!hasData) {
+      return
+    }
+
+    // Create draft object
+    const draft: DraftLoading = {
+      decompositionStageId: selectedNode.decompositionStageId,
+      employeeId: selectedEmployee?.user_id,
+      employeeName: selectedEmployee?.full_name,
+      employeeAvatarUrl: selectedEmployee?.avatar_url ?? undefined,
+      employeeTeamName: selectedEmployee?.team_name ?? undefined,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      rate: formData.rate,
+      comment: formData.comment,
+    }
+
+    // Save to drafts map
+    setDraftLoadings((prev) => {
+      const newDrafts = new Map(prev)
+      newDrafts.set(selectedNode.decompositionStageId!, draft)
+      return newDrafts
+    })
+  }
+
+  // Add draft loadings to the tree structure
+  const enrichTreeWithDrafts = (nodes: FileTreeNode[]): FileTreeNode[] => {
+    return nodes.map((node) => {
+      // DEBUG: Log original children count
+      if (node.type === "folder" && node.decompositionStageId && node.children) {
+        console.log(`[enrichTreeWithDrafts] BEFORE: Узел "${node.name}" имеет ${node.children.length} детей`)
+      }
+
+      // Recursively process children first
+      const enrichedChildren = node.children ? enrichTreeWithDrafts(node.children) : undefined
+
+      // DEBUG: Log after recursive processing
+      if (node.type === "folder" && node.decompositionStageId) {
+        console.log(`[enrichTreeWithDrafts] AFTER recursive: Узел "${node.name}" enrichedChildren = ${enrichedChildren?.length || 'undefined'}`)
+      }
+
+      // If this is a decomposition stage folder, add draft if exists
+      if (node.type === "folder" && node.decompositionStageId) {
+        const draft = draftLoadings.get(node.decompositionStageId)
+
+        if (draft) {
+          console.log(`[enrichTreeWithDrafts] Добавление черновика к этапу "${node.name}"`)
+          console.log(`[enrichTreeWithDrafts] До добавления черновика: ${enrichedChildren?.length || 0} детей`)
+
+          // Create draft node
+          const draftNode: FileTreeNode = {
+            id: `draft-${node.decompositionStageId}`,
+            name: `✏️ ${draft.employeeName || "Без сотрудника"}`,
+            type: "file",
+            isDraft: true,
+            decompositionStageId: node.decompositionStageId,
+            draftData: draft,
+          }
+
+          // Add draft to the end of children (after existing loadings)
+          const newChildren = [...(enrichedChildren || []), draftNode]
+          console.log(`[enrichTreeWithDrafts] После добавления черновика: ${newChildren.length} детей`)
+
+          return {
+            ...node,
+            children: newChildren,
+          }
+        }
+      }
+
+      // Return node with enriched children
+      return {
+        ...node,
+        children: enrichedChildren,
+      }
+    })
+  }
+
   // Handle node selection
   const handleNodeSelect = (node: FileTreeNode) => {
     // Helper function to build breadcrumbs
@@ -1118,29 +1268,151 @@ export function LoadingModal({
       return path
     }
 
-    // If it's a decomposition stage folder (for creating new loading)
+    // If it's a decomposition stage folder (for creating new loading or moving existing)
     if (node.type === "folder" && node.decompositionStageId) {
-      setEditingLoadingFromTree(null)
-      setSelectedNode(node)
-      setBreadcrumbs(buildBreadcrumbs(node))
+      // Check if we're in edit mode with an existing loading
+      if (mode === "edit" && editingLoadingFromTree) {
+        // Moving existing loading to a new stage
+        const oldStageId = editingLoadingFromTree.stageId
+        const newStageId = node.decompositionStageId
 
-      // Clear error
-      if (errors.decompositionStageId) {
-        setErrors((prev) => {
-          const newErrors = { ...prev }
-          delete newErrors.decompositionStageId
-          return newErrors
-        })
+        if (oldStageId !== newStageId) {
+          // Update the loading with new decomposition stage
+          const updateLoading = async () => {
+            try {
+              const supabase = createClient()
+              const { error } = await supabase
+                .from("loadings")
+                .update({ decomposition_stage_id: newStageId })
+                .eq("id", editingLoadingFromTree.id)
+
+              if (error) throw error
+
+              // Update local state
+              const updatedLoading = {
+                ...editingLoadingFromTree,
+                stageId: newStageId,
+              }
+              setEditingLoadingFromTree(updatedLoading)
+              await updateLoadingInStore(editingLoadingFromTree.id, { stageId: newStageId })
+
+              // Update selected node and breadcrumbs
+              setSelectedNode(node)
+              setBreadcrumbs(buildBreadcrumbs(node))
+
+              // Show success message
+              setNotification("Загрузка перемещена на новый этап")
+              successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+              // Refresh tree to show updated structure
+              await buildFileTree()
+            } catch (error) {
+              console.error("Error moving loading:", error)
+              setNotification("Ошибка при перемещении загрузки")
+              errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+            }
+          }
+
+          updateLoading()
+        }
+      } else {
+        // Create mode or no stage selected yet
+        // Only select the stage if no stage is currently selected
+        // This prevents changing the selected stage when just browsing the tree
+        const isStageAlreadySelected = selectedNode && selectedNode.decompositionStageId
+
+        if (!isStageAlreadySelected) {
+          // Save current draft before navigating away
+          saveDraftIfNeeded()
+
+          setEditingLoadingFromTree(null)
+          setSelectedNode(node)
+          setBreadcrumbs(buildBreadcrumbs(node))
+
+          // Clear error
+          if (errors.decompositionStageId) {
+            setErrors((prev) => {
+              const newErrors = { ...prev }
+              delete newErrors.decompositionStageId
+              return newErrors
+            })
+          }
+
+          // In create mode, create a draft immediately and select it
+          if (mode === "create" && node.decompositionStageId) {
+            // Create draft with current form data and original employee
+            const draft: DraftLoading = {
+              decompositionStageId: node.decompositionStageId,
+              employeeId: originalEmployeeRef.current?.user_id,
+              employeeName: originalEmployeeRef.current?.full_name,
+              employeeAvatarUrl: originalEmployeeRef.current?.avatar_url ?? undefined,
+              employeeTeamName: originalEmployeeRef.current?.team_name ?? undefined,
+              startDate: formData.startDate,
+              endDate: formData.endDate,
+              rate: formData.rate,
+              comment: formData.comment,
+            }
+
+            // Add draft to the map
+            setDraftLoadings((prev) => {
+              const newDrafts = new Map(prev)
+              newDrafts.set(node.decompositionStageId!, draft)
+              return newDrafts
+            })
+
+            // Mark this draft for auto-selection (useEffect will handle it)
+            pendingDraftSelectionRef.current = node.decompositionStageId
+          }
+        }
+        // If stage is already selected, do nothing (just browsing)
       }
     } else if (node.type === "file") {
-      // If it's a loading node with full loading object, open edit mode
-      if (node.loadingId && node.loading) {
-        // Set editing state
+      // Check if it's a draft node
+      if (node.isDraft && node.draftData) {
+        // Save current draft before switching to another draft
+        saveDraftIfNeeded()
+
+        // Load draft data into form
+        setEditingLoadingFromTree(null)
+        setSelectedNode(node)
+        setBreadcrumbs(buildBreadcrumbs(node))
+
+        // Populate form with draft data
+        if (node.draftData.employeeId) {
+          const draftEmployee: EmployeeSearchResult = {
+            user_id: node.draftData.employeeId,
+            full_name: node.draftData.employeeName || "",
+            first_name: node.draftData.employeeName?.split(" ")[1] || "",
+            last_name: node.draftData.employeeName?.split(" ")[0] || "",
+            email: "",
+            position_name: null,
+            avatar_url: node.draftData.employeeAvatarUrl || null,
+            team_name: node.draftData.employeeTeamName || null,
+            department_name: null,
+            employment_rate: null,
+          }
+          setSelectedEmployee(draftEmployee)
+          setEmployeeSearchTerm(node.draftData.employeeName || "")
+        }
+
+        setFormData({
+          startDate: node.draftData.startDate || formatLocalYMD(new Date())!,
+          endDate: node.draftData.endDate || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+          rate: node.draftData.rate || 1,
+          comment: node.draftData.comment || "",
+        })
+      } else if (node.loadingId && node.loading) {
+        // If it's a loading node with full loading object, open edit mode
+        // Save current draft before switching to edit mode
+        saveDraftIfNeeded()
+
         setEditingLoadingFromTree(node.loading)
         setSelectedNode(node)
         setBreadcrumbs(buildBreadcrumbs(node))
       } else {
         // Regular file node (not a loading) - just select it for create mode
+        saveDraftIfNeeded()
+
         setEditingLoadingFromTree(null)
         setSelectedNode(node)
         setBreadcrumbs(buildBreadcrumbs(node))
@@ -1157,10 +1429,77 @@ export function LoadingModal({
     }
   }
 
+  // Memoize enriched tree with drafts
+  const enrichedTreeData = useMemo(() => {
+    return enrichTreeWithDrafts(treeData)
+  }, [treeData, draftLoadings])
+
+  // Auto-select draft when it's created
+  useEffect(() => {
+    if (!pendingDraftSelectionRef.current) return
+
+    const decompositionStageId = pendingDraftSelectionRef.current
+    const draftNodeId = `draft-${decompositionStageId}`
+
+    // Find the draft node in enriched tree
+    const findDraftNode = (nodes: FileTreeNode[]): FileTreeNode | null => {
+      for (const node of nodes) {
+        if (node.id === draftNodeId) return node
+        if (node.children) {
+          const found = findDraftNode(node.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
+    const draftNode = findDraftNode(enrichedTreeData)
+    if (draftNode) {
+      // Build breadcrumbs for the draft node
+      const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+        const path: FileTreeNode[] = [targetNode]
+        let current = targetNode
+
+        const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+          for (const n of nodes) {
+            if (n.children) {
+              for (const child of n.children) {
+                if (child.id === childId) return n
+              }
+              const found = findParentNode(n.children, childId)
+              if (found) return found
+            }
+          }
+          return null
+        }
+
+        while (current.parentId) {
+          const parent = findParentNode(treeData, current.id)
+          if (parent) {
+            path.unshift(parent)
+            current = parent
+          } else {
+            break
+          }
+        }
+
+        return path
+      }
+
+      // Select the draft node
+      setSelectedNode(draftNode)
+      setBreadcrumbs(buildBreadcrumbs(draftNode))
+
+      // Clear the pending selection
+      pendingDraftSelectionRef.current = null
+    }
+  }, [enrichedTreeData, treeData])
+
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
     const isLoadingNode = node.type === "file" && node.loadingId
+    const isDraftNode = node.type === "file" && node.isDraft
     const isSelected = selectedNode?.id === node.id ||
       (isLoadingNode && editingLoadingFromTree && node.loadingId === editingLoadingFromTree.id)
     const hasChildren = node.children && node.children.length > 0
@@ -1175,15 +1514,27 @@ export function LoadingModal({
         <div
           className={cn(
             "group flex items-center gap-1 py-1 px-2 text-sm cursor-pointer rounded-sm select-none transition-colors duration-150",
+            isDraftNode && theme === "dark" && "bg-yellow-900/20",
+            isDraftNode && theme !== "dark" && "bg-yellow-100",
             isSelected && "bg-primary/10 text-primary border-l-2 border-primary",
-            !isSelected && "hover:bg-accent hover:text-accent-foreground",
+            !isSelected && !isDraftNode && "hover:bg-accent hover:text-accent-foreground",
           )}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
           onClick={() => {
             if (node.type === "folder") {
-              // If it's a decomposition stage, select it for creating loading
+              // If it's a decomposition stage, behavior depends on mode
               if (node.decompositionStageId) {
-                handleNodeSelect(node)
+                // If no stage selected (selection mode) → select stage and expand it
+                if (!selectedNode) {
+                  handleNodeSelect(node)
+                  // Auto-expand to show loadings
+                  if (!expandedFolders.has(node.id)) {
+                    setExpandedFolders(prev => new Set(prev).add(node.id))
+                  }
+                } else {
+                  // If stage already selected (viewing mode) → toggle folder to show loadings
+                  toggleFolder(node.id)
+                }
               } else {
                 // Otherwise, toggle folder expansion
                 toggleFolder(node.id)
@@ -1498,22 +1849,30 @@ export function LoadingModal({
             successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
             setEditingLoadingFromTree(null)
 
+            // Delete draft if it exists for this stage
+            if (selectedNode?.decompositionStageId) {
+              setDraftLoadings((prev) => {
+                const newDrafts = new Map(prev)
+                newDrafts.delete(selectedNode.decompositionStageId!)
+                return newDrafts
+              })
+            }
+
             // Reset form for next loading creation instead of closing
-            setSelectedNode(null)
-            setBreadcrumbs([])
+            // Keep selectedNode and breadcrumbs to preserve stage context
             setFormData({
               startDate: formatLocalYMD(new Date())!,
               endDate: formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
               rate: 1,
               comment: "",
             })
-            // Restore original employee
+            // Restore original employee if creating from employee side
             if (originalEmployeeRef.current) {
               setSelectedEmployee(originalEmployeeRef.current)
               setEmployeeSearchTerm(originalEmployeeRef.current.full_name)
             }
             setErrors({})
-            // Don't call onClose() - keep modal open
+            // Don't call onClose() - keep modal open for next loading
           } else {
             // Edit mode
             const updatedLoading: Partial<Loading> = {
@@ -1671,6 +2030,14 @@ export function LoadingModal({
 
   // Wrapper for onClose to clear editing state
   const handleClose = () => {
+    // Check if there are any unsaved drafts
+    if (draftLoadings.size > 0) {
+      const confirmed = window.confirm("У вас есть несохраненные черновики. Закрыть?")
+      if (!confirmed) {
+        return
+      }
+    }
+
     setEditingLoadingFromTree(null)
     onClose()
   }
@@ -1801,7 +2168,7 @@ export function LoadingModal({
                       </button>
                     </div>
                   ) : (
-                    <div className="p-1">{treeData.map((node) => renderNode(node))}</div>
+                    <div className="p-1">{enrichedTreeData.map((node) => renderNode(node))}</div>
                   )}
                 </div>
               </TooltipProvider>
@@ -1812,29 +2179,35 @@ export function LoadingModal({
               {selectedNode ? (
                 <div className="space-y-6">
                   {/* Breadcrumbs with change stage button */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm flex-wrap">
-                      <button
-                        onClick={() => {
-                          setSelectedNode(null)
-                          setBreadcrumbs([])
-                        }}
-                        className={cn(
-                          "px-3 py-1.5 text-sm rounded border transition-colors",
-                          theme === "dark"
-                            ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
-                            : "border-teal-500 text-teal-600 hover:bg-teal-50"
-                        )}
-                      >
-                        Сменить этап
-                      </button>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
                       {breadcrumbs.map((item, index) => (
                         <div key={item.id} className="flex items-center gap-2">
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           <span className="text-muted-foreground">{item.name}</span>
                         </div>
                       ))}
                     </div>
+                    <button
+                      onClick={() => {
+                        // If in create mode and has a draft, save it before switching
+                        if (mode === "create" && selectedNode?.decompositionStageId) {
+                          saveDraftIfNeeded()
+                        }
+
+                        // Reset selection to allow choosing a new stage
+                        setSelectedNode(null)
+                        setBreadcrumbs([])
+                      }}
+                      className={cn(
+                        "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
+                        theme === "dark"
+                          ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
+                          : "border-teal-500 text-teal-600 hover:bg-teal-50"
+                      )}
+                    >
+                      Сменить этап
+                    </button>
                   </div>
 
                   {/* Employee Selector */}

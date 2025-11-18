@@ -218,8 +218,10 @@ CREATE TABLE public.departments (
   department_name text UNIQUE,
   department_id uuid NOT NULL,
   department_head_id uuid,
+  subdivision_id uuid,
   CONSTRAINT departments_pkey PRIMARY KEY (department_id),
-  CONSTRAINT departments_department_head_id_fkey FOREIGN KEY (department_head_id) REFERENCES public.profiles(user_id)
+  CONSTRAINT departments_department_head_id_fkey FOREIGN KEY (department_head_id) REFERENCES public.profiles(user_id),
+  CONSTRAINT departments_subdivision_id_fkey FOREIGN KEY (subdivision_id) REFERENCES public.subdivisions(subdivision_id)
 );
 CREATE TABLE public.documents (
   id bigint NOT NULL DEFAULT nextval('documents_id_seq'::regclass),
@@ -379,13 +381,15 @@ CREATE TABLE public.profiles (
   is_hourly boolean DEFAULT true,
   avatar_url text,
   city_id uuid,
+  subdivision_id uuid,
   CONSTRAINT profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT profiles_department_membership_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
   CONSTRAINT profiles_team_membership_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id),
   CONSTRAINT profiles_position_id_fkey FOREIGN KEY (position_id) REFERENCES public.positions(position_id),
   CONSTRAINT profiles_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(category_id),
   CONSTRAINT profiles_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id),
-  CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT profiles_subdivision_id_fkey FOREIGN KEY (subdivision_id) REFERENCES public.subdivisions(subdivision_id)
 );
 CREATE TABLE public.project_deletion_log (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -506,6 +510,15 @@ CREATE TABLE public.stages (
   external_updated_at timestamp without time zone,
   CONSTRAINT stages_pkey PRIMARY KEY (stage_id),
   CONSTRAINT stages_stage_project_id_fkey FOREIGN KEY (stage_project_id) REFERENCES public.projects(project_id)
+);
+CREATE TABLE public.subdivisions (
+  subdivision_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subdivision_name text NOT NULL UNIQUE,
+  subdivision_head_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT subdivisions_pkey PRIMARY KEY (subdivision_id),
+  CONSTRAINT subdivisions_subdivision_head_id_fkey FOREIGN KEY (subdivision_head_id) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.tasks (
   task_id uuid NOT NULL DEFAULT gen_random_uuid(),
