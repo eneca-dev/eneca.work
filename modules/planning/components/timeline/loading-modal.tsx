@@ -1218,6 +1218,7 @@ export function LoadingModal({
             isDraft: true,
             decompositionStageId: node.decompositionStageId,
             draftData: draft,
+            parentId: node.id,
           }
 
           // Add draft to the end of children (after existing loadings)
@@ -1497,7 +1498,7 @@ export function LoadingModal({
         }
 
         while (current.parentId) {
-          const parent = findParentNode(treeData, current.id)
+          const parent = findParentNode(enrichedTreeData, current.id)
           if (parent) {
             path.unshift(parent)
             current = parent
