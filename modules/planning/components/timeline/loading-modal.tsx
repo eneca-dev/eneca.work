@@ -91,6 +91,7 @@ interface EmployeeSearchResult {
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+const DROPDOWN_MAX_HEIGHT_PX = 256
 
 export function LoadingModal({
   isOpen,
@@ -199,6 +200,15 @@ export function LoadingModal({
         }
       : null,
   )
+
+  // Dropdown positioning
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    openUp: boolean
+  } | null>(null)
 
   // SectionPanel state
   const [showSectionPanel, setShowSectionPanel] = useState(false)
@@ -594,6 +604,20 @@ export function LoadingModal({
     } finally {
       setIsLoadingEmployees(false)
     }
+  }, [])
+
+  // Update dropdown position
+  const updateDropdownPosition = useCallback(() => {
+    if (!inputWrapperRef.current) return
+    const rect = inputWrapperRef.current.getBoundingClientRect()
+    const viewportSpaceBelow = window.innerHeight - rect.bottom
+    const openUp = viewportSpaceBelow < DROPDOWN_MAX_HEIGHT_PX / 2 && rect.top > viewportSpaceBelow
+    setDropdownPosition({
+      left: rect.left,
+      top: openUp ? rect.top : rect.bottom,
+      width: rect.width,
+      openUp,
+    })
   }, [])
 
   // Create basic decomposition stage
@@ -1006,6 +1030,20 @@ export function LoadingModal({
     }
   }, [mode, loading, editingLoadingFromTree, employees])
 
+  // Update dropdown position on scroll/resize
+  useEffect(() => {
+    if (!showEmployeeDropdown) return
+    updateDropdownPosition()
+    const handlers = [
+      ['scroll', updateDropdownPosition, true],
+      ['resize', updateDropdownPosition, false],
+    ] as const
+    handlers.forEach(([event, fn, capture]) =>
+      window.addEventListener(event, fn as EventListener, capture))
+    return () => handlers.forEach(([event, fn, capture]) =>
+      window.removeEventListener(event, fn as EventListener, capture))
+  }, [showEmployeeDropdown, updateDropdownPosition])
+
   // Toggle folder expansion
   const toggleFolder = (folderId: string) => {
     const isExpanding = !expandedFolders.has(folderId)
@@ -1049,57 +1087,41 @@ export function LoadingModal({
         // Set editing state
         setEditingLoadingFromTree(node.loading)
 
-        // Find the parent decomposition stage node for tree display
-        const findParentDecompStage = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-          for (const n of nodes) {
-            if (n.children) {
-              for (const child of n.children) {
-                if (child.id === childId && n.decompositionStageId) return n
-              }
-              const found = findParentDecompStage(n.children, childId)
-              if (found) return found
-            }
-          }
-          return null
-        }
+        // Select the loading node itself (not the parent)
+        setSelectedNode(node)
 
-        const parentStage = findParentDecompStage(treeData, node.id)
-        if (parentStage) {
-          setSelectedNode(parentStage)
+        // Build breadcrumbs for the loading node
+        const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
+          const path: FileTreeNode[] = [targetNode]
+          let current = targetNode
 
-          // Build breadcrumbs for parent stage
-          const buildBreadcrumbs = (targetNode: FileTreeNode): FileTreeNode[] => {
-            const path: FileTreeNode[] = [targetNode]
-            let current = targetNode
-
-            const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-              for (const n of nodes) {
-                if (n.children) {
-                  for (const child of n.children) {
-                    if (child.id === childId) return n
-                  }
-                  const found = findParentNode(n.children, childId)
-                  if (found) return found
+          const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+            for (const n of nodes) {
+              if (n.children) {
+                for (const child of n.children) {
+                  if (child.id === childId) return n
                 }
-              }
-              return null
-            }
-
-            while (current.parentId) {
-              const parent = findParentNode(treeData, current.id)
-              if (parent) {
-                path.unshift(parent)
-                current = parent
-              } else {
-                break
+                const found = findParentNode(n.children, childId)
+                if (found) return found
               }
             }
-
-            return path
+            return null
           }
 
-          setBreadcrumbs(buildBreadcrumbs(parentStage))
+          while (current.parentId) {
+            const parent = findParentNode(treeData, current.id)
+            if (parent) {
+              path.unshift(parent)
+              current = parent
+            } else {
+              break
+            }
+          }
+
+          return path
         }
+
+        setBreadcrumbs(buildBreadcrumbs(node))
       } else {
         // Regular file node (not a loading) - just select it for create mode
         setEditingLoadingFromTree(null)
@@ -1153,13 +1175,14 @@ export function LoadingModal({
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
-    const isSelected = selectedNode?.id === node.id
+    const isLoadingNode = node.type === "file" && node.loadingId
+    const isSelected = selectedNode?.id === node.id ||
+      (isLoadingNode && editingLoadingFromTree && node.loadingId === editingLoadingFromTree.id)
     const hasChildren = node.children && node.children.length > 0
     const isLoading = loadingNodes.has(node.id)
     const isSectionNode = node.type === "folder" && node.sectionId && !node.decompositionStageId
     const isProjectNode = node.type === "folder" && node.projectId && !node.stageId
     const isDecompositionStageNode = node.type === "folder" && node.decompositionStageId
-    const isLoadingNode = node.type === "file" && node.loadingId
     const isRefreshingProject = refreshingProjects.has(node.id)
 
     return (
@@ -1385,7 +1408,7 @@ export function LoadingModal({
       newErrors.employee = "Необходимо выбрать сотрудника"
     }
 
-    if (!selectedNode || !selectedNode.decompositionStageId) {
+    if (!selectedNode || (!selectedNode.decompositionStageId && !selectedNode.loadingId)) {
       newErrors.decompositionStageId = "Необходимо выбрать этап декомпозиции"
     }
 
@@ -1419,6 +1442,28 @@ export function LoadingModal({
           span.setAttribute("loading.rate", formData.rate)
 
           if (!isEditMode) {
+            // Get decomposition stage name (if selectedNode is loading node, get it from parent)
+            let decompositionStageName = selectedNode!.name
+            if (selectedNode!.loadingId) {
+              // If it's a loading node, we need to find the parent decomposition stage for the name
+              const findParentDecompStage = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+                for (const n of nodes) {
+                  if (n.children) {
+                    for (const child of n.children) {
+                      if (child.id === childId && n.decompositionStageId) return n
+                    }
+                    const found = findParentDecompStage(n.children, childId)
+                    if (found) return found
+                  }
+                }
+                return null
+              }
+              const parentStage = findParentDecompStage(treeData, selectedNode!.id)
+              if (parentStage) {
+                decompositionStageName = parentStage.name
+              }
+            }
+
             // Fetch project and section names
             const { data: sectionData } = await supabase
               .from("view_section_hierarchy")
@@ -1437,7 +1482,7 @@ export function LoadingModal({
               projectName: sectionData?.project_name,
               sectionName: sectionData?.section_name,
               decompositionStageId: selectedNode!.decompositionStageId!,
-              decompositionStageName: selectedNode!.name,
+              decompositionStageName,
               responsibleName: selectedEmployee!.full_name,
               responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
               responsibleTeamName: selectedEmployee!.team_name || undefined,
@@ -1474,7 +1519,29 @@ export function LoadingModal({
             // Update stage if changed
             if (selectedNode!.decompositionStageId !== loadingToEdit!.stageId) {
               updatedLoading.stageId = selectedNode!.decompositionStageId
-              updatedLoading.stageName = selectedNode!.name
+
+              // Get decomposition stage name (if selectedNode is loading node, get it from parent)
+              let decompositionStageName = selectedNode!.name
+              if (selectedNode!.loadingId) {
+                const findParentDecompStage = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+                  for (const n of nodes) {
+                    if (n.children) {
+                      for (const child of n.children) {
+                        if (child.id === childId && n.decompositionStageId) return n
+                      }
+                      const found = findParentDecompStage(n.children, childId)
+                      if (found) return found
+                    }
+                  }
+                  return null
+                }
+                const parentStage = findParentDecompStage(treeData, selectedNode!.id)
+                if (parentStage) {
+                  decompositionStageName = parentStage.name
+                }
+              }
+
+              updatedLoading.stageName = decompositionStageName
             }
 
             // Update employee if changed
@@ -1750,7 +1817,7 @@ export function LoadingModal({
                   {/* Employee Selector */}
                   <div>
                     <label className="block text-sm font-medium mb-1 dark:text-slate-300">Сотрудник</label>
-                    <div className="relative">
+                    <div className="relative" ref={inputWrapperRef}>
                       <input
                         type="text"
                         value={employeeSearchTerm}
@@ -1779,41 +1846,82 @@ export function LoadingModal({
                         )}
                       />
 
-                      {showEmployeeDropdown && filteredEmployees.length > 0 && !selectedEmployee && (
-                        <div
-                          className={cn(
-                            "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border",
-                            theme === "dark" ? "bg-slate-800 border-slate-600" : "bg-white border-slate-300",
-                          )}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          {filteredEmployees.map((emp) => (
+                      {showEmployeeDropdown && filteredEmployees.length > 0 && dropdownPosition && typeof document !== 'undefined' && (
+                        (typeof window !== 'undefined' && typeof require !== 'undefined') && (
+                          require('react-dom').createPortal(
                             <div
-                              key={emp.user_id}
-                              onMouseDown={(e) => {
-                                e.preventDefault()
-                                handleEmployeeSelect(emp)
+                              style={{
+                                position: 'fixed',
+                                left: dropdownPosition.left,
+                                top: dropdownPosition.top,
+                                width: dropdownPosition.width,
+                                transform: dropdownPosition.openUp
+                                  ? 'translateY(-8px) translateY(-100%)'
+                                  : 'translateY(8px)',
                               }}
-                              className={cn(
-                                "px-3 py-2 cursor-pointer text-sm flex items-center space-x-3",
-                                theme === "dark" ? "hover:bg-slate-600 text-slate-200" : "hover:bg-slate-50 text-slate-800",
-                              )}
+                              className="z-50"
+                              onMouseDown={(e) => e.preventDefault()}
                             >
-                              <Avatar
-                                name={emp.full_name}
-                                avatarUrl={emp.avatar_url}
-                                theme={theme === "dark" ? "dark" : "light"}
-                                size="sm"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">{emp.full_name}</div>
-                                <div className={cn("text-xs truncate", theme === "dark" ? "text-slate-400" : "text-slate-500")}>
-                                  {emp.position_name || "Должность не указана"}
+                              <div className={cn(
+                                "border rounded shadow-xl ring-1 ring-black/5 overflow-hidden",
+                                theme === "dark" ? "bg-slate-700 border-slate-600" : "bg-white border-gray-200"
+                              )}>
+                                <div className={cn(
+                                  "sticky top-0 backdrop-blur px-3 py-2 border-b text-xs uppercase tracking-wide",
+                                  theme === "dark"
+                                    ? "bg-slate-700/90 border-slate-600 text-slate-400"
+                                    : "bg-white/90 border-gray-100 text-slate-500"
+                                )}>
+                                  Сотрудник
+                                </div>
+                                <div
+                                  className="overflow-y-auto overscroll-contain"
+                                  style={{ maxHeight: DROPDOWN_MAX_HEIGHT_PX }}
+                                >
+                                  {filteredEmployees.map((emp) => {
+                                    const isSelected = emp.user_id === selectedEmployee?.user_id
+                                    return (
+                                      <button
+                                        key={emp.user_id}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault()
+                                          handleEmployeeSelect(emp)
+                                        }}
+                                        className={cn(
+                                          "w-full text-left px-3 py-2 cursor-pointer flex items-center space-x-3",
+                                          isSelected && (theme === "dark"
+                                            ? "bg-teal-900/30 text-teal-200"
+                                            : "bg-teal-50 text-teal-900"),
+                                          !isSelected && (theme === "dark"
+                                            ? "hover:bg-slate-600 text-slate-200"
+                                            : "hover:bg-slate-50 text-slate-800")
+                                        )}
+                                      >
+                                      <Avatar
+                                        name={emp.full_name}
+                                        avatarUrl={emp.avatar_url}
+                                        theme={theme === "dark" ? "dark" : "light"}
+                                        size="sm"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium truncate">{emp.full_name}</div>
+                                        <div className={cn(
+                                          "text-xs truncate",
+                                          theme === "dark" ? "text-slate-400" : "text-slate-500"
+                                        )}>
+                                          {emp.position_name || "Должность не указана"}
+                                        </div>
+                                      </div>
+                                    </button>
+                                    )
+                                  })}
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            </div>,
+                            document.body
+                          )
+                        )
                       )}
                     </div>
                     {errors.employee && <p className="text-xs text-red-500 mt-1">{errors.employee}</p>}
