@@ -133,15 +133,15 @@ export function LoadingModal({
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
   // Helper function for date formatting
-  const formatLocalYMD = (date: Date): string | null => {
+  const formatLocalYMD = useCallback((date: Date): string | null => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, "0")
     const day = String(date.getDate()).padStart(2, "0")
     return `${year}-${month}-${day}`
-  }
+  }, [])
 
-  const normalizeDateValue = (val?: Date | string) => {
+  const normalizeDateValue = useCallback((val?: Date | string) => {
     if (!val) return null
     try {
       if (typeof val === "string") {
@@ -153,7 +153,7 @@ export function LoadingModal({
     } catch {
       return null
     }
-  }
+  }, [formatLocalYMD])
 
   // Form data initialization
   const [formData, setFormData] = useState({
@@ -233,6 +233,16 @@ export function LoadingModal({
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
   const hasLoadedTreeRef = useRef(false)
+
+  // Ref to store original values in edit mode for change detection
+  const originalValuesRef = useRef({
+    startDate: "",
+    endDate: "",
+    rate: 0,
+    comment: "",
+    employeeId: "",
+    stageId: "",
+  })
 
   // Cleanup timeouts
   useEffect(() => {
@@ -949,6 +959,25 @@ export function LoadingModal({
     }
   }, [mode, loading, employees])
 
+  // Initialize original values in edit mode for change detection
+  // ВАЖНО: Выполняется ПОСЛЕ того, как selectedEmployee и selectedNode установлены
+  useEffect(() => {
+    if (mode === "edit" && loading && selectedEmployee && selectedNode) {
+      // Инициализируем только один раз, когда все данные готовы и ref еще пуст
+      if (originalValuesRef.current.employeeId === "") {
+        originalValuesRef.current = {
+          startDate: normalizeDateValue(loading.startDate) || "",
+          endDate: normalizeDateValue(loading.endDate) || "",
+          rate: loading.rate ?? 1,
+          comment: loading.comment || "",
+          employeeId: selectedEmployee.user_id,
+          stageId: selectedNode.decompositionStageId || "",
+        }
+        console.log("[LoadingModal] ✅ Исходные значения сохранены (все данные готовы):", originalValuesRef.current)
+      }
+    }
+  }, [mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, loading?.responsibleId, loading?.stageId, selectedEmployee?.user_id, selectedNode?.decompositionStageId, normalizeDateValue])
+
   // Reset modal state when reopening in create mode
   useEffect(() => {
     if (isOpen && mode === "create") {
@@ -979,7 +1008,32 @@ export function LoadingModal({
       // Clear errors
       setErrors({})
     }
-  }, [isOpen, mode])
+
+    // Reset originalValuesRef when modal closes (for both modes)
+    if (!isOpen) {
+      originalValuesRef.current = {
+        startDate: "",
+        endDate: "",
+        rate: 0,
+        comment: "",
+        employeeId: "",
+        stageId: "",
+      }
+      console.log("[LoadingModal] 🔄 originalValuesRef сброшен при закрытии модалки")
+
+      // Сбросить formData к исходным значениям из loading (для edit mode)
+      // Это отменяет все несохранённые изменения
+      if (mode === "edit" && loading) {
+        setFormData({
+          startDate: normalizeDateValue(loading.startDate) || formatLocalYMD(new Date())!,
+          endDate: normalizeDateValue(loading.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+          rate: loading.rate ?? 1,
+          comment: loading.comment || "",
+        })
+        console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading")
+      }
+    }
+  }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
@@ -1079,6 +1133,49 @@ export function LoadingModal({
       }
     }
   }
+
+  // Check if any field has changed in edit mode
+  const hasChanges = useMemo(() => {
+    // In create mode, always allow saving (if validation passes)
+    if (mode === "create") return true
+
+    // Если originalValues еще не инициализированы (данные еще загружаются), считаем что изменений нет
+    if (originalValuesRef.current.employeeId === "") {
+      console.log("[LoadingModal] ⚠️ originalValues еще не инициализированы, кнопка неактивна")
+      return false
+    }
+
+    // In edit mode, check if any field differs from original
+    const startDateChanged = formData.startDate !== originalValuesRef.current.startDate
+    const endDateChanged = formData.endDate !== originalValuesRef.current.endDate
+    const rateChanged = formData.rate !== originalValuesRef.current.rate
+    const commentChanged = (formData.comment || "") !== (originalValuesRef.current.comment || "")
+    const employeeChanged = (selectedEmployee?.user_id || "") !== (originalValuesRef.current.employeeId || "")
+    const stageChanged = (selectedNode?.decompositionStageId || "") !== (originalValuesRef.current.stageId || "")
+
+    const changed = startDateChanged || endDateChanged || rateChanged || commentChanged || employeeChanged || stageChanged
+
+    console.log("[LoadingModal] Проверка изменений:", {
+      startDateChanged,
+      endDateChanged,
+      rateChanged,
+      commentChanged,
+      employeeChanged,
+      stageChanged,
+      hasChanges: changed,
+      current: {
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        rate: formData.rate,
+        comment: formData.comment,
+        employeeId: selectedEmployee?.user_id,
+        stageId: selectedNode?.decompositionStageId,
+      },
+      original: originalValuesRef.current,
+    })
+
+    return changed
+  }, [mode, formData, selectedEmployee, selectedNode])
 
   // Filter projects by search term
   const filteredTreeData = useMemo(() => {
@@ -1963,7 +2060,8 @@ export function LoadingModal({
                           new Date(formData.startDate) > new Date(formData.endDate) ||
                           formData.rate <= 0 ||
                           formData.rate > 2 ||
-                          !selectedNode?.decompositionStageId
+                          !selectedNode?.decompositionStageId ||
+                          (mode === "edit" && !hasChanges)
                         }
                         className={cn(
                           "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
@@ -1977,7 +2075,8 @@ export function LoadingModal({
                             new Date(formData.startDate) > new Date(formData.endDate) ||
                             formData.rate <= 0 ||
                             formData.rate > 2 ||
-                            !selectedNode?.decompositionStageId) &&
+                            !selectedNode?.decompositionStageId ||
+                            (mode === "edit" && !hasChanges)) &&
                             "opacity-50 cursor-not-allowed",
                         )}
                       >
@@ -1988,13 +2087,22 @@ export function LoadingModal({
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  {originalEmployeeRef.current && (
-                    <p className="text-sm text-muted-foreground text-center max-w-md">
-                      Выберите этап из дерева слева для создания загрузки на сотрудника{" "}
-                      <span className="font-medium text-foreground">
-                        {originalEmployeeRef.current.full_name}
-                      </span>
-                    </p>
+                  {mode === "edit" && originalValuesRef.current.employeeId === "" ? (
+                    // Loading spinner for edit mode while data is being loaded
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                      <p className="text-sm text-muted-foreground">Загрузка данных...</p>
+                    </div>
+                  ) : (
+                    // Message for create mode - select a stage
+                    originalEmployeeRef.current && (
+                      <p className="text-sm text-muted-foreground text-center max-w-md">
+                        Выберите этап из дерева слева для создания загрузки на сотрудника{" "}
+                        <span className="font-medium text-foreground">
+                          {originalEmployeeRef.current.full_name}
+                        </span>
+                      </p>
+                    )
                   )}
                 </div>
               )}
