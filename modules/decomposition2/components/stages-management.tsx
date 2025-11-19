@@ -370,7 +370,6 @@ function SortableStage({
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
                     <th className="w-8 pb-2 pt-0"></th>
-                    <th className="w-8 pb-2 pt-0"></th>
                     <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Описание
                     </th>
@@ -383,8 +382,8 @@ function SortableStage({
                     <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Ответственный
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Часы
+                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
+                      Факт ч./План ч.
                     </th>
                     <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Прогресс
@@ -815,7 +814,7 @@ function SortableDecompositionRow({
         </Select>
       </td>
       <td className="py-1.5 px-2">
-        <div className="relative w-[200px]" ref={responsibleContainerRef}>
+        <div className="relative w-[175px]" ref={responsibleContainerRef}>
           <input
             type="text"
             value={employeeSearchTerm}
@@ -902,21 +901,33 @@ function SortableDecompositionRow({
           }
         </div>
       </td>
-      <td className="py-1.5 px-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground tabular-nums min-w-[24px] text-right">
+      <td className="py-1.5 pl-2 pr-1">
+        <div className="flex items-center gap-1">
+          <div className="h-6 w-[48px] flex items-center justify-center border-0 bg-muted/40 shadow-none rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums">
             {Number(actualByItemId[decomposition.id] || 0).toFixed(2)}
-          </span>
+          </div>
           <span className="text-xs text-muted-foreground/50">/</span>
           <Input
             type="number"
             value={decomposition.plannedHours}
             onChange={(e) => {
-              onUpdate(stageId, decomposition.id, { plannedHours: Number.parseInt((e.target as HTMLInputElement).value) || 0 });
+              const val = e.target.value;
+              const num = parseFloat(val);
+              onUpdate(stageId, decomposition.id, { plannedHours: isNaN(num) || num < 0 ? 0 : num });
               markInteracted();
             }}
+            onInput={(e) => {
+              const input = e.target as HTMLInputElement;
+              input.value = input.value.replace(/[^0-9.]/g, '');
+            }}
+            onFocus={(e) => {
+              // Если значение 0, выделяем весь текст - тогда при вводе цифры 0 заменится
+              if (decomposition.plannedHours === 0) {
+                e.target.select();
+              }
+            }}
             onKeyDown={handleKeyDown}
-            className="h-6 w-[45px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center"
+            className="h-6 w-[48px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             ref={plannedHoursInputRef}
           />
         </div>
@@ -1369,7 +1380,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       const defCategoryId = categoryNameToId.get(defCategoryName) || null;
       const defDifficultyName = difficultyOptions[0] || '';
       const defDifficultyId = defDifficultyName ? (difficultyNameToId.get(defDifficultyName) || null) : null;
-      const defStatusName = statusOptions[0] || '';
+      const defStatusName = (statuses.find((s) => /план/i.test(s.name))?.name ?? statusOptions[0]) || '';
       const defStatusId = defStatusName ? (statusNameToId.get(defStatusName) || null) : null;
 
       const { data, error } = await supabase
@@ -1502,8 +1513,14 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (updates.typeOfWork !== undefined) payload.decomposition_item_work_category_id = categoryNameToId.get(updates.typeOfWork) || null;
       if (updates.difficulty !== undefined) payload.decomposition_item_difficulty_id = difficultyNameToId.get(updates.difficulty) || null;
       if (updates.responsible !== undefined) payload.decomposition_item_responsible = updates.responsible ? (profileNameToId.get(updates.responsible) || null) : null;
-      if (updates.plannedHours !== undefined) payload.decomposition_item_planned_hours = Number(updates.plannedHours) || 0;
-      if (updates.progress !== undefined) payload.decomposition_item_progress = Number(updates.progress) || 0;
+      if (updates.plannedHours !== undefined) {
+        const hours = Number(updates.plannedHours);
+        payload.decomposition_item_planned_hours = isNaN(hours) || hours < 0 ? 0 : hours;
+      }
+      if (updates.progress !== undefined) {
+        const progress = Number(updates.progress);
+        payload.decomposition_item_progress = isNaN(progress) || progress < 0 ? 0 : Math.min(progress, 100);
+      }
       if (updates.status !== undefined) payload.decomposition_item_status_id = statusNameToId.get(updates.status) || null;
       if (updates.completionDate !== undefined) payload.decomposition_item_planned_due_date = updates.completionDate || null;
       if (Object.keys(payload).length === 0) return;

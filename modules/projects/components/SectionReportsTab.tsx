@@ -21,15 +21,40 @@ interface WorkLogRow {
   work_log_amount: number
 }
 
+// Хук для сохранения состояния в localStorage
+function useLocalStorageState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    if (typeof window === 'undefined') return initialValue
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error)
+      return initialValue
+    }
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state))
+    } catch (error) {
+      console.error(`Error saving ${key} to localStorage:`, error)
+    }
+  }, [key, state])
+
+  return [state, setState]
+}
+
 const supabase = createClient()
 
 export default function SectionReportsTab({ sectionId }: SectionReportsTabProps) {
   const [rows, setRows] = useState<WorkLogRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [dateFrom, setDateFrom] = useState<string>("")
-  const [dateTo, setDateTo] = useState<string>("")
+  const [dateFrom, setDateFrom] = useLocalStorageState<string>('section-reports-dateFrom', "")
+  const [dateTo, setDateTo] = useLocalStorageState<string>('section-reports-dateTo', "")
   const [range, setRange] = useState<DateRange | null>(null)
-  const [preset, setPreset] = useState<'7d' | 'm' | 'q' | 'y' | 'all'>('m')
+  const [preset, setPreset] = useLocalStorageState<'7d' | 'm' | 'q' | 'y' | 'all' | null>('section-reports-preset', 'm')
 
   const formatLocalYMD = (d: Date): string => {
     const y = d.getFullYear()
@@ -38,8 +63,23 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
     return `${y}-${m}-${day}`
   }
 
+  // Восстанавливаем range из сохраненных dateFrom/dateTo при монтировании
+  useEffect(() => {
+    if (dateFrom || dateTo) {
+      const fromDate = dateFrom ? new Date(dateFrom) : null
+      const toDate = dateTo ? new Date(dateTo) : null
+      setRange({
+        from: fromDate && !isNaN(fromDate.getTime()) ? fromDate : null,
+        to: toDate && !isNaN(toDate.getTime()) ? toDate : null
+      })
+    }
+  }, []) // Только при монтировании
+
   // Устанавливаем диапазон по пресету
   useEffect(() => {
+    // Если preset === null, значит используется custom диапазон из DateRangePicker
+    if (preset === null) return
+
     const now = new Date()
     const to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     let from: Date | null = null
@@ -76,7 +116,7 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
           'work_log_id, work_log_date, author_name, decomposition_item_description, work_category_name, work_log_description, work_log_hours, work_log_hourly_rate, work_log_amount'
         )
         .eq('section_id', sectionId)
-        .order('work_log_date', { ascending: false })
+        .order('work_log_date', { ascending: true })
 
       if (dateFrom) query = query.gte('work_log_date', dateFrom)
       if (dateTo) query = query.lte('work_log_date', dateTo)
@@ -127,7 +167,13 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
             <button
               key={k}
               onClick={() => setPreset(k as any)}
-              className={`px-2 py-1 text-xs rounded ${preset === k ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+              className={`px-2 py-1 text-xs rounded ${
+                preset === k
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+                  : preset === null
+                  ? 'text-slate-400 dark:text-slate-600'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
             >
               {t}
             </button>
@@ -143,6 +189,8 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
                 const toStr = r?.to ? formatLocalYMD(new Date(r.to.getFullYear(), r.to.getMonth(), r.to.getDate())) : ''
                 setDateFrom(fromStr)
                 setDateTo(toStr)
+                // Сбрасываем preset при выборе custom диапазона
+                setPreset(null)
               }}
               placeholder="Выберите период"
               calendarWidth="500px"
