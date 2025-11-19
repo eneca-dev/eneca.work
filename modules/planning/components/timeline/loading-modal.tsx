@@ -434,7 +434,7 @@ export function LoadingModal({
 
 
   // Load children for a specific node using optimized view
-  const loadNodeChildren = useCallback(async (node: FileTreeNode) => {
+  const loadNodeChildren = useCallback(async (node: FileTreeNode, forceRefresh = false) => {
     if (!node.projectId || loadingNodes.has(node.id)) {
       return
     }
@@ -444,8 +444,8 @@ export function LoadingModal({
     try {
       console.log(`[LoadingModal] Загрузка данных для проекта: ${node.name}`)
 
-      // Check cache first
-      let projectData = projectDataCache.get(node.projectId)
+      // Check cache first (unless forceRefresh is true)
+      let projectData = forceRefresh ? null : projectDataCache.get(node.projectId)
 
       if (!projectData) {
         // Fetch all project data from view in ONE query
@@ -650,9 +650,15 @@ export function LoadingModal({
 
       const projectNode = findProjectNode(treeData)
       if (projectNode && sectionNode.projectId) {
-        // Clear cache and reload the project's children to show the new stage
-        clearProjectCache(sectionNode.projectId)
-        await loadNodeChildren(projectNode)
+        // Clear cache synchronously and reload the project's children to show the new stage
+        setProjectDataCache((prev) => {
+          const next = new Map(prev)
+          next.delete(sectionNode.projectId!)
+          return next
+        })
+        // Small delay to ensure state update
+        await new Promise(resolve => setTimeout(resolve, 0))
+        await loadNodeChildren(projectNode, true)
 
         // Expand the section to show the new stage
         setExpandedFolders((prev) => new Set(prev).add(sectionNode.id))
@@ -691,7 +697,16 @@ export function LoadingModal({
 
     setRefreshingProjects((prev) => new Set(prev).add(projectId))
     try {
-      await loadNodeChildren(projectNode)
+      // Clear cache synchronously before reloading
+      console.log(`[LoadingModal] Принудительное обновление проекта: ${projectNode.name}`)
+      setProjectDataCache((prev) => {
+        const next = new Map(prev)
+        next.delete(projectNode.projectId!)
+        return next
+      })
+      // Small delay to ensure state update
+      await new Promise(resolve => setTimeout(resolve, 0))
+      await loadNodeChildren(projectNode, true)
       setNotification(`Проект "${projectNode.name}" обновлён`)
       successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
     } catch (error) {
@@ -726,6 +741,12 @@ export function LoadingModal({
 
     setIsRefreshingAll(true)
     try {
+      console.log("[LoadingModal] Полное обновление: очистка всего кэша и перезагрузка списка проектов")
+      // Clear entire cache to force fresh data on next expand
+      setProjectDataCache(new Map())
+      // Reset expanded folders so they reload when re-expanded
+      setExpandedFolders(new Set())
+      // Rebuild project list
       await buildFileTree()
       setNotification("Список проектов обновлён")
       successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
@@ -2175,7 +2196,26 @@ export function LoadingModal({
       {showSectionPanel && selectedNode?.sectionId && (
         <SectionPanel
           isOpen={showSectionPanel}
-          onClose={() => setShowSectionPanel(false)}
+          onClose={() => {
+            setShowSectionPanel(false)
+            // Clear cache and reload project tree after decomposition changes
+            if (selectedNode?.projectId) {
+              console.log(`[LoadingModal] Обновление дерева после изменений в декомпозиции проекта: ${selectedNode.projectId}`)
+              setProjectDataCache((prev) => {
+                const next = new Map(prev)
+                next.delete(selectedNode.projectId!)
+                return next
+              })
+              // Find and reload the project node
+              const projectNode = treeData.find(n => n.id === `project-${selectedNode.projectId}`)
+              if (projectNode) {
+                // Small delay to ensure state update
+                setTimeout(() => {
+                  loadNodeChildren(projectNode, true)
+                }, 0)
+              }
+            }
+          }}
           sectionId={selectedNode.sectionId}
           initialTab="decomposition"
           statuses={statuses}
