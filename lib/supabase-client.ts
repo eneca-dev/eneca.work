@@ -122,6 +122,9 @@ interface LoadingUpdateData {
   loading_finish?: string
   loading_rate?: number
   loading_section?: string
+  loading_responsible?: string
+  loading_stage?: string
+  loading_comment?: string
 }
 
 
@@ -680,6 +683,9 @@ export async function updateLoading(
     rate?: number
     projectId?: string
     sectionId?: string
+    responsibleId?: string
+    stageId?: string
+    comment?: string
   },
 ): Promise<{ 
   success: boolean; 
@@ -713,6 +719,15 @@ export async function updateLoading(
     }
     if (updates.sectionId) {
       updateData.loading_section = updates.sectionId
+    }
+    if (updates.responsibleId) {
+      updateData.loading_responsible = updates.responsibleId
+    }
+    if (updates.stageId) {
+      updateData.loading_stage = updates.stageId
+    }
+    if (updates.comment !== undefined) {
+      updateData.loading_comment = updates.comment
     }
 
     console.log("Обновление загрузки:", loadingId, updateData)

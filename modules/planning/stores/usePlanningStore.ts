@@ -1321,6 +1321,15 @@ export const usePlanningStore = create<PlanningState>()(
             if (updates.projectId) {
               apiUpdates.projectId = updates.projectId
             }
+            if (updates.responsibleId) {
+              apiUpdates.responsibleId = updates.responsibleId
+            }
+            if (updates.stageId) {
+              apiUpdates.stageId = updates.stageId
+            }
+            if (updates.comment !== undefined) {
+              apiUpdates.comment = updates.comment
+            }
 
             // Импортируем функцию обновления
             const { updateLoading: updateLoadingAPI } = await import("@/lib/supabase-client")
