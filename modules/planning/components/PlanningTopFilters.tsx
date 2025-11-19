@@ -157,7 +157,12 @@ function DatePickerCalendar({ value, onChange, triggerClassName, daysToShow = 18
     const start = date
     const end = new Date(date)
     end.setDate(end.getDate() + Math.max(daysToShow - 1, 0))
-    const fmt = (d: Date) => d.toLocaleDateString()
+    const fmt = (d: Date) => {
+      const dd = String(d.getDate()).padStart(2, "0")
+      const mm = String(d.getMonth() + 1).padStart(2, "0")
+      const yyyy = String(d.getFullYear())
+      return `${dd}.${mm}.${yyyy}`
+    }
     return `${fmt(start)} — ${fmt(end)}`
   }
 
