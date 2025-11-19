@@ -31,6 +31,7 @@ import {
   DollarSign,
   Network,
   X,
+  RefreshCw,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -51,6 +52,8 @@ import * as Sentry from "@sentry/nextjs"
 interface UsersListProps {
   users: User[]
   onUserUpdated?: () => void
+  onRefresh?: () => Promise<void>
+  isRefreshing?: boolean
 }
 
 // Тип для группировки (восстановлен из оригинала)
@@ -74,7 +77,7 @@ const getWorkLocationInfo = (location: string | null) => {
   }
 }
 
-function UsersList({ users, onUserUpdated }: UsersListProps) {
+function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: UsersListProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -1007,12 +1010,33 @@ function UsersList({ users, onUserUpdated }: UsersListProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Кнопка обновления */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs ml-auto gap-1 transition-all duration-200"
+            onClick={onRefresh || onUserUpdated}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                Обновление...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3 w-3" />
+                Обновить
+              </>
+            )}
+          </Button>
+
           {/* Кнопка показать всех - скрываем при группировке */}
           {groupBy === "none" && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 px-1 text-xs whitespace-nowrap ml-auto"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-1 text-xs whitespace-nowrap"
               onClick={handleToggleShowAll}
             >
               {showAll ? "Пагинация" : "Показать всех"}
