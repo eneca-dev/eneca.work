@@ -1009,6 +1009,22 @@ export function LoadingModal({
       setErrors({})
     }
 
+    // Reset modal state when reopening in edit mode
+    if (isOpen && mode === "edit" && loading) {
+      // Reset formData to original values from loading (discarding any unsaved changes)
+      setFormData({
+        startDate: normalizeDateValue(loading.startDate) || formatLocalYMD(new Date())!,
+        endDate: normalizeDateValue(loading.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+        rate: loading.rate ?? 1,
+        comment: loading.comment || "",
+      })
+
+      // Clear errors
+      setErrors({})
+
+      console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading при открытии")
+    }
+
     // Reset originalValuesRef when modal closes (for both modes)
     if (!isOpen) {
       originalValuesRef.current = {
