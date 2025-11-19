@@ -1223,110 +1223,131 @@ export function LoadingModal({
     const isProjectNode = node.type === "folder" && node.projectId && !node.stageId
     const isRefreshingProject = refreshingProjects.has(node.id)
 
-    return (
-      <div key={node.id}>
-        <div
-          className={cn(
-            "group flex items-center gap-1 py-1 px-2 text-sm cursor-pointer rounded-sm select-none transition-colors duration-150",
-            isSelected && "bg-primary/10 text-primary border-l-2 border-primary",
-            !isSelected && "hover:bg-accent hover:text-accent-foreground",
-          )}
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          onClick={() => {
-            if (node.type === "folder") {
-              toggleFolder(node.id)
-            } else {
+    const isDisabledStage = !isSelected && selectedNode && isDecompositionStageNode
+
+    const nodeContent = (
+      <div
+        className={cn(
+          "group flex items-center gap-1 py-1 px-2 text-sm rounded-sm select-none transition-colors duration-150",
+          isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
+          !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
+          !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+        )}
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        onClick={() => {
+          if (node.type === "folder") {
+            toggleFolder(node.id)
+          } else if (node.type === "file" && node.decompositionStageId) {
+            // Если уже выбран этап, блокируем выбор другого
+            if (!selectedNode) {
               handleNodeSelect(node)
             }
-          }}
-        >
-          {node.type === "folder" ? (
-            <>
-              <button className="h-4 w-4 p-0">
-                {isLoading ? (
-                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                ) : hasChildren ? (
-                  isExpanded ? (
-                    <ChevronDown className="h-3 w-3" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" />
-                  )
+          }
+        }}
+      >
+        {node.type === "folder" ? (
+          <>
+            <button className="h-4 w-4 p-0">
+              {isLoading ? (
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              ) : hasChildren ? (
+                isExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
                 ) : (
-                  <ChevronRight className="h-3 w-3 opacity-30" />
-                )}
-              </button>
-              {isExpanded ? <FolderOpen className="h-4 w-4 text-blue-500" /> : <Folder className="h-4 w-4 text-blue-500" />}
-            </>
-          ) : (
-            <>
-              <div className="h-4 w-4" />
-              <File className="h-4 w-4 text-gray-500" />
-            </>
-          )}
-          <span className="truncate flex-1">{node.name}</span>
-          {isLoading && <span className="text-xs text-muted-foreground">Загрузка...</span>}
+                  <ChevronRight className="h-3 w-3" />
+                )
+              ) : (
+                <ChevronRight className="h-3 w-3 opacity-30" />
+              )}
+            </button>
+            {isExpanded ? <FolderOpen className="h-4 w-4 text-blue-500" /> : <Folder className="h-4 w-4 text-blue-500" />}
+          </>
+        ) : (
+          <>
+            <div className="h-4 w-4" />
+            <File className="h-4 w-4 text-gray-500" />
+          </>
+        )}
+        <span className="truncate flex-1">{node.name}</span>
+        {isLoading && <span className="text-xs text-muted-foreground">Загрузка...</span>}
 
-          {/* Refresh icon for project nodes */}
-          {isProjectNode && (
-            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={(e) => handleRefreshProject(node, e)}
-                    disabled={isRefreshingProject}
-                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={cn("h-4 w-4 text-primary", isRefreshingProject && "animate-spin")} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Обновить проект</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          )}
+        {/* Refresh icon for project nodes */}
+        {isProjectNode && (
+          <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => handleRefreshProject(node, e)}
+                  disabled={isRefreshingProject}
+                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={cn("h-4 w-4 text-primary", isRefreshingProject && "animate-spin")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Обновить проект</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
 
-          {/* Hover action icons for section nodes */}
-          {isSectionNode && (
-            <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {/* Navigate to decomposition */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedNode(node)
-                      setShowSectionPanel(true)
-                    }}
-                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4 text-primary" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Перейти к декомпозиции</p>
-                </TooltipContent>
-              </Tooltip>
+        {/* Hover action icons for section nodes */}
+        {isSectionNode && (
+          <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Navigate to decomposition */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedNode(node)
+                    setShowSectionPanel(true)
+                  }}
+                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4 text-primary" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Перейти к декомпозиции</p>
+              </TooltipContent>
+            </Tooltip>
 
-              {/* Create basic stage */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={(e) => handleCreateBasicStage(node, e)}
-                    disabled={isCreatingStage}
-                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
-                  >
-                    <FilePlus className="h-4 w-4 text-primary" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Создать базовый этап</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          )}
+            {/* Create basic stage */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={(e) => handleCreateBasicStage(node, e)}
+                  disabled={isCreatingStage}
+                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+                >
+                  <FilePlus className="h-4 w-4 text-primary" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Создать базовый этап</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+      </div>
+    )
 
-        </div>
+    return (
+      <div key={node.id}>
+        {isDisabledStage ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {nodeContent}
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Нажмите &quot;Сменить этап&quot; для выбора другого этапа</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          nodeContent
+        )}
 
         {node.type === "folder" && hasChildren && isExpanded && (
           <div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
