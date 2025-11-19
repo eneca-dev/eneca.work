@@ -15,6 +15,8 @@ import { AddShortageModal } from "./AddShortageModal"
 import {
   loadingsToPeriods,
   groupVacationPeriods,
+  groupSickLeavePeriods,
+  groupTimeOffPeriods,
   calculateBarRenders,
   formatBarLabel,
   formatBarTooltip,
@@ -566,12 +568,14 @@ export function EmployeeRow({
   // Базовая высота строки сотрудника (90% от rowHeight)
   const reducedRowHeight = Math.floor(rowHeight * 0.9)
 
-  // Преобразуем загрузки и отпуска в периоды для отрисовки
+  // Преобразуем загрузки, отпуска, больничные и отгулы в периоды для отрисовки
   const allPeriods = useMemo(() => {
     const loadingPeriods = loadingsToPeriods(employee.loadings)
     const vacationPeriods = groupVacationPeriods(employee.vacationsDaily)
-    return [...loadingPeriods, ...vacationPeriods]
-  }, [employee.loadings, employee.vacationsDaily])
+    const sickLeavePeriods = groupSickLeavePeriods(employee.sickLeavesDaily)
+    const timeOffPeriods = groupTimeOffPeriods(employee.timeOffsDaily)
+    return [...loadingPeriods, ...vacationPeriods, ...sickLeavePeriods, ...timeOffPeriods]
+  }, [employee.loadings, employee.vacationsDaily, employee.sickLeavesDaily, employee.timeOffsDaily])
 
   // Вычисляем параметры отрисовки всех полосок
   const barRenders = useMemo(() => {
