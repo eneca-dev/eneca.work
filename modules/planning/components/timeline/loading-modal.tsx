@@ -17,7 +17,7 @@ import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSe
 import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Search } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { DatePicker } from "@/modules/projects/components/DatePicker"
+import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
 
 // Project with department info (from view_projects_with_department_info)
 interface ProjectWithDepartmentInfo {
@@ -2117,66 +2117,48 @@ export function LoadingModal({
                   </div>
 
                   {/* Date Range Picker */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-slate-300">Дата начала</label>
-                      <DatePicker
-                        value={formData.startDate ? new Date(formData.startDate) : null}
-                        onChange={(date) => {
-                          const formatted = formatLocalYMD(date)
-                          if (formatted) {
-                            setFormData((prev) => ({ ...prev, startDate: formatted }))
-                            if (errors.startDate) {
-                              setErrors((prev) => {
-                                const newErrors = { ...prev }
-                                delete newErrors.startDate
-                                return newErrors
-                              })
-                            }
-                          }
-                        }}
-                        placeholder="дд.мм.гггг"
-                        inputClassName={cn(
-                          "w-full text-sm rounded border px-3 py-2",
-                          theme === "dark"
-                            ? "bg-slate-700 border-slate-600 text-slate-200"
-                            : "bg-white border-slate-300 text-slate-800",
-                          errors.startDate ? "border-red-500" : "",
-                          isSaving ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
-                        )}
-                      />
-                      {errors.startDate && <p className="text-xs text-red-500 mt-1">{errors.startDate}</p>}
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 dark:text-slate-300">Период работ</label>
+                    <DateRangePicker
+                      value={{
+                        from: formData.startDate ? new Date(formData.startDate) : null,
+                        to: formData.endDate ? new Date(formData.endDate) : null,
+                      }}
+                      onChange={(range: DateRange) => {
+                        const startFormatted = range.from ? formatLocalYMD(range.from) : null
+                        const endFormatted = range.to ? formatLocalYMD(range.to) : null
 
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-slate-300">Дата окончания</label>
-                      <DatePicker
-                        value={formData.endDate ? new Date(formData.endDate) : null}
-                        onChange={(date) => {
-                          const formatted = formatLocalYMD(date)
-                          if (formatted) {
-                            setFormData((prev) => ({ ...prev, endDate: formatted }))
-                            if (errors.endDate) {
-                              setErrors((prev) => {
-                                const newErrors = { ...prev }
-                                delete newErrors.endDate
-                                return newErrors
-                              })
-                            }
-                          }
-                        }}
-                        placeholder="дд.мм.гггг"
-                        inputClassName={cn(
-                          "w-full text-sm rounded border px-3 py-2",
-                          theme === "dark"
-                            ? "bg-slate-700 border-slate-600 text-slate-200"
-                            : "bg-white border-slate-300 text-slate-800",
-                          errors.endDate ? "border-red-500" : "",
-                          isSaving ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
-                        )}
-                      />
-                      {errors.endDate && <p className="text-xs text-red-500 mt-1">{errors.endDate}</p>}
-                    </div>
+                        setFormData((prev) => ({
+                          ...prev,
+                          startDate: startFormatted || prev.startDate,
+                          endDate: endFormatted || prev.endDate,
+                        }))
+
+                        // Clear errors when dates are selected
+                        if (range.from && range.to) {
+                          setErrors((prev) => {
+                            const newErrors = { ...prev }
+                            delete newErrors.startDate
+                            delete newErrors.endDate
+                            return newErrors
+                          })
+                        }
+                      }}
+                      placeholder="Выберите период"
+                      inputClassName={cn(
+                        "w-full text-sm rounded border px-3 py-2",
+                        theme === "dark"
+                          ? "bg-slate-700 border-slate-600 text-slate-200"
+                          : "bg-white border-slate-300 text-slate-800",
+                        (errors.startDate || errors.endDate) ? "border-red-500" : "",
+                        isSaving ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
+                      )}
+                    />
+                    {(errors.startDate || errors.endDate) && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {errors.startDate || errors.endDate}
+                      </p>
+                    )}
                   </div>
 
                   {/* Comment */}
