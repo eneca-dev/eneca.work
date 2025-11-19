@@ -517,9 +517,30 @@ export async function updateUser(
           const { permissions } = await getUserPermissions(currentUser.id)
           const hasEditSalaryAll = permissions.includes('users.edit_salary.all')
           const hasEditSalaryDepartment = permissions.includes('users.edit_salary.department')
+          const hasEditSalarySubdivision = permissions.includes('users.edit_salary.subdivision')
+          const isSubdivisionHead = permissions.includes('hierarchy.is_subdivision_head')
+
+          // Subdivision_head не может редактировать свою ставку и загруженность
+          if (currentUser.id === userId && isSubdivisionHead) {
+            const error = new Error("Руководитель подразделения не может редактировать свою ставку и загруженность")
+            Sentry.captureException(error, {
+              tags: {
+                module: 'org_data_service',
+                action: 'update_user_check_subdivision_head_self_edit',
+                user_id: userId
+              },
+              extra: {
+                current_user_id: currentUser.id,
+                target_user_id: userId,
+                is_subdivision_head: isSubdivisionHead,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
 
           // Проверяем, есть ли у пользователя право редактировать зарплату
-          if (!hasEditSalaryAll && !hasEditSalaryDepartment) {
+          if (!hasEditSalaryAll && !hasEditSalaryDepartment && !hasEditSalarySubdivision) {
             const error = new Error("Недостаточно прав для редактирования ставки и загруженности")
             Sentry.captureException(error, {
               tags: {
@@ -587,7 +608,101 @@ export async function updateUser(
               throw error
             }
 
-            console.log("✅ Пользователи в одном отделе, разрешение предоставлено")
+            console.log("✅ Пользователи в одном отделе")
+
+            // Проверяем роль целевого пользователя (руководитель отдела может редактировать только team_lead и user)
+            console.log("🔐 Проверяем роль целевого пользователя...")
+
+            // Получаем основную роль целевого пользователя из view_users
+            const { data: targetUserData, error: targetUserError } = await supabase
+              .from('view_users')
+              .select('primary_role')
+              .eq('user_id', userId)
+              .single()
+
+            if (targetUserError) {
+              const error = new Error("Не удалось получить роль целевого пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Руководитель отдела может редактировать только team_lead и user
+            const targetRole = targetUserData.primary_role?.toLowerCase()
+            const allowedRoles = ['team_lead', 'user']
+
+            if (!allowedRoles.includes(targetRole || '')) {
+              const error = new Error(`Недостаточно прав для редактирования ставки пользователя с ролью "${targetRole}"`)
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'org_data_service',
+                  action: 'update_user_check_role',
+                  user_id: userId
+                },
+                extra: {
+                  current_user_id: currentUser.id,
+                  target_user_id: userId,
+                  target_role: targetRole,
+                  allowed_roles: allowedRoles,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              throw error
+            }
+
+            console.log(`✅ Роль целевого пользователя (${targetRole}) разрешена для редактирования`)
+          }
+
+          // Если есть только разрешение для подразделения, проверяем, что пользователи в одном подразделении
+          if (!hasEditSalaryAll && !hasEditSalaryDepartment && hasEditSalarySubdivision) {
+            console.log("🔐 Проверяем, что пользователи в одном подразделении...")
+
+            // Получаем подразделение текущего пользователя
+            const { data: currentUserProfile, error: currentProfileError } = await supabase
+              .from('profiles')
+              .select('subdivision_id')
+              .eq('user_id', currentUser.id)
+              .single()
+
+            if (currentProfileError) {
+              const error = new Error("Не удалось получить профиль текущего пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Получаем подразделение целевого пользователя
+            const { data: targetUserProfile, error: targetProfileError } = await supabase
+              .from('profiles')
+              .select('subdivision_id')
+              .eq('user_id', userId)
+              .single()
+
+            if (targetProfileError) {
+              const error = new Error("Не удалось получить профиль целевого пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Проверяем, что подразделения совпадают
+            if (currentUserProfile.subdivision_id !== targetUserProfile.subdivision_id) {
+              const error = new Error("Невозможно редактировать ставку пользователя из другого подразделения")
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'org_data_service',
+                  action: 'update_user_check_subdivision',
+                  user_id: userId
+                },
+                extra: {
+                  current_user_id: currentUser.id,
+                  current_subdivision_id: currentUserProfile.subdivision_id,
+                  target_user_id: userId,
+                  target_subdivision_id: targetUserProfile.subdivision_id,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              throw error
+            }
+
+            console.log("✅ Пользователи в одном подразделении, разрешение предоставлено")
           }
 
           console.log("✅ Разрешение на редактирование полей зарплаты предоставлено")

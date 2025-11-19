@@ -136,6 +136,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   // Руководитель подразделения может редактировать сотрудников своего подразделения
   // Руководитель отдела может редактировать только сотрудников своего отдела
   const canEditSalaryFields = React.useMemo(() => {
+    // Subdivision_head не может редактировать свою ставку и загруженность
+    if (isSelfEdit && isSubdivisionHead) return false
+
     // Админ с полными правами может редактировать всех
     if (canEditSalaryAll) return true
 
@@ -158,11 +161,18 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       // Если не известны ID отделов, запрещаем редактирование
       if (!currentDepartmentId || !targetDepartmentId) return false
 
-      return currentDepartmentId === targetDepartmentId
+      // Проверяем принадлежность к одному отделу
+      if (currentDepartmentId !== targetDepartmentId) return false
+
+      // Руководитель отдела может редактировать только team_lead и user
+      const targetRole = user?.role?.toLowerCase()
+      const allowedRoles = ['team_lead', 'user']
+
+      return allowedRoles.includes(targetRole || '')
     }
 
     return false
-  }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user])
+  }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user, isSelfEdit, isSubdivisionHead])
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
