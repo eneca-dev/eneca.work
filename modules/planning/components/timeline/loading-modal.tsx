@@ -607,6 +607,99 @@ export function LoadingModal({
     console.log(`[LoadingModal] Кэш очищен для проекта: ${projectId}`)
   }, [])
 
+  // Helper function to find and select a decomposition stage node by ID
+  const findAndSelectNode = useCallback((decompositionStageId: string) => {
+    console.log(`[LoadingModal] Поиск этапа декомпозиции: ${decompositionStageId}`)
+
+    const findNodeById = (nodes: FileTreeNode[], id: string): FileTreeNode | null => {
+      for (const node of nodes) {
+        if (node.decompositionStageId === id) return node
+        if (node.children) {
+          const found = findNodeById(node.children, id)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
+    const targetNode = findNodeById(treeData, decompositionStageId)
+    if (targetNode) {
+      console.log(`[LoadingModal] Этап найден: ${targetNode.name} (${targetNode.id})`)
+      // Expand all parent folders
+      const expandPath = (node: FileTreeNode) => {
+        const path: string[] = []
+        let current: FileTreeNode | undefined = node
+
+        while (current) {
+          if (current.parentId) {
+            path.push(current.parentId)
+          }
+          // Find parent in tree
+          const findParent = (nodes: FileTreeNode[], childId: string): FileTreeNode | undefined => {
+            for (const n of nodes) {
+              if (n.id === childId) return undefined
+              if (n.children) {
+                for (const child of n.children) {
+                  if (child.id === childId) return n
+                }
+                const found = findParent(n.children, childId)
+                if (found) return found
+              }
+            }
+            return undefined
+          }
+          current = findParent(treeData, current.id)
+        }
+
+        return path
+      }
+
+      const pathToExpand = expandPath(targetNode)
+      console.log(`[LoadingModal] Раскрытие папок: ${pathToExpand.length} уровней`)
+      // Also expand the target node itself to show its loadings
+      const foldersToExpand = new Set([...pathToExpand, targetNode.id])
+      setExpandedFolders(foldersToExpand)
+      setSelectedNode(targetNode)
+      console.log(`[LoadingModal] Этап успешно выбран и развёрнут: ${targetNode.name}`)
+
+      // Build breadcrumbs
+      const buildBreadcrumbs = (node: FileTreeNode): FileTreeNode[] => {
+        const path: FileTreeNode[] = [node]
+        let current = node
+
+        const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
+          for (const n of nodes) {
+            if (n.children) {
+              for (const child of n.children) {
+                if (child.id === childId) return n
+              }
+              const found = findParentNode(n.children, childId)
+              if (found) return found
+            }
+          }
+          return null
+        }
+
+        while (current.parentId) {
+          const parent = findParentNode(treeData, current.id)
+          if (parent) {
+            path.unshift(parent)
+            current = parent
+          } else {
+            break
+          }
+        }
+
+        return path
+      }
+
+      setBreadcrumbs(buildBreadcrumbs(targetNode))
+    } else {
+      console.warn(`[LoadingModal] Этап декомпозиции не найден: ${decompositionStageId}`)
+      console.warn("[LoadingModal] Доступные узлы дерева:", treeData)
+    }
+  }, [treeData])
+
   // Fetch employees
   const fetchEmployees = useCallback(async () => {
     setIsLoadingEmployees(true)
@@ -941,99 +1034,7 @@ export function LoadingModal({
           })
       }
     }
-
-    function findAndSelectNode(decompositionStageId: string) {
-      console.log(`[LoadingModal] Поиск этапа декомпозиции: ${decompositionStageId}`)
-
-      const findNodeById = (nodes: FileTreeNode[], id: string): FileTreeNode | null => {
-        for (const node of nodes) {
-          if (node.decompositionStageId === id) return node
-          if (node.children) {
-            const found = findNodeById(node.children, id)
-            if (found) return found
-          }
-        }
-        return null
-      }
-
-      const targetNode = findNodeById(treeData, decompositionStageId)
-      if (targetNode) {
-        console.log(`[LoadingModal] Этап найден: ${targetNode.name} (${targetNode.id})`)
-        // Expand all parent folders
-        const expandPath = (node: FileTreeNode) => {
-          const path: string[] = []
-          let current: FileTreeNode | undefined = node
-
-          while (current) {
-            if (current.parentId) {
-              path.push(current.parentId)
-            }
-            // Find parent in tree
-            const findParent = (nodes: FileTreeNode[], childId: string): FileTreeNode | undefined => {
-              for (const n of nodes) {
-                if (n.id === childId) return undefined
-                if (n.children) {
-                  for (const child of n.children) {
-                    if (child.id === childId) return n
-                  }
-                  const found = findParent(n.children, childId)
-                  if (found) return found
-                }
-              }
-              return undefined
-            }
-            current = findParent(treeData, current.id)
-          }
-
-          return path
-        }
-
-        const pathToExpand = expandPath(targetNode)
-        console.log(`[LoadingModal] Раскрытие папок: ${pathToExpand.length} уровней`)
-        // Also expand the target node itself to show its loadings
-        const foldersToExpand = new Set([...pathToExpand, targetNode.id])
-        setExpandedFolders(foldersToExpand)
-        setSelectedNode(targetNode)
-        console.log(`[LoadingModal] Этап успешно выбран и развёрнут: ${targetNode.name}`)
-
-        // Build breadcrumbs
-        const buildBreadcrumbs = (node: FileTreeNode): FileTreeNode[] => {
-          const path: FileTreeNode[] = [node]
-          let current = node
-
-          const findParentNode = (nodes: FileTreeNode[], childId: string): FileTreeNode | null => {
-            for (const n of nodes) {
-              if (n.children) {
-                for (const child of n.children) {
-                  if (child.id === childId) return n
-                }
-                const found = findParentNode(n.children, childId)
-                if (found) return found
-              }
-            }
-            return null
-          }
-
-          while (current.parentId) {
-            const parent = findParentNode(treeData, current.id)
-            if (parent) {
-              path.unshift(parent)
-              current = parent
-            } else {
-              break
-            }
-          }
-
-          return path
-        }
-
-        setBreadcrumbs(buildBreadcrumbs(targetNode))
-      } else {
-        console.warn(`[LoadingModal] Этап декомпозиции не найден: ${decompositionStageId}`)
-        console.warn("[LoadingModal] Доступные узлы дерева:", treeData)
-      }
-    }
-  }, [treeData, mode, loading, stageId, section, loadNodeChildren])
+  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode])
 
   // Pre-fill employee for edit mode
   useEffect(() => {
@@ -1933,12 +1934,25 @@ export function LoadingModal({
                   {/* Breadcrumbs with change stage button */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
-                      {breadcrumbs.map((item, index) => (
-                        <div key={item.id} className="flex items-center gap-2">
-                          {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                          <span className="text-muted-foreground">{item.name}</span>
+                      {/* Show skeleton loader if node is selected but no decomposition stage chosen */}
+                      {selectedNode && !selectedNode.decompositionStageId ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <div className="h-4 w-20 bg-muted rounded animate-pulse" />
                         </div>
-                      ))}
+                      ) : (
+                        breadcrumbs.map((item, index) => (
+                          <div key={item.id} className="flex items-center gap-2">
+                            {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            <span className="text-muted-foreground">{item.name}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                     <button
                       onClick={() => {
@@ -2287,7 +2301,12 @@ export function LoadingModal({
             setShowSectionPanel(false)
             // Clear cache and reload project tree after decomposition changes
             if (selectedNode?.projectId) {
+              // ВАЖНО: Сохраняем ID выбранного этапа перед перезагрузкой
+              const savedDecompositionStageId = selectedNode.decompositionStageId
+
               console.log(`[LoadingModal] Обновление дерева после изменений в декомпозиции проекта: ${selectedNode.projectId}`)
+              console.log(`[LoadingModal] Сохранён ID этапа для восстановления: ${savedDecompositionStageId}`)
+
               setProjectDataCache((prev) => {
                 const next = new Map(prev)
                 next.delete(selectedNode.projectId!)
@@ -2296,9 +2315,18 @@ export function LoadingModal({
               // Find and reload the project node
               const projectNode = treeData.find(n => n.id === `project-${selectedNode.projectId}`)
               if (projectNode) {
-                // Small delay to ensure state update
-                setTimeout(() => {
-                  loadNodeChildren(projectNode, true)
+                // Small delay to ensure state update, then reload and restore selection
+                setTimeout(async () => {
+                  await loadNodeChildren(projectNode, true)
+
+                  // После перезагрузки дерева восстанавливаем выбранный этап
+                  if (savedDecompositionStageId) {
+                    // Дополнительная небольшая задержка для гарантии обновления treeData
+                    setTimeout(() => {
+                      console.log(`[LoadingModal] Восстановление выбора этапа: ${savedDecompositionStageId}`)
+                      findAndSelectNode(savedDecompositionStageId)
+                    }, 100)
+                  }
                 }, 0)
               }
             }

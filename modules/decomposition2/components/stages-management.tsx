@@ -2190,7 +2190,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             </Button>
             <Button onClick={addStage} size="sm" className="h-9">
               <Plus className="mr-2 h-4 w-4" />
-              Добавить этап
+              Добавить этап1
             </Button>
           </div>
         </div>
