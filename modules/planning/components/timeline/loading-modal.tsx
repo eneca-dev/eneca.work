@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import type { Loading, Employee, Section } from "../../types"
 import { useUiStore } from "@/stores/useUiStore"
+import { useUserStore } from "@/stores/useUserStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
 import { useProjectsStore } from "@/modules/projects/store"
 import { supabase } from "@/lib/supabase-client"
@@ -17,6 +18,18 @@ import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshC
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/modules/projects/components/DatePicker"
+
+// Project with department info (from view_projects_with_department_info)
+interface ProjectWithDepartmentInfo {
+  project_id: string
+  project_name: string
+  project_description: string | null
+  project_status: string
+  project_created: string
+  project_updated: string
+  department_ids: string[] | null
+  sections_count: number
+}
 
 // View row structure
 interface ProjectTreeViewRow {
@@ -30,6 +43,9 @@ interface ProjectTreeViewRow {
   object_name: string | null
   section_id: string | null
   section_name: string | null
+  section_responsible_id: string | null
+  responsible_department_id: string | null
+  responsible_department_name: string | null
   decomposition_stage_id: string | null
   decomposition_stage_name: string | null
   decomposition_stage_order: number | null
@@ -43,6 +59,8 @@ interface ProjectTreeViewRow {
   loading_responsible_full_name: string | null
   loading_responsible_avatar: string | null
   loading_responsible_team_name: string | null
+  loading_responsible_department_id: string | null
+  loading_responsible_department_name: string | null
 }
 
 // FileTree node structure
@@ -112,6 +130,11 @@ export function LoadingModal({
 }: LoadingModalProps) {
   const router = useRouter()
   const selectSection = useProjectsStore((state) => state.selectSection)
+
+  // Get current user's department for filtering
+  const userDepartmentId = useUserStore((state) =>
+    state.profile?.departmentId || state.profile?.department_id
+  )
 
   // State tracking
   const [isSaving, setIsSaving] = useState(false)
@@ -195,6 +218,9 @@ export function LoadingModal({
 
   // Project search state
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
+
+  // View mode state: "my" (Мои проекты) or "all" (Все проекты)
+  const [viewMode, setViewMode] = useState<"my" | "all">("my")
 
   // Store original employee from props for restoration after creation
   const originalEmployeeRef = useRef<EmployeeSearchResult | null>(
@@ -286,19 +312,28 @@ export function LoadingModal({
 
           console.log("[LoadingModal] Загрузка списка проектов...")
 
-          // Fetch only projects initially
+          // Fetch projects with department information
           const { data: projects, error: projectsError } = await supabase
-            .from("projects")
-            .select("project_id, project_name")
-            .eq("project_status", "active")
+            .from("view_projects_with_department_info")
+            .select("*")
             .order("project_name")
 
           if (projectsError) throw projectsError
 
           console.log(`[LoadingModal] Загружено проектов: ${projects?.length || 0}`)
 
+          // Filter projects by department in "my" mode
+          let filteredProjects = projects as ProjectWithDepartmentInfo[] | null
+          if (viewMode === "my" && userDepartmentId) {
+            console.log(`[LoadingModal] Фильтрация проектов по отделу: ${userDepartmentId}`)
+            filteredProjects = projects?.filter(
+              (p) => p.department_ids && p.department_ids.includes(userDepartmentId)
+            ) || null
+            console.log(`[LoadingModal] После фильтрации осталось проектов: ${filteredProjects?.length || 0}`)
+          }
+
           // Create tree with projects only (no children loaded yet)
-          const tree: FileTreeNode[] = (projects || []).map((project) => ({
+          const tree: FileTreeNode[] = (filteredProjects || []).map((project) => ({
             id: `project-${project.project_id}`,
             name: project.project_name,
             type: "folder" as const,
@@ -341,7 +376,7 @@ export function LoadingModal({
         }
       },
     )
-  }, [mode, setNotification, clearNotification])
+  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId])
 
   // Helper: Build stage nodes from view data
   const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
@@ -456,9 +491,20 @@ export function LoadingModal({
 
         if (error) throw error
 
-        projectData = (data as ProjectTreeViewRow[]) || []
+        let fetchedData = (data as ProjectTreeViewRow[]) || []
 
-        // Cache the result
+        // Apply department filter in "my projects" mode
+        if (viewMode === "my" && userDepartmentId) {
+          console.log(`[LoadingModal] Фильтрация по отделу: ${userDepartmentId}`)
+          fetchedData = fetchedData.filter(row =>
+            row.section_id && row.responsible_department_id === userDepartmentId
+          )
+          console.log(`[LoadingModal] После фильтрации осталось ${fetchedData.length} строк`)
+        }
+
+        projectData = fetchedData
+
+        // Cache the filtered result
         setProjectDataCache((prev) => new Map(prev).set(node.projectId!, projectData!))
         console.log(`[LoadingModal] Загружено ${projectData.length} строк из view для проекта`)
 
@@ -549,7 +595,7 @@ export function LoadingModal({
         return next
       })
     }
-  }, [loadingNodes, projectDataCache, buildStageNodes, buildObjectNodes, buildSectionNodes, buildDecompositionStageNodes])
+  }, [loadingNodes, projectDataCache, buildStageNodes, buildObjectNodes, buildSectionNodes, buildDecompositionStageNodes, viewMode, userDepartmentId])
 
   // Clear cache for a project and reload its data
   const clearProjectCache = useCallback((projectId: string) => {
@@ -774,6 +820,19 @@ export function LoadingModal({
       fetchEmployees()
     }
   }, [buildFileTree, fetchEmployees])
+
+  // Clear cache and reload when view mode changes
+  useEffect(() => {
+    if (hasLoadedTreeRef.current) {
+      console.log(`[LoadingModal] Режим отображения изменен на: ${viewMode}`)
+      // Clear all cached data to force reload with new filter
+      setProjectDataCache(new Map())
+      // Collapse all expanded folders
+      setExpandedFolders(new Set())
+      // Reload project list with new filter
+      buildFileTree()
+    }
+  }, [viewMode, buildFileTree])
 
   // Pre-fill employee search term
   useEffect(() => {
@@ -1229,17 +1288,17 @@ export function LoadingModal({
   }, [mode, formData, selectedEmployee, selectedNode])
 
   // Filter projects by search term
+  // Note: Department filtering is already done in buildFileTree() using view_projects_with_department_info
   const filteredTreeData = useMemo(() => {
-    // If search is empty, return empty array (nothing to show)
-    if (!projectSearchTerm.trim()) {
-      return []
+    const searchLower = projectSearchTerm.trim().toLowerCase()
+
+    // If no search term, show all projects (already filtered by department in buildFileTree)
+    if (!searchLower) {
+      return treeData
     }
 
-    const searchLower = projectSearchTerm.toLowerCase()
-
-    // Filter only top-level projects (first level of tree)
+    // Apply search filter
     return treeData.filter((node) => {
-      // Only filter project nodes
       if (node.projectId && !node.stageId) {
         return node.name.toLowerCase().includes(searchLower)
       }
@@ -1794,6 +1853,32 @@ export function LoadingModal({
                     </Tooltip>
                   </div>
 
+                  {/* View Mode Toggle */}
+                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                    <button
+                      onClick={() => setViewMode("my")}
+                      className={cn(
+                        "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                        viewMode === "my"
+                          ? "bg-background shadow-sm"
+                          : "hover:bg-background/50"
+                      )}
+                    >
+                      Мои проекты
+                    </button>
+                    <button
+                      onClick={() => setViewMode("all")}
+                      className={cn(
+                        "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                        viewMode === "all"
+                          ? "bg-background shadow-sm"
+                          : "hover:bg-background/50"
+                      )}
+                    >
+                      Все проекты
+                    </button>
+                  </div>
+
                   {/* Search input */}
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1824,11 +1909,13 @@ export function LoadingModal({
                         Повторить загрузку
                       </button>
                     </div>
-                  ) : !projectSearchTerm.trim() ? (
-                    <div className="p-4 text-center text-sm text-muted-foreground italic">
-                      Введите название проекта для поиска
+                  ) : filteredTreeData.length === 0 && !projectSearchTerm.trim() && viewMode === "my" ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {userDepartmentId
+                        ? "Нет проектов с разделами из вашего отдела"
+                        : "Ваш отдел не указан в профиле"}
                     </div>
-                  ) : filteredTreeData.length === 0 ? (
+                  ) : filteredTreeData.length === 0 && projectSearchTerm.trim() ? (
                     <div className="p-4 text-center text-sm text-muted-foreground">
                       Проекты не найдены
                     </div>
