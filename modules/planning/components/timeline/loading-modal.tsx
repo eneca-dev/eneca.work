@@ -793,6 +793,9 @@ export function LoadingModal({
       if (projectNode) {
         console.log(`[LoadingModal] Найден проект: ${projectNode.name} (${projectNodeId})`)
 
+        // Установить название проекта в поиск, чтобы проект отображался в дереве
+        setProjectSearchTerm(projectNode.name)
+
         // Load project data if not loaded yet
         if (projectNode.children?.length === 0) {
           console.log(`[LoadingModal] Загрузка данных проекта для stageId: ${targetStageId}`)
@@ -835,6 +838,9 @@ export function LoadingModal({
               const projectNode = treeData.find((n) => n.id === projectNodeId)
 
               if (projectNode) {
+                // Установить название проекта в поиск
+                setProjectSearchTerm(projectNode.name)
+
                 if (projectNode.children?.length === 0) {
                   loadNodeChildren(projectNode).then(() => {
                     setTimeout(() => findAndSelectNode(targetStageId!), 100)
