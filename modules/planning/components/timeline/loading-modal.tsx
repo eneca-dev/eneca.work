@@ -155,6 +155,14 @@ export function LoadingModal({
     }
   }, [formatLocalYMD])
 
+  // Helper function to format date string to DD.MM.YYYY
+  const formatDateDisplay = useCallback((dateString: string): string => {
+    if (!dateString) return ""
+    // dateString is in format YYYY-MM-DD
+    const [year, month, day] = dateString.split("-")
+    return `${day}.${month}.${year}`
+  }, [])
+
   // Form data initialization
   const [formData, setFormData] = useState({
     startDate:
@@ -1699,6 +1707,14 @@ export function LoadingModal({
                   </h4>
                   <div className={cn("mt-2 text-sm", theme === "dark" ? "text-amber-300" : "text-amber-700")}>
                     <p>Вы уверены, что хотите удалить эту загрузку?</p>
+                    {loading && (
+                      <div className="mt-3 space-y-1.5 text-xs">
+                        <p><strong>Этап:</strong> {loading.stageName || "Не указан"}</p>
+                        <p><strong>Сотрудник:</strong> {loading.responsibleName || selectedEmployee?.full_name || "Не указан"}</p>
+                        <p><strong>Даты:</strong> {formatDateDisplay(formData.startDate)} — {formatDateDisplay(formData.endDate)}</p>
+                        <p><strong>Ставка:</strong> {formData.rate}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
