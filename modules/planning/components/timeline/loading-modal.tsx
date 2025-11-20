@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Search } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -1307,6 +1307,39 @@ export function LoadingModal({
     })
   }, [treeData, projectSearchTerm])
 
+  // Get node icon based on hierarchy level
+  const getNodeIcon = (node: FileTreeNode, isExpanded: boolean) => {
+    // Decomposition stage - файл
+    if (node.type === "file" && node.decompositionStageId) {
+      return <File className="h-4 w-4 text-gray-500" />
+    }
+
+    // Project level
+    if (node.projectId && !node.stageId) {
+      const IconComponent = isExpanded ? FolderOpen : Folder
+      return <IconComponent className="h-4 w-4 text-green-600" />
+    }
+
+    // Stage level
+    if (node.stageId && !node.objectId) {
+      return <SquareStack className="h-4 w-4 text-purple-600" />
+    }
+
+    // Object level
+    if (node.objectId && !node.sectionId) {
+      return <Package className="h-4 w-4 text-orange-600" />
+    }
+
+    // Section level
+    if (node.sectionId && !node.decompositionStageId) {
+      return <CircleDashed className="h-4 w-4 text-teal-500" />
+    }
+
+    // Fallback
+    const IconComponent = isExpanded ? FolderOpen : Folder
+    return <IconComponent className="h-4 w-4 text-blue-500" />
+  }
+
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
@@ -1356,12 +1389,12 @@ export function LoadingModal({
                 <ChevronRight className="h-3 w-3 opacity-30" />
               )}
             </button>
-            {isExpanded ? <FolderOpen className="h-4 w-4 text-blue-500" /> : <Folder className="h-4 w-4 text-blue-500" />}
+            {getNodeIcon(node, isExpanded)}
           </>
         ) : (
           <>
             <div className="h-4 w-4" />
-            <File className="h-4 w-4 text-gray-500" />
+            {getNodeIcon(node, isExpanded)}
           </>
         )}
         <span className="truncate flex-1">{node.name}</span>
@@ -1401,7 +1434,7 @@ export function LoadingModal({
                   }}
                   className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
                 >
-                  <ChevronRight className="h-4 w-4 text-primary" />
+                  <Link className="h-4 w-4 text-primary" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
@@ -1750,14 +1783,55 @@ export function LoadingModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
-          <h2 className="text-lg font-semibold dark:text-slate-200">
+        <div className="relative flex items-center justify-between border-b dark:border-slate-700">
+          <h2 className="text-lg font-semibold dark:text-slate-200 flex-shrink-0 pl-4 py-4">
             {mode === "create" ? "Создание загрузки" : "Редактирование загрузки"}
           </h2>
+
+          {/* Breadcrumbs - positioned to align with tree border (384px + padding) */}
+          {selectedNode && (
+            <div className="absolute left-[400px] right-16 flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm flex-wrap flex-1 min-w-0">
+                {selectedNode && !selectedNode.decompositionStageId ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                  </div>
+                ) : (
+                  breadcrumbs.map((item, index) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      <span className="text-muted-foreground truncate">{item.name}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedNode(null)
+                  setBreadcrumbs([])
+                }}
+                className={cn(
+                  "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
+                  theme === "dark"
+                    ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
+                    : "border-teal-500 text-teal-600 hover:bg-teal-50"
+                )}
+              >
+                Сменить этап
+              </button>
+            </div>
+          )}
+
           <button
             onClick={handleClose}
             disabled={isSaving || isDeleting}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-4 py-4 flex-shrink-0"
           >
             ✕
           </button>
@@ -1931,46 +2005,6 @@ export function LoadingModal({
             <div className="flex-1 overflow-y-auto p-6">
               {selectedNode ? (
                 <div className="space-y-6">
-                  {/* Breadcrumbs with change stage button */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2 text-sm flex-wrap flex-1">
-                      {/* Show skeleton loader if node is selected but no decomposition stage chosen */}
-                      {selectedNode && !selectedNode.decompositionStageId ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-4 w-24 bg-muted rounded animate-pulse" />
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          <div className="h-4 w-16 bg-muted rounded animate-pulse" />
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          <div className="h-4 w-32 bg-muted rounded animate-pulse" />
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          <div className="h-4 w-20 bg-muted rounded animate-pulse" />
-                        </div>
-                      ) : (
-                        breadcrumbs.map((item, index) => (
-                          <div key={item.id} className="flex items-center gap-2">
-                            {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                            <span className="text-muted-foreground">{item.name}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <button
-                      onClick={() => {
-                        // Reset selection to allow choosing a new stage
-                        setSelectedNode(null)
-                        setBreadcrumbs([])
-                      }}
-                      className={cn(
-                        "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
-                        theme === "dark"
-                          ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
-                          : "border-teal-500 text-teal-600 hover:bg-teal-50"
-                      )}
-                    >
-                      Сменить этап
-                    </button>
-                  </div>
-
                   {/* Employee Selector */}
                   <div>
                     <label className="block text-sm font-medium mb-1 dark:text-slate-300">Сотрудник</label>
