@@ -2005,6 +2005,16 @@ export function LoadingModal({
             <div className="flex-1 overflow-y-auto p-6">
               {selectedNode ? (
                 <div className="space-y-6">
+                  {/* Stage Title */}
+                  <div className="text-xl font-semibold dark:text-slate-200">
+                    Загрузка для этапа{" "}
+                    <span className={cn(
+                      theme === "dark" ? "text-teal-400" : "text-teal-600"
+                    )}>
+                      {selectedNode?.name}
+                    </span>
+                  </div>
+
                   {/* Employee Selector */}
                   <div>
                     <label className="block text-sm font-medium mb-1 dark:text-slate-300">Сотрудник</label>
