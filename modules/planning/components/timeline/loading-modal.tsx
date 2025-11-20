@@ -18,6 +18,8 @@ import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, Refr
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
+import { useCalendarEvents } from "@/modules/calendar/hooks/useCalendarEvents"
+import { calculateWorkingDays } from "../../utils/working-days"
 
 // Project with department info (from view_projects_with_department_info)
 interface ProjectWithDepartmentInfo {
@@ -259,6 +261,9 @@ export function LoadingModal({
   // SectionPanel state
   const [showSectionPanel, setShowSectionPanel] = useState(false)
   const { statuses } = useSectionStatuses()
+
+  // Calendar events for working days calculation
+  const { events: calendarEvents, fetchEvents } = useCalendarEvents()
 
   // State for creating stages
   const [isCreatingStage, setIsCreatingStage] = useState(false)
@@ -920,6 +925,13 @@ export function LoadingModal({
     }
   }, [buildFileTree, fetchEmployees])
 
+  // Fetch calendar events when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchEvents()
+    }
+  }, [isOpen, fetchEvents])
+
   // Clear cache and reload when view mode changes
   useEffect(() => {
     if (hasLoadedTreeRef.current) {
@@ -1302,6 +1314,20 @@ export function LoadingModal({
       }
     }
   }
+
+  // Calculate working days in the selected period
+  const workingDaysCount = useMemo(() => {
+    if (!formData.startDate || !formData.endDate) {
+      return 0
+    }
+
+    return calculateWorkingDays(formData.startDate, formData.endDate, calendarEvents)
+  }, [formData.startDate, formData.endDate, calendarEvents])
+
+  // Calculate working hours (working days × 8 hours × rate)
+  const workingHoursCount = useMemo(() => {
+    return workingDaysCount * 8 * formData.rate
+  }, [workingDaysCount, formData.rate])
 
   // Check if any field has changed in edit mode
   const hasChanges = useMemo(() => {
@@ -2418,6 +2444,13 @@ export function LoadingModal({
                         {errors.startDate || errors.endDate}
                       </p>
                     )}
+                    {/* Working days and hours counter */}
+                    {formData.startDate && formData.endDate && (
+                      <div className="text-sm text-slate-600 dark:text-slate-400 mt-2 space-y-1">
+                        <div>Количество рабочих дней: {workingDaysCount}</div>
+                        <div>Количество рабочих часов с учётом ставки: {workingHoursCount} ч</div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Comment */}
@@ -2547,7 +2580,7 @@ export function LoadingModal({
                     // Message for create mode - select a stage
                     originalEmployeeRef.current && (
                       <p className="text-sm text-muted-foreground text-center max-w-md">
-                        Выберите этап из дерева слева для создания загрузки на сотрудника{" "}
+                        Выберите этап из дерева слева для создания в нем загрузки на сотрудника{" "}
                         <span className="font-medium text-foreground">
                           {originalEmployeeRef.current.full_name}
                         </span>
