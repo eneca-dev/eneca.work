@@ -1160,8 +1160,29 @@ export function LoadingModal({
       window.removeEventListener(event, fn as EventListener, capture))
   }, [showEmployeeDropdown, updateDropdownPosition])
 
+  // Helper function to collect all folder IDs in a project hierarchy
+  const expandAllProjectFolders = useCallback((nodes: FileTreeNode[], targetProjectId: string): string[] => {
+    const foldersToExpand: string[] = []
+
+    const collectFolders = (items: FileTreeNode[]) => {
+      for (const node of items) {
+        // Only expand folder nodes belonging to this project
+        if (node.projectId === targetProjectId && node.type === "folder") {
+          foldersToExpand.push(node.id)
+        }
+        // Recursively check children
+        if (node.children) {
+          collectFolders(node.children)
+        }
+      }
+    }
+
+    collectFolders(nodes)
+    return foldersToExpand
+  }, [])
+
   // Toggle folder expansion
-  const toggleFolder = (folderId: string) => {
+  const toggleFolder = async (folderId: string) => {
     const isExpanding = !expandedFolders.has(folderId)
 
     setExpandedFolders((prev) => {
@@ -1190,7 +1211,24 @@ export function LoadingModal({
       const node = findNode(treeData, folderId)
       if (node && node.children?.length === 0) {
         // Children not loaded yet, load them
-        loadNodeChildren(node)
+        await loadNodeChildren(node)
+
+        // After loading, expand all folders in this project hierarchy
+        // Use setTimeout to ensure state updates have propagated
+        setTimeout(() => {
+          setTreeData((currentTree) => {
+            const updatedNode = findNode(currentTree, folderId)
+            if (updatedNode && updatedNode.children && updatedNode.projectId) {
+              const foldersToExpand = expandAllProjectFolders(updatedNode.children, updatedNode.projectId)
+              setExpandedFolders((prev) => {
+                const newSet = new Set(prev)
+                foldersToExpand.forEach((id) => newSet.add(id))
+                return newSet
+              })
+            }
+            return currentTree
+          })
+        }, 0)
       }
     }
   }
@@ -1363,9 +1401,9 @@ export function LoadingModal({
           !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        onClick={() => {
+        onClick={async () => {
           if (node.type === "folder") {
-            toggleFolder(node.id)
+            await toggleFolder(node.id)
           } else if (node.type === "file" && node.decompositionStageId) {
             // Если уже выбран этап, блокируем выбор другого
             if (!selectedNode) {
@@ -1441,22 +1479,6 @@ export function LoadingModal({
                 <p>Перейти к декомпозиции</p>
               </TooltipContent>
             </Tooltip>
-
-            {/* Create basic stage */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={(e) => handleCreateBasicStage(node, e)}
-                  disabled={isCreatingStage}
-                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
-                >
-                  <FilePlus className="h-4 w-4 text-primary" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Создать базовый этап</p>
-              </TooltipContent>
-            </Tooltip>
           </div>
         )}
       </div>
@@ -1484,18 +1506,34 @@ export function LoadingModal({
         {/* Show message for empty folders (only if not loading) */}
         {node.type === "folder" && !hasChildren && isExpanded && !isLoading && (
           <div
-            className="text-xs text-muted-foreground italic px-2 py-1"
-            style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
+            className="px-2 py-1"
+            style={{ paddingLeft: `${(depth) * 12 + 40}px` }}
           >
-            {node.sectionId && !node.decompositionStageId
-              ? "Этапы декомпозиции отсутствуют"
-              : node.objectId && !node.sectionId
-              ? "Разделы отсутствуют"
-              : node.stageId && !node.objectId
-              ? "Объекты отсутствуют"
-              : node.projectId && !node.stageId
-              ? "Стадии отсутствуют"
-              : "Нет данных"}
+            {node.sectionId && !node.decompositionStageId ? (
+              <div className="space-y-1">
+                <button
+                  onClick={(e) => handleCreateBasicStage(node, e)}
+                  disabled={isCreatingStage}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 py-1 rounded hover:bg-primary/5"
+                >
+                  <FilePlus className="h-4 w-4" />
+                  <span>Создать базовый этап</span>
+                </button>
+                <div className="text-xs text-muted-foreground italic">
+                  Этапы декомпозиции отсутствуют
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground italic">
+                {node.objectId && !node.sectionId
+                  ? "Разделы отсутствуют"
+                  : node.stageId && !node.objectId
+                  ? "Объекты отсутствуют"
+                  : node.projectId && !node.stageId
+                  ? "Стадии отсутствуют"
+                  : "Нет данных"}
+              </div>
+            )}
           </div>
         )}
       </div>
