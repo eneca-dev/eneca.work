@@ -918,7 +918,19 @@ function SortableDecompositionRow({
             }}
             onInput={(e) => {
               const input = e.target as HTMLInputElement;
-              input.value = input.value.replace(/[^0-9.]/g, '');
+              // Удаляем невалидные символы
+              let cleaned = input.value.replace(/[^0-9.]/g, '');
+
+              // Удаляем ведущие нули (но оставляем 0 перед точкой, например "0.5")
+              if (cleaned.startsWith('0') && cleaned.length > 1 && cleaned[1] !== '.') {
+                cleaned = cleaned.replace(/^0+/, '');
+                // Если после удаления осталась пустая строка или только точка, добавляем 0
+                if (cleaned === '' || cleaned === '.') {
+                  cleaned = '0' + cleaned;
+                }
+              }
+
+              input.value = cleaned;
             }}
             onFocus={(e) => {
               // Если значение 0, выделяем весь текст - тогда при вводе цифры 0 заменится
