@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -1311,7 +1311,7 @@ export function LoadingModal({
   const getNodeIcon = (node: FileTreeNode, isExpanded: boolean) => {
     // Decomposition stage - файл
     if (node.type === "file" && node.decompositionStageId) {
-      return <File className="h-4 w-4 text-gray-500" />
+      return <FileUser className="h-4 w-4 text-gray-500" />
     }
 
     // Project level
@@ -1783,55 +1783,14 @@ export function LoadingModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="relative flex items-center justify-between border-b dark:border-slate-700">
-          <h2 className="text-lg font-semibold dark:text-slate-200 flex-shrink-0 pl-4 py-4">
+        <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
+          <h2 className="text-lg font-semibold dark:text-slate-200">
             {mode === "create" ? "Создание загрузки" : "Редактирование загрузки"}
           </h2>
-
-          {/* Breadcrumbs - positioned to align with tree border (384px + padding) */}
-          {selectedNode && (
-            <div className="absolute left-[400px] right-16 flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm flex-wrap flex-1 min-w-0">
-                {selectedNode && !selectedNode.decompositionStageId ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-24 bg-muted rounded animate-pulse" />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    <div className="h-4 w-16 bg-muted rounded animate-pulse" />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    <div className="h-4 w-32 bg-muted rounded animate-pulse" />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    <div className="h-4 w-20 bg-muted rounded animate-pulse" />
-                  </div>
-                ) : (
-                  breadcrumbs.map((item, index) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                      <span className="text-muted-foreground truncate">{item.name}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedNode(null)
-                  setBreadcrumbs([])
-                }}
-                className={cn(
-                  "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
-                  theme === "dark"
-                    ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
-                    : "border-teal-500 text-teal-600 hover:bg-teal-50"
-                )}
-              >
-                Сменить этап
-              </button>
-            </div>
-          )}
-
           <button
             onClick={handleClose}
             disabled={isSaving || isDeleting}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-4 py-4 flex-shrink-0"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             ✕
           </button>
@@ -2005,14 +1964,53 @@ export function LoadingModal({
             <div className="flex-1 overflow-y-auto p-6">
               {selectedNode ? (
                 <div className="space-y-6">
-                  {/* Stage Title */}
-                  <div className="text-xl font-semibold dark:text-slate-200">
-                    Загрузка для этапа{" "}
-                    <span className={cn(
-                      theme === "dark" ? "text-teal-400" : "text-teal-600"
-                    )}>
-                      {selectedNode?.name}
-                    </span>
+                  {/* Breadcrumbs */}
+                  <div className="flex items-center gap-2 text-sm flex-wrap pb-4 border-b dark:border-slate-700">
+                    {selectedNode && !selectedNode.decompositionStageId ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                      </div>
+                    ) : (
+                      breadcrumbs.map((item, index) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          {getNodeIcon(item, false)}
+                          <span className="text-muted-foreground truncate">{item.name}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Stage Title with change button */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-xl font-semibold dark:text-slate-200">
+                      Загрузка для этапа{" "}
+                      <span className={cn(
+                        theme === "dark" ? "text-teal-400" : "text-teal-600"
+                      )}>
+                        {selectedNode?.name}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedNode(null)
+                        setBreadcrumbs([])
+                      }}
+                      className={cn(
+                        "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
+                        theme === "dark"
+                          ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
+                          : "border-teal-500 text-teal-600 hover:bg-teal-50"
+                      )}
+                    >
+                      Сменить этап
+                    </button>
                   </div>
 
                   {/* Employee Selector */}
