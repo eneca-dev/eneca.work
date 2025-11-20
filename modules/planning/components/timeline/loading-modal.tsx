@@ -113,7 +113,7 @@ interface EmployeeSearchResult {
   employment_rate: number | null
 }
 
-const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+const RATES = [0.2, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 const DROPDOWN_MAX_HEIGHT_PX = 256
 
 export function LoadingModal({
@@ -1326,8 +1326,10 @@ export function LoadingModal({
 
   // Calculate working hours (working days × 8 hours × rate)
   const workingHoursCount = useMemo(() => {
-    return workingDaysCount * 8 * formData.rate
+    const value = workingDaysCount * 8 * formData.rate
+    return Math.round(value * 100) / 100
   }, [workingDaysCount, formData.rate])
+  
 
   // Check if any field has changed in edit mode
   const hasChanges = useMemo(() => {
