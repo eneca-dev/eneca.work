@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link, Trash2 } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -140,6 +140,8 @@ export function LoadingModal({
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Refs for timeouts
@@ -153,6 +155,7 @@ export function LoadingModal({
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
   const updateLoadingInStore = usePlanningStore((state) => state.updateLoading)
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
+  const archiveLoadingInStore = usePlanningStore((state) => state.archiveLoading)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
   // Helper function for date formatting
@@ -1793,6 +1796,45 @@ export function LoadingModal({
     }
   }
 
+  // Handle archive
+  const handleArchive = async () => {
+    if (mode !== "edit" || !loading) return
+    const loadingToArchive = loading
+
+    setIsArchiving(true)
+
+    try {
+      const result = await archiveLoadingInStore(loadingToArchive.id)
+
+      if (!result.success) {
+        throw new Error(result.error || "Ошибка при архивировании загрузки")
+      }
+
+      setNotification("Загрузка успешно архивирована")
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+      onClose()
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "archive_loading",
+          modal: "loading_modal",
+        },
+        extra: {
+          loading_id: loadingToArchive.id,
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      setNotification(`Ошибка при архивировании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setIsArchiving(false)
+      setShowArchiveConfirm(false)
+    }
+  }
+
   const navigateToDecomposition = () => {
     if (!selectedNode?.sectionId) return
     setShowSectionPanel(true)
@@ -1811,7 +1853,7 @@ export function LoadingModal({
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
         onClick={(e) => {
           // Закрывать только при клике на overlay, не на содержимое модалки
-          if (e.target === e.currentTarget && !isSaving && !isDeleting) {
+          if (e.target === e.currentTarget && !isSaving && !isDeleting && !isArchiving) {
             handleClose();
           }
         }}
@@ -1827,7 +1869,7 @@ export function LoadingModal({
           </h2>
           <button
             onClick={handleClose}
-            disabled={isSaving || isDeleting}
+            disabled={isSaving || isDeleting || isArchiving}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             ✕
@@ -1840,24 +1882,26 @@ export function LoadingModal({
             <div
               className={cn(
                 "p-4 rounded-lg border",
-                theme === "dark" ? "bg-amber-900 border-amber-700" : "bg-amber-50 border-amber-200",
+                theme === "dark" ? "bg-red-900 border-red-700" : "bg-red-50 border-red-200",
               )}
             >
               <div className="flex items-start space-x-3">
-                <div className={cn("flex-shrink-0 w-5 h-5 mt-0.5", theme === "dark" ? "text-amber-400" : "text-amber-600")}>
+                <div className={cn("flex-shrink-0 w-5 h-5 mt-2", theme === "dark" ? "text-red-400" : "text-red-600")}>
                   <svg fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 0 00-1-1z"
                       clipRule="evenodd"
                     />
                   </svg>
                 </div>
                 <div>
-                  <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-amber-200" : "text-amber-800")}>
+                  {/* <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-red-200" : "text-red-800")}>
                     Внимание! Удаление загрузки
-                  </h4>
-                  <div className={cn("mt-2 text-sm", theme === "dark" ? "text-amber-300" : "text-amber-700")}>
+                  </h4> */}
+                  <div className={cn("mt-2 text-sm", theme === "dark" ? "text-red-300" : "text-red-700")}>
+                    <p className="mb-2"><strong>Загрузки нужно архивировать, а не удалять.</strong></p>
+                    <p className="mb-2">Удалять можно только ошибочно созданные загрузки.</p>
                     <p>Вы уверены, что хотите удалить эту загрузку?</p>
                     {loading && (
                       <div className="mt-3 space-y-1.5 text-xs">
@@ -1886,6 +1930,22 @@ export function LoadingModal({
                 Отмена
               </button>
               <button
+                onClick={async () => {
+                  setShowDeleteConfirm(false)
+                  await handleArchive()
+                }}
+                disabled={isDeleting}
+                className={cn(
+                  "px-4 py-2 text-sm rounded border",
+                  theme === "dark"
+                    ? "border-amber-600 text-amber-400 hover:bg-amber-900 hover:bg-opacity-20"
+                    : "border-amber-500 text-amber-600 hover:bg-amber-50",
+                  isDeleting ? "opacity-50 cursor-not-allowed" : "",
+                )}
+              >
+                Архивировать эту загрузку
+              </button>
+              <button
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className={cn(
@@ -1900,8 +1960,82 @@ export function LoadingModal({
           </div>
         )}
 
+        {/* Archive confirmation */}
+        {showArchiveConfirm && (
+          <div className="p-6 space-y-4">
+            <div
+              className={cn(
+                "p-4 rounded-lg border",
+                theme === "dark" ? "bg-amber-900 border-amber-700" : "bg-amber-50 border-amber-200",
+              )}
+            >
+              <div className="flex items-start space-x-3">
+                <div className={cn("flex-shrink-0 w-5 h-5 mt-0.5", theme === "dark" ? "text-amber-400" : "text-amber-600")}>
+                  <svg fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-amber-200" : "text-amber-800")}>
+                    Архивирование загрузки
+                  </h4>
+                  <div className={cn("mt-2 text-sm", theme === "dark" ? "text-amber-300" : "text-amber-700")}>
+                    <p className="mb-2"><strong>Что означает архивирование?</strong></p>
+                    <p className="mb-2">
+                      Архивирование скрывает загрузку с графика планирования.
+                    </p>
+                    <p className="mb-2">
+                      Архивированные загрузки можно восстановить при необходимости.
+                    </p>
+                    {loading && (
+                      <div className="mt-3 space-y-1.5 text-xs">
+                        <p><strong>Этап:</strong> {loading.stageName || "Не указан"}</p>
+                        <p><strong>Сотрудник:</strong> {loading.responsibleName || selectedEmployee?.full_name || "Не указан"}</p>
+                        <p><strong>Даты:</strong> {formatDateDisplay(formData.startDate)} — {formatDateDisplay(formData.endDate)}</p>
+                        <p><strong>Ставка:</strong> {formData.rate}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowArchiveConfirm(false)}
+                disabled={isArchiving}
+                className={cn(
+                  "px-4 py-2 text-sm rounded border",
+                  theme === "dark"
+                    ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                  isArchiving ? "opacity-50 cursor-not-allowed" : "",
+                )}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleArchive}
+                disabled={isArchiving}
+                className={cn(
+                  "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[140px]",
+                  theme === "dark"
+                    ? "bg-amber-600 text-white hover:bg-amber-700"
+                    : "bg-amber-500 text-white hover:bg-amber-600",
+                  isArchiving ? "opacity-70 cursor-not-allowed" : "",
+                )}
+              >
+                {isArchiving ? "Архивирование..." : "Архивировать"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main content */}
-        {!showDeleteConfirm && (
+        {!showDeleteConfirm && !showArchiveConfirm && (
           <div className="flex-1 flex overflow-hidden">
             {/* Left side - Tree */}
             <div className="w-96 border-r dark:border-slate-700 overflow-y-auto">
@@ -2072,14 +2206,14 @@ export function LoadingModal({
                           }
                         }}
                         placeholder="Поиск сотрудника..."
-                        disabled={isSaving || isLoadingEmployees}
+                        disabled={isSaving || isLoadingEmployees || isArchiving || isDeleting}
                         className={cn(
                           "w-full text-sm rounded border px-3 py-2",
                           theme === "dark"
                             ? "bg-slate-700 border-slate-600 text-slate-200"
                             : "bg-white border-slate-300 text-slate-800",
                           errors.employee ? "border-red-500" : "",
-                          isSaving || isLoadingEmployees ? "opacity-50 cursor-not-allowed" : "",
+                          (isSaving || isLoadingEmployees || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       />
 
@@ -2231,7 +2365,7 @@ export function LoadingModal({
                           ? "bg-slate-700 border-slate-600 text-slate-200"
                           : "bg-white border-slate-300 text-slate-800",
                         (errors.startDate || errors.endDate) ? "border-red-500" : "",
-                        isSaving ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
+                        (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                       )}
                     />
                     {(errors.startDate || errors.endDate) && (
@@ -2250,13 +2384,13 @@ export function LoadingModal({
                       onChange={handleChange}
                       rows={3}
                       placeholder="Например: уточнение по задачам, договорённости и т.п."
-                      disabled={isSaving}
+                      disabled={isSaving || isArchiving || isDeleting}
                       className={cn(
                         "w-full text-sm rounded border px-3 py-2 resize-y min-h-[72px]",
                         theme === "dark"
                           ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
                           : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
-                        isSaving ? "opacity-50 cursor-not-allowed" : "",
+                        (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                       )}
                     />
                   </div>
@@ -2264,31 +2398,55 @@ export function LoadingModal({
                   {/* Action buttons */}
                   <div className={cn("flex gap-2 pt-4", mode === "edit" ? "justify-between" : "justify-end")}>
                     {mode === "edit" && (
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        disabled={isSaving}
-                        className={cn(
-                          "px-4 py-2 text-sm rounded border",
-                          theme === "dark"
-                            ? "border-red-600 text-red-400 hover:bg-red-900 hover:bg-opacity-20"
-                            : "border-red-300 text-red-600 hover:bg-red-50",
-                          isSaving ? "opacity-50 cursor-not-allowed" : "",
-                        )}
-                      >
-                        Удалить
-                      </button>
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => setShowArchiveConfirm(true)}
+                          disabled={isSaving || isArchiving}
+                          className={cn(
+                            "px-4 py-2 text-sm rounded border",
+                            theme === "dark"
+                              ? "border-amber-600 text-amber-400 hover:bg-amber-900 hover:bg-opacity-20"
+                              : "border-amber-500 text-amber-600 hover:bg-amber-50",
+                            (isSaving || isArchiving) ? "opacity-50 cursor-not-allowed" : "",
+                          )}
+                        >
+                          В архив
+                        </button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => setShowDeleteConfirm(true)}
+                                disabled={isSaving || isDeleting}
+                                className={cn(
+                                  "p-2 rounded border transition-colors",
+                                  theme === "dark"
+                                    ? "border-red-600 text-red-400 hover:bg-red-900 hover:bg-opacity-20"
+                                    : "border-red-300 text-red-600 hover:bg-red-50",
+                                  (isSaving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                                )}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Удалить</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     )}
 
                     <div className="flex gap-2">
                       <button
                         onClick={handleClose}
-                        disabled={isSaving}
+                        disabled={isSaving || isArchiving || isDeleting}
                         className={cn(
                           "px-4 py-2 text-sm rounded border",
                           theme === "dark"
                             ? "border-slate-600 text-slate-300 hover:bg-slate-700"
                             : "border-slate-300 text-slate-600 hover:bg-slate-50",
-                          isSaving ? "opacity-50 cursor-not-allowed" : "",
+                          (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       >
                         Отмена
@@ -2297,6 +2455,8 @@ export function LoadingModal({
                         onClick={handleSave}
                         disabled={
                           isSaving ||
+                          isArchiving ||
+                          isDeleting ||
                           !selectedEmployee ||
                           !formData.startDate ||
                           !formData.endDate ||
@@ -2312,6 +2472,8 @@ export function LoadingModal({
                             ? "bg-teal-600 text-white hover:bg-teal-700"
                             : "bg-teal-500 text-white hover:bg-teal-600",
                           (isSaving ||
+                            isArchiving ||
+                            isDeleting ||
                             !selectedEmployee ||
                             !formData.startDate ||
                             !formData.endDate ||
