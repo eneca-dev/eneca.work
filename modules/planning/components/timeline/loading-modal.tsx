@@ -267,6 +267,9 @@ export function LoadingModal({
   const [refreshingProjects, setRefreshingProjects] = useState<Set<string>>(new Set())
   const [isRefreshingAll, setIsRefreshingAll] = useState(false)
 
+  // State for controlling stage change in edit mode
+  const [isChangingStage, setIsChangingStage] = useState(false)
+
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
   const hasLoadedTreeRef = useRef(false)
@@ -1105,6 +1108,9 @@ export function LoadingModal({
 
       // Clear errors
       setErrors({})
+
+      // Reset isChangingStage (in create mode, tree is always unlocked)
+      setIsChangingStage(false)
     }
 
     // Reset modal state when reopening in edit mode
@@ -1119,6 +1125,9 @@ export function LoadingModal({
 
       // Clear errors
       setErrors({})
+
+      // Reset isChangingStage (in edit mode, tree starts locked)
+      setIsChangingStage(false)
 
       console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading при открытии")
     }
@@ -1146,6 +1155,9 @@ export function LoadingModal({
         })
         console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading")
       }
+
+      // Reset isChangingStage when modal closes
+      setIsChangingStage(false)
     }
   }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
 
@@ -1275,6 +1287,11 @@ export function LoadingModal({
       setSelectedNode(node)
       setBreadcrumbs(buildBreadcrumbs(node))
 
+      // Reset changing stage flag (lock the tree again in edit mode)
+      if (mode === "edit") {
+        setIsChangingStage(false)
+      }
+
       // Clear error
       if (errors.decompositionStageId) {
         setErrors((prev) => {
@@ -1394,17 +1411,24 @@ export function LoadingModal({
 
     const isDisabledStage = !isSelected && selectedNode && isDecompositionStageNode
 
+    // Tree is locked in edit mode until user clicks "Сменить этап"
+    const isTreeLocked = mode === "edit" && !isChangingStage
+
     const nodeContent = (
       <div
         className={cn(
           "group flex items-center gap-1 py-1 px-2 text-sm rounded-sm select-none transition-colors duration-150",
-          isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
-          !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
-          !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
-          !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          isTreeLocked && "opacity-50 cursor-not-allowed",
+          !isTreeLocked && isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
+          !isTreeLocked && !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          !isTreeLocked && !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
+          !isTreeLocked && !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={async () => {
+          // Prevent all interactions when tree is locked
+          if (isTreeLocked) return
+
           if (node.type === "folder") {
             await toggleFolder(node.id)
           } else if (node.type === "file" && node.decompositionStageId) {
@@ -1489,7 +1513,16 @@ export function LoadingModal({
 
     return (
       <div key={node.id}>
-        {isDisabledStage ? (
+        {isTreeLocked ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {nodeContent}
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Нажмите &quot;Сменить этап&quot; для изменения этапа декомпозиции</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : isDisabledStage ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {nodeContent}
@@ -2060,25 +2093,32 @@ export function LoadingModal({
                   </div>
 
                   {/* View Mode Toggle */}
-                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                  <div className={cn(
+                    "flex gap-1 p-1 bg-muted rounded-lg",
+                    mode === "edit" && !isChangingStage && "opacity-50 cursor-not-allowed"
+                  )}>
                     <button
                       onClick={() => setViewMode("my")}
+                      disabled={mode === "edit" && !isChangingStage}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
                           ? "bg-background shadow-sm"
-                          : "hover:bg-background/50"
+                          : "hover:bg-background/50",
+                        mode === "edit" && !isChangingStage && "cursor-not-allowed"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
+                      disabled={mode === "edit" && !isChangingStage}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
                           ? "bg-background shadow-sm"
-                          : "hover:bg-background/50"
+                          : "hover:bg-background/50",
+                        mode === "edit" && !isChangingStage && "cursor-not-allowed"
                       )}
                     >
                       Все проекты
@@ -2092,7 +2132,11 @@ export function LoadingModal({
                       placeholder="Поиск проектов..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
-                      className="h-8 pl-8 text-sm"
+                      className={cn(
+                        "h-8 pl-8 text-sm",
+                        mode === "edit" && !isChangingStage && "opacity-50 cursor-not-allowed"
+                      )}
+                      disabled={mode === "edit" && !isChangingStage}
                     />
                   </div>
 
@@ -2171,6 +2215,7 @@ export function LoadingModal({
                     </div>
                     <button
                       onClick={() => {
+                        setIsChangingStage(true)
                         setSelectedNode(null)
                         setBreadcrumbs([])
                       }}
