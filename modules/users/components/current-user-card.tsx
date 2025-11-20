@@ -63,22 +63,26 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
           const formattedUser: User = {
             id: userData.user_id,
             email: userData.email || "",
-            name: userData.full_name?.trim() || 
-                  (userData.first_name && userData.last_name 
+            name: userData.full_name?.trim() ||
+                  (userData.first_name && userData.last_name
                     ? `${userData.first_name} ${userData.last_name}`.trim()
                     : userState.name || ""),
             avatar_url: userData.avatar_url || "",
             position: userData.position_name === "Без должности" ? "" : userData.position_name || "",
+            subdivision: userData.subdivision_name || "",
+            subdivisionId: userData.subdivision_id || undefined,
             department: userData.department_name === "Без отдела" ? "" : userData.department_name || "",
+            departmentId: userData.department_id || undefined,
             team: userData.team_name || "",
+            teamId: userData.team_id || undefined,
             category: userData.category_name === "Не применяется" ? "" : userData.category_name || "",
             role: userData.roles_display_string || "",
 
             dateJoined: userData.created_at || "",
-            workLocation: 
-              userData.work_format === "Гибридный" ? "hybrid" : 
-              userData.work_format === "В офисе" ? "office" : 
-              userData.work_format === "Удаленно" ? "remote" : 
+            workLocation:
+              userData.work_format === "Гибридный" ? "hybrid" :
+              userData.work_format === "В офисе" ? "office" :
+              userData.work_format === "Удаленно" ? "remote" :
               "office",
             country: userData.country_name || "",
             city: userData.city_name || "",
@@ -227,17 +231,20 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                 className="h-16 w-16"
                 onAvatarUploaded={handleAvatarUploaded}
               />
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-medium">{currentUser.name}</h3>
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hidden lg:flex">
+                {/* Первая строка: Должность • Подразделение • Отдел */}
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                   {currentUser.position && <span>{currentUser.position}</span>}
-                  {currentUser.position && (currentUser.department || currentUser.team) && <span>•</span>}
-                  {currentUser.department && <span>{currentUser.department}</span>}
-                  {currentUser.department && currentUser.team && <span>•</span>}
-                  {currentUser.team && <span>{currentUser.team}</span>}
-                  {currentUser.workLocation && (currentUser.position || currentUser.department || currentUser.team) && (
-                    <span>•</span>
-                  )}
+                  {currentUser.position && (currentUser.subdivision || currentUser.department) && <span>•</span>}
+                  {currentUser.subdivision && <span className="truncate max-w-[200px]">{currentUser.subdivision}</span>}
+                  {currentUser.subdivision && currentUser.department && <span>•</span>}
+                  {currentUser.department && <span className="truncate max-w-[150px]">{currentUser.department}</span>}
+                </div>
+                {/* Вторая строка: Команда • Расположение • Роль */}
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  {currentUser.team && <span className="truncate max-w-[120px]">{currentUser.team}</span>}
+                  {currentUser.team && currentUser.workLocation && <span>•</span>}
                   {currentUser.workLocation && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -251,20 +258,18 @@ function CurrentUserCard({ onUserUpdated, fallbackUser }: CurrentUserCardProps) 
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>
-                          {currentUser.country && currentUser.city 
+                          {currentUser.country && currentUser.city
                             ? `${currentUser.city}, ${currentUser.country}`
-                            : currentUser.country 
+                            : currentUser.country
                               ? currentUser.country
-                              : currentUser.city 
-                                ? currentUser.city 
+                              : currentUser.city
+                                ? currentUser.city
                                 : "Местоположение не указано"}
                         </p>
                       </TooltipContent>
                     </Tooltip>
                   )}
-                  {currentUser.role && (currentUser.workLocation || currentUser.position || currentUser.department || currentUser.team) && (
-                    <span>•</span>
-                  )}
+                  {currentUser.role && (currentUser.team || currentUser.workLocation) && <span>•</span>}
                   {currentUser.role && (
                     <span className="text-gray-400 dark:text-gray-500 font-medium">
                       {currentUser.role}

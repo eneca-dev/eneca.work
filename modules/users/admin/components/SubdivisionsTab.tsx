@@ -22,10 +22,6 @@ import * as Sentry from "@sentry/nextjs"
 const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: number = 300) => {
   await new Promise(resolve => setTimeout(resolve, initialDelay))
   await fetchFn()
-
-  setTimeout(async () => {
-    await fetchFn()
-  }, 1000)
 }
 
 interface Subdivision {
@@ -134,13 +130,12 @@ function SubdivisionsTab() {
   }, [subdivisions, search])
 
   // Обработчики для управления подразделениями
-  const handleCreateSubdivision = useCallback(async () => {
+  const handleCreateSubdivision = useCallback(() => {
     Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'SubdivisionsTab: open create subdivision' })
-    await fetchSubdivisions()
     setModalMode("create")
     setSelectedSubdivision(null)
     setModalOpen(true)
-  }, [fetchSubdivisions])
+  }, [])
 
   const handleEditSubdivision = useCallback((subdivision: Subdivision) => {
     Sentry.addBreadcrumb({
@@ -467,12 +462,7 @@ function SubdivisionsTab() {
       {/* Модальное окно для создания/редактирования подразделения */}
       <EntityModal
         open={modalOpen}
-        onOpenChange={async (open) => {
-          setModalOpen(open)
-          if (!open) {
-            await refreshWithDelay(fetchSubdivisions, 300)
-          }
-        }}
+        onOpenChange={setModalOpen}
         title={modalMode === "create" ? "Создать подразделение" : "Редактировать подразделение"}
         mode={modalMode}
         table="subdivisions"

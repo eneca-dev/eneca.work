@@ -27,8 +27,8 @@ export function validateEntityName(value: string): ValidationResult {
     errors.push("Название должно содержать минимум 2 символа")
   }
 
-  if (normalizedValue.length > 20) {
-    errors.push("Название не может быть длиннее 20 символов")
+  if (normalizedValue.length > 40) {
+    errors.push("Название не может быть длиннее 40 символов")
   }
 
   // 4. Проверка алфавита (кириллица + цифры + пробелы + дефисы)

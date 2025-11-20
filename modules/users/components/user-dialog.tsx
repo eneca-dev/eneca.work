@@ -10,11 +10,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { updateUser, getDepartments, getTeams, getPositions, getCategories } from "@/services/org-data-service"
+import { updateUser, getDepartments, getTeams, getPositions, getCategories, getSubdivisions } from "@/services/org-data-service"
 import { getAllRoles, assignRoleToUser, revokeRoleFromUser, getUserRoles } from "@/modules/permissions/supabase/supabasePermissions"
 import type { Role } from "@/modules/permissions/types"
 // УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
-import type { User, Department, Team, Position, Category } from "@/types/db"
+import type { User, Department, Team, Position, Category, Subdivision } from "@/types/db"
 import { toast } from "@/components/ui/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
@@ -38,6 +38,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     firstName: "",
     lastName: "",
     email: "",
+    subdivision: "",
     position: "",
     department: "",
     team: "",
@@ -49,9 +50,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     employmentRate: 1,
   })
 
+  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
+  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [roles, setRoles] = useState<Role[]>([])
@@ -133,6 +136,9 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   // Руководитель подразделения может редактировать сотрудников своего подразделения
   // Руководитель отдела может редактировать только сотрудников своего отдела
   const canEditSalaryFields = React.useMemo(() => {
+    // Subdivision_head не может редактировать свою ставку и загруженность
+    if (isSelfEdit && isSubdivisionHead) return false
+
     // Админ с полными правами может редактировать всех
     if (canEditSalaryAll) return true
 
@@ -155,11 +161,18 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       // Если не известны ID отделов, запрещаем редактирование
       if (!currentDepartmentId || !targetDepartmentId) return false
 
-      return currentDepartmentId === targetDepartmentId
+      // Проверяем принадлежность к одному отделу
+      if (currentDepartmentId !== targetDepartmentId) return false
+
+      // Руководитель отдела может редактировать только team_lead и user
+      const targetRole = user?.role?.toLowerCase()
+      const allowedRoles = ['team_lead', 'user']
+
+      return allowedRoles.includes(targetRole || '')
     }
 
     return false
-  }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user])
+  }, [canEditSalaryAll, canEditSalarySubdivision, canEditSalaryDepartment, currentUserProfile, user, isSelfEdit, isSubdivisionHead])
 
   // Определяем, редактирует ли пользователь свой собственный профиль
   const isEditingOwnProfile = user?.id === currentUserId
@@ -168,21 +181,24 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   useEffect(() => {
     async function loadReferenceData() {
       try {
-        const [departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Sentry.startSpan({ name: 'Users/UserDialog loadReferenceData', op: 'ui.load' }, async () => Promise.all([
+        const [subdivisionsData, departmentsData, teamsData, positionsData, categoriesData, rolesData] = await Sentry.startSpan({ name: 'Users/UserDialog loadReferenceData', op: 'ui.load' }, async () => Promise.all([
+          getSubdivisions(),
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
           getAllRoles()
         ]))
-        
+
         console.log("=== UserDialog: Загружены справочные данные ===")
+        console.log("subdivisions:", subdivisionsData)
         console.log("departments:", departmentsData)
         console.log("teams:", teamsData)
         console.log("positions:", positionsData)
         console.log("categories:", categoriesData)
         console.log("roles:", rolesData)
-        
+
+        setSubdivisions(subdivisionsData)
         setDepartments(departmentsData)
         setTeams(teamsData)
         setPositions(positionsData)
@@ -341,6 +357,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         firstName,
         lastName,
         email: user.email || "",
+        subdivision: user.subdivision || "",
         position: user.position || "",
         department: user.department || "",
         team: user.team || "",
@@ -371,6 +388,17 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       
       // Роли теперь управляются отдельно через handleRoleToggle
       
+      // Инициализируем filteredDepartments на основе подразделения пользователя
+      if (user.subdivision && user.subdivision !== "") {
+        const subdivisionId = subdivisions.find((s) => s.name === user.subdivision)?.id
+        if (subdivisionId) {
+          const filtered = departments.filter((d) => d.subdivisionId === subdivisionId)
+          setFilteredDepartments(filtered)
+        }
+      } else {
+        setFilteredDepartments(departments)
+      }
+
       // Инициализируем filteredTeams на основе отдела пользователя
       if (user.department && user.department !== "") {
         const departmentId = departments.find((d) => d.name === user.department)?.id
@@ -390,7 +418,44 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         }))
       }
     }
-  }, [open, user, countries, roles, canEditRoles, departments, teams, canEditOnlyTeam])
+  }, [open, user, countries, roles, canEditRoles, departments, teams, subdivisions, canEditOnlyTeam])
+
+  // Фильтрация отделов по выбранному подразделению
+  useEffect(() => {
+    console.log("=== UserDialog: Фильтрация отделов ===")
+    console.log("formData.subdivision:", formData.subdivision)
+    console.log("subdivisions:", subdivisions)
+    console.log("departments:", departments)
+
+    if (formData.subdivision && formData.subdivision !== "") {
+      const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
+      console.log("Найденный subdivisionId:", subdivisionId)
+
+      // Фильтруем отделы по подразделению
+      const filtered = departments.filter((d) => {
+        // Проверяем есть ли у отдела поле subdivisionId
+        const deptSubdivisionId = (d as any).subdivisionId
+        return deptSubdivisionId === subdivisionId
+      })
+      console.log("Отфильтрованные отделы:", filtered)
+      setFilteredDepartments(filtered)
+
+      // Если выбранный отдел не принадлежит выбранному подразделению, сбрасываем его и команду
+      if (formData.department && formData.department !== "") {
+        const departmentExists = filtered.some((d) => d.name === formData.department)
+        console.log("Отдел найден в подразделении:", departmentExists)
+
+        if (!departmentExists) {
+          console.log("Сбрасываем отдел и команду, так как отдел не принадлежит подразделению")
+          setFormData((prev) => ({ ...prev, department: "", team: "" }))
+        }
+      }
+    } else {
+      console.log("Подразделение не выбрано, показываем все отделы")
+      setFilteredDepartments(departments)
+    }
+  }, [formData.subdivision, subdivisions, departments])
+
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     console.log("=== UserDialog: Фильтрация команд ===")
@@ -430,21 +495,29 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
   const handleChange = (field: string, value: string | boolean | number) => {
     setFormData((prev) => {
       let processedValue = value
-      
+
       // Преобразуем специальные значения в пустые строки для внутреннего состояния
-      if (field === "department" && value === "no-department") {
+      if (field === "subdivision" && value === "no-subdivision") {
+        processedValue = ""
+      } else if (field === "department" && value === "no-department") {
         processedValue = ""
       } else if (field === "team" && value === "no-team") {
         processedValue = ""
       }
-      
+
       const newData = { ...prev, [field]: processedValue }
-      
+
+      // При изменении подразделения сбрасываем отдел и команду
+      if (field === "subdivision") {
+        newData.department = ""
+        newData.team = ""
+      }
+
       // При изменении отдела сбрасываем команду
       if (field === "department") {
         newData.team = ""
       }
-      
+
       return newData
     })
   }
@@ -575,7 +648,12 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
         if (trimmedEmail && trimmedEmail !== currentEmail) {
           updateData.email = trimmedEmail
         }
-        
+
+        // Добавляем подразделение если пользователь admin
+        if (isAdmin && formData.subdivision !== undefined) {
+          updateData.subdivision = formData.subdivision && formData.subdivision !== "" ? formData.subdivision : null
+        }
+
         // Добавляем отдел если пользователь может его редактировать
         if (canEditDepartmentField) {
           // Отдел - может быть пустым (null)
@@ -831,6 +909,32 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
               </div>
             </div>
             
+            {/* Подразделение */}
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
+              <Label className="text-right md:col-span-1 col-span-full pt-2">Подразделение</Label>
+              <Select
+                value={formData.subdivision}
+                onValueChange={(value) => handleChange("subdivision", value)}
+                disabled={!isAdmin}
+              >
+                <SelectTrigger className={`md:col-span-3 col-span-full ${!formData.subdivision ? "border-purple-200 bg-purple-50" : ""}`}>
+                  <SelectValue placeholder="Выберите подразделение" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-subdivision" className="text-purple-600">
+                    Без подразделения
+                  </SelectItem>
+                  {subdivisions && subdivisions.length > 0 ? subdivisions.map((subdivision) => (
+                    <SelectItem key={subdivision.id} value={subdivision.name}>
+                      {subdivision.name}
+                    </SelectItem>
+                  )) : (
+                    <SelectItem value="loading-subdivisions" disabled>Загрузка подразделений...</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Отдел и Команда в одну строку */}
             <div className="grid grid-cols-1 md:grid-cols-4 items-start gap-3">
               <Label className="text-right md:col-span-1 col-span-full flex items-center gap-2 pt-2">
@@ -853,7 +957,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         Без отдела
                       </span>
                     </SelectItem>
-                    {departments && departments.length > 0 ? departments.map((department) => (
+                    {filteredDepartments && filteredDepartments.length > 0 ? filteredDepartments.map((department) => (
                       <SelectItem key={department.id} value={department.name}>
                         <span className="flex items-center gap-2">
                           <Building2 className="h-4 w-4" />
@@ -861,7 +965,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                         </span>
                       </SelectItem>
                     )) : (
-                      <SelectItem value="loading-departments" disabled>Загрузка отделов...</SelectItem>
+                      <SelectItem value="loading-departments" disabled>Нет отделов в подразделении</SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -902,8 +1006,8 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   <div className="flex items-start gap-2">
                     <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
                     <div className="min-w-0">
-                      <strong>Логика назначения:</strong> Команда может быть назначена только при выбранном отделе. 
-                      Если отдел не выбран, команда автоматически сбрасывается.
+                      <strong>Логика назначения:</strong> Команда может быть назначена только при выбранном отделе.
+                      Если отдел не выбран, команда автоматически сбрасывается. При изменении подразделения отдел и команда сбрасываются.
                     </div>
                   </div>
                 </div>
@@ -970,7 +1074,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     className="h-9"
                     title={!canEditSalaryFields ? "Недостаточно прав для редактирования ставки" : ""}
                   />
-                  <p className="text-xs text-gray-500">Ставка {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
+                  <p className="text-xs text-gray-500">Ставка BYN/час {!canEditSalaryFields && <span className="text-orange-600">(недоступно для редактирования)</span>}</p>
                 </div>
 
                 <div className="space-y-1">

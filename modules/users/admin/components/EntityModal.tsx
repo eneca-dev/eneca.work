@@ -235,13 +235,8 @@ export default function EntityModal({
     return true
   }, [formData, nameField, validation.isValid, duplicateError, extraFields])
 
-  // Обработчик закрытия модального окна с дополнительным обновлением
-  const handleClose = async () => {
-    // Если это создание, принудительно обновляем данные
-    if (mode === "create") {
-      await new Promise(resolve => setTimeout(resolve, 200))
-      onSuccess()
-    }
+  // Обработчик закрытия модального окна
+  const handleClose = () => {
     onOpenChange(false)
   }
 
