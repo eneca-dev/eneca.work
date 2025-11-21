@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, Link, Trash2 } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2 } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -81,6 +81,7 @@ interface FileTreeNode {
   loadingId?: string // For loading nodes
   loading?: Loading // Full loading object for edit mode
   isUnsaved?: boolean // Flag for unsaved loading node
+  isNavigationNode?: boolean // Flag for navigation node (e.g., "Перейти к декомпозиции")
 }
 
 interface LoadingModalProps {
@@ -113,7 +114,7 @@ interface EmployeeSearchResult {
   employment_rate: number | null
 }
 
-const RATES = [0.2, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+const RATES = [0.2, 0.25, 0.5, 0.75, 1]
 const DROPDOWN_MAX_HEIGHT_PX = 256
 
 export function LoadingModal({
@@ -204,6 +205,10 @@ export function LoadingModal({
     rate: mode === "edit" && loading ? loading.rate ?? 1 : defaultRate ?? 1,
     comment: mode === "edit" && loading ? loading.comment || "" : "",
   })
+
+  // Separate state for manual rate input field
+  const [manualRateInput, setManualRateInput] = useState("")
+  const [manualRateError, setManualRateError] = useState("")
 
   // FileTree state
   const [treeData, setTreeData] = useState<FileTreeNode[]>([])
@@ -565,7 +570,21 @@ export function LoadingModal({
               node.projectId
             )
 
-            sectionNode.children = decompNodes
+            // Create navigation node to open SectionPanel
+            const navigationNode: FileTreeNode = {
+              id: `nav-${sectionNode.sectionId}`,
+              name: "Перейти к декомпозиции",
+              type: "file",
+              parentId: sectionNode.id,
+              sectionId: sectionNode.sectionId,
+              objectId: sectionNode.objectId,
+              stageId: sectionNode.stageId,
+              projectId: sectionNode.projectId,
+              isNavigationNode: true,
+            }
+
+            // Add navigation node BEFORE decomposition stages
+            sectionNode.children = [navigationNode, ...decompNodes]
           }
 
           objectNode.children = sectionNodes
@@ -1452,6 +1471,7 @@ export function LoadingModal({
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
     const isDecompositionStageNode = node.type === "file" && node.decompositionStageId
+    const isNavigationNode = node.isNavigationNode === true
     const isSelected = selectedNode?.id === node.id
     const hasChildren = node.children && node.children.length > 0
     const isLoading = loadingNodes.has(node.id)
@@ -1471,14 +1491,38 @@ export function LoadingModal({
       <div
         className={cn(
           "group flex items-center gap-1 py-1 px-2 text-sm rounded-sm select-none transition-colors duration-150",
-          isTreeLocked && "opacity-50 cursor-not-allowed",
-          !isTreeLocked && isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
-          !isTreeLocked && !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
-          !isTreeLocked && !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
-          !isTreeLocked && !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          isNavigationNode && "text-primary/80 hover:bg-primary/5 hover:text-primary cursor-pointer italic",
+          !isNavigationNode && isTreeLocked && "opacity-50 cursor-not-allowed",
+          !isNavigationNode && !isTreeLocked && isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
+          !isNavigationNode && !isTreeLocked && !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          !isNavigationNode && !isTreeLocked && !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
+          !isNavigationNode && !isTreeLocked && !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={async () => {
+          // Handle navigation node click
+          if (isNavigationNode && node.sectionId) {
+            // Find the parent section node
+            const findSectionNode = (nodes: FileTreeNode[], sectionId: string): FileTreeNode | null => {
+              for (const n of nodes) {
+                if (n.sectionId === sectionId && n.type === "folder" && !n.decompositionStageId) {
+                  return n
+                }
+                if (n.children) {
+                  const found = findSectionNode(n.children, sectionId)
+                  if (found) return found
+                }
+              }
+              return null
+            }
+            const sectionNode = findSectionNode(treeData, node.sectionId)
+            if (sectionNode) {
+              setSelectedNode(sectionNode)
+              setShowSectionPanel(true)
+            }
+            return
+          }
+
           // Prevent interactions only for locked decomposition stages
           if (isTreeLocked) return
 
@@ -1492,7 +1536,12 @@ export function LoadingModal({
           }
         }}
       >
-        {node.type === "folder" ? (
+        {isNavigationNode ? (
+          <>
+            <div className="h-4 w-4" />
+            <ExternalLink className="h-4 w-4 text-primary" />
+          </>
+        ) : node.type === "folder" ? (
           <>
             <button className="h-4 w-4 p-0">
               {isLoading ? (
@@ -1533,30 +1582,6 @@ export function LoadingModal({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Обновить проект</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        )}
-
-        {/* Hover action icons for section nodes */}
-        {isSectionNode && (
-          <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* Navigate to decomposition */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedNode(node)
-                    setShowSectionPanel(true)
-                  }}
-                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors"
-                >
-                  <Link className="h-4 w-4 text-primary" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Перейти к декомпозиции</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1659,12 +1684,52 @@ export function LoadingModal({
     }
   }
 
+  // Handle manual rate input
+  const handleManualRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    // Replace comma with period for decimal separator
+    const normalizedValue = value.replace(/,/g, ".")
+
+    // Update the input field with normalized value
+    setManualRateInput(normalizedValue)
+
+    // Parse and validate
+    if (normalizedValue === "") {
+      setFormData((prev) => ({ ...prev, rate: 0 }))
+      setManualRateError("")
+    } else {
+      const numericValue = Number.parseFloat(normalizedValue)
+      if (!Number.isNaN(numericValue)) {
+        setFormData((prev) => ({ ...prev, rate: numericValue }))
+
+        // Validate range
+        if (numericValue <= 0) {
+          setManualRateError("Ставка должна быть больше 0")
+        } else if (numericValue > 2) {
+          setManualRateError("Ставка должна быть не более 2")
+        } else {
+          setManualRateError("")
+        }
+      }
+    }
+
+    // Clear rate error if exists
+    if (errors.rate) {
+      setErrors((prev) => {
+        const newErrors = { ...prev }
+        delete newErrors.rate
+        return newErrors
+      })
+    }
+  }
+
   // Handle form changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "rate" ? (value === "" ? 0 : Number.parseFloat(value) || 0) : value,
+      [name]: value,
     }))
 
     if (errors[name]) {
@@ -2452,8 +2517,11 @@ export function LoadingModal({
                       {RATES.map((rate) => (
                         <button
                           key={rate}
+                          type="button"
                           onClick={() => {
                             setFormData((prev) => ({ ...prev, rate }))
+                            setManualRateInput("") // Clear manual input when chip is clicked
+                            setManualRateError("") // Clear manual rate error
                             if (errors.rate) {
                               setErrors((prev) => {
                                 const newErrors = { ...prev }
@@ -2462,16 +2530,41 @@ export function LoadingModal({
                               })
                             }
                           }}
+                          disabled={isSaving || isArchiving || isDeleting}
                           className={cn(
                             "px-3 py-1 rounded-full text-sm font-medium border transition-colors",
                             formData.rate === rate
                               ? "bg-primary text-primary-foreground border-primary"
                               : "bg-background text-foreground border-input hover:bg-accent",
+                            (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                           )}
                         >
                           {rate}
                         </button>
                       ))}
+                    </div>
+
+                    {/* Manual input for custom rate */}
+                    <div className="mt-3">
+                      <label className="block text-xs text-muted-foreground mb-1">Или введите своё значение:</label>
+                      <input
+                        type="text"
+                        value={manualRateInput}
+                        onChange={handleManualRateChange}
+                        placeholder="1.25"
+                        disabled={isSaving || isArchiving || isDeleting}
+                        className={cn(
+                          "w-20 text-sm rounded-full border px-3 py-1 outline-none focus:ring-2 focus:ring-offset-0 transition-all",
+                          theme === "dark"
+                            ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
+                            : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
+                          manualRateError
+                            ? "!border-red-500 focus:!ring-red-500 focus:!border-red-500"
+                            : "focus:ring-primary focus:border-primary",
+                          (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                        )}
+                      />
+                      {manualRateError && <p className="text-xs text-red-500 mt-1">{manualRateError}</p>}
                     </div>
                     {errors.rate && <p className="text-xs text-red-500 mt-1">{errors.rate}</p>}
                   </div>
