@@ -421,18 +421,6 @@ useEffect(() => {
     }
   }, [])
 
-  // Получаем данные для заголовка
-  const { columnVisibility } = usePlanningColumnsStore()
-
-  // Генерируем timeUnits для заголовка
-  const timeUnits = generateTimeUnits(startDate, daysToShow)
-
-  // Константы для размеров (должны совпадать с timeline-grid.tsx)
-  const HEADER_HEIGHT = 40
-  const PADDING = 12
-  const LEFT_OFFSET = 0
-  const CELL_WIDTH = cellWidth || 22
-  const COLUMN_WIDTH = 430
 
   // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
   useEffect(() => {
@@ -562,7 +550,7 @@ useEffect(() => {
               toggleShowDepartments={toggleShowDepartments}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
-              headerRightScrollRef={headerRightScrollRef}
+              headerRightScrollRef={headerRightScrollRef as React.RefObject<HTMLDivElement>}
               scrollbarWidth={scrollbarWidth}
             />
           </div>
