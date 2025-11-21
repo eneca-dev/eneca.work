@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2 } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2, FilePenLine } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -2348,12 +2348,13 @@ export function LoadingModal({
                           setBreadcrumbs([])
                         }}
                         className={cn(
-                          "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
+                          "inline-flex items-center px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
                           theme === "dark"
                             ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
                             : "border-teal-500 text-teal-600 hover:bg-teal-50"
                         )}
                       >
+                        <FilePenLine className="w-4 h-4 mr-2" />
                         Сменить этап
                       </button>
                     </div>
