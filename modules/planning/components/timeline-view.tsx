@@ -476,7 +476,7 @@ useEffect(() => {
               toggleShowDepartments={toggleShowDepartments}
               expandAllDepartments={expandAllDepartments}
               collapseAllDepartments={collapseAllDepartments}
-              headerRightScrollRef={headerRightScrollRef}
+              headerRightScrollRef={headerRightScrollRef as React.RefObject<HTMLDivElement>}
               scrollbarWidth={scrollbarWidth}
             />
           </div>

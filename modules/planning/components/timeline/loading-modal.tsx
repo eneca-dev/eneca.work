@@ -275,6 +275,11 @@ export function LoadingModal({
   // State for controlling stage change in edit mode
   const [isChangingStage, setIsChangingStage] = useState(false)
 
+  // State for controlling form display in create mode (two-step process)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  // Flag for tracking when user is selecting a new stage (keeps form visible, unlocks tree)
+  const [isSelectingNewStage, setIsSelectingNewStage] = useState(false)
+
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
   const hasLoadedTreeRef = useRef(false)
@@ -1123,6 +1128,12 @@ export function LoadingModal({
 
       // Reset isChangingStage (in create mode, tree is always unlocked)
       setIsChangingStage(false)
+
+      // Reset showCreateForm (start with stage selection screen)
+      setShowCreateForm(false)
+
+      // Reset isSelectingNewStage flag
+      setIsSelectingNewStage(false)
     }
 
     // Reset modal state when reopening in edit mode
@@ -1170,6 +1181,12 @@ export function LoadingModal({
 
       // Reset isChangingStage when modal closes
       setIsChangingStage(false)
+
+      // Reset showCreateForm when modal closes
+      setShowCreateForm(false)
+
+      // Reset isSelectingNewStage when modal closes
+      setIsSelectingNewStage(false)
     }
   }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
 
@@ -1302,6 +1319,11 @@ export function LoadingModal({
       // Reset changing stage flag (lock the tree again in edit mode)
       if (mode === "edit") {
         setIsChangingStage(false)
+      }
+
+      // In create mode: if we were selecting a new stage, lock tree again
+      if (mode === "create" && isSelectingNewStage) {
+        setIsSelectingNewStage(false)
       }
 
       // Clear error
@@ -1439,8 +1461,11 @@ export function LoadingModal({
 
     const isDisabledStage = !isSelected && selectedNode && isDecompositionStageNode
 
-    // Tree is locked in edit mode until user clicks "Сменить этап"
-    const isTreeLocked = mode === "edit" && !isChangingStage
+    // In edit mode: only lock decomposition stages until user clicks "Сменить этап"
+    const isStageLockedInEdit = mode === "edit" && !isChangingStage && isDecompositionStageNode
+    // In create mode: lock ENTIRE tree when form is shown AND not selecting new stage
+    const isNodeLockedInCreate = mode === "create" && showCreateForm && !isSelectingNewStage
+    const isTreeLocked = isStageLockedInEdit || isNodeLockedInCreate
 
     const nodeContent = (
       <div
@@ -1454,7 +1479,7 @@ export function LoadingModal({
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={async () => {
-          // Prevent all interactions when tree is locked
+          // Prevent interactions only for locked decomposition stages
           if (isTreeLocked) return
 
           if (node.type === "folder") {
@@ -1547,7 +1572,11 @@ export function LoadingModal({
               {nodeContent}
             </TooltipTrigger>
             <TooltipContent>
-              <p>Нажмите &quot;Сменить этап&quot; для изменения этапа декомпозиции</p>
+              <p>
+                {mode === "edit"
+                  ? "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"
+                  : "Дерево заблокировано - форма открыта. Нажмите \"Сменить этап\" для изменения"}
+              </p>
             </TooltipContent>
           </Tooltip>
         ) : isDisabledStage ? (
@@ -2123,30 +2152,30 @@ export function LoadingModal({
                   {/* View Mode Toggle */}
                   <div className={cn(
                     "flex gap-1 p-1 bg-muted rounded-lg",
-                    mode === "edit" && !isChangingStage && "opacity-50 cursor-not-allowed"
+                    ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                   )}>
                     <button
                       onClick={() => setViewMode("my")}
-                      disabled={mode === "edit" && !isChangingStage}
+                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
                           ? "bg-background shadow-sm"
                           : "hover:bg-background/50",
-                        mode === "edit" && !isChangingStage && "cursor-not-allowed"
+                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
-                      disabled={mode === "edit" && !isChangingStage}
+                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
                           ? "bg-background shadow-sm"
                           : "hover:bg-background/50",
-                        mode === "edit" && !isChangingStage && "cursor-not-allowed"
+                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
                     >
                       Все проекты
@@ -2162,9 +2191,9 @@ export function LoadingModal({
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
                       className={cn(
                         "h-8 pl-8 text-sm",
-                        mode === "edit" && !isChangingStage && "opacity-50 cursor-not-allowed"
+                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                       )}
-                      disabled={mode === "edit" && !isChangingStage}
+                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                     />
                   </div>
 
@@ -2206,7 +2235,7 @@ export function LoadingModal({
 
             {/* Right side - Form */}
             <div className="flex-1 overflow-y-auto p-6">
-              {selectedNode ? (
+              {(selectedNode || (mode === "create" && showCreateForm && isSelectingNewStage)) && (mode === "edit" || (mode === "create" && showCreateForm)) ? (
                 <div className="space-y-6">
                   {/* Breadcrumbs */}
                   <div className="flex items-center gap-2 text-sm flex-wrap pb-4 border-b dark:border-slate-700">
@@ -2232,32 +2261,76 @@ export function LoadingModal({
                   </div>
 
                   {/* Stage Title with change button */}
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-xl font-semibold dark:text-slate-200">
-                      Загрузка для этапа{" "}
-                      <span className={cn(
-                        theme === "dark" ? "text-teal-400" : "text-teal-600"
-                      )}>
-                        {selectedNode?.name}
-                      </span>
+                  {selectedNode ? (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="text-xl font-semibold dark:text-slate-200">
+                        Загрузка для этапа{" "}
+                        <span className={cn(
+                          theme === "dark" ? "text-teal-400" : "text-teal-600"
+                        )}>
+                          {selectedNode.name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (mode === "edit") {
+                            setIsChangingStage(true)
+                          } else {
+                            // In create mode, keep form visible but unlock tree for stage selection
+                            setIsSelectingNewStage(true)
+                          }
+                          setSelectedNode(null)
+                          setBreadcrumbs([])
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
+                          theme === "dark"
+                            ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
+                            : "border-teal-500 text-teal-600 hover:bg-teal-50"
+                        )}
+                      >
+                        Сменить этап
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        setIsChangingStage(true)
-                        setSelectedNode(null)
-                        setBreadcrumbs([])
-                      }}
-                      className={cn(
-                        "px-3 py-1.5 text-sm rounded border transition-colors flex-shrink-0",
-                        theme === "dark"
-                          ? "border-teal-600 text-teal-400 hover:bg-teal-900 hover:bg-opacity-20"
-                          : "border-teal-500 text-teal-600 hover:bg-teal-50"
-                      )}
-                    >
-                      Сменить этап
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full space-y-6 px-8">
+                      {/* Title */}
+                      <div className="text-center space-y-2">
+                        <div className="text-2xl font-bold dark:text-slate-200">
+                          Смена этапа
+                        </div>
+                        <p className="text-base text-muted-foreground">
+                          Выберите новый этап из дерева слева
+                        </p>
+                      </div>
 
+                      {/* Current loading info */}
+                      <div className="bg-muted/50 rounded-lg p-6 space-y-3 w-full max-w-md">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Сотрудник:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {selectedEmployee?.full_name || "Не выбран"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Ставка:</span>
+                          <span className="text-sm font-medium text-foreground">{formData.rate}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Период:</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {formData.startDate && formData.endDate
+                              ? `${formatDateDisplay(formData.startDate)} — ${formatDateDisplay(formData.endDate)}`
+                              : "Не указан"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show form fields only when stage is selected */}
+                  {selectedNode && (
+                    <>
                   {/* Employee Selector */}
                   <div>
                     <label className="block text-sm font-medium mb-1 dark:text-slate-300">Сотрудник</label>
@@ -2569,6 +2642,50 @@ export function LoadingModal({
                       </button>
                     </div>
                   </div>
+                    </>
+                  )}
+                </div>
+              ) : selectedNode && mode === "create" && !showCreateForm ? (
+                // Create mode - Stage selected, show "Create Loading" button
+                <div className="flex flex-col items-center justify-center h-full space-y-8 px-8">
+                  {/* Breadcrumbs */}
+                  <div className="flex items-center gap-2 text-sm flex-wrap justify-center">
+                    {breadcrumbs.map((item, index) => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        {getNodeIcon(item, false)}
+                        <span className="text-muted-foreground truncate">{item.name}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Stage name */}
+                  <div className="text-center space-y-2">
+                    <div className="text-2xl font-bold dark:text-slate-200">
+                      {selectedNode.name}
+                    </div>
+                    {originalEmployeeRef.current && (
+                      <p className="text-base text-muted-foreground">
+                        Создание загрузки для{" "}
+                        <span className="font-medium text-foreground">
+                          {originalEmployeeRef.current.full_name}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Big Create Loading Button */}
+                  <button
+                    onClick={() => setShowCreateForm(true)}
+                    className={cn(
+                      "px-8 py-4 text-lg font-semibold rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95",
+                      theme === "dark"
+                        ? "bg-teal-600 text-white hover:bg-teal-700"
+                        : "bg-teal-500 text-white hover:bg-teal-600"
+                    )}
+                  >
+                    Создать загрузку
+                  </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
