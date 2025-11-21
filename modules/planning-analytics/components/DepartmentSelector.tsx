@@ -10,95 +10,106 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { DepartmentOption } from "../services/planningAnalyticsService"
+import type { DepartmentOption, DepartmentProjectData } from "../services/planningAnalyticsService"
 
 interface DepartmentSelectorProps {
   options: DepartmentOption[]
   selectedIds: string[]
+  selectedSubdivisionId: string | null
   onChange: (selectedIds: string[]) => void
+  onSubdivisionChange: (subdivisionId: string | null) => void
   onRefresh: () => void
   isLoading?: boolean
+  departmentProjects: DepartmentProjectData[]
 }
 
 export function DepartmentSelector({
   options,
   selectedIds,
+  selectedSubdivisionId,
   onChange,
+  onSubdivisionChange,
   onRefresh,
-  isLoading = false
+  isLoading = false,
+  departmentProjects
 }: DepartmentSelectorProps) {
   const [open, setOpen] = useState(false)
 
   // Обработчик изменения выбора
-  const handleToggle = (id: string) => {
-    let newSelected: string[]
-
-    // Если кликнули на "Общее"
-    if (id === "all") {
-      if (selectedIds.includes("all")) {
-        // Снимаем "Общее" - ничего не делаем или оставляем "Общее"
-        newSelected = ["all"]
+  const handleToggle = (id: string, type: "subdivision" | "department") => {
+    if (type === "subdivision") {
+      if (selectedSubdivisionId === id) {
+        // Снимаем выделение подразделения
+        onSubdivisionChange(null)
+        // НЕ очищаем отделы - они валидны в режиме "все отделы"
       } else {
-        // Включаем "Общее" - сбрасываем все остальные
-        newSelected = ["all"]
+        // Выбираем НОВОЕ подразделение
+        onSubdivisionChange(id)
+        // Очищаем выбранные отделы, т.к. они могут быть из другого подразделения
+        onChange([])
       }
     } else {
-      // Кликнули на отдел
+      // Клик на отдел → переключаем его выбор
       if (selectedIds.includes(id)) {
-        // Снимаем выбор с отдела
-        newSelected = selectedIds.filter(sid => sid !== id)
-
-        // Если ничего не осталось, выбираем "Общее"
-        if (newSelected.length === 0 || newSelected.every(sid => sid === "all")) {
-          newSelected = ["all"]
-        }
+        onChange(selectedIds.filter(sid => sid !== id))
       } else {
-        // Добавляем отдел и убираем "Общее"
-        newSelected = selectedIds.filter(sid => sid !== "all")
-        newSelected.push(id)
+        onChange([...selectedIds, id])
       }
     }
-
-    onChange(newSelected)
   }
 
+  // Разделяем опции по типам
+  const subdivisionOptions = options.filter(opt => opt.type === "subdivision")
 
-  // Подсчёт выбранных
-  const selectedCount = selectedIds.length
+  // Фильтруем отделы по выбранному подразделению
+  const departmentOptions = options.filter(opt => {
+    if (opt.type !== "department") return false
+
+    // Если подразделение не выбрано, показываем все отделы
+    if (!selectedSubdivisionId) return true
+
+    // Если подразделение выбрано, показываем только его отделы
+    const departmentData = departmentProjects.find(dp => dp.department_id === opt.id)
+    return departmentData?.subdivision_id === selectedSubdivisionId
+  })
 
   const getButtonLabel = () => {
     if (isLoading) return "Загрузка..."
-    if (selectedIds.includes("all") && selectedIds.length === 1) return "Общее"
-    if (selectedIds.length === 0) return "Выберите отделы"
+
+    // Если выбрано подразделение
+    if (selectedSubdivisionId) {
+      const subdivisionOption = options.find(opt => opt.id === selectedSubdivisionId && opt.type === "subdivision")
+      const selectedCount = selectedIds.length
+
+      if (selectedCount === 0) {
+        return subdivisionOption?.name || "Подразделение"
+      } else if (selectedCount === 1) {
+        const departmentOption = options.find(opt => opt.id === selectedIds[0] && opt.type === "department")
+        return `${subdivisionOption?.name} / ${departmentOption?.name}`
+      } else {
+        return `${subdivisionOption?.name} (${selectedCount})`
+      }
+    }
+
+    // Если ничего не выбрано
+    if (selectedIds.length === 0) {
+      return "Все отделы"
+    }
+
+    // Если выбран один отдел
     if (selectedIds.length === 1) {
       const option = options.find(opt => opt.id === selectedIds[0])
       return option?.name || "Отдел"
     }
-    return `Выбрано: ${selectedCount}`
+
+    return `Выбрано: ${selectedIds.length}`
   }
 
-  // Обработчик переключения на "Все отделы"
-  const handleSelectAll = () => {
-    onChange(["all"])
+  // Обработчик сброса фильтра
+  const handleResetFilter = () => {
+    onSubdivisionChange(null)
+    onChange([])
   }
-
-  // Обработчик выбора всех отделов планирования (все отделы с загрузками)
-  const handleSelectPlanningDepartments = () => {
-    const allDepartmentIds = filteredOptions.map(opt => opt.id)
-    onChange(allDepartmentIds)
-  }
-
-  // Фильтруем опции - убираем "Общее" из списка
-  const filteredOptions = options.filter(opt => opt.type !== "all")
-
-  // Проверяем, активна ли кнопка "Все отделы"
-  const isAllActive = selectedIds.includes("all") && selectedIds.length === 1
-
-  // Проверяем, выбраны ли все отделы планирования
-  const allDepartmentIds = filteredOptions.map(opt => opt.id)
-  const isPlanningDepartmentsActive = allDepartmentIds.length > 0 &&
-    allDepartmentIds.every(id => selectedIds.includes(id)) &&
-    selectedIds.length === allDepartmentIds.length
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -114,78 +125,107 @@ export function DepartmentSelector({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[280px] bg-white dark:bg-[rgb(15_23_42)]">
         {/* Кнопки управления */}
-        <div className="flex flex-col gap-2 px-2 py-2">
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleSelectAll()
-              }}
-              variant={isAllActive ? "default" : "outline"}
-              size="sm"
-              className="h-7 text-xs px-3 gap-1.5 flex-1"
-            >
-              <BarChart3 className="h-3.5 w-3.5" />
-              Общая аналитика
-            </Button>
-            <Button
-              onClick={(e) => {
-                e.stopPropagation()
-                onRefresh()
-              }}
-              variant="outline"
-              size="sm"
-              disabled={isLoading}
-              className="h-7 w-7 p-0"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 px-2 py-2">
           <Button
             onClick={(e) => {
               e.stopPropagation()
-              handleSelectPlanningDepartments()
+              handleResetFilter()
             }}
-            variant={isPlanningDepartmentsActive ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            className="h-7 text-xs px-3 gap-1.5 w-full"
-            disabled={filteredOptions.length === 0}
+            className="h-7 text-xs px-3 gap-1.5 flex-1"
           >
-            <Building2 className="h-3.5 w-3.5" />
-            Все отделы (с загрузками)
+            <BarChart3 className="h-3.5 w-3.5" />
+            Сбросить фильтр
+          </Button>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRefresh()
+            }}
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+            className="h-7 w-7 p-0"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
         </div>
 
         <DropdownMenuSeparator />
 
-        {/* Список опций с квадратными чекбоксами (без "Общее") */}
+        {/* Список опций с квадратными чекбоксами */}
         <div className="max-h-[300px] overflow-y-auto p-2">
-          {filteredOptions.map((option) => {
-            const isChecked = selectedIds.includes(option.id)
-
-            return (
-              <div
-                key={option.id}
-                className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer"
-                onClick={(e) => {
-                  e.preventDefault()
-                  handleToggle(option.id)
-                }}
-              >
-                <Checkbox
-                  id={option.id}
-                  checked={isChecked}
-                  className="h-4 w-4 pointer-events-none"
-                />
-                <label
-                  htmlFor={option.id}
-                  className="flex-1 cursor-pointer text-sm"
-                >
-                  <span className="truncate">{option.name}</span>
-                </label>
+          {/* Секция подразделений */}
+          {subdivisionOptions.length > 0 && (
+            <>
+              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">
+                Подразделения
               </div>
-            )
-          })}
+              {subdivisionOptions.map((option) => {
+                const isChecked = selectedSubdivisionId === option.id
+
+                return (
+                  <div
+                    key={option.id}
+                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      handleToggle(option.id, "subdivision")
+                    }}
+                  >
+                    <Checkbox
+                      id={option.id}
+                      checked={isChecked}
+                      className="h-4 w-4 pointer-events-none"
+                    />
+                    <label
+                      htmlFor={option.id}
+                      className="flex-1 cursor-pointer text-sm"
+                    >
+                      <span className="truncate">{option.name}</span>
+                    </label>
+                  </div>
+                )
+              })}
+              <DropdownMenuSeparator className="my-2" />
+            </>
+          )}
+
+          {/* Секция отделов */}
+          {departmentOptions.length > 0 && (
+            <>
+              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">
+                Отделы
+              </div>
+              {departmentOptions.map((option) => {
+                const isChecked = selectedIds.includes(option.id)
+
+                return (
+                  <div
+                    key={option.id}
+                    className="flex items-center space-x-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      handleToggle(option.id, "department")
+                    }}
+                  >
+                    <Checkbox
+                      id={option.id}
+                      checked={isChecked}
+                      className="h-4 w-4 pointer-events-none"
+                    />
+                    <label
+                      htmlFor={option.id}
+                      className="flex-1 cursor-pointer text-sm"
+                    >
+                      <span className="truncate">{option.name}</span>
+                    </label>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

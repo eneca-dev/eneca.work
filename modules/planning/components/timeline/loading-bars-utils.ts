@@ -5,11 +5,11 @@
 import type { Loading } from "../../types"
 
 /**
- * Интерфейс для периода (загрузка или отпуск)
+ * Интерфейс для периода (загрузка, отпуск, больничный или отгул)
  */
 export interface BarPeriod {
   id: string
-  type: "loading" | "vacation"
+  type: "loading" | "vacation" | "sick_leave" | "time_off"
   startDate: Date
   endDate: Date
   rate: number
@@ -124,6 +124,20 @@ export function getVacationColor(isDark: boolean): string {
 }
 
 /**
+ * Цвет для больничных
+ */
+export function getSickLeaveColor(isDark: boolean): string {
+  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400 
+}
+
+/**
+ * Цвет для отгулов
+ */
+export function getTimeOffColor(isDark: boolean): string {
+  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400 
+}
+
+/**
  * Проверяет, пересекаются ли два периода
  */
 function periodsOverlap(period1: BarPeriod, period2: BarPeriod): boolean {
@@ -233,6 +247,112 @@ export function groupVacationPeriods(vacationsDaily: Record<string, number> | un
 }
 
 /**
+ * Группирует последовательные даты больничных в периоды
+ */
+export function groupSickLeavePeriods(sickLeavesDaily: Record<string, number> | undefined): BarPeriod[] {
+  if (!sickLeavesDaily) return []
+
+  // Сортируем даты
+  const dates = Object.keys(sickLeavesDaily)
+    .filter((dateKey) => sickLeavesDaily[dateKey] > 0)
+    .sort()
+
+  if (dates.length === 0) return []
+
+  const periods: BarPeriod[] = []
+  let currentStart = new Date(dates[0])
+  let currentEnd = new Date(dates[0])
+
+  for (let i = 1; i < dates.length; i++) {
+    const currentDate = new Date(dates[i])
+    const prevDate = new Date(dates[i - 1])
+
+    // Проверяем, является ли текущая дата последовательной (следующий день)
+    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (dayDiff === 1) {
+      // Продолжаем текущий период
+      currentEnd = currentDate
+    } else {
+      // Сохраняем текущий период и начинаем новый
+      periods.push({
+        id: `sick-leave-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+        type: "sick_leave",
+        startDate: currentStart,
+        endDate: currentEnd,
+        rate: 1,
+      })
+      currentStart = currentDate
+      currentEnd = currentDate
+    }
+  }
+
+  // Добавляем последний период
+  periods.push({
+    id: `sick-leave-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+    type: "sick_leave",
+    startDate: currentStart,
+    endDate: currentEnd,
+    rate: 1,
+  })
+
+  return periods
+}
+
+/**
+ * Группирует последовательные даты отгулов в периоды
+ */
+export function groupTimeOffPeriods(timeOffsDaily: Record<string, number> | undefined): BarPeriod[] {
+  if (!timeOffsDaily) return []
+
+  // Сортируем даты
+  const dates = Object.keys(timeOffsDaily)
+    .filter((dateKey) => timeOffsDaily[dateKey] > 0)
+    .sort()
+
+  if (dates.length === 0) return []
+
+  const periods: BarPeriod[] = []
+  let currentStart = new Date(dates[0])
+  let currentEnd = new Date(dates[0])
+
+  for (let i = 1; i < dates.length; i++) {
+    const currentDate = new Date(dates[i])
+    const prevDate = new Date(dates[i - 1])
+
+    // Проверяем, является ли текущая дата последовательной (следующий день)
+    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (dayDiff === 1) {
+      // Продолжаем текущий период
+      currentEnd = currentDate
+    } else {
+      // Сохраняем текущий период и начинаем новый
+      periods.push({
+        id: `time-off-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+        type: "time_off",
+        startDate: currentStart,
+        endDate: currentEnd,
+        rate: 1,
+      })
+      currentStart = currentDate
+      currentEnd = currentDate
+    }
+  }
+
+  // Добавляем последний период
+  periods.push({
+    id: `time-off-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
+    type: "time_off",
+    startDate: currentStart,
+    endDate: currentEnd,
+    rate: 1,
+  })
+
+  return periods
+}
+
+/**
  * Нормализует дату (обнуляет время)
  */
 function normalizeDate(date: Date): Date {
@@ -316,10 +436,18 @@ export function calculateBarRenders(
     const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
     const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
 
-    // Определяем цвет на основе комбинации проект + раздел
-    const color = period.type === "vacation"
-      ? getVacationColor(isDark)
-      : getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
+    // Определяем цвет на основе типа периода
+    let color: string
+    if (period.type === "vacation") {
+      color = getVacationColor(isDark)
+    } else if (period.type === "sick_leave") {
+      color = getSickLeaveColor(isDark)
+    } else if (period.type === "time_off") {
+      color = getTimeOffColor(isDark)
+    } else {
+      // loading
+      color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
+    }
 
     renders.push({
       period,
@@ -351,6 +479,12 @@ export function formatBarLabel(period: BarPeriod): string {
   if (period.type === "vacation") {
     return "Отпуск"
   }
+  if (period.type === "sick_leave") {
+    return "Больничный"
+  }
+  if (period.type === "time_off") {
+    return "Отгул"
+  }
 
   const parts: string[] = []
   if (period.stageName) parts.push(period.stageName)
@@ -377,6 +511,12 @@ function formatDate(date: Date): string {
 export function formatBarTooltip(period: BarPeriod): string {
   if (period.type === "vacation") {
     return `Отпуск\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
+  }
+  if (period.type === "sick_leave") {
+    return `Больничный\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
+  }
+  if (period.type === "time_off") {
+    return `Отгул\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
   }
 
   const lines: string[] = []

@@ -9,21 +9,12 @@ export interface ProjectLoading {
   rank: number
 }
 
-export interface PlanningAnalyticsSummary {
-  analytics_date: string
-  users_with_loading_count: number
-  total_users_count: number
-  percentage_users_with_loading: number
-  sections_in_work_today: number
-  projects_in_work_today: number
-  avg_department_loading: number
-  top_projects_by_loading: ProjectLoading[]
-}
-
 export interface DepartmentProjectData {
   analytics_date: string
   department_id: string
   department_name: string
+  subdivision_id: string | null
+  subdivision_name: string | null
   project_id: string
   project_name: string
   users_count: number
@@ -34,13 +25,15 @@ export interface DepartmentProjectData {
 export interface DepartmentOption {
   id: string
   name: string
-  type: "all" | "department"
+  type: "all" | "subdivision" | "department"
 }
 
 export interface DepartmentStats {
   analytics_date: string
   department_id: string
   department_name: string
+  subdivision_id: string | null
+  subdivision_name: string | null
   total_users: number
   users_with_loading: number
   percentage_users_with_loading: number
@@ -54,67 +47,7 @@ export interface DepartmentStats {
     first_name: string
     last_name: string
   }>
-}
-
-/**
- * Получение общей статистики по планированию
- */
-export async function fetchPlanningAnalyticsSummary(): Promise<PlanningAnalyticsSummary | null> {
-  return Sentry.startSpan(
-    {
-      op: "db.query",
-      name: "Загрузка общей статистики планирования",
-    },
-    async (span) => {
-      try {
-        span.setAttribute("table", "view_planning_analytics_summary")
-
-        const { data, error } = await supabase
-          .from("view_planning_analytics_summary")
-          .select("*")
-          .single()
-
-        if (error) {
-          span.setAttribute("db.success", false)
-          span.setAttribute("db.error", error.message)
-
-          Sentry.captureException(error, {
-            tags: {
-              module: 'planning-analytics',
-              action: 'fetch_planning_analytics_summary',
-              table: 'view_planning_analytics_summary'
-            },
-            extra: {
-              error_code: error.code,
-              error_details: error.details,
-              error_hint: error.hint,
-              timestamp: new Date().toISOString()
-            }
-          })
-          return null
-        }
-
-        span.setAttribute("db.success", true)
-
-        return data as PlanningAnalyticsSummary
-      } catch (error) {
-        // This catch now only handles unexpected errors (non-Supabase errors)
-        span.setAttribute("db.success", false)
-
-        Sentry.captureException(error, {
-          tags: {
-            module: 'planning-analytics',
-            action: 'fetch_planning_analytics_summary',
-            error_type: 'unexpected_error'
-          },
-          extra: {
-            timestamp: new Date().toISOString()
-          }
-        })
-        return null
-      }
-    }
-  )
+  total_loadings_count: number
 }
 
 /**
@@ -181,21 +114,35 @@ export async function fetchDepartmentProjects(): Promise<DepartmentProjectData[]
 }
 
 /**
- * Получение списка отделов для селектора
+ * Получение списка подразделений и отделов для селектора
+ * Всегда возвращает полный список подразделений и отделов
  */
-export function getDepartmentOptions(departmentProjects: DepartmentProjectData[]): DepartmentOption[] {
+export function getDepartmentOptions(
+  departmentProjects: DepartmentProjectData[]
+): DepartmentOption[] {
+  const uniqueSubdivisions = new Map<string, string>()
   const uniqueDepartments = new Map<string, string>()
 
   departmentProjects.forEach(item => {
+    // Добавляем подразделение, если оно есть
+    if (item.subdivision_id && item.subdivision_name && !uniqueSubdivisions.has(item.subdivision_id)) {
+      uniqueSubdivisions.set(item.subdivision_id, item.subdivision_name)
+    }
+
+    // Добавляем отдел
     if (!uniqueDepartments.has(item.department_id)) {
       uniqueDepartments.set(item.department_id, item.department_name)
     }
   })
 
-  const options: DepartmentOption[] = [
-    { id: "all", name: "Общее", type: "all" }
-  ]
+  const options: DepartmentOption[] = []
 
+  // Добавляем подразделения
+  uniqueSubdivisions.forEach((name, id) => {
+    options.push({ id, name, type: "subdivision" })
+  })
+
+  // Добавляем отделы
   uniqueDepartments.forEach((name, id) => {
     options.push({ id, name, type: "department" })
   })
@@ -278,6 +225,8 @@ export function aggregateDepartmentStats(
   sections_in_work_today: number
   projects_in_work_today: number
   avg_department_loading: number
+  total_loading_rate: number
+  total_loadings_count: number
 } {
   // Фильтруем статистику по выбранным отделам
   const filteredStats = departmentStats.filter(stat =>
@@ -291,7 +240,9 @@ export function aggregateDepartmentStats(
       percentage_users_with_loading: 0,
       sections_in_work_today: 0,
       projects_in_work_today: 0,
-      avg_department_loading: 0
+      avg_department_loading: 0,
+      total_loading_rate: 0,
+      total_loadings_count: 0
     }
   }
 
@@ -299,6 +250,7 @@ export function aggregateDepartmentStats(
   const totalUsers = filteredStats.reduce((sum, stat) => sum + stat.total_users, 0)
   const usersWithLoading = filteredStats.reduce((sum, stat) => sum + stat.users_with_loading, 0)
   const totalLoadingRate = filteredStats.reduce((sum, stat) => sum + Number(stat.total_loading_rate), 0)
+  const totalLoadingsCount = filteredStats.reduce((sum, stat) => sum + stat.total_loadings_count, 0)
 
   // Собираем уникальные ID разделов и проектов через Set
   const uniqueSectionIds = new Set<string>()
@@ -330,7 +282,9 @@ export function aggregateDepartmentStats(
     projects_in_work_today: uniqueProjectIds.size,
     avg_department_loading: totalUsers > 0
       ? Number((totalLoadingRate / totalUsers).toFixed(2))
-      : 0
+      : 0,
+    total_loading_rate: totalLoadingRate,
+    total_loadings_count: totalLoadingsCount
   }
 }
 
