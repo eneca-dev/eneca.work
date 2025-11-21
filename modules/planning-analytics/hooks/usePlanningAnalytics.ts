@@ -28,6 +28,8 @@ interface UsePlanningAnalyticsResult {
     sections_in_work_today: number
     projects_in_work_today: number
     avg_department_loading: number
+    total_loading_rate: number
+    total_loadings_count: number
   }
 }
 

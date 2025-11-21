@@ -47,6 +47,7 @@ export interface DepartmentStats {
     first_name: string
     last_name: string
   }>
+  total_loadings_count: number
 }
 
 /**
@@ -224,6 +225,8 @@ export function aggregateDepartmentStats(
   sections_in_work_today: number
   projects_in_work_today: number
   avg_department_loading: number
+  total_loading_rate: number
+  total_loadings_count: number
 } {
   // Фильтруем статистику по выбранным отделам
   const filteredStats = departmentStats.filter(stat =>
@@ -237,7 +240,9 @@ export function aggregateDepartmentStats(
       percentage_users_with_loading: 0,
       sections_in_work_today: 0,
       projects_in_work_today: 0,
-      avg_department_loading: 0
+      avg_department_loading: 0,
+      total_loading_rate: 0,
+      total_loadings_count: 0
     }
   }
 
@@ -245,6 +250,7 @@ export function aggregateDepartmentStats(
   const totalUsers = filteredStats.reduce((sum, stat) => sum + stat.total_users, 0)
   const usersWithLoading = filteredStats.reduce((sum, stat) => sum + stat.users_with_loading, 0)
   const totalLoadingRate = filteredStats.reduce((sum, stat) => sum + Number(stat.total_loading_rate), 0)
+  const totalLoadingsCount = filteredStats.reduce((sum, stat) => sum + stat.total_loadings_count, 0)
 
   // Собираем уникальные ID разделов и проектов через Set
   const uniqueSectionIds = new Set<string>()
@@ -276,7 +282,9 @@ export function aggregateDepartmentStats(
     projects_in_work_today: uniqueProjectIds.size,
     avg_department_loading: totalUsers > 0
       ? Number((totalLoadingRate / totalUsers).toFixed(2))
-      : 0
+      : 0,
+    total_loading_rate: totalLoadingRate,
+    total_loadings_count: totalLoadingsCount
   }
 }
 

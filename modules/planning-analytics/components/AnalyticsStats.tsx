@@ -9,6 +9,8 @@ interface AnalyticsStatsData {
   sections_in_work_today: number
   projects_in_work_today: number
   avg_department_loading: number
+  total_loading_rate: number
+  total_loadings_count: number
   analytics_date?: string
 }
 
@@ -56,16 +58,16 @@ export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
         </CardContent>
       </Card>
 
-      {/* Разделов в работе */}
+      {/* Количество загрузок */}
       <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Разделов в работе
+            Количество загрузок
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold text-foreground dark:text-white">
-            {stats.sections_in_work_today}
+            {stats.total_loadings_count}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString('ru-RU') : new Date().toLocaleDateString('ru-RU')}
