@@ -14,6 +14,7 @@ interface ProjectsLoadingChartProps {
   chartHeight?: number
   selectedDepartmentIds?: string[]
   departmentOptions?: DepartmentOption[]
+  selectedSubdivisionId?: string | null
 }
 
 // Цвет для всех столбцов - темно-зелёный
@@ -161,9 +162,15 @@ export function ProjectsLoadingChart({
   description,
   chartHeight = 400,
   selectedDepartmentIds = [],
-  departmentOptions = []
+  departmentOptions = [],
+  selectedSubdivisionId = null
 }: ProjectsLoadingChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  // Получаем название выбранного подразделения
+  const selectedSubdivisionName = selectedSubdivisionId
+    ? departmentOptions.find(opt => opt.id === selectedSubdivisionId && opt.type === "subdivision")?.name
+    : null
 
   // Получаем названия выбранных отделов для отображения в виде меток
   const selectedDepartmentNames = selectedDepartmentIds
@@ -173,6 +180,9 @@ export function ProjectsLoadingChart({
 
   // Проверяем, выбрано ли "Общее"
   const isAllSelected = selectedDepartmentIds.includes("all") && selectedDepartmentIds.length === 1
+
+  // Если выбрано подразделение без отделов, показываем название подразделения
+  const shouldShowSubdivision = selectedSubdivisionId && selectedDepartmentIds.length === 0
 
   if (isLoading) {
     return (
@@ -230,6 +240,16 @@ export function ProjectsLoadingChart({
         )}
         {/* Зарезервированное место для меток отделов - предотвращает прыжки графика */}
         <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
+          {/* Показываем метку подразделения, если оно выбрано без отделов */}
+          {shouldShowSubdivision && selectedSubdivisionName && (
+            <Badge
+              variant="secondary"
+              className="text-xs px-2.5 py-0.5"
+            >
+              {selectedSubdivisionName}
+            </Badge>
+          )}
+          {/* Показываем метки отделов, если они выбраны */}
           {!isAllSelected && selectedDepartmentNames.length > 0 && (
             <>
               {selectedDepartmentNames.map((name, index) => (

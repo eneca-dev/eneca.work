@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
-  fetchPlanningAnalyticsSummary,
   fetchDepartmentProjects,
   fetchDepartmentStats,
   getDepartmentOptions,
   aggregateProjectsByDepartments,
   aggregateDepartmentStats,
-  type PlanningAnalyticsSummary,
   type DepartmentProjectData,
   type DepartmentStats,
   type DepartmentOption,
@@ -16,14 +14,14 @@ import {
 } from "../services/planningAnalyticsService"
 
 interface UsePlanningAnalyticsResult {
-  summary: PlanningAnalyticsSummary | null
   departmentOptions: DepartmentOption[]
   departmentStats: DepartmentStats[]
+  departmentProjects: DepartmentProjectData[]
   isLoading: boolean
   error: Error | null
   refresh: () => Promise<void>
-  getAggregatedProjects: (selectedDepartmentIds: string[]) => ProjectLoading[]
-  getAggregatedStats: (selectedDepartmentIds: string[]) => {
+  getAggregatedProjects: (selectedDepartmentIds: string[], selectedSubdivisionId?: string | null) => ProjectLoading[]
+  getAggregatedStats: (selectedDepartmentIds: string[], selectedSubdivisionId?: string | null) => {
     users_with_loading_count: number
     total_users_count: number
     percentage_users_with_loading: number
@@ -34,7 +32,6 @@ interface UsePlanningAnalyticsResult {
 }
 
 export function usePlanningAnalytics(): UsePlanningAnalyticsResult {
-  const [summary, setSummary] = useState<PlanningAnalyticsSummary | null>(null)
   const [departmentProjects, setDepartmentProjects] = useState<DepartmentProjectData[]>([])
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -46,13 +43,11 @@ export function usePlanningAnalytics(): UsePlanningAnalyticsResult {
       setError(null)
 
       // Загружаем все источники данных параллельно
-      const [summaryData, departmentData, statsData] = await Promise.all([
-        fetchPlanningAnalyticsSummary(),
+      const [departmentData, statsData] = await Promise.all([
         fetchDepartmentProjects(),
         fetchDepartmentStats()
       ])
 
-      setSummary(summaryData)
       setDepartmentProjects(departmentData)
       setDepartmentStats(statsData)
     } catch (err) {
@@ -67,67 +62,73 @@ export function usePlanningAnalytics(): UsePlanningAnalyticsResult {
     loadData()
   }, [loadData])
 
-  // Получение опций для селектора
+  // Получение опций для селектора (всегда полный список)
   const departmentOptions = useMemo(() => {
     return getDepartmentOptions(departmentProjects)
   }, [departmentProjects])
 
   // Функция для получения агрегированных проектов
-  const getAggregatedProjects = useCallback((selectedDepartmentIds: string[]): ProjectLoading[] => {
-    // Если выбрано "Общее" (и только оно), возвращаем данные из summary
-    if (selectedDepartmentIds.includes("all") && selectedDepartmentIds.length === 1) {
-      return summary?.top_projects_by_loading || []
+  const getAggregatedProjects = useCallback((selectedDepartmentIds: string[], selectedSubdivisionId?: string | null): ProjectLoading[] => {
+    // Определяем, какие отделы нужно включить
+    let departmentIdsToInclude: string[] = []
+
+    // Если выбрано подразделение, но нет выбранных отделов → показываем все отделы подразделения
+    if (selectedSubdivisionId && selectedDepartmentIds.length === 0) {
+      departmentProjects.forEach(dp => {
+        if (dp.subdivision_id === selectedSubdivisionId && !departmentIdsToInclude.includes(dp.department_id)) {
+          departmentIdsToInclude.push(dp.department_id)
+        }
+      })
     }
-
-    // Фильтруем только реальные отделы (исключаем "all")
-    const departmentIds = selectedDepartmentIds.filter(id => id !== "all")
-
-    // Если нет выбранных отделов, возвращаем общие данные
-    if (departmentIds.length === 0) {
-      return summary?.top_projects_by_loading || []
+    // Если есть выбранные отделы → показываем только их
+    else if (selectedDepartmentIds.length > 0) {
+      departmentIdsToInclude = selectedDepartmentIds
+    }
+    // Если ничего не выбрано → агрегируем все отделы
+    else {
+      const allDepartmentIds = Array.from(
+        new Set(departmentProjects.map(dp => dp.department_id))
+      )
+      return aggregateProjectsByDepartments(departmentProjects, allDepartmentIds)
     }
 
     // Агрегируем данные по выбранным отделам
-    return aggregateProjectsByDepartments(departmentProjects, departmentIds)
-  }, [summary, departmentProjects])
+    return aggregateProjectsByDepartments(departmentProjects, departmentIdsToInclude)
+  }, [departmentProjects])
 
   // Функция для получения агрегированной статистики
-  const getAggregatedStats = useCallback((selectedDepartmentIds: string[]) => {
-    // Если выбрано "Общее" (и только оно), возвращаем данные из summary
-    if (selectedDepartmentIds.includes("all") && selectedDepartmentIds.length === 1) {
-      return {
-        users_with_loading_count: summary?.users_with_loading_count || 0,
-        total_users_count: summary?.total_users_count || 0,
-        percentage_users_with_loading: summary?.percentage_users_with_loading || 0,
-        sections_in_work_today: summary?.sections_in_work_today || 0,
-        projects_in_work_today: summary?.projects_in_work_today || 0,
-        avg_department_loading: summary?.avg_department_loading || 0
-      }
+  const getAggregatedStats = useCallback((selectedDepartmentIds: string[], selectedSubdivisionId?: string | null) => {
+    // Определяем, какие отделы нужно включить
+    let departmentIdsToInclude: string[] = []
+
+    // Если выбрано подразделение, но нет выбранных отделов → показываем все отделы подразделения
+    if (selectedSubdivisionId && selectedDepartmentIds.length === 0) {
+      departmentStats.forEach(ds => {
+        if (ds.subdivision_id === selectedSubdivisionId && !departmentIdsToInclude.includes(ds.department_id)) {
+          departmentIdsToInclude.push(ds.department_id)
+        }
+      })
     }
-
-    // Фильтруем только реальные отделы (исключаем "all")
-    const departmentIds = selectedDepartmentIds.filter(id => id !== "all")
-
-    // Если нет выбранных отделов, возвращаем общие данные
-    if (departmentIds.length === 0) {
-      return {
-        users_with_loading_count: summary?.users_with_loading_count || 0,
-        total_users_count: summary?.total_users_count || 0,
-        percentage_users_with_loading: summary?.percentage_users_with_loading || 0,
-        sections_in_work_today: summary?.sections_in_work_today || 0,
-        projects_in_work_today: summary?.projects_in_work_today || 0,
-        avg_department_loading: summary?.avg_department_loading || 0
-      }
+    // Если есть выбранные отделы → показываем только их
+    else if (selectedDepartmentIds.length > 0) {
+      departmentIdsToInclude = selectedDepartmentIds
+    }
+    // Если ничего не выбрано → агрегируем все отделы
+    else {
+      const allDepartmentIds = Array.from(
+        new Set(departmentStats.map(ds => ds.department_id))
+      )
+      return aggregateDepartmentStats(departmentStats, allDepartmentIds)
     }
 
     // Агрегируем статистику по выбранным отделам
-    return aggregateDepartmentStats(departmentStats, departmentIds)
-  }, [summary, departmentStats])
+    return aggregateDepartmentStats(departmentStats, departmentIdsToInclude)
+  }, [departmentStats])
 
   return {
-    summary,
     departmentOptions,
     departmentStats,
+    departmentProjects,
     isLoading,
     error,
     refresh: loadData,

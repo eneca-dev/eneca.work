@@ -1,7 +1,6 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { PlanningAnalyticsSummary } from "../services/planningAnalyticsService"
 
 interface AnalyticsStatsData {
   users_with_loading_count: number

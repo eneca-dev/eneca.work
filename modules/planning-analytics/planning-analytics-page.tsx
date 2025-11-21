@@ -11,13 +11,14 @@ import { usePlanningAnalytics } from "./hooks/usePlanningAnalytics"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useRouter } from "next/navigation"
 
-const STORAGE_KEY = "planning-analytics-selected-departments"
+const STORAGE_KEY_DEPARTMENTS = "planning-analytics-selected-departments"
+const STORAGE_KEY_SUBDIVISION = "planning-analytics-selected-subdivision"
 
 export function PlanningAnalyticsPage() {
   const {
-    summary,
     departmentOptions,
     departmentStats,
+    departmentProjects,
     isLoading,
     error,
     refresh,
@@ -26,45 +27,81 @@ export function PlanningAnalyticsPage() {
   } = usePlanningAnalytics()
   const router = useRouter()
 
-  // Загружаем выбранные отделы из localStorage
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(() => {
+  // Загружаем выбранное подразделение из localStorage
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(STORAGE_KEY_SUBDIVISION)
       if (saved) {
         try {
           return JSON.parse(saved)
         } catch {
-          return ["all"]
+          return null
         }
       }
     }
-    return ["all"]
+    return null
+  })
+
+  // Загружаем выбранные отделы из localStorage
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(STORAGE_KEY_DEPARTMENTS)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {
+          return []
+        }
+      }
+    }
+    return []
   })
 
   // Сохраняем выбор в localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedDepartments))
+      localStorage.setItem(STORAGE_KEY_DEPARTMENTS, JSON.stringify(selectedDepartments))
     }
   }, [selectedDepartments])
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY_SUBDIVISION, JSON.stringify(selectedSubdivision))
+    }
+  }, [selectedSubdivision])
+
   // Получаем агрегированные данные для графика
   const chartProjects = useMemo(() => {
-    return getAggregatedProjects(selectedDepartments)
-  }, [selectedDepartments, getAggregatedProjects])
+    return getAggregatedProjects(selectedDepartments, selectedSubdivision)
+  }, [selectedDepartments, selectedSubdivision, getAggregatedProjects])
 
   // Получаем агрегированную статистику
   const aggregatedStats = useMemo(() => {
-    return getAggregatedStats(selectedDepartments)
-  }, [selectedDepartments, getAggregatedStats])
+    return getAggregatedStats(selectedDepartments, selectedSubdivision)
+  }, [selectedDepartments, selectedSubdivision, getAggregatedStats])
 
   // Заголовок графика - упрощенный вариант
   const chartTitle = "Распределение ресурсов по проектам (топ-10)"
 
   // Фильтрация пользователей без загрузки по выбранным отделам
   const usersWithoutLoadingData = useMemo(() => {
-    // Если выбрано "Общее" - показываем все отделы
-    if (selectedDepartments.includes("all") && selectedDepartments.length === 1) {
+    // Определяем, какие отделы нужно включить
+    let departmentIdsToInclude: string[] = []
+
+    // Если выбрано подразделение, но нет выбранных отделов → показываем все отделы подразделения
+    if (selectedSubdivision && selectedDepartments.length === 0) {
+      departmentStats.forEach(ds => {
+        if (ds.subdivision_id === selectedSubdivision && !departmentIdsToInclude.includes(ds.department_id)) {
+          departmentIdsToInclude.push(ds.department_id)
+        }
+      })
+    }
+    // Если есть выбранные отделы → показываем только их
+    else if (selectedDepartments.length > 0) {
+      departmentIdsToInclude = selectedDepartments
+    }
+    // Если ничего не выбрано → показываем все отделы
+    else {
       return departmentStats
         .map(stat => ({
           department_name: stat.department_name,
@@ -73,24 +110,17 @@ export function PlanningAnalyticsPage() {
         .filter(dept => dept.users.length > 0)
     }
 
-    // Фильтруем только выбранные отделы
-    const departmentIds = selectedDepartments.filter(id => id !== "all")
-
-    if (departmentIds.length === 0) {
-      return []
-    }
-
     return departmentStats
-      .filter(stat => departmentIds.includes(stat.department_id))
+      .filter(stat => departmentIdsToInclude.includes(stat.department_id))
       .map(stat => ({
         department_name: stat.department_name,
         users: stat.users_without_loading || []
       }))
       .filter(dept => dept.users.length > 0)
-  }, [selectedDepartments, departmentStats])
+  }, [selectedDepartments, selectedSubdivision, departmentStats])
 
   // Проверка загрузки в процессе (первая загрузка)
-  if (isLoading && !summary) {
+  if (isLoading && departmentProjects.length === 0) {
     return (
       <div className="min-h-screen dark:bg-[rgb(17_24_39)] bg-white flex justify-center pt-32">
         <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-[rgb(20_182_166)] border-t-transparent"></div>
@@ -111,9 +141,12 @@ export function PlanningAnalyticsPage() {
           <DepartmentSelector
             options={departmentOptions}
             selectedIds={selectedDepartments}
+            selectedSubdivisionId={selectedSubdivision}
             onChange={setSelectedDepartments}
+            onSubdivisionChange={setSelectedSubdivision}
             onRefresh={refresh}
             isLoading={isLoading}
+            departmentProjects={departmentProjects}
           />
           <Button
             onClick={() => router.back()}
@@ -157,6 +190,7 @@ export function PlanningAnalyticsPage() {
         chartHeight={425}
         selectedDepartmentIds={selectedDepartments}
         departmentOptions={departmentOptions}
+        selectedSubdivisionId={selectedSubdivision}
       />
 
       {/* Список пользователей без загрузки */}
