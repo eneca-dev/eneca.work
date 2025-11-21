@@ -51,6 +51,7 @@ interface PlanningState {
   syncState: {
     isApplyingFilters: boolean
     lastAppliedFilters: {
+      subdivisionId: string | null
       projectId: string | null
       departmentId: string | null
       teamId: string | null
@@ -60,6 +61,7 @@ interface PlanningState {
       objectId: string | null
     } | null
     currentFilters: {
+      subdivisionId: string | null
       projectId: string | null
       departmentId: string | null
       teamId: string | null
@@ -131,6 +133,7 @@ interface PlanningState {
     employeeId?: string | null,
     stageId?: string | null,
     objectId?: string | null,
+    subdivisionId?: string | null,
   ) => void
   // Новый метод для синхронизации с новой системой фильтров
   syncWithFilterStore: () => void
@@ -318,11 +321,12 @@ export const usePlanningStore = create<PlanningState>()(
         },
 
         // Установка фильтров
-        setFilters: (projectId, departmentId, teamId, managerId = null, employeeId = null, stageId = null, objectId = null) => {
+        setFilters: (projectId, departmentId, teamId, managerId = null, employeeId = null, stageId = null, objectId = null, subdivisionId = null) => {
           const currentState = get()
-          
+
           // Создаем новые фильтры
           const newFilters = {
+            subdivisionId,
             projectId,
             departmentId,
             teamId,
@@ -331,17 +335,18 @@ export const usePlanningStore = create<PlanningState>()(
             stageId,
             objectId,
           }
-          
+
           // Генерируем ключ для новых фильтров
           const newFiltersKey = currentState.generateFiltersKey(newFilters)
-          
+
           // Проверяем, изменились ли фильтры
           const filtersChanged = currentState.syncState.filtersKey !== newFiltersKey
-          
+
           // Проверяем, нужна ли первоначальная загрузка данных
           const needsInitialLoad = currentState.syncState.lastDataLoadTime === null
 
           console.log("🎯 Установка фильтров в usePlanningStore:", {
+            subdivisionId,
             projectId,
             departmentId,
             teamId,
@@ -532,6 +537,7 @@ export const usePlanningStore = create<PlanningState>()(
             // Получаем текущие фильтры из новой системы фильтров
             const { useFilterStore } = await import('../filters/store')
             const {
+              selectedSubdivisionId,
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
@@ -540,10 +546,11 @@ export const usePlanningStore = create<PlanningState>()(
               selectedStageId,
               selectedObjectId,
             } = useFilterStore.getState()
-            
+
             const { sectionsPerPage, currentPage } = get()
 
             console.log("📋 Загрузка разделов с фильтрами:", {
+              selectedSubdivisionId,
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
@@ -562,6 +569,7 @@ export const usePlanningStore = create<PlanningState>()(
               selectedEmployeeId,
               selectedStageId,
               selectedObjectId,
+              selectedSubdivisionId,
             )
 
             // Проверяем, что результат не является ошибкой
@@ -619,12 +627,26 @@ export const usePlanningStore = create<PlanningState>()(
           try {
             // Получаем текущие фильтры из новой системы фильтров
             const { useFilterStore } = await import('../filters/store')
-            const { selectedDepartmentId, selectedTeamId } = useFilterStore.getState()
+            const { selectedSubdivisionId, selectedDepartmentId, selectedTeamId } = useFilterStore.getState()
 
             // Загружаем организационную структуру из нового представления
             let query = supabase.from("view_organizational_structure").select("*")
 
-            // Применяем фильтр по отделу, если он выбран
+            // Если выбрано подразделение (и не выбран конкретный отдел)
+            if (selectedSubdivisionId && !selectedDepartmentId) {
+              // Получаем отделы подразделения
+              const { data: depts } = await supabase
+                .from("departments")
+                .select("department_id")
+                .eq("subdivision_id", selectedSubdivisionId)
+
+              const deptIds = depts?.map(d => d.department_id) || []
+              if (deptIds.length > 0) {
+                query = query.in("department_id", deptIds)
+              }
+            }
+
+            // Применяем фильтр по отделу, если он выбран (приоритет выше subdivision)
             if (selectedDepartmentId) {
               query = query.eq("department_id", selectedDepartmentId)
             }

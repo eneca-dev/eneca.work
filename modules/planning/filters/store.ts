@@ -16,6 +16,7 @@ export const useFilterStore = create<FilterStore>()(
         isLoadingObjects: false,
         
         // Данные фильтров
+        subdivisions: [],
         managers: [],
         projects: [],
         stages: [],
@@ -23,11 +24,12 @@ export const useFilterStore = create<FilterStore>()(
         departments: [],
         teams: [],
         employees: [],
-        
+
         // Заблокированные фильтры по ролям
         lockedFilters: [],
-        
+
         // Выбранные значения
+        selectedSubdivisionId: null,
         selectedManagerId: null,
         selectedProjectId: null,
         selectedStageId: null,
@@ -43,23 +45,24 @@ export const useFilterStore = create<FilterStore>()(
         initialize: (config: FilterConfigs) => {
           set({ config })
           // Загружаем базовые данные
+          get().loadSubdivisions()
           get().loadManagers()
           get().loadDepartments()
           get().loadEmployees()
-          
+
           // Восстанавливаем зависимые данные для сохраненных фильтров
           const state = get()
-          
+
           // Если есть выбранный менеджер, загружаем его проекты
           if (state.selectedManagerId) {
             get().loadProjects(state.selectedManagerId)
           }
-          
+
           // Если есть выбранный проект, загружаем его стадии
           if (state.selectedProjectId) {
             get().loadStages(state.selectedProjectId)
           }
-          
+
           // Если есть выбранная стадия, загружаем её объекты
           if (state.selectedStageId) {
             get().loadObjects(state.selectedStageId)
@@ -96,18 +99,27 @@ export const useFilterStore = create<FilterStore>()(
             updates.selectedObjectId = null
             state.loadProjects(value)
           }
-          
+
           if (type === 'project' && value) {
             updates.selectedStageId = null
             updates.selectedObjectId = null
             state.loadStages(value)
           }
-          
+
           if (type === 'stage' && value) {
             updates.selectedObjectId = null
             state.loadObjects(value)
           }
-          
+
+          // Subdivision → Department → Team → Employee
+          if (type === 'subdivision') {
+            // Сбрасываем все зависимые фильтры при изменении подразделения
+            console.log(`🔄 Сбрасываю отдел, команду и сотрудника при изменении подразделения`)
+            updates.selectedDepartmentId = null
+            updates.selectedTeamId = null
+            updates.selectedEmployeeId = null
+          }
+
           if (type === 'department') {
             // Сбрасываем команду и сотрудника при любом изменении отдела (выбор или очистка)
             console.log(`🔄 Сбрасываю команду и сотрудника при изменении отдела`)
@@ -117,7 +129,7 @@ export const useFilterStore = create<FilterStore>()(
               state.loadTeams()
             }
           }
-          
+
           if (type === 'team') {
             // Сбрасываем сотрудника при любом изменении команды (выбор или очистка)
             console.log(`🔄 Сбрасываю сотрудника при изменении команды`)
@@ -135,6 +147,7 @@ export const useFilterStore = create<FilterStore>()(
           const isLocked = (t: FilterType) => Boolean(state.lockedFilters && state.lockedFilters.includes(t))
 
           set({
+            selectedSubdivisionId: isLocked('subdivision') ? state.selectedSubdivisionId : null,
             selectedManagerId: isLocked('manager') ? state.selectedManagerId : null,
             selectedProjectId: null,
             selectedStageId: null,
@@ -168,26 +181,52 @@ export const useFilterStore = create<FilterStore>()(
           if (!state.selectedStageId) return []
           return state.objects
         },
-        
+
+        getFilteredDepartments: () => {
+          const state = get()
+          if (!state.selectedSubdivisionId) return state.departments
+          return state.departments.filter(d => (d as any).subdivisionId === state.selectedSubdivisionId)
+        },
+
         getFilteredEmployees: () => {
           const state = get()
           let filtered = state.employees
-          
-          if (state.selectedDepartmentId) {
-            filtered = filtered.filter(e => (e as any).departmentId === state.selectedDepartmentId)
-          }
-          
+
+          // Priority: team > department > subdivision
           if (state.selectedTeamId) {
             filtered = filtered.filter(e => (e as any).teamId === state.selectedTeamId)
+          } else if (state.selectedDepartmentId) {
+            filtered = filtered.filter(e => (e as any).departmentId === state.selectedDepartmentId)
+          } else if (state.selectedSubdivisionId) {
+            // Get all departments in this subdivision
+            const deptIds = new Set(
+              state.departments
+                .filter(d => (d as any).subdivisionId === state.selectedSubdivisionId)
+                .map(d => d.id)
+            )
+            // Filter employees by those departments
+            filtered = filtered.filter(e => deptIds.has((e as any).departmentId))
           }
-          
+
           return filtered
         },
 
         getFilteredTeams: () => {
           const state = get()
-          if (!state.selectedDepartmentId) return state.teams
-          return state.teams.filter(t => t.departmentId === state.selectedDepartmentId)
+          // Priority: department > subdivision
+          if (state.selectedDepartmentId) {
+            return state.teams.filter(t => t.departmentId === state.selectedDepartmentId)
+          }
+
+          // If only subdivision is selected, filter teams by departments in this subdivision
+          if (state.selectedSubdivisionId) {
+            const deptIds = state.departments
+              .filter(d => (d as any).subdivisionId === state.selectedSubdivisionId)
+              .map(d => d.id)
+            return state.teams.filter(t => deptIds.includes(t.departmentId!))
+          }
+
+          return state.teams
         },
         
         // Методы загрузки данных
@@ -290,29 +329,59 @@ export const useFilterStore = create<FilterStore>()(
             set({ isLoadingObjects: false })
           }
         },
-        
-        loadDepartments: async () => {
+
+        loadSubdivisions: async () => {
           try {
             const { data, error } = await supabase
-              .from('view_organizational_structure')
-              .select('*')
-              .order('department_name')
-            
+              .from('view_subdivisions_with_heads')
+              .select('subdivision_id, subdivision_name')
+              .order('subdivision_name')
+
             if (error) throw error
-            
+
+            const subdivisions = data?.map(s => ({
+              id: s.subdivision_id,
+              name: s.subdivision_name
+            })) || []
+
+            set({ subdivisions })
+          } catch (error) {
+            console.error('Ошибка загрузки подразделений:', error)
+          }
+        },
+
+        loadDepartments: async () => {
+          try {
+            // Загружаем departments напрямую из таблицы чтобы получить subdivision_id
+            const [deptsResult, teamsResult] = await Promise.all([
+              supabase
+                .from('departments')
+                .select('department_id, department_name, subdivision_id')
+                .order('department_name'),
+              supabase
+                .from('view_organizational_structure')
+                .select('team_id, team_name, department_id')
+                .order('team_name')
+            ])
+
+            if (deptsResult.error) throw deptsResult.error
+            if (teamsResult.error) throw teamsResult.error
+
+            // Departments с subdivision_id
             const departmentsMap = new Map()
-            const teamsMap = new Map()
-            
-            data?.forEach(row => {
-              // Отделы
+            deptsResult.data?.forEach(row => {
               if (!departmentsMap.has(row.department_id)) {
                 departmentsMap.set(row.department_id, {
                   id: row.department_id,
-                  name: row.department_name
+                  name: row.department_name,
+                  subdivisionId: row.subdivision_id
                 })
               }
-              
-              // Команды
+            })
+
+            // Teams
+            const teamsMap = new Map()
+            teamsResult.data?.forEach(row => {
               if (row.team_id && !teamsMap.has(row.team_id)) {
                 teamsMap.set(row.team_id, {
                   id: row.team_id,
@@ -321,8 +390,8 @@ export const useFilterStore = create<FilterStore>()(
                 })
               }
             })
-            
-            set({ 
+
+            set({
               departments: Array.from(departmentsMap.values()),
               teams: Array.from(teamsMap.values())
             })
@@ -371,6 +440,7 @@ export const useFilterStore = create<FilterStore>()(
       {
         name: 'filter-store',
         partialize: (state) => ({
+          selectedSubdivisionId: state.selectedSubdivisionId,
           selectedManagerId: state.selectedManagerId,
           selectedProjectId: state.selectedProjectId,
           selectedStageId: state.selectedStageId,

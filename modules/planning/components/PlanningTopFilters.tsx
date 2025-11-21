@@ -346,6 +346,9 @@ export default function PlanningTopFilters() {
     loadVacations,
     toggleSectionExpanded,
     toggleDepartmentExpanded,
+    isLoadingSections,
+    isLoadingDepartments,
+    vacationsCache,
   } = usePlanningStore()
   const expandedSections = usePlanningStore(s => s.expandedSections)
   const expandedProjectGroups = usePlanningStore(s => s.expandedProjectGroups)
@@ -357,6 +360,9 @@ export default function PlanningTopFilters() {
   const [statusSearch, setStatusSearch] = useState('')
   const [projectSearch, setProjectSearch] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Комбинированный флаг загрузки: показывает индикатор при любой загрузке данных
+  const isAnyLoading = isRefreshing || isLoadingSections || isLoadingDepartments || vacationsCache.isLoading
 
   // Гарантируем дефолт: отделы включены, разделы выключены при первом монтировании
   const [initialized, setInitialized] = useState(false)
@@ -388,6 +394,9 @@ export default function PlanningTopFilters() {
     // Применяем блокировки по permissions (hierarchy)
     applyPlanningLocks().catch(console.error)
 
+    if (filterStore.subdivisions.length === 0) {
+      filterStore.loadSubdivisions()
+    }
     if (filterStore.managers.length === 0) {
       filterStore.loadManagers()
     }
@@ -404,11 +413,13 @@ export default function PlanningTopFilters() {
     if ((statuses || []).length === 0) {
       loadStatuses()
     }  }, [
+    filterStore.subdivisions.length,
     filterStore.managers.length,
     filterStore.departments.length,
     filterStore.employees.length,
     filterStore.projects.length,
     filterStore.selectedManagerId,
+    filterStore.loadSubdivisions,
     filterStore.loadManagers,
     filterStore.loadDepartments,
     filterStore.loadEmployees,
@@ -599,13 +610,44 @@ export default function PlanningTopFilters() {
             <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
               Организация
             </span>
-            {[filterStore.selectedDepartmentId, filterStore.selectedTeamId, filterStore.selectedEmployeeId].some(Boolean) && (
+            {[filterStore.selectedSubdivisionId, filterStore.selectedDepartmentId, filterStore.selectedTeamId, filterStore.selectedEmployeeId].some(Boolean) && (
               <span className="ml-1 inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full" />
             )}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[320px] p-0 dark:bg-slate-800 dark:border-slate-700">
           <div className="p-2 space-y-2">
+            {/* Подразделение */}
+            <div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
+                <span>Подразделение</span>
+                {filterStore.isFilterLocked('subdivision') && (
+                  <>
+                    <Lock className="h-3 w-3 text-slate-400" />
+                    <UiTooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs dark:text-slate-200 leading-tight">
+                        Недостаточно прав для изменения подразделения
+                      </TooltipContent>
+                    </UiTooltip>
+                  </>
+                )}
+              </div>
+              <select
+                value={filterStore.selectedSubdivisionId || ''}
+                onChange={e => filterStore.setFilter('subdivision', e.target.value || null)}
+                className="w-full px-2 py-1.5 text-[11px] md:text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:border-indigo-400 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition-all duration-200 rounded-md"
+                size={6}
+                disabled={filterStore.isFilterLocked('subdivision')}
+              >
+                <option value="">Все</option>
+                {filterStore.subdivisions.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
             {/* Отдел */}
             <div>
               <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1">
@@ -632,7 +674,7 @@ export default function PlanningTopFilters() {
                 disabled={filterStore.isFilterLocked('department')}
               >
                 <option value="">Все</option>
-                {filterStore.departments.map(d => (
+                {filterStore.getFilteredDepartments().map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
@@ -798,7 +840,7 @@ export default function PlanningTopFilters() {
 
       <button
         onClick={async () => {
-          if (isRefreshing) return
+          if (isAnyLoading) return
           setIsRefreshing(true)
           try {
             // Сохраняем текущее положение прокрутки страницы
@@ -844,12 +886,12 @@ export default function PlanningTopFilters() {
             setIsRefreshing(false)
           }
         }}
-        className={`inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md ${isRefreshing ? 'opacity-60 cursor-not-allowed' : ''}`}
+        className={`inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md ${isAnyLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
         title="Обновить данные"
-        disabled={isRefreshing}
-        aria-busy={isRefreshing}
+        disabled={isAnyLoading}
+        aria-busy={isAnyLoading}
       >
-        {isRefreshing ? (
+        {isAnyLoading ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-600 dark:text-slate-300" />
         ) : (
           <RotateCcw className="h-4 w-4 text-slate-600 dark:text-slate-300" />

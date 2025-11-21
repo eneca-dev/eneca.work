@@ -10,6 +10,7 @@ export async function applyPlanningLocks(): Promise<{ locked: Set<FilterType> }>
 
   const { lockedFilters, defaults } = computeDefaults({
     permissions: base.permissions,
+    subdivisionId: base.subdivisionId,
     departmentId: base.departmentId,
     teamId: base.teamId,
     managerId: userId,
@@ -17,15 +18,28 @@ export async function applyPlanningLocks(): Promise<{ locked: Set<FilterType> }>
 
   const updates: any = {}
 
+  // Subdivision блокируется для subdivision_head, department_head, team_lead, user
+  if (Object.prototype.hasOwnProperty.call(defaults, 'subdivision')) {
+    updates.selectedSubdivisionId = defaults.subdivision ?? null
+    updates.selectedDepartmentId = null
+    updates.selectedTeamId = null
+    updates.selectedEmployeeId = null
+  }
+
+  // Department блокируется для department_head, team_lead, user
   if (Object.prototype.hasOwnProperty.call(defaults, 'department')) {
     updates.selectedDepartmentId = defaults.department ?? null
     updates.selectedTeamId = null
     updates.selectedEmployeeId = null
   }
+
+  // Team блокируется для team_lead, user
   if (Object.prototype.hasOwnProperty.call(defaults, 'team')) {
     updates.selectedTeamId = defaults.team ?? null
     updates.selectedEmployeeId = null
   }
+
+  // Manager блокируется для project_manager
   if (Object.prototype.hasOwnProperty.call(defaults, 'manager')) {
     updates.selectedManagerId = defaults.manager ?? null
     updates.selectedProjectId = null

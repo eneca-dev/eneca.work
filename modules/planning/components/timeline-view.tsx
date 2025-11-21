@@ -29,6 +29,7 @@ import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
   const {
+    selectedSubdivisionId,
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
@@ -145,9 +146,10 @@ useEffect(() => {
 
   // Количество активных фильтров
   const activeFiltersCount = [
-    selectedProjectId, 
-    selectedDepartmentId, 
-    selectedTeamId, 
+    selectedSubdivisionId,
+    selectedProjectId,
+    selectedDepartmentId,
+    selectedTeamId,
     selectedEmployeeId,
     selectedManagerId,
     selectedStageId,
@@ -165,22 +167,23 @@ useEffect(() => {
   // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
   useEffect(() => {
     fetchProjectSummaries()
-  }, [fetchProjectSummaries, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+  }, [fetchProjectSummaries, selectedSubdivisionId, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
 
   // Применяем фильтры только при их изменении (если действительно заданы)
   useEffect(() => {
     if (activeFiltersCount > 0) {
       setLoading(true)
-      setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId)
+      setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId, selectedSubdivisionId)
       const timer = setTimeout(() => setLoading(false), 300)
       return () => clearTimeout(timer)
     }
     // если фильтров нет — работаем в режиме саммари проектов, ничего не тянем
-  }, [activeFiltersCount, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
+  }, [activeFiltersCount, selectedSubdivisionId, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
 
   // Дополнительная подписка на изменения фильтров для немедленного обновления данных
   useEffect(() => {
     console.log("🔄 Фильтры изменились, обновляем данные:", {
+      selectedSubdivisionId,
       selectedStageId,
       selectedObjectId,
       selectedProjectId,
@@ -189,26 +192,27 @@ useEffect(() => {
       selectedEmployeeId,
       selectedManagerId
     })
-    
+
     // Вызываем fetchSections для немедленного обновления данных
-    if (selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
+    if (selectedSubdivisionId || selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
       fetchSections()
     }
-  }, [selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
+  }, [selectedSubdivisionId, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
 
   // Загружаем отделы при переключении showDepartments или изменении организационных фильтров
   // Это обеспечивает автоматическую перезагрузку отделов когда:
   // 1. Пользователь включает показ отделов (showDepartments = true)
-  // 2. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
-  // 3. Пользователь изменяет фильтр по команде (selectedTeamId)
-  // 4. Пользователь сбрасывает фильтры (selectedDepartmentId/selectedTeamId → null)
+  // 2. Пользователь изменяет фильтр по подразделению (selectedSubdivisionId)
+  // 3. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
+  // 4. Пользователь изменяет фильтр по команде (selectedTeamId)
+  // 5. Пользователь сбрасывает фильтры (selectedSubdivisionId/selectedDepartmentId/selectedTeamId → null)
   // Функция fetchDepartments в deps может вызывать частые срабатывания, но внутри неё есть
   // защита от одновременных вызовов через isDepartmentsFetching флаг
   useEffect(() => {
     if (showDepartments) {
       fetchDepartments()
     }
-  }, [showDepartments, selectedDepartmentId, selectedTeamId, fetchDepartments])
+  }, [showDepartments, selectedSubdivisionId, selectedDepartmentId, selectedTeamId, fetchDepartments])
 
   // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
   // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
@@ -219,6 +223,15 @@ useEffect(() => {
       loadVacations(false) // false = не форсировать, проверить кэш
     }
   }, [startDate, daysToShow, showDepartments, loadVacations])
+
+  // Обновляем отпуска при изменении организационных фильтров
+  // Форсируем обновление (true), так как изменились видимые сотрудники
+  // Это обеспечивает синхронность данных отпусков с выбранными фильтрами
+  useEffect(() => {
+    if (showDepartments) {
+      loadVacations(true) // true = форсировать обновление, игнорируя кэш
+    }
+  }, [selectedSubdivisionId, selectedDepartmentId, selectedTeamId, showDepartments, loadVacations])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
