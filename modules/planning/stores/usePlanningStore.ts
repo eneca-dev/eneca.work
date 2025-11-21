@@ -307,6 +307,7 @@ export const usePlanningStore = create<PlanningState>()(
           isApplyingFilters: false,
           lastAppliedFilters: null,
           currentFilters: {
+            subdivisionId: null,
             projectId: null,
             departmentId: null,
             teamId: null,
@@ -2311,6 +2312,11 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Загрузка отпусков с буферным кэшированием
         loadVacations: async (forceReload = false) => {
+          // Если принудительное обновление, сбрасываем существующий promise
+          if (forceReload) {
+            loadVacationsPromise = null
+          }
+
           // Если запрос уже выполняется, возвращаем существующий Promise
           if (loadVacationsPromise) {
             return loadVacationsPromise
@@ -2995,6 +3001,7 @@ export const usePlanningStore = create<PlanningState>()(
           import('../filters/store').then(({ useFilterStore }) => {
             const filterStore = useFilterStore.getState()
             const {
+              selectedSubdivisionId,
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
@@ -3005,6 +3012,7 @@ export const usePlanningStore = create<PlanningState>()(
             } = filterStore
 
             console.log("🔄 Синхронизация с новой системой фильтров:", {
+              selectedSubdivisionId,
               selectedProjectId,
               selectedDepartmentId,
               selectedTeamId,
@@ -3015,9 +3023,10 @@ export const usePlanningStore = create<PlanningState>()(
             })
 
             const currentState = get()
-            
+
             // Создаем новые фильтры со всеми параметрами
             const newFilters = {
+              subdivisionId: selectedSubdivisionId,
               projectId: selectedProjectId,
               departmentId: selectedDepartmentId,
               teamId: selectedTeamId,
