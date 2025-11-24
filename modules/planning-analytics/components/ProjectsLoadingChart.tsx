@@ -14,6 +14,7 @@ interface ProjectsLoadingChartProps {
   chartHeight?: number
   selectedDepartmentIds?: string[]
   departmentOptions?: DepartmentOption[]
+  selectedSubdivisionId?: string | null
 }
 
 // Цвет для всех столбцов - темно-зелёный
@@ -161,9 +162,15 @@ export function ProjectsLoadingChart({
   description,
   chartHeight = 400,
   selectedDepartmentIds = [],
-  departmentOptions = []
+  departmentOptions = [],
+  selectedSubdivisionId = null
 }: ProjectsLoadingChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+
+  // Получаем название выбранного подразделения
+  const selectedSubdivisionName = selectedSubdivisionId
+    ? departmentOptions.find(opt => opt.id === selectedSubdivisionId && opt.type === "subdivision")?.name
+    : null
 
   // Получаем названия выбранных отделов для отображения в виде меток
   const selectedDepartmentNames = selectedDepartmentIds
@@ -173,6 +180,9 @@ export function ProjectsLoadingChart({
 
   // Проверяем, выбрано ли "Общее"
   const isAllSelected = selectedDepartmentIds.includes("all") && selectedDepartmentIds.length === 1
+
+  // Если выбрано подразделение без отделов, показываем название подразделения
+  const shouldShowSubdivision = selectedSubdivisionId && selectedDepartmentIds.length === 0
 
   if (isLoading) {
     return (
@@ -205,17 +215,17 @@ export function ProjectsLoadingChart({
     )
   }
 
-  // Форматируем данные для диаграммы и сортируем по количеству загрузок
+  // Форматируем данные для диаграммы и сортируем по общей ставке
   const chartData = projects
     .map((project) => ({
       name: project.project_name, // Теперь не обрезаем, разделение на строки в CustomYAxisTick
       fullName: project.project_name,
       projectId: project.project_id,
-      value: project.total_loadings_count, // Отображаем количество загрузок
+      value: Number(project.total_loading_rate), // Отображаем общую ставку
       count: project.total_loadings_count,
       loadingRate: Number(project.total_loading_rate),
     }))
-    .sort((a, b) => b.count - a.count) // Сортировка по убыванию количества загрузок
+    .sort((a, b) => b.loadingRate - a.loadingRate) // Сортировка по убыванию общей ставки
 
   return (
     <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
@@ -230,6 +240,16 @@ export function ProjectsLoadingChart({
         )}
         {/* Зарезервированное место для меток отделов - предотвращает прыжки графика */}
         <div className="flex flex-wrap gap-2 mt-3 min-h-[28px]">
+          {/* Показываем метку подразделения, если оно выбрано без отделов */}
+          {shouldShowSubdivision && selectedSubdivisionName && (
+            <Badge
+              variant="secondary"
+              className="text-xs px-2.5 py-0.5"
+            >
+              {selectedSubdivisionName}
+            </Badge>
+          )}
+          {/* Показываем метки отделов, если они выбраны */}
           {!isAllSelected && selectedDepartmentNames.length > 0 && (
             <>
               {selectedDepartmentNames.map((name, index) => (
@@ -272,7 +292,7 @@ export function ProjectsLoadingChart({
               type="number"
               className="text-xs fill-gray-600 dark:fill-gray-400"
               label={{
-                value: 'Количество загрузок',
+                value: 'Общая ставка',
                 position: 'insideBottom',
                 offset: -10,
                 className: "fill-gray-600 dark:fill-gray-400"
@@ -301,10 +321,10 @@ export function ProjectsLoadingChart({
                         {data.fullName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Количество загрузок: <span className="font-bold text-sky-500">{data.count}</span>
+                        Общая ставка: <span className="font-bold text-emerald-500">{data.loadingRate}</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Общая ставка: <span className="font-bold text-emerald-500">{data.loadingRate}</span>
+                        Количество загрузок: <span className="font-bold text-sky-500">{data.count}</span>
                       </p>
                     </div>
                   )

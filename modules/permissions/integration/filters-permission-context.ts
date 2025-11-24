@@ -4,6 +4,7 @@ import { getUserPermissions } from '../supabase/supabasePermissions'
 
 export interface PermissionContext {
   permissions: string[]
+  subdivisionId?: string | null
   departmentId?: string | null
   teamId?: string | null
 }
@@ -40,6 +41,7 @@ export function getFiltersPermissionContext(): PermissionContext {
   let { permissions } = usePermissionsStore.getState()
   const { profile } = useUserStore.getState()
 
+  const subdivisionId = profile?.subdivisionId ?? profile?.subdivision_id ?? null
   const departmentId = profile?.departmentId ?? profile?.department_id ?? null
   const teamId = profile?.teamId ?? profile?.team_id ?? null
 
@@ -49,6 +51,10 @@ export function getFiltersPermissionContext(): PermissionContext {
   }
 
   permissions = normalizeHierarchyPermissions(permissions)
+
+  if (permissions.includes('hierarchy.is_subdivision_head')) {
+    if (!subdivisionId) throw new Error('Subdivision ID is missing in user profile for subdivision head')
+  }
 
   if (permissions.includes('hierarchy.is_department_head')) {
     if (!departmentId) throw new Error('Department ID is missing in user profile for department head')
@@ -61,6 +67,7 @@ export function getFiltersPermissionContext(): PermissionContext {
 
   return {
     permissions,
+    subdivisionId,
     departmentId,
     teamId,
   }
@@ -91,9 +98,13 @@ export async function getFiltersPermissionContextAsync(): Promise<PermissionCont
   }
 
   const { profile } = useUserStore.getState()
+  const subdivisionId = profile?.subdivisionId ?? profile?.subdivision_id ?? null
   const departmentId = profile?.departmentId ?? profile?.department_id ?? null
   const teamId = profile?.teamId ?? profile?.team_id ?? null
 
+  if (permissions.includes('hierarchy.is_subdivision_head')) {
+    if (!subdivisionId) throw new Error('Subdivision ID is missing in user profile for subdivision head')
+  }
   if (permissions.includes('hierarchy.is_department_head')) {
     if (!departmentId) throw new Error('Department ID is missing in user profile for department head')
   }
@@ -102,7 +113,7 @@ export async function getFiltersPermissionContextAsync(): Promise<PermissionCont
     if (!teamId) throw new Error('Team ID is missing in user profile for team-bound roles')
   }
 
-  return { permissions, departmentId, teamId }
+  return { permissions, subdivisionId, departmentId, teamId }
 }
 
 

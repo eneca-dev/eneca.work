@@ -1,4 +1,4 @@
-import type { User, UserWithRoles, Department, Team, Position, Category, WorkFormatType } from "@/types/db"
+import type { User, UserWithRoles, Department, Team, Position, Category, Subdivision, WorkFormatType } from "@/types/db"
 import { createClient } from "@/utils/supabase/client"
 import { createAdminClient } from "@/utils/supabase/admin"
 import * as Sentry from "@sentry/nextjs"
@@ -123,7 +123,7 @@ export async function getDepartments(): Promise<Department[]> {
         const supabase = createClient();
         span.setAttribute("table", "departments")
         
-        const { data, error } = await supabase.from("departments").select("department_id, department_name")
+        const { data, error } = await supabase.from("departments").select("department_id, department_name, subdivision_id")
 
         if (error) {
           span.setAttribute("db.success", false)
@@ -144,10 +144,11 @@ export async function getDepartments(): Promise<Department[]> {
 
         span.setAttribute("db.success", true)
         span.setAttribute("departments.count", data?.length || 0)
-        
+
         return data.map((dept) => ({
           id: dept.department_id,
           name: dept.department_name || "",
+          subdivisionId: dept.subdivision_id || undefined,
         }))
       } catch (error) {
         span.setAttribute("error", true)
@@ -294,7 +295,7 @@ export async function getCategories(): Promise<Category[]> {
       try {
         const supabase = createClient()
         span.setAttribute("table", "categories")
-        
+
         const { data, error } = await supabase.from("categories").select("category_id, category_name")
 
         if (error) {
@@ -316,7 +317,7 @@ export async function getCategories(): Promise<Category[]> {
 
         span.setAttribute("db.success", true)
         span.setAttribute("categories.count", data?.length || 0)
-        
+
         return data?.map((cat) => ({
           id: cat.category_id,
           name: cat.category_name || "",
@@ -335,6 +336,63 @@ export async function getCategories(): Promise<Category[]> {
           }
         })
         throw error
+      }
+    }
+  )
+}
+
+// Получение всех подразделений
+export async function getSubdivisions(): Promise<Subdivision[]> {
+  return Sentry.startSpan(
+    {
+      op: "db.query",
+      name: "Получение всех подразделений",
+    },
+    async (span: any) => {
+      try {
+        const supabase = createClient()
+        span.setAttribute("table", "subdivisions")
+
+        const { data, error } = await supabase.from("subdivisions").select("subdivision_id, subdivision_name")
+
+        if (error) {
+          span.setAttribute("db.success", false)
+          Sentry.captureException(error, {
+            tags: {
+              module: 'org_data_service',
+              action: 'get_subdivisions',
+              table: 'subdivisions'
+            },
+            extra: {
+              error_code: error.code,
+              error_details: error.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+          return []
+        }
+
+        span.setAttribute("db.success", true)
+        span.setAttribute("subdivisions.count", data?.length || 0)
+
+        return data.map((subdivision) => ({
+          id: subdivision.subdivision_id,
+          name: subdivision.subdivision_name || "",
+        }))
+      } catch (error) {
+        span.setAttribute("error", true)
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'get_subdivisions',
+            error_type: 'processing_error'
+          },
+          extra: {
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+        return []
       }
     }
   )
@@ -459,9 +517,30 @@ export async function updateUser(
           const { permissions } = await getUserPermissions(currentUser.id)
           const hasEditSalaryAll = permissions.includes('users.edit_salary.all')
           const hasEditSalaryDepartment = permissions.includes('users.edit_salary.department')
+          const hasEditSalarySubdivision = permissions.includes('users.edit_salary.subdivision')
+          const isSubdivisionHead = permissions.includes('hierarchy.is_subdivision_head')
+
+          // Subdivision_head не может редактировать свою ставку и загруженность
+          if (currentUser.id === userId && isSubdivisionHead) {
+            const error = new Error("Руководитель подразделения не может редактировать свою ставку и загруженность")
+            Sentry.captureException(error, {
+              tags: {
+                module: 'org_data_service',
+                action: 'update_user_check_subdivision_head_self_edit',
+                user_id: userId
+              },
+              extra: {
+                current_user_id: currentUser.id,
+                target_user_id: userId,
+                is_subdivision_head: isSubdivisionHead,
+                timestamp: new Date().toISOString()
+              }
+            })
+            throw error
+          }
 
           // Проверяем, есть ли у пользователя право редактировать зарплату
-          if (!hasEditSalaryAll && !hasEditSalaryDepartment) {
+          if (!hasEditSalaryAll && !hasEditSalaryDepartment && !hasEditSalarySubdivision) {
             const error = new Error("Недостаточно прав для редактирования ставки и загруженности")
             Sentry.captureException(error, {
               tags: {
@@ -529,7 +608,101 @@ export async function updateUser(
               throw error
             }
 
-            console.log("✅ Пользователи в одном отделе, разрешение предоставлено")
+            console.log("✅ Пользователи в одном отделе")
+
+            // Проверяем роль целевого пользователя (руководитель отдела может редактировать только team_lead и user)
+            console.log("🔐 Проверяем роль целевого пользователя...")
+
+            // Получаем основную роль целевого пользователя из view_users
+            const { data: targetUserData, error: targetUserError } = await supabase
+              .from('view_users')
+              .select('primary_role')
+              .eq('user_id', userId)
+              .single()
+
+            if (targetUserError) {
+              const error = new Error("Не удалось получить роль целевого пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Руководитель отдела может редактировать только team_lead и user
+            const targetRole = targetUserData.primary_role?.toLowerCase()
+            const allowedRoles = ['team_lead', 'user']
+
+            if (!allowedRoles.includes(targetRole || '')) {
+              const error = new Error(`Недостаточно прав для редактирования ставки пользователя с ролью "${targetRole}"`)
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'org_data_service',
+                  action: 'update_user_check_role',
+                  user_id: userId
+                },
+                extra: {
+                  current_user_id: currentUser.id,
+                  target_user_id: userId,
+                  target_role: targetRole,
+                  allowed_roles: allowedRoles,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              throw error
+            }
+
+            console.log(`✅ Роль целевого пользователя (${targetRole}) разрешена для редактирования`)
+          }
+
+          // Если есть только разрешение для подразделения, проверяем, что пользователи в одном подразделении
+          if (!hasEditSalaryAll && !hasEditSalaryDepartment && hasEditSalarySubdivision) {
+            console.log("🔐 Проверяем, что пользователи в одном подразделении...")
+
+            // Получаем подразделение текущего пользователя
+            const { data: currentUserProfile, error: currentProfileError } = await supabase
+              .from('profiles')
+              .select('subdivision_id')
+              .eq('user_id', currentUser.id)
+              .single()
+
+            if (currentProfileError) {
+              const error = new Error("Не удалось получить профиль текущего пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Получаем подразделение целевого пользователя
+            const { data: targetUserProfile, error: targetProfileError } = await supabase
+              .from('profiles')
+              .select('subdivision_id')
+              .eq('user_id', userId)
+              .single()
+
+            if (targetProfileError) {
+              const error = new Error("Не удалось получить профиль целевого пользователя")
+              Sentry.captureException(error)
+              throw error
+            }
+
+            // Проверяем, что подразделения совпадают
+            if (currentUserProfile.subdivision_id !== targetUserProfile.subdivision_id) {
+              const error = new Error("Невозможно редактировать ставку пользователя из другого подразделения")
+              Sentry.captureException(error, {
+                tags: {
+                  module: 'org_data_service',
+                  action: 'update_user_check_subdivision',
+                  user_id: userId
+                },
+                extra: {
+                  current_user_id: currentUser.id,
+                  current_subdivision_id: currentUserProfile.subdivision_id,
+                  target_user_id: userId,
+                  target_subdivision_id: targetUserProfile.subdivision_id,
+                  timestamp: new Date().toISOString()
+                }
+              })
+              throw error
+            }
+
+            console.log("✅ Пользователи в одном подразделении, разрешение предоставлено")
           }
 
           console.log("✅ Разрешение на редактирование полей зарплаты предоставлено")
@@ -550,6 +723,75 @@ export async function updateUser(
   if (userData.email) {
     console.warn('Изменение email заблокировано на уровне сервиса. Поле email будет проигнорировано.')
     // Не обновляем auth.users и не зеркалим в profiles
+  }
+
+  // Обработка подразделения
+  if (userData.subdivision !== undefined) {
+    if (userData.subdivision && userData.subdivision.trim() !== "") {
+      console.log("Ищем подразделение:", userData.subdivision);
+      try {
+        const { data: subdivision, error: subdivisionError } = await supabase
+          .from("subdivisions")
+          .select("subdivision_id")
+          .eq("subdivision_name", userData.subdivision)
+          .single()
+
+        if (subdivisionError) {
+          Sentry.captureException(subdivisionError, {
+            tags: {
+              module: 'org_data_service',
+              action: 'update_user_find_subdivision',
+              user_id: userId
+            },
+            extra: {
+              subdivision_name: userData.subdivision,
+              error_code: subdivisionError.code,
+              error_details: subdivisionError.details,
+              timestamp: new Date().toISOString()
+            }
+          })
+        } else if (subdivision) {
+          // Получаем текущее подразделение пользователя
+          const { data: currentProfile } = await supabase
+            .from("profiles")
+            .select("subdivision_id")
+            .eq("user_id", userId)
+            .single()
+
+          // Если подразделение изменилось, сбрасываем отдел и команду
+          if (currentProfile && currentProfile.subdivision_id !== subdivision.subdivision_id) {
+            console.log("Подразделение изменилось, сбрасываем отдел и команду");
+            updates.subdivision_id = subdivision.subdivision_id
+            updates.department_id = null
+            updates.team_id = null
+            console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
+            console.log("Сброшены department_id и team_id");
+          } else {
+            updates.subdivision_id = subdivision.subdivision_id
+            console.log("Найдено подразделение, ID =", subdivision.subdivision_id);
+          }
+        } else {
+          console.warn("Подразделение не найдено:", userData.subdivision);
+        }
+      } catch (error) {
+        Sentry.captureException(error, {
+          tags: {
+            module: 'org_data_service',
+            action: 'update_user_process_subdivision',
+            user_id: userId
+          },
+          extra: {
+            subdivision_name: userData.subdivision,
+            error_message: (error as Error).message,
+            timestamp: new Date().toISOString()
+          }
+        })
+      }
+    } else {
+      // Устанавливаем subdivision_id в NULL
+      updates.subdivision_id = null
+      console.log("Устанавливаем subdivision_id = NULL (без подразделения)");
+    }
   }
 
   // Найдем ID для связанных сущностей, если они изменились

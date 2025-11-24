@@ -29,6 +29,7 @@ import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 export function TimelineView() {
   // Получаем состояние и действия из нового стора фильтров
   const {
+    selectedSubdivisionId,
     selectedProjectId,
     selectedDepartmentId,
     selectedTeamId,
@@ -48,6 +49,7 @@ export function TimelineView() {
     fetchProjectSummaries,
     fetchSections,
     fetchDepartments,
+    loadVacations,
     setFilters,
     expandedSections,
     expandedDepartments,
@@ -144,9 +146,10 @@ useEffect(() => {
 
   // Количество активных фильтров
   const activeFiltersCount = [
-    selectedProjectId, 
-    selectedDepartmentId, 
-    selectedTeamId, 
+    selectedSubdivisionId,
+    selectedProjectId,
+    selectedDepartmentId,
+    selectedTeamId,
     selectedEmployeeId,
     selectedManagerId,
     selectedStageId,
@@ -164,22 +167,23 @@ useEffect(() => {
   // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
   useEffect(() => {
     fetchProjectSummaries()
-  }, [fetchProjectSummaries, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
+  }, [fetchProjectSummaries, selectedSubdivisionId, selectedProjectId, selectedManagerId, selectedDepartmentId, selectedTeamId, selectedEmployeeId])
 
   // Применяем фильтры только при их изменении (если действительно заданы)
   useEffect(() => {
     if (activeFiltersCount > 0) {
       setLoading(true)
-      setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId)
+      setFilters(selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedEmployeeId, selectedStageId, selectedObjectId, selectedSubdivisionId)
       const timer = setTimeout(() => setLoading(false), 300)
       return () => clearTimeout(timer)
     }
     // если фильтров нет — работаем в режиме саммари проектов, ничего не тянем
-  }, [activeFiltersCount, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
+  }, [activeFiltersCount, selectedSubdivisionId, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, selectedManagerId, selectedStageId, selectedObjectId, setFilters, setLoading])
 
   // Дополнительная подписка на изменения фильтров для немедленного обновления данных
   useEffect(() => {
     console.log("🔄 Фильтры изменились, обновляем данные:", {
+      selectedSubdivisionId,
       selectedStageId,
       selectedObjectId,
       selectedProjectId,
@@ -188,19 +192,46 @@ useEffect(() => {
       selectedEmployeeId,
       selectedManagerId
     })
-    
+
     // Вызываем fetchSections для немедленного обновления данных
-    if (selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
+    if (selectedSubdivisionId || selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
       fetchSections()
     }
-  }, [selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
+  }, [selectedSubdivisionId, selectedProjectId, selectedDepartmentId, selectedTeamId, selectedManagerId, selectedStageId, selectedObjectId, selectedEmployeeId, fetchSections])
 
-  // Загружаем отделы при переключении showDepartments
+  // Загружаем отделы при переключении showDepartments или изменении организационных фильтров
+  // Это обеспечивает автоматическую перезагрузку отделов когда:
+  // 1. Пользователь включает показ отделов (showDepartments = true)
+  // 2. Пользователь изменяет фильтр по подразделению (selectedSubdivisionId)
+  // 3. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
+  // 4. Пользователь изменяет фильтр по команде (selectedTeamId)
+  // 5. Пользователь сбрасывает фильтры (selectedSubdivisionId/selectedDepartmentId/selectedTeamId → null)
+  // Функция fetchDepartments в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isDepartmentsFetching флаг
   useEffect(() => {
-    if (showDepartments && departments.length === 0) {
+    if (showDepartments) {
       fetchDepartments()
     }
-  }, [showDepartments, departments.length, fetchDepartments])
+  }, [showDepartments, selectedSubdivisionId, selectedDepartmentId, selectedTeamId, fetchDepartments])
+
+  // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
+  // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
+  // Функция loadVacations в deps может вызывать частые срабатывания, но внутри неё есть
+  // защита от одновременных вызовов через isLoading флаг + проверка валидности кэша
+  useEffect(() => {
+    if (showDepartments) {
+      loadVacations(false) // false = не форсировать, проверить кэш
+    }
+  }, [startDate, daysToShow, showDepartments, loadVacations])
+
+  // Обновляем отпуска при изменении организационных фильтров
+  // Форсируем обновление (true), так как изменились видимые сотрудники
+  // Это обеспечивает синхронность данных отпусков с выбранными фильтрами
+  useEffect(() => {
+    if (showDepartments) {
+      loadVacations(true) // true = форсировать обновление, игнорируя кэш
+    }
+  }, [selectedSubdivisionId, selectedDepartmentId, selectedTeamId, showDepartments, loadVacations])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -334,19 +365,152 @@ useEffect(() => {
 
   // Обработчик изменения страницы
   const handlePageChange = (page: number) => {
-    // При изменении страницы подгружаем отделы, если они должны быть показаны
     setCurrentPage(page)
-    if (showDepartments) {
-      fetchDepartments()
-    }
+    // Отпуска уже в кэше, не нужно перезагружать departments
   }
 
+
+  // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
   useEffect(() => {
-    // Если отделы должны быть показаны, но еще не загружены, загружаем их
-    if (showDepartments && departments.length === 0 && !isLoadingDepartments) {
-      fetchDepartments()
+    const headerRightScroll = headerRightScrollRef.current
+    const contentScroll = contentScrollRef.current
+
+    if (!headerRightScroll || !contentScroll) return
+
+    let isHeaderScrolling = false
+    let isContentScrolling = false
+
+    const handleHeaderScroll = () => {
+      if (isContentScrolling) return
+      isHeaderScrolling = true
+      contentScroll.scrollLeft = headerRightScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isHeaderScrolling = false
+      })
     }
-  }, [showDepartments, departments.length, isLoadingDepartments, fetchDepartments])
+
+    const handleContentScroll = () => {
+      if (isHeaderScrolling) return
+      isContentScrolling = true
+      headerRightScroll.scrollLeft = contentScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isContentScrolling = false
+      })
+    }
+
+    headerRightScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
+    contentScroll.addEventListener('scroll', handleContentScroll, { passive: true })
+
+    return () => {
+      headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
+      contentScroll.removeEventListener('scroll', handleContentScroll)
+    }
+  }, [])
+
+  // Вычисляем ширину вертикального скроллбара контента
+  useEffect(() => {
+    const contentScroll = contentScrollRef.current
+    if (!contentScroll) return
+
+    // Вычисляем ширину скроллбара: offsetWidth (включая скроллбар) - clientWidth (без скроллбара)
+    const calculateScrollbarWidth = () => {
+      const scrollbarWidth = contentScroll.offsetWidth - contentScroll.clientWidth
+      setScrollbarWidth(scrollbarWidth)
+    }
+
+    // Вычисляем при монтировании
+    calculateScrollbarWidth()
+
+    // Пересчитываем при изменении размера окна
+    window.addEventListener('resize', calculateScrollbarWidth)
+
+    // Используем ResizeObserver для отслеживания изменений размера контента
+    const resizeObserver = new ResizeObserver(calculateScrollbarWidth)
+    resizeObserver.observe(contentScroll)
+
+    return () => {
+      window.removeEventListener('resize', calculateScrollbarWidth)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+
+  // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
+  useEffect(() => {
+    const headerRightScroll = headerRightScrollRef.current
+    const contentScroll = contentScrollRef.current
+
+    if (!headerRightScroll || !contentScroll) return
+
+    let isHeaderScrolling = false
+    let isContentScrolling = false
+
+    const handleHeaderScroll = () => {
+      if (isContentScrolling) return
+      isHeaderScrolling = true
+      contentScroll.scrollLeft = headerRightScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isHeaderScrolling = false
+      })
+    }
+
+    const handleContentScroll = () => {
+      if (isHeaderScrolling) return
+      isContentScrolling = true
+      headerRightScroll.scrollLeft = contentScroll.scrollLeft
+      requestAnimationFrame(() => {
+        isContentScrolling = false
+      })
+    }
+
+    headerRightScroll.addEventListener('scroll', handleHeaderScroll, { passive: true })
+    contentScroll.addEventListener('scroll', handleContentScroll, { passive: true })
+
+    return () => {
+      headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
+      contentScroll.removeEventListener('scroll', handleContentScroll)
+    }
+  }, [])
+
+  // Вычисляем ширину вертикального скроллбара контента
+  useEffect(() => {
+    const contentScroll = contentScrollRef.current
+    if (!contentScroll) return
+
+    // Вычисляем ширину скроллбара: offsetWidth (включая скроллбар) - clientWidth (без скроллбара)
+    const calculateScrollbarWidth = () => {
+      const scrollbarWidth = contentScroll.offsetWidth - contentScroll.clientWidth
+      setScrollbarWidth(scrollbarWidth)
+    }
+
+    // Вычисляем при монтировании
+    calculateScrollbarWidth()
+
+    // Пересчитываем при изменении размера окна
+    window.addEventListener('resize', calculateScrollbarWidth)
+
+    // Используем ResizeObserver для отслеживания изменений размера контента
+    const resizeObserver = new ResizeObserver(calculateScrollbarWidth)
+    resizeObserver.observe(contentScroll)
+
+    return () => {
+      window.removeEventListener('resize', calculateScrollbarWidth)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  // Получаем данные для заголовка
+  const { columnVisibility } = usePlanningColumnsStore()
+
+  // Генерируем timeUnits для заголовка
+  const timeUnits = generateTimeUnits(startDate, daysToShow)
+
+  // Константы для размеров (должны совпадать с timeline-grid.tsx)
+  const HEADER_HEIGHT = 40
+  const PADDING = 12
+  const LEFT_OFFSET = 0
+  const CELL_WIDTH = cellWidth || 22
+  const COLUMN_WIDTH = 430
 
   // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
   useEffect(() => {

@@ -6,6 +6,7 @@ export interface FilterOption {
 }
 
 export interface FilterState {
+  selectedSubdivisionId: string | null
   selectedProjectId: string | null
   selectedDepartmentId: string | null
   selectedTeamId: string | null
@@ -16,6 +17,7 @@ export interface FilterState {
 }
 
 export interface FilterOptions {
+  subdivisions: FilterOption[]
   projects: FilterOption[]
   departments: FilterOption[]
   teams: FilterOption[]
@@ -32,7 +34,7 @@ export interface LoadingState {
   isLoadingObjects: boolean
 }
 
-export type FilterType = 'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'
+export type FilterType = 'subdivision' | 'manager' | 'project' | 'stage' | 'object' | 'department' | 'team' | 'employee'
 
 export interface FilterConfig {
   id: string
@@ -55,8 +57,9 @@ export interface FilterStore {
   isLoadingProjects: boolean
   isLoadingStages: boolean
   isLoadingObjects: boolean
-  
+
   // Данные фильтров
+  subdivisions: FilterOption[]
   managers: FilterOption[]
   projects: FilterOption[]
   stages: FilterOption[]
@@ -64,11 +67,12 @@ export interface FilterStore {
   departments: FilterOption[]
   teams: FilterOption[]
   employees: FilterOption[]
-  
+
   // Заблокированные фильтры по правам (храним как массив строк для совместимости с persist)
   lockedFilters?: FilterType[]
-  
+
   // Выбранные значения
+  selectedSubdivisionId: string | null
   selectedManagerId: string | null
   selectedProjectId: string | null
   selectedStageId: string | null
@@ -85,15 +89,17 @@ export interface FilterStore {
   setFilter: (type: FilterType, value: string | null) => void
   resetFilters: () => void
 
-  applyPermissionDefaults: (ctx: { permissions: string[]; departmentId?: string | null; teamId?: string | null }) => void
+  applyPermissionDefaults: (ctx: { permissions: string[]; subdivisionId?: string | null; departmentId?: string | null; teamId?: string | null }) => void
   isFilterLocked: (type: FilterType) => boolean
+  getFilteredDepartments: () => FilterOption[]
   getFilteredProjects: () => FilterOption[]
   getFilteredStages: () => FilterOption[]
   getFilteredObjects: () => FilterOption[]
   getFilteredEmployees: () => FilterOption[]
   getFilteredTeams: () => FilterOption[]
-  
+
   // Приватные методы загрузки
+  loadSubdivisions: () => Promise<void>
   loadManagers: () => Promise<void>
   loadProjects: (managerId?: string | null) => Promise<void>
   loadStages: (projectId: string) => Promise<void>

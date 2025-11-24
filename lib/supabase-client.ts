@@ -253,6 +253,7 @@ export async function fetchSectionsWithLoadings(
   employeeId: string | null = null,
   stageId: string | null = null,
   objectId: string | null = null,
+  subdivisionId: string | null = null,
 ): Promise<{ sections: Section[]; loadingsMap: Record<string, Loading[]> } | StructuredError> {
   try {
     console.log("🔍 Фильтры для fetchSectionsWithLoadings:", {
@@ -262,7 +263,8 @@ export async function fetchSectionsWithLoadings(
       managerId,
       employeeId,
       stageId,
-      objectId
+      objectId,
+      subdivisionId
     })
 
     let query = supabase.from("view_sections_with_loadings").select("*")
@@ -312,6 +314,36 @@ export async function fetchSectionsWithLoadings(
       if (!projectId) {
         query = query.in("project_id", projectIds)
       }
+    }
+
+    // Если выбрано подразделение (и не выбран конкретный отдел)
+    if (subdivisionId && !departmentId) {
+      console.log("🏢 Применяю фильтр по подразделению:", subdivisionId)
+
+      // Получаем все отделы подразделения
+      const { data: subdivisionDepts, error: deptError } = await supabase
+        .from("departments")
+        .select("department_id")
+        .eq("subdivision_id", subdivisionId)
+
+      if (deptError) {
+        console.error("Ошибка при получении отделов подразделения:", deptError)
+        return {
+          success: false,
+          error: "Не удалось получить отделы подразделения",
+          details: deptError
+        }
+      }
+
+      const departmentIds = subdivisionDepts?.map(d => d.department_id) || []
+
+      if (departmentIds.length === 0) {
+        console.log("В подразделении нет отделов")
+        return { sections: [], loadingsMap: {} }
+      }
+
+      // Фильтруем по отделам подразделения
+      query = query.in("responsible_department_id", departmentIds)
     }
 
     if (departmentId) {

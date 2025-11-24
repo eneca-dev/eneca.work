@@ -43,10 +43,12 @@ interface Team {
 type TeamsTabProps =
   | { scope?: 'all' }
   | { scope: 'department'; departmentId: string }
+  | { scope: 'subdivision'; subdivisionId: string }
 
 export default function TeamsTab(props: TeamsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
+  const subdivisionId = 'subdivisionId' in props ? props.subdivisionId : null
   const [teams, setTeams] = useState<Team[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState("")
@@ -65,16 +67,17 @@ export default function TeamsTab(props: TeamsTabProps) {
 
   // Определяем, должны ли быть видны элементы управления
   const canManageAllTeams = perms.canManageTeams
+  const canEditSubdivision = perms.canEditSubdivision
   const canEditDepartment = perms.canEditDepartment
   const canEditTeams = perms.canEditTeam
   const canDeleteTeam = perms.canDeleteTeam
   const canManageTeamLead = perms.canManageTeamLead
   const isTeamScoped = scope === 'department'
-  const showManagementControls = canManageAllTeams && !isTeamScoped
-  // Создавать команды могут: admin (manage.teams) и department_head (edit.department)
-  const canCreateTeam = canManageAllTeams || canEditDepartment
-  // Редактировать команды могут: admin, department_head и team_lead (edit.team)
-  const canModifyTeams = canManageAllTeams || canEditDepartment || canEditTeams
+  const showManagementControls = (canManageAllTeams && !isTeamScoped) || (canEditSubdivision && scope === 'subdivision')
+  // Создавать команды могут: admin (manage.teams), subdivision_head (edit.subdivision) и department_head (edit.department)
+  const canCreateTeam = canManageAllTeams || canEditSubdivision || canEditDepartment
+  // Редактировать команды могут: admin, subdivision_head, department_head и team_lead (edit.team)
+  const canModifyTeams = canManageAllTeams || canEditSubdivision || canEditDepartment || canEditTeams
   // Удалять команды могут: только те, у кого есть разрешение delete.team (admin и department_head)
   const canDelete = canDeleteTeam
   // Управлять руководителями команд могут: только те, у кого есть разрешение manage.team_lead (admin и department_head)
@@ -83,7 +86,7 @@ export default function TeamsTab(props: TeamsTabProps) {
   // Проверяет, может ли текущий пользователь управлять данной командой
   const canManageTeam = useCallback((team: Team) => {
     // Admin может управлять всеми командами
-    if (canManageAllTeams || canEditDepartment) {
+    if (canManageAllTeams || canEditSubdivision || canEditDepartment) {
       return true
     }
 
@@ -93,7 +96,7 @@ export default function TeamsTab(props: TeamsTabProps) {
     }
 
     return false
-  }, [canManageAllTeams, canEditDepartment, canEditTeams, currentUserId])
+  }, [canManageAllTeams, canEditSubdivision, canEditDepartment, canEditTeams, currentUserId])
 
   const fetchData = useCallback(async () => {
     try {
@@ -127,7 +130,7 @@ export default function TeamsTab(props: TeamsTabProps) {
       // Получаем отделы
       const { data: deptsData, error: deptsError } = await supabase
         .from("departments")
-        .select("department_id, department_name")
+        .select("department_id, department_name, subdivision_id")
       
       if (deptsError) {
         console.error('Ошибка при загрузке отделов:', deptsError)
@@ -157,16 +160,29 @@ export default function TeamsTab(props: TeamsTabProps) {
       
       // Устанавливаем данные команд с учетом скоупа
       const preparedTeams = Array.from(uniqueTeamsMap.values())
-      const scopedTeams = scope === 'department'
-        ? preparedTeams.filter(t => t.departmentId === departmentId!)
-        : preparedTeams
+      let scopedTeams = preparedTeams
+      if (scope === 'department') {
+        scopedTeams = preparedTeams.filter(t => t.departmentId === departmentId!)
+      } else if (scope === 'subdivision') {
+        // Для subdivision нужно фильтровать по отделам, которые принадлежат подразделению
+        // Сначала получаем список отделов подразделения
+        const subdivisionDeptIds = deptsData
+          ?.filter((d: any) => d.subdivision_id === subdivisionId)
+          .map((d: any) => d.department_id) || []
+        scopedTeams = preparedTeams.filter(t => t.departmentId && subdivisionDeptIds.includes(t.departmentId))
+      }
       setTeams(scopedTeams)
 
       // Устанавливаем данные отделов с учетом скоупа
       const allDepartments = deptsData ? deptsData.map(dep => ({ id: dep.department_id, name: dep.department_name })) : []
-      const scopedDepartments = scope === 'department'
-        ? allDepartments.filter(d => d.id === departmentId!)
-        : allDepartments
+      let scopedDepartments = allDepartments
+      if (scope === 'department') {
+        scopedDepartments = allDepartments.filter(d => d.id === departmentId!)
+      } else if (scope === 'subdivision') {
+        scopedDepartments = deptsData
+          ?.filter((d: any) => d.subdivision_id === subdivisionId)
+          .map((d: any) => ({ id: d.department_id, name: d.department_name })) || []
+      }
       setDepartments(scopedDepartments)
     } catch (error) {
       console.error("Ошибка при загрузке данных:", error)
@@ -175,7 +191,7 @@ export default function TeamsTab(props: TeamsTabProps) {
     } finally {
       setIsLoading(false)
     }
-  }, [scope, departmentId])
+  }, [scope, departmentId, subdivisionId])
 
   // Загружаем данные при монтировании компонента
   useEffect(() => {

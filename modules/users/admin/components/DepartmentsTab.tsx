@@ -23,16 +23,13 @@ const refreshWithDelay = async (fetchFn: () => Promise<void>, initialDelay: numb
   // Небольшая задержка для завершения транзакции
   await new Promise(resolve => setTimeout(resolve, initialDelay))
   await fetchFn()
-
-  // Дополнительное обновление через 1 секунду для надежности
-  setTimeout(async () => {
-    await fetchFn()
-  }, 1000)
 }
 
 interface Department {
   department_id: string
   department_name: string
+  subdivision_id: string | null
+  subdivision_name?: string | null
   department_head_id: string | null
   head_first_name: string | null
   head_last_name: string | null
@@ -45,11 +42,14 @@ interface Department {
 type DepartmentsTabProps =
   | { scope?: 'all' }
   | { scope: 'department'; departmentId: string }
+  | { scope: 'subdivision'; subdivisionId: string }
 
 function DepartmentsTab(props: DepartmentsTabProps) {
   const scope = props.scope ?? 'all'
   const departmentId = 'departmentId' in props ? props.departmentId : null
+  const subdivisionId = 'subdivisionId' in props ? props.subdivisionId : null
   const [departments, setDepartments] = useState<Department[]>([])
+  const [subdivisions, setSubdivisions] = useState<Array<{ id: string; name: string }>>([])
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -62,7 +62,28 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   const perms = useAdminPermissions()
 
   // Определяем, должны ли быть видны элементы управления
-  const showManagementControls = perms.canManageDepartments && scope !== 'department'
+  // subdivision_head может управлять отделами своего подразделения
+  const showManagementControls = (perms.canManageDepartments && scope !== 'department') || (perms.canEditSubdivision && scope === 'subdivision')
+
+  // Загрузка подразделений для админа
+  const fetchSubdivisions = useCallback(async () => {
+    if (scope !== 'all') return // Загружаем только для админа
+
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('view_subdivisions_with_heads')
+        .select('subdivision_id, subdivision_name')
+        .order('subdivision_name')
+
+      if (error) throw error
+
+      setSubdivisions(data?.map(s => ({ id: s.subdivision_id, name: s.subdivision_name })) || [])
+    } catch (error) {
+      console.error("Ошибка загрузки подразделений:", error)
+      Sentry.captureException(error, { tags: { module: 'users', component: 'DepartmentsTab', action: 'fetch_subdivisions', error_type: 'unexpected' } })
+    }
+  }, [scope])
 
   // Загрузка отделов из представления
   const fetchDepartments = useCallback(async () => {
@@ -102,15 +123,22 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         
         console.log("📊 Уникальные отделы:", uniqueData)
         // Применяем скоуп
-        const scoped = scope === 'department'
-          ? (departmentId
-              ? uniqueData.filter((d: Department) => d.department_id === departmentId)
-              : (() => {
-                  console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
-                  return []
-                })()
-            )
-          : uniqueData
+        let scoped = uniqueData
+        if (scope === 'department') {
+          scoped = departmentId
+            ? uniqueData.filter((d: Department) => d.department_id === departmentId)
+            : (() => {
+                console.warn("⚠️ Предупреждение: departmentId отсутствует при scope='department', возвращаем пустой массив")
+                return []
+              })()
+        } else if (scope === 'subdivision') {
+          scoped = subdivisionId
+            ? uniqueData.filter((d: any) => d.subdivision_id === subdivisionId)
+            : (() => {
+                console.warn("⚠️ Предупреждение: subdivisionId отсутствует при scope='subdivision', возвращаем пустой массив")
+                return []
+              })()
+        }
         setDepartments(scoped)
       } catch (error) {
         console.error("Ошибка при загрузке отделов:", error)
@@ -120,7 +148,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         setIsLoading(false)
       }
     })
-  }, [scope, departmentId])
+  }, [scope, departmentId, subdivisionId])
 
   // Принудительное обновление данных
   const forceRefresh = useCallback(async () => {
@@ -146,8 +174,9 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   }, [fetchDepartments])
 
   useEffect(() => {
+    fetchSubdivisions()
     fetchDepartments()
-  }, [fetchDepartments])
+  }, [fetchSubdivisions, fetchDepartments])
 
   // Удалены автообновления (интервал, фокус окна, ввод в поиск).
   // Данные обновляются при монтировании и явных действиях пользователя.
@@ -170,14 +199,12 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   }, [departments, search])
 
   // Обработчики для управления отделами
-  const handleCreateDepartment = useCallback(async () => {
+  const handleCreateDepartment = useCallback(() => {
     Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open create department' })
-    // Обновляем данные перед открытием модального окна
-    await fetchDepartments()
     setModalMode("create")
     setSelectedDepartment(null)
     setModalOpen(true)
-  }, [fetchDepartments])
+  }, [])
 
   const handleEditDepartment = useCallback((department: Department) => {
     Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open edit department', data: { department_id: department.department_id } })
@@ -206,14 +233,42 @@ function DepartmentsTab(props: DepartmentsTabProps) {
   }, [])
 
   // Данные для EntityModal
-  const entityData = useMemo(() => {
-    if (!selectedDepartment) return undefined
-    
+  const entityData = useMemo<Record<string, string | number | null> | undefined>(() => {
+    if (!selectedDepartment) {
+      // При создании нового отдела в режиме subdivision добавляем subdivision_id
+      if (modalMode === "create" && scope === 'subdivision' && subdivisionId) {
+        return {
+          subdivision_id: subdivisionId
+        } as Record<string, string | number | null>
+      }
+      return undefined
+    }
+
     return {
       department_id: selectedDepartment.department_id,
-      department_name: selectedDepartment.department_name
-    }
-  }, [selectedDepartment])
+      department_name: selectedDepartment.department_name,
+      subdivision_id: selectedDepartment.subdivision_id || null
+    } as Record<string, string | number | null>
+  }, [selectedDepartment, modalMode, scope, subdivisionId])
+
+  // Дополнительные поля для формы создания/редактирования отдела
+  const extraFields = useMemo(() => {
+    // Только для админа (scope='all') показываем выбор подразделения
+    if (scope !== 'all') return []
+
+    return [
+      {
+        name: 'subdivision_id',
+        label: 'Подразделение',
+        type: 'select' as const,
+        required: true,
+        options: [
+          { value: 'none', label: 'Не назначено' },
+          ...subdivisions.map(s => ({ value: s.id, label: s.name }))
+        ]
+      }
+    ]
+  }, [scope, subdivisions])
 
   if (isLoading) {
     return (
@@ -273,12 +328,13 @@ function DepartmentsTab(props: DepartmentsTabProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-base">Название отдела</TableHead>
+                  <TableHead className="text-base">Подразделение</TableHead>
                   <TableHead className="text-base">Руководитель</TableHead>
                   <TableHead className="w-64 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <LoadingState columnCount={3} />
+                <LoadingState columnCount={4} />
               </TableBody>
             </Table>
           </CardContent>
@@ -344,6 +400,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-base">Название отдела</TableHead>
+                <TableHead className="text-base">Подразделение</TableHead>
                 <TableHead className="text-base">Руководитель</TableHead>
                 <TableHead className="w-64 text-right">Действия</TableHead>
               </TableRow>
@@ -354,6 +411,9 @@ function DepartmentsTab(props: DepartmentsTabProps) {
                   <TableRow key={`dept-${department.department_id}-${index}`}>
                     <TableCell className="text-base font-medium">
                       {department.department_name}
+                    </TableCell>
+                    <TableCell className="text-base">
+                      {department.subdivision_name || <span className="text-muted-foreground">Не указано</span>}
                     </TableCell>
                     <TableCell className="text-base">
                       {department.department_head_id ? (
@@ -451,7 +511,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3}>
+                  <TableCell colSpan={4}>
                     <EmptyState
                       message={
                         search
@@ -472,19 +532,14 @@ function DepartmentsTab(props: DepartmentsTabProps) {
       {/* Модальное окно для создания/редактирования отдела */}
       <EntityModal
         open={modalOpen}
-        onOpenChange={async (open) => {
-          setModalOpen(open)
-          // Если модальное окно закрывается, обновляем данные
-          if (!open) {
-            await refreshWithDelay(fetchDepartments, 300)
-          }
-        }}
+        onOpenChange={setModalOpen}
         title={modalMode === "create" ? "Создать отдел" : "Редактировать отдел"}
         mode={modalMode}
         table="departments"
         idField="department_id"
         nameField="department_name"
         entity={entityData}
+        extraFields={extraFields}
         existingNames={departments.map(d => d.department_name)}
         entityType="department"
         onSuccess={async () => {

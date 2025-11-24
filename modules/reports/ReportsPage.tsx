@@ -14,6 +14,8 @@ import { useReportsOrgFiltersStore } from "./filters/store"
 import { useReportsProjectFiltersStore } from "./filters/projectStore"
 import { useReportsAuthorFilterStore } from "./filters/authorStore"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
+import { useUserStore } from "@/stores/useUserStore"
+import { useHasPermission } from "@/modules/permissions/hooks/usePermissions"
 
 interface WorkLogRow {
   work_log_id: string
@@ -42,6 +44,13 @@ export default function ReportsPage() {
   const [hasMore, setHasMore] = useState(true)
   const [totalCount, setTotalCount] = useState<number | null>(null)
   const [authors, setAuthors] = useState<Array<{ author_id: string; author_name: string }>>([])
+
+  // блокируем загрузку данных до применения прав доступа
+  const [securityInitialized, setSecurityInitialized] = useState(false)
+
+  // Reset trigger - гарантирует, что useEffect сработает при reset даже если фильтры не изменились
+  const [resetTrigger, setResetTrigger] = useState(0)
+
   const { authorId, setAuthorId, authorSearch, setAuthorSearch } = useReportsAuthorFilterStore()
   // Визуальные фильтры (дизайн, без логики)
   const [orgOpen, setOrgOpen] = useState(true)
@@ -108,6 +117,9 @@ export default function ReportsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('work_log_date' as any)
   const [sortAsc, setSortAsc] = useState<boolean>(false)
 
+  // Проверка роли администратора для доступа ко всем отчётам
+  const isAdmin = useHasPermission('hierarchy.is_admin')
+
   // Компактный индикатор состояния фильтра Организация + заголовок с выбранными
   const orgActiveCount = [selectedDepartmentId, selectedTeamId, selectedEmployeeId].filter(Boolean).length
   const selectedDepartmentName = selectedDepartmentId ? (departments.find(d => d.id === selectedDepartmentId)?.name || '') : ''
@@ -126,25 +138,46 @@ export default function ReportsPage() {
   }, [setAuthorId, setAuthorSearch])
 
   const resetFilters = () => {
+    // сбрасываем ref ПЕРВЫМ делом, ДО любых setState вызовов!
+    // Zustand store updates синхронны и сразу вызывают ре-рендер,
+    lastQuerySigRef.current = null
+
+    // Получаем сохранённые безопасные defaults из сторов
+    const orgStore = useReportsOrgFiltersStore.getState()
+    const projStore = useReportsProjectFiltersStore.getState()
+
+    // Сбрасываем фильтры автора
     setAuthorId("")
     setAuthorSearch("")
-    setDepartment(null)
-    setTeam(null)
-    setEmployee(null)
-    setProject(null)
+
+    // Организационные фильтры - сбрасываем к безопасным defaults (не к null!)
+    // Это защищает от утечки данных при сбросе фильтров
+    setDepartment(orgStore.defaultDepartmentId)
+    setTeam(orgStore.defaultTeamId)
+    setEmployee(orgStore.defaultEmployeeId)
+
+    // Проектные фильтры - сбрасываем к defaults
+    setProject(projStore.defaultProjectId)
     setStage(null)
     setObject(null)
     setSection(null)
+
+    // Остальные фильтры
     setCategoryId("")
     setCategorySearch("")
     setPeriodPreset('m')
     setDateFrom("")
     setDateTo("")
-    // Поиск по проектам удалён — сбрасывать нечего
+
     // Сброс пагинации/состояний списка
     setRows([])
     setOffset(0)
     setHasMore(true)
+
+    // Инкрементируем resetTrigger, чтобы ГАРАНТИРОВАННО вызвать useEffect
+    // Даже если фильтры не изменились (например, уже были в состоянии по умолчанию),
+    // изменение resetTrigger заставит useEffect сработать и загрузить данные
+    setResetTrigger(prev => prev + 1)
   }
 
   // Вспомогательные функции для диапазона дат
@@ -219,6 +252,9 @@ export default function ReportsPage() {
   }, [dateFrom, dateTo])
 
   const buildBaseQuery = () => {
+    // Получаем ID текущего пользователя для secure default
+    const currentUserId = useUserStore.getState().id
+
     let query = supabase
         .from("view_work_logs_enriched")
         .select("work_log_id, work_log_date, author_name, section_name, decomposition_item_description, work_category_name, work_log_description, work_log_hours, work_log_hourly_rate, work_log_amount, author_id, work_category_id, project_id, project_name, stage_id, stage_name, object_id, object_name, section_id", { count: 'estimated' })
@@ -229,7 +265,10 @@ export default function ReportsPage() {
       if (to) query = query.lte('work_log_date', to)
 
       // Приоритет фильтров по автору/сотруднику/организации
-      const effectiveAuthorId = selectedEmployeeId || (!selectedDepartmentId && !selectedTeamId ? authorId : "")
+      // 1. Сотрудник из орг фильтра (наивысший приоритет)
+      // 2. Автор из фильтра "Автор"
+      // 3. Отдел/команда из орг фильтра
+      const effectiveAuthorId = selectedEmployeeId || authorId
       if (effectiveAuthorId) {
         query = query.eq('author_id', effectiveAuthorId)
       } else if (selectedDepartmentId || selectedTeamId) {
@@ -239,6 +278,20 @@ export default function ReportsPage() {
           return { query: null as any }
         }
         query = query.in('author_id', ids as string[])
+      } else {
+        // DEFAULT - если ничего не выбрано
+        // Администраторы видят ВСЕ отчёты (без фильтра по author_id)
+        // Обычные пользователи видят только свои отчёты
+        // Это защищает от утечки данных при race condition или сбросе фильтров
+        if (!isAdmin) {
+          if (!currentUserId) {
+            // Нет авторизованного пользователя - не показываем никаких данных
+            return { query: null as any }
+          }
+          query = query.eq('author_id', currentUserId)
+        }
+        // Если isAdmin === true, query остаётся без фильтра по author_id
+        // и вернёт ВСЕ отчёты (согласно другим фильтрам: период, категория, проект)
       }
       // Пересечение с проектными фильтрами (по section_id)
       if (sectionIdFilter) {
@@ -313,8 +366,20 @@ export default function ReportsPage() {
     setLoadingMore(false)
   }
 
-  // Перезагрузка при изменении фильтров
+  //  Перезагрузка при изменении фильтров
+  // Блокируем загрузку до инициализации системы безопасности
   useEffect(() => {
+    // Не загружаем данные до применения прав доступа и блокировок
+    if (!securityInitialized) {
+      return
+    }
+
+    // Не загружаем данные, пока stores загружают справочники
+    // Иначе getEmployeesFiltered() вернет [] и query будет null
+    if (orgLoading || isLoadingProjects) {
+      return
+    }
+
     const sig = [
       authorId || '',
       selectedDepartmentId || '',
@@ -338,7 +403,7 @@ export default function ReportsPage() {
     lastQuerySigRef.current = sig
     loadPage(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, projectId, stageId, objectId, sectionIdFilter, categoryId, periodPreset, dateFrom, dateTo, sortKey, sortAsc])
+  }, [securityInitialized, orgLoading, isLoadingProjects, authorId, selectedDepartmentId, selectedTeamId, selectedEmployeeId, projectId, stageId, objectId, sectionIdFilter, categoryId, periodPreset, dateFrom, dateTo, sortKey, sortAsc, resetTrigger])
 
   // Инициализация организационных фильтров
   useEffect(() => {
@@ -351,8 +416,19 @@ export default function ReportsPage() {
   }, [initProjectFilters])
 
   // Применение блокировок по permissions (hierarchy)
+  // Устанавливает флаг securityInitialized после завершения
   useEffect(() => {
-    applyReportsLocks().catch(console.error)
+    applyReportsLocks()
+      .then(() => {
+        setSecurityInitialized(true)
+      })
+      .catch((err) => {
+        console.error('Failed to initialize security:', err)
+        // даже при ошибке устанавливаем true,
+        // иначе страница зависнет в loading.
+        // Secure default в buildBaseQuery всё равно защитит данные
+        setSecurityInitialized(true)
+      })
   }, [])
 
   // Убраны глобальные изменения overscroll для html/body

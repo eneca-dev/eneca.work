@@ -14,6 +14,7 @@ import type { UserWithRoles } from "@/types/db"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams, useRouter } from "next/navigation"
 import { PermissionGuard } from "@/modules/permissions"
+import { toast } from "@/components/ui/use-toast"
 // Отладочный флаг для управления console.log вызовами
 const debug = process.env.NEXT_PUBLIC_DEBUG === "true"
 
@@ -79,6 +80,32 @@ export default function UsersPage() {
     loadUsers()
   }, [loadUsers])
 
+  // Принудительное обновление данных с индикатором загрузки
+  const forceRefresh = useCallback(async () => {
+    Sentry.addBreadcrumb({
+      category: 'ui.action',
+      level: 'info',
+      message: 'UsersPage: forceRefresh clicked'
+    })
+    console.log("🔄 Принудительное обновление списка пользователей...")
+    try {
+      await Sentry.startSpan({ name: 'Users/UsersPage forceRefresh', op: 'ui.action' }, async () => {
+        await loadUsers()
+      })
+      toast({
+        title: "Данные обновлены",
+        description: "Список пользователей успешно обновлён"
+      })
+    } catch (error) {
+      console.error("Ошибка при обновлении данных:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось обновить данные",
+        variant: "destructive"
+      })
+    }
+  }, [loadUsers])
+
   // ОПТИМИЗАЦИЯ: Мемоизируем fallback пользователя
   const fallbackUser = useMemo(() => currentUser || {
     user_id: "current",
@@ -124,6 +151,8 @@ export default function UsersPage() {
       email: user.email,
       avatar_url: user.avatar_url || undefined,
       position: user.position_name || "",
+      subdivision: user.subdivision_name || "",
+      subdivisionId: user.subdivision_id || undefined,
       department: user.department_name || "",
       departmentId: user.department_id || undefined,
       team: user.team_name || "",
@@ -177,7 +206,7 @@ export default function UsersPage() {
       
       
       <div className="px-1 md:px-2 space-y-6">
-        {isLoading ? (
+        {isLoading && users.length === 0 ? (
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
@@ -227,9 +256,11 @@ export default function UsersPage() {
               </TabsList>
               
               <TabsContent value="list" className="space-y-4">
-                <UsersList 
+                <UsersList
                   users={usersAsUserType}
-                  onUserUpdated={handleUserUpdated} 
+                  onUserUpdated={handleUserUpdated}
+                  onRefresh={forceRefresh}
+                  isRefreshing={isLoading}
                 />
               </TabsContent>
               

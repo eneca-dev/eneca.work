@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { Calendar as CalendarIcon } from 'lucide-react'
+import { ChevronDown, Layers, RotateCcw } from 'lucide-react'
 import { DateRangePicker, type DateRange } from '@/modules/projects/components/DateRangePicker'
 
 interface SectionReportsTabProps {
@@ -14,6 +14,8 @@ interface WorkLogRow {
   work_log_date: string
   author_name: string
   decomposition_item_description: string | null
+  decomposition_stage_id: string | null
+  decomposition_stage_name: string | null
   work_category_name: string | null
   work_log_description: string | null
   work_log_hours: number
@@ -21,15 +23,41 @@ interface WorkLogRow {
   work_log_amount: number
 }
 
+// Хук для сохранения состояния в localStorage
+function useLocalStorageState<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [state, setState] = useState<T>(() => {
+    if (typeof window === 'undefined') return initialValue
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error)
+      return initialValue
+    }
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state))
+    } catch (error) {
+      console.error(`Error saving ${key} to localStorage:`, error)
+    }
+  }, [key, state])
+
+  return [state, setState]
+}
+
 const supabase = createClient()
 
 export default function SectionReportsTab({ sectionId }: SectionReportsTabProps) {
   const [rows, setRows] = useState<WorkLogRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [dateFrom, setDateFrom] = useState<string>("")
-  const [dateTo, setDateTo] = useState<string>("")
+  const [dateFrom, setDateFrom] = useLocalStorageState<string>('section-reports-dateFrom', "")
+  const [dateTo, setDateTo] = useLocalStorageState<string>('section-reports-dateTo', "")
   const [range, setRange] = useState<DateRange | null>(null)
-  const [preset, setPreset] = useState<'7d' | 'm' | 'q' | 'y' | 'all'>('m')
+  const [preset, setPreset] = useLocalStorageState<'7d' | 'm' | 'q' | 'y' | 'all' | null>('section-reports-preset', 'm')
+  const [collapsedStages, setCollapsedStages] = useState<Record<string, boolean>>({})
 
   const formatLocalYMD = (d: Date): string => {
     const y = d.getFullYear()
@@ -38,8 +66,23 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
     return `${y}-${m}-${day}`
   }
 
+  // Восстанавливаем range из сохраненных dateFrom/dateTo при монтировании
+  useEffect(() => {
+    if (dateFrom || dateTo) {
+      const fromDate = dateFrom ? new Date(dateFrom) : null
+      const toDate = dateTo ? new Date(dateTo) : null
+      setRange({
+        from: fromDate && !isNaN(fromDate.getTime()) ? fromDate : null,
+        to: toDate && !isNaN(toDate.getTime()) ? toDate : null
+      })
+    }
+  }, []) // Только при монтировании
+
   // Устанавливаем диапазон по пресету
   useEffect(() => {
+    // Если preset === null, значит используется custom диапазон из DateRangePicker
+    if (preset === null) return
+
     const now = new Date()
     const to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     let from: Date | null = null
@@ -73,10 +116,10 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
       let query = supabase
         .from('view_work_logs_enriched')
         .select(
-          'work_log_id, work_log_date, author_name, decomposition_item_description, work_category_name, work_log_description, work_log_hours, work_log_hourly_rate, work_log_amount'
+          'work_log_id, work_log_date, author_name, decomposition_item_description, decomposition_stage_id, decomposition_stage_name, work_category_name, work_log_description, work_log_hours, work_log_hourly_rate, work_log_amount'
         )
         .eq('section_id', sectionId)
-        .order('work_log_date', { ascending: false })
+        .order('work_log_date', { ascending: true })
 
       if (dateFrom) query = query.gte('work_log_date', dateFrom)
       if (dateTo) query = query.lte('work_log_date', dateTo)
@@ -98,15 +141,33 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId, dateFrom, dateTo])
 
-  // Группировка по строкам декомпозиции (по описанию)
-  const groups = useMemo(() => {
-    const map = new Map<string, WorkLogRow[]>()
+  // Двухуровневая группировка: по этапам → по декомпозициям
+  const stageGroups = useMemo(() => {
+    // Map<stageName, Map<decompDescription, WorkLogRow[]>>
+    const stagesMap = new Map<string, Map<string, WorkLogRow[]>>()
+
     for (const r of rows) {
-      const key = r.decomposition_item_description || 'Без строки'
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(r)
+      const stageName = r.decomposition_stage_name || 'Без этапа'
+      const decompName = r.decomposition_item_description || 'Без строки'
+
+      if (!stagesMap.has(stageName)) {
+        stagesMap.set(stageName, new Map())
+      }
+      const decompMap = stagesMap.get(stageName)!
+      if (!decompMap.has(decompName)) {
+        decompMap.set(decompName, [])
+      }
+      decompMap.get(decompName)!.push(r)
     }
-    return Array.from(map.entries()).map(([key, list]) => ({ key, list }))
+
+    // Преобразуем в массив для рендеринга
+    return Array.from(stagesMap.entries()).map(([stageName, decompMap]) => ({
+      stageName,
+      decompositions: Array.from(decompMap.entries()).map(([decompName, rows]) => ({
+        decompName,
+        rows
+      }))
+    }))
   }, [rows])
 
   const totalHours = useMemo(() => rows.reduce((s, r) => s + Number(r.work_log_hours || 0), 0), [rows])
@@ -127,7 +188,13 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
             <button
               key={k}
               onClick={() => setPreset(k as any)}
-              className={`px-2 py-1 text-xs rounded ${preset === k ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+              className={`px-2 py-1 text-xs rounded ${
+                preset === k
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+                  : preset === null
+                  ? 'text-slate-400 dark:text-slate-600'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
             >
               {t}
             </button>
@@ -143,6 +210,8 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
                 const toStr = r?.to ? formatLocalYMD(new Date(r.to.getFullYear(), r.to.getMonth(), r.to.getDate())) : ''
                 setDateFrom(fromStr)
                 setDateTo(toStr)
+                // Сбрасываем preset при выборе custom диапазона
+                setPreset(null)
               }}
               placeholder="Выберите период"
               calendarWidth="500px"
@@ -150,6 +219,15 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
               inputClassName="bg-transparent border-0 focus:outline-none focus:ring-0 outline-none text-xs h-[22px] leading-[22px] px-2 py-0 m-0"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setPreset('all')}
+            className="inline-flex items-center justify-center gap-1.5 h-[30px] px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors text-xs"
+            title="Сбросить фильтры"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Сбросить
+          </button>
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
           <div>Часы: <span className="font-medium text-slate-900 dark:text-slate-100">{totalHours.toFixed(2)}</span></div>
@@ -158,36 +236,86 @@ export default function SectionReportsTab({ sectionId }: SectionReportsTabProps)
       </div>
 
       {/* Список сгруппированный по строкам декомпозиции */}
-      <div className="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+      <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
         {loading ? (
           <div className="flex items-center justify-center h-24 text-slate-500 dark:text-slate-400 text-sm">Загрузка...</div>
         ) : rows.length === 0 ? (
           <div className="p-4 text-sm text-slate-500 dark:text-slate-400">Нет отчётов за выбранный период</div>
         ) : (
-          <div className="divide-y divide-slate-200 dark:divide-slate-700">
-            {groups.map(({ key, list }) => {
-              const groupHours = list.reduce((s, r) => s + Number(r.work_log_hours || 0), 0)
-              const groupAmount = list.reduce((s, r) => s + Number(r.work_log_amount || 0), 0)
+          <div className="space-y-4 p-4">
+            {stageGroups.map(({ stageName, decompositions }) => {
+              // Вычисляем общую сумму часов и рублей для всего этапа
+              const stageTotalHours = decompositions.reduce((total, { rows }) =>
+                total + rows.reduce((s, r) => s + Number(r.work_log_hours || 0), 0),
+                0
+              )
+              const stageTotalAmount = decompositions.reduce((total, { rows }) =>
+                total + rows.reduce((s, r) => s + Number(r.work_log_amount || 0), 0),
+                0
+              )
+              const isCollapsed = Boolean(collapsedStages[stageName])
+
               return (
-                <div key={key}>
-                  <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60">
-                    <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{key}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{groupHours.toFixed(2)} ч · {groupAmount.toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
+              <div key={stageName} className="space-y-2">
+                {/* Заголовок этапа с кнопкой сворачивания */}
+                <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-muted border">
+                  <div className="flex items-center gap-2 text-foreground text-sm font-semibold">
+                    <button
+                      type="button"
+                      aria-label={isCollapsed ? "Развернуть" : "Свернуть"}
+                      aria-expanded={!isCollapsed}
+                      onClick={() => setCollapsedStages((prev) => ({ ...prev, [stageName]: !prev[stageName] }))}
+                      className="p-1 rounded hover:bg-accent text-muted-foreground"
+                    >
+                      <ChevronDown className={`h-4 w-4 transform transition-transform ${isCollapsed ? "-rotate-90" : "rotate-0"}`} />
+                    </button>
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span>{stageName}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {list.map((r) => (
-                      <div key={r.work_log_id} className="grid grid-cols-[90px_1fr_120px_80px] gap-2 items-center px-3 py-1.5">
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{new Date(r.work_log_date).toLocaleDateString('ru-RU')}</div>
-                        <div className="text-[12px] dark:text-slate-100">
-                          <div className="truncate">{r.work_log_description || 'Без описания'}</div>
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{r.author_name}{r.work_category_name ? ` · ${r.work_category_name}` : ''}</div>
-                        </div>
-                        <div className="text-[11px] text-right tabular-nums text-slate-600 dark:text-slate-300">{Number(r.work_log_hours || 0).toFixed(2)} ч</div>
-                        <div className="text-[11px] text-right tabular-nums text-slate-600 dark:text-slate-300">{Number(r.work_log_amount || 0).toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded border bg-slate-100 dark:bg-slate-700 text-[11px] md:text-xs text-muted-foreground">
+                      {stageTotalHours.toFixed(2)} ч
+                    </span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded border bg-slate-100 dark:bg-slate-700 text-[11px] md:text-xs text-muted-foreground">
+                      {stageTotalAmount.toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}
+                    </span>
                   </div>
                 </div>
+
+                {/* Декомпозиции внутри этапа - только если не свернуто */}
+                {!isCollapsed && (
+                  <div className="space-y-2">
+                    {decompositions.map(({ decompName, rows: decompRows }) => {
+                      const groupHours = decompRows.reduce((s, r) => s + Number(r.work_log_hours || 0), 0)
+                      const groupAmount = decompRows.reduce((s, r) => s + Number(r.work_log_amount || 0), 0)
+                      return (
+                        <div key={decompName} className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                          {/* Заголовок декомпозиции */}
+                          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60">
+                            <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{decompName}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{groupHours.toFixed(2)} ч · {groupAmount.toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
+                          </div>
+
+                          {/* Список отчетов */}
+                          <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                            {decompRows.map((r) => (
+                              <div key={r.work_log_id} className="grid grid-cols-[90px_1fr_120px_80px] gap-2 items-center px-3 py-1.5">
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{new Date(r.work_log_date).toLocaleDateString('ru-RU')}</div>
+                                <div className="text-[12px] dark:text-slate-100">
+                                  <div className="truncate">{r.work_log_description || 'Без описания'}</div>
+                                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{r.author_name}{r.work_category_name ? ` · ${r.work_category_name}` : ''}</div>
+                                </div>
+                                <div className="text-[11px] text-right tabular-nums text-slate-600 dark:text-slate-300">{Number(r.work_log_hours || 0).toFixed(2)} ч</div>
+                                <div className="text-[11px] text-right tabular-nums text-slate-600 dark:text-slate-300">{Number(r.work_log_amount || 0).toLocaleString('ru-BY', { style: 'currency', currency: 'BYN', maximumFractionDigits: 0 })}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
               )
             })}
           </div>

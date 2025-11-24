@@ -40,23 +40,44 @@ export const usePermissionsStore = create<PermissionsState>()(
         // Нормализуем hierarchy.*: оставляем только наивысший уровень
         const setHier = new Set(permissions)
         const hasAdmin = setHier.has('hierarchy.is_admin')
+        const hasSubdivisionHead = setHier.has('hierarchy.is_subdivision_head')
         const hasDeptHead = setHier.has('hierarchy.is_department_head')
         const hasTeamLead = setHier.has('hierarchy.is_team_lead')
         const hasUser = setHier.has('hierarchy.is_user')
 
         let normalized = permissions
         if (hasAdmin) {
-          normalized = permissions.filter(p => p !== 'hierarchy.is_department_head' && p !== 'hierarchy.is_team_lead' && p !== 'hierarchy.is_user')
+          // Admin - удаляем все остальные иерархические роли
+          normalized = permissions.filter(p =>
+            p !== 'hierarchy.is_subdivision_head' &&
+            p !== 'hierarchy.is_department_head' &&
+            p !== 'hierarchy.is_team_lead' &&
+            p !== 'hierarchy.is_user'
+          )
+        } else if (hasSubdivisionHead) {
+          // Subdivision Head - удаляем department_head, team_lead, user
+          normalized = permissions.filter(p =>
+            p !== 'hierarchy.is_department_head' &&
+            p !== 'hierarchy.is_team_lead' &&
+            p !== 'hierarchy.is_user'
+          )
         } else if (hasDeptHead) {
-          normalized = permissions.filter(p => p !== 'hierarchy.is_team_lead' && p !== 'hierarchy.is_user')
+          // Department Head - удаляем team_lead, user
+          normalized = permissions.filter(p =>
+            p !== 'hierarchy.is_team_lead' &&
+            p !== 'hierarchy.is_user'
+          )
         } else if (hasTeamLead) {
-          normalized = permissions.filter(p => p !== 'hierarchy.is_user')
+          // Team Lead - удаляем user
+          normalized = permissions.filter(p =>
+            p !== 'hierarchy.is_user'
+          )
         }
 
-        set({ 
-          permissions: normalized, 
+        set({
+          permissions: normalized,
           lastUpdated: new Date(),
-          error: null 
+          error: null
         })
       },
 
