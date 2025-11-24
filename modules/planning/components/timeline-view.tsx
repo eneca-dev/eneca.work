@@ -405,7 +405,7 @@ useEffect(() => {
       headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
       contentScroll.removeEventListener('scroll', handleContentScroll)
     }
-  }, [])
+  }, [isLoadingSections])
 
   // Вычисляем ширину вертикального скроллбара контента
   useEffect(() => {
@@ -432,7 +432,7 @@ useEffect(() => {
       window.removeEventListener('resize', calculateScrollbarWidth)
       resizeObserver.disconnect()
     }
-  }, [])
+  }, [isLoadingSections])
 
   // Получаем данные для заголовка
   const { columnVisibility } = usePlanningColumnsStore()
