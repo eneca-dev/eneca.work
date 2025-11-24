@@ -2239,10 +2239,10 @@ export function LoadingModal({
 
                   {/* View Mode Toggle */}
                   <div className={cn(
-                    "flex gap-1 p-1 rounded-lg border",
+                    "flex gap-1 p-1 rounded-lg",
                     theme === "dark"
-                      ? "bg-slate-700 border-slate-600"
-                      : "bg-muted border-border",
+                      ? "bg-slate-700"
+                      : "bg-muted",
                     ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                   )}>
                     <button
