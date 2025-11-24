@@ -48,8 +48,11 @@ interface SectionData {
 }
 
 type HierarchyData = {
+  object_id?: string
   object_name: string | null
+  stage_id?: string
   stage_name?: string | null
+  project_id?: string
   project_name?: string | null
   manager_name?: string | null
   project_manager_name?: string | null
@@ -310,13 +313,17 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
       const formattedData = {
         ...sectionData,
         responsible_name: responsibleName,
+        responsible_avatar: responsibleAvatar,
         object_name: hierarchyData?.object_name || null,
         stage_name: hierarchy?.stage_name || null,
         project_name: hierarchy?.project_name || null,
         manager_name: hierarchy?.manager_name ?? hierarchy?.project_manager_name ?? null,
         status_name: sectionData.section_statuses?.name || null,
         status_color: sectionData.section_statuses?.color || null,
-        responsible_avatar: responsibleAvatar
+        // ID для навигации по breadcrumbs
+        object_id: hierarchyData?.object_id,
+        stage_id: hierarchyData?.stage_id,
+        project_id: hierarchyData?.project_id
       }
 
       console.log('Итоговые данные раздела:', formattedData)
