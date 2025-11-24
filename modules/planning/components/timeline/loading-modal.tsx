@@ -2571,6 +2571,8 @@ export function LoadingModal({
                             "px-3 py-1 rounded-full text-sm font-medium border transition-colors",
                             formData.rate === rate
                               ? "bg-primary text-primary-foreground border-primary"
+                              : theme === "dark"
+                              ? "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600"
                               : "bg-background text-foreground border-input hover:bg-accent",
                             (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                           )}
@@ -2592,7 +2594,7 @@ export function LoadingModal({
                         className={cn(
                           "w-20 text-sm rounded-full border px-3 py-1 outline-none focus:ring-2 focus:ring-offset-0 transition-all",
                           theme === "dark"
-                            ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
+                            ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-500"
                             : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
                           manualRateError
                             ? "!border-red-500 focus:!ring-red-500 focus:!border-red-500"
