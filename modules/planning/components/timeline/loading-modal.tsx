@@ -2239,7 +2239,10 @@ export function LoadingModal({
 
                   {/* View Mode Toggle */}
                   <div className={cn(
-                    "flex gap-1 p-1 bg-muted rounded-lg",
+                    "flex gap-1 p-1 rounded-lg border",
+                    theme === "dark"
+                      ? "bg-slate-700 border-slate-600"
+                      : "bg-muted border-border",
                     ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                   )}>
                     <button
@@ -2248,7 +2251,11 @@ export function LoadingModal({
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
-                          ? "bg-background shadow-sm"
+                          ? theme === "dark"
+                            ? "bg-slate-600 shadow-sm"
+                            : "bg-background shadow-sm"
+                          : theme === "dark"
+                          ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
                         ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
@@ -2261,7 +2268,11 @@ export function LoadingModal({
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
-                          ? "bg-background shadow-sm"
+                          ? theme === "dark"
+                            ? "bg-slate-600 shadow-sm"
+                            : "bg-background shadow-sm"
+                          : theme === "dark"
+                          ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
                         ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
