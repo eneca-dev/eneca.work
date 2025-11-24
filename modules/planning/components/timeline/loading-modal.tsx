@@ -1488,7 +1488,6 @@ export function LoadingModal({
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
-    const isDecompositionStageNode = node.type === "file" && node.decompositionStageId
     const isNavigationNode = node.isNavigationNode === true
     const isSelected = selectedNode?.id === node.id
     const hasChildren = node.children && node.children.length > 0
@@ -1497,10 +1496,8 @@ export function LoadingModal({
     const isProjectNode = node.type === "folder" && node.projectId && !node.stageId
     const isRefreshingProject = refreshingProjects.has(node.id)
 
-    const isDisabledStage = !isSelected && selectedNode && isDecompositionStageNode
-
-    // In edit mode: only lock decomposition stages until user clicks "Сменить этап"
-    const isStageLockedInEdit = mode === "edit" && !isChangingStage && isDecompositionStageNode
+    // In edit mode: lock entire tree until user clicks "Сменить этап"
+    const isStageLockedInEdit = mode === "edit" && !isChangingStage
     // In create mode: lock ENTIRE tree when form is shown AND not selecting new stage
     const isNodeLockedInCreate = mode === "create" && showCreateForm && !isSelectingNewStage
     const isTreeLocked = isStageLockedInEdit || isNodeLockedInCreate
@@ -1512,9 +1509,7 @@ export function LoadingModal({
           isNavigationNode && "text-primary/80 hover:bg-primary/5 hover:text-primary cursor-pointer italic",
           !isNavigationNode && isTreeLocked && "opacity-50 cursor-not-allowed",
           !isNavigationNode && !isTreeLocked && isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
-          !isNavigationNode && !isTreeLocked && !isSelected && !selectedNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
-          !isNavigationNode && !isTreeLocked && !isSelected && selectedNode && isDecompositionStageNode && "opacity-50 cursor-not-allowed",
-          !isNavigationNode && !isTreeLocked && !isSelected && selectedNode && !isDecompositionStageNode && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          !isNavigationNode && !isTreeLocked && !isSelected && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={async () => {
@@ -1558,10 +1553,7 @@ export function LoadingModal({
           if (node.type === "folder") {
             await toggleFolder(node.id)
           } else if (node.type === "file" && node.decompositionStageId) {
-            // Если уже выбран этап, блокируем выбор другого
-            if (!selectedNode) {
-              handleNodeSelect(node)
-            }
+            handleNodeSelect(node)
           }
         }}
       >
@@ -1631,15 +1623,6 @@ export function LoadingModal({
                   ? "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"
                   : "Дерево заблокировано - форма открыта. Нажмите \"Сменить этап\" для изменения"}
               </p>
-            </TooltipContent>
-          </Tooltip>
-        ) : isDisabledStage ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {nodeContent}
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Нажмите &quot;Сменить этап&quot; для выбора другого этапа</p>
             </TooltipContent>
           </Tooltip>
         ) : (
