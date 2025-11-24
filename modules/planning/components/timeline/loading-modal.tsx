@@ -350,7 +350,7 @@ export function LoadingModal({
           if (viewMode === "my" && userDepartmentId) {
             console.log(`[LoadingModal] Фильтрация проектов по отделу: ${userDepartmentId}`)
             filteredProjects = projects?.filter(
-              (p) => p.department_ids && p.department_ids.includes(userDepartmentId)
+              (p) => Array.isArray(p.department_ids) && p.department_ids.includes(userDepartmentId)
             ) || null
             console.log(`[LoadingModal] После фильтрации осталось проектов: ${filteredProjects?.length || 0}`)
           }
@@ -373,7 +373,7 @@ export function LoadingModal({
           span.setAttribute("db.success", false)
           span.setAttribute("db.error", error instanceof Error ? error.message : "Unknown error")
 
-          console.error("[LoadingModal] Ошибка при загрузке проектов:", error)
+          console.warn("[LoadingModal] Ошибка при загрузке проектов:", error)
 
           Sentry.captureException(error, {
             tags: {
@@ -399,7 +399,7 @@ export function LoadingModal({
         }
       },
     )
-  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId])
+  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId, employee, section, loading])
 
   // Helper: Build stage nodes from view data
   const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
@@ -1226,6 +1226,20 @@ export function LoadingModal({
       setSectionPanelProjectId(null)
     }
   }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
+
+  // Initialize manualRateInput for custom rates in edit mode
+  useEffect(() => {
+    if (mode === "edit" && isOpen && formData.rate) {
+      // Check if rate is a custom rate (not in predefined RATES)
+      if (!RATES.includes(formData.rate)) {
+        // Set manual input to the custom rate value
+        setManualRateInput(formData.rate.toString())
+      } else {
+        // Clear manual input if using predefined rate
+        setManualRateInput("")
+      }
+    }
+  }, [mode, formData.rate, isOpen])
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
