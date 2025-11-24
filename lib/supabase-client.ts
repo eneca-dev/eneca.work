@@ -110,6 +110,8 @@ export interface EmployeeWorkloadData {
   project_id: string | null
   project_name: string | null
   project_status: string | null
+  stage_id: string | null
+  stage_name: string | null
   has_loadings: boolean
   loadings_count: number
   employment_rate: number | null

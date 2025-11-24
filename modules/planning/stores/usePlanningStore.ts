@@ -724,6 +724,8 @@ export const usePlanningStore = create<PlanningState>()(
 
               // Добавляем загрузку, если она есть
               if (item.loading_id) {
+                const stageId = item.stage_id || undefined
+
                 employee.loadings.push({
                   id: item.loading_id,
                   responsibleId: item.user_id,
@@ -732,9 +734,9 @@ export const usePlanningStore = create<PlanningState>()(
                   responsibleTeamName: item.final_team_name,
                   sectionId: item.loading_section,
                   sectionName: item.section_name,
-                  stageId: item.stage_id || item.loading_stage,
+                  stageId: stageId,
                   stageName: item.stage_name || undefined,
-                  projectId: null,
+                  projectId: item.project_id || null,
                   projectName: item.project_name,
                   projectStatus: item.project_status,
                   startDate: new Date(item.loading_start),
@@ -1123,7 +1125,7 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleAvatarUrl: item.responsible_avatar || undefined,
               // Берём корректные поля из ответа fetchLoadings (view_sections_with_loadings)
               sectionId: item.section_id,
-              stageId: item.loading_stage,
+              stageId: item.loading_stage || undefined,  // loading_stage - это decomposition_stage_id из loadings
               stageName: item.stage_name || undefined,
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
@@ -2750,6 +2752,8 @@ export const usePlanningStore = create<PlanningState>()(
 
               // Добавляем загрузку, если она есть
               if (item.loading_id) {
+                const stageId = item.stage_id || undefined
+
                 employee.loadings.push({
                   id: item.loading_id,
                   responsibleId: item.user_id,
@@ -2758,9 +2762,9 @@ export const usePlanningStore = create<PlanningState>()(
                   responsibleTeamName: item.final_team_name,
                   sectionId: item.loading_section,
                   sectionName: item.section_name,
-                  stageId: item.loading_stage,
+                  stageId: stageId,
                   stageName: item.stage_name || undefined,
-                  projectId: null,
+                  projectId: item.project_id || null,
                   projectName: item.project_name,
                   projectStatus: item.project_status,
                   startDate: new Date(item.loading_start),

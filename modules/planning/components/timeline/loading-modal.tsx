@@ -318,7 +318,6 @@ export function LoadingModal({
   const buildFileTree = useCallback(async () => {
     // Prevent concurrent calls
     if (isLoadingTreeRef.current) {
-      console.log("[LoadingModal] buildFileTree уже выполняется, пропуск...")
       return
     }
     isLoadingTreeRef.current = true
@@ -333,8 +332,6 @@ export function LoadingModal({
         try {
           span.setAttribute("modal_mode", mode)
 
-          console.log("[LoadingModal] Загрузка списка проектов...")
-
           // Fetch projects with department information
           const { data: projects, error: projectsError } = await supabase
             .from("view_projects_with_department_info")
@@ -343,16 +340,12 @@ export function LoadingModal({
 
           if (projectsError) throw projectsError
 
-          console.log(`[LoadingModal] Загружено проектов: ${projects?.length || 0}`)
-
           // Filter projects by department in "my" mode
           let filteredProjects = projects as ProjectWithDepartmentInfo[] | null
           if (viewMode === "my" && userDepartmentId) {
-            console.log(`[LoadingModal] Фильтрация проектов по отделу: ${userDepartmentId}`)
             filteredProjects = projects?.filter(
-              (p) => p.department_ids && p.department_ids.includes(userDepartmentId)
+              (p) => Array.isArray(p.department_ids) && p.department_ids.includes(userDepartmentId)
             ) || null
-            console.log(`[LoadingModal] После фильтрации осталось проектов: ${filteredProjects?.length || 0}`)
           }
 
           // Create tree with projects only (no children loaded yet)
@@ -368,12 +361,11 @@ export function LoadingModal({
           span.setAttribute("projects_count", tree.length)
 
           setTreeData(tree)
-          console.log("[LoadingModal] Список проектов загружен")
         } catch (error) {
           span.setAttribute("db.success", false)
           span.setAttribute("db.error", error instanceof Error ? error.message : "Unknown error")
 
-          console.error("[LoadingModal] Ошибка при загрузке проектов:", error)
+          console.warn("[LoadingModal] Ошибка при загрузке проектов:", error)
 
           Sentry.captureException(error, {
             tags: {
@@ -399,7 +391,7 @@ export function LoadingModal({
         }
       },
     )
-  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId])
+  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId, employee, section, loading])
 
   // Helper: Build stage nodes from view data
   const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
@@ -500,8 +492,6 @@ export function LoadingModal({
     setLoadingNodes((prev) => new Set(prev).add(node.id))
 
     try {
-      console.log(`[LoadingModal] Загрузка данных для проекта: ${node.name}`)
-
       // Check cache first (unless forceRefresh is true)
       let projectData = forceRefresh ? null : projectDataCache.get(node.projectId)
 
@@ -518,39 +508,15 @@ export function LoadingModal({
 
         // Apply department filter in "my projects" mode
         if (viewMode === "my" && userDepartmentId) {
-          console.log(`[LoadingModal] Фильтрация по отделу: ${userDepartmentId}`)
           fetchedData = fetchedData.filter(row =>
             row.section_id && row.responsible_department_id === userDepartmentId
           )
-          console.log(`[LoadingModal] После фильтрации осталось ${fetchedData.length} строк`)
         }
 
         projectData = fetchedData
 
         // Cache the filtered result
         setProjectDataCache((prev) => new Map(prev).set(node.projectId!, projectData!))
-        console.log(`[LoadingModal] Загружено ${projectData.length} строк из view для проекта`)
-
-        // DEBUG: Show sample rows
-        if (projectData.length > 0) {
-          console.log(`[LoadingModal] DEBUG: Первая строка из view:`, {
-            decomposition_stage_id: projectData[0].decomposition_stage_id,
-            decomposition_stage_name: projectData[0].decomposition_stage_name,
-            loading_id: projectData[0].loading_id,
-            loading_responsible_full_name: projectData[0].loading_responsible_full_name,
-            section_id: projectData[0].section_id,
-            section_name: projectData[0].section_name,
-          })
-
-          // Show rows with loading_id if any
-          const rowsWithLoadings = projectData.filter(r => r.loading_id)
-          console.log(`[LoadingModal] DEBUG: Строк с loading_id: ${rowsWithLoadings.length}`)
-          if (rowsWithLoadings.length > 0) {
-            console.log(`[LoadingModal] DEBUG: Первая строка с loading:`, rowsWithLoadings[0])
-          }
-        }
-      } else {
-        console.log(`[LoadingModal] Используются кэшированные данные (${projectData.length} строк)`)
       }
 
       // Build tree structure from cached data
@@ -610,8 +576,6 @@ export function LoadingModal({
         }
         return updateNode(prevTree)
       })
-
-      console.log(`[LoadingModal] Дерево построено для проекта "${node.name}"`)
     } catch (error) {
       console.error(`[LoadingModal] Ошибка при загрузке данных проекта:`, error)
       Sentry.captureException(error, {
@@ -646,8 +610,6 @@ export function LoadingModal({
 
   // Helper function to find and select a decomposition stage node by ID
   const findAndSelectNode = useCallback((decompositionStageId: string) => {
-    console.log(`[LoadingModal] Поиск этапа декомпозиции: ${decompositionStageId}`)
-
     const findNodeById = (nodes: FileTreeNode[], id: string): FileTreeNode | null => {
       for (const node of nodes) {
         if (node.decompositionStageId === id) return node
@@ -661,7 +623,6 @@ export function LoadingModal({
 
     const targetNode = findNodeById(treeData, decompositionStageId)
     if (targetNode) {
-      console.log(`[LoadingModal] Этап найден: ${targetNode.name} (${targetNode.id})`)
       // Expand all parent folders
       const expandPath = (node: FileTreeNode) => {
         const path: string[] = []
@@ -692,12 +653,10 @@ export function LoadingModal({
       }
 
       const pathToExpand = expandPath(targetNode)
-      console.log(`[LoadingModal] Раскрытие папок: ${pathToExpand.length} уровней`)
       // Also expand the target node itself to show its loadings
       const foldersToExpand = new Set([...pathToExpand, targetNode.id])
       setExpandedFolders(foldersToExpand)
       setSelectedNode(targetNode)
-      console.log(`[LoadingModal] Этап успешно выбран и развёрнут: ${targetNode.name}`)
 
       // Build breadcrumbs
       const buildBreadcrumbs = (node: FileTreeNode): FileTreeNode[] => {
@@ -730,10 +689,10 @@ export function LoadingModal({
         return path
       }
 
-      setBreadcrumbs(buildBreadcrumbs(targetNode))
+      const breadcrumbs = buildBreadcrumbs(targetNode)
+      setBreadcrumbs(breadcrumbs)
     } else {
-      console.warn(`[LoadingModal] Этап декомпозиции не найден: ${decompositionStageId}`)
-      console.warn("[LoadingModal] Доступные узлы дерева:", treeData)
+      console.warn(`[LoadingModal] ❌ Этап декомпозиции не найден: ${decompositionStageId}`)
     }
   }, [treeData])
 
@@ -917,7 +876,6 @@ export function LoadingModal({
 
     setIsRefreshingAll(true)
     try {
-      console.log("[LoadingModal] Полное обновление: очистка всего кэша и перезагрузка списка проектов")
       // Clear entire cache to force fresh data on next expand
       setProjectDataCache(new Map())
       // Reset expanded folders so they reload when re-expanded
@@ -945,7 +903,6 @@ export function LoadingModal({
   // Load tree and employees on mount
   useEffect(() => {
     if (!hasLoadedTreeRef.current) {
-      console.log("[LoadingModal] Первая загрузка - запуск buildFileTree и fetchEmployees")
       buildFileTree()
       fetchEmployees()
     }
@@ -961,7 +918,6 @@ export function LoadingModal({
   // Clear cache and reload when view mode changes
   useEffect(() => {
     if (hasLoadedTreeRef.current) {
-      console.log(`[LoadingModal] Режим отображения изменен на: ${viewMode}`)
       // Clear all cached data to force reload with new filter
       setProjectDataCache(new Map())
       // Collapse all expanded folders
@@ -980,7 +936,9 @@ export function LoadingModal({
 
   // Auto-expand and select node for edit mode or when stageId is provided
   useEffect(() => {
-    if (treeData.length === 0) return
+    if (treeData.length === 0) {
+      return
+    }
 
     let targetStageId: string | undefined
     let targetProjectId: string | undefined
@@ -989,25 +947,9 @@ export function LoadingModal({
       targetStageId = loading.stageId
       // Try to get project ID from loading or section
       targetProjectId = loading.projectId || section?.projectId
-
-      console.log("[LoadingModal] Режим редактирования - автовыбор этапа:", {
-        targetStageId,
-        targetProjectId,
-        loadingData: {
-          id: loading.id,
-          projectId: loading.projectId,
-          sectionId: loading.sectionId,
-          stageId: loading.stageId,
-        },
-      })
     } else if (mode === "create" && stageId) {
       targetStageId = stageId
       targetProjectId = section?.projectId
-
-      console.log("[LoadingModal] Режим создания - автовыбор этапа:", {
-        targetStageId,
-        targetProjectId,
-      })
     }
 
     if (targetStageId && targetProjectId) {
@@ -1016,14 +958,11 @@ export function LoadingModal({
       const projectNode = treeData.find((n) => n.id === projectNodeId)
 
       if (projectNode) {
-        console.log(`[LoadingModal] Найден проект: ${projectNode.name} (${projectNodeId})`)
-
         // Установить название проекта в поиск, чтобы проект отображался в дереве
         setProjectSearchTerm(projectNode.name)
 
         // Load project data if not loaded yet
         if (projectNode.children?.length === 0) {
-          console.log(`[LoadingModal] Загрузка данных проекта для stageId: ${targetStageId}`)
           loadNodeChildren(projectNode).then(() => {
             // After loading, find and select the target node
             setTimeout(() => {
@@ -1031,16 +970,11 @@ export function LoadingModal({
             }, 100)
           })
         } else {
-          console.log(`[LoadingModal] Данные проекта уже загружены, поиск этапа...`)
           // Data already loaded, just find and select
           findAndSelectNode(targetStageId)
         }
-      } else {
-        console.warn(`[LoadingModal] Проект не найден: ${projectNodeId}`)
       }
     } else if (targetStageId && !targetProjectId) {
-      console.warn("[LoadingModal] targetProjectId отсутствует, попытка получить из sectionId...")
-
       // Fallback: fetch projectId from sectionId if missing
       if (loading?.sectionId) {
         supabase
@@ -1055,7 +989,6 @@ export function LoadingModal({
               return
             }
             if (data?.project_id) {
-              console.log(`[LoadingModal] Получен project_id из БД: ${data.project_id}`)
               targetProjectId = data.project_id
 
               // Retry auto-expand with fetched projectId
@@ -1083,14 +1016,8 @@ export function LoadingModal({
   // Pre-fill employee for edit mode
   useEffect(() => {
     if (mode === "edit" && loading && employees.length > 0) {
-      console.log("[LoadingModal] Предзаполнение сотрудника для режима редактирования:", {
-        responsibleId: loading.responsibleId,
-        employeesCount: employees.length,
-      })
-
       const emp = employees.find((e) => e.user_id === loading.responsibleId)
       if (emp) {
-        console.log(`[LoadingModal] Сотрудник найден: ${emp.full_name}`)
         setSelectedEmployee(emp)
       } else {
         console.warn(`[LoadingModal] Сотрудник не найден с ID: ${loading.responsibleId}`)
@@ -1112,7 +1039,6 @@ export function LoadingModal({
           employeeId: selectedEmployee.user_id,
           stageId: selectedNode.decompositionStageId || "",
         }
-        console.log("[LoadingModal] ✅ Исходные значения сохранены (все данные готовы):", originalValuesRef.current)
       }
     }
   }, [mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, loading?.responsibleId, loading?.stageId, selectedEmployee?.user_id, selectedNode?.decompositionStageId, normalizeDateValue])
@@ -1180,8 +1106,6 @@ export function LoadingModal({
       // Clear section panel IDs
       setSectionPanelSectionId(null)
       setSectionPanelProjectId(null)
-
-      console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading при открытии")
     }
 
     // Reset originalValuesRef when modal closes (for both modes)
@@ -1194,7 +1118,6 @@ export function LoadingModal({
         employeeId: "",
         stageId: "",
       }
-      console.log("[LoadingModal] 🔄 originalValuesRef сброшен при закрытии модалки")
 
       // Сбросить formData к исходным значениям из loading (для edit mode)
       // Это отменяет все несохранённые изменения
@@ -1205,7 +1128,6 @@ export function LoadingModal({
           rate: loading.rate ?? 1,
           comment: loading.comment || "",
         })
-        console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading")
       }
 
       // Reset isChangingStage when modal closes
@@ -1226,6 +1148,20 @@ export function LoadingModal({
       setSectionPanelProjectId(null)
     }
   }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
+
+  // Initialize manualRateInput for custom rates in edit mode
+  useEffect(() => {
+    if (mode === "edit" && isOpen && formData.rate) {
+      // Check if rate is a custom rate (not in predefined RATES)
+      if (!RATES.includes(formData.rate)) {
+        // Set manual input to the custom rate value
+        setManualRateInput(formData.rate.toString())
+      } else {
+        // Clear manual input if using predefined rate
+        setManualRateInput("")
+      }
+    }
+  }, [mode, formData.rate, isOpen])
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
@@ -1265,6 +1201,7 @@ export function LoadingModal({
   // Toggle folder expansion
   const toggleFolder = async (folderId: string) => {
     const isExpanding = !expandedFolders.has(folderId)
+    console.log(`[LoadingModal] 📁 toggleFolder(): ${isExpanding ? 'Раскрытие' : 'Сворачивание'} папки ${folderId}`)
 
     setExpandedFolders((prev) => {
       const newSet = new Set(prev)
@@ -1397,7 +1334,6 @@ export function LoadingModal({
 
     // Если originalValues еще не инициализированы (данные еще загружаются), считаем что изменений нет
     if (originalValuesRef.current.employeeId === "") {
-      console.log("[LoadingModal] ⚠️ originalValues еще не инициализированы, кнопка неактивна")
       return false
     }
 
@@ -1410,25 +1346,6 @@ export function LoadingModal({
     const stageChanged = (selectedNode?.decompositionStageId || "") !== (originalValuesRef.current.stageId || "")
 
     const changed = startDateChanged || endDateChanged || rateChanged || commentChanged || employeeChanged || stageChanged
-
-    console.log("[LoadingModal] Проверка изменений:", {
-      startDateChanged,
-      endDateChanged,
-      rateChanged,
-      commentChanged,
-      employeeChanged,
-      stageChanged,
-      hasChanges: changed,
-      current: {
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        rate: formData.rate,
-        comment: formData.comment,
-        employeeId: selectedEmployee?.user_id,
-        stageId: selectedNode?.decompositionStageId,
-      },
-      original: originalValuesRef.current,
-    })
 
     return changed
   }, [mode, formData, selectedEmployee, selectedNode])
@@ -2636,6 +2553,7 @@ export function LoadingModal({
                         }
                       }}
                       placeholder="Выберите период"
+                      hideSingleDateActions={true}
                       inputClassName={cn(
                         "w-full text-sm rounded border px-3 py-2",
                         theme === "dark"
