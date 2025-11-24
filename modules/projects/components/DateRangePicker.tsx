@@ -13,6 +13,7 @@ interface DateRangePickerProps {
   inputWidth?: string
   inputClassName?: string
   renderToBody?: boolean
+  hideSingleDateActions?: boolean
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
@@ -23,6 +24,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   inputWidth = "100%",
   inputClassName,
   renderToBody = true,
+  hideSingleDateActions = false,
 }) => {
   const [open, setOpen] = useState(false)
   const [openUpward, setOpenUpward] = useState(false)
@@ -426,7 +428,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               {renderMonth(currentMonth, 'left')}
               {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
             </div>
-            {selectedDate && (
+            {selectedDate && !hideSingleDateActions && (
               <div className="flex gap-2 mt-3 pt-2 border-t border-border dark:border-slate-600">
                 <button
                   onClick={saveAsStartDate}
@@ -470,7 +472,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                   {renderMonth(currentMonth, 'left')}
                   {renderMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1), 'right')}
                 </div>
-                {selectedDate && (
+                {selectedDate && !hideSingleDateActions && (
                   <div className="flex gap-2 mt-3 pt-2 border-t border-border dark:border-slate-600">
                     <button
                       onClick={saveAsStartDate}

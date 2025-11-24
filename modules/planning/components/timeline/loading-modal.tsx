@@ -2636,6 +2636,7 @@ export function LoadingModal({
                         }
                       }}
                       placeholder="Выберите период"
+                      hideSingleDateActions={true}
                       inputClassName={cn(
                         "w-full text-sm rounded border px-3 py-2",
                         theme === "dark"
