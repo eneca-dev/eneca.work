@@ -1,10 +1,10 @@
-import { ChatRequest, ChatResponse, ChatRequestWithHistory } from '../types/chat'
+import { ChatRequest, ChatResponse, ChatRequestWithHistory, ChatAgentType } from '../types/chat'
 import { createClient } from '@/utils/supabase/client'
 import { useUserStore } from '@/stores/useUserStore'
 import { getContextForRequest } from '../utils/chatCache'
 import * as Sentry from '@sentry/nextjs'
 
-export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
+export async function sendChatMessage(request: ChatRequest, agentType: ChatAgentType = 'n8n'): Promise<ChatResponse> {
   try {
     // Получаем JWT токен из Supabase
     const supabase = createClient()
@@ -18,18 +18,20 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
     const userStore = useUserStore.getState()
     const userId = userStore.id
     
-    const conversationHistory = userId && typeof window !== 'undefined' 
-      ? getContextForRequest(userId) 
+    const conversationHistory = userId && typeof window !== 'undefined'
+      ? getContextForRequest(userId)
       : []
-    
-    // Идём через наш гейт /api/chat (full switch)
+
+    // Выбор endpoint в зависимости от типа агента
+    const endpoint = agentType === 'python' ? '/api/chat/python' : '/api/chat'
+
     const payload = {
       message: request.message,
       conversationHistory: conversationHistory,
       conversationId: request.conversationId,
     }
-    console.debug('sendChatMessage payload → /api/chat', payload)
-    const response = await fetch('/api/chat', {
+    console.debug(`sendChatMessage payload → ${endpoint} (agent: ${agentType})`, payload)
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -21,9 +21,13 @@ npm run lint       # Run ESLint
 - **Backend:** Supabase (PostgreSQL database, authentication, realtime subscriptions, edge functions)
 - **State Management:** Zustand (NOT Redux - despite what some old docs may say)
 - **Forms:** React Hook Form + Zod validation
-- **Rich Text:** TipTap editor
+- **Rich Text:** TipTap editor v2
 - **Monitoring:** Sentry for error tracking and performance monitoring
 - **AI Integration:** N8N workflow automation for GPT-4o-mini chat
+- **Drag & Drop:** @dnd-kit (core + sortable) for drag-and-drop interactions
+- **Data Visualization:** Recharts 2.15 for analytics charts
+- **Notifications:** Sonner toast library
+- **Excel Export:** ExcelJS 4.4
 
 ## Architecture Overview
 
@@ -178,10 +182,16 @@ app/api/
 
 ### 5. Error Handling
 
-- Sentry integration throughout application
+- Sentry integration throughout application (client, server, edge runtimes)
 - Custom error boundaries per module
 - `PermissionsErrorBoundary` for permission errors
 - Structured error responses from API routes
+- **Sentry Usage Patterns:**
+  - Exception catching: `Sentry.captureException(error)` in try-catch blocks
+  - Custom spans: `Sentry.startSpan({ op: "ui.click", name: "..." }, (span) => { ... })`
+  - Logger: Import `import * as Sentry from "@sentry/nextjs"`, use `Sentry.logger.error()`, etc.
+  - Span attributes: `span.setAttribute(key, value)` for metrics
+  - See `.cursorrules/rules.md` for detailed examples
 
 ## Important Conventions
 
@@ -227,11 +237,21 @@ For detailed module-specific documentation, refer to individual module READMEs:
 - `modules/chat/README.md` - Chat system architecture
 - `modules/notifications/README.md` - Notification system
 - `modules/planning/README.md` - Planning module (resource allocation, Gantt chart)
+- `modules/vacation-management/README.md` - Vacation tracking system
+- `modules/announcements/README.md` - Company announcements
+- `modules/text-editor/README.md` - TipTap rich text editor
+- `modules/users/admin/README.md` - Admin panel features
 
 ## Additional Resources
 
-- `docs/roles-and-permissions.md` - Detailed permission system documentation
-- `docs/modules.md` - Module architecture overview
-- `supabase-db.sql` - Complete database schema
-- `supabase-views.md` - Database views documentation
-- `chat-system-prompts.md` - Chat AI prompts and behavior
+- `docs/modules.md` - Module architecture guide (Russian) - how to add new modules
+- `docs/overview.md` - Project mission and main use cases (Russian)
+- `docs/database/README.md` - Database structure overview and quick start
+- `docs/database/tables.md` - Complete table definitions
+- `docs/database/views.md` - Database views documentation
+- `docs/database/functions-and-triggers.md` - Database functions and triggers
+- `docs/database/indexes-and-optimization.md` - Performance tuning guide
+- `supabase-db.sql` - Complete database schema SQL
+- `supabase-views.md` - Detailed view definitions (496KB)
+- `chat-system-prompts.md` - Chat AI prompts and behavior configuration
+- `.cursorrules/rules.md` - Sentry integration examples and patterns

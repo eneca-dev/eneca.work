@@ -1,9 +1,10 @@
-import { ChatMessage, ChatContextMessage } from '../types/chat'
+import { ChatMessage, ChatContextMessage, ChatAgentType } from '../types/chat'
 
 const MAX_MESSAGES = 10
 
 // Ключ с userId для изоляции пользователей
 const getStorageKey = (userId: string) => `eneca_chat_${userId}`
+const getAgentKey = () => `eneca_chat_agent`
 
 export function saveMessage(message: ChatMessage, userId: string): void {
   if (typeof window === 'undefined' || !userId) return
@@ -81,4 +82,27 @@ export function getMessagesCount(userId: string): number {
 
 export function hasHistory(userId: string): boolean {
   return getHistory(userId).length > 0
+}
+
+// Сохранение и загрузка выбранного агента
+export function saveAgentType(agentType: ChatAgentType): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    localStorage.setItem(getAgentKey(), agentType)
+  } catch (error) {
+    console.warn('Не удалось сохранить тип агента:', error)
+  }
+}
+
+export function getAgentType(): ChatAgentType {
+  if (typeof window === 'undefined') return 'n8n'
+
+  try {
+    const stored = localStorage.getItem(getAgentKey())
+    return (stored === 'python' || stored === 'n8n') ? stored : 'n8n'
+  } catch (error) {
+    console.warn('Не удалось загрузить тип агента:', error)
+    return 'n8n'
+  }
 } 

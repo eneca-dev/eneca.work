@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(/tmp/department-row-before-employeerow.txt)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
