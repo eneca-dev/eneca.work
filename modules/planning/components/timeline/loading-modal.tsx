@@ -1507,8 +1507,9 @@ export function LoadingModal({
         className={cn(
           "group flex items-center gap-1 py-1 px-2 text-sm rounded-sm select-none transition-colors duration-150",
           isNavigationNode && "text-primary/80 hover:bg-primary/5 hover:text-primary cursor-pointer italic",
-          !isNavigationNode && isTreeLocked && "opacity-50 cursor-not-allowed",
-          !isNavigationNode && !isTreeLocked && isSelected && "bg-primary/10 text-primary border-l-2 border-primary cursor-pointer",
+          !isNavigationNode && isTreeLocked && !isSelected && "opacity-50 cursor-not-allowed",
+          !isNavigationNode && isTreeLocked && isSelected && "cursor-not-allowed",
+          !isNavigationNode && isSelected && "bg-primary/10 text-primary border-l-2 border-primary",
           !isNavigationNode && !isTreeLocked && !isSelected && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
