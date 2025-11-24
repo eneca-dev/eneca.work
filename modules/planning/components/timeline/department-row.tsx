@@ -207,7 +207,8 @@ export function DepartmentRow({
           {/* Ячейки для каждого периода - сдвигаем влево */}
           <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isFirstDayOfMonthDate = isFirstDayOfMonth(unit.date)
               const isLastDayOfMonthDate = i === timeUnits.length - 1 // Проверяем, является ли это последним днем месяца
@@ -436,7 +437,8 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
         {/* Ячейки периода */}
         <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
           {timeUnits.map((unit, i) => {
-            const isWeekendDay = unit.isWeekend
+            // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+            const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
             const dateKey = unit.date.toISOString().split("T")[0]
             const workload = (team.dailyWorkloads || {})[dateKey] || 0
@@ -875,7 +877,8 @@ export function EmployeeRow({
 
             {/* Базовые ячейки таймлайна (фон, границы, выходные) */}
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isMonthBoundary = i === 0 || i === timeUnits.length - 1
 

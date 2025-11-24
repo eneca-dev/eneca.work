@@ -395,11 +395,50 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
 }
 
 /**
+ * Разбивает период на сегменты рабочих дней, исключая нерабочие дни (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ */
+function splitPeriodByWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }>
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend // Используем isWorkingDay если есть, иначе проверяем isWeekend
+
+    if (isWorking) {
+      // Начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
+      }
+    } else {
+      // Нерабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
+      }
+    }
+  }
+
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
+  }
+
+  return segments
+}
+
+/**
  * Вычисляет параметры отрисовки для всех периодов
+ * Разбивает загрузки на сегменты, исключая нерабочие дни (выходные и праздники)
  */
 export function calculateBarRenders(
   periods: BarPeriod[],
-  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean }>,
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }>,
   cellWidth: number,
   isDark: boolean
 ): BarRender[] {
@@ -431,11 +470,6 @@ export function calculateBarRenders(
     const actualStartIdx = Math.max(0, startIdx === -1 ? 0 : startIdx)
     const actualEndIdx = Math.min(timeUnits.length - 1, endIdx === -1 ? timeUnits.length - 1 : endIdx)
 
-    // Вычисляем позицию и ширину с учетом горизонтальных отступов
-    // Добавляем половину зазора слева, вычитаем половину справа
-    const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
-    const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
-
     // Определяем цвет на основе типа периода
     let color: string
     if (period.type === "vacation") {
@@ -449,15 +483,41 @@ export function calculateBarRenders(
       color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
     }
 
-    renders.push({
-      period,
-      startIdx: actualStartIdx,
-      endIdx: actualEndIdx,
-      left,
-      width,
-      layer,
-      color,
-    })
+    // Для загрузок (type="loading") разбиваем на сегменты по рабочим дням
+    // Для отпусков, больничных и отгулов оставляем сплошным
+    if (period.type === "loading") {
+      const segments = splitPeriodByWorkingDays(actualStartIdx, actualEndIdx, timeUnits)
+
+      // Создаем отдельный рендер для каждого сегмента
+      for (const segment of segments) {
+        const left = segment.startIdx * cellWidth + HORIZONTAL_GAP / 2
+        const width = (segment.endIdx - segment.startIdx + 1) * cellWidth - HORIZONTAL_GAP
+
+        renders.push({
+          period,
+          startIdx: segment.startIdx,
+          endIdx: segment.endIdx,
+          left,
+          width,
+          layer,
+          color,
+        })
+      }
+    } else {
+      // Для отпусков, больничных и отгулов создаем один сплошной бар
+      const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
+      const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
+
+      renders.push({
+        period,
+        startIdx: actualStartIdx,
+        endIdx: actualEndIdx,
+        left,
+        width,
+        layer,
+        color,
+      })
+    }
   }
 
   return renders

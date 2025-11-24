@@ -1,3 +1,5 @@
+import type { CalendarEvent } from "@/modules/calendar/types"
+
 export const isWeekend = (date: Date) => {
   const day = date.getDay()
   return day === 0 || day === 6 // 0 - воскресенье, 6 - суббота
@@ -41,19 +43,65 @@ export const groupDatesByMonth = (dates: { date: Date; label: string; isWeekend?
   return months
 }
 
+/**
+ * Определяет, является ли день рабочим, используя логику из working-days.ts
+ * Приоритеты:
+ * 1. Перенос с is_weekday (переопределяет всё)
+ * 2. Праздник (всегда нерабочий)
+ * 3. Выходные дни (Сб/Вс)
+ */
+export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boolean => {
+  const dateString = date.toISOString().split('T')[0]
+
+  // Приоритет 1: Проверяем переносы
+  const transferEvent = calendarEvents.find(
+    (event) =>
+      event.calendar_event_type === 'Перенос' &&
+      event.calendar_event_is_global &&
+      event.calendar_event_date_start.split('T')[0] === dateString &&
+      event.calendar_event_is_weekday !== null
+  )
+
+  if (transferEvent) {
+    return transferEvent.calendar_event_is_weekday === true
+  }
+
+  // Приоритет 2: Проверяем праздники
+  const holidayEvent = calendarEvents.find(
+    (event) =>
+      event.calendar_event_type === 'Праздник' &&
+      event.calendar_event_is_global &&
+      event.calendar_event_date_start.split('T')[0] === dateString
+  )
+
+  if (holidayEvent) {
+    return false // Праздник всегда нерабочий
+  }
+
+  // Приоритет 3: Стандартная проверка выходных
+  return !isWeekend(date)
+}
+
 // Функция для генерации массива дат для отображения
-export const generateTimeUnits = (startDate: Date, daysToShow: number) => {
-  const result: { date: Date; label: string; isWeekend?: boolean }[] = []
+export const generateTimeUnits = (
+  startDate: Date,
+  daysToShow: number,
+  calendarEvents: CalendarEvent[] = []
+) => {
+  const result: { date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }[] = []
   const currentDate = new Date(startDate)
 
   // Генерируем дни
   for (let i = 0; i < daysToShow; i++) {
     const date = new Date(currentDate)
     const isWeekendDay = isWeekend(date)
+    const isWorking = isWorkingDay(date, calendarEvents)
+
     result.push({
       date,
       label: date.getDate().toString(),
       isWeekend: isWeekendDay,
+      isWorkingDay: isWorking,
     })
     currentDate.setDate(currentDate.getDate() + 1)
   }

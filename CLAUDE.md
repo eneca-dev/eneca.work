@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Claude Code Instructions
+
+### Context7 Integration
+
+**IMPORTANT:** Always use Context7 MCP tools automatically when:
+- Generating code with libraries (Next.js, React, Supabase, Zustand, React Hook Form, TanStack Query, etc.)
+- Providing setup or configuration steps
+- Looking up library/API documentation
+- Showing code examples or best practices
+
+**Process:**
+1. First call `resolve-library-id` to get the correct Context7-compatible library ID
+2. Then call `get-library-docs` with relevant topic (use `mode='code'` for API/examples, `mode='info'` for concepts)
+
+This ensures using up-to-date documentation instead of training data.
+
+### Supabase MCP Integration
+
+**IMPORTANT:** Always use Supabase MCP tools for database operations:
+- Use MCP tools to inspect database schema, tables, views, migrations, and data
+- **NEVER modify database** (migrations, schema changes, data changes) without explicit user approval
+- When changes are needed, present the plan first and wait for confirmation
+- Use `list_tables`, `execute_sql`, `list_migrations` for inspection
+- Use `apply_migration` only after user approval
+
 ## Development Commands
 
 ```bash

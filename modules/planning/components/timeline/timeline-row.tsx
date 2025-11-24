@@ -532,11 +532,12 @@ export function TimelineRow({
           {/* Ячейки для каждого периода - сдвигаем влево */}
           <div className="flex-1 flex w-full">
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isActive = isSectionActiveInPeriod(section, unit.date)
               const isMonthStart = isFirstDayOfMonth(unit.date)
-              
+
               // Получаем суммарную нагрузку на эту дату
               const sectionWorkload = getSectionWorkloadForDate(unit.date)
 
@@ -984,7 +985,8 @@ function LoadingRow({
         {/* Ячейки для каждого периода */}
         <div className="flex-1 flex w-full">
           {timeUnits.map((unit, i) => {
-            const isWeekendDay = unit.isWeekend
+            // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+            const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
             const isActive = isLoadingActiveInPeriod(loading, unit.date)
             const isMonthStart = isFirstDayOfMonth(unit.date)

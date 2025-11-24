@@ -188,6 +188,8 @@ export function TimelineHeader({
               {timeUnits.map((unit, i) => {
                 const isTodayDate = isToday(unit.date)
                 const isMonthStart = isFirstDayOfMonth(unit.date)
+                // Используем isWorkingDay для определения выходных (включая праздники и переносы)
+                const isNonWorkingDay = unit.isWorkingDay === false
 
                 return (
                   <div
@@ -195,7 +197,7 @@ export function TimelineHeader({
                     className={cn(
                       headerCellStyle,
                       theme === "dark" ? "bg-slate-800" : "bg-slate-50",
-                      unit.isWeekend ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
+                      isNonWorkingDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
                       isTodayDate ? (theme === "dark" ? "bg-teal-900/40" : "bg-teal-100") : "",
                       isMonthStart
                         ? theme === "dark"
