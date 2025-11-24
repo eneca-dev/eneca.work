@@ -265,6 +265,8 @@ export function LoadingModal({
 
   // SectionPanel state
   const [showSectionPanel, setShowSectionPanel] = useState(false)
+  const [sectionPanelSectionId, setSectionPanelSectionId] = useState<string | null>(null)
+  const [sectionPanelProjectId, setSectionPanelProjectId] = useState<string | null>(null)
   const { statuses } = useSectionStatuses()
 
   // Calendar events for working days calculation
@@ -1153,6 +1155,10 @@ export function LoadingModal({
 
       // Reset isSelectingNewStage flag
       setIsSelectingNewStage(false)
+
+      // Clear section panel IDs
+      setSectionPanelSectionId(null)
+      setSectionPanelProjectId(null)
     }
 
     // Reset modal state when reopening in edit mode
@@ -1170,6 +1176,10 @@ export function LoadingModal({
 
       // Reset isChangingStage (in edit mode, tree starts locked)
       setIsChangingStage(false)
+
+      // Clear section panel IDs
+      setSectionPanelSectionId(null)
+      setSectionPanelProjectId(null)
 
       console.log("[LoadingModal] 🔄 formData сброшен к исходным значениям из loading при открытии")
     }
@@ -1204,8 +1214,16 @@ export function LoadingModal({
       // Reset showCreateForm when modal closes
       setShowCreateForm(false)
 
+      // Clear section panel IDs
+      setSectionPanelSectionId(null)
+      setSectionPanelProjectId(null)
+
       // Reset isSelectingNewStage when modal closes
       setIsSelectingNewStage(false)
+
+      // Clear section panel IDs when modal closes
+      setSectionPanelSectionId(null)
+      setSectionPanelProjectId(null)
     }
   }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
 
@@ -1516,9 +1534,20 @@ export function LoadingModal({
               return null
             }
             const sectionNode = findSectionNode(treeData, node.sectionId)
+            console.log('[LoadingModal] Клик на "Перейти к декомпозиции"', {
+              nodeSectionId: node.sectionId,
+              foundSectionNode: sectionNode,
+              sectionId: sectionNode?.sectionId,
+              projectId: sectionNode?.projectId
+            })
             if (sectionNode) {
-              setSelectedNode(sectionNode)
+              setSectionPanelSectionId(sectionNode.sectionId!)
+              setSectionPanelProjectId(sectionNode.projectId!)
               setShowSectionPanel(true)
+              console.log('[LoadingModal] SectionPanel открыт', {
+                sectionPanelSectionId: sectionNode.sectionId,
+                sectionPanelProjectId: sectionNode.projectId
+              })
             }
             return
           }
@@ -1992,6 +2021,8 @@ export function LoadingModal({
 
   const navigateToDecomposition = () => {
     if (!selectedNode?.sectionId) return
+    setSectionPanelSectionId(selectedNode.sectionId)
+    setSectionPanelProjectId(selectedNode.projectId || null)
     setShowSectionPanel(true)
   }
 
@@ -2809,26 +2840,36 @@ export function LoadingModal({
       </div>
 
       {/* SectionPanel for decomposition */}
-      {showSectionPanel && selectedNode?.sectionId && (
+      {(() => {
+        console.log('[LoadingModal] SectionPanel render check:', {
+          showSectionPanel,
+          sectionPanelSectionId,
+          sectionPanelProjectId,
+          willRender: showSectionPanel && sectionPanelSectionId
+        })
+        return null
+      })()}
+      {showSectionPanel && sectionPanelSectionId && (
         <SectionPanel
           isOpen={showSectionPanel}
           onClose={() => {
+            console.log('[LoadingModal] SectionPanel onClose вызван')
             setShowSectionPanel(false)
             // Clear cache and reload project tree after decomposition changes
-            if (selectedNode?.projectId) {
+            if (sectionPanelProjectId) {
               // ВАЖНО: Сохраняем ID выбранного этапа перед перезагрузкой
-              const savedDecompositionStageId = selectedNode.decompositionStageId
+              const savedDecompositionStageId = selectedNode?.decompositionStageId
 
-              console.log(`[LoadingModal] Обновление дерева после изменений в декомпозиции проекта: ${selectedNode.projectId}`)
+              console.log(`[LoadingModal] Обновление дерева после изменений в декомпозиции проекта: ${sectionPanelProjectId}`)
               console.log(`[LoadingModal] Сохранён ID этапа для восстановления: ${savedDecompositionStageId}`)
 
               setProjectDataCache((prev) => {
                 const next = new Map(prev)
-                next.delete(selectedNode.projectId!)
+                next.delete(sectionPanelProjectId)
                 return next
               })
               // Find and reload the project node
-              const projectNode = treeData.find(n => n.id === `project-${selectedNode.projectId}`)
+              const projectNode = treeData.find(n => n.id === `project-${sectionPanelProjectId}`)
               if (projectNode) {
                 // Small delay to ensure state update, then reload and restore selection
                 setTimeout(async () => {
@@ -2845,8 +2886,11 @@ export function LoadingModal({
                 }, 0)
               }
             }
+            // Clear section panel IDs
+            setSectionPanelSectionId(null)
+            setSectionPanelProjectId(null)
           }}
-          sectionId={selectedNode.sectionId}
+          sectionId={sectionPanelSectionId}
           initialTab="decomposition"
           statuses={statuses}
         />
