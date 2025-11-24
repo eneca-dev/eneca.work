@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -32,6 +32,9 @@ import { DatePicker } from "./ui/date-picker";
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
+import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
+import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore";
+import { useUserStore } from "@/stores/useUserStore";
 
 // Типы данных
 type Decomposition = {
@@ -1101,6 +1104,15 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({});
 
+  // State для шаблонов
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+
+  // Хуки для пользователя и разрешений
+  const { id: userId } = useUserStore();
+  const hasPermission = usePermissionsStore(state => state.hasPermission);
+  const hasManagePermission = hasPermission('dec.templates.manage');
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -1946,6 +1958,82 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
+  // Handlers для работы с шаблонами
+  const handleApplyTemplate = async (templateId: string) => {
+    try {
+      // Подготовить статусы для передачи в applyTemplate
+      const statusesForTemplate = statuses.map(s => ({ id: s.id, name: s.name }));
+      const newStages = await applyTemplate(templateId, sectionId, statusesForTemplate);
+      // Добавить новые этапы в state БЕЗ перезагрузки страницы
+      setStages([...stages, ...newStages]);
+      toast({
+        title: "Успешно",
+        description: "Шаблон успешно применен",
+      });
+    } catch (error) {
+      console.error('Ошибка применения шаблона:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось применить шаблон';
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveTemplate = async (departmentId: string, name: string) => {
+    if (!userId) {
+      toast({
+        title: "Ошибка",
+        description: "Пользователь не авторизован",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Подготовить этапы для сохранения (исключить __no_stage__)
+      const validStages = stages.filter(s => s.id !== '__no_stage__');
+
+      const templateStages: TemplateStage[] = validStages.map((stage, index) => ({
+        name: stage.name,
+        order: index,
+        items: stage.decompositions.map((decomp, itemIndex) => {
+          const categoryId = categoryNameToId.get(decomp.typeOfWork);
+          if (!categoryId) {
+            throw new Error(`Категория работы "${decomp.typeOfWork}" не найдена в справочнике`);
+          }
+          const difficultyId = difficultyNameToId.get(decomp.difficulty) || null;
+
+          return {
+            description: decomp.description,
+            workCategoryId: categoryId,
+            workCategoryName: decomp.typeOfWork,
+            difficultyId: difficultyId,
+            difficultyName: decomp.difficulty || null,
+            plannedHours: decomp.plannedHours,
+          };
+        })
+      }));
+
+      await saveTemplate(name, departmentId, templateStages, userId);
+
+      toast({
+        title: "Успешно",
+        description: "Шаблон успешно сохранен",
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения шаблона:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось сохранить шаблон';
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const bulkDeleteStages = async () => {
     if (selectedStages.size === 0) {
       toast({
@@ -2217,6 +2305,27 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
               <Copy className="mr-2 h-4 w-4" />
               Копировать
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 bg-transparent transition-transform active:scale-95"
+              onClick={() => setTemplatesDialogOpen(true)}
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              Шаблоны
+            </Button>
+            {hasManagePermission && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 bg-transparent transition-transform active:scale-95"
+                onClick={() => setSaveDialogOpen(true)}
+                disabled={stages.length === 0 || stages.every(s => s.id === '__no_stage__')}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Сохранить шаблон
+              </Button>
+            )}
             <Button onClick={addStage} size="sm" className="h-9">
               <Plus className="mr-2 h-4 w-4" />
               Добавить этап
@@ -2399,6 +2508,20 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Диалоги шаблонов */}
+        <TemplatesDialog
+          isOpen={templatesDialogOpen}
+          onClose={() => setTemplatesDialogOpen(false)}
+          onApply={handleApplyTemplate}
+          hasManagePermission={hasManagePermission}
+        />
+
+        <SaveTemplateDialog
+          isOpen={saveDialogOpen}
+          onClose={() => setSaveDialogOpen(false)}
+          onSave={handleSaveTemplate}
+        />
       </div>
       {isInitialLoading && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-background/60">
