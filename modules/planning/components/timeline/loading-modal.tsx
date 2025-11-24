@@ -1613,7 +1613,7 @@ export function LoadingModal({
 
     return (
       <div key={node.id}>
-        {isTreeLocked ? (
+        {isTreeLocked && !isNavigationNode ? (
           <Tooltip>
             <TooltipTrigger asChild>
               {nodeContent}
@@ -1622,7 +1622,7 @@ export function LoadingModal({
               <p>
                 {mode === "edit"
                   ? "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"
-                  : "Дерево заблокировано - форма открыта. Нажмите \"Сменить этап\" для изменения"}
+                  : "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"}
               </p>
             </TooltipContent>
           </Tooltip>
@@ -1635,38 +1635,46 @@ export function LoadingModal({
         )}
 
         {/* Show message for empty folders (only if not loading) */}
-        {node.type === "folder" && !hasChildren && isExpanded && !isLoading && (
-          <div
-            className="px-2 py-1"
-            style={{ paddingLeft: `${(depth) * 12 + 40}px` }}
-          >
-            {node.sectionId && !node.decompositionStageId ? (
-              <div className="space-y-1">
-                <button
-                  onClick={(e) => handleCreateBasicStage(node, e)}
-                  disabled={isCreatingStage}
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 py-1 rounded hover:bg-primary/5"
-                >
-                  <FilePlus className="h-4 w-4" />
-                  <span>Создать базовый этап</span>
-                </button>
-                <div className="text-xs text-muted-foreground italic">
-                  Этапы декомпозиции отсутствуют
+        {(() => {
+          // For section nodes: check if there are decomposition stages (excluding navigation node)
+          const decompStageChildren = node.children?.filter(child => !child.isNavigationNode) || []
+          const hasDecompStages = decompStageChildren.length > 0
+          const isSectionWithoutDecomp = node.type === "folder" && node.sectionId && !node.decompositionStageId && !hasDecompStages
+          const shouldShowEmptyMessage = node.type === "folder" && !hasChildren && isExpanded && !isLoading
+
+          return (isSectionWithoutDecomp || shouldShowEmptyMessage) && isExpanded && !isLoading ? (
+            <div
+              className="px-2 py-1"
+              style={{ paddingLeft: `${(depth) * 12 + 40}px` }}
+            >
+              {node.sectionId && !node.decompositionStageId ? (
+                <div className="space-y-1">
+                  <button
+                    onClick={(e) => handleCreateBasicStage(node, e)}
+                    disabled={isCreatingStage}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 py-1 rounded hover:bg-primary/5"
+                  >
+                    <FilePlus className="h-4 w-4" />
+                    <span>Создать базовый этап</span>
+                  </button>
+                  <div className="text-xs text-muted-foreground italic">
+                    Этапы декомпозиции отсутствуют
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground italic">
-                {node.objectId && !node.sectionId
-                  ? "Разделы отсутствуют"
-                  : node.stageId && !node.objectId
-                  ? "Объекты отсутствуют"
-                  : node.projectId && !node.stageId
-                  ? "Стадии отсутствуют"
-                  : "Нет данных"}
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                <div className="text-xs text-muted-foreground italic">
+                  {node.objectId && !node.sectionId
+                    ? "Разделы отсутствуют"
+                    : node.stageId && !node.objectId
+                    ? "Объекты отсутствуют"
+                    : node.projectId && !node.stageId
+                    ? "Стадии отсутствуют"
+                    : "Нет данных"}
+                </div>
+              )}
+            </div>
+          ) : null
+        })()}
       </div>
     )
   }
