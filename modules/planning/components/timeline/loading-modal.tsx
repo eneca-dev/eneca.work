@@ -1462,7 +1462,7 @@ export function LoadingModal({
     // Project level
     if (node.projectId && !node.stageId) {
       const IconComponent = isExpanded ? FolderOpen : Folder
-      return <IconComponent className="h-4 w-4 text-green-600" />
+      return <IconComponent className="h-4 w-4 text-green-600 dark:text-green-400" />
     }
 
     // Stage level
@@ -1506,13 +1506,14 @@ export function LoadingModal({
       <div
         className={cn(
           "group flex items-center gap-1 py-1 px-2 text-sm rounded-sm select-none transition-colors duration-150",
-          isNavigationNode && "text-primary/80 hover:bg-primary/5 hover:text-primary cursor-pointer italic",
+          isNavigationNode && "text-primary/80 dark:text-emerald-300 hover:bg-primary/5 hover:text-primary dark:hover:text-emerald-200 cursor-pointer italic",
           !isNavigationNode && isTreeLocked && !isSelected && "opacity-50 cursor-not-allowed",
           !isNavigationNode && isTreeLocked && isSelected && "cursor-not-allowed",
-          !isNavigationNode && isSelected && "bg-primary/10 text-primary border-l-2 border-primary",
+          !isNavigationNode && isSelected && "bg-primary/10 text-primary dark:text-emerald-300 border-l-2 border-primary dark:border-emerald-400",
           !isNavigationNode && !isTreeLocked && !isSelected && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
+      
         onClick={async () => {
           // Handle navigation node click
           if (isNavigationNode && node.sectionId) {
@@ -1561,13 +1562,13 @@ export function LoadingModal({
         {isNavigationNode ? (
           <>
             <div className="h-4 w-4" />
-            <ExternalLink className="h-4 w-4 text-primary" />
+            <ExternalLink className="h-4 w-4 text-primary dark:text-emerald-300" />
           </>
         ) : node.type === "folder" ? (
           <>
             <button className="h-4 w-4 p-0">
               {isLoading ? (
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary dark:border-primary/80 border-t-transparent" />
               ) : hasChildren ? (
                 isExpanded ? (
                   <ChevronDown className="h-3 w-3" />
@@ -1599,7 +1600,7 @@ export function LoadingModal({
                   disabled={isRefreshingProject}
                   className="h-6 w-6 flex items-center justify-center rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw className={cn("h-4 w-4 text-primary", isRefreshingProject && "animate-spin")} />
+                  <RefreshCw className={cn("h-4 w-4 text-primary dark:text-primary/90", isRefreshingProject && "animate-spin")} />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
