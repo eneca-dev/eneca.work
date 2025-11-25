@@ -50,6 +50,8 @@ export function TimelineView() {
     fetchSections,
     fetchDepartments,
     loadVacations,
+    loadGlobalCalendarEvents,
+    globalCalendarEvents,
     setFilters,
     expandedSections,
     expandedDepartments,
@@ -163,6 +165,11 @@ useEffect(() => {
   useEffect(() => {
     fetchProjectSummaries()
   }, [fetchProjectSummaries])
+
+  // Загружаем глобальные события календаря при монтировании
+  useEffect(() => {
+    loadGlobalCalendarEvents()
+  }, [loadGlobalCalendarEvents])
 
   // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
   useEffect(() => {
@@ -437,8 +444,8 @@ useEffect(() => {
   // Получаем данные для заголовка
   const { columnVisibility } = usePlanningColumnsStore()
 
-  // Генерируем timeUnits для заголовка
-  const timeUnits = generateTimeUnits(startDate, daysToShow)
+  // Генерируем timeUnits для заголовка с учетом глобальных событий
+  const timeUnits = generateTimeUnits(startDate, daysToShow, globalCalendarEvents)
 
   // Константы для размеров (должны совпадать с timeline-grid.tsx)
   const HEADER_HEIGHT = 40
@@ -588,6 +595,7 @@ useEffect(() => {
               showDepartments={showDepartments}
               startDate={startDate}
               daysToShow={daysToShow}
+              globalCalendarEvents={globalCalendarEvents}
               theme={theme}
               isLoading={isLoadingSections}
               isLoadingDepartments={isLoadingDepartments}

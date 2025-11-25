@@ -1,7 +1,7 @@
 "use client" 
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
 import type { Department, Employee, Loading } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -19,6 +19,7 @@ import {
   calculateBarRenders,
   formatBarLabel,
   formatBarTooltip,
+  getBarLabelParts,
   type BarPeriod,
 } from "./loading-bars-utils"
 
@@ -207,7 +208,8 @@ export function DepartmentRow({
           {/* Ячейки для каждого периода - сдвигаем влево */}
           <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isFirstDayOfMonthDate = isFirstDayOfMonth(unit.date)
               const isLastDayOfMonthDate = i === timeUnits.length - 1 // Проверяем, является ли это последним днем месяца
@@ -216,9 +218,11 @@ export function DepartmentRow({
               const dateKey = unit.date.toISOString().split("T")[0]
               const departmentWorkload = department.dailyWorkloads?.[dateKey] || 0
 
-              // Рассчитываем процент загрузки отдела
+              // Рассчитываем процент загрузки отдела (только для рабочих дней)
               const departmentLoadPercentage =
-                totalDepartmentCapacity > 0 ? Math.round((departmentWorkload / totalDepartmentCapacity) * 100) : 0
+                !isWeekendDay && totalDepartmentCapacity > 0
+                  ? Math.round((departmentWorkload / totalDepartmentCapacity) * 100)
+                  : 0
 
               return (
                 <div
@@ -226,8 +230,8 @@ export function DepartmentRow({
                   className={cn(
                     "border-r relative transition-colors border-b", // Добавлена border-b
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
-                    isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                    isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                    isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                    isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                     theme === "dark" ? "group-hover/row:bg-emerald-900" : "group-hover/row:bg-emerald-50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
@@ -238,8 +242,8 @@ export function DepartmentRow({
                   )}
                   style={{
                     height: `${rowHeight}px`,
-                    width: `${cellWidth}px`,
-                    minWidth: `${cellWidth}px`, // Добавляем минимальную ширину
+                    width: `${unit.width ?? cellWidth}px`,
+                    minWidth: `${unit.width ?? cellWidth}px`, // Добавляем минимальную ширину
                     flexShrink: 0, // Запрещаем сжатие ячейки
                     borderRight: "1px solid",
                     borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
@@ -256,12 +260,11 @@ export function DepartmentRow({
                       <div
                         className={cn(
                           "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                          // Менее яркие границы для всех отделов
-                          theme === "dark" ? "border-slate-500" : "border-slate-400"
+                          theme === "dark" ? "border-slate-600/60" : "border-slate-400"
                         )}
                         style={{
-                          width: `${Math.max(cellWidth - 6, 3)}px`, // Ширина полосы
-                          height: `${rowHeight - 10}px`, // Всегда полная высота (граница как 100%)
+                          width: `${Math.max(cellWidth - 6, 3)}px`,
+                          height: `${rowHeight - 10}px`,
                           opacity: 0.9
                         }}
                         title={`Загрузка отдела: ${departmentLoadPercentage}%`}
@@ -272,11 +275,11 @@ export function DepartmentRow({
                             "absolute bottom-0 left-0 right-0 transition-all duration-200",
                             departmentLoadPercentage > 100
                               ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
-                              : departmentLoadPercentage <= 50 
-                                ? (theme === "dark" ? "bg-blue-400" : "bg-blue-500")
-                                : departmentLoadPercentage <= 85 
-                                  ? (theme === "dark" ? "bg-amber-400" : "bg-amber-500")
-                                  : (theme === "dark" ? "bg-emerald-400" : "bg-emerald-500")
+                              : departmentLoadPercentage <= 50
+                                ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
+                                : departmentLoadPercentage <= 85
+                                  ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
+                                  : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
                           )}
                           style={{
                             height: `${Math.max(
@@ -436,11 +439,13 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
         {/* Ячейки периода */}
         <div className="flex-1 flex w-full" style={{ flexWrap: "nowrap" }}>
           {timeUnits.map((unit, i) => {
-            const isWeekendDay = unit.isWeekend
+            // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+            const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
             const dateKey = unit.date.toISOString().split("T")[0]
             const workload = (team.dailyWorkloads || {})[dateKey] || 0
-            const loadPct = totalTeamCapacity > 0 ? Math.round((workload / totalTeamCapacity) * 100) : 0
+            // Рассчитываем процент загрузки команды (только для рабочих дней)
+            const loadPct = !isWeekendDay && totalTeamCapacity > 0 ? Math.round((workload / totalTeamCapacity) * 100) : 0
 
             return (
               <div
@@ -448,8 +453,8 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                 className={cn(
                   "border-r relative transition-colors border-b",
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
-                  isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                  isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                  isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                  isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                   isFirstDayOfMonth(unit.date)
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
@@ -459,8 +464,8 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                 )}
                 style={{
                   height: `${reducedRowHeight}px`,
-                  width: `${cellWidth}px`,
-                  minWidth: `${cellWidth}px`,
+                  width: `${unit.width ?? cellWidth}px`,
+                  minWidth: `${unit.width ?? cellWidth}px`,
                   flexShrink: 0,
                   borderRight: "1px solid",
                   borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
@@ -471,7 +476,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                     <div
                       className={cn(
                         "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                        theme === "dark" ? "border-slate-500" : "border-slate-400"
+                        theme === "dark" ? "border-slate-600/60" : "border-slate-400"
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -483,14 +488,13 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                       <div
                         className={cn(
                           "absolute bottom-0 left-0 right-0 transition-all duration-200",
-                          // Если превышена емкость (более 100%), всегда красный
                           loadPct > 100
                             ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
                             : loadPct <= 50
-                              ? (theme === "dark" ? "bg-blue-400" : "bg-blue-500")
+                              ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
                               : loadPct <= 85
-                                ? (theme === "dark" ? "bg-amber-400" : "bg-amber-500")
-                                : (theme === "dark" ? "bg-emerald-400" : "bg-emerald-500")
+                                ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
+                                : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
                         )}
                         style={{
                           height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
@@ -828,8 +832,10 @@ export function EmployeeRow({
                     <div
                       key={`${bar.period.id}-${idx}`}
                       className={cn(
-                        "absolute rounded transition-all duration-200 pointer-events-auto flex items-center",
-                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default"
+                        "absolute rounded transition-all duration-200 pointer-events-auto",
+                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default",
+                        // Всегда используем горизонтальное выравнивание
+                        "flex items-center"
                       )}
                       style={{
                         left: `${bar.left}px`,
@@ -837,13 +843,13 @@ export function EmployeeRow({
                         height: `${barHeight}px`,
                         top: `${top}px`,
                         backgroundColor: bar.color,
-                        opacity: 0.9,
+                        opacity: 0.8,
                         border: `2px solid ${bar.color}`,
                         paddingLeft: "6px",
                         paddingRight: "6px",
+                        paddingTop: "4px",
+                        paddingBottom: "4px",
                         overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
@@ -856,17 +862,194 @@ export function EmployeeRow({
                         }
                       }}
                     >
-                      <span
-                        className={cn(
-                          "text-[9px] font-semibold leading-none",
-                          theme === "dark" ? "text-white" : "text-white"
-                        )}
-                        style={{
-                          textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        {formatBarLabel(bar.period)}
-                      </span>
+                      {(() => {
+                        // Адаптивное отображение для загрузок
+                        if (bar.period.type === "loading") {
+                          const labelParts = getBarLabelParts(bar.period, bar.width)
+                          const rate = bar.period.rate || 1
+
+                          // Определяем максимальное количество строк в зависимости от rate (высоты)
+                          let maxLines = 3
+                          if (rate < 0.5) {
+                            maxLines = 1 // Очень низкие бары - только одна строка
+                          } else if (rate < 1) {
+                            maxLines = 2 // Средние бары - максимум 2 строки
+                          }
+
+                          if (labelParts.displayMode === 'icon-only') {
+                            return (
+                              <FolderKanban
+                                size={11}
+                                className="text-white"
+                                style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                              />
+                            )
+                          }
+
+                          if (labelParts.displayMode === 'minimal') {
+                            // Узкие бары - многострочное отображение, используем высоту
+                            const displayText = labelParts.project || labelParts.stage
+
+                            if (maxLines === 1) {
+                              // Одна строка для маленьких баров
+                              return (
+                                <span
+                                  className="text-[10px] font-semibold text-white truncate"
+                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                                  title={displayText}
+                                >
+                                  {displayText}
+                                </span>
+                              )
+                            }
+
+                            let lineCount = 0
+                            return (
+                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 w-full overflow-hidden">
+                                    <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[10px] font-semibold text-white truncate"
+                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                      title={labelParts.project}
+                                    >
+                                      {labelParts.project}
+                                    </span>
+                                  </div>
+                                )})()}
+                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 w-full overflow-hidden">
+                                    <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[9px] font-medium text-white/90 truncate"
+                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                      title={labelParts.stage}
+                                    >
+                                      {labelParts.stage}
+                                    </span>
+                                  </div>
+                                )})()}
+                              </div>
+                            )
+                          }
+
+                          if (labelParts.displayMode === 'compact') {
+                            // Средние бары
+                            const displayText = labelParts.project || labelParts.stage
+
+                            if (maxLines === 1) {
+                              const Icon = labelParts.project ? FolderKanban : Milestone
+                              return (
+                                <div className="flex items-center gap-1 overflow-hidden">
+                                  <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <span
+                                    className="text-[10px] font-semibold text-white truncate"
+                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                                    title={displayText}
+                                  >
+                                    {displayText}
+                                  </span>
+                                </div>
+                              )
+                            }
+
+                            let lineCount = 0
+                            return (
+                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 w-full overflow-hidden">
+                                    <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[10px] font-semibold text-white truncate"
+                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                      title={labelParts.project}
+                                    >
+                                      {labelParts.project}
+                                    </span>
+                                  </div>
+                                )})()}
+                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 w-full overflow-hidden">
+                                    <Milestone size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[9px] font-medium text-white/90 truncate"
+                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                      title={labelParts.stage}
+                                    >
+                                      {labelParts.stage}
+                                    </span>
+                                  </div>
+                                )})()}
+                              </div>
+                            )
+                          }
+
+                          // full mode - многострочное отображение с иконками
+                          if (maxLines === 1) {
+                            const displayText = labelParts.project || labelParts.stage
+                            const Icon = labelParts.project ? FolderKanban : Milestone
+                            return (
+                              <div className="flex items-center gap-1 overflow-hidden">
+                                <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                <span
+                                  className="text-[11px] font-semibold text-white truncate"
+                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                                  title={displayText}
+                                >
+                                  {displayText}
+                                </span>
+                              </div>
+                            )
+                          }
+
+                          let lineCount = 0
+                          return (
+                            <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
+                              {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                <div className="flex items-center gap-1 overflow-hidden">
+                                  <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <span
+                                    className="text-[10px] font-semibold text-white truncate"
+                                    style={{
+                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                      lineHeight: "1.2"
+                                    }}
+                                    title={labelParts.project}
+                                  >
+                                    {labelParts.project}
+                                  </span>
+                                </div>
+                              )})()}
+                              {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                                <div className="flex items-center gap-1 overflow-hidden">
+                                  <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <span
+                                    className="text-[9px] font-medium text-white/90 truncate"
+                                    style={{
+                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                      lineHeight: "1.2"
+                                    }}
+                                    title={labelParts.stage}
+                                  >
+                                    {labelParts.stage}
+                                  </span>
+                                </div>
+                              )})()}
+                            </div>
+                          )
+                        }
+
+                        // Для отпусков, больничных и отгулов - простой текст
+                        return (
+                          <span
+                            className="text-[10px] font-semibold leading-none text-white"
+                            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                          >
+                            {formatBarLabel(bar.period)}
+                          </span>
+                        )
+                      })()}
                     </div>
                   )
                 })
@@ -875,7 +1058,8 @@ export function EmployeeRow({
 
             {/* Базовые ячейки таймлайна (фон, границы, выходные) */}
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isMonthBoundary = i === 0 || i === timeUnits.length - 1
 
@@ -885,8 +1069,8 @@ export function EmployeeRow({
                   className={cn(
                     "border-r relative border-b",
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
-                    isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                    isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                    isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                    isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
@@ -896,8 +1080,8 @@ export function EmployeeRow({
                   )}
                   style={{
                     height: `${actualRowHeight}px`,
-                    width: `${cellWidth}px`,
-                    minWidth: `${cellWidth}px`,
+                    width: `${unit.width ?? cellWidth}px`,
+                    minWidth: `${unit.width ?? cellWidth}px`,
                     flexShrink: 0,
                     borderRight: "1px solid",
                     borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",

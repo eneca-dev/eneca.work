@@ -532,11 +532,12 @@ export function TimelineRow({
           {/* Ячейки для каждого периода - сдвигаем влево */}
           <div className="flex-1 flex w-full">
             {timeUnits.map((unit, i) => {
-              const isWeekendDay = unit.isWeekend
+              // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+              const isWeekendDay = unit.isWorkingDay === false
               const isTodayDate = isToday(unit.date)
               const isActive = isSectionActiveInPeriod(section, unit.date)
               const isMonthStart = isFirstDayOfMonth(unit.date)
-              
+
               // Получаем суммарную нагрузку на эту дату
               const sectionWorkload = getSectionWorkloadForDate(unit.date)
 
@@ -546,8 +547,8 @@ export function TimelineRow({
                   className={cn(
                     "border-r border-b relative",
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
-                    isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                    isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                    isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                    isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                     theme === "dark" ? "group-hover/row:bg-emerald-900/20" : "group-hover/row:bg-emerald-50",
                     isMonthStart
                       ? theme === "dark"
@@ -984,7 +985,8 @@ function LoadingRow({
         {/* Ячейки для каждого периода */}
         <div className="flex-1 flex w-full">
           {timeUnits.map((unit, i) => {
-            const isWeekendDay = unit.isWeekend
+            // Используем isWorkingDay для определения нерабочих дней (выходные, праздники, переносы)
+            const isWeekendDay = unit.isWorkingDay === false
             const isTodayDate = isToday(unit.date)
             const isActive = isLoadingActiveInPeriod(loading, unit.date)
             const isMonthStart = isFirstDayOfMonth(unit.date)

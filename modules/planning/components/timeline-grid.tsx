@@ -3,6 +3,7 @@
 import { useMemo, useRef, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { Section, Department } from "../types"
+import type { CalendarEvent } from "@/modules/calendar/types"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 import { useTheme } from "next-themes"
 import { generateTimeUnits } from "../utils/date-utils"
@@ -27,6 +28,7 @@ interface TimelineGridProps {
   showDepartments: boolean // Флаг для показа/скрытия отделов
   startDate: Date
   daysToShow: number
+  globalCalendarEvents?: CalendarEvent[] // Глобальные события календаря для определения рабочих дней
   theme?: string // Делаем необязательным, будем использовать useSettingsStore если не передано
   isLoading: boolean
   isLoadingDepartments: boolean // Добавляем флаг загрузки отделов
@@ -49,6 +51,7 @@ export function TimelineGrid({
   showDepartments,
   startDate,
   daysToShow,
+  globalCalendarEvents = [], // Глобальные события календаря
   theme: propTheme, // Переименовываем параметр
   isLoading,
   isLoadingDepartments,
@@ -123,10 +126,10 @@ export function TimelineGrid({
   // Ссылка на контейнер таймлайна
   const timelineContainerRef = useRef<HTMLDivElement>(null)
 
-  // Генерируем массив дат для отображения
+  // Генерируем массив дат для отображения с учетом глобальных событий
   const timeUnits = useMemo(() => {
-    return generateTimeUnits(startDate, daysToShow)
-  }, [startDate, daysToShow])
+    return generateTimeUnits(startDate, daysToShow, globalCalendarEvents)
+  }, [startDate, daysToShow, globalCalendarEvents])
 
   // Обновляем стиль для тени при прокрутке (делаем его более заметным)
   const stickyColumnShadow = ""
