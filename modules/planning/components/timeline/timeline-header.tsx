@@ -143,7 +143,10 @@ export function TimelineHeader({
             {/* Строка 1: Названия месяцев */}
             <div className="flex" style={{ height: `${headerHeight}px` }}>
               {monthGroups.map((month, i) => {
-                const width = month.length * cellWidth
+                // Вычисляем ширину месяца суммируя ширины всех его ячеек
+                const width = timeUnits
+                  .slice(month.startIndex, month.startIndex + month.length)
+                  .reduce((sum, unit) => sum + (unit.width ?? cellWidth), 0)
                 const isFirstMonth = i === 0
 
                 return (
@@ -197,8 +200,8 @@ export function TimelineHeader({
                     className={cn(
                       headerCellStyle,
                       theme === "dark" ? "bg-slate-800" : "bg-slate-50",
-                      isNonWorkingDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                      isTodayDate ? (theme === "dark" ? "bg-teal-900/40" : "bg-teal-100") : "",
+                      isNonWorkingDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                      isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                       isMonthStart
                         ? theme === "dark"
                           ? "border-l border-l-slate-600"
@@ -207,8 +210,8 @@ export function TimelineHeader({
                     )}
                     style={{
                       height: `${headerHeight}px`,
-                      width: `${cellWidth}px`,
-                      minWidth: `${cellWidth}px`,
+                      width: `${unit.width ?? cellWidth}px`,
+                      minWidth: `${unit.width ?? cellWidth}px`,
                       padding: `${Math.max(1, padding - 2)}px`,
                       borderBottom: "none",
                       borderLeft: isMonthStart ? "1px solid" : "none",
@@ -221,20 +224,17 @@ export function TimelineHeader({
                   >
                     <span
                       className={cn(
-                        "flex items-center justify-center rounded-full text-xs",
-                        "min-w-[10px] min-h-[10px] w-auto h-auto",
+                        "flex items-center justify-center text-xs font-semibold",
                         isTodayDate
                           ? theme === "dark"
-                            ? "bg-teal-500 text-white font-bold ring-1 ring-teal-400 ring-opacity-50"
-                            : "bg-teal-500 text-white font-bold ring-1 ring-teal-400 ring-opacity-50"
+                            ? "text-teal-300"
+                            : "text-teal-700"
                           : theme === "dark"
                             ? "text-slate-300"
                             : "text-slate-600",
                       )}
                       style={{
-                        width: "12px",
-                        height: "12px",
-                        fontSize: "11px",
+                        fontSize: isTodayDate ? "13px" : "11px",
                       }}
                     >
                       {unit.label}

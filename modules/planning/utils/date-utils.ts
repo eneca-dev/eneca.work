@@ -82,27 +82,44 @@ export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boole
   return !isWeekend(date)
 }
 
+// Константы для ширины ячеек
+const WORKING_DAY_WIDTH = 30 // Рабочие дни (~36% шире)
+const NON_WORKING_DAY_WIDTH = 22 // Выходные/праздники
+
 // Функция для генерации массива дат для отображения
 export const generateTimeUnits = (
   startDate: Date,
   daysToShow: number,
   calendarEvents: CalendarEvent[] = []
 ) => {
-  const result: { date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }[] = []
+  const result: {
+    date: Date
+    label: string
+    isWeekend?: boolean
+    isWorkingDay?: boolean
+    width: number
+    left: number // Накопленная позиция слева
+  }[] = []
   const currentDate = new Date(startDate)
+  let accumulatedLeft = 0
 
   // Генерируем дни
   for (let i = 0; i < daysToShow; i++) {
     const date = new Date(currentDate)
     const isWeekendDay = isWeekend(date)
     const isWorking = isWorkingDay(date, calendarEvents)
+    const width = isWorking ? WORKING_DAY_WIDTH : NON_WORKING_DAY_WIDTH
 
     result.push({
       date,
       label: date.getDate().toString(),
       isWeekend: isWeekendDay,
       isWorkingDay: isWorking,
+      width,
+      left: accumulatedLeft,
     })
+
+    accumulatedLeft += width
     currentDate.setDate(currentDate.getDate() + 1)
   }
 

@@ -438,8 +438,8 @@ function splitPeriodByWorkingDays(
  */
 export function calculateBarRenders(
   periods: BarPeriod[],
-  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }>,
-  cellWidth: number,
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean; width?: number; left?: number }>,
+  cellWidth: number, // Deprecated: используется только для обратной совместимости
   isDark: boolean
 ): BarRender[] {
   if (periods.length === 0) return []
@@ -490,8 +490,15 @@ export function calculateBarRenders(
 
       // Создаем отдельный рендер для каждого сегмента
       for (const segment of segments) {
-        const left = segment.startIdx * cellWidth + HORIZONTAL_GAP / 2
-        const width = (segment.endIdx - segment.startIdx + 1) * cellWidth - HORIZONTAL_GAP
+        // Используем позиции из timeUnits если доступны, иначе старый метод
+        const left = (timeUnits[segment.startIdx]?.left ?? segment.startIdx * cellWidth) + HORIZONTAL_GAP / 2
+
+        // Вычисляем ширину сегмента суммированием ширин всех ячеек
+        let width = 0
+        for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+          width += timeUnits[idx]?.width ?? cellWidth
+        }
+        width -= HORIZONTAL_GAP
 
         renders.push({
           period,
@@ -505,8 +512,14 @@ export function calculateBarRenders(
       }
     } else {
       // Для отпусков, больничных и отгулов создаем один сплошной бар
-      const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
-      const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
+      const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
+
+      // Вычисляем ширину суммированием ширин всех ячеек
+      let width = 0
+      for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
+        width += timeUnits[idx]?.width ?? cellWidth
+      }
+      width -= HORIZONTAL_GAP
 
       renders.push({
         period,
@@ -552,6 +565,46 @@ export function formatBarLabel(period: BarPeriod): string {
   if (period.projectName) parts.push(period.projectName)
 
   return parts.join(" • ") || "Загрузка"
+}
+
+/**
+ * Адаптивное форматирование текста в зависимости от ширины бара
+ */
+export interface BarLabelParts {
+  project?: string
+  section?: string
+  stage?: string
+  displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
+}
+
+export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelParts {
+  if (period.type !== "loading") {
+    return { displayMode: 'full' }
+  }
+
+  // Определяем режим отображения на основе ширины
+  // Примерные пороги в пикселях (понижены т.к. бары разбиваются на сегменты выходными)
+  const THRESHOLD_FULL = 120      // Полное отображение всех частей (~3 дня при 40px/день)
+  const THRESHOLD_COMPACT = 70    // Компактное: только важные части (~2 дня)
+  const THRESHOLD_MINIMAL = 35    // Минимальное: только этап или раздел (~1 день)
+  // < 35 - только иконка
+
+  let displayMode: BarLabelParts['displayMode'] = 'icon-only'
+
+  if (barWidth >= THRESHOLD_FULL) {
+    displayMode = 'full'
+  } else if (barWidth >= THRESHOLD_COMPACT) {
+    displayMode = 'compact'
+  } else if (barWidth >= THRESHOLD_MINIMAL) {
+    displayMode = 'minimal'
+  }
+
+  return {
+    project: period.projectName,
+    section: period.sectionName,
+    stage: period.stageName,
+    displayMode
+  }
 }
 
 /**

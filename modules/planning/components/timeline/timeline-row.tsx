@@ -547,8 +547,8 @@ export function TimelineRow({
                   className={cn(
                     "border-r border-b relative",
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
-                    isWeekendDay ? (theme === "dark" ? "bg-slate-900" : "bg-slate-100") : "",
-                    isTodayDate ? (theme === "dark" ? "bg-teal-900/20" : "bg-teal-100/40") : "",
+                    isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
+                    isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
                     theme === "dark" ? "group-hover/row:bg-emerald-900/20" : "group-hover/row:bg-emerald-50",
                     isMonthStart
                       ? theme === "dark"
