@@ -3,7 +3,19 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(/tmp/department-row-before-employeerow.txt)",
+<<<<<<< Updated upstream
       "Bash(npx tsc:*)"
+=======
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(ping:*)",
+      "Bash(nul)",
+      "Bash(rm:*)",
+      "Bash(PYTHON_AGENT_URL=https://ai-bot.eneca.work npm run dev:*)",
+      "Bash(python:*)",
+      "Bash(find:*)"
+>>>>>>> Stashed changes
     ],
     "deny": [],
     "ask": []

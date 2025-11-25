@@ -311,12 +311,32 @@ export function useChat() {
       saveMessage(botMessage, userId)
       // Дедупликация: если последнее локальное сообщение совпадает, заменяем вместо добавления
       setMessages(prev => replaceLastIfDuplicateElseAppend(prev, botMessage))
+<<<<<<< Updated upstream
       // После успешного HTTP-ответа продолжаем ждать финального события из realtime
       // НЕ сбрасываем isLoading/isLoadingRef - они будут сброшены при получении 'observation' или 'message'
       setIsTyping(true)
       awaitingFinalRef.current = true
       startTypingSafetyTimer()
       console.debug('[useChat] HTTP-ответ получен, ожидаем финальное событие от n8n')
+=======
+
+      // Для Python агента сразу завершаем, для N8N ждем realtime события
+      if (agentType === 'python') {
+        // Python агент: сразу сбрасываем индикаторы
+        setIsTyping(false)
+        awaitingFinalRef.current = false
+        isLoadingRef.current = false
+        setIsLoading(false)
+        clearTypingSafetyTimer()
+        console.debug('[useChat] Python агент: ответ получен и отображен')
+      } else {
+        // N8N агент: ждем финального события из realtime
+        setIsTyping(true)
+        awaitingFinalRef.current = true
+        startTypingSafetyTimer()
+        console.debug('[useChat] N8N: HTTP-ответ получен, ожидаем финальное событие от n8n')
+      }
+>>>>>>> Stashed changes
     } catch (error) {
       console.error('Chat error:', error)
       if (error instanceof Error) {
