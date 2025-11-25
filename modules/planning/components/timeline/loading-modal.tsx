@@ -691,6 +691,14 @@ export function LoadingModal({
       currentViewMode: viewMode,
     })
 
+    // Очищаем кэш для конкретного проекта перед переключением
+    setProjectDataCache((prev) => {
+      const next = new Map(prev)
+      next.delete(projectId)
+      console.log(`[LoadingModal] 🗑️ Кэш очищен для проекта: ${projectId}`)
+      return next
+    })
+
     // Сохраняем информацию о том, что нужно выбрать после переключения
     setPendingStageSelection({ stageId: targetStageId, projectId })
 
@@ -828,14 +836,9 @@ export function LoadingModal({
       if (viewMode === "my" && projectId) {
         console.log("[LoadingModal] 🔄 Этап не найден в 'Мои проекты', переключаемся на 'Все проекты'")
         switchToAllProjects(decompositionStageId, projectId)
-      } else {
-        // Уже в режиме "Все проекты" и все равно не найден - это финальная ошибка
-        console.error("[LoadingModal] ❌ Этап не найден даже в режиме 'Все проекты'!")
-        setNotification("Этап декомпозиции не найден в системе")
-        setTimeout(() => clearNotification(), 5000)
       }
     }
-  }, [treeData, viewMode, switchToAllProjects, setNotification, clearNotification])
+  }, [treeData, viewMode, switchToAllProjects])
 
   // Fetch employees
   const fetchEmployees = useCallback(async () => {
@@ -1125,11 +1128,9 @@ export function LoadingModal({
         if (projectNode.children?.length === 0) {
           console.log("[LoadingModal] 📁 Загрузка данных проекта:", projectNode.name)
           loadNodeChildren(projectNode).then(() => {
-            console.log("[LoadingModal] ✅ Данные проекта загружены, запуск findAndSelectNode через 100ms")
+            console.log("[LoadingModal] ✅ Данные проекта загружены, запуск findAndSelectNode")
             // After loading, find and select the target node
-            setTimeout(() => {
-              findAndSelectNode(targetStageId!, targetProjectId)
-            }, 100)
+            findAndSelectNode(targetStageId!, targetProjectId)
           })
         } else {
           console.log("[LoadingModal] ✅ Данные проекта уже загружены, запуск findAndSelectNode")
@@ -1142,74 +1143,20 @@ export function LoadingModal({
           viewMode,
           userDepartmentId,
         })
-      }
-    } else if (targetStageId && !targetProjectId) {
-      console.log("[LoadingModal] ⚠️ projectId отсутствует, запуск fallback через view_section_hierarchy")
-      // Fallback: fetch projectId from sectionId if missing
-      if (loading?.sectionId) {
-        console.log("[LoadingModal] 🌐 Запрос projectId для sectionId:", loading.sectionId)
-        Promise.resolve(
-          supabase
-            .from("view_section_hierarchy")
-            .select("project_id")
-            .eq("section_id", loading.sectionId)
-            .limit(1)
-            .maybeSingle()
-        )
-          .then(({ data, error }) => {
-            if (error) {
-              console.error("[LoadingModal] ❌ Ошибка при получении project_id:", error)
-              return
-            }
-            console.log("[LoadingModal] 🌐 Результат запроса view_section_hierarchy:", data)
-            if (data?.project_id) {
-              targetProjectId = data.project_id
-              console.log("[LoadingModal] ✅ projectId получен из БД:", targetProjectId)
 
-              // Retry auto-expand with fetched projectId
-              const projectNodeId = `project-${targetProjectId}`
-              const projectNode = treeData.find((n) => n.id === projectNodeId)
-
-              console.log("[LoadingModal] 🔍 Повторный поиск проекта после fallback:", {
-                projectNodeId,
-                found: !!projectNode,
-                projectName: projectNode?.name,
-              })
-
-              if (projectNode) {
-                // Установить название проекта в поиск
-                setProjectSearchTerm(projectNode.name)
-
-                if (projectNode.children?.length === 0) {
-                  console.log("[LoadingModal] 📁 Загрузка данных проекта (fallback):", projectNode.name)
-                  loadNodeChildren(projectNode).then(() => {
-                    console.log("[LoadingModal] ✅ Данные загружены (fallback), запуск findAndSelectNode")
-                    setTimeout(() => findAndSelectNode(targetStageId!, targetProjectId), 100)
-                  })
-                } else {
-                  console.log("[LoadingModal] ✅ Данные уже загружены (fallback), запуск findAndSelectNode")
-                  findAndSelectNode(targetStageId!, targetProjectId)
-                }
-              } else {
-                console.warn("[LoadingModal] ❌ Проект НЕ найден после fallback!")
-              }
-            } else {
-              console.warn("[LoadingModal] ❌ view_section_hierarchy вернула пустой результат")
-            }
-          })
-          .catch((err: unknown) => {
-            console.error("[LoadingModal] ❌ Исключение при fallback запросе:", err)
-          })
-      } else {
-        console.warn("[LoadingModal] ❌ loading.sectionId отсутствует, fallback невозможен")
+        // Если проект не найден в "Мои проекты" - переключиться на "Все проекты"
+        if (viewMode === "my") {
+          console.log("[LoadingModal] 🔄 Проект не найден в 'Мои проекты', переключаемся на 'Все проекты'")
+          switchToAllProjects(targetStageId!, targetProjectId!)
+        }
       }
     } else {
-      console.log("[LoadingModal] ⏸️ Условия для auto-select не выполнены:", {
+      console.log("[LoadingModal] ⏸️ Условия для auto-select не выполнены (требуется targetStageId и targetProjectId):", {
         hasTargetStageId: !!targetStageId,
         hasTargetProjectId: !!targetProjectId,
       })
     }
-  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId])
+  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects])
 
   // Handle pending stage selection after viewMode switch
   useEffect(() => {
@@ -1238,11 +1185,9 @@ export function LoadingModal({
         console.log("[LoadingModal] 📁 Загрузка данных проекта для pending выбора (forceRefresh=true)")
         loadNodeChildren(projectNode, true).then(() => {
           console.log("[LoadingModal] ✅ Данные загружены для pending выбора, запуск findAndSelectNode")
-          setTimeout(() => {
-            findAndSelectNode(pendingStageId, pendingProjectId)
-            setPendingStageSelection(null) // Очищаем pending
-            console.log("[LoadingModal] ✅ Pending выбор завершён, флаг очищен")
-          }, 100)
+          findAndSelectNode(pendingStageId, pendingProjectId)
+          setPendingStageSelection(null) // Очищаем pending
+          console.log("[LoadingModal] ✅ Pending выбор завершён, флаг очищен")
         })
       } else {
         console.log("[LoadingModal] ✅ Данные уже загружены для pending выбора")
