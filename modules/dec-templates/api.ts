@@ -260,7 +260,7 @@ export async function applyTemplate(
         plannedHours: item.plannedHours,
         progress: 0,
         status: planStatusName,
-        completionDate: ''
+        completionDate: null
       }))
 
       return {

@@ -48,5 +48,5 @@ export type Decomposition = {
   plannedHours: number
   progress: number
   status: string
-  completionDate: string
+  completionDate: string | null
 }
