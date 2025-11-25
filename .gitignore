@@ -36,3 +36,6 @@ ws-to-work-integration/
 docs/database/public_schema.md
 
 tsconfig.tsbuildinfo
+
+# MCP Configuration
+.mcp.json

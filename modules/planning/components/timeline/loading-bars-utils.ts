@@ -395,12 +395,51 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
 }
 
 /**
+ * Разбивает период на сегменты рабочих дней, исключая нерабочие дни (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ */
+function splitPeriodByWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }>
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend // Используем isWorkingDay если есть, иначе проверяем isWeekend
+
+    if (isWorking) {
+      // Начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
+      }
+    } else {
+      // Нерабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
+      }
+    }
+  }
+
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
+  }
+
+  return segments
+}
+
+/**
  * Вычисляет параметры отрисовки для всех периодов
+ * Разбивает загрузки на сегменты, исключая нерабочие дни (выходные и праздники)
  */
 export function calculateBarRenders(
   periods: BarPeriod[],
-  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean }>,
-  cellWidth: number,
+  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean; width?: number; left?: number }>,
+  cellWidth: number, // Deprecated: используется только для обратной совместимости
   isDark: boolean
 ): BarRender[] {
   if (periods.length === 0) return []
@@ -431,11 +470,6 @@ export function calculateBarRenders(
     const actualStartIdx = Math.max(0, startIdx === -1 ? 0 : startIdx)
     const actualEndIdx = Math.min(timeUnits.length - 1, endIdx === -1 ? timeUnits.length - 1 : endIdx)
 
-    // Вычисляем позицию и ширину с учетом горизонтальных отступов
-    // Добавляем половину зазора слева, вычитаем половину справа
-    const left = actualStartIdx * cellWidth + HORIZONTAL_GAP / 2
-    const width = (actualEndIdx - actualStartIdx + 1) * cellWidth - HORIZONTAL_GAP
-
     // Определяем цвет на основе типа периода
     let color: string
     if (period.type === "vacation") {
@@ -449,15 +483,54 @@ export function calculateBarRenders(
       color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
     }
 
-    renders.push({
-      period,
-      startIdx: actualStartIdx,
-      endIdx: actualEndIdx,
-      left,
-      width,
-      layer,
-      color,
-    })
+    // Для загрузок (type="loading") разбиваем на сегменты по рабочим дням
+    // Для отпусков, больничных и отгулов оставляем сплошным
+    if (period.type === "loading") {
+      const segments = splitPeriodByWorkingDays(actualStartIdx, actualEndIdx, timeUnits)
+
+      // Создаем отдельный рендер для каждого сегмента
+      for (const segment of segments) {
+        // Используем позиции из timeUnits если доступны, иначе старый метод
+        const left = (timeUnits[segment.startIdx]?.left ?? segment.startIdx * cellWidth) + HORIZONTAL_GAP / 2
+
+        // Вычисляем ширину сегмента суммированием ширин всех ячеек
+        let width = 0
+        for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+          width += timeUnits[idx]?.width ?? cellWidth
+        }
+        width -= HORIZONTAL_GAP
+
+        renders.push({
+          period,
+          startIdx: segment.startIdx,
+          endIdx: segment.endIdx,
+          left,
+          width,
+          layer,
+          color,
+        })
+      }
+    } else {
+      // Для отпусков, больничных и отгулов создаем один сплошной бар
+      const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
+
+      // Вычисляем ширину суммированием ширин всех ячеек
+      let width = 0
+      for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
+        width += timeUnits[idx]?.width ?? cellWidth
+      }
+      width -= HORIZONTAL_GAP
+
+      renders.push({
+        period,
+        startIdx: actualStartIdx,
+        endIdx: actualEndIdx,
+        left,
+        width,
+        layer,
+        color,
+      })
+    }
   }
 
   return renders
@@ -492,6 +565,46 @@ export function formatBarLabel(period: BarPeriod): string {
   if (period.projectName) parts.push(period.projectName)
 
   return parts.join(" • ") || "Загрузка"
+}
+
+/**
+ * Адаптивное форматирование текста в зависимости от ширины бара
+ */
+export interface BarLabelParts {
+  project?: string
+  section?: string
+  stage?: string
+  displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
+}
+
+export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelParts {
+  if (period.type !== "loading") {
+    return { displayMode: 'full' }
+  }
+
+  // Определяем режим отображения на основе ширины
+  // Примерные пороги в пикселях (понижены т.к. бары разбиваются на сегменты выходными)
+  const THRESHOLD_FULL = 120      // Полное отображение всех частей (~3 дня при 40px/день)
+  const THRESHOLD_COMPACT = 70    // Компактное: только важные части (~2 дня)
+  const THRESHOLD_MINIMAL = 35    // Минимальное: только этап или раздел (~1 день)
+  // < 35 - только иконка
+
+  let displayMode: BarLabelParts['displayMode'] = 'icon-only'
+
+  if (barWidth >= THRESHOLD_FULL) {
+    displayMode = 'full'
+  } else if (barWidth >= THRESHOLD_COMPACT) {
+    displayMode = 'compact'
+  } else if (barWidth >= THRESHOLD_MINIMAL) {
+    displayMode = 'minimal'
+  }
+
+  return {
+    project: period.projectName,
+    section: period.sectionName,
+    stage: period.stageName,
+    displayMode
+  }
 }
 
 /**

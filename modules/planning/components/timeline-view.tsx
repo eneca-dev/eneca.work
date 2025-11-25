@@ -50,6 +50,8 @@ export function TimelineView() {
     fetchSections,
     fetchDepartments,
     loadVacations,
+    loadGlobalCalendarEvents,
+    globalCalendarEvents,
     setFilters,
     expandedSections,
     expandedDepartments,
@@ -163,6 +165,11 @@ useEffect(() => {
   useEffect(() => {
     fetchProjectSummaries()
   }, [fetchProjectSummaries])
+
+  // Загружаем глобальные события календаря при монтировании
+  useEffect(() => {
+    loadGlobalCalendarEvents()
+  }, [loadGlobalCalendarEvents])
 
   // Перегружаем саммари проектов при изменении фильтров, чтобы список групп соответствовал выбранной организации/менеджеру/проекту
   useEffect(() => {
@@ -405,7 +412,7 @@ useEffect(() => {
       headerRightScroll.removeEventListener('scroll', handleHeaderScroll)
       contentScroll.removeEventListener('scroll', handleContentScroll)
     }
-  }, [])
+  }, [isLoadingSections])
 
   // Вычисляем ширину вертикального скроллбара контента
   useEffect(() => {
@@ -432,8 +439,20 @@ useEffect(() => {
       window.removeEventListener('resize', calculateScrollbarWidth)
       resizeObserver.disconnect()
     }
-  }, [])
+  }, [isLoadingSections])
 
+  // Получаем данные для заголовка
+  const { columnVisibility } = usePlanningColumnsStore()
+
+  // Генерируем timeUnits для заголовка с учетом глобальных событий
+  const timeUnits = generateTimeUnits(startDate, daysToShow, globalCalendarEvents)
+
+  // Константы для размеров (должны совпадать с timeline-grid.tsx)
+  const HEADER_HEIGHT = 40
+  const PADDING = 12
+  const LEFT_OFFSET = 0
+  const CELL_WIDTH = cellWidth || 22
+  const COLUMN_WIDTH = 430
 
   // Синхронизация горизонтальной прокрутки между правой частью заголовка и контентом
   useEffect(() => {
@@ -500,17 +519,6 @@ useEffect(() => {
   }, [])
 
   // Получаем данные для заголовка
-  const { columnVisibility } = usePlanningColumnsStore()
-
-  // Генерируем timeUnits для заголовка
-  const timeUnits = generateTimeUnits(startDate, daysToShow)
-
-  // Константы для размеров (должны совпадать с timeline-grid.tsx)
-  const HEADER_HEIGHT = 40
-  const PADDING = 12
-  const LEFT_OFFSET = 0
-  const CELL_WIDTH = cellWidth || 22
-  const COLUMN_WIDTH = 430
 
   return (
     <div
@@ -587,6 +595,7 @@ useEffect(() => {
               showDepartments={showDepartments}
               startDate={startDate}
               daysToShow={daysToShow}
+              globalCalendarEvents={globalCalendarEvents}
               theme={theme}
               isLoading={isLoadingSections}
               isLoadingDepartments={isLoadingDepartments}
