@@ -566,7 +566,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchSubdivisionDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.subdivision).filter(Boolean))]
+                         {[...new Set(users.map(u => u.subdivision).filter((s): s is string => Boolean(s)))]
                            .sort()
                            .filter(subdiv => subdiv.toLowerCase().includes(searchSubdivisionDropdown.toLowerCase()))
                            .map(subdiv => (
@@ -647,7 +647,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchDepartmentDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.department).filter(Boolean))]
+                         {[...new Set(users.map(u => u.department).filter((d): d is string => Boolean(d)))]
                            .sort()
                            .filter(dept => dept.toLowerCase().includes(searchDepartmentDropdown.toLowerCase()))
                            .map(dept => (
@@ -704,7 +704,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchTeamDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.team).filter(Boolean))]
+                         {[...new Set(users.map(u => u.team).filter((t): t is string => Boolean(t)))]
                            .sort()
                            .filter(team => team.toLowerCase().includes(searchTeamDropdown.toLowerCase()))
                            .map(team => (
@@ -761,7 +761,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchPositionDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.position).filter(Boolean))]
+                         {[...new Set(users.map(u => u.position).filter((p): p is string => Boolean(p)))]
                            .sort()
                            .filter(position => position.toLowerCase().includes(searchPositionDropdown.toLowerCase()))
                            .map(position => (
@@ -818,7 +818,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchCategoryDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.category).filter(Boolean))]
+                         {[...new Set(users.map(u => u.category).filter((c): c is string => Boolean(c)))]
                            .sort()
                            .filter(category => category.toLowerCase().includes(searchCategoryDropdown.toLowerCase()))
                            .map(category => (
@@ -875,9 +875,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchRoleDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.role).filter(Boolean))]
+                         {[...new Set(users.map(u => u.role).filter((r): r is string => Boolean(r)))]
                            .sort()
-                           .filter(role => role && role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
+                           .filter(role => role.toLowerCase().includes(searchRoleDropdown.toLowerCase()))
                            .map(role => (
                            <div key={role} className="flex items-center space-x-2">
                              <input
@@ -934,7 +934,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          onChange={(e) => setSearchLocationDropdown(e.target.value)}
                        />
                        <div className="max-h-32 overflow-y-auto space-y-1">
-                         {[...new Set(users.map(u => u.workLocation).filter(Boolean))]
+                         {[...new Set(users.map(u => u.workLocation).filter((l): l is "office" | "remote" | "hybrid" => Boolean(l)))]
                            .sort()
                            .filter(location => {
                              const locationInfo = getWorkLocationInfo(location)
@@ -1373,7 +1373,15 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     {/* Заголовок команды */}
                                     <TableRow className="bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-100/50 hover:dark:bg-slate-800/30">
                                       <TableCell colSpan={shouldShowActionsColumn ? 7 : 6} className="py-1.5 pl-16 pr-4">
-                                        <div className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                                        <div
+                                          className="flex items-center text-[13px] font-medium text-slate-600 dark:text-slate-300 cursor-pointer"
+                                          onClick={() => toggleGroup(`${subdivision}-${department}-${team}`)}
+                                        >
+                                          {expandedGroups[`${subdivision}-${department}-${team}`] ? (
+                                            <ChevronDown className="h-3.5 w-3.5 mr-2" />
+                                          ) : (
+                                            <ChevronRight className="h-3.5 w-3.5 mr-2" />
+                                          )}
                                           <Users className="h-3.5 w-3.5 mr-2 text-slate-400" />
                                           <span>{team}</span>
                                           <span className="ml-2 text-[11px] text-slate-400">{teamUsers.length}</span>
@@ -1382,111 +1390,112 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                                     </TableRow>
 
                                     {/* Пользователи команды */}
-                                    {getPaginatedUsersFromGroup(teamUsers).map((user) => {
-                                      const workLocationInfo = getWorkLocationInfo(user.workLocation)
+                                    {expandedGroups[`${subdivision}-${department}-${team}`] &&
+                                      getPaginatedUsersFromGroup(teamUsers).map((user) => {
+                                        const workLocationInfo = getWorkLocationInfo(user.workLocation)
 
-                                      return (
-                                        <TableRow key={user.id} className="pl-20 h-12">
-                                          {/* Пользователь */}
-                                          <TableCell className="pl-6 sm:pl-10 lg:pl-20 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
-                                            <div className="flex items-center space-x-1">
-                                              <Avatar className="h-8 w-8">
-                                                <AvatarImage src={user.avatar_url || ""} alt={user.name} />
-                                                <AvatarFallback className="text-xs">
-                                                  {getInitials(user.name)}
-                                                </AvatarFallback>
-                                              </Avatar>
-                                              <div className="min-w-0 flex-1">
-                                                <div className="font-medium text-xs sm:text-sm">
-                                                  <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
+                                        return (
+                                          <TableRow key={user.id} className="pl-20 h-12">
+                                            {/* Пользователь */}
+                                            <TableCell className="pl-6 sm:pl-10 lg:pl-20 text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                              <div className="flex items-center space-x-1">
+                                                <Avatar className="h-8 w-8">
+                                                  <AvatarImage src={user.avatar_url || ""} alt={user.name} />
+                                                  <AvatarFallback className="text-xs">
+                                                    {getInitials(user.name)}
+                                                  </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0 flex-1">
+                                                  <div className="font-medium text-xs sm:text-sm">
+                                                    <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none">{user.name}</span>
+                                                  </div>
+                                                  <div className="text-xs text-gray-400 hidden sm:block">
+                                                    <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
+                                                  </div>
                                                 </div>
-                                                <div className="text-xs text-gray-400 hidden sm:block">
-                                                  <span className="block sm:truncate sm:max-w-20 md:max-w-28 lg:max-w-36 xl:max-w-44 2xl:max-w-none text-[10px]">{user.email}</span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </TableCell>
-                                          {/* Должность */}
-                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
-                                            <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
-                                          </TableCell>
-                                          {/* Категория */}
-                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
-                                            <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
-                                          </TableCell>
-                                          {/* Ставка */}
-                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
-                                            <div className="text-center">
-                                              <span className="text-xs sm:text-sm font-medium">
-                                                {canViewRate(user) && user.salary ? (
-                                                  <>
-                                                    <span>{user.salary}</span>
-                                                    <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
-                                                  </>
-                                                ) : '—'}
-                                              </span>
-                                            </div>
-                                          </TableCell>
-                                          {/* Роль */}
-                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
-                                            <div className="flex flex-col items-start space-y-0.5">
-                                              {user.role ? (
-                                                <Badge variant="secondary" className="text-xs">
-                                                  {user.role}
-                                                </Badge>
-                                              ) : (
-                                                <Badge variant="secondary" className="text-xs">
-                                                  —
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                          {/* Значок дома */}
-                                          <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
-                                            <div className="flex justify-center">
-                                              {workLocationInfo?.icon || (
-                                                <span className="text-gray-400 text-xs">—</span>
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                          {(canEditAllUsers || canEditUser(user)) && (
-                                            <TableCell className="w-12 px-1 py-1">
-                                              <div className="flex justify-end">
-                                                <DropdownMenu>
-                                                  <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                      <MoreHorizontal className="h-4 w-4" />
-                                                      <span className="sr-only">Меню</span>
-                                                    </Button>
-                                                  </DropdownMenuTrigger>
-                                                  <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => {
-                                                      Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
-                                                      handleEditUser(user)
-                                                    }}>
-                                                      <Edit className="mr-2 h-4 w-4" />
-                                                      Редактировать
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                      className="text-red-600 dark:text-red-400"
-                                                      onClick={() => {
-                                                        Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
-                                                        openDeleteDialog(user)
-                                                      }}
-                                                      disabled={isDeleting === user.id}
-                                                    >
-                                                      <Trash className="mr-2 h-4 w-4" />
-                                                      {isDeleting === user.id ? "Удаление..." : "Удалить"}
-                                                    </DropdownMenuItem>
-                                                  </DropdownMenuContent>
-                                                </DropdownMenu>
                                               </div>
                                             </TableCell>
-                                          )}
-                                        </TableRow>
-                                      )
-                                    })}
+                                            {/* Должность */}
+                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                              <span className="block lg:truncate lg:max-w-18 xl:max-w-28 2xl:max-w-none text-xs sm:text-sm">{user.position || '—'}</span>
+                                            </TableCell>
+                                            {/* Категория */}
+                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                              <span className="block lg:truncate lg:max-w-16 xl:max-w-24 2xl:max-w-none text-xs sm:text-sm">{user.category || '—'}</span>
+                                            </TableCell>
+                                            {/* Ставка */}
+                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 hidden lg:table-cell py-1">
+                                              <div className="text-center">
+                                                <span className="text-xs sm:text-sm font-medium">
+                                                  {canViewRate(user) && user.salary ? (
+                                                    <>
+                                                      <span>{user.salary}</span>
+                                                      <span className="text-[10px] text-gray-500 ml-1">{user.isHourly ? 'BYN/ч' : 'BYN'}</span>
+                                                    </>
+                                                  ) : '—'}
+                                                </span>
+                                              </div>
+                                            </TableCell>
+                                            {/* Роль */}
+                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1">
+                                              <div className="flex flex-col items-start space-y-0.5">
+                                                {user.role ? (
+                                                  <Badge variant="secondary" className="text-xs">
+                                                    {user.role}
+                                                  </Badge>
+                                                ) : (
+                                                  <Badge variant="secondary" className="text-xs">
+                                                    —
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                            {/* Значок дома */}
+                                            <TableCell className="text-xs sm:text-sm lg:text-base px-0.5 sm:px-0.5 md:px-1 lg:px-1 xl:px-2 2xl:px-4 py-1 w-8">
+                                              <div className="flex justify-center">
+                                                {workLocationInfo?.icon || (
+                                                  <span className="text-gray-400 text-xs">—</span>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                            {(canEditAllUsers || canEditUser(user)) && (
+                                              <TableCell className="w-12 px-1 py-1">
+                                                <div className="flex justify-end">
+                                                  <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                        <span className="sr-only">Меню</span>
+                                                      </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                      <DropdownMenuItem onClick={() => {
+                                                        Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open edit user', data: { user_id: user.id } })
+                                                        handleEditUser(user)
+                                                      }}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Редактировать
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuSeparator />
+                                                      <DropdownMenuItem
+                                                        className="text-red-600 dark:text-red-400"
+                                                        onClick={() => {
+                                                          Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'UsersList: open delete confirm', data: { user_id: user.id } })
+                                                          openDeleteDialog(user)
+                                                        }}
+                                                        disabled={isDeleting === user.id}
+                                                      >
+                                                        <Trash className="mr-2 h-4 w-4" />
+                                                        {isDeleting === user.id ? "Удаление..." : "Удалить"}
+                                                      </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                  </DropdownMenu>
+                                                </div>
+                                              </TableCell>
+                                            )}
+                                          </TableRow>
+                                        )
+                                      })}
                                   </React.Fragment>
                                 ))}
                             </React.Fragment>

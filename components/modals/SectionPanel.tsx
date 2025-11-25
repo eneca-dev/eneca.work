@@ -445,9 +445,14 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
         ...sectionData,
         [fieldName]: fieldValue
       })
-      
+
       setEditingField(null)
       setNotification('Поле успешно обновлено')
+
+      // Плавное обновление дерева проектов (особенно важно для названия раздела)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+      }
     } catch (error) {
       console.error('Ошибка сохранения:', error)
       setNotification('Ошибка сохранения изменений')
@@ -468,6 +473,10 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
   const handleDeleteSuccess = () => {
     setShowDeleteModal(false)
     onClose()
+    // Плавная перезагрузка дерева проектов после удаления раздела
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+    }
   }
 
   const getProfileName = (profile: Profile) => {
@@ -525,6 +534,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
 
       setNotification('Сроки раздела обновлены')
       setIsEditingDates(false)
+
+      // Плавное обновление дерева проектов
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+      }
     } catch (err) {
       console.error('Ошибка сохранения дат раздела:', err)
       setNotification('Ошибка сохранения сроков')
@@ -995,7 +1009,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                                   })
 
                                   setNotification('Ответственный снят')
-                                  await loadSectionData()
+
+                                  // Плавное обновление дерева проектов
+                                  if (typeof window !== 'undefined') {
+                                    window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+                                  }
                                 } catch (error) {
                                   console.error('Ошибка снятия ответственного:', error)
                                   setNotification('Ошибка при снятии ответственного')
@@ -1047,7 +1065,11 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                                     })
 
                                     setNotification('Ответственный успешно назначен')
-                                    await loadSectionData()
+
+                                    // Плавное обновление дерева проектов
+                                    if (typeof window !== 'undefined') {
+                                      window.dispatchEvent(new CustomEvent('projectsTree:reload'))
+                                    }
                                   } catch (error) {
                                     console.error('Ошибка сохранения ответственного:', error)
                                     setNotification('Ошибка при назначении ответственного')

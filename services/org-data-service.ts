@@ -1115,6 +1115,7 @@ export async function createUser(userData: {
   password: string
   firstName: string
   lastName: string
+  subdivision?: string
   department?: string
   team?: string
   position?: string
@@ -1227,17 +1228,40 @@ export async function createUser(userData: {
         }
 
         // 3. Найдем ID для связанных сущностей
+        // Сначала обрабатываем subdivision если указано
+        if (userData.subdivision) {
+          const subdivision = await supabase
+            .from("subdivisions")
+            .select("subdivision_id")
+            .eq("subdivision_name", userData.subdivision)
+            .single()
+
+          if (subdivision.data) {
+            profileData.subdivision_id = subdivision.data.subdivision_id
+            console.log("Найдено подразделение, ID =", subdivision.data.subdivision_id)
+          } else {
+            console.warn("Подразделение не найдено:", userData.subdivision)
+          }
+        }
+
         if (userData.department) {
-          const department = await supabase
+          // Ищем отдел, учитывая подразделение если оно указано
+          let departmentQuery = supabase
             .from("departments")
             .select("department_id")
             .eq("department_name", userData.department)
-            .single()
-          
+
+          // Если указано подразделение, фильтруем отделы по нему
+          if (profileData.subdivision_id) {
+            departmentQuery = departmentQuery.eq("subdivision_id", profileData.subdivision_id)
+          }
+
+          const department = await departmentQuery.single()
+
           if (department.data) {
             profileData.department_id = department.data.department_id
           } else {
-            console.warn("Отдел не найден:", userData.department)
+            console.warn(`Отдел "${userData.department}" не найден для подразделения "${userData.subdivision}"`)
           }
         }
 

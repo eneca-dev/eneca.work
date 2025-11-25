@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
 import { Avatar } from "./Avatar"
@@ -33,9 +34,10 @@ interface AssignResponsibleModalProps {
   section: SectionNode
   setShowAssignModal: (show: boolean) => void
   theme: string
+  onSuccess?: () => void
 }
 
-export function AssignResponsibleModal({ section, setShowAssignModal, theme }: AssignResponsibleModalProps) {
+export function AssignResponsibleModal({ section, setShowAssignModal, theme, onSuccess }: AssignResponsibleModalProps) {
   // Состояние для отслеживания процесса сохранения
   const [isSaving, setIsSaving] = useState(false)
   // Состояние для отслеживания ошибок валидации
@@ -53,6 +55,8 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("")
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
 
   // Загружаем список сотрудников при открытии модального окна
   useEffect(() => {
@@ -165,6 +169,18 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
     employee.email.toLowerCase().includes(employeeSearchTerm.toLowerCase())
   )
 
+  // Обновляем позицию dropdown при открытии
+  useEffect(() => {
+    if (showEmployeeDropdown && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 4, // +4px для небольшого отступа
+        left: rect.left,
+        width: rect.width
+      })
+    }
+  }, [showEmployeeDropdown])
+
   // Валидация формы
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -254,6 +270,9 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
             clearNotification()
           }, 3000)
 
+          // Вызываем callback для обновления данных
+          onSuccess?.()
+
           // Закрываем модальное окно
           setShowAssignModal(false)
 
@@ -327,20 +346,20 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
         <div
           className={cn(
             "p-4 rounded-lg border mb-4",
-            theme === "dark" ? "bg-blue-900 border-blue-700" : "bg-blue-50 border-blue-200",
+            theme === "dark" ? "bg-slate-800/50 border-slate-700" : "bg-blue-50 border-blue-200",
           )}
         >
           <div className="flex items-start space-x-3">
-            <div className={cn("flex-shrink-0 w-5 h-5 mt-0.5", theme === "dark" ? "text-blue-400" : "text-blue-600")}>
+            <div className={cn("flex-shrink-0 w-5 h-5 mt-0.5", theme === "dark" ? "text-slate-400" : "text-blue-600")}>
               <svg fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
             </div>
             <div>
-              <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-blue-200" : "text-blue-800")}>
+              <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-slate-200" : "text-blue-800")}>
                 Назначение ответственного за раздел
               </h4>
-              <div className={cn("mt-2 text-sm", theme === "dark" ? "text-blue-300" : "text-blue-700")}>
+              <div className={cn("mt-2 text-sm", theme === "dark" ? "text-slate-300" : "text-blue-700")}>
                 <p className="mb-1">
                   <strong>Раздел:</strong> {section.name}
                 </p>
@@ -362,6 +381,7 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
           </label>
           <div className="relative">
             <input
+              ref={inputRef}
               type="text"
               value={employeeSearchTerm}
               onChange={(e) => {
@@ -380,20 +400,25 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
               className={cn(
                 "w-full px-3 py-2 border rounded text-sm",
                 theme === "dark"
-                  ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400"
+                  ? "bg-slate-900/50 border-slate-700 text-slate-200 placeholder-slate-500"
                   : "bg-white border-slate-300 text-slate-800 placeholder-slate-500",
                 errors.employee ? "border-red-500" : "",
               )}
             />
 
-            {showEmployeeDropdown && filteredEmployees.length > 0 && !selectedEmployee && (
+            {showEmployeeDropdown && filteredEmployees.length > 0 && !selectedEmployee && typeof window !== 'undefined' && createPortal(
               <div
                 className={cn(
-                  "absolute z-10 w-full mt-1 max-h-60 overflow-auto rounded border",
+                  "fixed z-[9999] max-h-60 overflow-auto rounded border shadow-lg",
                   theme === "dark"
-                    ? "bg-slate-800 border-slate-600"
+                    ? "bg-slate-900 border-slate-700"
                     : "bg-white border-slate-300",
                 )}
+                style={{
+                  top: `${dropdownPosition.top}px`,
+                  left: `${dropdownPosition.left}px`,
+                  width: `${dropdownPosition.width}px`
+                }}
                 onMouseDown={(e) => e.preventDefault()} // Предотвращаем потерю фокуса при клике
               >
                 {filteredEmployees.map((employee) => (
@@ -405,7 +430,7 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
                     }}
                     className={cn(
                       "px-3 py-2 cursor-pointer text-sm flex items-center space-x-3",
-                      theme === "dark" ? "hover:bg-slate-600 text-slate-200" : "hover:bg-slate-50 text-slate-800",
+                      theme === "dark" ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-50 text-slate-800",
                     )}
                   >
                     <Avatar
@@ -427,7 +452,8 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
                     </div>
                   </div>
                 ))}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
           {errors.employee && (
@@ -440,7 +466,7 @@ export function AssignResponsibleModal({ section, setShowAssignModal, theme }: A
           <div
             className={cn(
               "p-3 rounded-lg border mb-4",
-              theme === "dark" ? "bg-slate-700 border-slate-600" : "bg-slate-50 border-slate-200",
+              theme === "dark" ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-200",
             )}
           >
             <div className="flex items-center space-x-3">

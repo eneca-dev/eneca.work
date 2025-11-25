@@ -29,7 +29,7 @@ interface Department {
 interface Team {
   id: string;
   name: string;
-  departmentId: string | null;
+  departmentId: string;
   departmentName: string | null;
   team_lead_id: string | null;
   headFirstName: string | null;
@@ -146,7 +146,7 @@ export default function TeamsTab(props: TeamsTabProps) {
           uniqueTeamsMap.set(team.team_id, {
             id: team.team_id,
             name: team.team_name,
-            departmentId: team.department_id || null,
+            departmentId: team.department_id,
             departmentName: team.department_name || null,
             team_lead_id: team.team_lead_id,
             headFirstName: team.team_lead_first_name,
@@ -201,14 +201,10 @@ export default function TeamsTab(props: TeamsTabProps) {
   // Мемоизируем фильтрованные команды
   const filtered = useMemo(() => {
     return teams.filter(team => {
-      // Фильтрация по отделу: три-состояние
+      // Фильтрация по отделу
       // activeDept === null: "Все отделы" - показываем все команды
-      // activeDept === "": "Без отдела" - показываем команды без отдела
       // activeDept === deptId: показываем команды конкретного отдела
-      const matchesDept =
-        activeDept === null ||
-        (activeDept === "" && (!team.departmentId || team.departmentId === "")) ||
-        team.departmentId === activeDept
+      const matchesDept = activeDept === null || team.departmentId === activeDept
       const matchesSearch = typeof team.name === "string" && team.name.toLowerCase().includes(search.toLowerCase())
       return matchesDept && matchesSearch
     })
@@ -221,11 +217,10 @@ export default function TeamsTab(props: TeamsTabProps) {
 
   // Мемоизируем extraFields для EntityModal
   const extraFields = useMemo(() => {
-    // Добавляем опцию "Не назначен" для команд без отдела
-    const departmentOptions = [
-      { value: "none", label: "Не назначен" },
-      ...departments.map(dep => ({ value: dep.id, label: dep.name }))
-    ]
+    // Фильтруем департаменты, исключая "Не назначен"
+    const departmentOptions = departments
+      .filter(dep => dep.name !== "Не назначен")
+      .map(dep => ({ value: dep.id, label: dep.name }))
 
     return [
       {
@@ -233,7 +228,7 @@ export default function TeamsTab(props: TeamsTabProps) {
         label: "Отдел",
         type: "select" as const,
         options: departmentOptions,
-        required: false // Отдел не обязателен для команды
+        required: true // Отдел обязателен для команды
       }
     ]
   }, [departments])
@@ -243,7 +238,7 @@ export default function TeamsTab(props: TeamsTabProps) {
     // Для team_lead (edit.team без edit.department) ограничиваем отдел их собственным
     if (canEditTeams && !canManageAllTeams && !canEditDepartment && departmentId) {
       const theOnly = departments
-        .filter(d => d.id === departmentId)
+        .filter(d => d.id === departmentId && d.name !== "Не назначен")
         .map(d => ({ value: d.id, label: d.name }))
       return [
         {
@@ -258,7 +253,7 @@ export default function TeamsTab(props: TeamsTabProps) {
     // Для пользователей с manage.teams или без ограничений - обычная логика
     if (scope === 'department') {
       const theOnly = departments
-        .filter(d => d.id === departmentId)
+        .filter(d => d.id === departmentId && d.name !== "Не назначен")
         .map(d => ({ value: d.id, label: d.name }))
       return [
         {
@@ -280,9 +275,9 @@ export default function TeamsTab(props: TeamsTabProps) {
     return {
       team_id: selectedTeam.id,
       team_name: selectedTeam.name,
-      department_id: selectedTeam.departmentId || "none" // "none" для "Не назначен"
+      department_id: selectedTeam.departmentId
     }
-  }, [selectedTeam])
+  }, [selectedTeam, departments])
 
   // Мемоизируем данные команды для TeamHeadModal
   const teamHeadData = useMemo(() => {
@@ -291,7 +286,7 @@ export default function TeamsTab(props: TeamsTabProps) {
     return {
       id: selectedTeam.id,
       name: selectedTeam.name,
-      departmentId: selectedTeam.departmentId || "",
+      departmentId: selectedTeam.departmentId,
       departmentName: selectedTeam.departmentName || "",
       team_lead_id: selectedTeam.team_lead_id,
       headFirstName: selectedTeam.headFirstName,
@@ -326,9 +321,21 @@ export default function TeamsTab(props: TeamsTabProps) {
       return
     }
 
+    // Подсчитываем количество команд в отделе
+    const teamsInDepartment = teams.filter(t => t.departmentId === team.departmentId).length
+
+    // Если это последняя команда в отделе, показываем предупреждение
+    if (teamsInDepartment === 1) {
+      toast.error(
+        `Невозможно удалить команду "${team.name}". Это последняя команда в отделе "${team.departmentName}". Удалите весь отдел, если необходимо.`,
+        { duration: 5000 }
+      )
+      return
+    }
+
     setSelectedTeam(team)
     setDeleteModalOpen(true)
-  }, [canDeleteTeam])
+  }, [canDeleteTeam, teams])
 
   const handleModalOpenChange = useCallback((open: boolean) => {
     setModalOpen(open)
@@ -446,21 +453,13 @@ export default function TeamsTab(props: TeamsTabProps) {
           
           <div className="mt-4">
             <div className="flex flex-wrap gap-2">
-              <Button 
-                size="sm" 
-                variant={activeDept === null ? "default" : "outline"} 
-                onClick={() => setActiveDept(null)} 
+              <Button
+                size="sm"
+                variant={activeDept === null ? "default" : "outline"}
+                onClick={() => setActiveDept(null)}
                 className="h-7 text-xs rounded font-normal"
               >
                 Все отделы
-              </Button>
-              <Button
-                size="sm"
-                variant={activeDept === "none" ? "default" : "outline"}
-                onClick={() => setActiveDept("none")}
-                className="h-7 text-xs rounded font-normal"
-              >
-                Без отдела
               </Button>
               {departments.map((dep) => (
                 <Button
@@ -500,7 +499,7 @@ export default function TeamsTab(props: TeamsTabProps) {
                   <TableRow key={team.id}>
                     <TableCell className="text-base font-medium">{team.name}</TableCell>
                     <TableCell className="text-base">
-                      {team.departmentId ? team.departmentName : "Не назначен"}
+                      {team.departmentName}
                     </TableCell>
                     <TableCell className="text-base">
                       {team.team_lead_id ? (
@@ -574,7 +573,7 @@ export default function TeamsTab(props: TeamsTabProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {canManageTeam(team) && team.departmentId && (
+                        {canManageTeam(team) && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -676,14 +675,14 @@ export default function TeamsTab(props: TeamsTabProps) {
       )}
 
       {/* Модальное окно для назначения сотрудников в команду */}
-      {selectedTeam && selectedTeam.departmentId && (
+      {selectedTeam && (
         <AssignToTeamModal
           open={assignModalOpen}
           onOpenChange={setAssignModalOpen}
           team={{
             id: selectedTeam.id,
             name: selectedTeam.name,
-            departmentId: selectedTeam.departmentId,
+            departmentId: selectedTeam.departmentId!,
             departmentName: selectedTeam.departmentName || "",
             team_lead_id: selectedTeam.team_lead_id
           }}
