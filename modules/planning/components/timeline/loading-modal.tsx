@@ -327,42 +327,18 @@ export function LoadingModal({
   const buildFileTree = useCallback(async () => {
     // Prevent concurrent calls - добавить в очередь вместо отклонения
     if (isLoadingTreeRef.current) {
-      console.log("[LoadingModal] buildFileTree: added to queue (already loading)", {
-        timestamp: new Date().toISOString(),
-        isLoadingTreeRef: isLoadingTreeRef.current,
-        currentViewMode: viewMode,
-        queueLength: pendingBuildQueue.length,
-      })
-
       // Добавить в очередь только если там ещё нет задачи с таким же viewMode
       setPendingBuildQueue((prev) => {
         const hasSameTask = prev.some((task) => task.viewMode === viewMode)
         if (hasSameTask) {
-          console.log("[LoadingModal] buildFileTree: task already in queue, skipping", {
-            timestamp: new Date().toISOString(),
-            viewMode,
-          })
           return prev
         }
-        console.log("[LoadingModal] buildFileTree: task added to queue", {
-          timestamp: new Date().toISOString(),
-          viewMode,
-          newQueueLength: prev.length + 1,
-        })
         return [...prev, { viewMode }]
       })
       return
     }
 
-    console.log("[LoadingModal] buildFileTree: started", {
-      timestamp: new Date().toISOString(),
-      viewMode,
-      userDepartmentId,
-      isLoadingTreeRef: isLoadingTreeRef.current,
-      hasLoadedTreeRef: hasLoadedTreeRef.current,
-      isOpen,
-      mode,
-    })
+    console.log("[LoadingModal] buildFileTree started:", viewMode)
 
     isLoadingTreeRef.current = true
     setIsLoadingTree(true)
@@ -404,12 +380,7 @@ export function LoadingModal({
           span.setAttribute("db.success", true)
           span.setAttribute("projects_count", tree.length)
 
-          console.log("[LoadingModal] buildFileTree: tree created", {
-            timestamp: new Date().toISOString(),
-            projectCount: tree.length,
-            viewMode,
-            filteredByDepartment: viewMode === "my" && userDepartmentId,
-          })
+          console.log("[LoadingModal] buildFileTree completed:", tree.length, "projects")
 
           setTreeData(tree)
         } catch (error) {
@@ -440,24 +411,13 @@ export function LoadingModal({
           isLoadingTreeRef.current = false
           hasLoadedTreeRef.current = true
 
-          console.log("[LoadingModal] buildFileTree: completed", {
-            timestamp: new Date().toISOString(),
-            hasLoadedTreeRef: true,
-            viewMode,
-            queueLength: pendingBuildQueue.length,
-          })
-
           // Обработка очереди - выполнить следующую задачу
           setPendingBuildQueue((currentQueue) => {
             if (currentQueue.length > 0) {
               const nextTask = currentQueue[0]
               const remainingQueue = currentQueue.slice(1)
 
-              console.log("[LoadingModal] buildFileTree: processing next task from queue", {
-                timestamp: new Date().toISOString(),
-                nextTaskViewMode: nextTask.viewMode,
-                remainingQueueLength: remainingQueue.length,
-              })
+              console.log("[LoadingModal] Processing queued task:", nextTask.viewMode)
 
               // Выполнить следующую задачу асинхронно
               setTimeout(() => {
@@ -468,9 +428,6 @@ export function LoadingModal({
               return remainingQueue
             }
 
-            console.log("[LoadingModal] buildFileTree: queue is empty", {
-              timestamp: new Date().toISOString(),
-            })
             return currentQueue
           })
         }
@@ -574,27 +531,11 @@ export function LoadingModal({
       return
     }
 
-    console.log("[LoadingModal] loadNodeChildren called", {
-      timestamp: new Date().toISOString(),
-      nodeId: node.id,
-      projectId: node.projectId,
-      forceRefresh,
-      hasCachedData: projectDataCache.has(node.projectId || ""),
-      viewMode,
-    })
-
     setLoadingNodes((prev) => new Set(prev).add(node.id))
 
     try {
       // Check cache first (unless forceRefresh is true)
       let projectData = forceRefresh ? null : projectDataCache.get(node.projectId)
-
-      console.log("[LoadingModal] Cache lookup for project", {
-        timestamp: new Date().toISOString(),
-        projectId: node.projectId,
-        cacheHit: !!projectData,
-        forceRefresh,
-      })
 
       if (!projectData) {
         // Fetch all project data from view in ONE query
@@ -615,14 +556,6 @@ export function LoadingModal({
         }
 
         projectData = fetchedData
-
-        console.log("[LoadingModal] Project data fetched and cached", {
-          timestamp: new Date().toISOString(),
-          projectId: node.projectId,
-          rowCount: projectData?.length,
-          viewMode,
-          filteredByDepartment: viewMode === "my" && userDepartmentId,
-        })
 
         // Cache the filtered result
         setProjectDataCache((prev) => new Map(prev).set(node.projectId!, projectData!))
@@ -725,14 +658,6 @@ export function LoadingModal({
 
   // Switch to "All Projects" mode when stage not found in "My Projects"
   const switchToAllProjects = useCallback((targetStageId: string, projectId: string) => {
-    console.log("[LoadingModal] switchToAllProjects called", {
-      timestamp: new Date().toISOString(),
-      targetStageId,
-      projectId,
-      currentViewMode: viewMode,
-      hasLoadedTreeRef: hasLoadedTreeRef.current,
-    })
-
     // Очищаем кэш для конкретного проекта перед переключением
     setProjectDataCache((prev) => {
       const next = new Map(prev)
@@ -745,11 +670,6 @@ export function LoadingModal({
 
     // Переключаем режим (это триггернет useEffect для перезагрузки)
     setViewMode("all")
-
-    console.log("[LoadingModal] setViewMode called from switchToAllProjects", {
-      timestamp: new Date().toISOString(),
-      newViewMode: "all",
-    })
 
     // Показываем уведомление
     setNotification("Этап не найден в ваших проектах. Переключение на 'Все проекты'...")
@@ -1055,14 +975,6 @@ export function LoadingModal({
 
   // Load tree and employees on mount
   useEffect(() => {
-    console.log("[LoadingModal] Initial load effect executed", {
-      timestamp: new Date().toISOString(),
-      hasLoadedTreeRef: hasLoadedTreeRef.current,
-      isOpen,
-      mode,
-      willBuildTree: !hasLoadedTreeRef.current && isOpen,
-    })
-
     if (!hasLoadedTreeRef.current && isOpen) {
       buildFileTree()
       fetchEmployees()
@@ -1078,23 +990,11 @@ export function LoadingModal({
 
   // Clear cache and reload when view mode changes
   useEffect(() => {
-    console.log("[LoadingModal] viewMode change effect triggered", {
-      timestamp: new Date().toISOString(),
-      newViewMode: viewMode,
-      hasLoadedTreeRef: hasLoadedTreeRef.current,
-      willRebuildTree: hasLoadedTreeRef.current,
-    })
-
     if (hasLoadedTreeRef.current) {
       // Clear all cached data to force reload with new filter
       setProjectDataCache(new Map())
       // Collapse all expanded folders
       setExpandedFolders(new Set())
-
-      console.log("[LoadingModal] Cache cleared, about to call buildFileTree", {
-        timestamp: new Date().toISOString(),
-        viewMode,
-      })
 
       // Reload project list with new filter
       buildFileTree()
@@ -1154,14 +1054,6 @@ export function LoadingModal({
 
   // Handle pending stage selection after viewMode switch
   useEffect(() => {
-    console.log("[LoadingModal] pendingStageSelection effect executed", {
-      timestamp: new Date().toISOString(),
-      hasPending: !!pendingStageSelection,
-      pendingData: pendingStageSelection,
-      treeDataLength: treeData.length,
-      viewMode,
-    })
-
     if (!pendingStageSelection || treeData.length === 0) {
       return
     }
@@ -1286,29 +1178,11 @@ export function LoadingModal({
 
     // Reset originalValuesRef when modal closes (for both modes)
     if (!isOpen) {
-      console.log("[LoadingModal] Modal closing, cleaning up state", {
-        timestamp: new Date().toISOString(),
-        isOpen: false,
-        hasLoadedTreeRef: hasLoadedTreeRef.current,
-        mode,
-        viewMode,
-        treeDataLength: treeData.length,
-        queueLength: pendingBuildQueue.length,
-      })
-
       // Очистить старое дерево и сбросить состояние
       setTreeData([])
       setViewMode("my")
       setPendingBuildQueue([])
       hasLoadedTreeRef.current = false
-
-      console.log("[LoadingModal] Modal closing: state cleared", {
-        timestamp: new Date().toISOString(),
-        hasLoadedTreeRef: false,
-        viewMode: "my",
-        treeData: "cleared",
-        queue: "cleared",
-      })
 
       originalValuesRef.current = {
         startDate: "",
