@@ -48,6 +48,7 @@ export interface DepartmentStats {
     last_name: string
   }>
   total_loadings_count: number
+  absence_count: number
 }
 
 /**
@@ -64,7 +65,7 @@ export async function fetchDepartmentProjects(): Promise<DepartmentProjectData[]
         span.setAttribute("table", "view_planning_analytics_departments_projects")
 
         const { data, error } = await supabase
-          .from("view_planning_analytics_departments_projects")
+          .from("view_planning_analytics_departments_projects_2")
           .select("*")
           .order("department_id")
           .order("rank")
@@ -164,7 +165,7 @@ export async function fetchDepartmentStats(): Promise<DepartmentStats[]> {
         span.setAttribute("table", "view_planning_analytics_departments")
 
         const { data, error } = await supabase
-          .from("view_planning_analytics_departments")
+          .from("view_planning_analytics_departments_2")
           .select("*")
           .order("avg_department_loading", { ascending: false })
 
@@ -272,6 +273,8 @@ export function aggregateDepartmentStats(
     }
   })
 
+  const absenceCount = filteredStats.reduce((sum, stat) => sum + (stat.absence_count || 0), 0)
+
   return {
     users_with_loading_count: usersWithLoading,
     total_users_count: totalUsers,
@@ -284,7 +287,8 @@ export function aggregateDepartmentStats(
       ? Number((totalLoadingRate / totalUsers).toFixed(2))
       : 0,
     total_loading_rate: totalLoadingRate,
-    total_loadings_count: totalLoadingsCount
+    total_loadings_count: totalLoadingsCount,
+    absence_count: absenceCount
   }
 }
 
