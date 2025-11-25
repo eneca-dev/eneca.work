@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import * as Sentry from '@sentry/nextjs'
+import { useTheme } from 'next-themes'
 import { useUserStore } from '@/stores/useUserStore'
 import { ChevronDown, ChevronRight, User, FolderOpen, Building, Package, PlusCircle, Edit, Trash2, Expand, Minimize, List, Search, Calendar, Loader2, AlertTriangle, Settings, Filter, Users, SquareStack, Star, LayoutDashboard } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -895,6 +896,7 @@ export function ProjectsTree({
     groupByClient,
     toggleGroupByClient
   } = useProjectsStore()
+  const { theme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showOnlySections, setShowOnlySections] = useState(false)
@@ -980,7 +982,7 @@ export function ProjectsTree({
     const handleCreated = async (e: any) => {
       // После создания сразу перезагружаем дерево и фокусируемся на созданном узле
       const prevExpanded = new Set(expandedNodes)
-      await loadTreeData()
+      await loadTreeData(true) // true = обновление (плавная анимация вместо спиннера)
       try {
         const detail = e?.detail
         if (!detail?.id) return
@@ -1912,24 +1914,40 @@ export function ProjectsTree({
         return
       }
 
-      // Оптимистично обновим локально
+      // Оптимистично обновим локально + пересортировка для поднятия избранных вверх
       setTreeData(prev => {
+        // Обновляем флаг isFavorite
         const update = (nodes: ProjectNode[]): ProjectNode[] => nodes.map(n => {
           if (n.type === 'project' && n.id === project.id) {
             return { ...n, isFavorite: !n.isFavorite }
           }
-          return { ...n, children: n.children ? update(n.children) : n.children }
+          // Рекурсивно обновляем детей
+          if (n.children && n.children.length > 0) {
+            return { ...n, children: update(n.children) }
+          }
+          return n
         })
-        // Легкая пересортировка после переключения
-        const sortNodes = (nodes2: ProjectNode[]): ProjectNode[] => nodes2
-          .sort((a, b) => {
-            const aFav = a.type === 'project' && a.isFavorite ? 1 : 0
-            const bFav = b.type === 'project' && b.isFavorite ? 1 : 0
-            if (aFav !== bFav) return bFav - aFav
-            return a.name.localeCompare(b.name, 'ru', { numeric: true })
-          })
-          .map(n => ({ ...n, children: n.children ? sortNodes(n.children) : n.children }))
-        return sortNodes(update(prev))
+
+        // Сортировка: избранные проекты вверх, НЕ трогая вложенную иерархию
+        const sortProjects = (nodes: ProjectNode[]): ProjectNode[] => {
+          // Проверяем, есть ли на этом уровне проекты
+          const hasProjects = nodes.some(n => n.type === 'project')
+
+          if (hasProjects) {
+            // Сортируем только уровень с проектами (используем slice для создания копии)
+            return nodes.slice().sort((a, b) => {
+              const aFav = a.type === 'project' && a.isFavorite ? 1 : 0
+              const bFav = b.type === 'project' && b.isFavorite ? 1 : 0
+              if (aFav !== bFav) return bFav - aFav
+              return a.name.localeCompare(b.name, 'ru', { numeric: true })
+            })
+          }
+
+          // Для остальных уровней (stages, objects, sections) возвращаем как есть
+          return nodes
+        }
+
+        return sortProjects(update(prev))
       })
 
       if (project.isFavorite) {
@@ -1952,7 +1970,7 @@ export function ProjectsTree({
     } catch (e) {
       console.error('Ошибка переключения избранного проекта:', e)
       // В случае ошибки — перезагрузим данные из БД, чтобы не зависнуть в неверном состоянии
-      await loadTreeData()
+      await loadTreeData(true)
     }
   }
 
@@ -2391,7 +2409,10 @@ export function ProjectsTree({
         <AssignResponsibleModal
           section={selectedSection}
           setShowAssignModal={setShowAssignModal}
-          theme="light" // Можно сделать динамическим
+          theme={theme || "light"}
+          onSuccess={() => {
+            loadTreeData(true) // Плавная анимация обновления после назначения ответственного
+          }}
         />
       )}
 
@@ -2423,7 +2444,7 @@ export function ProjectsTree({
           onSuccess={() => {
             setShowDeleteModal(false)
             setSelectedProject(null)
-            loadTreeData() // Перезагружаем данные после удаления проекта
+            loadTreeData(true) // Плавная анимация обновления после удаления проекта
           }}
         />
       )}
@@ -2438,7 +2459,7 @@ export function ProjectsTree({
           }}
           stageId={selectedStage.id}
           onStageUpdated={() => {
-            loadTreeData() // Перезагружаем данные после обновления
+            loadTreeData(true) // Плавная анимация обновления после обновления/удаления стадии
           }}
         />
       )}
@@ -2453,7 +2474,7 @@ export function ProjectsTree({
           }}
           objectId={selectedObject.id}
           onObjectUpdated={() => {
-            loadTreeData() // Перезагружаем данные после обновления
+            loadTreeData(true) // Плавная анимация обновления после обновления/удаления объекта
           }}
         />
       )}
@@ -2484,7 +2505,7 @@ export function ProjectsTree({
           projectId={selectedProjectForStage.id}
           projectName={selectedProjectForStage.name}
           onSuccess={() => {
-            loadTreeData() // Перезагружаем данные после создания стадии
+            // Перезагрузка происходит через событие projectsTree:created из модалки
           }}
         />
       )}
@@ -2500,7 +2521,7 @@ export function ProjectsTree({
           stageId={selectedStageForObject.id}
           stageName={selectedStageForObject.name}
           onSuccess={() => {
-            loadTreeData() // Перезагружаем данные после создания объекта
+            // Перезагрузка происходит через событие projectsTree:created из модалки
           }}
         />
       )}
@@ -2517,7 +2538,7 @@ export function ProjectsTree({
           objectName={selectedObjectForSection.name}
           projectId={selectedObjectForSection.projectId}
           onSuccess={() => {
-            loadTreeData() // Перезагружаем данные после создания раздела
+            // Перезагрузка происходит через событие projectsTree:created из модалки
           }}
           statuses={statuses}
         />

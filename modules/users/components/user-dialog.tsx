@@ -15,7 +15,7 @@ import { getAllRoles, assignRoleToUser, revokeRoleFromUser, getUserRoles } from 
 import type { Role } from "@/modules/permissions/types"
 // УДАЛЕНО: import getUserRoleAndPermissions - используем новую систему permissions
 import type { User, Department, Team, Position, Category, Subdivision } from "@/types/db"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "@/hooks/use-toast"
 import { useUserStore } from "@/stores/useUserStore"
 import { createClient } from "@/utils/supabase/client"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
@@ -392,18 +392,18 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       if (user.subdivision && user.subdivision !== "") {
         const subdivisionId = subdivisions.find((s) => s.name === user.subdivision)?.id
         if (subdivisionId) {
-          const filtered = departments.filter((d) => d.subdivisionId === subdivisionId)
+          const filtered = departments.filter((d) => d.subdivisionId === subdivisionId && d.name !== "Не назначен")
           setFilteredDepartments(filtered)
         }
       } else {
-        setFilteredDepartments(departments)
+        setFilteredDepartments(departments.filter((d) => d.name !== "Не назначен"))
       }
 
       // Инициализируем filteredTeams на основе отдела пользователя
       if (user.department && user.department !== "") {
         const departmentId = departments.find((d) => d.name === user.department)?.id
         if (departmentId) {
-          const filtered = teams.filter((t) => t.departmentId === departmentId)
+          const filtered = teams.filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
           setFilteredTeams(filtered)
         }
       } else {
@@ -431,11 +431,11 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
       console.log("Найденный subdivisionId:", subdivisionId)
 
-      // Фильтруем отделы по подразделению
+      // Фильтруем отделы по подразделению, исключая "Не назначен"
       const filtered = departments.filter((d) => {
         // Проверяем есть ли у отдела поле subdivisionId
         const deptSubdivisionId = (d as any).subdivisionId
-        return deptSubdivisionId === subdivisionId
+        return deptSubdivisionId === subdivisionId && d.name !== "Не назначен"
       })
       console.log("Отфильтрованные отделы:", filtered)
       setFilteredDepartments(filtered)
@@ -452,7 +452,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       }
     } else {
       console.log("Подразделение не выбрано, показываем все отделы")
-      setFilteredDepartments(departments)
+      setFilteredDepartments(departments.filter((d) => d.name !== "Не назначен"))
     }
   }, [formData.subdivision, subdivisions, departments])
 
@@ -463,12 +463,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
     console.log("formData.team:", formData.team)
     console.log("departments:", departments)
     console.log("teams:", teams)
-    
+
     if (formData.department && formData.department !== "") {
       const departmentId = departments.find((d) => d.name === formData.department)?.id
       console.log("Найденный departmentId:", departmentId)
-      
-      const filtered = teams.filter((t) => t.departmentId === departmentId)
+
+      const filtered = teams
+        .filter((t) => t.departmentId === departmentId && t.name !== "Не назначен")
       console.log("Отфильтрованные команды:", filtered)
       setFilteredTeams(filtered)
 
@@ -476,7 +477,7 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       if (formData.team && formData.team !== "") {
         const teamExists = filtered.some((t) => t.name === formData.team)
         console.log("Команда найдена по имени:", teamExists)
-        
+
         if (!teamExists) {
           console.log("Сбрасываем команду, так как она не принадлежит отделу")
           setFormData((prev) => ({ ...prev, team: "" }))
@@ -662,6 +663,17 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
 
         // Добавляем команду если пользователь может её редактировать
         if (canEditTeamField) {
+          // Валидация обязательности команды
+          if (!formData.team || formData.team === "") {
+            toast({
+              title: "Ошибка валидации",
+              description: "Команда обязательна для заполнения",
+              variant: "destructive"
+            })
+            setIsLoading(false)
+            return
+          }
+
           // Если пользователь не может редактировать отдел (department_head или team_lead),
           // нужна валидация, что команда принадлежит отделу пользователя
           if (!canEditDepartmentField && formData.team && formData.team !== "") {
@@ -921,9 +933,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                   <SelectValue placeholder="Выберите подразделение" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="no-subdivision" className="text-purple-600">
-                    Без подразделения
-                  </SelectItem>
                   {subdivisions && subdivisions.length > 0 ? subdivisions.map((subdivision) => (
                     <SelectItem key={subdivision.id} value={subdivision.name}>
                       {subdivision.name}
@@ -951,12 +960,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     <SelectValue placeholder="Выберите отдел" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="no-department" className="text-orange-600">
-                      <span className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        Без отдела
-                      </span>
-                    </SelectItem>
                     {filteredDepartments && filteredDepartments.length > 0 ? filteredDepartments.map((department) => (
                       <SelectItem key={department.id} value={department.name}>
                         <span className="flex items-center gap-2">
@@ -979,12 +982,6 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
                     <SelectValue placeholder={formData.department ? "Выберите команду" : "Сначала выберите отдел"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="no-team" className="text-blue-600">
-                      <span className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Без команды
-                      </span>
-                    </SelectItem>
                     {filteredTeams && filteredTeams.length > 0 ? filteredTeams.map((team) => (
                       <SelectItem key={team.id} value={team.name}>
                         <span className="flex items-center gap-2">

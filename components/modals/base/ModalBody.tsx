@@ -9,14 +9,15 @@ export function ModalBody({
   padding = true
 }: ModalBodyProps) {
   return (
-    <div 
+    <div
       className={`
         flex-1 overflow-y-auto
+        bg-transparent
         ${padding ? 'px-6 py-5' : ''}
         ${className}
       `}
     >
-      <div className="space-y-4">
+      <div className="space-y-4 bg-transparent">
         {children}
       </div>
     </div>
