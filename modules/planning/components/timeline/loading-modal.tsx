@@ -676,25 +676,6 @@ export function LoadingModal({
     setTimeout(() => clearNotification(), 3000)
   }, [viewMode, setNotification, clearNotification])
 
-  // Switch to "All Projects" mode when stage not found in "My Projects"
-  const switchToAllProjects = useCallback((targetStageId: string, projectId: string) => {
-    // Очищаем кэш для конкретного проекта перед переключением
-    setProjectDataCache((prev) => {
-      const next = new Map(prev)
-      next.delete(projectId)
-      return next
-    })
-
-    // Сохраняем информацию о том, что нужно выбрать после переключения
-    setPendingStageSelection({ stageId: targetStageId, projectId })
-
-    // Переключаем режим (это триггернет useEffect для перезагрузки)
-    setViewMode("all")
-
-    // Показываем уведомление
-    setNotification("Этап не найден в ваших проектах. Переключение на 'Все проекты'...")
-    setTimeout(() => clearNotification(), 3000)
-  }, [viewMode, setNotification, clearNotification])
 
   // Helper function to find and select a decomposition stage node by ID
   const findAndSelectNode = useCallback((decompositionStageId: string, projectId?: string) => {
