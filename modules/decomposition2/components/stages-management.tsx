@@ -6,7 +6,8 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save, ChevronsDown, ChevronsUp } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -26,12 +27,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Input } from "./ui/input";
 import { DatePicker } from "./ui/date-picker";
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
+import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
+import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore";
+import { useUserStore } from "@/stores/useUserStore";
 
 // Типы данных
 type Decomposition = {
@@ -43,7 +48,7 @@ type Decomposition = {
   plannedHours: number;
   progress: number;
   status: string;
-  completionDate: string;
+  completionDate: string | null;
 };
 
 type Stage = {
@@ -234,7 +239,7 @@ function SortableStage({
       stageData += "|---|---|---|---|---|---|---|---|\n";
 
       stage.decompositions.forEach((decomp) => {
-        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.progress}% | ${decomp.status} | ${decomp.completionDate} |\n`;
+        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.progress}% | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
       });
 
       await navigator.clipboard.writeText(stageData);
@@ -268,11 +273,10 @@ function SortableStage({
         >
           <GripVertical className="h-6 w-5 text-muted-foreground" />
         </div>
-        <input
-          type="checkbox"
+        <Checkbox
           checked={selectedStages.has(stage.id)}
-          onChange={() => toggleStageSelection(stage.id)}
-          className="h-4 w-4 rounded"
+          onCheckedChange={() => toggleStageSelection(stage.id)}
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
         />
         <Button
           variant="ghost"
@@ -320,23 +324,6 @@ function SortableStage({
           />
           <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={copyStage}
-          className={`${isCollapsed ? "h-7" : "h-8"} px-3 hover:bg-primary/10 transition-all active:scale-95`}
-        >
-          <Copy className="h-4 w-4 mr-1.5" />
-          <span className={`${isCollapsed ? "hidden md:inline" : "inline"}`}>Копировать</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => { e.stopPropagation(); deleteStage(stage.id); }}
-          className={`${isCollapsed ? "h-7 w-7" : "h-8 w-8"} p-0 hover:bg-destructive/10 hover:text-destructive transition-all`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
       </div>
 
       {stage.decompositions.length > 0 && !isCollapsed && (
@@ -669,11 +656,10 @@ function SortableDecompositionRow({
         </div>
       </td>
       <td className="py-1.5 px-2">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={isChecked}
-          onChange={() => !selectionDisabled && onToggleSelection(decomposition.id)}
-          className="h-4 w-4 rounded"
+          onCheckedChange={() => !selectionDisabled && onToggleSelection(decomposition.id)}
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
           disabled={selectionDisabled}
         />
       </td>
@@ -1065,16 +1051,6 @@ function SortableDecompositionRow({
           triggerRef={completionDateTriggerRef as unknown as React.Ref<HTMLButtonElement>}
         />
       </td>
-      <td className="py-1.5 px-0.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDelete(stageId, decomposition.id)}
-          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </td>
     </tr>
   );
 }
@@ -1100,6 +1076,23 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const [actualByItemId, setActualByItemId] = useState<Record<string, number>>({});
+
+  // State для шаблонов
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+
+  // Состояния для подтверждения удаления
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
+  const [decompToDelete, setDecompToDelete] = useState<{ stageId: string; decompId: string } | null>(null);
+  const [deleteStageDialogOpen, setDeleteStageDialogOpen] = useState(false);
+  const [deleteDecompDialogOpen, setDeleteDecompDialogOpen] = useState(false);
+  const [bulkDeleteStagesDialogOpen, setBulkDeleteStagesDialogOpen] = useState(false);
+  const [bulkDeleteDecompsDialogOpen, setBulkDeleteDecompsDialogOpen] = useState(false);
+
+  // Хуки для пользователя и разрешений
+  const { id: userId } = useUserStore();
+  const hasPermission = usePermissionsStore(state => state.hasPermission);
+  const hasManagePermission = hasPermission('dec.templates.manage');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1211,7 +1204,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
             status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || new Date().toISOString().split('T')[0],
+            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -1324,9 +1317,18 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const deleteStage = async (stageId: string) => {
+  // Функция-обёртка для открытия диалога подтверждения удаления этапа
+  const deleteStage = (stageId: string) => {
+    setStageToDelete(stageId);
+    setDeleteStageDialogOpen(true);
+  };
+
+  // Функция фактического удаления этапа
+  const confirmDeleteStage = async () => {
+    if (!stageToDelete) return;
+
     try {
-      if (stageId === '__no_stage__') {
+      if (stageToDelete === '__no_stage__') {
         // Удаляем все элементы без этапа в рамках текущего раздела, самого этапа в БД нет
         const { error: noStageItemsErr } = await supabase
           .from('decomposition_items')
@@ -1339,27 +1341,27 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         const { error: itemsErr } = await supabase
           .from('decomposition_items')
           .delete()
-          .eq('decomposition_item_stage_id', stageId);
+          .eq('decomposition_item_stage_id', stageToDelete);
         if (itemsErr) throw itemsErr;
 
         const { error: stageErr } = await supabase
           .from('decomposition_stages')
           .delete()
-          .eq('decomposition_stage_id', stageId);
+          .eq('decomposition_stage_id', stageToDelete);
         if (stageErr) throw stageErr;
       }
 
       // Обновляем локальное состояние и снимаем выбор с удалённых сущностей
       const removedDecompIds = new Set<string>();
-      const nextStages = stages.filter((s) => s.id !== stageId);
-      const deletedStage = stages.find((s) => s.id === stageId);
+      const nextStages = stages.filter((s) => s.id !== stageToDelete);
+      const deletedStage = stages.find((s) => s.id === stageToDelete);
       if (deletedStage) {
         deletedStage.decompositions.forEach((d) => removedDecompIds.add(d.id));
       }
       setStages(nextStages);
       setSelectedStages((prev) => {
         const newSet = new Set(prev);
-        newSet.delete(stageId);
+        newSet.delete(stageToDelete);
         return newSet;
       });
       if (removedDecompIds.size > 0) {
@@ -1370,6 +1372,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         });
       }
       toast({ title: 'Успешно', description: 'Этап удалён' });
+      setDeleteStageDialogOpen(false);
+      setStageToDelete(null);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления этапа:', e);
@@ -1442,31 +1446,44 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const deleteDecomposition = async (stageId: string, decompId: string) => {
+  // Функция-обёртка для открытия диалога подтверждения удаления декомпозиции
+  const deleteDecomposition = (stageId: string, decompId: string) => {
+    setDecompToDelete({ stageId, decompId });
+    setDeleteDecompDialogOpen(true);
+  };
+
+  // Функция фактического удаления декомпозиции
+  const confirmDeleteDecomposition = async () => {
+    if (!decompToDelete) return;
+
     try {
       const { error } = await supabase
         .from('decomposition_items')
         .delete()
-        .eq('decomposition_item_id', decompId);
+        .eq('decomposition_item_id', decompToDelete.decompId);
       if (error) throw error;
       setStages(
         stages.map((stage) =>
-          stage.id === stageId
-            ? { ...stage, decompositions: stage.decompositions.filter((d) => d.id !== decompId) }
+          stage.id === decompToDelete.stageId
+            ? { ...stage, decompositions: stage.decompositions.filter((d) => d.id !== decompToDelete.decompId) }
             : stage
         )
       );
       setSelectedDecompositions((prev) => {
         const newSet = new Set(prev);
-        newSet.delete(decompId);
+        newSet.delete(decompToDelete.decompId);
         return newSet;
       });
-      if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompId) {
+      if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompToDelete.decompId) {
         setPendingNewDecomposition(null);
       }
+      toast({ title: 'Успешно', description: 'Строка декомпозиции удалена' });
+      setDeleteDecompDialogOpen(false);
+      setDecompToDelete(null);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления строки:', e);
+      toast({ title: 'Ошибка', description: 'Не удалось удалить строку декомпозиции', variant: 'destructive' });
     }
   };
 
@@ -1879,7 +1896,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
             status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || new Date().toISOString().split('T')[0],
+            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -1918,7 +1935,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
       stages.forEach((stage) => {
         stage.decompositions.forEach((decomp) => {
-          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.status} | ${decomp.completionDate} |\n`;
+          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
         });
       });
 
@@ -1946,7 +1963,83 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const bulkDeleteStages = async () => {
+  // Handlers для работы с шаблонами
+  const handleApplyTemplate = async (templateId: string) => {
+    try {
+      // Подготовить статусы для передачи в applyTemplate
+      const statusesForTemplate = statuses.map(s => ({ id: s.id, name: s.name }));
+      const newStages = await applyTemplate(templateId, sectionId, statusesForTemplate);
+      // Добавить новые этапы в state БЕЗ перезагрузки страницы
+      setStages([...stages, ...newStages]);
+      toast({
+        title: "Успешно",
+        description: "Шаблон успешно применен",
+      });
+    } catch (error) {
+      console.error('Ошибка применения шаблона:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось применить шаблон';
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveTemplate = async (departmentId: string, name: string) => {
+    if (!userId) {
+      toast({
+        title: "Ошибка",
+        description: "Пользователь не авторизован",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Подготовить этапы для сохранения (исключить __no_stage__)
+      const validStages = stages.filter(s => s.id !== '__no_stage__');
+
+      const templateStages: TemplateStage[] = validStages.map((stage, index) => ({
+        name: stage.name,
+        order: index,
+        items: stage.decompositions.map((decomp, itemIndex) => {
+          const categoryId = categoryNameToId.get(decomp.typeOfWork);
+          if (!categoryId) {
+            throw new Error(`Категория работы "${decomp.typeOfWork}" не найдена в справочнике`);
+          }
+          const difficultyId = difficultyNameToId.get(decomp.difficulty) || null;
+
+          return {
+            description: decomp.description,
+            workCategoryId: categoryId,
+            workCategoryName: decomp.typeOfWork,
+            difficultyId: difficultyId,
+            difficultyName: decomp.difficulty || null,
+            plannedHours: decomp.plannedHours,
+          };
+        })
+      }));
+
+      await saveTemplate(name, departmentId, templateStages, userId);
+
+      toast({
+        title: "Успешно",
+        description: "Шаблон успешно сохранен",
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения шаблона:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось сохранить шаблон';
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const confirmBulkDeleteStages = async () => {
     if (selectedStages.size === 0) {
       toast({
         title: "Ошибка",
@@ -1955,6 +2048,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       });
       return;
     }
+
+    setBulkDeleteStagesDialogOpen(false);
 
     const allIds = Array.from(selectedStages);
     const realIds = allIds.filter((id) => id !== "__no_stage__");
@@ -2005,11 +2100,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const bulkDeleteDecompositions = async () => {
+  const confirmBulkDeleteDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
       toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
       return;
     }
+
+    setBulkDeleteDecompsDialogOpen(false);
 
     const ids = Array.from(selectedDecompositions);
     const count = ids.length;
@@ -2035,6 +2132,27 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       console.error('Ошибка пакетного удаления декомпозиций:', e);
       toast({ title: "Ошибка", description: "Не удалось удалить декомпозиции", variant: "destructive" });
     }
+  };
+
+  // Функции-обертки для открытия диалогов подтверждения
+  const bulkDeleteStages = () => {
+    if (selectedStages.size === 0) {
+      toast({
+        title: "Ошибка",
+        description: "Не выбраны этапы для удаления",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBulkDeleteStagesDialogOpen(true);
+  };
+
+  const bulkDeleteDecompositions = () => {
+    if (selectedDecompositions.size === 0) {
+      toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
+      return;
+    }
+    setBulkDeleteDecompsDialogOpen(true);
   };
 
   const selectAllStages = () => {
@@ -2131,7 +2249,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         text += "| Описание | Тип работ | Сложность | Ответственный | Часы | Прогресс | Статус | Дата |\n";
         text += "|---|---|---|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
-          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.responsible} | ${d.plannedHours} | ${d.progress}% | ${d.status} | ${d.completionDate} |\n`;
+          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.responsible} | ${d.plannedHours} | ${d.progress}% | ${d.status} | ${d.completionDate || ''} |\n`;
         });
         text += "\n\n";
       });
@@ -2191,32 +2309,70 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     <div className="min-h-[60vh] bg-background dark:bg-slate-900 relative px-4 pb-4 pt-2">
       <div className="w-full">
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-foreground">Управление этапами</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold text-foreground">Управление этапами</h1>
+
+            {/* Левая группа - иконки */}
+            <div className="flex gap-1 ml-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopy}
+                className="h-8 w-8 bg-transparent"
+                title="Копировать"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowPasteDialog(true)}
+                className="h-8 w-8 bg-transparent"
+                title="Вставить"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const allCollapsed = stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id));
+                  allCollapsed ? expandAllStages() : collapseAllStages();
+                }}
+                className="h-8 w-8 bg-transparent"
+                title={stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id)) ? "Развернуть все" : "Свернуть все"}
+              >
+                {stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id))
+                  ? <ChevronsUp className="h-4 w-4" />
+                  : <ChevronsDown className="h-4 w-4" />
+                }
+              </Button>
+            </div>
+          </div>
+
+          {/* Правая группа - текстовые кнопки */}
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const allCollapsed = stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id));
-                allCollapsed ? expandAllStages() : collapseAllStages();
-              }}
-              className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90"
+              className="h-9 bg-transparent transition-transform active:scale-95"
+              onClick={() => setTemplatesDialogOpen(true)}
             >
-              {stages.length > 0 && stages.every((s) => collapsedStageIds.has(s.id)) ? "Развернуть все" : "Свернуть все"}
+              <FolderOpen className="mr-2 h-4 w-4" />
+              Применить шаблон
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowPasteDialog(true)} className="h-9 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 dark:hover:bg-muted/30 text-foreground/90">
-              <ClipboardPaste className="mr-2 h-4 w-4" />
-              Вставить
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopy}
-              className={`h-9 bg-transparent transition-transform active:scale-95`}
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Копировать
-            </Button>
+            {hasManagePermission && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 bg-transparent transition-transform active:scale-95"
+                onClick={() => setSaveDialogOpen(true)}
+                disabled={stages.length === 0 || stages.every(s => s.id === '__no_stage__')}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Сохранить как шаблон
+              </Button>
+            )}
             <Button onClick={addStage} size="sm" className="h-9">
               <Plus className="mr-2 h-4 w-4" />
               Добавить этап
@@ -2399,6 +2555,112 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Диалоги шаблонов */}
+        <TemplatesDialog
+          isOpen={templatesDialogOpen}
+          onClose={() => setTemplatesDialogOpen(false)}
+          onApply={handleApplyTemplate}
+          hasManagePermission={hasManagePermission}
+        />
+
+        <SaveTemplateDialog
+          isOpen={saveDialogOpen}
+          onClose={() => setSaveDialogOpen(false)}
+          onSave={handleSaveTemplate}
+        />
+
+        {/* Диалог подтверждения удаления этапа */}
+        <AlertDialog open={deleteStageDialogOpen} onOpenChange={setDeleteStageDialogOpen}>
+          <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить этап?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить этот этап? Все декомпозиции в этом этапе также будут удалены. Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setDeleteStageDialogOpen(false); setStageToDelete(null); }}>
+                Отмена
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteStage}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Диалог подтверждения удаления строки декомпозиции */}
+        <AlertDialog open={deleteDecompDialogOpen} onOpenChange={setDeleteDecompDialogOpen}>
+          <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить строку декомпозиции?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить эту строку декомпозиции? Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setDeleteDecompDialogOpen(false); setDecompToDelete(null); }}>
+                Отмена
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteDecomposition}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Диалог подтверждения массового удаления этапов */}
+        <AlertDialog open={bulkDeleteStagesDialogOpen} onOpenChange={setBulkDeleteStagesDialogOpen}>
+          <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить выбранные этапы?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить {selectedStages.size} {selectedStages.size === 1 ? 'этап' : 'этапов'}? Все декомпозиции в этих этапах также будут удалены. Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkDeleteStagesDialogOpen(false)}>
+                Отмена
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBulkDeleteStages}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Диалог подтверждения массового удаления декомпозиций */}
+        <AlertDialog open={bulkDeleteDecompsDialogOpen} onOpenChange={setBulkDeleteDecompsDialogOpen}>
+          <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Удалить выбранные декомпозиции?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Вы уверены, что хотите удалить {selectedDecompositions.size} {selectedDecompositions.size === 1 ? 'декомпозицию' : 'декомпозиций'}? Это действие нельзя отменить.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkDeleteDecompsDialogOpen(false)}>
+                Отмена
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBulkDeleteDecompositions}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Удалить
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
       {isInitialLoading && (
         <div className="absolute inset-0 z-50 grid place-items-center bg-background/60">

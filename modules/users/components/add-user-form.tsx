@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getDepartments, getTeams, getPositions, getCategories, getAvailableRoles } from "@/services/org-data-service"
+import { getDepartments, getTeams, getPositions, getCategories, getAvailableRoles, getSubdivisions } from "@/services/org-data-service"
 import { Country, City } from "country-state-city"
 import { createUserViaAPI } from "@/services/user-api"
-import type { Department, Team, Position, Category } from "@/types/db"
+import type { Department, Team, Position, Category, Subdivision } from "@/types/db"
 import { toast } from "sonner"
 import { useAdminPermissions } from "@/modules/users/admin/hooks/useAdminPermissions"
 import { UserPlus, AlertCircle } from "lucide-react"
@@ -21,6 +21,7 @@ interface AddUserFormData {
   email: string
   firstName: string
   lastName: string
+  subdivision: string
   department: string
   team: string
   position: string
@@ -43,6 +44,7 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     email: "",
     firstName: "",
     lastName: "",
+    subdivision: "",
     department: "",
     team: "",
     position: "",
@@ -54,8 +56,10 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     city: "",
   })
 
+  const [subdivisions, setSubdivisions] = useState<Subdivision[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([])
   const [filteredTeams, setFilteredTeams] = useState<Team[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -81,14 +85,17 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     async function loadReferenceData() {
       try {
         setIsLoading(true)
-        const [depts, allTeams, pos, cats] = await Sentry.startSpan({ name: 'Users/AddUserForm loadReferenceData', op: 'ui.load' }, async () => Promise.all([
+        const [subs, depts, allTeams, pos, cats] = await Sentry.startSpan({ name: 'Users/AddUserForm loadReferenceData', op: 'ui.load' }, async () => Promise.all([
+          getSubdivisions(),
           getDepartments(),
           getTeams(),
           getPositions(),
           getCategories(),
         ]))
 
+        setSubdivisions(subs)
         setDepartments(depts)
+        setFilteredDepartments(depts)
         setTeams(allTeams)
         setPositions(pos)
         setCategories(cats)
@@ -161,10 +168,29 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
     }
   }, [citySearch, cities])
 
+  // Фильтрация отделов по выбранному подразделению
+  useEffect(() => {
+    if (formData.subdivision && formData.subdivision !== "") {
+      const subdivisionId = subdivisions.find((s) => s.name === formData.subdivision)?.id
+      const filtered = departments.filter((d) => d.subdivisionId === subdivisionId)
+      setFilteredDepartments(filtered)
+
+      // Если выбранный отдел не принадлежит выбранному подразделению, сбрасываем его и команду
+      if (formData.department && formData.department !== "") {
+        const departmentExists = filtered.some((d) => d.name === formData.department)
+        if (!departmentExists) {
+          setFormData((prev) => ({ ...prev, department: "", team: "" }))
+        }
+      }
+    } else {
+      setFilteredDepartments(departments)
+    }
+  }, [formData.subdivision, subdivisions, departments])
+
   // Фильтрация команд по выбранному отделу
   useEffect(() => {
     if (formData.department) {
-      const departmentId = departments.find((d) => d.name === formData.department)?.id
+      const departmentId = filteredDepartments.find((d) => d.name === formData.department)?.id
       setFilteredTeams(teams.filter((t) => t.departmentId === departmentId))
 
       // Если выбранная команда не принадлежит выбранному отделу, сбрасываем её
@@ -175,16 +201,27 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
         }
       }
     } else {
-      setFilteredTeams(teams)
+      setFilteredTeams([])
     }
-  }, [formData.department, departments, teams])
+  }, [formData.department, filteredDepartments, teams])
 
   const handleChange = (field: string, value: string) => {
     if (field === 'email' || field === 'firstName' || field === 'lastName') {
       Sentry.addBreadcrumb({ category: 'ui.input', level: 'info', message: 'AddUserForm: change', data: { field } })
     }
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    
+
+    // При изменении подразделения сбрасываем отдел и команду
+    if (field === "subdivision") {
+      setFormData((prev) => ({ ...prev, [field]: value, department: "", team: "" }))
+    }
+    // При изменении отдела сбрасываем команду
+    else if (field === "department") {
+      setFormData((prev) => ({ ...prev, [field]: value, team: "" }))
+    }
+    else {
+      setFormData((prev) => ({ ...prev, [field]: value }))
+    }
+
     // Если изменяется роль, обновляем roleId (используется для назначения в user_roles)
     if (field === "role") {
       const selectedRole = roles.find(r => r.name === value)
@@ -198,6 +235,7 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
       email: "",
       firstName: "",
       lastName: "",
+      subdivision: "",
       department: "",
       team: "",
       position: "",
@@ -229,7 +267,11 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
       toast.error("Фамилия обязательна для заполнения")
       return
     }
-    
+    if (!formData.team) {
+      toast.error("Команда обязательна для заполнения")
+      return
+    }
+
     setIsLoading(true)
     
     try {
@@ -241,6 +283,7 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
         password: DEFAULT_PASSWORD,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        subdivision: formData.subdivision || undefined,
         department: formData.department || undefined,
         team: formData.team || undefined,
         position: formData.position || undefined,
@@ -378,18 +421,39 @@ function AddUserForm({ onUserAdded }: AddUserFormProps) {
             />
           </div>
 
+          {/* Подразделение */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="subdivision" className="text-right">Подразделение</Label>
+            <Select
+              value={formData.subdivision}
+              onValueChange={(value) => handleChange("subdivision", value)}
+            >
+              <SelectTrigger id="subdivision" className="col-span-3">
+                <SelectValue placeholder="Выберите подразделение" />
+              </SelectTrigger>
+              <SelectContent>
+                {subdivisions.map((subdivision) => (
+                  <SelectItem key={subdivision.id} value={subdivision.name}>
+                    {subdivision.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Отдел */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="department" className="text-right">Отдел</Label>
             <Select
               value={formData.department}
               onValueChange={(value) => handleChange("department", value)}
+              disabled={!formData.subdivision}
             >
               <SelectTrigger id="department" className="col-span-3">
-                <SelectValue placeholder="Выберите отдел" />
+                <SelectValue placeholder={formData.subdivision ? "Выберите отдел" : "Сначала выберите подразделение"} />
               </SelectTrigger>
               <SelectContent>
-                {departments.map((department) => (
+                {filteredDepartments.map((department) => (
                   <SelectItem key={department.id} value={department.name}>
                     {department.name}
                   </SelectItem>

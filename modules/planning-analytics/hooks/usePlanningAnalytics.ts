@@ -30,6 +30,7 @@ interface UsePlanningAnalyticsResult {
     avg_department_loading: number
     total_loading_rate: number
     total_loadings_count: number
+    absence_count: number
   }
 }
 

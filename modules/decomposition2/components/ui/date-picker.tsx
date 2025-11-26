@@ -3,7 +3,7 @@ import { cn } from "../../lib/utils";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 
 type DatePickerProps = {
-  value: string; // YYYY-MM-DD
+  value: string | null; // YYYY-MM-DD or null
   onChange: (value: string) => void;
   triggerClassName?: string;
   onFocus?: (e: React.FocusEvent<HTMLButtonElement>) => void;
@@ -30,7 +30,7 @@ const RU_MONTHS = [
 
 const RU_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-function parseISODate(iso: string | undefined): Date | null {
+function parseISODate(iso: string | undefined | null): Date | null {
   if (!iso) return null;
   const [y, m, d] = iso.split("-").map((v) => Number.parseInt(v, 10));
   if (!y || !m || !d) return null;
@@ -184,12 +184,12 @@ export function DatePicker({
 
   const isCurrentMonth = (d: Date) => d.getMonth() === viewMonth && d.getFullYear() === viewYear;
 
-  const formatDisplay = (iso?: string) => {
+  const formatDisplay = (iso?: string | null) => {
     const dt = parseISODate(iso ?? "");
-    const date = dt ?? new Date();
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(date.getFullYear());
+    if (!dt) return "-"; // Если дата null, показываем прочерк
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(dt.getFullYear());
     return `${dd}.${mm}.${yyyy}`;
   };
 

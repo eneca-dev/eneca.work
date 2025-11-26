@@ -5,6 +5,7 @@ export interface CreateUserData {
   password: string
   firstName: string
   lastName: string
+  subdivision?: string
   department?: string
   team?: string
   position?: string

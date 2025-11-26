@@ -6,9 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { createClient } from "@/utils/supabase/client"
 import { toast } from "sonner"
 import { Modal, ModalButton } from '@/components/modals'
-import { UserPlus, Users, X } from 'lucide-react'
+import { UserPlus, Users } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useUserStore } from "@/stores/useUserStore"
+// import { useUserStore } from "@/stores/useUserStore" // Не используется после отключения удаления из команды
 import * as Sentry from "@sentry/nextjs"
 
 interface User {
@@ -54,7 +54,7 @@ export default function AssignToTeamModal({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<"assign" | "members">("assign")
-  const currentUserId = useUserStore(state => state.id)
+  // const currentUserId = useUserStore(state => state.id) // Не используется после отключения удаления из команды
 
   // Загрузка доступных пользователей (без команды, с ролью user, из того же отдела)
   const fetchAvailableUsers = useCallback(async () => {
@@ -300,41 +300,28 @@ export default function AssignToTeamModal({
     }
   }, [selectedUser, team, fetchAvailableUsers, fetchTeamMembers, onSuccess])
 
-  const handleRemoveFromTeam = useCallback(async (user: User) => {
-    try {
-      const supabase = createClient()
-
-      // Убираем пользователя из команды
-      const { error } = await supabase
-        .from("profiles")
-        .update({ team_id: null })
-        .eq("user_id", user.user_id)
-
-      if (error) {
-        console.error("Ошибка при удалении из команды:", error)
-        Sentry.captureException(error, {
-          tags: { module: 'users', component: 'AssignToTeamModal', action: 'remove_from_team', error_type: 'db_error' },
-          extra: { team_id: team.id, user_id: user.user_id }
-        })
-        toast.error("Не удалось удалить сотрудника из команды")
-        return
-      }
-
-      toast.success(`${user.first_name} ${user.last_name} удалён(а) из команды "${team.name}"`)
-
-      // Обновляем списки
-      await fetchAvailableUsers()
-      await fetchTeamMembers()
-      onSuccess()
-    } catch (error) {
-      console.error("Ошибка при удалении из команды:", error)
-      Sentry.captureException(error, {
-        tags: { module: 'users', component: 'AssignToTeamModal', action: 'remove_from_team_unexpected', error_type: 'unexpected' },
-        extra: { team_id: team.id, user_id: user.user_id }
-      })
-      toast.error("Произошла ошибка")
-    }
-  }, [team, fetchAvailableUsers, fetchTeamMembers, onSuccess])
+  // Функция удаления из команды отключена - пользователь не может быть без команды
+  // const handleRemoveFromTeam = useCallback(async (user: User) => {
+  //   try {
+  //     const supabase = createClient()
+  //     const { error } = await supabase
+  //       .from("profiles")
+  //       .update({ team_id: null })
+  //       .eq("user_id", user.user_id)
+  //     if (error) {
+  //       console.error("Ошибка при удалении из команды:", error)
+  //       toast.error("Не удалось удалить сотрудника из команды")
+  //       return
+  //     }
+  //     toast.success(`${user.first_name} ${user.last_name} удалён(а) из команды "${team.name}"`)
+  //     await fetchAvailableUsers()
+  //     await fetchTeamMembers()
+  //     onSuccess()
+  //   } catch (error) {
+  //     console.error("Ошибка при удалении из команды:", error)
+  //     toast.error("Произошла ошибка")
+  //   }
+  // }, [team, fetchAvailableUsers, fetchTeamMembers, onSuccess])
 
   const getUserFullName = (user: User) => {
     return `${user.first_name || ""} ${user.last_name || ""}`.trim()
@@ -454,10 +441,8 @@ export default function AssignToTeamModal({
               ) : (
                 <div className="p-2">
                   {filteredTeamMembers.map((user) => {
-                    // Проверяем, является ли пользователь тимлидом команды или текущим пользователем
+                    // Проверяем, является ли пользователь тимлидом команды
                     const isTeamLead = team.team_lead_id === user.user_id
-                    const isCurrentUser = currentUserId === user.user_id
-                    const canRemove = !isTeamLead && !isCurrentUser
 
                     return (
                       <div
@@ -484,16 +469,7 @@ export default function AssignToTeamModal({
                             </div>
                           )}
                         </div>
-                        {canRemove && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveFromTeam(user)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
+                        {/* Кнопка удаления из команды убрана - пользователь не может быть без команды */}
                       </div>
                     )
                   })}

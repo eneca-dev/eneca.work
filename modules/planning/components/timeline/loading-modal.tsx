@@ -387,7 +387,7 @@ export function LoadingModal({
           span.setAttribute("db.success", false)
           span.setAttribute("db.error", error instanceof Error ? error.message : "Unknown error")
 
-          console.error("[LoadingModal] Ошибка при загрузке проектов:", error)
+          console.warn("[LoadingModal] Ошибка при загрузке проектов:", error)
 
           Sentry.captureException(error, {
             tags: {
@@ -655,6 +655,26 @@ export function LoadingModal({
       return next
     })
   }, [])
+
+  // Switch to "All Projects" mode when stage not found in "My Projects"
+  const switchToAllProjects = useCallback((targetStageId: string, projectId: string) => {
+    // Очищаем кэш для конкретного проекта перед переключением
+    setProjectDataCache((prev) => {
+      const next = new Map(prev)
+      next.delete(projectId)
+      return next
+    })
+
+    // Сохраняем информацию о том, что нужно выбрать после переключения
+    setPendingStageSelection({ stageId: targetStageId, projectId })
+
+    // Переключаем режим (это триггернет useEffect для перезагрузки)
+    setViewMode("all")
+
+    // Показываем уведомление
+    setNotification("Этап не найден в ваших проектах. Переключение на 'Все проекты'...")
+    setTimeout(() => clearNotification(), 3000)
+  }, [viewMode, setNotification, clearNotification])
 
   // Switch to "All Projects" mode when stage not found in "My Projects"
   const switchToAllProjects = useCallback((targetStageId: string, projectId: string) => {
@@ -1274,6 +1294,7 @@ export function LoadingModal({
   // Toggle folder expansion
   const toggleFolder = async (folderId: string) => {
     const isExpanding = !expandedFolders.has(folderId)
+    console.log(`[LoadingModal] 📁 toggleFolder(): ${isExpanding ? 'Раскрытие' : 'Сворачивание'} папки ${folderId}`)
 
     setExpandedFolders((prev) => {
       const newSet = new Set(prev)

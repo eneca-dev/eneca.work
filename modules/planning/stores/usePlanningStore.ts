@@ -1,7 +1,8 @@
-import { create } from "zustand" 
+import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import * as Sentry from "@sentry/nextjs"
 import type { Section, Loading, Department, Team, Employee, ProjectSummary } from "../types"
+import type { CalendarEvent } from "@/modules/calendar/types"
 // Обновляем импорты, добавляя новые функции
 import {
   fetchLoadings,
@@ -117,6 +118,10 @@ interface PlanningState {
     }>
   }
 
+  // Глобальные события календаря (для рабочих/нерабочих дней)
+  globalCalendarEvents: CalendarEvent[]
+  isLoadingGlobalEvents: boolean
+
   // Действия
   fetchProjectSummaries: () => Promise<void>
   ensureProjectSectionsLoaded: (projectId: string) => Promise<void>
@@ -188,6 +193,9 @@ interface PlanningState {
   // Методы для работы с отпусками
   loadVacations: (forceReload?: boolean) => Promise<void>
   clearVacationsCache: () => void
+
+  // Методы для работы с глобальными событиями календаря
+  loadGlobalCalendarEvents: () => Promise<void>
 
   // Функции синхронизации
   generateFiltersKey: (filters: {
@@ -301,6 +309,10 @@ export const usePlanningStore = create<PlanningState>()(
           data: {},
           metadata: {},
         },
+
+        // Начальное состояние глобальных событий календаря
+        globalCalendarEvents: [],
+        isLoadingGlobalEvents: false,
 
         // Состояние синхронизации фильтров и данных
         syncState: {
@@ -2548,6 +2560,59 @@ export const usePlanningStore = create<PlanningState>()(
               metadata: {},
             },
           })
+        },
+
+        // Загрузка глобальных событий календаря
+        loadGlobalCalendarEvents: async () => {
+          return Sentry.startSpan(
+            {
+              op: "planning.load_global_calendar_events",
+              name: "Load Global Calendar Events",
+            },
+            async (span) => {
+              try {
+                set({ isLoadingGlobalEvents: true })
+
+                // Загружаем только глобальные события
+                const { data, error } = await supabase
+                  .from('calendar_events')
+                  .select('*')
+                  .eq('calendar_event_is_global', true)
+                  .order('calendar_event_date_start', { ascending: true })
+
+                if (error) {
+                  span.setAttribute("load.success", false)
+                  span.setAttribute("load.error", error.message)
+                  Sentry.captureException(error, {
+                    tags: {
+                      module: 'planning',
+                      action: 'load_global_calendar_events',
+                      error_type: 'db_error'
+                    },
+                    extra: {
+                      timestamp: new Date().toISOString()
+                    }
+                  })
+                  throw error
+                }
+
+                span.setAttribute("load.success", true)
+                span.setAttribute("events.count", data?.length || 0)
+
+                console.log("✅ Загружено глобальных событий:", data?.length || 0)
+
+                set({ globalCalendarEvents: data || [] })
+              } catch (error) {
+                span.setAttribute("load.success", false)
+                span.recordException(error as Error)
+                console.error("❌ Ошибка загрузки глобальных событий:", error)
+                // Не бросаем ошибку дальше, чтобы не ломать UI
+                set({ globalCalendarEvents: [] })
+              } finally {
+                set({ isLoadingGlobalEvents: false })
+              }
+            }
+          )
         },
 
         // Функции синхронизации с поддержкой AbortController

@@ -56,12 +56,97 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           )
         }
-        
-        // 1. Создаем пользователя в auth.users
+
+        // 1. Найдем ID для связанных сущностей ПЕРЕД созданием пользователя
+        // чтобы передать их в user_metadata для триггера
+        let subdivisionId: string | null = null
+        let departmentId: string | null = null
+        let teamId: string | null = null
+        let positionId: string | null = null
+        let categoryId: string | null = null
+
+        if (userData.subdivision) {
+          const subdivision = await supabase
+            .from("subdivisions")
+            .select("subdivision_id")
+            .eq("subdivision_name", userData.subdivision)
+            .single()
+
+          if (subdivision.data) {
+            subdivisionId = subdivision.data.subdivision_id
+          }
+        }
+
+        if (userData.department) {
+          // Ищем отдел, учитывая подразделение если оно указано
+          let departmentQuery = supabase
+            .from("departments")
+            .select("department_id")
+            .eq("department_name", userData.department)
+
+          // Если указано подразделение, фильтруем отделы по нему
+          if (subdivisionId) {
+            departmentQuery = departmentQuery.eq("subdivision_id", subdivisionId)
+          }
+
+          const department = await departmentQuery.single()
+
+          if (department.data) {
+            departmentId = department.data.department_id
+          } else if (department.error) {
+            console.warn(`Отдел "${userData.department}" не найден для подразделения "${userData.subdivision}"`)
+          }
+        }
+
+        if (userData.team) {
+          teamId = userData.team
+        }
+
+        if (userData.position) {
+          const position = await supabase
+            .from("positions")
+            .select("position_id")
+            .eq("position_name", userData.position)
+            .single()
+
+          if (position.data) {
+            positionId = position.data.position_id
+          }
+        }
+
+        if (userData.category) {
+          const category = await supabase
+            .from("categories")
+            .select("category_id")
+            .eq("category_name", userData.category)
+            .single()
+
+          if (category.data) {
+            categoryId = category.data.category_id
+          }
+        }
+
+        console.log("Найденные ID перед созданием пользователя:", {
+          subdivisionId,
+          departmentId,
+          teamId,
+          positionId,
+          categoryId
+        })
+
+        // 2. Создаем пользователя в auth.users
+        // Передаем данные в user_metadata, чтобы триггер мог их прочитать и создать профиль с правильными значениями
         const { data: authData, error: createAuthError } = await adminClient.auth.admin.createUser({
           email: userData.email,
           password: userData.password,
-          email_confirm: true
+          email_confirm: true,
+          user_metadata: {
+            subdivision_id: subdivisionId,
+            department_id: departmentId,
+            team_id: teamId,
+            position_id: positionId,
+            category_id: categoryId
+          }
         })
 
         if (createAuthError || !authData.user) {
@@ -77,7 +162,7 @@ export async function POST(request: NextRequest) {
         span.setAttribute("new_user.id", authData.user.id)
         console.log("Пользователь создан в auth.users:", authData.user.id)
 
-        // 2. Подготавливаем данные для профиля
+        // 3. Подготавливаем данные для профиля
         const profileData: any = {
           user_id: authData.user.id,
           first_name: userData.firstName,
@@ -87,6 +172,11 @@ export async function POST(request: NextRequest) {
           employment_rate: 1,
           salary: 0,
           is_hourly: true,
+          subdivision_id: subdivisionId,
+          department_id: departmentId,
+          team_id: teamId,
+          position_id: positionId,
+          category_id: categoryId
         }
 
         // Обработка страны/города
@@ -94,7 +184,7 @@ export async function POST(request: NextRequest) {
           try {
             // Подготавливаем заголовки для внутреннего API вызова
             const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-            
+
             // Захватываем cookie из входящего запроса для передачи аутентификации
             const incomingCookie = request.headers.get('cookie')
             if (incomingCookie) {
@@ -119,47 +209,6 @@ export async function POST(request: NextRequest) {
             }
           } catch (error) {
             console.error('Ошибка вызова /api/geo/upsert:', error)
-          }
-        }
-
-        // 3. Найдем ID для связанных сущностей, используя обычный клиент
-        if (userData.department) {
-          const department = await supabase
-            .from("departments")
-            .select("department_id")
-            .eq("department_name", userData.department)
-            .single()
-          
-          if (department.data) {
-            profileData.department_id = department.data.department_id
-          }
-        }
-
-        if (userData.team) {
-          profileData.team_id = userData.team
-        }
-
-        if (userData.position) {
-          const position = await supabase
-            .from("positions")
-            .select("position_id")
-            .eq("position_name", userData.position)
-            .single()
-          
-          if (position.data) {
-            profileData.position_id = position.data.position_id
-          }
-        }
-
-        if (userData.category) {
-          const category = await supabase
-            .from("categories")
-            .select("category_id")
-            .eq("category_name", userData.category)
-            .single()
-          
-          if (category.data) {
-            profileData.category_id = category.data.category_id
           }
         }
 

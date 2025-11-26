@@ -11,6 +11,7 @@ interface AnalyticsStatsData {
   avg_department_loading: number
   total_loading_rate: number
   total_loadings_count: number
+  absence_count: number
   analytics_date?: string
 }
 
@@ -22,8 +23,8 @@ interface AnalyticsStatsProps {
 export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => (
           <Card key={i} className="rounded-sm dark:bg-[rgb(15_23_42)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -40,7 +41,7 @@ export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       {/* Пользователи с загрузкой */}
       <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
         <CardHeader className="pb-2">
@@ -88,6 +89,23 @@ export function AnalyticsStats({ stats, isLoading }: AnalyticsStatsProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {stats.analytics_date ? new Date(stats.analytics_date).toLocaleDateString('ru-RU') : new Date().toLocaleDateString('ru-RU')}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Отпуск/Больничный/Отгул */}
+      <Card className="rounded-sm dark:bg-[rgb(15_23_42)]">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Отпуск
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold text-foreground dark:text-white">
+            {stats.absence_count}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            человек сегодня
           </p>
         </CardContent>
       </Card>
