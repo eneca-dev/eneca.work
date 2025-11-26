@@ -140,6 +140,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
     canViewRateDepartment,
     canViewRateSubdivision,
     canViewRateAll,
+    isAdmin, // Добавляем проверку на администратора
   } = useUserPermissions()
 
   const viewerDeptId = profile?.departmentId || profile?.department_id || null
@@ -385,8 +386,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
           roles: urlRoles,
           workLocations: urlLocs,
         })
-      } else if (currentUserSubdivision) {
-        // 2) Если в URL нет — всегда устанавливаем фильтр по подразделению текущего пользователя
+      } else if (currentUserSubdivision && !isAdmin) {
+        // 2) Если в URL нет И пользователь НЕ админ — устанавливаем фильтр по подразделению текущего пользователя
+        // Админ видит всех пользователей без автоматической фильтрации
         // (игнорируем localStorage для приоритетной фильтрации)
         setFilters({
           subdivisions: [currentUserSubdivision],
@@ -403,9 +405,9 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
       console.warn('Не удалось восстановить состояние списка пользователей:', e)
       Sentry.captureException(e, { tags: { module: 'users', component: 'UsersList', action: 'restore_state', error_type: 'unexpected' } })
     }
-    // Выполняем только на монтировании
+    // Выполняем при монтировании и при изменении прав администратора
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isAdmin])
 
   // Сохранение состояния в URL и localStorage при изменениях
   useEffect(() => {
@@ -472,9 +474,18 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
 
   // Функция сброса всех фильтров
   const handleResetFilters = useCallback(() => {
-    // Сбрасываем все фильтры
+    // Получаем подразделение текущего пользователя для не-админов
+    const currentUser = users.find(u => u.id === viewerId)
+    const currentUserSubdivision = currentUser?.subdivision
+
+    // Для не-админов сохраняем фильтр по подразделению
+    const subdivisionsFilter = (!isAdmin && currentUserSubdivision)
+      ? [currentUserSubdivision]
+      : []
+
+    // Сбрасываем все фильтры (кроме подразделения для не-админов)
     setFilters({
-      subdivisions: [],
+      subdivisions: subdivisionsFilter,
       departments: [],
       teams: [],
       categories: [],
@@ -494,7 +505,7 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
 
     // Сбрасываем основной поиск
     setSearchTerm("")
-  }, [])
+  }, [isAdmin, users, viewerId])
 
   // Проверяем есть ли активные фильтры
   const hasActiveFilters = useMemo(() => {
@@ -569,25 +580,32 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                          {[...new Set(users.map(u => u.subdivision).filter((s): s is string => Boolean(s)))]
                            .sort()
                            .filter(subdiv => subdiv.toLowerCase().includes(searchSubdivisionDropdown.toLowerCase()))
-                           .map(subdiv => (
+                           .map(subdiv => {
+                             // Для не-админов блокируем изменение фильтра подразделения
+                             const isDisabled = !isAdmin
+                             return (
                            <div key={subdiv} className="flex items-center space-x-2">
                              <input
                                type="checkbox"
                                id={`subdiv-${subdiv}`}
                                checked={filters.subdivisions.includes(subdiv)}
+                               disabled={isDisabled}
                                onChange={(e) => {
-                                 const newSubdivs = e.target.checked
-                                   ? [...filters.subdivisions, subdiv]
-                                   : filters.subdivisions.filter(s => s !== subdiv)
-                                 setFilters({...filters, subdivisions: newSubdivs})
+                                 if (isAdmin) {
+                                   const newSubdivs = e.target.checked
+                                     ? [...filters.subdivisions, subdiv]
+                                     : filters.subdivisions.filter(s => s !== subdiv)
+                                   setFilters({...filters, subdivisions: newSubdivs})
+                                 }
                                }}
                                className="rounded"
                              />
-                             <label htmlFor={`subdiv-${subdiv}`} className="text-xs cursor-pointer">
+                             <label htmlFor={`subdiv-${subdiv}`} className={`text-xs ${isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
                                {subdiv}
                              </label>
                            </div>
-                         ))}
+                             )
+                           })}
                        </div>
                      </div>
                    </DropdownMenuContent>
@@ -611,15 +629,18 @@ function UsersList({ users, onUserUpdated, onRefresh, isRefreshing = false }: Us
                    : `${filters.subdivisions[0]} +${filters.subdivisions.length - 1}`
                  }
                </span>
-               <button
-                 onClick={(e) => {
-                   e.stopPropagation()
-                   setFilters({...filters, subdivisions: []})
-                 }}
-                 className="ml-1 hover:bg-slate-300/50 dark:hover:bg-slate-500/50 rounded-full p-0.5 transition-colors"
-               >
-                 <X className="h-3 w-3" />
-               </button>
+               {/* Показываем кнопку удаления только для администраторов */}
+               {isAdmin && (
+                 <button
+                   onClick={(e) => {
+                     e.stopPropagation()
+                     setFilters({...filters, subdivisions: []})
+                   }}
+                   className="ml-1 hover:bg-slate-300/50 dark:hover:bg-slate-500/50 rounded-full p-0.5 transition-colors"
+                 >
+                   <X className="h-3 w-3" />
+                 </button>
+               )}
              </Badge>
            )}
 
