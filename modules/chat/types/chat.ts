@@ -45,6 +45,8 @@ export interface UserContext {
 
 export type ChatEnv = 'dev' | 'prod'
 
+export type ChatAgentType = 'n8n' | 'python'
+
 export interface ChatRequest {
   message: string
   userId?: string

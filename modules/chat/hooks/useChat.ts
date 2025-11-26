@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { ChatMessage, ChatEnv } from '../types/chat'
+import { ChatMessage, ChatEnv, ChatAgentType } from '../types/chat'
 import { sendChatMessage } from '../api/chat'
-import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
+import { getHistory, saveMessage, clearHistory, saveAgentType, getAgentType } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
 import { useSidebarState } from '@/hooks/useSidebarState'
 import { createClient } from '@/utils/supabase/client'
@@ -30,6 +30,8 @@ export function useChat() {
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null)
   // env удалён — всегда используем прод вебхук через серверный gateway
+  // Выбор агента: N8N или Python
+  const [agentType, setAgentTypeState] = useState<ChatAgentType>(() => getAgentType())
 
   const userStore = useUserStore()
   const userId = userStore.id
@@ -296,7 +298,7 @@ export function useChat() {
       const response = await sendChatMessage({
         message: content,
         conversationId: ensuredConvId || conversationId || undefined,
-      })
+      }, agentType)
       setLastLatencyMs(Date.now() - startedAt)
 
       const botMessage: ChatMessage = {
@@ -311,14 +313,6 @@ export function useChat() {
       saveMessage(botMessage, userId)
       // Дедупликация: если последнее локальное сообщение совпадает, заменяем вместо добавления
       setMessages(prev => replaceLastIfDuplicateElseAppend(prev, botMessage))
-<<<<<<< Updated upstream
-      // После успешного HTTP-ответа продолжаем ждать финального события из realtime
-      // НЕ сбрасываем isLoading/isLoadingRef - они будут сброшены при получении 'observation' или 'message'
-      setIsTyping(true)
-      awaitingFinalRef.current = true
-      startTypingSafetyTimer()
-      console.debug('[useChat] HTTP-ответ получен, ожидаем финальное событие от n8n')
-=======
 
       // Для Python агента сразу завершаем, для N8N ждем realtime события
       if (agentType === 'python') {
@@ -336,7 +330,6 @@ export function useChat() {
         startTypingSafetyTimer()
         console.debug('[useChat] N8N: HTTP-ответ получен, ожидаем финальное событие от n8n')
       }
->>>>>>> Stashed changes
     } catch (error) {
       console.error('Chat error:', error)
       if (error instanceof Error) {
@@ -376,11 +369,11 @@ export function useChat() {
       clearTypingSafetyTimer()
     }
     // НЕ используем finally - isLoading сбросится только при получении финального события или ошибке
-  }, [userId, conversationId, ensureConversation])
+  }, [userId, conversationId, ensureConversation, agentType])
 
   const clearMessages = useCallback(() => {
     if (!userId) return
-    
+
     // Очищаем и кеш, и состояние с userId
     clearHistory(userId)
     setMessages([])
@@ -392,6 +385,12 @@ export function useChat() {
     awaitingFinalRef.current = false
     clearTypingSafetyTimer()
   }, [userId, clearTypingSafetyTimer])
+
+  const switchAgent = useCallback((newAgentType: ChatAgentType) => {
+    setAgentTypeState(newAgentType)
+    saveAgentType(newAgentType)
+    console.debug(`[useChat] Переключен агент: ${newAgentType}`)
+  }, [])
 
   return {
     messages,
@@ -412,6 +411,8 @@ export function useChat() {
     conversationId,
     setConversationId,
     startConversation: ensureConversation,
+    agentType,
+    switchAgent,
     debug: {
       isSubscribed,
       lastEventAt,
