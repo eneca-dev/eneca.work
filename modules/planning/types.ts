@@ -218,3 +218,13 @@ export interface ProjectSummary {
   // Суммарная вовлеченность
   engagedEmployeesTotal: number
 }
+
+// Единица таймлайна (день на временной шкале)
+export interface TimelineUnit {
+  date: Date
+  label: string
+  isWeekend?: boolean
+  isWorkingDay?: boolean
+  width?: number
+  left?: number
+}

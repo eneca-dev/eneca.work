@@ -1,11 +1,11 @@
-"use client" 
+"use client"
 
 import React, { useState } from "react"
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, PlusCircle, Calendar, CalendarRange, Users, Milestone, Edit3, TrendingUp, Trash2, Building2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import type { Section, Loading, DecompositionStage } from "../../types"
+import type { Section, Loading, DecompositionStage, TimelineUnit } from "../../types"
 import { isSectionActiveInPeriod, getSectionStatusColor } from "../../utils/section-utils"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -20,7 +20,7 @@ import { LoadingModal } from "./loading-modal"
 interface TimelineRowProps {
   section: Section
   sectionIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   headerHeight: number
@@ -716,7 +716,7 @@ interface LoadingRowProps {
   loading: Loading
   sectionPosition: number
   loadingIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -1062,7 +1062,7 @@ interface StageRowProps {
   stage: DecompositionStage
   sectionPosition: number
   stageIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number

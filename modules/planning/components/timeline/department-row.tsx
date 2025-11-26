@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
-import type { Department, Employee, Loading } from "../../types"
+import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
@@ -26,7 +26,7 @@ import {
 interface DepartmentRowProps {
   department: Department
   departmentIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   headerHeight: number
@@ -359,7 +359,7 @@ export function DepartmentRow({
 // Компонент строки команды внутри отдела
 interface TeamRowProps {
   team: Department["teams"][number]
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -528,7 +528,7 @@ interface EmployeeRowProps {
   employee: Employee
   departmentPosition: number
   employeeIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
