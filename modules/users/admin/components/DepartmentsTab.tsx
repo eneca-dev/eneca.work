@@ -215,9 +215,23 @@ function DepartmentsTab(props: DepartmentsTabProps) {
 
   const handleDeleteDepartment = useCallback((department: Department) => {
     Sentry.addBreadcrumb({ category: 'ui.open', level: 'info', message: 'DepartmentsTab: open delete department confirm', data: { department_id: department.department_id } })
+
+    // Подсчитываем количество отделов в подразделении
+    const deptsInSubdivision = departments.filter(d => d.subdivision_id === department.subdivision_id).length
+
+    // Если это последний отдел в подразделении, показываем предупреждение
+    if (deptsInSubdivision === 1 && department.subdivision_id) {
+      const subdivisionName = subdivisions.find(s => s.id === department.subdivision_id)?.name || 'подразделении'
+      toast.error(
+        `Невозможно удалить отдел "${department.name}". Это последний отдел в подразделении "${subdivisionName}". Удалите всё подразделение, если необходимо.`,
+        { duration: 5000 }
+      )
+      return
+    }
+
     setSelectedDepartment(department)
     setDeleteModalOpen(true)
-  }, [])
+  }, [departments, subdivisions])
 
   // Обработчики для управления руководителями
   const handleAssignHead = useCallback((department: Department) => {
@@ -247,7 +261,7 @@ function DepartmentsTab(props: DepartmentsTabProps) {
     return {
       department_id: selectedDepartment.department_id,
       department_name: selectedDepartment.department_name,
-      subdivision_id: selectedDepartment.subdivision_id || null
+      subdivision_id: selectedDepartment.subdivision_id || "none" // "none" если нет подразделения
     } as Record<string, string | number | null>
   }, [selectedDepartment, modalMode, scope, subdivisionId])
 
@@ -262,10 +276,9 @@ function DepartmentsTab(props: DepartmentsTabProps) {
         label: 'Подразделение',
         type: 'select' as const,
         required: true,
-        options: [
-          { value: 'none', label: 'Не назначено' },
-          ...subdivisions.map(s => ({ value: s.id, label: s.name }))
-        ]
+        options: subdivisions
+          .filter(s => s.name !== "Не назначен")
+          .map(s => ({ value: s.id, label: s.name }))
       }
     ]
   }, [scope, subdivisions])

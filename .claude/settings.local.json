@@ -3,21 +3,14 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(/tmp/department-row-before-employeerow.txt)",
-<<<<<<< Updated upstream
-      "Bash(npx tsc:*)"
-=======
       "Bash(npx tsc:*)",
-      "Bash(curl:*)",
-      "Bash(npx kill-port:*)",
-      "Bash(ping:*)",
-      "Bash(nul)",
-      "Bash(rm:*)",
-      "Bash(PYTHON_AGENT_URL=https://ai-bot.eneca.work npm run dev:*)",
-      "Bash(python:*)",
-      "Bash(find:*)"
->>>>>>> Stashed changes
+      "mcp__supabase__execute_sql"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
