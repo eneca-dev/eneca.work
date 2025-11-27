@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2, FilePenLine } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2, FilePenLine, X } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -1717,6 +1717,12 @@ export function LoadingModal({
     return <IconComponent className="h-4 w-4 text-blue-500" />
   }
 
+  // In edit mode: lock entire tree until user clicks "Сменить этап"
+  const isStageLockedInEdit = mode === "edit" && !isChangingStage
+  // In create mode: lock ENTIRE tree when form is shown AND not selecting new stage
+  const isNodeLockedInCreate = mode === "create" && showCreateForm && !isSelectingNewStage
+  const isTreeLocked = isStageLockedInEdit || isNodeLockedInCreate
+
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
     const isExpanded = expandedFolders.has(node.id)
@@ -1727,12 +1733,6 @@ export function LoadingModal({
     const isSectionNode = node.type === "folder" && node.sectionId && !node.decompositionStageId
     const isProjectNode = node.type === "folder" && node.projectId && !node.stageId
     const isRefreshingProject = refreshingProjects.has(node.id)
-
-    // In edit mode: lock entire tree until user clicks "Сменить этап"
-    const isStageLockedInEdit = mode === "edit" && !isChangingStage
-    // In create mode: lock ENTIRE tree when form is shown AND not selecting new stage
-    const isNodeLockedInCreate = mode === "create" && showCreateForm && !isSelectingNewStage
-    const isTreeLocked = isStageLockedInEdit || isNodeLockedInCreate
 
     const nodeContent = (
       <div
@@ -2466,11 +2466,11 @@ export function LoadingModal({
                     theme === "dark"
                       ? "bg-slate-700"
                       : "bg-muted",
-                    (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
+                    isTreeLocked && "opacity-50 cursor-not-allowed"
                   )}>
                     <button
                       onClick={() => setViewMode("my")}
-                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
+                      disabled={isTreeLocked}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
@@ -2480,14 +2480,14 @@ export function LoadingModal({
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
-                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
+                        isTreeLocked && "cursor-not-allowed"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
-                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
+                      disabled={isTreeLocked}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
@@ -2497,7 +2497,7 @@ export function LoadingModal({
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
-                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
+                        isTreeLocked && "cursor-not-allowed"
                       )}
                     >
                       Все проекты
@@ -2511,12 +2511,25 @@ export function LoadingModal({
                       placeholder="Поиск проектов..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
-                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
+                      disabled={isTreeLocked}
                       className={cn(
-                        "h-8 pl-8 text-sm",
-                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
+                        "h-8 pl-8 pr-8 text-sm",
+                        isTreeLocked && "opacity-50 cursor-not-allowed"
                       )}
                     />
+                    {projectSearchTerm && (
+                      <button
+                        onClick={() => setProjectSearchTerm("")}
+                        disabled={isTreeLocked}
+                        className={cn(
+                          "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors",
+                          isTreeLocked && "cursor-not-allowed opacity-50"
+                        )}
+                        aria-label="Очистить поиск"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Search results count */}
