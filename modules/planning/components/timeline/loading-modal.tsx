@@ -1154,6 +1154,12 @@ export function LoadingModal({
       return
     }
 
+    // In edit mode, skip auto-select if user is actively changing stage
+    if (mode === "edit" && isChangingStage) {
+      console.log('⏸️ Edit mode: user is changing stage, skipping auto-select')
+      return
+    }
+
     let targetStageId: string | undefined
     let targetProjectId: string | undefined
 
@@ -1193,6 +1199,19 @@ export function LoadingModal({
         // Установить название проекта в поиск, чтобы проект отображался в дереве
         setProjectSearchTerm(projectNode.name)
 
+        // Check if project children are already loaded to prevent infinite loops
+        if (projectNode.children && projectNode.children.length > 0) {
+          console.log('✅ Дети проекта уже загружены, пропускаем loadNodeChildren')
+          console.log(`📊 projectNode.children.length: ${projectNode.children.length}`)
+
+          // Children already loaded, try to find and select the node directly
+          setPendingStageSelection({
+            stageId: targetStageId!,
+            projectId: targetProjectId!
+          })
+          return
+        }
+
         // ВСЕГДА загружаем иерархию перед поиском (проще и надёжнее)
         console.log('⏳ Загружаем иерархию проекта перед поиском...')
         console.log(`📊 treeData.length ДО loadNodeChildren: ${treeData.length}`)
@@ -1230,7 +1249,7 @@ export function LoadingModal({
         }
       }
     }
-  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode])
+  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode, isChangingStage])
 
   // Handle pending stage selection after viewMode switch
   useEffect(() => {
@@ -1559,11 +1578,6 @@ export function LoadingModal({
     if (node.type === "file" && node.decompositionStageId) {
       setSelectedNode(node)
       setBreadcrumbs(buildBreadcrumbs(node))
-
-      // Reset changing stage flag (lock the tree again in edit mode)
-      if (mode === "edit") {
-        setIsChangingStage(false)
-      }
 
       // In create mode: if we were selecting a new stage, lock tree again
       if (mode === "create" && isSelectingNewStage) {
