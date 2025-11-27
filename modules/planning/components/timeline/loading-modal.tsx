@@ -1160,6 +1160,16 @@ export function LoadingModal({
       return
     }
 
+    // In edit mode, if user manually selected a DIFFERENT stage, block auto-revert
+    if (mode === "edit" && selectedNode && loading?.stageId) {
+      if (selectedNode.decompositionStageId !== loading.stageId) {
+        console.log('⏸️ Edit mode: user changed to different stage, blocking auto-revert')
+        console.log(`   Current: ${selectedNode.decompositionStageId}`)
+        console.log(`   Original: ${loading.stageId}`)
+        return
+      }
+    }
+
     let targetStageId: string | undefined
     let targetProjectId: string | undefined
 
@@ -1322,6 +1332,11 @@ export function LoadingModal({
           employeeId: selectedEmployee.user_id,
           stageId: selectedNode.decompositionStageId || "",
         }
+        console.log('📝 originalValuesRef initialized:', {
+          stageId: originalValuesRef.current.stageId,
+          employeeId: originalValuesRef.current.employeeId,
+          selectedNodeId: selectedNode.decompositionStageId
+        })
       }
     }
   }, [mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, loading?.responsibleId, loading?.stageId, selectedEmployee?.user_id, selectedNode?.decompositionStageId, normalizeDateValue])
@@ -1579,6 +1594,11 @@ export function LoadingModal({
       setSelectedNode(node)
       setBreadcrumbs(buildBreadcrumbs(node))
 
+      // Reset changing stage flag (lock the tree again in edit mode)
+      if (mode === "edit") {
+        setIsChangingStage(false)
+      }
+
       // In create mode: if we were selecting a new stage, lock tree again
       if (mode === "create" && isSelectingNewStage) {
         setIsSelectingNewStage(false)
@@ -1628,6 +1648,17 @@ export function LoadingModal({
     const commentChanged = (formData.comment || "") !== (originalValuesRef.current.comment || "")
     const employeeChanged = (selectedEmployee?.user_id || "") !== (originalValuesRef.current.employeeId || "")
     const stageChanged = (selectedNode?.decompositionStageId || "") !== (originalValuesRef.current.stageId || "")
+
+    console.log('🔍 hasChanges check:', {
+      current: selectedNode?.decompositionStageId,
+      original: originalValuesRef.current.stageId,
+      stageChanged,
+      startDateChanged,
+      endDateChanged,
+      rateChanged,
+      commentChanged,
+      employeeChanged
+    })
 
     const changed = startDateChanged || endDateChanged || rateChanged || commentChanged || employeeChanged || stageChanged
 
@@ -2435,11 +2466,11 @@ export function LoadingModal({
                     theme === "dark"
                       ? "bg-slate-700"
                       : "bg-muted",
-                    ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
+                    (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                   )}>
                     <button
                       onClick={() => setViewMode("my")}
-                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
+                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
@@ -2449,14 +2480,14 @@ export function LoadingModal({
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
-                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
+                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
-                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
+                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
@@ -2466,7 +2497,7 @@ export function LoadingModal({
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
                           : "hover:bg-background/50",
-                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
+                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "cursor-not-allowed"
                       )}
                     >
                       Все проекты
@@ -2480,11 +2511,11 @@ export function LoadingModal({
                       placeholder="Поиск проектов..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      disabled={mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                       className={cn(
                         "h-8 pl-8 text-sm",
-                        ((mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
+                        (mode === "edit" || (mode === "create" && showCreateForm && !isSelectingNewStage)) && "opacity-50 cursor-not-allowed"
                       )}
-                      disabled={(mode === "edit" && !isChangingStage) || (mode === "create" && showCreateForm && !isSelectingNewStage)}
                     />
                   </div>
 
@@ -2566,6 +2597,16 @@ export function LoadingModal({
                         onClick={() => {
                           if (mode === "edit") {
                             setIsChangingStage(true)
+
+                            // Auto-expand the current project if selectedNode exists
+                            if (selectedNode && selectedNode.projectId) {
+                              const projectNodeId = `project-${selectedNode.projectId}`
+                              setExpandedFolders(prev => {
+                                const newSet = new Set(prev)
+                                newSet.add(projectNodeId)
+                                return newSet
+                              })
+                            }
                           } else {
                             // In create mode, keep form visible but unlock tree for stage selection
                             setIsSelectingNewStage(true)
