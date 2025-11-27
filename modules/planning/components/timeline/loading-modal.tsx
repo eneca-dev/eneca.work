@@ -230,7 +230,8 @@ export function LoadingModal({
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
 
   // View mode state: "my" (Мои проекты) or "all" (Все проекты)
-  const [viewMode, setViewMode] = useState<"my" | "all">("my")
+  // Edit mode always starts with "all" to avoid unnecessary filtering
+  const [viewMode, setViewMode] = useState<"my" | "all">(mode === "edit" ? "all" : "my")
 
   // Очередь для отложенных вызовов buildFileTree
   const [pendingBuildQueue, setPendingBuildQueue] = useState<Array<{ viewMode: "my" | "all" }>>([])
@@ -887,11 +888,12 @@ export function LoadingModal({
 
     } else {
       // Если не найден в режиме "Мои проекты" - переключаемся на "Все проекты"
-      if (viewMode === "my" && projectId) {
+      // Edit mode starts in "all", so only switch in create mode
+      if (viewMode === "my" && projectId && mode !== "edit") {
         switchToAllProjects(decompositionStageId, projectId)
       }
     }
-  }, [treeData, viewMode, switchToAllProjects])
+  }, [treeData, viewMode, switchToAllProjects, mode])
 
   // Fetch employees
   const fetchEmployees = useCallback(async () => {
@@ -1105,6 +1107,14 @@ export function LoadingModal({
     }
   }, [buildFileTree, fetchEmployees, isOpen, mode])
 
+  // Force viewMode to "all" in edit mode when modal opens
+  useEffect(() => {
+    if (isOpen && mode === "edit" && viewMode !== "all") {
+      console.log('🔄 Forcing viewMode to "all" for edit mode')
+      setViewMode("all")
+    }
+  }, [isOpen, mode, viewMode])
+
   // Fetch calendar events when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -1135,6 +1145,12 @@ export function LoadingModal({
   // Auto-expand and select node for edit mode or when stageId is provided
   useEffect(() => {
     if (treeData.length === 0) {
+      return
+    }
+
+    // In edit mode, wait until viewMode is "all" before proceeding
+    if (mode === "edit" && viewMode === "my") {
+      console.log('⏸️ Edit mode: waiting for viewMode to switch to "all"...')
       return
     }
 
@@ -1197,7 +1213,8 @@ export function LoadingModal({
           } else {
             console.log('⚠️ После загрузки и фильтрации нет детей в проекте')
 
-            if (viewMode === "my") {
+            // Edit mode starts in "all", so only switch in create mode
+            if (viewMode === "my" && mode !== "edit") {
               console.log('⚠️ Переключаюсь на режим "Все проекты"...')
               switchToAllProjects(targetStageId!, targetProjectId!)
             } else {
@@ -1207,7 +1224,8 @@ export function LoadingModal({
         })()
       } else {
         // Если проект не найден в "Мои проекты" - переключиться на "Все проекты"
-        if (viewMode === "my") {
+        // Edit mode starts in "all", so only switch in create mode
+        if (viewMode === "my" && mode !== "edit") {
           switchToAllProjects(targetStageId!, targetProjectId!)
         }
       }
@@ -1358,7 +1376,8 @@ export function LoadingModal({
     if (!isOpen) {
       // Очистить старое дерево и сбросить состояние
       setTreeData([])
-      setViewMode("my")
+      // Reset to mode-appropriate initial state
+      setViewMode(mode === "edit" ? "all" : "my")
       setPendingBuildQueue([])
       hasLoadedTreeRef.current = false
 
