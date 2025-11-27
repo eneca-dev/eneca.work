@@ -2700,7 +2700,7 @@ export function LoadingModal({
                         placeholder="Поиск сотрудника..."
                         disabled={isSaving || isLoadingEmployees || isArchiving || isDeleting}
                         className={cn(
-                          "w-full text-sm rounded border px-3 py-2",
+                          "w-full text-sm rounded border pl-3 pr-8 py-2",
                           theme === "dark"
                             ? "bg-slate-700 border-slate-600 text-slate-200"
                             : "bg-white border-slate-300 text-slate-800",
@@ -2708,6 +2708,23 @@ export function LoadingModal({
                           (isSaving || isLoadingEmployees || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       />
+                      {employeeSearchTerm && (
+                        <button
+                          onClick={() => {
+                            setEmployeeSearchTerm("")
+                            setSelectedEmployee(null)
+                            setShowEmployeeDropdown(false)
+                          }}
+                          disabled={isSaving || isLoadingEmployees || isArchiving || isDeleting}
+                          className={cn(
+                            "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors",
+                            (isSaving || isLoadingEmployees || isArchiving || isDeleting) && "cursor-not-allowed opacity-50"
+                          )}
+                          aria-label="Очистить поиск"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
 
                       {showEmployeeDropdown && filteredEmployees.length > 0 && dropdownPosition && typeof document !== 'undefined' && (
                         (typeof window !== 'undefined' && typeof require !== 'undefined') && (
