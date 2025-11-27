@@ -747,8 +747,6 @@ function LoadingRow({
 }: LoadingRowProps) {
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
-  const [showLoadingModal, setShowLoadingModal] = useState(false)
-  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
 
   // Вычисляем уменьшенную высоту строки (примерно на 25%)
@@ -914,23 +912,7 @@ function LoadingRow({
                   </span>
                 </div>
 
-                {/* Кнопки редактирования и удаления */}
-                <button
-                  className={cn(
-                    "inline-flex items-center justify-center h-5 w-5 rounded opacity-0 group-hover/loading:opacity-100 transition-all",
-                    theme === "dark"
-                      ? "hover:bg-emerald-900/30 hover:text-emerald-300"
-                      : "hover:bg-emerald-100 hover:text-emerald-600"
-                  )}
-                  title="Редактировать загрузку"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setEditingLoading(loading)
-                    setShowLoadingModal(true)
-                  }}
-                >
-                  <Edit3 className="h-3 w-3" />
-                </button>
+                {/* Кнопка удаления */}
                 <ConfirmDialog
                   title="Удалить загрузку?"
                   description={(
@@ -1043,16 +1025,6 @@ function LoadingRow({
           })}
         </div>
       </div>
-      <LoadingModal
-        isOpen={showLoadingModal}
-        onClose={() => {
-          setShowLoadingModal(false)
-          setEditingLoading(null)
-        }}
-        theme={theme}
-        mode="edit"
-        loading={editingLoading || undefined}
-      />
     </div>
   )
 }
@@ -1621,7 +1593,6 @@ function StageRow({
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
         theme={theme}
-        mode="create"
         section={section}
         stageId={stage.id}
         stageName={stage.name}

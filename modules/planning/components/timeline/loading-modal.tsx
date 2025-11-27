@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabase-client"
 import { Avatar } from "../avatar"
 import { SectionPanel } from "@/components/modals/SectionPanel"
 import { useSectionStatuses } from "@/modules/statuses-tags/statuses/hooks/useSectionStatuses"
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, Trash2, FilePenLine, X } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileUser, FilePlus, RefreshCw, Search, SquareStack, Package, CircleDashed, ExternalLink, FilePenLine, X } from "lucide-react"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker"
@@ -88,8 +88,6 @@ interface LoadingModalProps {
   isOpen: boolean
   onClose: () => void
   theme: string
-  mode: "create" | "edit"
-  // For create mode
   employee?: Employee
   section?: Section
   stageId?: string
@@ -97,8 +95,6 @@ interface LoadingModalProps {
   defaultStartDate?: Date | string
   defaultEndDate?: Date | string
   defaultRate?: number
-  // For edit mode
-  loading?: Loading
 }
 
 interface EmployeeSearchResult {
@@ -121,7 +117,6 @@ export function LoadingModal({
   isOpen,
   onClose,
   theme,
-  mode,
   employee,
   section,
   stageId,
@@ -129,7 +124,6 @@ export function LoadingModal({
   defaultStartDate,
   defaultEndDate,
   defaultRate,
-  loading,
 }: LoadingModalProps) {
   const router = useRouter()
   const selectSection = useProjectsStore((state) => state.selectSection)
@@ -141,10 +135,6 @@ export function LoadingModal({
 
   // State tracking
   const [isSaving, setIsSaving] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [isArchiving, setIsArchiving] = useState(false)
-  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Refs for timeouts
@@ -156,9 +146,6 @@ export function LoadingModal({
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
-  const updateLoadingInStore = usePlanningStore((state) => state.updateLoading)
-  const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
-  const archiveLoadingInStore = usePlanningStore((state) => state.archiveLoading)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
   // Helper function for date formatting
@@ -194,16 +181,10 @@ export function LoadingModal({
 
   // Form data initialization
   const [formData, setFormData] = useState({
-    startDate:
-      mode === "edit" && loading
-        ? normalizeDateValue(loading.startDate) || formatLocalYMD(new Date())!
-        : normalizeDateValue(defaultStartDate) || formatLocalYMD(new Date())!,
-    endDate:
-      mode === "edit" && loading
-        ? normalizeDateValue(loading.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!
-        : normalizeDateValue(defaultEndDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-    rate: mode === "edit" && loading ? loading.rate ?? 1 : defaultRate ?? 1,
-    comment: mode === "edit" && loading ? loading.comment || "" : "",
+    startDate: normalizeDateValue(defaultStartDate) || formatLocalYMD(new Date())!,
+    endDate: normalizeDateValue(defaultEndDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+    rate: defaultRate ?? 1,
+    comment: "",
   })
 
   // Separate state for manual rate input field
@@ -230,15 +211,14 @@ export function LoadingModal({
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
 
   // View mode state: "my" (Мои проекты) or "all" (Все проекты)
-  // Edit mode always starts with "all" to avoid unnecessary filtering
-  const [viewMode, setViewMode] = useState<"my" | "all">(mode === "edit" ? "all" : "my")
+  const [viewMode, setViewMode] = useState<"my" | "all">("my")
 
   // Очередь для отложенных вызовов buildFileTree
   const [pendingBuildQueue, setPendingBuildQueue] = useState<Array<{ viewMode: "my" | "all" }>>([])
 
   // Store original employee from props for restoration after creation
   const originalEmployeeRef = useRef<EmployeeSearchResult | null>(
-    mode === "create" && employee
+    employee
       ? {
           user_id: employee.id,
           first_name: employee.firstName || "",
@@ -283,9 +263,6 @@ export function LoadingModal({
   const [refreshingProjects, setRefreshingProjects] = useState<Set<string>>(new Set())
   const [isRefreshingAll, setIsRefreshingAll] = useState(false)
 
-  // State for controlling stage change in edit mode
-  const [isChangingStage, setIsChangingStage] = useState(false)
-
   // State for controlling form display in create mode (two-step process)
   const [showCreateForm, setShowCreateForm] = useState(false)
   // Flag for tracking when user is selecting a new stage (keeps form visible, unlocks tree)
@@ -294,16 +271,6 @@ export function LoadingModal({
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
   const hasLoadedTreeRef = useRef(false)
-
-  // Ref to store original values in edit mode for change detection
-  const originalValuesRef = useRef({
-    startDate: "",
-    endDate: "",
-    rate: 0,
-    comment: "",
-    employeeId: "",
-    stageId: "",
-  })
 
   // State for tracking pending stage selection after viewMode switch
   const [pendingStageSelection, setPendingStageSelection] = useState<{
@@ -351,7 +318,7 @@ export function LoadingModal({
       },
       async (span) => {
         try {
-          span.setAttribute("modal_mode", mode)
+          span.setAttribute("modal_mode", "create")
 
           // Fetch projects with department information
           const { data: projects, error: projectsError } = await supabase
@@ -397,10 +364,8 @@ export function LoadingModal({
               modal: "loading_modal",
             },
             extra: {
-              mode,
               employee_id: employee?.id,
               section_id: section?.id,
-              loading_id: loading?.id,
               timestamp: new Date().toISOString(),
             },
           })
@@ -434,7 +399,7 @@ export function LoadingModal({
         }
       },
     )
-  }, [mode, setNotification, clearNotification, viewMode, userDepartmentId, employee, section, loading])
+  }, [setNotification, clearNotification, viewMode, userDepartmentId, employee, section])
 
   // Helper: Build stage nodes from view data
   const buildStageNodes = useCallback((data: ProjectTreeViewRow[], projectId: string): FileTreeNode[] => {
@@ -888,12 +853,11 @@ export function LoadingModal({
 
     } else {
       // Если не найден в режиме "Мои проекты" - переключаемся на "Все проекты"
-      // Edit mode starts in "all", so only switch in create mode
-      if (viewMode === "my" && projectId && mode !== "edit") {
+      if (viewMode === "my" && projectId) {
         switchToAllProjects(decompositionStageId, projectId)
       }
     }
-  }, [treeData, viewMode, switchToAllProjects, mode])
+  }, [treeData, viewMode, switchToAllProjects])
 
   // Fetch employees
   const fetchEmployees = useCallback(async () => {
@@ -1105,15 +1069,7 @@ export function LoadingModal({
       buildFileTree()
       fetchEmployees()
     }
-  }, [buildFileTree, fetchEmployees, isOpen, mode])
-
-  // Force viewMode to "all" in edit mode when modal opens
-  useEffect(() => {
-    if (isOpen && mode === "edit" && viewMode !== "all") {
-      console.log('🔄 Forcing viewMode to "all" for edit mode')
-      setViewMode("all")
-    }
-  }, [isOpen, mode, viewMode])
+  }, [buildFileTree, fetchEmployees, isOpen])
 
   // Fetch calendar events when modal opens
   useEffect(() => {
@@ -1142,54 +1098,16 @@ export function LoadingModal({
     }
   }, [selectedEmployee])
 
-  // Auto-expand and select node for edit mode or when stageId is provided
+  // Auto-expand and select node when stageId is provided
   useEffect(() => {
     if (treeData.length === 0) {
       return
     }
 
-    // In edit mode, wait until viewMode is "all" before proceeding
-    if (mode === "edit" && viewMode === "my") {
-      console.log('⏸️ Edit mode: waiting for viewMode to switch to "all"...')
-      return
-    }
-
-    // In edit mode, skip auto-select if user is actively changing stage
-    if (mode === "edit" && isChangingStage) {
-      console.log('⏸️ Edit mode: user is changing stage, skipping auto-select')
-      return
-    }
-
-    // In edit mode, if user manually selected a DIFFERENT stage, block auto-revert
-    if (mode === "edit" && selectedNode && loading?.stageId) {
-      if (selectedNode.decompositionStageId !== loading.stageId) {
-        console.log('⏸️ Edit mode: user changed to different stage, blocking auto-revert')
-        console.log(`   Current: ${selectedNode.decompositionStageId}`)
-        console.log(`   Original: ${loading.stageId}`)
-        return
-      }
-    }
-
     let targetStageId: string | undefined
     let targetProjectId: string | undefined
 
-    if (mode === "edit" && loading?.stageId) {
-      targetStageId = loading.stageId
-      // Try to get project ID from loading or section
-      targetProjectId = loading.projectId || section?.projectId
-
-      console.log('┌─────────────────────────────────────────────────────────────')
-      console.log('│ 🎯 AUTO-SELECT в режиме EDIT')
-      console.log('├─────────────────────────────────────────────────────────────')
-      console.log(`│ Target Stage ID: ${targetStageId}`)
-      console.log(`│ Target Project ID: ${targetProjectId}`)
-      console.log(`│ Loading Section ID: ${loading.sectionId}`)
-      console.log(`│ Loading Section Name: ${loading.sectionName}`)
-      console.log(`│ User Department ID: ${userDepartmentId}`)
-      console.log(`│ View Mode: ${viewMode}`)
-      console.log(`│ TreeData length: ${treeData.length}`)
-      console.log('└─────────────────────────────────────────────────────────────')
-    } else if (mode === "create" && stageId) {
+    if (stageId) {
       targetStageId = stageId
       targetProjectId = section?.projectId
     }
@@ -1197,7 +1115,6 @@ export function LoadingModal({
     if (targetStageId && targetProjectId) {
       // Проверяем, не выбран ли уже нужный узел (чтобы избежать бесконечного цикла)
       if (selectedNode?.decompositionStageId === targetStageId) {
-        console.log('✅ Нужный узел уже выбран, пропускаем повторную загрузку')
         return
       }
 
@@ -1211,9 +1128,6 @@ export function LoadingModal({
 
         // Check if project children are already loaded to prevent infinite loops
         if (projectNode.children && projectNode.children.length > 0) {
-          console.log('✅ Дети проекта уже загружены, пропускаем loadNodeChildren')
-          console.log(`📊 projectNode.children.length: ${projectNode.children.length}`)
-
           // Children already loaded, try to find and select the node directly
           setPendingStageSelection({
             stageId: targetStageId!,
@@ -1222,44 +1136,29 @@ export function LoadingModal({
           return
         }
 
-        // ВСЕГДА загружаем иерархию перед поиском (проще и надёжнее)
-        console.log('⏳ Загружаем иерархию проекта перед поиском...')
-        console.log(`📊 treeData.length ДО loadNodeChildren: ${treeData.length}`)
-        console.log(`📊 projectNode.children ДО loadNodeChildren: ${projectNode.children?.length ?? 'undefined'}`)
-
-        // Используем async IIFE для корректного ожидания результата
+        // Загружаем иерархию перед поиском
         ;(async () => {
           const hasChildren = await loadNodeChildren(projectNode)
 
-          console.log(`📊 hasChildren результат ПОСЛЕ await: ${hasChildren}`)
-
           if (hasChildren) {
-            console.log(`✅ Иерархия загружена успешно`)
             setPendingStageSelection({
               stageId: targetStageId!,
               projectId: targetProjectId!
             })
           } else {
-            console.log('⚠️ После загрузки и фильтрации нет детей в проекте')
-
-            // Edit mode starts in "all", so only switch in create mode
-            if (viewMode === "my" && mode !== "edit") {
-              console.log('⚠️ Переключаюсь на режим "Все проекты"...')
+            if (viewMode === "my") {
               switchToAllProjects(targetStageId!, targetProjectId!)
-            } else {
-              console.log('❌ Уже в режиме "Все проекты", но этап не найден. Возможно, данные отсутствуют.')
             }
           }
         })()
       } else {
         // Если проект не найден в "Мои проекты" - переключиться на "Все проекты"
-        // Edit mode starts in "all", so only switch in create mode
-        if (viewMode === "my" && mode !== "edit") {
+        if (viewMode === "my") {
           switchToAllProjects(targetStageId!, targetProjectId!)
         }
       }
     }
-  }, [treeData, mode, loading, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode, isChangingStage])
+  }, [treeData, stageId, section, loadNodeChildren, findAndSelectNode, viewMode, userDepartmentId, switchToAllProjects, selectedNode])
 
   // Handle pending stage selection after viewMode switch
   useEffect(() => {
@@ -1306,44 +1205,9 @@ export function LoadingModal({
     }
   }, [pendingStageSelection, treeData, viewMode, loadNodeChildren, findAndSelectNode, setProjectSearchTerm, loadingNodes])
 
-  // Pre-fill employee for edit mode
+  // Reset modal state when reopening
   useEffect(() => {
-    if (mode === "edit" && loading && employees.length > 0) {
-      const emp = employees.find((e) => e.user_id === loading.responsibleId)
-      if (emp) {
-        setSelectedEmployee(emp)
-      } else {
-        console.warn(`[LoadingModal] Сотрудник не найден с ID: ${loading.responsibleId}`)
-      }
-    }
-  }, [mode, loading, employees])
-
-  // Initialize original values in edit mode for change detection
-  // ВАЖНО: Выполняется ПОСЛЕ того, как selectedEmployee и selectedNode установлены
-  useEffect(() => {
-    if (mode === "edit" && loading && selectedEmployee && selectedNode) {
-      // Инициализируем только один раз, когда все данные готовы и ref еще пуст
-      if (originalValuesRef.current.employeeId === "") {
-        originalValuesRef.current = {
-          startDate: normalizeDateValue(loading.startDate) || "",
-          endDate: normalizeDateValue(loading.endDate) || "",
-          rate: loading.rate ?? 1,
-          comment: loading.comment || "",
-          employeeId: selectedEmployee.user_id,
-          stageId: selectedNode.decompositionStageId || "",
-        }
-        console.log('📝 originalValuesRef initialized:', {
-          stageId: originalValuesRef.current.stageId,
-          employeeId: originalValuesRef.current.employeeId,
-          selectedNodeId: selectedNode.decompositionStageId
-        })
-      }
-    }
-  }, [mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, loading?.responsibleId, loading?.stageId, selectedEmployee?.user_id, selectedNode?.decompositionStageId, normalizeDateValue])
-
-  // Reset modal state when reopening in create mode
-  useEffect(() => {
-    if (isOpen && mode === "create") {
+    if (isOpen) {
       // Clear selected node and breadcrumbs
       setSelectedNode(null)
       setBreadcrumbs([])
@@ -1371,9 +1235,6 @@ export function LoadingModal({
       // Clear errors
       setErrors({})
 
-      // Reset isChangingStage (in create mode, tree is always unlocked)
-      setIsChangingStage(false)
-
       // Reset showCreateForm (start with stage selection screen)
       setShowCreateForm(false)
 
@@ -1385,58 +1246,12 @@ export function LoadingModal({
       setSectionPanelProjectId(null)
     }
 
-    // Reset modal state when reopening in edit mode
-    if (isOpen && mode === "edit" && loading) {
-      // Reset formData to original values from loading (discarding any unsaved changes)
-      setFormData({
-        startDate: normalizeDateValue(loading.startDate) || formatLocalYMD(new Date())!,
-        endDate: normalizeDateValue(loading.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-        rate: loading.rate ?? 1,
-        comment: loading.comment || "",
-      })
-
-      // Clear errors
-      setErrors({})
-
-      // Reset isChangingStage (in edit mode, tree starts locked)
-      setIsChangingStage(false)
-
-      // Clear section panel IDs
-      setSectionPanelSectionId(null)
-      setSectionPanelProjectId(null)
-    }
-
-    // Reset originalValuesRef when modal closes (for both modes)
+    // Reset state when modal closes
     if (!isOpen) {
       // Очистить старое дерево и сбросить состояние
       setTreeData([])
-      // Reset to mode-appropriate initial state
-      setViewMode(mode === "edit" ? "all" : "my")
       setPendingBuildQueue([])
       hasLoadedTreeRef.current = false
-
-      originalValuesRef.current = {
-        startDate: "",
-        endDate: "",
-        rate: 0,
-        comment: "",
-        employeeId: "",
-        stageId: "",
-      }
-
-      // Сбросить formData к исходным значениям из loading (для edit mode)
-      // Это отменяет все несохранённые изменения
-      if (mode === "edit" && loading) {
-        setFormData({
-          startDate: normalizeDateValue(loading.startDate) || formatLocalYMD(new Date())!,
-          endDate: normalizeDateValue(loading.endDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-          rate: loading.rate ?? 1,
-          comment: loading.comment || "",
-        })
-      }
-
-      // Reset isChangingStage when modal closes
-      setIsChangingStage(false)
 
       // Reset showCreateForm when modal closes
       setShowCreateForm(false)
@@ -1451,21 +1266,7 @@ export function LoadingModal({
       // Clear pending stage selection when modal closes
       setPendingStageSelection(null)
     }
-  }, [isOpen, mode, loading?.id, loading?.startDate, loading?.endDate, loading?.rate, loading?.comment, normalizeDateValue, formatLocalYMD])
-
-  // Initialize manualRateInput for custom rates in edit mode
-  useEffect(() => {
-    if (mode === "edit" && isOpen && formData.rate) {
-      // Check if rate is a custom rate (not in predefined RATES)
-      if (!RATES.includes(formData.rate)) {
-        // Set manual input to the custom rate value
-        setManualRateInput(formData.rate.toString())
-      } else {
-        // Clear manual input if using predefined rate
-        setManualRateInput("")
-      }
-    }
-  }, [mode, formData.rate, isOpen])
+  }, [isOpen, normalizeDateValue, formatLocalYMD, defaultStartDate, defaultEndDate, defaultRate])
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
@@ -1594,13 +1395,8 @@ export function LoadingModal({
       setSelectedNode(node)
       setBreadcrumbs(buildBreadcrumbs(node))
 
-      // Reset changing stage flag (lock the tree again in edit mode)
-      if (mode === "edit") {
-        setIsChangingStage(false)
-      }
-
       // In create mode: if we were selecting a new stage, lock tree again
-      if (mode === "create" && isSelectingNewStage) {
+      if (isSelectingNewStage) {
         setIsSelectingNewStage(false)
       }
 
@@ -1631,39 +1427,6 @@ export function LoadingModal({
   }, [workingDaysCount, formData.rate])
   
 
-  // Check if any field has changed in edit mode
-  const hasChanges = useMemo(() => {
-    // In create mode, always allow saving (if validation passes)
-    if (mode === "create") return true
-
-    // Если originalValues еще не инициализированы (данные еще загружаются), считаем что изменений нет
-    if (originalValuesRef.current.employeeId === "") {
-      return false
-    }
-
-    // In edit mode, check if any field differs from original
-    const startDateChanged = formData.startDate !== originalValuesRef.current.startDate
-    const endDateChanged = formData.endDate !== originalValuesRef.current.endDate
-    const rateChanged = formData.rate !== originalValuesRef.current.rate
-    const commentChanged = (formData.comment || "") !== (originalValuesRef.current.comment || "")
-    const employeeChanged = (selectedEmployee?.user_id || "") !== (originalValuesRef.current.employeeId || "")
-    const stageChanged = (selectedNode?.decompositionStageId || "") !== (originalValuesRef.current.stageId || "")
-
-    console.log('🔍 hasChanges check:', {
-      current: selectedNode?.decompositionStageId,
-      original: originalValuesRef.current.stageId,
-      stageChanged,
-      startDateChanged,
-      endDateChanged,
-      rateChanged,
-      commentChanged,
-      employeeChanged
-    })
-
-    const changed = startDateChanged || endDateChanged || rateChanged || commentChanged || employeeChanged || stageChanged
-
-    return changed
-  }, [mode, formData, selectedEmployee, selectedNode])
 
   // Filter projects by search term
   // Note: Department filtering is already done in buildFileTree() using view_projects_with_department_info
@@ -1717,11 +1480,8 @@ export function LoadingModal({
     return <IconComponent className="h-4 w-4 text-blue-500" />
   }
 
-  // In edit mode: lock entire tree until user clicks "Сменить этап"
-  const isStageLockedInEdit = mode === "edit" && !isChangingStage
-  // In create mode: lock ENTIRE tree when form is shown AND not selecting new stage
-  const isNodeLockedInCreate = mode === "create" && showCreateForm && !isSelectingNewStage
-  const isTreeLocked = isStageLockedInEdit || isNodeLockedInCreate
+  // Lock ENTIRE tree when form is shown AND not selecting new stage
+  const isTreeLocked = showCreateForm && !isSelectingNewStage
 
   // Render FileTree node
   const renderNode = (node: FileTreeNode, depth = 0): React.ReactNode => {
@@ -1842,11 +1602,7 @@ export function LoadingModal({
               {nodeContent}
             </TooltipTrigger>
             <TooltipContent>
-              <p>
-                {mode === "edit"
-                  ? "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"
-                  : "Нажмите \"Сменить этап\" для изменения этапа декомпозиции"}
-              </p>
+              <p>Нажмите "Сменить этап" для изменения этапа декомпозиции</p>
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -2017,23 +1773,20 @@ export function LoadingModal({
     return Object.keys(newErrors).length === 0
   }
 
-  // Handle save (create or update)
+  // Handle save (create)
   const handleSave = async () => {
     if (!validateForm()) return
-
-    const isEditMode = mode === "edit"
-    const loadingToEdit = loading
 
     await Sentry.startSpan(
       {
         op: "ui.action",
-        name: isEditMode ? "Обновление загрузки" : "Создание загрузки",
+        name: "Создание загрузки",
       },
       async (span) => {
         setIsSaving(true)
 
         try {
-          span.setAttribute("mode", isEditMode ? "edit" : "create")
+          span.setAttribute("mode", "create")
           span.setAttribute("employee.id", selectedEmployee!.user_id)
           span.setAttribute("employee.name", selectedEmployee!.full_name)
           span.setAttribute("decomposition_stage.id", selectedNode!.decompositionStageId!)
@@ -2041,90 +1794,53 @@ export function LoadingModal({
           span.setAttribute("loading.end_date", formData.endDate)
           span.setAttribute("loading.rate", formData.rate)
 
-          if (!isEditMode) {
-            // Get decomposition stage name
-            const decompositionStageName = selectedNode!.name
+          // Get decomposition stage name
+          const decompositionStageName = selectedNode!.name
 
-            // Fetch project and section names
-            const { data: sectionData } = await supabase
-              .from("view_section_hierarchy")
-              .select("project_id, project_name, section_id, section_name")
-              .eq("section_id", selectedNode!.sectionId!)
-              .limit(1)
-              .maybeSingle()
+          // Fetch project and section names
+          const { data: sectionData } = await supabase
+            .from("view_section_hierarchy")
+            .select("project_id, project_name, section_id, section_name")
+            .eq("section_id", selectedNode!.sectionId!)
+            .limit(1)
+            .maybeSingle()
 
-            const result = await createLoadingInStore({
-              responsibleId: selectedEmployee!.user_id,
-              sectionId: selectedNode!.sectionId!,
-              stageId: selectedNode!.decompositionStageId!,
-              startDate: new Date(formData.startDate),
-              endDate: new Date(formData.endDate),
-              rate: formData.rate,
-              projectName: sectionData?.project_name,
-              sectionName: sectionData?.section_name,
-              decompositionStageId: selectedNode!.decompositionStageId!,
-              decompositionStageName,
-              responsibleName: selectedEmployee!.full_name,
-              responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
-              responsibleTeamName: selectedEmployee!.team_name || undefined,
-              comment: formData.comment?.trim() || undefined,
-            })
+          const result = await createLoadingInStore({
+            responsibleId: selectedEmployee!.user_id,
+            sectionId: selectedNode!.sectionId!,
+            stageId: selectedNode!.decompositionStageId!,
+            startDate: new Date(formData.startDate),
+            endDate: new Date(formData.endDate),
+            rate: formData.rate,
+            projectName: sectionData?.project_name,
+            sectionName: sectionData?.section_name,
+            decompositionStageId: selectedNode!.decompositionStageId!,
+            decompositionStageName,
+            responsibleName: selectedEmployee!.full_name,
+            responsibleAvatarUrl: selectedEmployee!.avatar_url || undefined,
+            responsibleTeamName: selectedEmployee!.team_name || undefined,
+            comment: formData.comment?.trim() || undefined,
+          })
 
-            if (!result.success) {
-              throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
-            }
-
-            span.setAttribute("operation.success", true)
-            span.setAttribute("loading.id", result.loadingId || "unknown")
-
-            setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} успешно создана`)
-
-            // Expand section
-            const { expandedSections } = usePlanningStore.getState()
-            if (selectedNode!.sectionId && !expandedSections[selectedNode!.sectionId]) {
-              toggleSectionExpanded(selectedNode!.sectionId)
-            }
-
-            successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
-
-            // Close modal after successful creation
-            onClose()
-          } else {
-            // Edit mode
-            const updatedLoading: Partial<Loading> = {
-              startDate: new Date(formData.startDate),
-              endDate: new Date(formData.endDate),
-              rate: formData.rate,
-              comment: formData.comment,
-            }
-
-            // Update stage if changed
-            if (selectedNode!.decompositionStageId !== loadingToEdit!.stageId) {
-              updatedLoading.stageId = selectedNode!.decompositionStageId
-              updatedLoading.stageName = selectedNode!.name
-            }
-
-            // Update employee if changed
-            if (selectedEmployee!.user_id !== loadingToEdit!.responsibleId) {
-              updatedLoading.responsibleId = selectedEmployee!.user_id
-              updatedLoading.responsibleName = selectedEmployee!.full_name
-              updatedLoading.responsibleAvatarUrl = selectedEmployee!.avatar_url || undefined
-              updatedLoading.responsibleTeamName = selectedEmployee!.team_name || undefined
-            }
-
-            const result = await updateLoadingInStore(loadingToEdit!.id, updatedLoading)
-
-            if (!result.success) {
-              throw new Error(result.error || "Ошибка при обновлении загрузки")
-            }
-
-            span.setAttribute("operation.success", true)
-
-            setNotification("Загрузка успешно обновлена")
-            successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
-
-            onClose()
+          if (!result.success) {
+            throw new Error(result.error || "Неизвестная ошибка при создании загрузки")
           }
+
+          span.setAttribute("operation.success", true)
+          span.setAttribute("loading.id", result.loadingId || "unknown")
+
+          setNotification(`Загрузка для сотрудника ${selectedEmployee!.full_name} успешно создана`)
+
+          // Expand section
+          const { expandedSections } = usePlanningStore.getState()
+          if (selectedNode!.sectionId && !expandedSections[selectedNode!.sectionId]) {
+            toggleSectionExpanded(selectedNode!.sectionId)
+          }
+
+          successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+          // Close modal after successful creation
+          onClose()
         } catch (error) {
           span.setAttribute("operation.success", false)
           span.setAttribute("operation.error", error instanceof Error ? error.message : "Неизвестная ошибка")
@@ -2132,17 +1848,15 @@ export function LoadingModal({
           Sentry.captureException(error, {
             tags: {
               module: "planning",
-              action: mode === "create" ? "create_loading" : "update_loading",
+              action: "create_loading",
               modal: "loading_modal",
             },
             extra: {
-              mode,
               employee_id: selectedEmployee?.user_id,
               decomposition_stage_id: selectedNode?.decompositionStageId,
               start_date: formData.startDate,
               end_date: formData.endDate,
               rate: formData.rate,
-              loading_id: loading?.id,
               timestamp: new Date().toISOString(),
             },
           })
@@ -2154,84 +1868,6 @@ export function LoadingModal({
         }
       },
     )
-  }
-
-  // Handle delete
-  const handleDelete = async () => {
-    if (mode !== "edit" || !loading) return
-    const loadingToDelete = loading
-
-    setIsDeleting(true)
-
-    try {
-      const result = await deleteLoadingInStore(loadingToDelete.id)
-
-      if (!result.success) {
-        throw new Error(result.error || "Ошибка при удалении загрузки")
-      }
-
-      setNotification("Загрузка успешно удалена")
-      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
-
-      onClose()
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: "planning",
-          action: "delete_loading",
-          modal: "loading_modal",
-        },
-        extra: {
-          loading_id: loadingToDelete.id,
-          timestamp: new Date().toISOString(),
-        },
-      })
-
-      setNotification(`Ошибка при удалении загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
-    } finally {
-      setIsDeleting(false)
-      setShowDeleteConfirm(false)
-    }
-  }
-
-  // Handle archive
-  const handleArchive = async () => {
-    if (mode !== "edit" || !loading) return
-    const loadingToArchive = loading
-
-    setIsArchiving(true)
-
-    try {
-      const result = await archiveLoadingInStore(loadingToArchive.id)
-
-      if (!result.success) {
-        throw new Error(result.error || "Ошибка при архивировании загрузки")
-      }
-
-      setNotification("Загрузка успешно архивирована")
-      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
-
-      onClose()
-    } catch (error) {
-      Sentry.captureException(error, {
-        tags: {
-          module: "planning",
-          action: "archive_loading",
-          modal: "loading_modal",
-        },
-        extra: {
-          loading_id: loadingToArchive.id,
-          timestamp: new Date().toISOString(),
-        },
-      })
-
-      setNotification(`Ошибка при архивировании загрузки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
-    } finally {
-      setIsArchiving(false)
-      setShowArchiveConfirm(false)
-    }
   }
 
   const navigateToDecomposition = () => {
@@ -2254,7 +1890,7 @@ export function LoadingModal({
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
         onClick={(e) => {
           // Закрывать только при клике на overlay, не на содержимое модалки
-          if (e.target === e.currentTarget && !isSaving && !isDeleting && !isArchiving) {
+          if (e.target === e.currentTarget && !isSaving) {
             handleClose();
           }
         }}
@@ -2266,177 +1902,19 @@ export function LoadingModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
           <h2 className="text-lg font-semibold dark:text-slate-200">
-            {mode === "create" ? "Создание загрузки" : "Редактирование загрузки"}
+            Создание загрузки
           </h2>
           <button
             onClick={handleClose}
-            disabled={isSaving || isDeleting || isArchiving}
+            disabled={isSaving}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             ✕
           </button>
         </div>
 
-        {/* Delete confirmation */}
-        {showDeleteConfirm && (
-          <div className="p-6 space-y-4">
-            <div
-              className={cn(
-                "p-4 rounded-lg border",
-                theme === "dark" ? "bg-red-900 border-red-700" : "bg-red-50 border-red-200",
-              )}
-            >
-              <div className="flex items-start space-x-3">
-                <div className={cn("flex-shrink-0 w-5 h-5 mt-2", theme === "dark" ? "text-red-400" : "text-red-600")}>
-                  <svg fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  {/* <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-red-200" : "text-red-800")}>
-                    Внимание! Удаление загрузки
-                  </h4> */}
-                  <div className={cn("mt-2 text-sm", theme === "dark" ? "text-red-300" : "text-red-700")}>
-                    <p className="mb-2"><strong>Загрузки нужно архивировать, а не удалять.</strong></p>
-                    <p className="mb-2">Удалять можно только ошибочно созданные загрузки.</p>
-                    <p>Вы уверены, что хотите удалить эту загрузку?</p>
-                    {loading && (
-                      <div className="mt-3 space-y-1.5 text-xs">
-                        <p><strong>Этап:</strong> {loading.stageName || "Не указан"}</p>
-                        <p><strong>Сотрудник:</strong> {loading.responsibleName || selectedEmployee?.full_name || "Не указан"}</p>
-                        <p><strong>Даты:</strong> {formatDateDisplay(formData.startDate)} — {formatDateDisplay(formData.endDate)}</p>
-                        <p><strong>Ставка:</strong> {formData.rate}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeleting}
-                className={cn(
-                  "px-4 py-2 text-sm rounded border",
-                  theme === "dark"
-                    ? "border-slate-600 text-slate-300 hover:bg-slate-700"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50",
-                  isDeleting ? "opacity-50 cursor-not-allowed" : "",
-                )}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={async () => {
-                  setShowDeleteConfirm(false)
-                  await handleArchive()
-                }}
-                disabled={isDeleting}
-                className={cn(
-                  "px-4 py-2 text-sm rounded border",
-                  theme === "dark"
-                    ? "border-amber-600 text-amber-400 hover:bg-amber-900 hover:bg-opacity-20"
-                    : "border-amber-500 text-amber-600 hover:bg-amber-50",
-                  isDeleting ? "opacity-50 cursor-not-allowed" : "",
-                )}
-              >
-                Архивировать эту загрузку
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className={cn(
-                  "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[120px]",
-                  theme === "dark" ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-500 text-white hover:bg-red-600",
-                  isDeleting ? "opacity-70 cursor-not-allowed" : "",
-                )}
-              >
-                {isDeleting ? "Удаление..." : "Да, удалить"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Archive confirmation */}
-        {showArchiveConfirm && (
-          <div className="p-6 space-y-4">
-            <div
-              className={cn(
-                "p-4 rounded-lg border",
-                theme === "dark" ? "bg-amber-900 border-amber-700" : "bg-amber-50 border-amber-200",
-              )}
-            >
-              <div className="flex items-start space-x-3">
-                <div className={cn("flex-shrink-0 w-5 h-5 mt-0.5", theme === "dark" ? "text-amber-400" : "text-amber-600")}>
-                  <svg fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className={cn("text-sm font-medium", theme === "dark" ? "text-amber-200" : "text-amber-800")}>
-                    Архивирование загрузки
-                  </h4>
-                  <div className={cn("mt-2 text-sm", theme === "dark" ? "text-amber-300" : "text-amber-700")}>
-                    <p className="mb-2"><strong>Что означает архивирование?</strong></p>
-                    <p className="mb-2">
-                      Архивирование скрывает загрузку с графика планирования.
-                    </p>
-                    <p className="mb-2">
-                      Архивированные загрузки можно восстановить при необходимости.
-                    </p>
-                    {loading && (
-                      <div className="mt-3 space-y-1.5 text-xs">
-                        <p><strong>Этап:</strong> {loading.stageName || "Не указан"}</p>
-                        <p><strong>Сотрудник:</strong> {loading.responsibleName || selectedEmployee?.full_name || "Не указан"}</p>
-                        <p><strong>Даты:</strong> {formatDateDisplay(formData.startDate)} — {formatDateDisplay(formData.endDate)}</p>
-                        <p><strong>Ставка:</strong> {formData.rate}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowArchiveConfirm(false)}
-                disabled={isArchiving}
-                className={cn(
-                  "px-4 py-2 text-sm rounded border",
-                  theme === "dark"
-                    ? "border-slate-600 text-slate-300 hover:bg-slate-700"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50",
-                  isArchiving ? "opacity-50 cursor-not-allowed" : "",
-                )}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleArchive}
-                disabled={isArchiving}
-                className={cn(
-                  "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[140px]",
-                  theme === "dark"
-                    ? "bg-amber-600 text-white hover:bg-amber-700"
-                    : "bg-amber-500 text-white hover:bg-amber-600",
-                  isArchiving ? "opacity-70 cursor-not-allowed" : "",
-                )}
-              >
-                {isArchiving ? "Архивирование..." : "Архивировать"}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Main content */}
-        {!showDeleteConfirm && !showArchiveConfirm && (
+        {(
           <div className="flex-1 flex overflow-hidden">
             {/* Left side - Tree */}
             <div className="w-96 border-r dark:border-slate-700 overflow-y-auto">
@@ -2465,12 +1943,10 @@ export function LoadingModal({
                     "flex gap-1 p-1 rounded-lg",
                     theme === "dark"
                       ? "bg-slate-700"
-                      : "bg-muted",
-                    isTreeLocked && "opacity-50 cursor-not-allowed"
+                      : "bg-muted"
                   )}>
                     <button
                       onClick={() => setViewMode("my")}
-                      disabled={isTreeLocked}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "my"
@@ -2479,15 +1955,13 @@ export function LoadingModal({
                             : "bg-background shadow-sm"
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
-                          : "hover:bg-background/50",
-                        isTreeLocked && "cursor-not-allowed"
+                          : "hover:bg-background/50"
                       )}
                     >
                       Мои проекты
                     </button>
                     <button
                       onClick={() => setViewMode("all")}
-                      disabled={isTreeLocked}
                       className={cn(
                         "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
                         viewMode === "all"
@@ -2496,8 +1970,7 @@ export function LoadingModal({
                             : "bg-background shadow-sm"
                           : theme === "dark"
                           ? "hover:bg-slate-600/50"
-                          : "hover:bg-background/50",
-                        isTreeLocked && "cursor-not-allowed"
+                          : "hover:bg-background/50"
                       )}
                     >
                       Все проекты
@@ -2511,11 +1984,7 @@ export function LoadingModal({
                       placeholder="Поиск проектов..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
-                      disabled={isTreeLocked}
-                      className={cn(
-                        "h-8 pl-8 pr-8 text-sm",
-                        isTreeLocked && "opacity-50 cursor-not-allowed"
-                      )}
+                      className="h-8 pl-8 pr-8 text-sm"
                     />
                     {projectSearchTerm && (
                       <button
@@ -2570,7 +2039,7 @@ export function LoadingModal({
 
             {/* Right side - Form */}
             <div className="flex-1 overflow-y-auto p-6">
-              {(selectedNode || (mode === "create" && showCreateForm && isSelectingNewStage)) && (mode === "edit" || (mode === "create" && showCreateForm)) ? (
+              {(selectedNode || (showCreateForm && isSelectingNewStage)) && showCreateForm ? (
                 <div className="space-y-6">
                   {/* Breadcrumbs */}
                   <div className="flex items-center gap-2 text-sm flex-wrap pb-4 border-b dark:border-slate-700">
@@ -2608,22 +2077,8 @@ export function LoadingModal({
                       </div>
                       <button
                         onClick={() => {
-                          if (mode === "edit") {
-                            setIsChangingStage(true)
-
-                            // Auto-expand the current project if selectedNode exists
-                            if (selectedNode && selectedNode.projectId) {
-                              const projectNodeId = `project-${selectedNode.projectId}`
-                              setExpandedFolders(prev => {
-                                const newSet = new Set(prev)
-                                newSet.add(projectNodeId)
-                                return newSet
-                              })
-                            }
-                          } else {
-                            // In create mode, keep form visible but unlock tree for stage selection
-                            setIsSelectingNewStage(true)
-                          }
+                          // Keep form visible but unlock tree for stage selection
+                          setIsSelectingNewStage(true)
                           setSelectedNode(null)
                           setBreadcrumbs([])
                         }}
@@ -2698,14 +2153,14 @@ export function LoadingModal({
                           }
                         }}
                         placeholder="Поиск сотрудника..."
-                        disabled={isSaving || isLoadingEmployees || isArchiving || isDeleting}
+                        disabled={isSaving || isLoadingEmployees }
                         className={cn(
                           "w-full text-sm rounded border pl-3 pr-8 py-2",
                           theme === "dark"
                             ? "bg-slate-700 border-slate-600 text-slate-200"
                             : "bg-white border-slate-300 text-slate-800",
                           errors.employee ? "border-red-500" : "",
-                          (isSaving || isLoadingEmployees || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                          (isSaving || isLoadingEmployees ) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       />
                       {employeeSearchTerm && (
@@ -2715,10 +2170,10 @@ export function LoadingModal({
                             setSelectedEmployee(null)
                             setShowEmployeeDropdown(false)
                           }}
-                          disabled={isSaving || isLoadingEmployees || isArchiving || isDeleting}
+                          disabled={isSaving || isLoadingEmployees }
                           className={cn(
                             "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors",
-                            (isSaving || isLoadingEmployees || isArchiving || isDeleting) && "cursor-not-allowed opacity-50"
+                            (isSaving || isLoadingEmployees ) && "cursor-not-allowed opacity-50"
                           )}
                           aria-label="Очистить поиск"
                         >
@@ -2828,7 +2283,7 @@ export function LoadingModal({
                               })
                             }
                           }}
-                          disabled={isSaving || isArchiving || isDeleting}
+                          disabled={isSaving }
                           className={cn(
                             "px-3 py-1 rounded-full text-sm font-medium border transition-colors",
                             formData.rate === rate
@@ -2836,7 +2291,7 @@ export function LoadingModal({
                               : theme === "dark"
                               ? "bg-slate-700 text-slate-200 border-slate-600 hover:bg-slate-600"
                               : "bg-background text-foreground border-input hover:bg-accent",
-                            (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                            (isSaving ) ? "opacity-50 cursor-not-allowed" : "",
                           )}
                         >
                           {rate}
@@ -2852,7 +2307,7 @@ export function LoadingModal({
                         value={manualRateInput}
                         onChange={handleManualRateChange}
                         placeholder="1.25"
-                        disabled={isSaving || isArchiving || isDeleting}
+                        disabled={isSaving }
                         className={cn(
                           "w-20 text-sm rounded-full border px-3 py-1 outline-none focus:ring-2 focus:ring-offset-0 transition-all",
                           theme === "dark"
@@ -2861,7 +2316,7 @@ export function LoadingModal({
                           manualRateError
                             ? "!border-red-500 focus:!ring-red-500 focus:!border-red-500"
                             : "focus:ring-primary focus:border-primary",
-                          (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                          (isSaving ) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       />
                       {manualRateError && <p className="text-xs text-red-500 mt-1">{manualRateError}</p>}
@@ -2905,7 +2360,7 @@ export function LoadingModal({
                           ? "bg-slate-700 border-slate-600 text-slate-200"
                           : "bg-white border-slate-300 text-slate-800",
                         (errors.startDate || errors.endDate) ? "border-red-500" : "",
-                        (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
+                        (isSaving ) ? "opacity-50 cursor-not-allowed pointer-events-none" : "",
                       )}
                     />
                     {(errors.startDate || errors.endDate) && (
@@ -2931,69 +2386,29 @@ export function LoadingModal({
                       onChange={handleChange}
                       rows={3}
                       placeholder="Например: уточнение по задачам, договорённости и т.п."
-                      disabled={isSaving || isArchiving || isDeleting}
+                      disabled={isSaving }
                       className={cn(
                         "w-full text-sm rounded border px-3 py-2 resize-y min-h-[72px]",
                         theme === "dark"
                           ? "bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
                           : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
-                        (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                        (isSaving ) ? "opacity-50 cursor-not-allowed" : "",
                       )}
                     />
                   </div>
 
                   {/* Action buttons */}
-                  <div className={cn("flex gap-2 pt-4", mode === "edit" ? "justify-between" : "justify-end")}>
-                    {mode === "edit" && (
-                      <div className="flex gap-2 items-center">
-                        <button
-                          onClick={() => setShowArchiveConfirm(true)}
-                          disabled={isSaving || isArchiving}
-                          className={cn(
-                            "px-4 py-2 text-sm rounded border",
-                            theme === "dark"
-                              ? "border-amber-600 text-amber-400 hover:bg-amber-900 hover:bg-opacity-20"
-                              : "border-amber-500 text-amber-600 hover:bg-amber-50",
-                            (isSaving || isArchiving) ? "opacity-50 cursor-not-allowed" : "",
-                          )}
-                        >
-                          В архив
-                        </button>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => setShowDeleteConfirm(true)}
-                                disabled={isSaving || isDeleting}
-                                className={cn(
-                                  "p-2 rounded border transition-colors",
-                                  theme === "dark"
-                                    ? "border-red-600 text-red-400 hover:bg-red-900 hover:bg-opacity-20"
-                                    : "border-red-300 text-red-600 hover:bg-red-50",
-                                  (isSaving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
-                                )}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Удалить</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    )}
-
+                  <div className="flex gap-2 pt-4 justify-end">
                     <div className="flex gap-2">
                       <button
                         onClick={handleClose}
-                        disabled={isSaving || isArchiving || isDeleting}
+                        disabled={isSaving}
                         className={cn(
                           "px-4 py-2 text-sm rounded border",
                           theme === "dark"
                             ? "border-slate-600 text-slate-300 hover:bg-slate-700"
                             : "border-slate-300 text-slate-600 hover:bg-slate-50",
-                          (isSaving || isArchiving || isDeleting) ? "opacity-50 cursor-not-allowed" : "",
+                          isSaving ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       >
                         Отмена
@@ -3002,16 +2417,13 @@ export function LoadingModal({
                         onClick={handleSave}
                         disabled={
                           isSaving ||
-                          isArchiving ||
-                          isDeleting ||
                           !selectedEmployee ||
                           !formData.startDate ||
                           !formData.endDate ||
                           new Date(formData.startDate) > new Date(formData.endDate) ||
                           formData.rate <= 0 ||
                           formData.rate > 2 ||
-                          !selectedNode?.decompositionStageId ||
-                          (mode === "edit" && !hasChanges)
+                          !selectedNode?.decompositionStageId
                         }
                         className={cn(
                           "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
@@ -3019,27 +2431,24 @@ export function LoadingModal({
                             ? "bg-teal-600 text-white hover:bg-teal-700"
                             : "bg-teal-500 text-white hover:bg-teal-600",
                           (isSaving ||
-                            isArchiving ||
-                            isDeleting ||
                             !selectedEmployee ||
                             !formData.startDate ||
                             !formData.endDate ||
                             new Date(formData.startDate) > new Date(formData.endDate) ||
                             formData.rate <= 0 ||
                             formData.rate > 2 ||
-                            !selectedNode?.decompositionStageId ||
-                            (mode === "edit" && !hasChanges)) &&
+                            !selectedNode?.decompositionStageId) &&
                             "opacity-50 cursor-not-allowed",
                         )}
                       >
-                        {isSaving ? "Сохранение..." : mode === "create" ? "Создать" : "Сохранить"}
+                        {isSaving ? "Сохранение..." : "Создать"}
                       </button>
                     </div>
                   </div>
                     </>
                   )}
                 </div>
-              ) : selectedNode && mode === "create" && !showCreateForm ? (
+              ) : selectedNode && !showCreateForm ? (
                 // Create mode - Stage selected, show "Create Loading" button
                 <div className="flex flex-col items-center justify-center h-full space-y-8 px-8">
                   {/* Breadcrumbs */}
@@ -3083,22 +2492,13 @@ export function LoadingModal({
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  {mode === "edit" && originalValuesRef.current.employeeId === "" ? (
-                    // Loading spinner for edit mode while data is being loaded
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                      <p className="text-sm text-muted-foreground">Загрузка данных...</p>
-                    </div>
-                  ) : (
-                    // Message for create mode - select a stage
-                    originalEmployeeRef.current && (
-                      <p className="text-sm text-muted-foreground text-center max-w-md">
-                        Выберите этап из дерева слева для создания в нем загрузки на сотрудника{" "}
-                        <span className="font-medium text-foreground">
-                          {originalEmployeeRef.current.full_name}
-                        </span>
-                      </p>
-                    )
+                  {originalEmployeeRef.current && (
+                    <p className="text-sm text-muted-foreground text-center max-w-md">
+                      Выберите этап из дерева слева для создания в нем загрузки на сотрудника{" "}
+                      <span className="font-medium text-foreground">
+                        {originalEmployeeRef.current.full_name}
+                      </span>
+                    </p>
                   )}
                 </div>
               )}

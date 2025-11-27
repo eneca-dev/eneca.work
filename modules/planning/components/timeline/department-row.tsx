@@ -559,8 +559,6 @@ export function EmployeeRow({
 }: EmployeeRowProps) {
   // Состояния для модальных окон
   const [showLoadingModal, setShowLoadingModal] = useState(false)
-  const [loadingModalMode, setLoadingModalMode] = useState<"create" | "edit">("create")
-  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const [showAddShortage, setShowAddShortage] = useState(false)
 
   // Состояние для отслеживания наведения на аватар
@@ -758,8 +756,6 @@ export function EmployeeRow({
                       if (employee.isShortage) {
                         setShowAddShortage(true)
                       } else {
-                        setLoadingModalMode("create")
-                        setEditingLoading(null)
                         setShowLoadingModal(true)
                       }
                     }}
@@ -833,7 +829,6 @@ export function EmployeeRow({
                       key={`${bar.period.id}-${idx}`}
                       className={cn(
                         "absolute rounded transition-all duration-200 pointer-events-auto",
-                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default",
                         // Всегда используем горизонтальное выравнивание
                         "flex items-center"
                       )}
@@ -853,14 +848,6 @@ export function EmployeeRow({
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (bar.period.type === "loading" && bar.period.loading) {
-                          setLoadingModalMode("edit")
-                          setEditingLoading(bar.period.loading)
-                          setShowLoadingModal(true)
-                        }
-                      }}
                     >
                       {(() => {
                         // Адаптивное отображение для загрузок
@@ -1099,17 +1086,12 @@ export function EmployeeRow({
         </div>
       </div>
 
-      {/* Универсальное модальное окно для создания/редактирования загрузки */}
+      {/* Модальное окно для создания загрузки */}
       <LoadingModal
         isOpen={showLoadingModal}
-        onClose={() => {
-          setShowLoadingModal(false)
-          setEditingLoading(null)
-        }}
+        onClose={() => setShowLoadingModal(false)}
         theme={theme}
-        mode={loadingModalMode}
-        employee={loadingModalMode === "create" ? employee : undefined}
-        loading={loadingModalMode === "edit" ? editingLoading || undefined : undefined}
+        employee={employee}
       />
       {showAddShortage && (
         <AddShortageModal
