@@ -11,6 +11,8 @@ import { useState, Fragment, useMemo } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { LoadingModal } from "./loading-modal"
 import { AddShortageModal } from "./AddShortageModal"
+import { FreshnessIndicator } from "./FreshnessIndicator"
+import { useTeamActivityPermissions } from "../../hooks/useTeamActivityPermissions"
 import {
   loadingsToPeriods,
   groupVacationPeriods,
@@ -98,6 +100,36 @@ export function DepartmentRow({
   const toggleTeamExpanded = usePlanningStore((s) => s.toggleTeamExpanded)
   const toggleEmployeeExpanded = usePlanningStore((s) => s.toggleEmployeeExpanded)
 
+  // Получаем данные freshness из стора и функцию подтверждения
+  const freshnessCache = usePlanningStore(s => s.freshnessCache.data)
+  const confirmActivity = usePlanningStore(s => s.confirmTeamActivity)
+  const confirmMultipleActivity = usePlanningStore(s => s.confirmMultipleTeamsActivity)
+
+  // Проверка прав на актуализацию данных команды
+  const { canActualizeDepartment, canActualizeTeam } = useTeamActivityPermissions()
+
+  // Вычисляем freshness для отдела на основе команд (максимум = самые старые данные)
+  const departmentFreshness = useMemo(() => {
+    if (!department.teams || department.teams.length === 0) return undefined
+
+    // Собираем данные freshness всех команд
+    const teamFreshness = department.teams
+      .map(team => freshnessCache[team.id])
+      .filter((f): f is NonNullable<typeof f> => f !== undefined && f.daysSinceUpdate !== undefined)
+
+    if (teamFreshness.length === 0) return undefined
+
+    // Находим команду с максимальным daysSinceUpdate (самые старые данные)
+    const oldestTeam = teamFreshness.reduce((max, current) =>
+      current.daysSinceUpdate! > max.daysSinceUpdate! ? current : max
+    )
+
+    return {
+      daysSinceUpdate: oldestTeam.daysSinceUpdate,
+      lastUpdate: oldestTeam.lastUpdate
+    }
+  }, [department.teams, freshnessCache])
+
   // Получаем всех сотрудников отдела из всех команд (исключая строку дефицита)
   const allEmployees = department.teams.flatMap((team) => team.employees.filter((e) => !(e as any).isShortage))
 
@@ -172,9 +204,28 @@ export function DepartmentRow({
                   )}
                 </div>
               </div>
+
+              {/* Правая часть с индикатором актуальности */}
+              <div className="flex items-center gap-2 pr-2">
+                {departmentFreshness && (
+                  <FreshnessIndicator
+                    teamId={department.teams[0]?.id || department.id}
+                    teamName={department.name}
+                    daysSinceUpdate={departmentFreshness.daysSinceUpdate}
+                    lastUpdate={departmentFreshness.lastUpdate}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    size="sm"
+                    onConfirm={confirmActivity}
+                    teamIds={department.teams.map(t => t.id)}
+                    onConfirmMultiple={confirmMultipleActivity}
+                    disabled={!canActualizeDepartment()}
+                    tooltipSide={departmentIndex === 0 ? 'left' : 'top'}
+                  />
+                )}
+              </div>
             </div>
 
-            
+
 
             {/* Столбец "Объект" (может быть скрыт) */}
             {columnVisibility.object && (
@@ -317,6 +368,7 @@ export function DepartmentRow({
                 totalFixedWidth={totalFixedWidth}
                 isExpanded={expandedTeams[team.id] || false}
                 onToggleExpand={() => toggleTeamExpanded(team.id)}
+                canActualizeTeam={canActualizeTeam}
               />
               {(expandedTeams[team.id] || false) && (() => {
                 // Формируем список сотрудников так, чтобы тимлид был первым, остальные — в исходном порядке
@@ -367,15 +419,20 @@ interface TeamRowProps {
   totalFixedWidth: number
   isExpanded: boolean
   onToggleExpand: () => void
+  canActualizeTeam: (teamId: string) => boolean
 }
 
-function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalFixedWidth, isExpanded, onToggleExpand }: TeamRowProps) {
+function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalFixedWidth, isExpanded, onToggleExpand, canActualizeTeam }: TeamRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   // Емкость команды: только реальные сотрудники, без строки дефицита
   const totalTeamCapacity = (team.employees || [])
     .filter((e) => !(e as any).isShortage)
     .reduce((sum, e) => sum + (e.employmentRate || 1), 0)
   const [showAddShortage, setShowAddShortage] = useState(false)
+
+  // Получаем данные freshness для команды
+  const freshness = usePlanningStore(s => s.freshnessCache.data[team.id])
+  const confirmActivity = usePlanningStore(s => s.confirmTeamActivity)
 
   return (
     <div className={cn("group/row min-w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}
@@ -413,8 +470,18 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                 )}
               </div>
             </div>
-            {/* Кнопка добавления дефицита для команды */}
+            {/* Индикатор актуальности и кнопка добавления дефицита для команды */}
             <div className="flex items-center gap-2">
+              <FreshnessIndicator
+                teamId={team.id}
+                teamName={team.name}
+                daysSinceUpdate={freshness?.daysSinceUpdate}
+                lastUpdate={freshness?.lastUpdate}
+                theme={theme === 'dark' ? 'dark' : 'light'}
+                size="sm"
+                onConfirm={confirmActivity}
+                disabled={!canActualizeTeam(team.id)}
+              />
               <button
                 className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center transition-opacity",
