@@ -1949,6 +1949,7 @@ export function LoadingModal({
             startDate: new Date(formData.startDate),
             endDate: new Date(formData.endDate),
             rate: formData.rate,
+            projectId: sectionData?.project_id,
             projectName: sectionData?.project_name,
             sectionName: sectionData?.section_name,
             decompositionStageId: selectedNode!.decompositionStageId!,

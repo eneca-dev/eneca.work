@@ -154,6 +154,7 @@ interface PlanningState {
     endDate: Date
     rate: number
     stageId?: string
+    projectId?: string
     projectName?: string
     sectionName?: string
     decompositionStageId?: string
@@ -1231,7 +1232,7 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleTeamName: loadingData.responsibleTeamName || undefined,
               sectionId: loadingData.sectionId,
               sectionName: loadingData.sectionName,
-              projectId: undefined,
+              projectId: loadingData.projectId,
               projectName: loadingData.projectName,
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
