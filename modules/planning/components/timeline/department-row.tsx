@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
-import type { Department, Employee, Loading } from "../../types"
+import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
@@ -26,7 +26,7 @@ import {
 interface DepartmentRowProps {
   department: Department
   departmentIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   headerHeight: number
@@ -359,7 +359,7 @@ export function DepartmentRow({
 // Компонент строки команды внутри отдела
 interface TeamRowProps {
   team: Department["teams"][number]
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -528,7 +528,7 @@ interface EmployeeRowProps {
   employee: Employee
   departmentPosition: number
   employeeIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -559,9 +559,9 @@ export function EmployeeRow({
 }: EmployeeRowProps) {
   // Состояния для модальных окон
   const [showLoadingModal, setShowLoadingModal] = useState(false)
-  const [loadingModalMode, setLoadingModalMode] = useState<"create" | "edit">("create")
-  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const [showAddShortage, setShowAddShortage] = useState(false)
+  // Состояние для редактирования загрузки
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
 
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -758,8 +758,6 @@ export function EmployeeRow({
                       if (employee.isShortage) {
                         setShowAddShortage(true)
                       } else {
-                        setLoadingModalMode("create")
-                        setEditingLoading(null)
                         setShowLoadingModal(true)
                       }
                     }}
@@ -833,9 +831,10 @@ export function EmployeeRow({
                       key={`${bar.period.id}-${idx}`}
                       className={cn(
                         "absolute rounded transition-all duration-200 pointer-events-auto",
-                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default",
                         // Всегда используем горизонтальное выравнивание
-                        "flex items-center"
+                        "flex items-center",
+                        // Курсор pointer для загрузок (можно редактировать)
+                        bar.period.type === "loading" && "cursor-pointer hover:brightness-110"
                       )}
                       style={{
                         left: `${bar.left}px`,
@@ -853,12 +852,10 @@ export function EmployeeRow({
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
-                      onClick={(e) => {
-                        e.stopPropagation()
+                      onClick={() => {
+                        // Открыть модалку редактирования для загрузок
                         if (bar.period.type === "loading" && bar.period.loading) {
-                          setLoadingModalMode("edit")
                           setEditingLoading(bar.period.loading)
-                          setShowLoadingModal(true)
                         }
                       }}
                     >
@@ -1099,18 +1096,29 @@ export function EmployeeRow({
         </div>
       </div>
 
-      {/* Универсальное модальное окно для создания/редактирования загрузки */}
+      {/* Модальное окно для создания загрузки */}
       <LoadingModal
         isOpen={showLoadingModal}
-        onClose={() => {
-          setShowLoadingModal(false)
-          setEditingLoading(null)
-        }}
+        onClose={() => setShowLoadingModal(false)}
         theme={theme}
-        mode={loadingModalMode}
-        employee={loadingModalMode === "create" ? employee : undefined}
-        loading={loadingModalMode === "edit" ? editingLoading || undefined : undefined}
+        employee={employee}
+        mode="create"
       />
+
+      {/* Модальное окно для редактирования загрузки */}
+      {editingLoading && (
+        <LoadingModal
+          isOpen={!!editingLoading}
+          onClose={() => setEditingLoading(null)}
+          theme={theme}
+          mode="edit"
+          loading={editingLoading}
+          onLoadingUpdated={() => {
+            // Store автоматически обновит state через realtime subscriptions
+          }}
+        />
+      )}
+
       {showAddShortage && (
         <AddShortageModal
           teamId={employee.teamId}

@@ -154,6 +154,7 @@ interface PlanningState {
     endDate: Date
     rate: number
     stageId?: string
+    projectId?: string
     projectName?: string
     sectionName?: string
     decompositionStageId?: string
@@ -1231,7 +1232,7 @@ export const usePlanningStore = create<PlanningState>()(
               responsibleTeamName: loadingData.responsibleTeamName || undefined,
               sectionId: loadingData.sectionId,
               sectionName: loadingData.sectionName,
-              projectId: undefined,
+              projectId: loadingData.projectId,
               projectName: loadingData.projectName,
               startDate: loadingData.startDate,
               endDate: loadingData.endDate,
@@ -1545,16 +1546,50 @@ export const usePlanningStore = create<PlanningState>()(
             }
 
             // Обновляем в отделах с пересчетом dailyWorkloads
-            const updatedDepartments = departments.map((department) => ({
-              ...department,
-              teams: department.teams.map((team) => ({
-                ...team,
-                employees: team.employees.map((employee) => {
-                  const updatedLoadings = employee.loadings?.map((loading) =>
-                    loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
-                  ) || []
-                  
-                  // Пересчитываем dailyWorkloads
+            // Если изменился responsibleId, нужно переместить загрузку между сотрудниками
+            let loadingToMove: Loading | undefined
+            let oldResponsibleId: string | undefined
+
+            // Сначала находим загрузку и определяем, изменился ли сотрудник
+            if (finalUpdates.responsibleId) {
+              departments.forEach((department) => {
+                department.teams.forEach((team) => {
+                  team.employees.forEach((employee) => {
+                    const found = employee.loadings?.find((l) => l.id === loadingId)
+                    if (found && employee.id !== finalUpdates.responsibleId) {
+                      loadingToMove = { ...found, ...finalUpdates }
+                      oldResponsibleId = employee.id
+                    }
+                  })
+                })
+              })
+            }
+
+            const updatedDepartments = departments.map((department) => {
+              const updatedTeams = department.teams.map((team) => {
+                const updatedEmployees = team.employees.map((employee) => {
+                  let updatedLoadings: Loading[]
+
+                  if (loadingToMove && oldResponsibleId) {
+                    // Смена сотрудника: удаляем у старого, добавляем новому
+                    if (employee.id === oldResponsibleId) {
+                      // Удаляем загрузку у старого сотрудника
+                      updatedLoadings = employee.loadings?.filter((l) => l.id !== loadingId) || []
+                    } else if (employee.id === finalUpdates.responsibleId) {
+                      // Добавляем загрузку новому сотруднику
+                      updatedLoadings = [...(employee.loadings || []), loadingToMove]
+                    } else {
+                      // Другие сотрудники - без изменений
+                      updatedLoadings = employee.loadings || []
+                    }
+                  } else {
+                    // Обычное обновление без смены сотрудника
+                    updatedLoadings = employee.loadings?.map((loading) =>
+                      loading.id === loadingId ? { ...loading, ...finalUpdates } : loading,
+                    ) || []
+                  }
+
+                  // Пересчитываем dailyWorkloads сотрудника
                   const dailyWorkloads: Record<string, number> = {}
                   updatedLoadings.forEach((loading) => {
                     const startDate = new Date(loading.startDate)
@@ -1578,9 +1613,43 @@ export const usePlanningStore = create<PlanningState>()(
                     hasLoadings: updatedLoadings.length > 0,
                     loadingsCount: updatedLoadings.length,
                   }
-                }),
-              })),
-            }))
+                })
+
+                // Пересчитываем dailyWorkloads команды на основе сотрудников
+                const teamDailyWorkloads: Record<string, number> = {}
+                updatedEmployees.forEach((employee) => {
+                  Object.keys(employee.dailyWorkloads || {}).forEach((dateKey) => {
+                    if (!teamDailyWorkloads[dateKey]) {
+                      teamDailyWorkloads[dateKey] = 0
+                    }
+                    teamDailyWorkloads[dateKey] += employee.dailyWorkloads[dateKey]
+                  })
+                })
+
+                return {
+                  ...team,
+                  employees: updatedEmployees,
+                  dailyWorkloads: teamDailyWorkloads,
+                }
+              })
+
+              // Пересчитываем dailyWorkloads отдела на основе команд
+              const departmentDailyWorkloads: Record<string, number> = {}
+              updatedTeams.forEach((team) => {
+                Object.keys(team.dailyWorkloads || {}).forEach((dateKey) => {
+                  if (!departmentDailyWorkloads[dateKey]) {
+                    departmentDailyWorkloads[dateKey] = 0
+                  }
+                  departmentDailyWorkloads[dateKey] += (team.dailyWorkloads || {})[dateKey] || 0
+                })
+              })
+
+              return {
+                ...department,
+                teams: updatedTeams,
+                dailyWorkloads: departmentDailyWorkloads,
+              }
+            })
 
             set({
               sections: updatedSections,

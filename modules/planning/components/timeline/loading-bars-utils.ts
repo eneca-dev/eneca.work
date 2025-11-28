@@ -2,7 +2,7 @@
  * Утилиты для работы с полосками загрузок сотрудников
  */
 
-import type { Loading } from "../../types"
+import type { Loading, TimelineUnit } from "../../types"
 
 /**
  * Интерфейс для периода (загрузка, отпуск, больничный или отгул)
@@ -401,7 +401,7 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
 function splitPeriodByWorkingDays(
   startIdx: number,
   endIdx: number,
-  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean }>
+  timeUnits: TimelineUnit[]
 ): Array<{ startIdx: number; endIdx: number }> {
   const segments: Array<{ startIdx: number; endIdx: number }> = []
   let segmentStart: number | null = null
@@ -438,7 +438,7 @@ function splitPeriodByWorkingDays(
  */
 export function calculateBarRenders(
   periods: BarPeriod[],
-  timeUnits: Array<{ date: Date; label: string; isWeekend?: boolean; isWorkingDay?: boolean; width?: number; left?: number }>,
+  timeUnits: TimelineUnit[],
   cellWidth: number, // Deprecated: используется только для обратной совместимости
   isDark: boolean
 ): BarRender[] {

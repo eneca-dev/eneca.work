@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { TimelineUnit } from "../../types"
 
 import { cn } from "@/lib/utils"
 import { useMemo } from "react"
@@ -9,7 +10,7 @@ import { groupDatesByMonth, isToday, isFirstDayOfMonth } from "../../utils/date-
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 
 interface TimelineHeaderProps {
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   headerHeight: number
   columnWidth: number
