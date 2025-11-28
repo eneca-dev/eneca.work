@@ -95,6 +95,10 @@ interface LoadingModalProps {
   defaultStartDate?: Date | string
   defaultEndDate?: Date | string
   defaultRate?: number
+  // Props для edit mode
+  mode?: "create" | "edit"
+  loading?: Loading
+  onLoadingUpdated?: () => void
 }
 
 interface EmployeeSearchResult {
@@ -124,7 +128,12 @@ export function LoadingModal({
   defaultStartDate,
   defaultEndDate,
   defaultRate,
+  mode = "create",
+  loading,
+  onLoadingUpdated,
 }: LoadingModalProps) {
+  // Определяем режим работы модалки
+  const isEditMode = mode === "edit" && !!loading
   const router = useRouter()
   const selectSection = useProjectsStore((state) => state.selectSection)
 
@@ -146,6 +155,9 @@ export function LoadingModal({
   const setNotification = useUiStore((state) => state.setNotification)
   const clearNotification = useUiStore((state) => state.clearNotification)
   const createLoadingInStore = usePlanningStore((state) => state.createLoading)
+  const updateLoadingInStore = usePlanningStore((state) => state.updateLoading)
+  const archiveLoadingInStore = usePlanningStore((state) => state.archiveLoading)
+  const deleteLoadingInStore = usePlanningStore((state) => state.deleteLoading)
   const toggleSectionExpanded = usePlanningStore((state) => state.toggleSectionExpanded)
 
   // Helper function for date formatting
@@ -211,7 +223,8 @@ export function LoadingModal({
   const [projectSearchTerm, setProjectSearchTerm] = useState("")
 
   // View mode state: "my" (Мои проекты) or "all" (Все проекты)
-  const [viewMode, setViewMode] = useState<"my" | "all">("my")
+  // В edit mode сразу используем "all", чтобы избежать race condition с очередью buildFileTree
+  const [viewMode, setViewMode] = useState<"my" | "all">(mode === "edit" ? "all" : "my")
 
   // Очередь для отложенных вызовов buildFileTree
   const [pendingBuildQueue, setPendingBuildQueue] = useState<Array<{ viewMode: "my" | "all" }>>([])
@@ -267,6 +280,14 @@ export function LoadingModal({
   const [showCreateForm, setShowCreateForm] = useState(false)
   // Flag for tracking when user is selecting a new stage (keeps form visible, unlocks tree)
   const [isSelectingNewStage, setIsSelectingNewStage] = useState(false)
+
+  // Edit mode states
+  const [hasChanges, setHasChanges] = useState(false)
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [showDeletePanel, setShowDeletePanel] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Ref to prevent concurrent buildFileTree calls
   const isLoadingTreeRef = useRef(false)
@@ -1179,30 +1200,47 @@ export function LoadingModal({
 
     setProjectSearchTerm(projectNode.name)
 
+    // Вспомогательная функция для поиска узла в дереве без побочных эффектов
+    const findNodeInTreeLocal = (nodes: FileTreeNode[], decompositionStageId: string): FileTreeNode | null => {
+      for (const node of nodes) {
+        if (node.decompositionStageId === decompositionStageId) {
+          return node
+        }
+        if (node.children) {
+          const found = findNodeInTreeLocal(node.children, decompositionStageId)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
     // Проверяем, загружены ли уже дети этого проекта
     if (projectNode.children && projectNode.children.length > 0) {
-      // Дети уже загружены, можем искать узел
-      console.log("Дети проекта уже загружены, ищем узел...")
-      findAndSelectNode(pendingStageId, pendingProjectId)
-      setPendingStageSelection(null)
-    } else if (!loadingNodes.has(projectNode.id)) {
-      // Нужно загрузить дети, ТОЛЬКО если они еще не загружаются
-      console.log("Загружаем дети проекта для pending selection...")
-      loadNodeChildren(projectNode, true).then((hasChildren) => {
-        if (hasChildren) {
-          // НЕ вызываем findAndSelectNode здесь!
-          // Просто ждём следующего рендера, когда treeData обновится
-          // и этот useEffect запустится снова
-          console.log("Дети загружены, ожидаем следующего рендера...")
-        } else {
-          console.log("Нет детей после загрузки")
-          setPendingStageSelection(null)
+      // Дети уже загружены, проверяем наличие узла
+      const foundNode = findNodeInTreeLocal(treeData, pendingStageId)
+
+      if (foundNode) {
+        // Узел найден - выбираем его и сбрасываем pending
+        console.log("Узел найден, выбираем...")
+        findAndSelectNode(pendingStageId, pendingProjectId)
+        setPendingStageSelection(null)
+      } else {
+        // Узел не найден - вероятно, нужно загрузить вложенные уровни
+        // НЕ сбрасываем pendingStageSelection, ждём обновления treeData
+        console.log("Узел не найден в загруженных детях, ожидаем...")
+
+        // Принудительная перезагрузка данных проекта
+        if (!loadingNodes.has(projectNode.id)) {
+          loadNodeChildren(projectNode, true)
         }
-      })
-    } else {
-      // Узел уже загружается, ждём следующего рендера
-      console.log("Узел уже загружается, ждём обновления treeData...")
+      }
+    } else if (!loadingNodes.has(projectNode.id)) {
+      // Дети не загружены - загружаем
+      console.log("Загружаем дети проекта для pending selection...")
+      loadNodeChildren(projectNode, true)
+      // НЕ сбрасываем pendingStageSelection - ждём обновления treeData
     }
+    // Если узел загружается (loadingNodes.has), просто ждём следующего рендера
   }, [pendingStageSelection, treeData, viewMode, loadNodeChildren, findAndSelectNode, setProjectSearchTerm, loadingNodes])
 
   // Reset modal state when reopening
@@ -1215,35 +1253,100 @@ export function LoadingModal({
       // Reset expanded folders to empty
       setExpandedFolders(new Set())
 
-      // Reset employee to original from props
-      setSelectedEmployee(originalEmployeeRef.current)
-      if (originalEmployeeRef.current) {
-        setEmployeeSearchTerm(originalEmployeeRef.current.full_name)
-      }
-
-      // Reset form data to defaults
-      setFormData({
-        startDate: normalizeDateValue(defaultStartDate) || formatLocalYMD(new Date())!,
-        endDate: normalizeDateValue(defaultEndDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-        rate: defaultRate ?? 1,
-        comment: "",
-      })
-
-      // Clear project search
-      setProjectSearchTerm("")
-
       // Clear errors
       setErrors({})
-
-      // Reset showCreateForm (start with stage selection screen)
-      setShowCreateForm(false)
-
-      // Reset isSelectingNewStage flag
-      setIsSelectingNewStage(false)
 
       // Clear section panel IDs
       setSectionPanelSectionId(null)
       setSectionPanelProjectId(null)
+
+      // Reset edit mode states
+      setHasChanges(false)
+      setShowArchiveConfirm(false)
+      setShowDeletePanel(false)
+      setShowDeleteConfirm(false)
+
+      if (isEditMode && loading) {
+        // EDIT MODE: Initialize from loading object
+        // Set viewMode to "all" (все проекты)
+        setViewMode("all")
+
+        // Fill form with loading data
+        const loadingStartDate = loading.startDate instanceof Date
+          ? formatLocalYMD(loading.startDate)
+          : normalizeDateValue(loading.startDate)
+        const loadingEndDate = loading.endDate instanceof Date
+          ? formatLocalYMD(loading.endDate)
+          : normalizeDateValue(loading.endDate)
+
+        setFormData({
+          startDate: loadingStartDate || formatLocalYMD(new Date())!,
+          endDate: loadingEndDate || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+          rate: loading.rate ?? 1,
+          comment: loading.comment || "",
+        })
+
+        // Set selected employee from loading
+        if (loading.responsibleId) {
+          const employeeFromLoading: EmployeeSearchResult = {
+            user_id: loading.responsibleId,
+            first_name: "",
+            last_name: "",
+            full_name: loading.responsibleName || "",
+            email: "",
+            position_name: null,
+            avatar_url: loading.responsibleAvatarUrl || null,
+            team_name: loading.responsibleTeamName || null,
+            department_name: null,
+            employment_rate: null,
+          }
+          setSelectedEmployee(employeeFromLoading)
+          setEmployeeSearchTerm(loading.responsibleName || "")
+        }
+
+        // Set project search term if available
+        if (loading.projectName) {
+          setProjectSearchTerm(loading.projectName)
+        } else {
+          setProjectSearchTerm("")
+        }
+
+        // Set pending stage selection to expand tree and select the decomposition stage
+        if (loading.stageId && loading.projectId) {
+          setPendingStageSelection({
+            stageId: loading.stageId,
+            projectId: loading.projectId,
+          })
+        }
+
+        // In edit mode, show form immediately
+        setShowCreateForm(true)
+        setIsSelectingNewStage(false)
+      } else {
+        // CREATE MODE: Reset to defaults
+        // Reset employee to original from props
+        setSelectedEmployee(originalEmployeeRef.current)
+        if (originalEmployeeRef.current) {
+          setEmployeeSearchTerm(originalEmployeeRef.current.full_name)
+        }
+
+        // Reset form data to defaults
+        setFormData({
+          startDate: normalizeDateValue(defaultStartDate) || formatLocalYMD(new Date())!,
+          endDate: normalizeDateValue(defaultEndDate) || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
+          rate: defaultRate ?? 1,
+          comment: "",
+        })
+
+        // Clear project search
+        setProjectSearchTerm("")
+
+        // Reset showCreateForm (start with stage selection screen)
+        setShowCreateForm(false)
+
+        // Reset isSelectingNewStage flag
+        setIsSelectingNewStage(false)
+      }
     }
 
     // Reset state when modal closes
@@ -1265,8 +1368,14 @@ export function LoadingModal({
 
       // Clear pending stage selection when modal closes
       setPendingStageSelection(null)
+
+      // Reset edit mode states
+      setHasChanges(false)
+      setShowArchiveConfirm(false)
+      setShowDeletePanel(false)
+      setShowDeleteConfirm(false)
     }
-  }, [isOpen, normalizeDateValue, formatLocalYMD, defaultStartDate, defaultEndDate, defaultRate])
+  }, [isOpen, normalizeDateValue, formatLocalYMD, defaultStartDate, defaultEndDate, defaultRate, isEditMode, loading])
 
   // Update dropdown position on scroll/resize
   useEffect(() => {
@@ -1398,6 +1507,10 @@ export function LoadingModal({
       // In create mode: if we were selecting a new stage, lock tree again
       if (isSelectingNewStage) {
         setIsSelectingNewStage(false)
+        // In edit mode, selecting a new stage means the form has changed
+        if (isEditMode) {
+          setHasChanges(true)
+        }
       }
 
       // Clear error
@@ -1481,6 +1594,7 @@ export function LoadingModal({
   }
 
   // Lock ENTIRE tree when form is shown AND not selecting new stage
+  // In edit mode, tree is always locked until "Change Stage" button is clicked
   const isTreeLocked = showCreateForm && !isSelectingNewStage
 
   // Render FileTree node
@@ -1675,6 +1789,11 @@ export function LoadingModal({
     setEmployeeSearchTerm(emp.full_name)
     setShowEmployeeDropdown(false)
 
+    // Track changes in edit mode
+    if (isEditMode) {
+      setHasChanges(true)
+    }
+
     if (errors.employee) {
       setErrors((prev) => {
         const newErrors = { ...prev }
@@ -1692,6 +1811,11 @@ export function LoadingModal({
 
     // Update the input field with normalized value
     setManualRateInput(normalizedValue)
+
+    // Track changes in edit mode
+    if (isEditMode) {
+      setHasChanges(true)
+    }
 
     // Parse and validate
     if (normalizedValue === "") {
@@ -1731,6 +1855,11 @@ export function LoadingModal({
       ...prev,
       [name]: value,
     }))
+
+    // Track changes in edit mode
+    if (isEditMode) {
+      setHasChanges(true)
+    }
 
     if (errors[name]) {
       setErrors((prev) => {
@@ -1870,6 +1999,183 @@ export function LoadingModal({
     )
   }
 
+  // Handle update (edit mode)
+  const handleUpdate = async () => {
+    if (!validateForm() || !loading) return
+
+    await Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Обновление загрузки",
+      },
+      async (span) => {
+        setIsSaving(true)
+
+        try {
+          span.setAttribute("mode", "edit")
+          span.setAttribute("loading.id", loading.id)
+          span.setAttribute("employee.id", selectedEmployee!.user_id)
+          span.setAttribute("loading.start_date", formData.startDate)
+          span.setAttribute("loading.end_date", formData.endDate)
+          span.setAttribute("loading.rate", formData.rate)
+
+          // Build updates object
+          const updates: Partial<Loading> = {
+            startDate: new Date(formData.startDate),
+            endDate: new Date(formData.endDate),
+            rate: formData.rate,
+            comment: formData.comment?.trim() || undefined,
+          }
+
+          // Check if employee changed
+          if (selectedEmployee?.user_id !== loading.responsibleId) {
+            updates.responsibleId = selectedEmployee!.user_id
+            updates.responsibleName = selectedEmployee!.full_name
+            updates.responsibleAvatarUrl = selectedEmployee!.avatar_url || undefined
+            updates.responsibleTeamName = selectedEmployee!.team_name || undefined
+          }
+
+          // Check if stage changed
+          if (selectedNode?.decompositionStageId && selectedNode.decompositionStageId !== loading.stageId) {
+            updates.stageId = selectedNode.decompositionStageId
+            updates.stageName = selectedNode.name
+
+            // Fetch section info for new stage
+            const { data: sectionData } = await supabase
+              .from("view_section_hierarchy")
+              .select("project_id, project_name, section_id, section_name")
+              .eq("section_id", selectedNode.sectionId!)
+              .limit(1)
+              .maybeSingle()
+
+            if (sectionData) {
+              updates.sectionId = sectionData.section_id
+              updates.sectionName = sectionData.section_name
+              updates.projectId = sectionData.project_id
+              updates.projectName = sectionData.project_name
+            }
+          }
+
+          const result = await updateLoadingInStore(loading.id, updates)
+
+          if (!result.success) {
+            throw new Error(result.error || "Неизвестная ошибка при обновлении загрузки")
+          }
+
+          span.setAttribute("operation.success", true)
+
+          setNotification("Загрузка успешно обновлена")
+          successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+          // Call callback and close modal
+          onLoadingUpdated?.()
+          onClose()
+        } catch (error) {
+          span.setAttribute("operation.success", false)
+          span.setAttribute("operation.error", error instanceof Error ? error.message : "Неизвестная ошибка")
+
+          Sentry.captureException(error, {
+            tags: {
+              module: "planning",
+              action: "update_loading",
+              modal: "loading_modal",
+            },
+            extra: {
+              loading_id: loading.id,
+              employee_id: selectedEmployee?.user_id,
+              start_date: formData.startDate,
+              end_date: formData.endDate,
+              rate: formData.rate,
+              timestamp: new Date().toISOString(),
+            },
+          })
+
+          setNotification(`Ошибка: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+          errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+        } finally {
+          setIsSaving(false)
+        }
+      },
+    )
+  }
+
+  // Handle archive with double confirmation
+  const handleArchive = async () => {
+    if (!loading) return
+
+    setIsArchiving(true)
+    try {
+      const result = await archiveLoadingInStore(loading.id)
+
+      if (!result.success) {
+        throw new Error(result.error || "Неизвестная ошибка при архивации")
+      }
+
+      setNotification("Загрузка архивирована")
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+      onLoadingUpdated?.()
+      onClose()
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "archive_loading",
+          modal: "loading_modal",
+        },
+        extra: {
+          loading_id: loading.id,
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      setNotification(`Ошибка: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setIsArchiving(false)
+      setShowArchiveConfirm(false)
+    }
+  }
+
+  // Handle delete with double confirmation
+  const handleDelete = async () => {
+    if (!loading) return
+
+    setIsDeleting(true)
+    try {
+      const result = await deleteLoadingInStore(loading.id)
+
+      if (!result.success) {
+        throw new Error(result.error || "Неизвестная ошибка при удалении")
+      }
+
+      setNotification("Загрузка удалена")
+      successTimeoutRef.current = setTimeout(() => clearNotification(), 3000)
+
+      onLoadingUpdated?.()
+      onClose()
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          module: "planning",
+          action: "delete_loading",
+          modal: "loading_modal",
+        },
+        extra: {
+          loading_id: loading.id,
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      setNotification(`Ошибка: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
+      errorTimeoutRef.current = setTimeout(() => clearNotification(), 5000)
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+      setShowDeletePanel(false)
+    }
+  }
+
   const navigateToDecomposition = () => {
     if (!selectedNode?.sectionId) return
     setSectionPanelSectionId(selectedNode.sectionId)
@@ -1902,7 +2208,7 @@ export function LoadingModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b dark:border-slate-700">
           <h2 className="text-lg font-semibold dark:text-slate-200">
-            Создание загрузки
+            {isEditMode ? "Редактирование загрузки" : "Создание загрузки"}
           </h2>
           <button
             onClick={handleClose}
@@ -2275,6 +2581,10 @@ export function LoadingModal({
                             setFormData((prev) => ({ ...prev, rate }))
                             setManualRateInput("") // Clear manual input when chip is clicked
                             setManualRateError("") // Clear manual rate error
+                            // Track changes in edit mode
+                            if (isEditMode) {
+                              setHasChanges(true)
+                            }
                             if (errors.rate) {
                               setErrors((prev) => {
                                 const newErrors = { ...prev }
@@ -2342,6 +2652,11 @@ export function LoadingModal({
                           endDate: endFormatted || prev.endDate,
                         }))
 
+                        // Track changes in edit mode
+                        if (isEditMode) {
+                          setHasChanges(true)
+                        }
+
                         // Clear errors when dates are selected
                         if (range.from && range.to) {
                           setErrors((prev) => {
@@ -2398,53 +2713,281 @@ export function LoadingModal({
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex gap-2 pt-4 justify-end">
+                  <div className={cn(
+                    "flex gap-2 pt-4",
+                    isEditMode ? "justify-between" : "justify-end"
+                  )}>
+                    {/* Left side buttons (edit mode only) */}
+                    {isEditMode && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowDeletePanel(true)}
+                          disabled={isSaving || isDeleting || isArchiving}
+                          className={cn(
+                            "px-4 py-2 text-sm rounded border",
+                            theme === "dark"
+                              ? "border-red-600 text-red-400 hover:bg-red-900 hover:bg-opacity-20"
+                              : "border-red-500 text-red-600 hover:bg-red-50",
+                            (isSaving || isDeleting || isArchiving) ? "opacity-50 cursor-not-allowed" : "",
+                          )}
+                        >
+                          Удалить
+                        </button>
+                        <button
+                          onClick={() => setShowArchiveConfirm(true)}
+                          disabled={isSaving || isDeleting || isArchiving}
+                          className={cn(
+                            "px-4 py-2 text-sm rounded border",
+                            theme === "dark"
+                              ? "border-amber-600 text-amber-400 hover:bg-amber-900 hover:bg-opacity-20"
+                              : "border-amber-500 text-amber-600 hover:bg-amber-50",
+                            (isSaving || isDeleting || isArchiving) ? "opacity-50 cursor-not-allowed" : "",
+                          )}
+                        >
+                          Архивировать
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Right side buttons */}
                     <div className="flex gap-2">
                       <button
                         onClick={handleClose}
-                        disabled={isSaving}
+                        disabled={isSaving || isDeleting || isArchiving}
                         className={cn(
                           "px-4 py-2 text-sm rounded border",
                           theme === "dark"
                             ? "border-slate-600 text-slate-300 hover:bg-slate-700"
                             : "border-slate-300 text-slate-600 hover:bg-slate-50",
-                          isSaving ? "opacity-50 cursor-not-allowed" : "",
+                          (isSaving || isDeleting || isArchiving) ? "opacity-50 cursor-not-allowed" : "",
                         )}
                       >
                         Отмена
                       </button>
-                      <button
-                        onClick={handleSave}
-                        disabled={
-                          isSaving ||
-                          !selectedEmployee ||
-                          !formData.startDate ||
-                          !formData.endDate ||
-                          new Date(formData.startDate) > new Date(formData.endDate) ||
-                          formData.rate <= 0 ||
-                          formData.rate > 2 ||
-                          !selectedNode?.decompositionStageId
-                        }
-                        className={cn(
-                          "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
-                          theme === "dark"
-                            ? "bg-teal-600 text-white hover:bg-teal-700"
-                            : "bg-teal-500 text-white hover:bg-teal-600",
-                          (isSaving ||
+                      {isEditMode ? (
+                        <button
+                          onClick={handleUpdate}
+                          disabled={
+                            isSaving ||
+                            isDeleting ||
+                            isArchiving ||
+                            !hasChanges ||
                             !selectedEmployee ||
                             !formData.startDate ||
                             !formData.endDate ||
                             new Date(formData.startDate) > new Date(formData.endDate) ||
                             formData.rate <= 0 ||
                             formData.rate > 2 ||
-                            !selectedNode?.decompositionStageId) &&
-                            "opacity-50 cursor-not-allowed",
-                        )}
-                      >
-                        {isSaving ? "Сохранение..." : "Создать"}
-                      </button>
+                            !selectedNode?.decompositionStageId
+                          }
+                          className={cn(
+                            "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
+                            theme === "dark"
+                              ? "bg-teal-600 text-white hover:bg-teal-700"
+                              : "bg-teal-500 text-white hover:bg-teal-600",
+                            (isSaving ||
+                              isDeleting ||
+                              isArchiving ||
+                              !hasChanges ||
+                              !selectedEmployee ||
+                              !formData.startDate ||
+                              !formData.endDate ||
+                              new Date(formData.startDate) > new Date(formData.endDate) ||
+                              formData.rate <= 0 ||
+                              formData.rate > 2 ||
+                              !selectedNode?.decompositionStageId) &&
+                              "opacity-50 cursor-not-allowed",
+                          )}
+                        >
+                          {isSaving ? "Сохранение..." : "Сохранить"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSave}
+                          disabled={
+                            isSaving ||
+                            !selectedEmployee ||
+                            !formData.startDate ||
+                            !formData.endDate ||
+                            new Date(formData.startDate) > new Date(formData.endDate) ||
+                            formData.rate <= 0 ||
+                            formData.rate > 2 ||
+                            !selectedNode?.decompositionStageId
+                          }
+                          className={cn(
+                            "px-4 py-2 text-sm rounded flex items-center justify-center min-w-[100px]",
+                            theme === "dark"
+                              ? "bg-teal-600 text-white hover:bg-teal-700"
+                              : "bg-teal-500 text-white hover:bg-teal-600",
+                            (isSaving ||
+                              !selectedEmployee ||
+                              !formData.startDate ||
+                              !formData.endDate ||
+                              new Date(formData.startDate) > new Date(formData.endDate) ||
+                              formData.rate <= 0 ||
+                              formData.rate > 2 ||
+                              !selectedNode?.decompositionStageId) &&
+                              "opacity-50 cursor-not-allowed",
+                          )}
+                        >
+                          {isSaving ? "Сохранение..." : "Создать"}
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {/* Archive Confirmation Dialog */}
+                  {showArchiveConfirm && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+                      <div className={cn(
+                        "rounded-lg p-6 max-w-md w-full mx-4 shadow-xl",
+                        theme === "dark" ? "bg-slate-800" : "bg-white"
+                      )}>
+                        <h3 className="text-lg font-semibold mb-4 dark:text-slate-200">
+                          Подтверждение архивации
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                          Вы уверены, что хотите архивировать эту загрузку?
+                          Архивированные загрузки можно восстановить.
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => setShowArchiveConfirm(false)}
+                            disabled={isArchiving}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded border",
+                              theme === "dark"
+                                ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                              isArchiving ? "opacity-50 cursor-not-allowed" : "",
+                            )}
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            onClick={handleArchive}
+                            disabled={isArchiving}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded",
+                              theme === "dark"
+                                ? "bg-amber-600 text-white hover:bg-amber-700"
+                                : "bg-amber-500 text-white hover:bg-amber-600",
+                              isArchiving ? "opacity-50 cursor-not-allowed" : "",
+                            )}
+                          >
+                            {isArchiving ? "Архивирование..." : "Архивировать"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Delete Warning Panel */}
+                  {showDeletePanel && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+                      <div className={cn(
+                        "rounded-lg p-6 max-w-md w-full mx-4 shadow-xl",
+                        theme === "dark" ? "bg-slate-800" : "bg-white"
+                      )}>
+                        <h3 className="text-lg font-semibold mb-4 text-red-600 dark:text-red-400">
+                          Внимание!
+                        </h3>
+                        <div className="space-y-3 mb-6">
+                          <p className="text-sm font-medium dark:text-slate-200">
+                            Загрузки нужно архивировать.
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Удалять можно только ошибочно созданные загрузки.
+                            Это действие необратимо.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <button
+                            onClick={() => setShowDeletePanel(false)}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded border",
+                              theme === "dark"
+                                ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                            )}
+                          >
+                            Отменить
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowDeletePanel(false)
+                              setShowArchiveConfirm(true)
+                            }}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded",
+                              theme === "dark"
+                                ? "bg-amber-600 text-white hover:bg-amber-700"
+                                : "bg-amber-500 text-white hover:bg-amber-600",
+                            )}
+                          >
+                            Архивировать
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(true)}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded",
+                              theme === "dark"
+                                ? "bg-red-600 text-white hover:bg-red-700"
+                                : "bg-red-500 text-white hover:bg-red-600",
+                            )}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Delete Final Confirmation Dialog */}
+                  {showDeleteConfirm && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+                      <div className={cn(
+                        "rounded-lg p-6 max-w-md w-full mx-4 shadow-xl",
+                        theme === "dark" ? "bg-slate-800" : "bg-white"
+                      )}>
+                        <h3 className="text-lg font-semibold mb-4 text-red-600 dark:text-red-400">
+                          Подтверждение удаления
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-6">
+                          Вы уверены? Это действие необратимо.
+                          Загрузка будет удалена навсегда.
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => setShowDeleteConfirm(false)}
+                            disabled={isDeleting}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded border",
+                              theme === "dark"
+                                ? "border-slate-600 text-slate-300 hover:bg-slate-700"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-50",
+                              isDeleting ? "opacity-50 cursor-not-allowed" : "",
+                            )}
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className={cn(
+                              "px-4 py-2 text-sm rounded",
+                              theme === "dark"
+                                ? "bg-red-600 text-white hover:bg-red-700"
+                                : "bg-red-500 text-white hover:bg-red-600",
+                              isDeleting ? "opacity-50 cursor-not-allowed" : "",
+                            )}
+                          >
+                            {isDeleting ? "Удаление..." : "Да, удалить"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                     </>
                   )}
                 </div>

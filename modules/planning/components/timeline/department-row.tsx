@@ -560,6 +560,8 @@ export function EmployeeRow({
   // Состояния для модальных окон
   const [showLoadingModal, setShowLoadingModal] = useState(false)
   const [showAddShortage, setShowAddShortage] = useState(false)
+  // Состояние для редактирования загрузки
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
 
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -830,7 +832,9 @@ export function EmployeeRow({
                       className={cn(
                         "absolute rounded transition-all duration-200 pointer-events-auto",
                         // Всегда используем горизонтальное выравнивание
-                        "flex items-center"
+                        "flex items-center",
+                        // Курсор pointer для загрузок (можно редактировать)
+                        bar.period.type === "loading" && "cursor-pointer hover:brightness-110"
                       )}
                       style={{
                         left: `${bar.left}px`,
@@ -848,6 +852,12 @@ export function EmployeeRow({
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
+                      onClick={() => {
+                        // Открыть модалку редактирования для загрузок
+                        if (bar.period.type === "loading" && bar.period.loading) {
+                          setEditingLoading(bar.period.loading)
+                        }
+                      }}
                     >
                       {(() => {
                         // Адаптивное отображение для загрузок
@@ -1092,7 +1102,23 @@ export function EmployeeRow({
         onClose={() => setShowLoadingModal(false)}
         theme={theme}
         employee={employee}
+        mode="create"
       />
+
+      {/* Модальное окно для редактирования загрузки */}
+      {editingLoading && (
+        <LoadingModal
+          isOpen={!!editingLoading}
+          onClose={() => setEditingLoading(null)}
+          theme={theme}
+          mode="edit"
+          loading={editingLoading}
+          onLoadingUpdated={() => {
+            // Store автоматически обновит state через realtime subscriptions
+          }}
+        />
+      )}
+
       {showAddShortage && (
         <AddShortageModal
           teamId={employee.teamId}
