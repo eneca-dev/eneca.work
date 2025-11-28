@@ -1279,12 +1279,20 @@ export function LoadingModal({
           ? formatLocalYMD(loading.endDate)
           : normalizeDateValue(loading.endDate)
 
+        const loadingRate = loading.rate ?? 1
         setFormData({
           startDate: loadingStartDate || formatLocalYMD(new Date())!,
           endDate: loadingEndDate || formatLocalYMD(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))!,
-          rate: loading.rate ?? 1,
+          rate: loadingRate,
           comment: loading.comment || "",
         })
+
+        // Если ставка не входит в стандартный список - инициализировать поле ручного ввода
+        if (!RATES.includes(loadingRate)) {
+          setManualRateInput(String(loadingRate))
+        } else {
+          setManualRateInput("")
+        }
 
         // Set selected employee from loading
         if (loading.responsibleId) {
