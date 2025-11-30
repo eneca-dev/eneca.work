@@ -1,32 +1,18 @@
-// Экспорт компонентов
+// Компоненты
 export { ChatInterface } from './components/ChatInterface'
 export { MessageList } from './components/MessageList'
 export { MessageInput } from './components/MessageInput'
 export { MarkdownRenderer } from './components/MarkdownRenderer'
 
-// Экспорт хуков
+// Хуки
 export { useChat } from './hooks/useChat'
 
-// Экспорт API
+// API
 export { sendChatMessage } from './api/chat'
 
-// Экспорт утилит
+// Утилиты
 export { formatMessageTime, formatMessageDate, formatMessageDateTime } from './utils/formatTime'
-export { 
-  saveMessage, 
-  getHistory, 
-  getContextForRequest, 
-  clearHistory, 
-  getMessagesCount, 
-  hasHistory 
-} from './utils/chatCache'
+export { saveMessage, getHistory, clearHistory, getMessagesCount, hasHistory } from './utils/chatCache'
 
-// Экспорт типов
-export type { 
-  ChatMessage, 
-  ChatRequest, 
-  ChatResponse, 
-  ChatHistory,
-  ChatContextMessage,
-  ChatRequestWithHistory 
-} from './types/chat' 
+// Типы
+export type { ChatMessage, ChatRequest, ChatResponse } from './types/chat'

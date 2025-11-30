@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { ChatMessage } from '../types/chat'
 import { formatMessageTime } from '../utils/formatTime'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { Brain, Wrench, Eye } from 'lucide-react'
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -51,10 +50,9 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
             style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
           >
             {message.role === 'user' ? (
-              // Структура для сообщений пользователя - время справа от текста
               <>
                 <div className="pr-12">
-                  <MarkdownRenderer 
+                  <MarkdownRenderer
                     content={message.content}
                     isUserMessage={true}
                   />
@@ -64,23 +62,9 @@ export function MessageList({ messages, isLoading, isTyping }: MessageListProps)
                 </span>
               </>
             ) : (
-              // Структура для сообщений агента - бейдж по kind и время под текстом
               <>
-                {message.kind && message.kind !== 'message' && (
-                  <div className="mb-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
-                    {message.kind === 'thinking' && <Brain size={10} />}
-                    {message.kind === 'tool' && <Wrench size={10} />}
-                    {message.kind === 'observation' && <Eye size={10} />}
-                    <span>
-                      {message.kind === 'thinking' ? 'Размышляю…'
-                        : message.kind === 'tool' ? 'Инструмент'
-                        : message.kind === 'observation' ? 'Наблюдение'
-                        : null}
-                    </span>
-                  </div>
-                )}
                 <div className="mb-1">
-                  <MarkdownRenderer 
+                  <MarkdownRenderer
                     content={message.content}
                     isUserMessage={false}
                   />
