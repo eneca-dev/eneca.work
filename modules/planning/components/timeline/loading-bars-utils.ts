@@ -460,15 +460,25 @@ export function calculateBarRenders(
     const startDate = normalizeDate(period.startDate)
     const endDate = normalizeDate(period.endDate)
 
+    // Получаем границы видимого диапазона
+    const timelineStart = normalizeDate(timeUnits[0].date)
+    const timelineEnd = normalizeDate(timeUnits[timeUnits.length - 1].date)
+
+    // Проверяем, пересекается ли период с видимым диапазоном
+    // Период виден, если: startDate <= timelineEnd AND endDate >= timelineStart
+    const isVisible = startDate <= timelineEnd && endDate >= timelineStart
+    if (!isVisible) continue
+
     const startIdx = timeUnits.findIndex((unit) => isSameDay(normalizeDate(unit.date), startDate))
     const endIdx = timeUnits.findIndex((unit) => isSameDay(normalizeDate(unit.date), endDate))
 
-    // Если период не попадает в видимый диапазон, пропускаем
-    if (startIdx === -1 && endIdx === -1) continue
-
-    // Если начало или конец выходят за границы, обрезаем
-    const actualStartIdx = Math.max(0, startIdx === -1 ? 0 : startIdx)
-    const actualEndIdx = Math.min(timeUnits.length - 1, endIdx === -1 ? timeUnits.length - 1 : endIdx)
+    // Если дата за пределами видимого диапазона - используем границы
+    const actualStartIdx = startIdx === -1
+      ? (startDate < timelineStart ? 0 : timeUnits.length - 1)
+      : startIdx
+    const actualEndIdx = endIdx === -1
+      ? (endDate > timelineEnd ? timeUnits.length - 1 : 0)
+      : endIdx
 
     // Определяем цвет на основе типа периода
     let color: string
