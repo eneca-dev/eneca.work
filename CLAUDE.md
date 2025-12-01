@@ -48,7 +48,7 @@ npm run lint       # Run ESLint
 - **Forms:** React Hook Form + Zod validation
 - **Rich Text:** TipTap editor
 - **Monitoring:** Sentry for error tracking and performance monitoring
-- **AI Integration:** N8N workflow automation for GPT-4o-mini chat
+- **AI Integration:** Python AI agent for chat
 
 ## Architecture Overview
 
@@ -176,7 +176,7 @@ supabase
 ```
 app/api/
 ├── auth/              # Authentication endpoints
-├── chat/              # Chat gateway (proxies to N8N at port 5000)
+├── chat/python/       # Python AI agent proxy
 ├── users/             # User operations
 ├── admin/             # Admin operations
 └── [other endpoints]
@@ -196,10 +196,10 @@ app/api/
 ### 4. Chat System
 
 - Chat button integrated in dashboard layout
-- Proxies requests to N8N webhook (localhost:5000 → N8N)
-- Stores conversations in `chat_conversations` and `chat_messages` tables
-- Uses GPT-4o-mini via N8N integration
-- Supports task-specific and general conversations
+- Proxies requests to Python AI agent (https://ai-bot.eneca.work)
+- Stores chat history in localStorage (max 10 messages per user)
+- Simple request/response flow with typing indicator
+- Supports markdown rendering in messages
 
 ### 5. Error Handling
 
