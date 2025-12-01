@@ -235,3 +235,12 @@ export interface DepartmentFreshness {
   daysSinceUpdate: number  // MAX среди команд отдела (worst case)
   teamsCount: number
 }
+// Единица таймлайна (день на временной шкале)
+export interface TimelineUnit {
+  date: Date
+  label: string
+  isWeekend?: boolean
+  isWorkingDay?: boolean
+  width?: number
+  left?: number
+}
