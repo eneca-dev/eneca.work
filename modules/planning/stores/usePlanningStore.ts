@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { devtools, persist } from "zustand/middleware"
 import * as Sentry from "@sentry/nextjs"
-import type { Section, Loading, Department, Team, Employee, ProjectSummary } from "../types"
+import type { Section, Loading, Department, Team, Employee, ProjectSummary, TeamFreshness, DepartmentFreshness } from "../types"
 import type { CalendarEvent } from "@/modules/calendar/types"
 // Обновляем импорты, добавляя новые функции
 import {
@@ -13,12 +13,16 @@ import {
   createLoading as createLoadingAPI,
 } from "@/lib/supabase-client"
 import { supabase } from "@/lib/supabase-client"
+import { fetchTeamFreshness, confirmTeamActivity as confirmTeamActivityAPI, confirmMultipleTeamsActivity as confirmMultipleTeamsActivityAPI } from "../api/teamActivity"
 
 // Переменная для хранения текущего Promise запроса саммари проектов
 let fetchProjectSummariesPromise: Promise<void> | null = null
 
 // Переменная для хранения текущего Promise загрузки отпусков
 let loadVacationsPromise: Promise<void> | null = null
+
+// Переменная для хранения текущего Promise загрузки freshness
+let loadFreshnessPromise: Promise<void> | null = null
 
 // Обновляем интерфейс PlanningState, добавляя функции архивирования
 interface PlanningState {
@@ -118,6 +122,14 @@ interface PlanningState {
     }>
   }
 
+  // Кэш актуальности команд (freshness)
+  freshnessCache: {
+    data: Record<string, TeamFreshness>  // teamId -> freshness data
+    departmentAggregates: Record<string, DepartmentFreshness>
+    lastLoaded: number | null
+    isLoading: boolean
+  }
+
   // Глобальные события календаря (для рабочих/нерабочих дней)
   globalCalendarEvents: CalendarEvent[]
   isLoadingGlobalEvents: boolean
@@ -194,6 +206,12 @@ interface PlanningState {
   // Методы для работы с отпусками
   loadVacations: (forceReload?: boolean) => Promise<void>
   clearVacationsCache: () => void
+
+  // Методы для работы с актуальностью команд (freshness)
+  loadFreshness: (forceReload?: boolean) => Promise<void>
+  invalidateFreshness: () => void
+  confirmTeamActivity: (teamId: string) => Promise<{ success: boolean; error?: string }>
+  confirmMultipleTeamsActivity: (teamIds: string[]) => Promise<{ success: boolean; error?: string }>
 
   // Методы для работы с глобальными событиями календаря
   loadGlobalCalendarEvents: () => Promise<void>
@@ -309,6 +327,14 @@ export const usePlanningStore = create<PlanningState>()(
         timeOffsCache: {
           data: {},
           metadata: {},
+        },
+
+        // Начальное состояние кэша актуальности команд
+        freshnessCache: {
+          data: {},
+          departmentAggregates: {},
+          lastLoaded: null,
+          isLoading: false,
         },
 
         // Начальное состояние глобальных событий календаря
@@ -631,12 +657,15 @@ export const usePlanningStore = create<PlanningState>()(
 
         // Обновляем функцию загрузки отделов для использования view_organizational_structure
         fetchDepartments: async () => {
+          console.log("🏁 fetchDepartments() ВЫЗВАНА")
           // Защита от одновременных вызовов
           const state = get()
           if (state.isDepartmentsFetching) {
+            console.log("⏸️ fetchDepartments уже выполняется, выход")
             return
           }
 
+          console.log("📍 Начинаем загрузку отделов...")
           set({ isLoadingDepartments: true, isDepartmentsFetching: true })
           try {
             // Получаем текущие фильтры из новой системы фильтров
@@ -1077,6 +1106,11 @@ export const usePlanningStore = create<PlanningState>()(
             })
 
             console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
+
+            // Загружаем данные freshness для команд
+            console.log("🎯 Сейчас вызовем loadFreshness()...")
+            await get().loadFreshness()
+            console.log("🎯 loadFreshness() завершена")
           } catch (error) {
             Sentry.captureException(error, {
               tags: {
@@ -2631,6 +2665,127 @@ export const usePlanningStore = create<PlanningState>()(
           })
         },
 
+        // Загрузка данных актуальности команд (freshness)
+        loadFreshness: async (forceReload = false) => {
+          const state = get()
+          const now = Date.now()
+          const TTL = 5 * 60 * 1000 // 5 минут
+
+          // Если принудительная перезагрузка, очищаем существующий promise
+          if (forceReload) {
+            loadFreshnessPromise = null
+          }
+
+          // Если запрос уже выполняется, возвращаем существующий promise
+          if (loadFreshnessPromise) {
+            return loadFreshnessPromise
+          }
+
+          // Проверка кеша
+          if (!forceReload && state.freshnessCache.lastLoaded && (now - state.freshnessCache.lastLoaded) < TTL) {
+            return
+          }
+
+          // Создаем новый promise и сохраняем его
+          loadFreshnessPromise = (async () => {
+            set({ freshnessCache: { ...state.freshnessCache, isLoading: true } })
+
+            try {
+              const freshness = await fetchTeamFreshness()
+
+              const dataMap: Record<string, TeamFreshness> = {}
+              freshness.forEach((f) => {
+                dataMap[f.teamId] = f
+              })
+
+              const departmentAgg: Record<string, DepartmentFreshness> = {}
+              freshness.forEach((f) => {
+                // Пропускаем команды без данных о daysSinceUpdate
+                if (f.daysSinceUpdate === undefined) return
+
+                if (!departmentAgg[f.departmentId]) {
+                  departmentAgg[f.departmentId] = {
+                    departmentId: f.departmentId,
+                    daysSinceUpdate: f.daysSinceUpdate,
+                    teamsCount: 1,
+                  }
+                } else {
+                  departmentAgg[f.departmentId].daysSinceUpdate = Math.max(
+                    departmentAgg[f.departmentId].daysSinceUpdate,
+                    f.daysSinceUpdate
+                  )
+                  departmentAgg[f.departmentId].teamsCount++
+                }
+              })
+
+              set({
+                freshnessCache: {
+                  data: dataMap,
+                  departmentAggregates: departmentAgg,
+                  lastLoaded: now,
+                  isLoading: false,
+                },
+              })
+            } catch (error) {
+              console.error("❌ Ошибка загрузки freshness:", error)
+              set({ freshnessCache: { ...state.freshnessCache, isLoading: false } })
+            } finally {
+              loadFreshnessPromise = null
+            }
+          })()
+
+          return loadFreshnessPromise
+        },
+
+        invalidateFreshness: () => {
+          set({
+            freshnessCache: {
+              data: {},
+              departmentAggregates: {},
+              lastLoaded: null,
+              isLoading: false,
+            },
+          })
+        },
+
+        confirmTeamActivity: async (teamId: string) => {
+          console.log("🔔 confirmTeamActivity() вызвана для команды:", teamId)
+          try {
+            const result = await confirmTeamActivityAPI(teamId)
+
+            if (result.success) {
+              console.log(`✅ Команда ${teamId} актуализирована`)
+              await get().loadFreshness(true)
+            } else {
+              console.error(`❌ Ошибка актуализации команды ${teamId}:`, result.error)
+            }
+
+            return result
+          } catch (error) {
+            console.error("❌ Неожиданная ошибка при актуализации:", error)
+            return { success: false, error: "Неожиданная ошибка" }
+          }
+        },
+
+        confirmMultipleTeamsActivity: async (teamIds: string[]) => {
+          console.log(`🔔 confirmMultipleTeamsActivity() вызвана для ${teamIds.length} команд`)
+          try {
+            const result = await confirmMultipleTeamsActivityAPI(teamIds)
+
+            if (result.success) {
+              console.log(`✅ Все ${teamIds.length} команд актуализированы`)
+              await get().loadFreshness(true)
+            } else {
+              console.error(`❌ Ошибка актуализации команд:`, result.error)
+            }
+
+            return result
+          } catch (error) {
+            console.error("❌ Неожиданная ошибка при актуализации команд:", error)
+            return { success: false, error: "Неожиданная ошибка" }
+          }
+        },
+
         // Загрузка глобальных событий календаря
         loadGlobalCalendarEvents: async () => {
           return Sentry.startSpan(
@@ -3094,6 +3249,10 @@ export const usePlanningStore = create<PlanningState>()(
             })
 
             console.log(`✅ Синхронно загружено ${departments.length} отделов с руководителями`)
+
+            // Загружаем данные freshness для команд
+            await get().loadFreshness()
+            console.log("🎯 loadFreshness() завершена")
           } catch (error) {
             if (abortController.signal.aborted) {
               console.log("🚫 Запрос загрузки отделов был отменен из-за ошибки")
