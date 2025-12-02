@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Input } from "./ui/input";
 import { DatePicker } from "./ui/date-picker";
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
 import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
@@ -190,35 +191,21 @@ function StageMetrics({
   actualHours: number;
   progress: number;
 }) {
-  const isOverBudget = actualHours > plannedHours;
-
   return (
     <div className="flex items-center gap-3 bg-muted/30 dark:bg-muted/20 px-3 py-1.5 rounded-md border border-border/30">
       <div className="flex items-center gap-1.5">
         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-        <span
-          className={`text-xs font-medium ${
-            isOverBudget
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-green-600 dark:text-green-400'
-          }`}
-        >
+        <span className="text-xs font-medium text-muted-foreground">
           {actualHours.toFixed(1)}ч
         </span>
         <span className="text-xs text-muted-foreground">/</span>
-        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+        <span className="text-xs font-medium text-muted-foreground">
           {plannedHours.toFixed(1)}ч
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-foreground tabular-nums">{progress}%</span>
-        <div className="w-12 h-2 bg-muted/60 dark:bg-muted/40 rounded-full overflow-hidden">
-          <div
-            className={`h-full transition-all duration-300 ${getProgressBarColor(progress)}`}
-            style={{ width: `${Math.min(progress, 100)}%` }}
-          />
-        </div>
+        <span className="text-xs font-semibold text-muted-foreground tabular-nums">{progress}%</span>
       </div>
     </div>
   );
@@ -283,6 +270,66 @@ function StageResponsibles({
         <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
       </button>
     </div>
+  );
+}
+
+// Компонент для отображения только аватаров ответственных (компактный вид)
+function StageResponsiblesAvatars({
+  responsibles,
+  employees,
+  onAdd,
+}: {
+  responsibles: string[];
+  employees: Employee[];
+  onAdd: () => void;
+}) {
+  const responsibleEmployees = employees.filter(emp => responsibles.includes(emp.user_id));
+
+  return (
+    <TooltipProvider>
+      <div className="flex items-center">
+        {responsibleEmployees.map((emp, index) => (
+          <Tooltip key={emp.user_id} delayDuration={300}>
+            <TooltipTrigger asChild>
+              <div
+                className="relative"
+                style={{
+                  marginLeft: index === 0 ? 0 : '-8px',
+                  zIndex: responsibleEmployees.length - index,
+                }}
+              >
+                {emp.avatar_url ? (
+                  <img
+                    src={emp.avatar_url}
+                    alt={emp.full_name}
+                    className="h-7 w-7 rounded-full object-cover border-2 border-background hover:border-primary/40 transition-colors cursor-pointer"
+                  />
+                ) : (
+                  <div className="h-7 w-7 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-[10px] font-semibold text-primary-foreground border-2 border-background hover:border-primary/40 transition-colors cursor-pointer">
+                    {emp.first_name?.[0]}{emp.last_name?.[0]}
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">{emp.first_name} {emp.last_name}</p>
+              {emp.position_name && <p className="text-xs text-muted-foreground">{emp.position_name}</p>}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+        <button
+          onClick={onAdd}
+          className="flex items-center justify-center h-7 w-7 rounded-full bg-muted/60 hover:bg-muted/80 dark:bg-muted/40 dark:hover:bg-muted/60 border-2 border-background hover:border-primary/40 transition-colors"
+          style={{
+            marginLeft: responsibleEmployees.length > 0 ? '-8px' : 0,
+            zIndex: 0,
+          }}
+          title="Добавить ответственного"
+        >
+          <Plus className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -479,6 +526,7 @@ function SortableStage({
   const [isEditingName, setIsEditingName] = useState(false);
   const [showResponsiblesDialog, setShowResponsiblesDialog] = useState(false);
   const [isUpdatingResponsibles, setIsUpdatingResponsibles] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const stageNameRef = useRef<HTMLTextAreaElement | null>(null);
 
   const adjustStageNameHeight = () => {
@@ -548,26 +596,39 @@ function SortableStage({
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing opacity-40 hover:opacity-100 transition-opacity"
+          className="cursor-grab active:cursor-grabbing opacity-40 hover:opacity-100 transition-opacity pt-2"
         >
           <GripVertical className="h-6 w-5 text-muted-foreground" />
         </div>
         <Checkbox
           checked={selectedStages.has(stage.id)}
           onCheckedChange={() => toggleStageSelection(stage.id)}
-          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary mt-3"
         />
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleCollapse(stage.id)}
-          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0`}
+          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0 mt-1.5`}
           title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
         <div className="flex-1">
-          <div className="flex items-start gap-3">
+          <div
+            className="flex items-start gap-3"
+            onMouseEnter={() => !isCollapsed && setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {!isCollapsed && (
+              <div className="flex items-center pt-1">
+                <StageResponsiblesAvatars
+                  responsibles={stage.responsibles}
+                  employees={employees}
+                  onAdd={() => setShowResponsiblesDialog(true)}
+                />
+              </div>
+            )}
             <Textarea
               ref={stageNameRef}
               value={stage.name}
@@ -586,76 +647,79 @@ function SortableStage({
               }`}
             />
             {!isCollapsed && (
-              <StageResponsibles
-                responsibles={stage.responsibles}
-                employees={employees}
-                onAdd={() => setShowResponsiblesDialog(true)}
-                onRemove={async (userId) => {
-                  const newResponsibles = stage.responsibles.filter(id => id !== userId);
-                  await updateStageResponsibles(stage.id, newResponsibles);
-                }}
-              />
+              <>
+                <Select
+                  value={stage.statusId || undefined}
+                  onValueChange={(value) => {
+                    updateStage(stage.id, { statusId: value || null });
+                  }}
+                >
+                  <SelectTrigger
+                    className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[115px] ${
+                      stage.statusId
+                        ? getStatusColor(statuses.find(s => s.id === stage.statusId)?.name || '')
+                        : 'bg-muted/60 hover:bg-muted/80'
+                    }`}
+                  >
+                    <SelectValue placeholder="Статус" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses
+                      .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
+                      .map((status) => (
+                        <SelectItem key={status.id} value={status.id}>
+                          {status.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <StageMetrics
+                  plannedHours={calculateStagePlannedHours(stage)}
+                  actualHours={calculateStageActualHours(stage, actualByItemId)}
+                  progress={calculateStageProgress(stage)}
+                />
+                <div className="relative">
+                  <DateRangePicker
+                    value={{
+                      from: parseISODateString(stage.startDate),
+                      to: parseISODateString(stage.endDate)
+                    }}
+                    onChange={(range: DateRange) => {
+                      updateStage(stage.id, {
+                        startDate: formatISODateString(range.from),
+                        endDate: formatISODateString(range.to)
+                      });
+                    }}
+                    calendarWidth="500px"
+                    inputWidth="200px"
+                    inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
+                  />
+                  <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                </div>
+              </>
             )}
           </div>
           {!isCollapsed && (
-            <div className="flex items-center gap-2 mt-2">
-              <Input
-                value={stage.description || ''}
-                onChange={(e) => {
-                  updateStage(stage.id, { description: e.target.value });
-                }}
-                placeholder="Описание этапа"
-                className="flex-1 text-sm h-8 border border-border/30 rounded-md px-3 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-              <Select
-                value={stage.statusId || undefined}
-                onValueChange={(value) => {
-                  updateStage(stage.id, { statusId: value || null });
-                }}
+            <>
+              <div
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  isHovered ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
               >
-                <SelectTrigger
-                  className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[115px] ${
-                    stage.statusId
-                      ? getStatusColor(statuses.find(s => s.id === stage.statusId)?.name || '')
-                      : 'bg-muted/60 hover:bg-muted/80'
-                  }`}
-                >
-                  <SelectValue placeholder="Статус" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses
-                    .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
-                    .map((status) => (
-                      <SelectItem key={status.id} value={status.id}>
-                        {status.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <StageMetrics
-                plannedHours={calculateStagePlannedHours(stage)}
-                actualHours={calculateStageActualHours(stage, actualByItemId)}
-                progress={calculateStageProgress(stage)}
-              />
-              <div className="relative">
-                <DateRangePicker
-                  value={{
-                    from: parseISODateString(stage.startDate),
-                    to: parseISODateString(stage.endDate)
-                  }}
-                  onChange={(range: DateRange) => {
-                    updateStage(stage.id, {
-                      startDate: formatISODateString(range.from),
-                      endDate: formatISODateString(range.to)
-                    });
-                  }}
-                  calendarWidth="500px"
-                  inputWidth="200px"
-                  inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
-                />
-                <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <div className="flex items-center gap-2 mt-2">
+                  <Input
+                    value={stage.description || ''}
+                    onChange={(e) => {
+                      updateStage(stage.id, { description: e.target.value });
+                    }}
+                    placeholder="Описание этапа"
+                    className="flex-1 text-sm h-8 border border-border/30 rounded-md px-3 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -684,29 +748,29 @@ function SortableStage({
             collisionDetection={closestCenter}
             onDragEnd={(event) => onDecompositionDragEnd(stage.id, event)}
           >
-            <div className="overflow-x-auto -mx-2">
+            <div className="overflow-x-auto ml-8">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/30">
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Описание
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Тип работ
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Сложность
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
                       Факт ч./План ч.
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Прогресс
                     </th>
-                    <th className="w-8 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -984,7 +1048,7 @@ function SortableDecompositionRow({
         }, 80);
       }}
     >
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <div
           {...attributes}
           {...listeners}
@@ -993,7 +1057,7 @@ function SortableDecompositionRow({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Checkbox
           checked={isChecked}
           onCheckedChange={() => !selectionDisabled && onToggleSelection(decomposition.id)}
@@ -1001,7 +1065,7 @@ function SortableDecompositionRow({
           disabled={selectionDisabled}
         />
       </td>
-      <td className="py-1.5 px-1">
+      <td className="py-1 px-1">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1013,7 +1077,7 @@ function SortableDecompositionRow({
           <Clock className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="py-1.5 px-1">
+      <td className="py-1 px-1">
         <Textarea
           ref={descriptionRef}
           value={decomposition.description}
@@ -1022,7 +1086,7 @@ function SortableDecompositionRow({
             markInteracted();
           }}
           onKeyDown={handleKeyDown}
-          className="min-h-[24px] h-auto min-w-[400px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden"
+          className="min-h-[24px] h-auto min-w-[600px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden"
           rows={1}
           autoFocus={autoFocus}
           placeholder="Новая декомпозиция"
@@ -1033,7 +1097,7 @@ function SortableDecompositionRow({
           }}
         />
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Select
           open={openTypeOfWork}
           onOpenChange={(v) => {
@@ -1085,7 +1149,7 @@ function SortableDecompositionRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Select
           open={openDifficulty}
           onOpenChange={(v) => {
@@ -1137,7 +1201,7 @@ function SortableDecompositionRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-1.5 pl-2 pr-1">
+      <td className="py-1 pl-1 pr-1">
         <div className="flex items-center gap-1">
           <div className="h-6 w-[48px] flex items-center justify-center border-0 bg-muted/40 shadow-none rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums">
             {Number(actualByItemId[decomposition.id] || 0).toFixed(2)}
@@ -1180,7 +1244,7 @@ function SortableDecompositionRow({
           />
         </div>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Select
           open={openProgress}
           onOpenChange={(v) => {
