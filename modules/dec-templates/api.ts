@@ -176,19 +176,25 @@ export async function applyTemplate(
 
   const maxOrder = existingStages?.[0]?.decomposition_stage_order ?? 0
 
-  // 3. Batch insert новых этапов
+  // 3. Найти дефолтный статус "План"
+  const defaultStatus = statuses.find((s) => /план/i.test(s.name)) || statuses[0];
+  const defaultStatusId = defaultStatus?.id || null;
+
+  // 4. Batch insert новых этапов
   const stagesToCreate = template.stages.map((stage) => ({
     decomposition_stage_section_id: sectionId,
     decomposition_stage_name: stage.name,
     decomposition_stage_order: maxOrder + stage.order + 1,
     decomposition_stage_start: null,
-    decomposition_stage_finish: null
+    decomposition_stage_finish: null,
+    decomposition_stage_description: null,
+    decomposition_stage_status_id: defaultStatusId
   }))
 
   const { data: createdStages, error: stagesError } = await supabase
     .from('decomposition_stages')
     .insert(stagesToCreate)
-    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish')
+    .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, decomposition_stage_status_id')
 
   if (stagesError) {
     console.error('Ошибка создания этапов:', stagesError)

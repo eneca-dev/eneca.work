@@ -36,6 +36,8 @@ export type Stage = {
   name: string
   startDate: string | null
   endDate: string | null
+  description: string | null
+  statusId: string | null
   decompositions: Decomposition[]
 }
 
