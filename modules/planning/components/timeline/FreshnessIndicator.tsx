@@ -228,7 +228,11 @@ function ConfirmModal({
           Актуализировать данные?
         </h3>
         <p className={cn("text-sm mb-4", theme === 'dark' ? 'text-slate-400' : 'text-slate-600')}>
-          Вы подтверждаете, что данные команды <strong>{teamName}</strong> актуальны на данный момент
+        {teamIds && onConfirmMultiple ? (
+            <>Вы подтверждаете, что данные всех команд отдела <strong>{teamName}</strong> актуальны на данный момент</>
+          ) : (
+            <>Вы подтверждаете, что данные команды <strong>{teamName}</strong> актуальны на данный момент</>
+          )}
         </p>
 
         {error && (
