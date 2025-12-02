@@ -616,7 +616,7 @@ export async function updateUser(
             // Получаем основную роль целевого пользователя из view_users
             const { data: targetUserData, error: targetUserError } = await supabase
               .from('view_users')
-              .select('primary_role')
+              .select('role_name')
               .eq('user_id', userId)
               .single()
 
@@ -627,7 +627,7 @@ export async function updateUser(
             }
 
             // Руководитель отдела может редактировать только team_lead и user
-            const targetRole = targetUserData.primary_role?.toLowerCase()
+            const targetRole = targetUserData.role_name?.toLowerCase()
             const allowedRoles = ['team_lead', 'user']
 
             if (!allowedRoles.includes(targetRole || '')) {
