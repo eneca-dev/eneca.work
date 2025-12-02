@@ -1,5 +1,8 @@
 export type WorkFormatType = "Гибридный" | "В офисе" | "Удаленно"
 
+// Database enum type
+export type DbWorkFormatType = "Гибридный" | "В офисе" | "Удаленно"
+
 export type User = {
   id: string
   name: string
@@ -53,7 +56,7 @@ export type UserWithRoles = {
   full_name: string
   is_active: boolean
   // Новые поля для ролей
-  primary_role: string | null
+  role_name: string | null
   roles_display_string: string | null
   roles_count: number
   has_multiple_roles: boolean
@@ -193,11 +196,10 @@ export type Database = {
           is_hourly: boolean | null
           last_name: string
           position_id: string
-          -- legacy removed: role_id
           salary: number | null
           team_id: string | null
           user_id: string
-          work_format: Database["public"]["Enums"]["work_format_type"] | null
+          work_format: DbWorkFormatType | null
         }
         Insert: {
           city?: string | null
@@ -212,7 +214,6 @@ export type Database = {
           is_hourly?: boolean | null
           last_name: string
           position_id: string
-          -- legacy removed: role_id
           salary?: number | null
           team_id?: string | null
           user_id: string
@@ -231,7 +232,6 @@ export type Database = {
           is_hourly?: boolean | null
           last_name?: string
           position_id?: string
-          -- legacy removed: role_id
           salary?: number | null
           team_id?: string | null
           user_id?: string
@@ -259,7 +259,6 @@ export type Database = {
             referencedRelation: "positions"
             referencedColumns: ["position_id"]
           },
-          -- profiles_role_id_fkey removed
           {
             foreignKeyName: "profiles_team_id_fkey"
             columns: ["team_id"]
