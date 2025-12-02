@@ -1108,9 +1108,7 @@ export const usePlanningStore = create<PlanningState>()(
             console.log(`✅ Загружено ${departments.length} отделов с руководителями`)
 
             // Загружаем данные freshness для команд
-            console.log("🎯 Сейчас вызовем loadFreshness()...")
             await get().loadFreshness()
-            console.log("🎯 loadFreshness() завершена")
           } catch (error) {
             Sentry.captureException(error, {
               tags: {
