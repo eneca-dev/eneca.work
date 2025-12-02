@@ -7,7 +7,7 @@ import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save, ChevronsDown, ChevronsUp } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save, ChevronsDown, ChevronsUp, X } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -305,7 +305,7 @@ function StageResponsiblesAvatars({
                     className="h-7 w-7 rounded-full object-cover border-2 border-background hover:border-primary/40 transition-colors cursor-pointer"
                   />
                 ) : (
-                  <div className="h-7 w-7 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-[10px] font-semibold text-primary-foreground border-2 border-background hover:border-primary/40 transition-colors cursor-pointer">
+                  <div className="h-7 w-7 rounded-full bg-primary dark:bg-primary flex items-center justify-center text-[10px] font-semibold text-primary-foreground border-2 border-background hover:border-primary/40 transition-colors cursor-pointer">
                     {emp.first_name?.[0]}{emp.last_name?.[0]}
                   </div>
                 )}
@@ -319,7 +319,7 @@ function StageResponsiblesAvatars({
         ))}
         <button
           onClick={onAdd}
-          className="flex items-center justify-center h-7 w-7 rounded-full bg-muted/60 hover:bg-muted/80 dark:bg-muted/40 dark:hover:bg-muted/60 border-2 border-background hover:border-primary/40 transition-colors"
+          className="flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-muted/80 dark:bg-muted dark:hover:bg-muted/80 border-2 border-background hover:border-primary/40 transition-colors"
           style={{
             marginLeft: responsibleEmployees.length > 0 ? '-8px' : 0,
             zIndex: 0,
@@ -371,6 +371,10 @@ function AssignResponsiblesDialog({
       if (newSet.has(userId)) {
         newSet.delete(userId);
       } else {
+        // Ограничение: максимум 5 сотрудников
+        if (newSet.size >= 5) {
+          return prev;
+        }
         newSet.add(userId);
       }
       return newSet;
@@ -382,9 +386,11 @@ function AssignResponsiblesDialog({
     onOpenChange(false);
   };
 
+  const maxReached = selectedIds.size >= 5;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className="max-w-2xl max-h-[80vh] dark:bg-[rgb(15,23,42)]">
         <DialogHeader>
           <DialogTitle>Назначить ответственных на этап</DialogTitle>
           <DialogDescription>
@@ -396,49 +402,101 @@ function AssignResponsiblesDialog({
             placeholder="Поиск по имени или email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full"
+            className="w-full dark:bg-slate-700"
           />
-          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
-            {filteredEmployees.map((emp) => (
-              <div
-                key={emp.user_id}
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  selectedIds.has(emp.user_id)
-                    ? 'bg-primary/10 border-primary/40'
-                    : 'bg-muted/30 border-border/40 hover:bg-muted/50'
-                }`}
-                onClick={() => toggleEmployee(emp.user_id)}
-              >
-                <Checkbox
-                  checked={selectedIds.has(emp.user_id)}
-                  onCheckedChange={() => toggleEmployee(emp.user_id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                {emp.avatar_url ? (
-                  <img
-                    src={emp.avatar_url}
-                    alt={emp.full_name}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-sm font-semibold text-primary-foreground">
-                    {emp.first_name?.[0]}{emp.last_name?.[0]}
-                  </div>
-                )}
-                <div className="flex-1">
-                  <div className="font-medium text-sm">{emp.full_name}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-2">
-                    {emp.position_name && <span>{emp.position_name}</span>}
-                    {emp.department_name && (
-                      <>
-                        {emp.position_name && <span>•</span>}
-                        <span>{emp.department_name}</span>
-                      </>
+          {selectedIds.size > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {employees
+                .filter(emp => selectedIds.has(emp.user_id))
+                .map(emp => (
+                  <div
+                    key={emp.user_id}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-900/70 dark:bg-emerald-950/70 text-white text-xs font-medium"
+                  >
+                    {emp.avatar_url ? (
+                      <img
+                        src={emp.avatar_url}
+                        alt={emp.full_name}
+                        className="h-5 w-5 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full bg-emerald-700 dark:bg-emerald-600 flex items-center justify-center text-[9px] font-semibold text-white">
+                        {emp.first_name?.[0]}{emp.last_name?.[0]}
+                      </div>
                     )}
+                    <span>{emp.first_name} {emp.last_name}</span>
+                    <button
+                      onClick={() => toggleEmployee(emp.user_id)}
+                      className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))}
+            </div>
+          )}
+          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
+            <TooltipProvider>
+              {filteredEmployees.map((emp) => {
+                const isSelected = selectedIds.has(emp.user_id);
+                const isDisabled = maxReached && !isSelected;
+
+                return (
+                  <div
+                    key={emp.user_id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary/40 cursor-pointer'
+                        : isDisabled
+                        ? 'bg-muted/20 border-border/20 opacity-50 cursor-default'
+                        : 'bg-muted/30 border-border/40 hover:bg-muted/50 cursor-pointer'
+                    }`}
+                    onClick={() => !isDisabled && toggleEmployee(emp.user_id)}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => !isDisabled && toggleEmployee(emp.user_id)}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={isDisabled}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      {isDisabled && (
+                        <TooltipContent className="text-xs bg-slate-700 dark:bg-slate-700 border-slate-600">
+                          <p>Нельзя выбрать больше 5 сотрудников</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    {emp.avatar_url ? (
+                      <img
+                        src={emp.avatar_url}
+                        alt={emp.full_name}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-sm font-semibold text-primary-foreground">
+                        {emp.first_name?.[0]}{emp.last_name?.[0]}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{emp.full_name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        {emp.position_name && <span>{emp.position_name}</span>}
+                        {emp.department_name && (
+                          <>
+                            {emp.position_name && <span>•</span>}
+                            <span>{emp.department_name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </TooltipProvider>
             {filteredEmployees.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 Сотрудники не найдены
@@ -451,7 +509,7 @@ function AssignResponsiblesDialog({
             Выбрано: {selectedIds.size}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:bg-slate-600 dark:hover:bg-slate-500">
               Отмена
             </Button>
             <Button onClick={handleSave} disabled={isLoading}>
@@ -609,7 +667,7 @@ function SortableStage({
           variant="ghost"
           size="sm"
           onClick={() => onToggleCollapse(stage.id)}
-          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0 mt-1.5`}
+          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0 mt-2`}
           title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -620,15 +678,13 @@ function SortableStage({
             onMouseEnter={() => !isCollapsed && setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            {!isCollapsed && (
-              <div className="flex items-center pt-1">
-                <StageResponsiblesAvatars
-                  responsibles={stage.responsibles}
-                  employees={employees}
-                  onAdd={() => setShowResponsiblesDialog(true)}
-                />
-              </div>
-            )}
+            <div className="flex items-center pt-1">
+              <StageResponsiblesAvatars
+                responsibles={stage.responsibles}
+                employees={employees}
+                onAdd={() => setShowResponsiblesDialog(true)}
+              />
+            </div>
             <Textarea
               ref={stageNameRef}
               value={stage.name}
@@ -663,7 +719,7 @@ function SortableStage({
                   >
                     <SelectValue placeholder="Статус" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background dark:bg-slate-700">
                     {statuses
                       .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
                       .map((status) => (
@@ -678,26 +734,26 @@ function SortableStage({
                   actualHours={calculateStageActualHours(stage, actualByItemId)}
                   progress={calculateStageProgress(stage)}
                 />
-                <div className="relative">
-                  <DateRangePicker
-                    value={{
-                      from: parseISODateString(stage.startDate),
-                      to: parseISODateString(stage.endDate)
-                    }}
-                    onChange={(range: DateRange) => {
-                      updateStage(stage.id, {
-                        startDate: formatISODateString(range.from),
-                        endDate: formatISODateString(range.to)
-                      });
-                    }}
-                    calendarWidth="500px"
-                    inputWidth="200px"
-                    inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
-                  />
-                  <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                </div>
               </>
             )}
+            <div className="relative">
+              <DateRangePicker
+                value={{
+                  from: parseISODateString(stage.startDate),
+                  to: parseISODateString(stage.endDate)
+                }}
+                onChange={(range: DateRange) => {
+                  updateStage(stage.id, {
+                    startDate: formatISODateString(range.from),
+                    endDate: formatISODateString(range.to)
+                  });
+                }}
+                calendarWidth="500px"
+                inputWidth="200px"
+                inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
+              />
+              <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            </div>
           </div>
           {!isCollapsed && (
             <>
@@ -891,7 +947,6 @@ function SortableDecompositionRow({
   const [openTypeOfWork, setOpenTypeOfWork] = useState(false);
   const [openDifficulty, setOpenDifficulty] = useState(false);
   const [openResponsible, setOpenResponsible] = useState(false);
-  const [openProgress, setOpenProgress] = useState(false);
   const [openStatus, setOpenStatus] = useState(false);
   const lastClosedSelectRef = useRef<string | null>(null);
   const [interacted, setInteracted] = useState(false);
@@ -1025,6 +1080,9 @@ function SortableDecompositionRow({
     }
   };
 
+  // Блокировка редактирования при прогрессе 100%
+  const isCompleted = decomposition.progress === 100;
+
   return (
     <tr
       ref={(node) => {
@@ -1069,10 +1127,15 @@ function SortableDecompositionRow({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onOpenLog?.(decomposition.id);
+            if (!isCompleted) onOpenLog?.(decomposition.id);
           }}
-          className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 transition-colors"
-          title="Добавить отчет"
+          disabled={isCompleted}
+          className={`flex items-center justify-center h-6 w-6 rounded-full transition-colors ${
+            isCompleted
+              ? 'bg-muted/40 text-muted-foreground cursor-default opacity-50'
+              : 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400'
+          }`}
+          title={isCompleted ? "Задача завершена (100%)" : "Добавить отчет"}
         >
           <Clock className="h-3.5 w-3.5" />
         </button>
@@ -1086,10 +1149,16 @@ function SortableDecompositionRow({
             markInteracted();
           }}
           onKeyDown={handleKeyDown}
-          className="min-h-[24px] h-auto min-w-[600px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden"
+          className={`min-h-[24px] h-auto min-w-[600px] border-0 shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden ${
+            isCompleted
+              ? 'bg-muted/30 cursor-default opacity-60'
+              : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent'
+          }`}
           rows={1}
-          autoFocus={autoFocus}
-          placeholder="Новая декомпозиция"
+          autoFocus={autoFocus && !isCompleted}
+          placeholder={isCompleted ? "" : "Новая задача"}
+          disabled={isCompleted}
+          readOnly={isCompleted}
           onInput={(e) => {
             const target = (e.target as HTMLTextAreaElement);
             target.style.height = "auto";
@@ -1099,13 +1168,15 @@ function SortableDecompositionRow({
       </td>
       <td className="py-1 px-1">
         <Select
-          open={openTypeOfWork}
+          open={openTypeOfWork && !isCompleted}
           onOpenChange={(v) => {
+            if (isCompleted) return;
             setOpenTypeOfWork(v);
             if (!v) lastClosedSelectRef.current = "typeOfWork";
           }}
           value={decomposition.typeOfWork}
           onValueChange={(value) => {
+            if (isCompleted) return;
             onUpdate(stageId, decomposition.id, { typeOfWork: value });
             markInteracted();
             setOpenTypeOfWork(false);
@@ -1113,9 +1184,15 @@ function SortableDecompositionRow({
               focusNextFrom(typeOfWorkTriggerRef.current);
             }, 0);
           }}
+          disabled={isCompleted}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full bg-muted/60 hover:bg-muted/80 w-[160px] whitespace-nowrap ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            disabled={isCompleted}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[160px] whitespace-nowrap ${
+              isCompleted
+                ? 'bg-muted/30 cursor-default opacity-60'
+                : 'bg-muted/60 hover:bg-muted/80'
+            } ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "typeOfWork") {
@@ -1129,6 +1206,7 @@ function SortableDecompositionRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            className="bg-background dark:bg-slate-700"
             onPointerDownOutside={() => {
               try {
                 typeOfWorkTriggerRef.current?.blur();
@@ -1151,13 +1229,15 @@ function SortableDecompositionRow({
       </td>
       <td className="py-1 px-1">
         <Select
-          open={openDifficulty}
+          open={openDifficulty && !isCompleted}
           onOpenChange={(v) => {
+            if (isCompleted) return;
             setOpenDifficulty(v);
             if (!v) lastClosedSelectRef.current = "difficulty";
           }}
           value={decomposition.difficulty}
           onValueChange={(value) => {
+            if (isCompleted) return;
             onUpdate(stageId, decomposition.id, { difficulty: value });
             markInteracted();
             setOpenDifficulty(false);
@@ -1165,9 +1245,13 @@ function SortableDecompositionRow({
               focusNextFrom(difficultyTriggerRef.current);
             }, 0);
           }}
+          disabled={isCompleted}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            disabled={isCompleted}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${
+              isCompleted ? 'bg-muted/30 cursor-default opacity-60' : getDifficultyColor(decomposition.difficulty)
+            } ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "difficulty") {
@@ -1181,6 +1265,7 @@ function SortableDecompositionRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            className="bg-background dark:bg-slate-700"
             onPointerDownOutside={() => {
               try {
                 difficultyTriggerRef.current?.blur();
@@ -1234,67 +1319,53 @@ function SortableDecompositionRow({
             }}
             onFocus={(e) => {
               // Если значение 0, выделяем весь текст - тогда при вводе цифры 0 заменится
-              if (decomposition.plannedHours === 0) {
+              if (!isCompleted && decomposition.plannedHours === 0) {
                 e.target.select();
               }
             }}
             onKeyDown={handleKeyDown}
-            className="h-6 w-[48px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className={`h-6 w-[48px] border-0 shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+              isCompleted
+                ? 'bg-muted/30 cursor-default opacity-60'
+                : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted'
+            }`}
+            disabled={isCompleted}
+            readOnly={isCompleted}
             ref={plannedHoursInputRef}
           />
         </div>
       </td>
       <td className="py-1 px-1">
-        <Select
-          open={openProgress}
-          onOpenChange={(v) => {
-            setOpenProgress(v);
-            if (!v) lastClosedSelectRef.current = "progress";
-          }}
-          value={decomposition.progress.toString()}
-          onValueChange={(value) => {
-            onUpdate(stageId, decomposition.id, { progress: Number.parseInt(value) });
+        <Input
+          ref={progressTriggerRef as unknown as React.Ref<HTMLInputElement>}
+          type="number"
+          min={0}
+          max={100}
+          value={decomposition.progress}
+          onChange={(e) => {
+            const val = e.target.value;
+            const num = parseInt(val);
+            const validNum = isNaN(num) || num < 0 ? 0 : Math.min(num, 100);
+            onUpdate(stageId, decomposition.id, { progress: validNum });
             markInteracted();
-            setOpenProgress(false);
-            setTimeout(() => {
-              focusNextFrom(progressTriggerRef.current);
-            }, 0);
           }}
-        >
-          <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[70px] ${getProgressColor(decomposition.progress)} ${openProgress ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if (lastClosedSelectRef.current === "progress") {
-                lastClosedSelectRef.current = null;
-                return;
-              }
-              setOpenProgress(true);
-            }}
-            ref={progressTriggerRef as unknown as React.Ref<HTMLButtonElement>}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            onPointerDownOutside={() => {
-              try {
-                progressTriggerRef.current?.blur();
-              } catch {}
-            }}
-            onCloseAutoFocus={(e) => {
-              e.preventDefault();
-              try {
-                progressTriggerRef.current?.blur();
-              } catch {}
-            }}
-          >
-            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
-              <SelectItem key={value} value={value.toString()}>
-                {value}%
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onInput={(e) => {
+            const input = e.target as HTMLInputElement;
+            let cleaned = input.value.replace(/[^0-9]/g, '');
+            if (cleaned.length > 3) {
+              cleaned = cleaned.slice(0, 3);
+            }
+            const num = parseInt(cleaned);
+            if (!isNaN(num) && num > 100) {
+              cleaned = '100';
+            }
+            input.value = cleaned;
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={(e) => e.target.select()}
+          className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[70px] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${getProgressColor(decomposition.progress)}`}
+          placeholder="%"
+        />
       </td>
     </tr>
   );
