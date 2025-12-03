@@ -15,6 +15,7 @@ export function useChat() {
   const [chatSize, setChatSize] = useState({ width: 320, height: 448 })
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const userId = useUserStore(state => state.id)
   const { collapsed } = useSidebarState()
@@ -87,6 +88,8 @@ export function useChat() {
   useEffect(() => {
     if (!conversationId || !userId) return
 
+    console.log('[Realtime] Creating subscription for conversation:', conversationId)
+
     const channel = supabase
       .channel(`chat:${conversationId}`)
       .on(
@@ -99,12 +102,44 @@ export function useChat() {
         },
         (payload) => {
           const newMessage = payload.new as ChatMessage
+          console.log('[Realtime] Received message:', newMessage)
 
-          // Не добавляем дубликаты
           setMessages(prev => {
-            const exists = prev.some(m => m.id === newMessage.id)
-            if (exists) return prev
+            console.log('[Realtime] Current messages count:', prev.length)
 
+            // Если это сообщение уже есть (по реальному ID) - пропускаем
+            if (prev.some(m => m.id === newMessage.id)) {
+              console.log('[Realtime] Message already exists, skipping')
+              return prev
+            }
+
+            // Если это сообщение от пользователя, ищем и заменяем временное
+            if (newMessage.role === 'user') {
+              const tempMessages = prev.filter(m => m.id.startsWith('temp-'))
+              console.log('[Realtime] Temp messages:', tempMessages)
+
+              const tempIndex = prev.findIndex(m =>
+                m.id.startsWith('temp-') &&
+                m.content === newMessage.content &&
+                m.role === 'user'
+              )
+
+              if (tempIndex !== -1) {
+                // Заменяем временное на реальное
+                console.log('[Realtime] Replacing temp message at index:', tempIndex)
+                const updated = [...prev]
+                updated[tempIndex] = {
+                  ...newMessage,
+                  created_at: new Date(newMessage.created_at)
+                }
+                return updated
+              } else {
+                console.log('[Realtime] No temp message found to replace')
+              }
+            }
+
+            // Добавляем новое сообщение
+            console.log('[Realtime] Adding new message')
             return [...prev, {
               ...newMessage,
               created_at: new Date(newMessage.created_at)
@@ -113,15 +148,27 @@ export function useChat() {
 
           // Если пришёл финальный ответ от бота
           if (newMessage.role === 'assistant' && newMessage.is_final) {
+            // Очищаем таймаут и останавливаем индикатор печати
+            if (typingTimeoutRef.current) {
+              clearTimeout(typingTimeoutRef.current)
+              typingTimeoutRef.current = null
+            }
             setIsLoading(false)
             setIsTyping(false)
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[Realtime] Subscription status:', status)
+      })
 
     return () => {
+      console.log('[Realtime] Unsubscribing')
       channel.unsubscribe()
+      // Очищаем таймаут при размонтировании
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
     }
   }, [conversationId, userId, supabase])
 
@@ -191,9 +238,23 @@ export function useChat() {
     setIsLoading(true)
     setIsTyping(true)
 
+    // Optimistic UI update - сразу показываем сообщение пользователя
+    const tempId = `temp-${Date.now()}`
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      conversation_id: conversationId,
+      user_id: userId,
+      role: 'user',
+      kind: 'message',
+      content,
+      is_final: true,
+      created_at: new Date()
+    }
+
+    setMessages(prev => [...prev, optimisticMessage])
+
     try {
       // Записываем в БД - это триггернёт webhook на Python агент
-      // Realtime подписка автоматически добавит сообщение в UI
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
@@ -208,14 +269,25 @@ export function useChat() {
 
       if (error) {
         console.error('[sendMessage] Insert error:', error)
+        // Удаляем optimistic сообщение при ошибке
+        setMessages(prev => prev.filter(m => m.id !== tempId))
         throw error
       }
 
       console.log('[sendMessage] Insert success:', data)
 
+      // Realtime автоматически заменит временное сообщение на реальное
       // Сбрасываем состояние загрузки сразу после успешной вставки
-      // isTyping останется true до прихода ответа от бота через Realtime
       setIsLoading(false)
+
+      // Устанавливаем таймаут для isTyping (60 секунд) на случай если бот не ответит
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        console.warn('[useChat] Typing timeout - bot did not respond')
+        setIsTyping(false)
+      }, 60000) // 60 секунд
     } catch (error) {
       console.error('[sendMessage] Error:', error)
 
