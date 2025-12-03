@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Settings } from 'lucide-react'
+import { useHasPermission } from '@/modules/permissions'
 import { useProjectTagsStore } from '../../stores/useProjectTagsStore'
 import * as api from '../../api/project-tags'
 import { toast } from 'sonner'
@@ -38,6 +39,7 @@ export function ProjectTagSelector({
 
   const allTags = useProjectTagsStore(state => state.tags)
   const isLoading = useProjectTagsStore(state => state.isLoading)
+  const isAdmin = useHasPermission('hierarchy.is_admin')
 
   // Обновить позицию дропдауна
   const updateDropdownPosition = () => {
@@ -183,17 +185,19 @@ export function ProjectTagSelector({
             )
           })}
 
-          {/* Шестерёнка управления */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowManagement(true)
-            }}
-            className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
-            title="Управление тегами"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
+          {/* Шестерёнка управления (только для админов) */}
+          {isAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowManagement(true)
+              }}
+              className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
+              title="Управление тегами"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          )}
 
           {/* Галочка закрытия */}
           <button
