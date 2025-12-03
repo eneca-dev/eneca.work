@@ -41,14 +41,17 @@ export type Stage = {
   decompositions: Decomposition[]
 }
 
+/**
+ * Тип декомпозиции для шаблонов.
+ * Содержит ТОЛЬКО данные, которые сохраняются в шаблоне.
+ * НЕ содержит: responsible, status, completionDate -
+ * эти поля управляются пользователем после применения шаблона.
+ */
 export type Decomposition = {
   id: string
   description: string
   typeOfWork: string
   difficulty: string
-  responsible: string
   plannedHours: number
   progress: number
-  status: string
-  completionDate: string | null
 }

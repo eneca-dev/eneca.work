@@ -45,11 +45,8 @@ type Decomposition = {
   description: string;
   typeOfWork: string;
   difficulty: string;
-  responsible: string;
   plannedHours: number;
   progress: number;
-  status: string;
-  completionDate: string | null;
 };
 
 type Stage = {
@@ -268,37 +265,40 @@ function StageResponsiblesAvatars({
                   marginLeft: index === 0 ? 0 : '-8px',
                   zIndex: responsibleEmployees.length - index,
                 }}
+                onClick={onAdd}
               >
                 {emp.avatar_url ? (
                   <img
                     src={emp.avatar_url}
                     alt={emp.full_name}
-                    className="h-7 w-7 rounded-full object-cover border-2 border-background hover:border-primary/40 transition-colors cursor-pointer"
+                    className="h-7 w-7 rounded-full object-cover transition-colors cursor-pointer"
                   />
                 ) : (
-                  <div className="h-7 w-7 rounded-full bg-primary dark:bg-primary flex items-center justify-center text-[10px] font-semibold text-primary-foreground border-2 border-background hover:border-primary/40 transition-colors cursor-pointer">
+                  <div className="h-7 w-7 rounded-full bg-primary dark:bg-primary flex items-center justify-center text-[10px] font-semibold text-primary-foreground transition-colors cursor-pointer">
                     {emp.first_name?.[0]}{emp.last_name?.[0]}
                   </div>
                 )}
               </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className="bg-slate-700 dark:bg-slate-700 border-slate-600">
               <p className="text-xs">{emp.first_name} {emp.last_name}</p>
               {emp.position_name && <p className="text-xs text-muted-foreground">{emp.position_name}</p>}
             </TooltipContent>
           </Tooltip>
         ))}
-        <button
-          onClick={onAdd}
-          className="flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-muted/80 dark:bg-muted dark:hover:bg-muted/80 border-2 border-background hover:border-primary/40 transition-colors"
-          style={{
-            marginLeft: responsibleEmployees.length > 0 ? '-8px' : 0,
-            zIndex: 0,
-          }}
-          title="Добавить ответственного"
-        >
-          <Plus className="h-4 w-4 text-muted-foreground" />
-        </button>
+        {responsibleEmployees.length < 5 && (
+          <button
+            onClick={onAdd}
+            className="flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-muted/80 dark:bg-muted dark:hover:bg-muted/80 transition-colors"
+            style={{
+              marginLeft: responsibleEmployees.length > 0 ? '-8px' : 0,
+              zIndex: 0,
+            }}
+            title="Добавить ответственного"
+          >
+            <Plus className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
       </div>
     </TooltipProvider>
   );
@@ -361,7 +361,7 @@ function AssignResponsiblesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] dark:bg-[rgb(15,23,42)]">
+      <DialogContent className="max-w-2xl max-h-[80vh] dark:bg-[rgb(15,23,42)] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
         <DialogHeader>
           <DialogTitle>Назначить ответственных на этап</DialogTitle>
           <DialogDescription>
@@ -415,7 +415,7 @@ function AssignResponsiblesDialog({
                 return (
                   <div
                     key={emp.user_id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                    className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
                       isSelected
                         ? 'bg-primary/10 border-primary/40 cursor-pointer'
                         : isDisabled
@@ -445,16 +445,16 @@ function AssignResponsiblesDialog({
                       <img
                         src={emp.avatar_url}
                         alt={emp.full_name}
-                        className="h-10 w-10 rounded-full object-cover"
+                        className="h-7 w-7 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="h-10 w-10 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-sm font-semibold text-primary-foreground">
+                      <div className="h-7 w-7 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-xs font-semibold text-primary-foreground">
                         {emp.first_name?.[0]}{emp.last_name?.[0]}
                       </div>
                     )}
                     <div className="flex-1">
                       <div className="font-medium text-sm">{emp.full_name}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                         {emp.position_name && <span>{emp.position_name}</span>}
                         {emp.department_name && (
                           <>
@@ -591,11 +591,11 @@ function SortableStage({
       const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
       let stageData = `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
       stageData += "Декомпозиции:\n";
-      stageData += "| Описание | Тип работ | Сложность | Ответственный | Часы | Прогресс | Статус | Дата |\n";
-      stageData += "|---|---|---|---|---|---|---|---|\n";
+      stageData += "| Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+      stageData += "|---|---|---|---|---|\n";
 
       stage.decompositions.forEach((decomp) => {
-        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.progress}% | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
+        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
       });
 
       await navigator.clipboard.writeText(stageData);
@@ -791,7 +791,7 @@ function SortableStage({
                       Факт ч./План ч.
                     </th>
                     <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Прогресс
+                      Прогресс,%
                     </th>
                     <th className="w-6 pb-2 pt-0"></th>
                   </tr>
@@ -841,7 +841,7 @@ function SortableStage({
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
                   Добавить декомпозицию
                 </Button>
-                <div className="flex items-center gap-6 mr-10 border-t-2 border-border/30 pt-2">
+                <div className="flex items-center gap-6 ml-11 mr-[65px] border-t-2 border-border/30 pt-2">
                   <div className="flex items-center gap-1">
                     <div className="h-6 w-[48px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums font-medium">
                       {calculateStageActualHours(stage, actualByItemId).toFixed(1)}
@@ -851,8 +851,8 @@ function SortableStage({
                       {calculateStagePlannedHours(stage).toFixed(1)}
                     </div>
                   </div>
-                  <div className="h-6 w-[52px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-muted-foreground tabular-nums font-semibold">
-                    {calculateStageProgress(stage)}%
+                  <div className="h-6 w-[52px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-muted-foreground tabular-nums font-semibold -ml-3">
+                    {calculateStageProgress(stage)}
                   </div>
                 </div>
               </div>
@@ -936,99 +936,14 @@ function SortableDecompositionRow({
   const rowRef = useRef<HTMLTableRowElement | null>(null);
   const typeOfWorkTriggerRef = useRef<HTMLButtonElement | null>(null);
   const difficultyTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const responsibleTriggerRef = useRef<HTMLButtonElement | null>(null);
   const progressTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const statusTriggerRef = useRef<HTMLButtonElement | null>(null);
   const plannedHoursInputRef = useRef<HTMLInputElement | null>(null);
-  const completionDateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [openTypeOfWork, setOpenTypeOfWork] = useState(false);
   const [openDifficulty, setOpenDifficulty] = useState(false);
-  const [openResponsible, setOpenResponsible] = useState(false);
-  const [openStatus, setOpenStatus] = useState(false);
   const lastClosedSelectRef = useRef<string | null>(null);
   const [interacted, setInteracted] = useState(false);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>(decomposition.responsible || "");
-  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState<boolean>(false);
-  const responsibleContainerRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ left: number; top: number; width: number; openUp: boolean }>({ left: 0, top: 0, width: 0, openUp: false });
-  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
-  const filteredEmployees = useMemo(() => {
-    const q = employeeSearchTerm.trim().toLowerCase();
-    const list = (employees || []).filter((emp) => {
-      if (!q) return true;
-      return (
-        (emp.full_name || `${emp.first_name} ${emp.last_name}`)?.toLowerCase().includes(q) ||
-        (emp.email || '').toLowerCase().includes(q)
-      );
-    });
-    return list.slice(0, 10);
-  }, [employees, employeeSearchTerm]);
-  const updateDropdownPosition = useCallback(() => {
-    const el = responsibleContainerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const openUp = (window.innerHeight - rect.bottom) < 260;
-    const computedTop = openUp ? Math.max(8, rect.top - 260) : rect.bottom + 4;
-    setDropdownPos({ left: rect.left, top: computedTop, width: rect.width, openUp });
-  }, []);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    updateDropdownPosition();
-    const handler = () => updateDropdownPosition();
-    window.addEventListener("scroll", handler, true);
-    window.addEventListener("resize", handler);
-    return () => {
-      window.removeEventListener("scroll", handler, true);
-      window.removeEventListener("resize", handler);
-    };
-  }, [showEmployeeDropdown, updateDropdownPosition]);
-  useEffect(() => {
-    if (showEmployeeDropdown) {
-      setHighlightedIndex(filteredEmployees.length > 0 ? 0 : -1);
-    }
-  }, [employeeSearchTerm, showEmployeeDropdown, filteredEmployees.length]);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    if (highlightedIndex < 0) return;
-    const el = dropdownRef.current?.querySelector(`[data-index="${highlightedIndex}"]`) as HTMLElement | null;
-    if (el) {
-      el.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightedIndex, showEmployeeDropdown]);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (responsibleContainerRef.current?.contains(t)) return;
-      if (dropdownRef.current?.contains(t)) return;
-      setShowEmployeeDropdown(false);
-      setOpenResponsible(false);
-    };
-    document.addEventListener("mousedown", onDown, true);
-    return () => document.removeEventListener("mousedown", onDown, true);
-  }, [showEmployeeDropdown]);
-  useEffect(() => {
-    setEmployeeSearchTerm(decomposition.responsible || "");
-  }, [decomposition.responsible]);
 
-  const selectEmployee = useCallback((emp: Employee) => {
-    const label = formatProfileLabel({ first_name: emp.first_name, last_name: emp.last_name, email: emp.email });
-    onUpdate(stageId, decomposition.id, { responsible: label });
-    setEmployeeSearchTerm(label);
-    markInteracted();
-    setShowEmployeeDropdown(false);
-    setOpenResponsible(false);
-    setTimeout(() => {
-      if (plannedHoursInputRef.current) {
-        plannedHoursInputRef.current.focus();
-        plannedHoursInputRef.current.select?.();
-      } else {
-        focusNextFrom(responsibleTriggerRef.current);
-      }
-    }, 50);
-  }, [formatProfileLabel, onUpdate, stageId, decomposition.id]);
   useEffect(() => {
     const el = descriptionRef.current;
     if (!el) return;
@@ -1116,7 +1031,7 @@ function SortableDecompositionRow({
         <Checkbox
           checked={isChecked}
           onCheckedChange={() => !selectionDisabled && onToggleSelection(decomposition.id)}
-          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary translate-y-[2px]"
           disabled={selectionDisabled}
         />
       </td>
@@ -1548,18 +1463,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
           }
           const stage = stageMap.get(stageId);
           if (!stage) return;
-          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
-          const statusName = it.section_statuses ? it.section_statuses.name : '';
           const decomp: Decomposition = {
             id: it.decomposition_item_id,
             description: it.decomposition_item_description || '',
             typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
             difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
-            responsible: respName,
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
-            status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -1783,11 +1693,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         description: '',
         typeOfWork: defCategoryName,
         difficulty: defDifficultyName,
-        responsible: '',
         plannedHours: 0,
         progress: 0,
-        status: defStatusName,
-        completionDate: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
       };
       setStages((prev) =>
         prev.map((stage) =>
@@ -1925,7 +1832,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (updates.description !== undefined) payload.decomposition_item_description = updates.description;
       if (updates.typeOfWork !== undefined) payload.decomposition_item_work_category_id = categoryNameToId.get(updates.typeOfWork) || null;
       if (updates.difficulty !== undefined) payload.decomposition_item_difficulty_id = difficultyNameToId.get(updates.difficulty) || null;
-      if (updates.responsible !== undefined) payload.decomposition_item_responsible = updates.responsible ? (profileNameToId.get(updates.responsible) || null) : null;
       if (updates.plannedHours !== undefined) {
         const hours = Number(updates.plannedHours);
         payload.decomposition_item_planned_hours = isNaN(hours) || hours < 0 ? 0 : hours;
@@ -1934,8 +1840,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         const progress = Number(updates.progress);
         payload.decomposition_item_progress = isNaN(progress) || progress < 0 ? 0 : Math.min(progress, 100);
       }
-      if (updates.status !== undefined) payload.decomposition_item_status_id = statusNameToId.get(updates.status) || null;
-      if (updates.completionDate !== undefined) payload.decomposition_item_planned_due_date = updates.completionDate || null;
       if (Object.keys(payload).length === 0) return;
       const { error } = await supabase
         .from('decomposition_items')
@@ -2077,8 +1981,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
         if (isHeader(parts[0])) continue;
 
-        if (parts.length >= 9) {
-          const [stageName, description, typeOfWork, difficulty, responsible, plannedHours, progressStr, status, completionDate] = parts;
+        if (parts.length >= 5) {
+          const [stageName, description, typeOfWork, difficulty, plannedHours, progressStr] = parts;
 
           if (!stageMap.has(stageName)) {
             stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
@@ -2089,32 +1993,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             description,
             typeOfWork,
             difficulty,
-            responsible,
             plannedHours: Number.parseInt(plannedHours ?? "") || 0,
-            progress: parseProgress(progressStr),
-            status,
-            completionDate: normalizeDate(completionDate),
-          };
-
-          stageMap.get(stageName)!.decompositions.push(decomposition);
-          continue;
-        } else if (parts.length >= 8) {
-          const [stageName, description, typeOfWork, difficulty, responsible, plannedHours, status, completionDate] = parts;
-
-          if (!stageMap.has(stageName)) {
-            stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
-          }
-
-          const decomposition: Decomposition = {
-            id: `${Date.now()}-${Math.random()}`,
-            description,
-            typeOfWork,
-            difficulty,
-            responsible,
-            plannedHours: Number.parseInt(plannedHours ?? "") || 0,
-            progress: 0,
-            status,
-            completionDate: normalizeDate(completionDate),
+            progress: progressStr ? parseProgress(progressStr) : 0,
           };
 
           stageMap.get(stageName)!.decompositions.push(decomposition);
@@ -2209,8 +2089,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         for (const d of data.decompositions) {
           const categoryId = (d.typeOfWork ? (categoryNameToId.get(d.typeOfWork) || null) : null) ?? defaultCategoryId;
           const difficultyId = (d.difficulty ? (difficultyNameToId.get(d.difficulty) || null) : null) ?? defaultDifficultyId;
-          const statusId = (d.status ? (statusNameToId.get(d.status) || null) : null) ?? defaultStatusId;
-          const responsibleId = d.responsible ? (profileNameToId.get(d.responsible) || null) : null;
 
           const payload: any = {
             decomposition_item_section_id: sectionId,
@@ -2218,9 +2096,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             decomposition_item_work_category_id: categoryId,
             decomposition_item_planned_hours: Number(d.plannedHours) || 0,
             decomposition_item_order: order++,
-            decomposition_item_planned_due_date: d.completionDate || today,
-            decomposition_item_responsible: responsibleId,
-            decomposition_item_status_id: statusId,
+            decomposition_item_planned_due_date: today,
+            decomposition_item_responsible: null,
+            decomposition_item_status_id: defaultStatusId,
             decomposition_item_progress: Number(d.progress) || 0,
             decomposition_item_stage_id: targetStageId, // null означает "без этапа"
             decomposition_item_difficulty_id: difficultyId,
@@ -2272,18 +2150,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
           }
           const stage = stageMapReload.get(stageId);
           if (!stage) return;
-          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
-          const statusName = it.section_statuses ? it.section_statuses.name : '';
           const decomp: Decomposition = {
             id: it.decomposition_item_id,
             description: it.decomposition_item_description || '',
             typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
             difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
-            responsible: respName,
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
-            status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -2317,12 +2190,12 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const handleCopy = async () => {
     try {
       let decompositionTable =
-        "| Название этапа | Описание декомпозиции (название) | Тип работ | Сложность | Отвественный | Плановые часы | Статус | Дата (декомпозиции) |\n";
-      decompositionTable += "|---|---|---|---|---|---|---|---|\n";
+        "| Название этапа | Описание декомпозиции (название) | Тип работ | Сложность | Плановые часы | Прогресс |\n";
+      decompositionTable += "|---|---|---|---|---|---|\n";
 
       stages.forEach((stage) => {
         stage.decompositions.forEach((decomp) => {
-          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
+          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
         });
       });
 
@@ -2353,9 +2226,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   // Handlers для работы с шаблонами
   const handleApplyTemplate = async (templateId: string) => {
     try {
-      // Подготовить статусы для передачи в applyTemplate
-      const statusesForTemplate = statuses.map(s => ({ id: s.id, name: s.name }));
-      const newStages = await applyTemplate(templateId, sectionId, statusesForTemplate);
+      const newStages = await applyTemplate(templateId, sectionId, defaultStageStatusId);
       // Преобразовать newStages, добавив поле responsibles для совместимости с локальным типом Stage
       const newStagesWithResponsibles = newStages.map(stage => ({
         ...stage,
@@ -2639,10 +2510,10 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
         text += `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
         text += "Декомпозиции:\n";
-        text += "| Описание | Тип работ | Сложность | Ответственный | Часы | Прогресс | Статус | Дата |\n";
-        text += "|---|---|---|---|---|---|---|---|\n";
+        text += "| Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+        text += "|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
-          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.responsible} | ${d.plannedHours} | ${d.progress}% | ${d.status} | ${d.completionDate || ''} |\n`;
+          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.plannedHours} | ${d.progress}% |\n`;
         });
         text += "\n\n";
       });
@@ -2900,8 +2771,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <DialogHeader>
               <DialogTitle>Вставить данные</DialogTitle>
               <DialogDescription className="text-sm">
-                Вставьте табличные данные в формате: Название этапа | Описание | Тип работ | Сложность | Ответственный |
-                Плановые часы | Прогресс | Статус | Дата
+                Вставьте табличные данные в формате: Название этапа | Описание | Тип работ | Сложность |
+                Плановые часы | Прогресс
               </DialogDescription>
             </DialogHeader>
             <Textarea
