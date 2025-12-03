@@ -6,13 +6,15 @@ import type { Section, Department } from "../types"
 import type { CalendarEvent } from "@/modules/calendar/types"
 import { useSettingsStore } from "@/stores/useSettingsStore"
 import { useTheme } from "next-themes"
-import { generateTimeUnits } from "../utils/date-utils"
+import { generateTimeUnits, isToday } from "../utils/date-utils"
 import { TimelineHeader } from "./timeline/timeline-header"
 import { TimelineRow } from "./timeline/timeline-row"
 import { DepartmentRow } from "./timeline/department-row" // Новый компонент для отделов
 import { DepartmentLoadingSkeleton } from "./timeline/department-loading-skeleton"
 import { SectionLoadingSkeleton } from "./timeline/section-loading-skeleton"
 import { ScrollbarStyles } from "./timeline/scrollbar-styles"
+import { ObjectTeamBars, calculateObjectTeamBarsHeight } from "./timeline/object-team-bars"
+import { ProjectIntensityBar } from "./timeline/project-intensity-bar"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
 import { ChevronDown, ChevronRight, Loader2, Milestone, Building2 } from "lucide-react"
@@ -95,6 +97,7 @@ export function TimelineGrid({
   const ensureProjectSectionsLoaded = usePlanningStore((state) => state.ensureProjectSectionsLoaded)
   const allSectionsStore = usePlanningStore((state) => state.allSections)
   const projectSectionsLoading = usePlanningStore((state) => state.projectSectionsLoading)
+  const loadingsMap = usePlanningStore((state) => state.loadingsMap)
   
   // Локальные раскрытия для уровней стадия и объект
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
@@ -383,7 +386,7 @@ export function TimelineGrid({
                 {/* Заголовок группы проекта */}
                   <div
                   className={cn(
-                    "flex items-center font-semibold border-b cursor-pointer select-none",
+                    "group/project flex items-center font-semibold border-b cursor-pointer select-none",
                     theme === "dark" ? "border-slate-700" : "border-slate-200"
                   )}
                   style={{ height: `${HEADER_HEIGHT}px` }}
@@ -391,8 +394,8 @@ export function TimelineGrid({
                 >
                   <div
                     className={cn(
-                    "sticky left-0 z-30 border-r border-b flex items-center",
-                    theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-slate-50 border-slate-200"
+                    "sticky left-0 z-30 border-r border-b flex items-center transition-colors",
+                    theme === "dark" ? "bg-slate-900 border-slate-700 group-hover/project:bg-slate-800" : "bg-slate-50 border-slate-200 group-hover/project:bg-slate-100"
                     )}
                     style={{
                       height: `${HEADER_HEIGHT}px`,
@@ -432,37 +435,45 @@ export function TimelineGrid({
                       {projectName}
                     </span>
                   </div>
-                  {/* Заполнитель для правой части, чтобы выровнять сетку */}
-                  <div className="flex-1 flex items-center">
-                    {/* Саммари на сетке при свернутой группе проекта (из view_project_summary) */}
-                    {!isExpanded && (() => {
-                      const chipClass = cn(
-                        "ml-2 text-xs px-2 py-0.5 rounded whitespace-nowrap",
-                        theme === "dark" ? "bg-slate-700 text-slate-200" : "bg-slate-200 text-slate-700"
-                      )
-                      const fmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" })
-                      const periodLabel = summary.projectStartDate && summary.projectEndDate
-                        ? `${fmt.format(summary.projectStartDate)}—${fmt.format(summary.projectEndDate)}`
-                        : "—"
-                      const rateLabel = summary.totalLoadingRateActive > 0
-                        ? (Number.isInteger(summary.totalLoadingRateActive) ? `${summary.totalLoadingRateActive} ставки` : `${summary.totalLoadingRateActive.toFixed(1)} ставки`)
-                        : null
+                  {/* Полотно таймлайна с heatmap интенсивности */}
+                  <div className="flex-1 flex w-full relative" style={{ flexWrap: "nowrap" }}>
+                    {timeUnits.map((unit, i) => {
+                      const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                      const isMonthBoundary = i === 0 || i === timeUnits.length - 1
+                      const isTodayDate = isToday(unit.date)
                       return (
-                        <div className="flex items-center pl-2">
-                          <span className={chipClass} title="Количество разделов">Разделы: {summary.sectionsCount}</span>
-                          {summary.loadingsCountActive > 0 && (
-                            <span className={chipClass} title="Количество активных загрузок">Загрузки: {summary.loadingsCountActive}</span>
+                        <div
+                          key={i}
+                          className={cn(
+                            "border-r border-b relative",
+                            theme === "dark" ? "border-slate-700" : "border-slate-200",
+                            isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                            theme === "dark" ? "group-hover/project:bg-slate-700/50" : "group-hover/project:bg-slate-200/50",
+                            isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "",
+                            isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                           )}
-                          {rateLabel && (
-                            <span className={chipClass} title="Суммарные активные ставки">{rateLabel}</span>
-                          )}
-                          {summary.employeesWithLoadingsActive > 0 && (
-                            <span className={chipClass} title="Сотрудников в активных загрузках">Сотр: {summary.employeesWithLoadingsActive}</span>
-                          )}
-                          <span className={chipClass} title="Период по разделам">Период: {periodLabel}</span>
-                        </div>
+                          style={{
+                            height: `${HEADER_HEIGHT}px`,
+                            width: `${unit.width ?? cellWidth}px`,
+                            minWidth: `${unit.width ?? cellWidth}px`,
+                            flexShrink: 0,
+                            borderRight: "1px solid",
+                            borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)",
+                            borderLeft: isMonthStart ? "1px solid" : "none",
+                            borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent",
+                          }}
+                        />
                       )
-                    })()}
+                    })}
+                    {/* Heatmap интенсивности загрузки проекта */}
+                    <ProjectIntensityBar
+                      sections={projectSections}
+                      timeUnits={timeUnits}
+                      cellWidth={cellWidth}
+                      theme={theme}
+                      loadingsMap={loadingsMap}
+                      rowHeight={HEADER_HEIGHT}
+                    />
                   </div>
                 </div>
                 {isExpanded && (() => {
@@ -483,31 +494,44 @@ export function TimelineGrid({
                     objectMap.get(oId)!.sections.push(s)
                   })
 
-                  const stageGroups: StageGroup[] = Array.from(stageMap.entries()).map(([stageId, data]) => ({
-                    stageId,
-                    stageName: data.name,
-                    objects: Array.from(data.objects.entries()).map(([objectId, obj]) => ({
-                      objectId,
-                      objectName: obj.name,
-                      sections: obj.sections,
-                    })),
-                  }))
+                  // Функция натуральной сортировки (Том 2 < Том 10)
+                  const naturalSort = (a: string, b: string): number => {
+                    return a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' })
+                  }
+
+                  const stageGroups: StageGroup[] = Array.from(stageMap.entries())
+                    .map(([stageId, data]) => ({
+                      stageId,
+                      stageName: data.name,
+                      objects: Array.from(data.objects.entries())
+                        .map(([objectId, obj]) => ({
+                          objectId,
+                          objectName: obj.name,
+                          sections: obj.sections,
+                        }))
+                        .sort((a, b) => naturalSort(a.objectName, b.objectName)),
+                    }))
+                    .sort((a, b) => naturalSort(a.stageName, b.stageName))
 
                   // Рендер: выпадающий список стадий
                   return stageGroups.flatMap((stage) => {
                     const stageKey = `${projectIdForGroup}:${stage.stageId}`
                     const isStageExpanded = expandedStages[stageKey] ?? false
+                    // Собираем все секции из всех объектов стадии
+                    const allStageSections = stage.objects.flatMap(obj => obj.sections)
+                    // Вычисляем высоту строки стадии на основе количества команд
+                    const stageRowHeight = calculateObjectTeamBarsHeight(allStageSections, reducedRowHeight, loadingsMap)
                     const stageHeader = (
-                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleStageExpanded(stageKey)}>
+                      <div key={`stage-header-${projectIdForGroup}-${stage.stageId}`} className="group/stage flex w-full cursor-pointer select-none" onClick={() => toggleStageExpanded(stageKey)}>
                         {/* Фиксированные столбцы */}
                         <div
                           className={cn("sticky left-0 z-20", "flex")}
-                          style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                          style={{ height: `${stageRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                         >
                           <div
                             className={cn(
                               "p-2 font-medium border-r flex items-center transition-colors h-full",
-                              theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                              theme === "dark" ? "border-slate-700 bg-slate-800 group-hover/stage:bg-slate-700" : "border-slate-200 bg-white group-hover/stage:bg-slate-100",
                             )}
                             style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                           >
@@ -527,21 +551,34 @@ export function TimelineGrid({
                           </div>
                         </div>
                         {/* Полотно таймлайна */}
-                        <div className="flex-1 flex w-full">
+                        <div className="flex-1 flex w-full relative" style={{ flexWrap: "nowrap" }}>
                           {timeUnits.map((unit, i) => {
                             const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                            const isMonthBoundary = i === 0 || i === timeUnits.length - 1
+                            const isTodayDate = isToday(unit.date)
                             return (
                               <div
                                 key={i}
                                 className={cn(
                                   "border-r border-b relative",
                                   theme === "dark" ? "border-slate-700" : "border-slate-200",
+                                  isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                                  theme === "dark" ? "group-hover/stage:bg-slate-700/50" : "group-hover/stage:bg-slate-200/50",
                                   isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "",
+                                  isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "",
                                 )}
-                                style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
+                                style={{ height: `${stageRowHeight}px`, width: `${unit.width ?? cellWidth}px`, minWidth: `${unit.width ?? cellWidth}px`, flexShrink: 0, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent" }}
                               />
                             )
                           })}
+                          {/* Линии команд на уровне стадии */}
+                          <ObjectTeamBars
+                            sections={allStageSections}
+                            timeUnits={timeUnits}
+                            cellWidth={cellWidth}
+                            theme={theme}
+                            loadingsMap={loadingsMap}
+                          />
                         </div>
                       </div>
                     )
@@ -549,13 +586,15 @@ export function TimelineGrid({
                     const objectBlocks = isStageExpanded ? stage.objects.flatMap((obj) => {
                       const objectKey = `${projectIdForGroup}:${stage.stageId}:${obj.objectId}`
                       const isObjectExpanded = expandedObjects[objectKey] ?? false
+                      // Вычисляем высоту строки объекта на основе количества команд
+                      const objectRowHeight = calculateObjectTeamBarsHeight(obj.sections, reducedRowHeight, loadingsMap)
                       const objectHeader = (
-                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="flex w-full cursor-pointer select-none" onClick={() => toggleObjectExpanded(objectKey)}>
-                          <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${reducedRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}>
+                        <div key={`object-header-${projectIdForGroup}-${stage.stageId}-${obj.objectId}`} className="group/object flex w-full cursor-pointer select-none" onClick={() => toggleObjectExpanded(objectKey)}>
+                          <div className={cn("sticky left-0 z-20", "flex")} style={{ height: `${objectRowHeight}px`, width: `${totalFixedWidth}px`, borderBottom: "1px solid", borderColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}>
                             <div
                               className={cn(
                                 "p-2 font-medium border-r flex items-center transition-colors h-full",
-                                theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-white",
+                                theme === "dark" ? "border-slate-700 bg-slate-800 group-hover/object:bg-slate-700" : "border-slate-200 bg-white group-hover/object:bg-slate-100",
                               )}
                               style={{ width: `${totalFixedWidth}px`, minWidth: `${totalFixedWidth}px`, padding: `${PADDING - 1}px`, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }}
                             >
@@ -574,13 +613,23 @@ export function TimelineGrid({
                               </div>
                             </div>
                           </div>
-                          <div className="flex-1 flex w-full">
+                          <div className="flex-1 flex w-full relative" style={{ flexWrap: "nowrap" }}>
                             {timeUnits.map((unit, i) => {
                               const isMonthStart = unit && unit.date ? (new Date(unit.date).getDate() === 1) : false
+                              const isMonthBoundary = i === 0 || i === timeUnits.length - 1
+                              const isTodayDate = isToday(unit.date)
                               return (
-                                <div key={i} className={cn("border-r border-b relative", theme === "dark" ? "border-slate-700" : "border-slate-200", isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "")} style={{ height: `${reducedRowHeight}px`, width: `${cellWidth}px`, borderRight: "1px solid", borderBottom: "1px solid", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderBottomColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)" }} />
+                                <div key={i} className={cn("border-r border-b relative", theme === "dark" ? "border-slate-700" : "border-slate-200", isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "", theme === "dark" ? "group-hover/object:bg-slate-700/50" : "group-hover/object:bg-slate-200/50", isMonthStart ? (theme === "dark" ? "border-l border-l-slate-600" : "border-l border-l-slate-300") : "", isMonthBoundary && i === timeUnits.length - 1 ? "border-r-0" : "")} style={{ height: `${objectRowHeight}px`, width: `${unit.width ?? cellWidth}px`, minWidth: `${unit.width ?? cellWidth}px`, flexShrink: 0, borderRight: "1px solid", borderRightColor: theme === "dark" ? "rgb(51, 65, 85)" : "rgb(226, 232, 240)", borderLeft: isMonthStart ? "1px solid" : "none", borderLeftColor: isMonthStart ? (theme === "dark" ? "rgb(71, 85, 105)" : "rgb(203, 213, 225)") : "transparent" }} />
                               )
                             })}
+                            {/* Линии команд на уровне объекта */}
+                            <ObjectTeamBars
+                              sections={obj.sections}
+                              timeUnits={timeUnits}
+                              cellWidth={cellWidth}
+                              theme={theme}
+                              loadingsMap={loadingsMap}
+                            />
                           </div>
                         </div>
                       )
