@@ -163,8 +163,8 @@ export function DepartmentRow({
               className={cn(
                 "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r",
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                  : "border-slate-200 bg-white group-hover/row:bg-slate-100",
               )}
               style={{
                 width: `${COLUMN_WIDTHS.section}px`,
@@ -233,8 +233,8 @@ export function DepartmentRow({
                 className={cn(
                   "p-3 transition-colors h-full flex items-center justify-center border-b border-r",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                    : "border-slate-200 bg-white group-hover/row:bg-slate-100",
                 )}
                 style={{
                   width: `${COLUMN_WIDTHS.object}px`,
@@ -283,7 +283,7 @@ export function DepartmentRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-emerald-900" : "group-hover/row:bg-emerald-50",
+                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-60"
@@ -310,8 +310,12 @@ export function DepartmentRow({
                     <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                       <div
                         className={cn(
-                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                          theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                          "rounded-sm pointer-events-auto relative",
+                          departmentLoadPercentage >= 86 && departmentLoadPercentage <= 100
+                            ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                            : departmentLoadPercentage > 100
+                              ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                              : (theme === "dark" ? "border border-slate-600/60" : "border border-slate-400")
                         )}
                         style={{
                           width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -323,14 +327,14 @@ export function DepartmentRow({
                         {/* Внутренняя заливка, показывающая процент загрузки */}
                         <div
                           className={cn(
-                            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                            "absolute bottom-0 left-0 right-0",
                             departmentLoadPercentage > 100
-                              ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
+                              ? "bg-red-500"
                               : departmentLoadPercentage <= 50
-                                ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
+                                ? "bg-teal-400"
                                 : departmentLoadPercentage <= 85
-                                  ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                  : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                                  ? "bg-teal-500"
+                                  : "bg-teal-600"
                           )}
                           style={{
                             height: `${Math.max(
@@ -522,6 +526,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                   isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                  theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
                   isFirstDayOfMonth(unit.date)
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
@@ -542,8 +547,12 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                     <div
                       className={cn(
-                        "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                        theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                        "rounded-sm pointer-events-auto relative",
+                        loadPct >= 86 && loadPct <= 100
+                          ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                          : loadPct > 100
+                            ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                            : (theme === "dark" ? "border border-slate-600/60" : "border border-slate-400")
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -554,14 +563,14 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                     >
                       <div
                         className={cn(
-                          "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                          "absolute bottom-0 left-0 right-0",
                           loadPct > 100
-                            ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
+                            ? "bg-red-500"
                             : loadPct <= 50
-                              ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
+                              ? "bg-teal-400"
                               : loadPct <= 85
-                                ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                                ? "bg-teal-500"
+                                : "bg-teal-600"
                         )}
                         style={{
                           height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
@@ -1135,6 +1144,7 @@ export function EmployeeRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                    theme === "dark" ? "group-hover/employee:bg-slate-700/50" : "group-hover/employee:bg-slate-200/50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
