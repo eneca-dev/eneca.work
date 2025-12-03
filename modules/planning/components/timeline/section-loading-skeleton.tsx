@@ -2,6 +2,12 @@
 
 import { cn } from "@/lib/utils"
 
+// Канонические ширины колонок - должны соответствовать timeline-row.tsx
+const COLUMN_WIDTHS = {
+  section: 430,  // Ширина для раздела
+  object: 120,   // Фиксированная ширина для объекта (скрыт по умолчанию)
+} as const
+
 interface SectionLoadingSkeletonProps {
   theme: string
   rowHeight: number
@@ -19,6 +25,9 @@ export function SectionLoadingSkeleton({
   timeUnitsCount,
   count = 5,
 }: SectionLoadingSkeletonProps) {
+  // Используем константу для консистентности
+  const sectionWidth = COLUMN_WIDTHS.section
+
   return (
     <>
       {Array.from({ length: count }).map((_, idx) => (
@@ -43,59 +52,73 @@ export function SectionLoadingSkeleton({
           >
             <div
               className={cn(
-                "p-3 flex flex-col justify-center border-b border-r",
+                "p-2 flex items-center border-r h-full",
                 theme === "dark"
                   ? "border-slate-700 bg-slate-800"
                   : "border-slate-200 bg-white"
               )}
               style={{
-                width: `${totalFixedWidth}px`,
-                minWidth: `${totalFixedWidth}px`,
+                width: `${sectionWidth}px`,
+                minWidth: `${sectionWidth}px`,
               }}
             >
-              {/* Chevron + Название раздела */}
-              <div className="flex items-center mb-2">
+              {/* Контент с отступом 60px слева (как в timeline-row) */}
+              <div className="flex items-center w-full" style={{ paddingLeft: '60px' }}>
+                {/* Аватар */}
                 <div
                   className={cn(
-                    "w-5 h-5 rounded mr-2",
+                    "w-6 h-6 rounded-full mr-2 flex-shrink-0",
                     theme === "dark" ? "bg-slate-700" : "bg-slate-200"
                   )}
                 />
-                <div
-                  className={cn(
-                    "h-4 rounded",
-                    theme === "dark" ? "bg-slate-700" : "bg-slate-200"
-                  )}
-                  style={{ width: `${150 + idx * 20}px` }}
-                />
-              </div>
 
-              {/* Вторая строка: Ответственный, этап, даты */}
-              <div className="flex items-center gap-2 ml-7">
-                {/* Ответственный */}
+                {/* Название раздела */}
                 <div
                   className={cn(
-                    "h-3 rounded",
+                    "h-4 rounded mr-2",
                     theme === "dark" ? "bg-slate-700" : "bg-slate-200"
                   )}
-                  style={{ width: `${80 + idx * 10}px` }}
+                  style={{ width: `${100 + (idx % 3) * 30}px`, maxWidth: '165px' }}
                 />
-                {/* Этап */}
+
+                {/* Счётчик загрузок */}
                 <div
                   className={cn(
-                    "h-3 rounded",
-                    theme === "dark" ? "bg-slate-700" : "bg-slate-200"
+                    "h-4 w-6 rounded mr-2 flex-shrink-0",
+                    theme === "dark" ? "bg-slate-600" : "bg-slate-200"
                   )}
-                  style={{ width: "60px" }}
                 />
-                {/* Даты */}
-                <div
-                  className={cn(
-                    "h-3 rounded",
-                    theme === "dark" ? "bg-slate-700" : "bg-slate-200"
-                  )}
-                  style={{ width: "100px" }}
-                />
+
+                {/* Правая часть: даты и информация */}
+                <div className="flex flex-col gap-1 ml-auto text-xs">
+                  {/* Даты */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "h-3 rounded",
+                        theme === "dark" ? "bg-slate-700" : "bg-slate-200"
+                      )}
+                      style={{ width: "55px" }}
+                    />
+                  </div>
+                  {/* Стадия и отдел */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "h-3 rounded",
+                        theme === "dark" ? "bg-slate-700" : "bg-slate-200"
+                      )}
+                      style={{ width: "40px" }}
+                    />
+                    <div
+                      className={cn(
+                        "h-3 rounded",
+                        theme === "dark" ? "bg-slate-700" : "bg-slate-200"
+                      )}
+                      style={{ width: "50px" }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -111,7 +134,7 @@ export function SectionLoadingSkeleton({
                 <div
                   key={i}
                   className={cn(
-                    "border-r relative border-b",
+                    "border-r relative",
                     theme === "dark" ? "border-slate-700" : "border-slate-200"
                   )}
                   style={{
@@ -129,8 +152,7 @@ export function SectionLoadingSkeleton({
                       )}
                       style={{
                         left: "2px",
-                        right: "2px",
-                        height: "24px",
+                        height: "40px",
                         width: `${cellWidth * barWidth - 4}px`,
                         opacity: 0.6,
                       }}
