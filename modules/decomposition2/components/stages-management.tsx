@@ -181,35 +181,6 @@ const getProgressBarColor = (progress: number): string => {
   return 'bg-green-500 dark:bg-green-600';
 };
 
-// Компонент для отображения метрик этапа
-function StageMetrics({
-  plannedHours,
-  actualHours,
-  progress,
-}: {
-  plannedHours: number;
-  actualHours: number;
-  progress: number;
-}) {
-  return (
-    <div className="flex items-center gap-3 bg-muted/30 dark:bg-muted/20 px-3 py-1.5 rounded-md border border-border/30">
-      <div className="flex items-center gap-1.5">
-        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground">
-          {actualHours.toFixed(1)}ч
-        </span>
-        <span className="text-xs text-muted-foreground">/</span>
-        <span className="text-xs font-medium text-muted-foreground">
-          {plannedHours.toFixed(1)}ч
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted-foreground tabular-nums">{progress}%</span>
-      </div>
-    </div>
-  );
-}
 
 // Компонент для отображения ответственных на этапе
 function StageResponsibles({
@@ -674,11 +645,11 @@ function SortableStage({
         </Button>
         <div className="flex-1">
           <div
-            className="flex items-start gap-3"
+            className="flex items-center gap-3"
             onMouseEnter={() => !isCollapsed && setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="flex items-center pt-1">
+            <div className="flex items-center">
               <StageResponsiblesAvatars
                 responsibles={stage.responsibles}
                 employees={employees}
@@ -729,11 +700,6 @@ function SortableStage({
                       ))}
                   </SelectContent>
                 </Select>
-                <StageMetrics
-                  plannedHours={calculateStagePlannedHours(stage)}
-                  actualHours={calculateStageActualHours(stage, actualByItemId)}
-                  progress={calculateStageProgress(stage)}
-                />
               </>
             )}
             <div className="relative">
@@ -759,19 +725,20 @@ function SortableStage({
             <>
               <div
                 className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                  isHovered ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+                  isHovered ? 'max-h-28 opacity-100' : 'max-h-0 opacity-0'
                 }`}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
               >
                 <div className="flex items-center gap-2 mt-2">
-                  <Input
+                  <Textarea
                     value={stage.description || ''}
                     onChange={(e) => {
                       updateStage(stage.id, { description: e.target.value });
                     }}
                     placeholder="Описание этапа"
-                    className="flex-1 text-sm h-8 border border-border/30 rounded-md px-3 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    rows={2}
+                    className="flex-1 text-sm min-h-[48px] max-h-20 overflow-y-auto rounded-md px-3 py-1.5 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 resize-none"
                   />
                 </div>
               </div>
@@ -862,15 +829,45 @@ function SortableStage({
             </div>
           </DndContext>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => addDecomposition(stage.id)}
-            className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Добавить декомпозицию
-          </Button>
+{stage.decompositions.length > 0 ? (
+            <div className="ml-8 pt-2 pb-1">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => addDecomposition(stage.id)}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Добавить декомпозицию
+                </Button>
+                <div className="flex items-center gap-6 mr-10 border-t-2 border-border/30 pt-2">
+                  <div className="flex items-center gap-1">
+                    <div className="h-6 w-[48px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums font-medium">
+                      {calculateStageActualHours(stage, actualByItemId).toFixed(1)}
+                    </div>
+                    <span className="text-xs text-muted-foreground/50">/</span>
+                    <div className="h-6 w-[48px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums font-medium">
+                      {calculateStagePlannedHours(stage).toFixed(1)}
+                    </div>
+                  </div>
+                  <div className="h-6 w-[52px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-muted-foreground tabular-nums font-semibold">
+                    {calculateStageProgress(stage)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => addDecomposition(stage.id)}
+              className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Добавить декомпозицию
+            </Button>
+          )}
         </>
       )}
 
@@ -1317,11 +1314,8 @@ function SortableDecompositionRow({
 
               input.value = cleaned;
             }}
-            onFocus={(e) => {
-              // Если значение 0, выделяем весь текст - тогда при вводе цифры 0 заменится
-              if (!isCompleted && decomposition.plannedHours === 0) {
-                e.target.select();
-              }
+            onFocus={() => {
+              // Не выделяем текст при фокусе
             }}
             onKeyDown={handleKeyDown}
             className={`h-6 w-[48px] border-0 shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
@@ -1343,28 +1337,65 @@ function SortableDecompositionRow({
           max={100}
           value={decomposition.progress}
           onChange={(e) => {
+            if (isCompleted) return;
             const val = e.target.value;
-            const num = parseInt(val);
+            const num = parseFloat(val);
             const validNum = isNaN(num) || num < 0 ? 0 : Math.min(num, 100);
             onUpdate(stageId, decomposition.id, { progress: validNum });
             markInteracted();
           }}
           onInput={(e) => {
+            if (isCompleted) return;
             const input = e.target as HTMLInputElement;
-            let cleaned = input.value.replace(/[^0-9]/g, '');
-            if (cleaned.length > 3) {
-              cleaned = cleaned.slice(0, 3);
+            // Удаляем невалидные символы (оставляем цифры и точку)
+            let cleaned = input.value.replace(/[^0-9.]/g, '');
+
+            // Ограничиваем целую часть: максимум 2 цифры, кроме случая "100"
+            const parts = cleaned.split('.');
+            let integerPart = parts[0];
+            const decimalPart = parts[1];
+
+            if (integerPart.length > 2) {
+              // Если начинается с "10", разрешаем только "100"
+              if (integerPart.startsWith('10')) {
+                integerPart = integerPart[2] === '0' ? '100' : '10';
+              } else {
+                // Любое другое двузначное число - обрезаем до 2 цифр
+                integerPart = integerPart.slice(0, 2);
+              }
             }
-            const num = parseInt(cleaned);
+
+            cleaned = integerPart + (decimalPart !== undefined ? '.' + decimalPart : '');
+
+            // Удаляем ведущие нули (но оставляем 0 перед точкой, например "0.5")
+            if (cleaned.startsWith('0') && cleaned.length > 1 && cleaned[1] !== '.') {
+              cleaned = cleaned.replace(/^0+/, '');
+              // Если после удаления осталась пустая строка или только точка, добавляем 0
+              if (cleaned === '' || cleaned === '.') {
+                cleaned = '0' + cleaned;
+              }
+            }
+
+            // Проверяем максимальное значение 100
+            const num = parseFloat(cleaned);
             if (!isNaN(num) && num > 100) {
               cleaned = '100';
             }
+
             input.value = cleaned;
           }}
           onKeyDown={handleKeyDown}
-          onFocus={(e) => e.target.select()}
-          className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[70px] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${getProgressColor(decomposition.progress)}`}
+          onFocus={() => {
+            // Не выделяем текст при фокусе
+          }}
+          className={`h-6 w-[48px] border-0 shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+            isCompleted
+              ? 'bg-muted/30 cursor-default opacity-60'
+              : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted'
+          }`}
           placeholder="%"
+          disabled={isCompleted}
+          readOnly={isCompleted}
         />
       </td>
     </tr>
