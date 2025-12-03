@@ -12,6 +12,8 @@ import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
+import { useProjectTagsStore } from '../stores/useProjectTagsStore'
+import { ProjectTagDisplay, ProjectTagManagementModal } from './tags'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
 import { usePermissionsStore } from '@/modules/permissions/store/usePermissionsStore'
@@ -98,6 +100,8 @@ interface ProjectNode {
     | 'customer approval'
   // Признак избранного проекта (только для узлов типа 'project')
   isFavorite?: boolean
+  // Теги проекта
+  projectTags?: Array<{ tag_id: string; name: string; color: string }>
 }
 
 interface ProjectsTreeProps {
@@ -688,6 +692,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Теги проекта */}
+                <div className="ml-2" onClick={(e) => e.stopPropagation()}>
+                  <ProjectTagDisplay
+                    projectId={node.id}
+                    projectName={node.name}
+                    tags={node.projectTags || []}
+                    onUpdate={() => {
+                      window.dispatchEvent(new CustomEvent('projectsTree:forceRefresh'))
+                    }}
+                  />
+                </div>
+
                 {/* Развернуть весь проект */}
                 <button
                   onClick={(e) => { e.stopPropagation(); expandAllFromNode(node) }}
@@ -896,6 +913,7 @@ export function ProjectsTree({
     groupByClient,
     toggleGroupByClient
   } = useProjectsStore()
+  const loadTags = useProjectTagsStore(state => state.loadTags)
   const { theme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -903,6 +921,7 @@ export function ProjectsTree({
   const [searchQuery, setSearchQuery] = useState('')
   // Удалены локальные refs и dropdown для статусов; управление сверху
   const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+  const [showTagManagementModal, setShowTagManagementModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -948,6 +967,7 @@ export function ProjectsTree({
     const collapseAll = () => collapseAllNodes()
     const onlySections = () => setShowOnlySections((v) => v) // отключено, держим состояние как есть
     const openStatusManagement = () => setShowStatusManagementModal(true)
+    const openTagManagement = () => setShowTagManagementModal(true)
     const toggleOnlyFavorites = () => setShowOnlyFavorites(v => !v)
     const resetOnlyFavorites = () => setShowOnlyFavorites(false)
 
@@ -957,6 +977,7 @@ export function ProjectsTree({
     // обработчик toggleOnlySections оставлен на будущее, но логика отключена
     // window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
     window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+    window.addEventListener('projectsTree:openTagManagement', openTagManagement as EventListener)
     window.addEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
     window.addEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
 
@@ -966,10 +987,16 @@ export function ProjectsTree({
       window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
       // window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
       window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+      window.removeEventListener('projectsTree:openTagManagement', openTagManagement as EventListener)
       window.removeEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
       window.removeEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
     }
   }, [toggleGroupByClient, toggleShowManagers, collapseAllNodes, showOnlySections, groupByClient, expandedNodes])
+
+  // Загрузка тегов при монтировании
+  useEffect(() => {
+    loadTags()
+  }, [loadTags])
 
   // Загрузка данных
   useEffect(() => {
@@ -1038,6 +1065,24 @@ export function ProjectsTree({
       window.removeEventListener('projectsTree:reload', reload as EventListener)
       window.removeEventListener('projectsTree:created', handleCreated as EventListener)
       window.removeEventListener('projectsTree:focusNode', handleFocusNode as EventListener)
+    }
+  }, [])
+
+  // Слушатели событий обновления тегов
+  useEffect(() => {
+    const handleTagUpdate = () => {
+      console.log('🏷️ Tags updated, refreshing tree')
+      loadTreeData(true) // true = это обновление, не первая загрузка
+    }
+
+    window.addEventListener('projectTags:updated', handleTagUpdate)
+    window.addEventListener('projectTags:deleted', handleTagUpdate)
+    window.addEventListener('projectTags:created', handleTagUpdate)
+
+    return () => {
+      window.removeEventListener('projectTags:updated', handleTagUpdate)
+      window.removeEventListener('projectTags:deleted', handleTagUpdate)
+      window.removeEventListener('projectTags:created', handleTagUpdate)
     }
   }, [])
 
@@ -1732,7 +1777,9 @@ export function ProjectsTree({
           projectStatus: normalizeProjectStatus(row.project_status),
           children: [],
           // Признак избранного приходит из view_project_tree
-          isFavorite: Boolean(row.is_favorite)
+          isFavorite: Boolean(row.is_favorite),
+          // Теги проекта из view_project_tree
+          projectTags: row.project_tags || []
         })
       } else {
         // Если проект уже есть, но пришёл флаг is_favorite=true — обновим
@@ -2550,7 +2597,11 @@ export function ProjectsTree({
         onClose={() => setShowStatusManagementModal(false)}
       />
 
-
+      {/* Модальное окно управления тегами */}
+      <ProjectTagManagementModal
+        isOpen={showTagManagementModal}
+        onClose={() => setShowTagManagementModal(false)}
+      />
 
       {/* Модальное окно создания задания для объекта */}
       {showCreateAssignmentModal && selectedObjectForAssignment && (
