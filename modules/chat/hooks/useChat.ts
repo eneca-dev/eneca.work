@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../types/chat'
-import { sendChatMessage } from '../api/chat'
-import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
 import { useSidebarState } from '@/hooks/useSidebarState'
+import { createClient } from '@/utils/supabase/client'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -18,14 +18,112 @@ export function useChat() {
 
   const userId = useUserStore(state => state.id)
   const { collapsed } = useSidebarState()
+  const supabase = createClient()
 
-  // Загрузка истории при монтировании
+  // Загрузка или создание conversation
   useEffect(() => {
-    if (userId) {
-      const history = getHistory(userId)
-      setMessages(history)
+    if (!userId) return
+
+    const initConversation = async () => {
+      try {
+        // Пытаемся найти активный conversation
+        const { data: existingConversation } = await supabase
+          .from('chat_conversations')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (existingConversation) {
+          setConversationId(existingConversation.id)
+          await loadMessages(existingConversation.id)
+        } else {
+          // Создаём новый conversation
+          const { data: newConversation } = await supabase
+            .from('chat_conversations')
+            .insert({
+              user_id: userId,
+              status: 'active'
+            })
+            .select()
+            .single()
+
+          if (newConversation) {
+            setConversationId(newConversation.id)
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing conversation:', error)
+      }
     }
-  }, [userId])
+
+    initConversation()
+  }, [userId, supabase])
+
+  // Загрузка истории сообщений
+  const loadMessages = async (convId: string) => {
+    try {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('conversation_id', convId)
+        .eq('kind', 'message')
+        .order('created_at', { ascending: true })
+
+      if (data) {
+        setMessages(data.map(msg => ({
+          ...msg,
+          created_at: new Date(msg.created_at)
+        })))
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error)
+    }
+  }
+
+  // Realtime подписка на новые сообщения
+  useEffect(() => {
+    if (!conversationId || !userId) return
+
+    const channel = supabase
+      .channel(`chat:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        (payload) => {
+          const newMessage = payload.new as ChatMessage
+
+          // Не добавляем дубликаты
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === newMessage.id)
+            if (exists) return prev
+
+            return [...prev, {
+              ...newMessage,
+              created_at: new Date(newMessage.created_at)
+            }]
+          })
+
+          // Если пришёл финальный ответ от бота
+          if (newMessage.role === 'assistant' && newMessage.is_final) {
+            setIsLoading(false)
+            setIsTyping(false)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [conversationId, userId, supabase])
 
   const toggleChat = useCallback(() => {
     setIsOpen(prev => !prev)
@@ -86,54 +184,87 @@ export function useChat() {
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading || !userId) return
+    if (!content.trim() || isLoading || !userId || !conversationId) return
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    saveMessage(userMessage, userId)
+    console.log('[sendMessage] Starting...', { userId, conversationId, content })
 
     setIsLoading(true)
     setIsTyping(true)
 
     try {
-      const response = await sendChatMessage({ message: content })
+      // Записываем в БД - это триггернёт webhook на Python агент
+      // Realtime подписка автоматически добавит сообщение в UI
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          user_id: userId,
+          role: 'user',
+          kind: 'message',
+          content,
+          is_final: true
+        })
+        .select()
 
-      const botMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date()
+      if (error) {
+        console.error('[sendMessage] Insert error:', error)
+        throw error
       }
 
-      setMessages(prev => [...prev, botMessage])
-      saveMessage(botMessage, userId)
+      console.log('[sendMessage] Insert success:', data)
+
+      // Сбрасываем состояние загрузки сразу после успешной вставки
+      // isTyping останется true до прихода ответа от бота через Realtime
+      setIsLoading(false)
     } catch (error) {
+      console.error('[sendMessage] Error:', error)
+
+      // Показываем ошибку
       const errorMessage: ChatMessage = {
         id: crypto.randomUUID(),
+        conversation_id: conversationId,
+        user_id: userId,
         role: 'assistant',
-        content: 'Произошла ошибка. Попробуйте еще раз.',
-        timestamp: new Date()
+        kind: 'message',
+        content: 'Произошла ошибка при отправке сообщения. Попробуйте еще раз.',
+        is_final: true,
+        created_at: new Date()
       }
 
       setMessages(prev => [...prev, errorMessage])
-      saveMessage(errorMessage, userId)
-    } finally {
       setIsLoading(false)
       setIsTyping(false)
     }
-  }, [userId, isLoading])
+  }, [userId, conversationId, isLoading, supabase])
 
-  const clearMessages = useCallback(() => {
-    if (!userId) return
-    clearHistory(userId)
-    setMessages([])
-  }, [userId])
+  const clearMessages = useCallback(async () => {
+    if (!userId || !conversationId) return
+
+    try {
+      // Закрываем текущий conversation
+      await supabase
+        .from('chat_conversations')
+        .update({ status: 'closed' })
+        .eq('id', conversationId)
+
+      // Создаём новый conversation
+      const { data: newConversation } = await supabase
+        .from('chat_conversations')
+        .insert({
+          user_id: userId,
+          status: 'active'
+        })
+        .select()
+        .single()
+
+      if (newConversation) {
+        setConversationId(newConversation.id)
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Error clearing messages:', error)
+    }
+  }, [userId, conversationId, supabase])
 
   return {
     messages,
