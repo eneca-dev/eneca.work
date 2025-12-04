@@ -46,7 +46,8 @@ export const useWorkloadStore = create<WorkloadState>()(
           set({ isLoading: true })
           try {
             // Загружаем данные из представления
-            const { data, error } = await supabase.from("view_employee_workloads").select("*")
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+            const { data, error } = await supabase.from("view_employee_workloads").select("*").limit(10000)
 
             if (error) {
               console.error("Ошибка при загрузке данных о загрузке сотрудников:", error)

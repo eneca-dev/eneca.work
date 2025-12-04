@@ -406,6 +406,7 @@ export const useFilterStore = create<FilterStore>()(
         
         loadEmployees: async () => {
           try {
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
             const { data, error } = await supabase
               .from('view_employee_workloads')
               .select(`
@@ -415,6 +416,7 @@ export const useFilterStore = create<FilterStore>()(
                 final_department_id
               `)
               .order('full_name')
+              .limit(10000)
             
             if (error) throw error
             

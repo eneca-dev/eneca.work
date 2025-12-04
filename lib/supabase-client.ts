@@ -369,7 +369,8 @@ export async function fetchSectionsWithLoadings(
     // Фильтруем только активные загрузки или записи без загрузок
     query = query.or("loading_status.eq.active,loading_status.is.null")
 
-    const { data, error } = await query
+    // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+    const { data, error } = await query.limit(10000)
 
     if (error) {
       console.error("Ошибка при загрузке данных из view_sections_with_loadings:", error)
@@ -686,7 +687,8 @@ export async function fetchEmployeeWorkloads(
       query = query.eq("team_id", teamId)
     }
 
-    const { data, error } = await query
+    // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+    const { data, error } = await query.limit(10000)
 
     if (error) {
       console.error("Ошибка при загрузке данных о загруженности сотрудников:", error)

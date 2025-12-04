@@ -699,7 +699,8 @@ export const usePlanningStore = create<PlanningState>()(
               query = query.eq("team_id", selectedTeamId)
             }
 
-            const { data: orgData, error: orgError } = await query
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+            const { data: orgData, error: orgError } = await query.limit(10000)
 
             if (orgError) {
               console.error("Ошибка при загрузке организационной структуры:", orgError)
@@ -715,6 +716,19 @@ export const usePlanningStore = create<PlanningState>()(
               .or("loading_status.eq.active,loading_status.is.null")
 
             // Применяем те же фильтры для сотрудников
+            // Если выбрано подразделение (и не выбран конкретный отдел), фильтруем по отделам подразделения
+            if (selectedSubdivisionId && !selectedDepartmentId) {
+              const { data: subdivDepts } = await supabase
+                .from("departments")
+                .select("department_id")
+                .eq("subdivision_id", selectedSubdivisionId)
+
+              const subdivDeptIds = subdivDepts?.map(d => d.department_id) || []
+              if (subdivDeptIds.length > 0) {
+                employeeQuery = employeeQuery.in("final_department_id", subdivDeptIds)
+              }
+            }
+
             if (selectedDepartmentId) {
               employeeQuery = employeeQuery.eq("final_department_id", selectedDepartmentId)
             }
@@ -723,7 +737,8 @@ export const usePlanningStore = create<PlanningState>()(
               employeeQuery = employeeQuery.eq("final_team_id", selectedTeamId)
             }
 
-            const { data: employeeData, error: employeeError } = await employeeQuery
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+            const { data: employeeData, error: employeeError } = await employeeQuery.limit(10000)
 
             if (employeeError) {
               console.error("Ошибка при загрузке данных о сотрудниках:", employeeError)
@@ -2929,9 +2944,10 @@ export const usePlanningStore = create<PlanningState>()(
           try {
             // Получаем текущие фильтры из новой системы фильтров
             const { useFilterStore } = await import('../filters/store')
-            const { selectedDepartmentId, selectedTeamId, selectedEmployeeId } = useFilterStore.getState()
+            const { selectedSubdivisionId, selectedDepartmentId, selectedTeamId, selectedEmployeeId } = useFilterStore.getState()
 
             console.log("🏢 Синхронная загрузка отделов с фильтрами:", {
+              selectedSubdivisionId,
               selectedDepartmentId,
               selectedTeamId,
               selectedEmployeeId
@@ -2946,6 +2962,20 @@ export const usePlanningStore = create<PlanningState>()(
             // Загружаем организационную структуру из нового представления
             let query = supabase.from("view_organizational_structure").select("*")
 
+            // Получаем ID отделов подразделения для фильтрации (если выбрано подразделение, но не конкретный отдел)
+            let subdivDeptIds: string[] = []
+            if (selectedSubdivisionId && !selectedDepartmentId) {
+              const { data: depts } = await supabase
+                .from("departments")
+                .select("department_id")
+                .eq("subdivision_id", selectedSubdivisionId)
+
+              subdivDeptIds = depts?.map(d => d.department_id) || []
+              if (subdivDeptIds.length > 0) {
+                query = query.in("department_id", subdivDeptIds)
+              }
+            }
+
             // Применяем фильтр по отделу, если он выбран
             if (selectedDepartmentId) {
               query = query.eq("department_id", selectedDepartmentId)
@@ -2956,7 +2986,8 @@ export const usePlanningStore = create<PlanningState>()(
               query = query.eq("team_id", selectedTeamId)
             }
 
-            const { data: orgData, error: orgError } = await query
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+            const { data: orgData, error: orgError } = await query.limit(10000)
 
             // Проверяем, не был ли запрос отменен после загрузки
             if (abortController.signal.aborted) {
@@ -2978,6 +3009,11 @@ export const usePlanningStore = create<PlanningState>()(
               .or("loading_status.eq.active,loading_status.is.null")
 
             // Применяем те же фильтры для сотрудников
+            // Если выбрано подразделение (и не выбран конкретный отдел), фильтруем по отделам подразделения
+            if (selectedSubdivisionId && !selectedDepartmentId && subdivDeptIds.length > 0) {
+              employeeQuery = employeeQuery.in("final_department_id", subdivDeptIds)
+            }
+
             if (selectedDepartmentId) {
               employeeQuery = employeeQuery.eq("final_department_id", selectedDepartmentId)
             }
@@ -2991,7 +3027,8 @@ export const usePlanningStore = create<PlanningState>()(
               employeeQuery = employeeQuery.eq("user_id", selectedEmployeeId)
             }
 
-            const { data: employeeData, error: employeeError } = await employeeQuery
+            // Увеличиваем лимит с дефолтных 1000 до 10000 для получения всех данных
+            const { data: employeeData, error: employeeError } = await employeeQuery.limit(10000)
 
             // Проверяем, не был ли запрос отменен после второй загрузки
             if (abortController.signal.aborted) {
