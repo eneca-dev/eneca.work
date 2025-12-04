@@ -280,8 +280,8 @@ function StageResponsiblesAvatars({
                 )}
               </div>
             </TooltipTrigger>
-            <TooltipContent className="bg-slate-700 dark:bg-slate-700 border-slate-600">
-              <p className="text-xs">{emp.first_name} {emp.last_name}</p>
+            <TooltipContent className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 shadow-md">
+              <p className="text-xs text-foreground">{emp.first_name} {emp.last_name}</p>
               {emp.position_name && <p className="text-xs text-muted-foreground">{emp.position_name}</p>}
             </TooltipContent>
           </Tooltip>
@@ -436,7 +436,7 @@ function AssignResponsiblesDialog({
                         </div>
                       </TooltipTrigger>
                       {isDisabled && (
-                        <TooltipContent className="text-xs bg-slate-700 dark:bg-slate-700 border-slate-600">
+                        <TooltipContent className="text-xs bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-foreground shadow-md">
                           <p>Нельзя выбрать больше 5 сотрудников</p>
                         </TooltipContent>
                       )}
@@ -498,7 +498,6 @@ function SortableStage({
   selectedStages,
   selectedDecompositions,
   toggleStageSelection,
-  toggleSelectAllInStage,
   toggleDecompositionSelection,
   deleteStage,
   deleteDecomposition,
@@ -526,7 +525,6 @@ function SortableStage({
   selectedStages: Set<string>;
   selectedDecompositions: Set<string>;
   toggleStageSelection: (id: string) => void;
-  toggleSelectAllInStage: (stageId: string) => void;
   toggleDecompositionSelection: (id: string) => void;
   deleteStage: (id: string) => void;
   deleteDecomposition: (stageId: string, decompId: string) => void;
@@ -568,10 +566,6 @@ function SortableStage({
   useEffect(() => {
     adjustStageNameHeight();
   }, [stage.name]);
-
-  const stageDecompositionIds = stage.decompositions.map((d) => d.id);
-  const isAllSelectedInStage = stageDecompositionIds.length > 0 && stageDecompositionIds.every((id) => selectedDecompositions.has(id));
-  const hasAnySelectedInStage = stageDecompositionIds.some((id) => selectedDecompositions.has(id));
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -746,23 +740,6 @@ function SortableStage({
           )}
         </div>
       </div>
-
-      {stage.decompositions.length > 0 && !isCollapsed && (
-        <div
-          className={`absolute top-2 left-2 transition-opacity ${
-            hasAnySelectedInStage ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleSelectAllInStage(stage.id)}
-            className="h-8 px-3 text-xs"
-          >
-            {isAllSelectedInStage ? "Снять выбор в этапе" : "Выбрать все в этапе"}
-          </Button>
-        </div>
-      )}
 
       {!isCollapsed && (
         <>
@@ -1494,12 +1471,17 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         return;
       }
       const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
-      if (allItemIds.length === 0) {
+      // Фильтруем только реальные UUID, исключаем временные ID (содержат '-' больше 4 раз)
+      const realItemIds = allItemIds.filter(id => {
+        const dashCount = (id.match(/-/g) || []).length;
+        return dashCount === 4; // UUID имеет ровно 4 дефиса
+      });
+      if (realItemIds.length === 0) {
         setActualByItemId({});
         return;
       }
       try {
-        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: allItemIds });
+        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: realItemIds });
         if (error) throw error;
         const hoursById: Record<string, number> = {};
         for (const row of (data as any[]) || []) {
@@ -2039,6 +2021,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             decomposition_stage_start: x.start,
             decomposition_stage_finish: x.finish,
             decomposition_stage_order: x.order,
+            decomposition_stage_status_id: defaultStatusId,
           })))
           .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish');
         if (createErr) throw createErr;
@@ -2436,22 +2419,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const toggleSelectAllInStage = (stageId: string) => {
-    const stage = stages.find((s) => s.id === stageId);
-    if (!stage) return;
-    const ids = stage.decompositions.map((d) => d.id);
-    const allSelected = ids.length > 0 && ids.every((id) => selectedDecompositions.has(id));
-    setSelectedDecompositions((prev) => {
-      const next = new Set(prev);
-      if (allSelected) {
-        ids.forEach((id) => next.delete(id));
-      } else {
-        ids.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
-
   const moveSelectedDecompositionsToStage = (targetStageId: string) => {
     if (!targetStageId) return;
     if (selectedDecompositions.size === 0) {
@@ -2477,26 +2444,99 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     toast({ title: "Успешно", description: "Декомпозиции перемещены" });
   };
 
-  const duplicateSelectedDecompositions = () => {
+  const duplicateSelectedDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
       toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
       return;
     }
-    setStages((prev) =>
-      prev.map((stage) => {
-        const toDuplicate = stage.decompositions.filter((d) => selectedDecompositions.has(d.id));
-        if (toDuplicate.length === 0) return stage;
-        const clones = toDuplicate.map((d) => ({ ...d, id: `${stage.id}-${Date.now()}-${Math.random()}` }));
-        return { ...stage, decompositions: [...stage.decompositions, ...clones] };
-      })
-    );
-    setSelectedDecompositions(new Set());
-    toast({ title: "Успешно", description: "Декомпозиции продублированы" });
+
+    try {
+      // Собираем все декомпозиции для дублирования
+      const itemsToDuplicate: Array<{ stage: Stage; decomp: Decomposition }> = [];
+      stages.forEach((stage) => {
+        stage.decompositions.forEach((decomp) => {
+          if (selectedDecompositions.has(decomp.id)) {
+            itemsToDuplicate.push({ stage, decomp });
+          }
+        });
+      });
+
+      // Вставляем в БД
+      const itemsToInsert = itemsToDuplicate.map(({ stage, decomp }) => ({
+        decomposition_item_section_id: sectionId,
+        decomposition_item_stage_id: stage.id === '__no_stage__' ? null : stage.id,
+        decomposition_item_description: decomp.description,
+        decomposition_item_work_category_id: categoryNameToId.get(decomp.typeOfWork) || null,
+        decomposition_item_difficulty_id: difficultyNameToId.get(decomp.difficulty) || null,
+        decomposition_item_planned_hours: decomp.plannedHours,
+        decomposition_item_progress: decomp.progress,
+        decomposition_item_order: 999 // Будет в конце
+      }));
+
+      const { data: insertedItems, error } = await supabase
+        .from('decomposition_items')
+        .insert(itemsToInsert)
+        .select('*');
+
+      if (error) throw error;
+
+      // Обновляем локальное состояние с реальными ID из БД
+      setStages((prev) =>
+        prev.map((stage) => {
+          const newDecomps = (insertedItems || [])
+            .filter((item: any) =>
+              (item.decomposition_item_stage_id === stage.id) ||
+              (item.decomposition_item_stage_id === null && stage.id === '__no_stage__')
+            )
+            .map((item: any) => ({
+              id: item.decomposition_item_id,
+              description: item.decomposition_item_description || '',
+              typeOfWork: categories.find(c => c.work_category_id === item.decomposition_item_work_category_id)?.work_category_name || '',
+              difficulty: difficulties.find(d => d.difficulty_id === item.decomposition_item_difficulty_id)?.difficulty_abbr || '',
+              plannedHours: Number(item.decomposition_item_planned_hours || 0),
+              progress: Number(item.decomposition_item_progress || 0),
+            }));
+
+          if (newDecomps.length === 0) return stage;
+          return { ...stage, decompositions: [...stage.decompositions, ...newDecomps] };
+        })
+      );
+
+      setSelectedDecompositions(new Set());
+      toast({ title: "Успешно", description: "Декомпозиции продублированы и сохранены" });
+    } catch (e) {
+      console.error('Ошибка дублирования декомпозиций:', e);
+      toast({ title: "Ошибка", description: "Не удалось продублировать декомпозиции", variant: "destructive" });
+    }
   };
 
   const eligibleTargetStages = stages.filter((stage) =>
     stage.decompositions.every((d) => !selectedDecompositions.has(d.id))
   );
+
+  const copySelectedDecompositionsToClipboard = async () => {
+    if (selectedDecompositions.size === 0) {
+      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      return;
+    }
+    try {
+      let text = "| Название этапа | Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+      text += "|---|---|---|---|---|---|\n";
+
+      stages.forEach((stage) => {
+        stage.decompositions.forEach((decomp) => {
+          if (selectedDecompositions.has(decomp.id)) {
+            text += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
+          }
+        });
+      });
+
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Успешно", description: "Декомпозиции скопированы в буфер обмена" });
+    } catch (e) {
+      toast({ title: "Ошибка", description: "Не удалось скопировать", variant: "destructive" });
+    }
+  };
 
   const copySelectedStagesToClipboard = async () => {
     if (selectedStages.size === 0) {
@@ -2510,10 +2550,10 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
         text += `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
         text += "Декомпозиции:\n";
-        text += "| Описание | Тип работ | Сложность | Часы | Прогресс |\n";
-        text += "|---|---|---|---|---|\n";
+        text += "| Название этапа | Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+        text += "|---|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
-          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.plannedHours} | ${d.progress}% |\n`;
+          text += `| ${stage.name} | ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.plannedHours} | ${d.progress}% |\n`;
         });
         text += "\n\n";
       });
@@ -2524,17 +2564,83 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const duplicateSelectedStages = () => {
+  const duplicateSelectedStages = async () => {
     if (selectedStages.size === 0) {
       toast({ title: "Ошибка", description: "Не выбраны этапы", variant: "destructive" });
       return;
     }
-    setStages((prev) => {
-      const clones: Stage[] = [];
-      prev.forEach((stage) => {
-        if (!selectedStages.has(stage.id)) return;
-        const newStageId = `${Date.now()}-${Math.random()}`;
-        const newStage: Stage = {
+
+    try {
+      const stagesToDuplicate = stages.filter((s) => selectedStages.has(s.id));
+      const newStages: Stage[] = [];
+
+      // Дублируем каждый этап по очереди
+      for (const stage of stagesToDuplicate) {
+        // Находим максимальный order
+        const maxOrder = stages.reduce((max, s) => Math.max(max, s.id === '__no_stage__' ? 0 : 999), 0);
+
+        // Вставляем этап в БД
+        const { data: insertedStage, error: stageError } = await supabase
+          .from('decomposition_stages')
+          .insert({
+            decomposition_stage_section_id: sectionId,
+            decomposition_stage_name: `${stage.name} (Копия)`,
+            decomposition_stage_start: stage.startDate,
+            decomposition_stage_finish: stage.endDate,
+            decomposition_stage_description: stage.description,
+            decomposition_stage_status_id: stage.statusId,
+            decomposition_stage_order: maxOrder + 1,
+          })
+          .select('*')
+          .single();
+
+        if (stageError) throw stageError;
+
+        const newStageId = (insertedStage as any).decomposition_stage_id;
+
+        // Копируем ответственных
+        if (stage.responsibles.length > 0) {
+          const responsibleInserts = stage.responsibles.map(userId => ({
+            decomposition_stage_id: newStageId,
+            user_id: userId
+          }));
+          await supabase.from('decomposition_stage_responsibles').insert(responsibleInserts);
+        }
+
+        // Вставляем декомпозиции
+        const newDecompositions: Decomposition[] = [];
+        if (stage.decompositions.length > 0) {
+          const decompsToInsert = stage.decompositions.map((d) => ({
+            decomposition_item_section_id: sectionId,
+            decomposition_item_stage_id: newStageId,
+            decomposition_item_description: d.description,
+            decomposition_item_work_category_id: categoryNameToId.get(d.typeOfWork) || null,
+            decomposition_item_difficulty_id: difficultyNameToId.get(d.difficulty) || null,
+            decomposition_item_planned_hours: d.plannedHours,
+            decomposition_item_progress: d.progress,
+            decomposition_item_order: 999
+          }));
+
+          const { data: insertedDecomps, error: decompsError } = await supabase
+            .from('decomposition_items')
+            .insert(decompsToInsert)
+            .select('*');
+
+          if (decompsError) throw decompsError;
+
+          (insertedDecomps || []).forEach((item: any) => {
+            newDecompositions.push({
+              id: item.decomposition_item_id,
+              description: item.decomposition_item_description || '',
+              typeOfWork: categories.find(c => c.work_category_id === item.decomposition_item_work_category_id)?.work_category_name || '',
+              difficulty: difficulties.find(d => d.difficulty_id === item.decomposition_item_difficulty_id)?.difficulty_abbr || '',
+              plannedHours: Number(item.decomposition_item_planned_hours || 0),
+              progress: Number(item.decomposition_item_progress || 0),
+            });
+          });
+        }
+
+        newStages.push({
           id: newStageId,
           name: `${stage.name} (Копия)`,
           startDate: stage.startDate,
@@ -2542,17 +2648,18 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
           description: stage.description,
           statusId: stage.statusId,
           responsibles: stage.responsibles,
-          decompositions: stage.decompositions.map((d) => ({
-            ...d,
-            id: `${newStageId}-${Date.now()}-${Math.random()}`,
-          })),
-        };
-        clones.push(newStage);
-      });
-      return [...prev, ...clones];
-    });
-    setSelectedStages(new Set());
-    toast({ title: "Успешно", description: "Этапы продублированы" });
+          decompositions: newDecompositions,
+        });
+      }
+
+      // Обновляем локальное состояние
+      setStages((prev) => [...prev, ...newStages]);
+      setSelectedStages(new Set());
+      toast({ title: "Успешно", description: "Этапы продублированы и сохранены" });
+    } catch (e) {
+      console.error('Ошибка дублирования этапов:', e);
+      toast({ title: "Ошибка", description: "Не удалось продублировать этапы", variant: "destructive" });
+    }
   };
 
   const toggleStageCollapsed = (stageId: string) => {
@@ -2649,7 +2756,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <Card
-            className={`pointer-events-auto p-3 shadow-lg border-border/60 transition-all duration-200 ${
+            className={`pointer-events-auto p-3 shadow-lg border-2 border-border/60 transition-all duration-200 bg-secondary max-w-4xl ${
               selectedDecompositions.size > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
             }`}
             aria-hidden={!(selectedDecompositions.size > 0)}
@@ -2657,21 +2764,22 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <div className="flex items-center gap-4">
               {selectedDecompositions.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Декомпозиции:</span>
+                  <span className="text-sm text-muted-foreground dark:text-white">Задачи:</span>
                   <span className="text-sm font-medium">{selectedDecompositions.size}</span>
-                  <Button variant="outline" size="sm" onClick={selectAllDecompositions} className="h-8 text-xs">
-                    {selectedDecompositions.size === stages.flatMap((s) => s.decompositions).length ? "Снять выбор" : "Выбрать все"}
+                  <Button variant="secondary" size="sm" onClick={selectAllDecompositions} className="h-8 text-xs border border-border dark:border-slate-600">
+                    {selectedDecompositions.size === stages.flatMap((s) => s.decompositions).length ? "Снять выбор" : "Выбрать все задачи"}
                   </Button>
                   <div className="flex items-center gap-2">
                     <Button
+                      variant="secondary"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs border border-border dark:border-slate-600"
                       disabled={selectedDecompositions.size === 0}
                       onClick={() => setShowMoveDialog(true)}
                     >
                       Переместить
                     </Button>
-                    <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={copySelectedStagesToClipboard}>
+                    <Button variant="secondary" size="sm" className="h-8 text-xs border border-border dark:border-slate-600" onClick={copySelectedDecompositionsToClipboard}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />Копировать
                     </Button>
                     <Button size="sm" className="h-8 text-xs" onClick={duplicateSelectedDecompositions}>
@@ -2689,7 +2797,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <Card
-            className={`pointer-events-auto p-3 shadow-lg border-border/60 transition-all duration-200 ${
+            className={`pointer-events-auto p-3 shadow-lg border-2 border-border/60 transition-all duration-200 bg-secondary max-w-4xl ${
               selectedStages.size > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
             }`}
             aria-hidden={!(selectedStages.size > 0)}
@@ -2697,13 +2805,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <div className="flex items-center gap-4">
               {selectedStages.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Этапы:</span>
+                  <span className="text-sm text-muted-foreground dark:text-white">Этапы:</span>
                   <span className="text-sm font-medium">{selectedStages.size}</span>
-                  <Button variant="outline" size="sm" onClick={selectAllStages} className="h-8 text-xs">
+                  <Button variant="secondary" size="sm" onClick={selectAllStages} className="h-8 text-xs border border-border dark:border-slate-600">
                     {selectedStages.size === stages.length ? "Снять выбор" : "Выбрать все этапы"}
                   </Button>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={copySelectedStagesToClipboard}>
+                    <Button variant="secondary" size="sm" className="h-8 text-xs border border-border dark:border-slate-600" onClick={copySelectedStagesToClipboard}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />Копировать
                     </Button>
                     <Button size="sm" className="h-8 text-xs" onClick={duplicateSelectedStages}>
@@ -2729,7 +2837,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
                   selectedStages={selectedStages}
                   selectedDecompositions={selectedDecompositions}
                   toggleStageSelection={toggleStageSelection}
-                  toggleSelectAllInStage={toggleSelectAllInStage}
                   toggleDecompositionSelection={toggleDecompositionSelection}
                   deleteStage={deleteStage}
                   deleteDecomposition={deleteDecomposition}

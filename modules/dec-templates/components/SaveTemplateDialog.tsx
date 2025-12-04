@@ -115,7 +115,7 @@ export function SaveTemplateDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md sm:rounded-md">
         <DialogHeader>
           <DialogTitle>Сохранить шаблон</DialogTitle>
           <DialogDescription className="text-sm">
