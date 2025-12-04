@@ -201,6 +201,7 @@ CREATE TABLE public.decomposition_stages (
   decomposition_stage_created_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  decomposition_stage_responsibles ARRAY DEFAULT '{}'::uuid[],
   CONSTRAINT decomposition_stages_pkey PRIMARY KEY (decomposition_stage_id),
   CONSTRAINT decomposition_stages_decomposition_stage_section_id_fkey FOREIGN KEY (decomposition_stage_section_id) REFERENCES public.sections(section_id),
   CONSTRAINT decomposition_stages_decomposition_stage_status_id_fkey FOREIGN KEY (decomposition_stage_status_id) REFERENCES public.section_statuses(id),
@@ -406,6 +407,7 @@ CREATE TABLE public.profiles (
   avatar_url text,
   city_id uuid,
   subdivision_id uuid,
+  is_service boolean NOT NULL DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT profiles_department_membership_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
   CONSTRAINT profiles_team_membership_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id),
@@ -426,6 +428,22 @@ CREATE TABLE public.project_deletion_log (
   error_message text,
   deleted_counts jsonb,
   CONSTRAINT project_deletion_log_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.project_tag_links (
+  project_id uuid NOT NULL,
+  tag_id uuid NOT NULL,
+  assigned_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT project_tag_links_pkey PRIMARY KEY (project_id, tag_id),
+  CONSTRAINT project_tag_links_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id),
+  CONSTRAINT project_tag_links_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.project_tags(tag_id)
+);
+CREATE TABLE public.project_tags (
+  tag_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  color text DEFAULT '#9CA3AF'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT project_tags_pkey PRIMARY KEY (tag_id)
 );
 CREATE TABLE public.projects (
   project_id uuid NOT NULL DEFAULT gen_random_uuid(),

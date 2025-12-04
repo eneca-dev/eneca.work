@@ -10,7 +10,7 @@ import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <NoSSR>
         <UserPermissionsSyncProvider>
           <FeedbackProvider>
