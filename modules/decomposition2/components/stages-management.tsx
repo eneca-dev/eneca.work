@@ -38,6 +38,7 @@ import { DecompositionStagesChart } from "@/modules/projects/components/Decompos
 import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore";
 import { useUserStore } from "@/stores/useUserStore";
+import { pluralizeStages, pluralizeTasks } from "@/lib/pluralize";
 
 // Типы данных
 type Decomposition = {
@@ -82,6 +83,7 @@ type Employee = {
 type StagesManagementProps = {
   sectionId: string;
   onOpenLog?: (itemId: string) => void;
+  onRefreshReady?: (refreshFn: () => void) => void;
 };
 
 // Вспомогательные функции для работы с датами
@@ -1291,7 +1293,7 @@ function SortableDecompositionRow({
 }
 
 
-export default function StagesManagement({ sectionId, onOpenLog }: StagesManagementProps) {
+export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady }: StagesManagementProps) {
   const supabase = useMemo(() => createClient(), []);
   const [stages, setStages] = useState<Stage[]>([]);
   const [categories, setCategories] = useState<WorkCategory[]>([]);
@@ -1459,39 +1461,48 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  // Загрузка фактических часов из work_logs
-  useEffect(() => {
-    const loadActuals = async () => {
-      if (stages.length === 0) {
-        setActualByItemId({});
-        return;
+  // Функция загрузки фактических часов из work_logs
+  const loadActualHours = useCallback(async () => {
+    if (stages.length === 0) {
+      setActualByItemId({});
+      return;
+    }
+    const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
+    // Фильтруем только реальные UUID, исключаем временные ID (содержат '-' больше 4 раз)
+    const realItemIds = allItemIds.filter(id => {
+      const dashCount = (id.match(/-/g) || []).length;
+      return dashCount === 4; // UUID имеет ровно 4 дефиса
+    });
+    if (realItemIds.length === 0) {
+      setActualByItemId({});
+      return;
+    }
+    try {
+      const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: realItemIds });
+      if (error) throw error;
+      const hoursById: Record<string, number> = {};
+      for (const row of (data as any[]) || []) {
+        const key = row.decomposition_item_id as string;
+        hoursById[key] = Number(row.actual_hours || 0);
       }
-      const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
-      // Фильтруем только реальные UUID, исключаем временные ID (содержат '-' больше 4 раз)
-      const realItemIds = allItemIds.filter(id => {
-        const dashCount = (id.match(/-/g) || []).length;
-        return dashCount === 4; // UUID имеет ровно 4 дефиса
-      });
-      if (realItemIds.length === 0) {
-        setActualByItemId({});
-        return;
-      }
-      try {
-        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: realItemIds });
-        if (error) throw error;
-        const hoursById: Record<string, number> = {};
-        for (const row of (data as any[]) || []) {
-          const key = row.decomposition_item_id as string;
-          hoursById[key] = Number(row.actual_hours || 0);
-        }
-        setActualByItemId(hoursById);
-      } catch (e) {
-        console.error('Ошибка агрегации work_logs:', e);
-        setActualByItemId({});
-      }
-    };
-    loadActuals();
+      setActualByItemId(hoursById);
+    } catch (e) {
+      console.error('Ошибка агрегации work_logs:', e);
+      setActualByItemId({});
+    }
   }, [stages, supabase]);
+
+  // Автоматическая загрузка при монтировании/изменении stages
+  useEffect(() => {
+    loadActualHours();
+  }, [loadActualHours]);
+
+  // Передаем функцию обновления наружу для вызова из других компонентов
+  useEffect(() => {
+    if (onRefreshReady) {
+      onRefreshReady(loadActualHours);
+    }
+  }, [onRefreshReady, loadActualHours]);
 
   // Загрузка сотрудников для поиска (view_users)
   useEffect(() => {
@@ -2994,7 +3005,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить выбранные этапы?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedStages.size} {selectedStages.size === 1 ? 'этап' : 'этапов'}? Все задачи в этих этапах также будут удалены. Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedStages.size} {pluralizeStages(selectedStages.size)}? Все задачи в этих этапах также будут удалены. Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -3017,7 +3028,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить выбранные задачи?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedDecompositions.size} {selectedDecompositions.size === 1 ? 'задачу' : 'задач'}? Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedDecompositions.size} {pluralizeTasks(selectedDecompositions.size)}? Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
