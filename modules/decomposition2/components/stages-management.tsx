@@ -584,7 +584,7 @@ function SortableStage({
     try {
       const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
       let stageData = `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
-      stageData += "Декомпозиции:\n";
+      stageData += "Задачи:\n";
       stageData += "| Описание | Тип работ | Сложность | Часы | Прогресс |\n";
       stageData += "|---|---|---|---|---|\n";
 
@@ -633,7 +633,7 @@ function SortableStage({
           size="sm"
           onClick={() => onToggleCollapse(stage.id)}
           className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0 mt-2`}
-          title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
+          title={isCollapsed ? "Развернуть задачи" : "Свернуть задачи"}
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
@@ -667,35 +667,6 @@ function SortableStage({
                   : "bg-transparent hover:bg-muted/40"
               }`}
             />
-            {!isCollapsed && (
-              <>
-                <Select
-                  value={stage.statusId || undefined}
-                  onValueChange={(value) => {
-                    updateStage(stage.id, { statusId: value || null });
-                  }}
-                >
-                  <SelectTrigger
-                    className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[115px] ${
-                      stage.statusId
-                        ? getStatusColor(statuses.find(s => s.id === stage.statusId)?.name || '')
-                        : 'bg-muted/60 hover:bg-muted/80'
-                    }`}
-                  >
-                    <SelectValue placeholder="Статус" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background dark:bg-slate-700">
-                    {statuses
-                      .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
-                      .map((status) => (
-                        <SelectItem key={status.id} value={status.id}>
-                          {status.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </>
-            )}
             <div className="relative">
               <DateRangePicker
                 value={{
@@ -714,6 +685,31 @@ function SortableStage({
               />
               <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             </div>
+            <Select
+              value={stage.statusId || undefined}
+              onValueChange={(value) => {
+                updateStage(stage.id, { statusId: value || null });
+              }}
+            >
+              <SelectTrigger
+                className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[115px] ${
+                  stage.statusId
+                    ? getStatusColor(statuses.find(s => s.id === stage.statusId)?.name || '')
+                    : 'bg-muted/60 hover:bg-muted/80'
+                }`}
+              >
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent className="bg-background dark:bg-slate-700">
+                {statuses
+                  .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
+                  .map((status) => (
+                    <SelectItem key={status.id} value={status.id}>
+                      {status.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
           {!isCollapsed && (
             <>
@@ -732,7 +728,7 @@ function SortableStage({
                     }}
                     placeholder="Описание этапа"
                     rows={2}
-                    className="flex-1 text-sm min-h-[48px] max-h-20 overflow-y-auto rounded-md px-3 py-1.5 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 resize-none"
+                    className="flex-1 text-sm min-h-[48px] max-h-20 overflow-y-auto rounded-md px-3 py-1.5 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none"
                   />
                 </div>
               </div>
@@ -816,7 +812,7 @@ function SortableStage({
                   className="h-8 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Добавить декомпозицию
+                  Добавить задачу
                 </Button>
                 <div className="flex items-center gap-6 ml-11 mr-[65px] border-t-2 border-border/30 pt-2">
                   <div className="flex items-center gap-1">
@@ -842,7 +838,7 @@ function SortableStage({
               className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Добавить декомпозицию
+              Добавить задачу
             </Button>
           )}
         </>
@@ -1726,13 +1722,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompToDelete.decompId) {
         setPendingNewDecomposition(null);
       }
-      toast({ title: 'Успешно', description: 'Строка декомпозиции удалена' });
+      toast({ title: 'Успешно', description: 'Задача удалена' });
       setDeleteDecompDialogOpen(false);
       setDecompToDelete(null);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления строки:', e);
-      toast({ title: 'Ошибка', description: 'Не удалось удалить строку декомпозиции', variant: 'destructive' });
+      toast({ title: 'Ошибка', description: 'Не удалось удалить задачу', variant: 'destructive' });
     }
   };
 
@@ -2154,7 +2150,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       const importedDecompsCount = Array.from(stageMap.values()).reduce((acc, v) => acc + v.decompositions.length, 0);
       const createdStagesCount = toCreate.length;
       const descParts = [] as string[];
-      if (importedDecompsCount > 0) descParts.push(`декомпозиций: ${importedDecompsCount}`);
+      if (importedDecompsCount > 0) descParts.push(`задач: ${importedDecompsCount}`);
       if (createdStagesCount > 0 || stageRows.length > 0) descParts.push(`этапов создано/обновлено: ${createdStagesCount}`);
 
       toast({
@@ -2173,7 +2169,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const handleCopy = async () => {
     try {
       let decompositionTable =
-        "| Название этапа | Описание декомпозиции (название) | Тип работ | Сложность | Плановые часы | Прогресс |\n";
+        "| Название этапа | Описание задачи (название) | Тип работ | Сложность | Плановые часы | Прогресс |\n";
       decompositionTable += "|---|---|---|---|---|---|\n";
 
       stages.forEach((stage) => {
@@ -2348,7 +2344,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   const confirmBulkDeleteDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи для удаления", variant: "destructive" });
       return;
     }
 
@@ -2372,11 +2368,11 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       );
       setSelectedDecompositions(new Set());
 
-      toast({ title: "Успешно", description: `Удалено декомпозиций: ${count}` });
+      toast({ title: "Успешно", description: `Удалено задач: ${count}` });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка пакетного удаления декомпозиций:', e);
-      toast({ title: "Ошибка", description: "Не удалось удалить декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не удалось удалить задачи", variant: "destructive" });
     }
   };
 
@@ -2395,7 +2391,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   const bulkDeleteDecompositions = () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи для удаления", variant: "destructive" });
       return;
     }
     setBulkDeleteDecompsDialogOpen(true);
@@ -2422,7 +2418,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const moveSelectedDecompositionsToStage = (targetStageId: string) => {
     if (!targetStageId) return;
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
       return;
     }
     setStages((prev) => {
@@ -2441,12 +2437,12 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       return next;
     });
     setSelectedDecompositions(new Set());
-    toast({ title: "Успешно", description: "Декомпозиции перемещены" });
+    toast({ title: "Успешно", description: "Задачи перемещены" });
   };
 
   const duplicateSelectedDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
       return;
     }
 
@@ -2503,10 +2499,10 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       );
 
       setSelectedDecompositions(new Set());
-      toast({ title: "Успешно", description: "Декомпозиции продублированы и сохранены" });
+      toast({ title: "Успешно", description: "Задачи продублированы и сохранены" });
     } catch (e) {
       console.error('Ошибка дублирования декомпозиций:', e);
-      toast({ title: "Ошибка", description: "Не удалось продублировать декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не удалось продублировать задачи", variant: "destructive" });
     }
   };
 
@@ -2516,7 +2512,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   const copySelectedDecompositionsToClipboard = async () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
       return;
     }
     try {
@@ -2532,7 +2528,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       });
 
       await navigator.clipboard.writeText(text);
-      toast({ title: "Успешно", description: "Декомпозиции скопированы в буфер обмена" });
+      toast({ title: "Успешно", description: "Задачи скопированы в буфер обмена" });
     } catch (e) {
       toast({ title: "Ошибка", description: "Не удалось скопировать", variant: "destructive" });
     }
@@ -2549,7 +2545,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         if (!selectedStages.has(stage.id)) return;
         const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
         text += `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
-        text += "Декомпозиции:\n";
+        text += "Задачи:\n";
         text += "| Название этапа | Описание | Тип работ | Сложность | Часы | Прогресс |\n";
         text += "|---|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
@@ -2902,7 +2898,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <DialogHeader>
               <DialogTitle>Переместить в этап</DialogTitle>
               <DialogDescription className="text-sm">
-                Выберите этап, в который перенести выбранные декомпозиции
+                Выберите этап, в который перенести выбранные задачи
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto">
@@ -2952,7 +2948,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить этап?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить этот этап? Все декомпозиции в этом этапе также будут удалены. Это действие нельзя отменить.
+                Вы уверены, что хотите удалить этот этап? Все задачи в этом этапе также будут удалены. Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2973,9 +2969,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         <AlertDialog open={deleteDecompDialogOpen} onOpenChange={setDeleteDecompDialogOpen}>
           <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
             <AlertDialogHeader>
-              <AlertDialogTitle>Удалить строку декомпозиции?</AlertDialogTitle>
+              <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить эту строку декомпозиции? Это действие нельзя отменить.
+                Вы уверены, что хотите удалить эту задачу? Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2998,7 +2994,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить выбранные этапы?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedStages.size} {selectedStages.size === 1 ? 'этап' : 'этапов'}? Все декомпозиции в этих этапах также будут удалены. Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedStages.size} {selectedStages.size === 1 ? 'этап' : 'этапов'}? Все задачи в этих этапах также будут удалены. Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -3019,9 +3015,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         <AlertDialog open={bulkDeleteDecompsDialogOpen} onOpenChange={setBulkDeleteDecompsDialogOpen}>
           <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
             <AlertDialogHeader>
-              <AlertDialogTitle>Удалить выбранные декомпозиции?</AlertDialogTitle>
+              <AlertDialogTitle>Удалить выбранные задачи?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedDecompositions.size} {selectedDecompositions.size === 1 ? 'декомпозицию' : 'декомпозиций'}? Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedDecompositions.size} {selectedDecompositions.size === 1 ? 'задачу' : 'задач'}? Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

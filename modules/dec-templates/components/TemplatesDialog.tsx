@@ -155,7 +155,7 @@ export function TemplatesDialog({
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
         <DialogContent className="max-w-lg sm:rounded-md">
           <DialogHeader>
-            <DialogTitle>Шаблоны декомпозиции</DialogTitle>
+            <DialogTitle>Шаблоны задач</DialogTitle>
             <DialogDescription className="text-sm">
               Выберите шаблон для применения к текущему разделу
             </DialogDescription>

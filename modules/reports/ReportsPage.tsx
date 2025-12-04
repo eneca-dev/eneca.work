@@ -890,7 +890,7 @@ export default function ReportsPage() {
                     rate: Number(r.work_log_hourly_rate || 0),
                     amount: Number(r.work_log_amount || 0),
                   }))
-                  const header = ['Дата','Автор','Раздел','Категория','Строка декомпозиции','Описание отчёта','Часы','Ставка','Сумма, BYN']
+                  const header = ['Дата','Автор','Раздел','Категория','Задача','Описание отчёта','Часы','Ставка','Сумма, BYN']
                   const escape = (s: string) => '"' + s.replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"'
                   const toCsv = (rows: any[]) => [
                     header.join(';'),
@@ -962,7 +962,7 @@ export default function ReportsPage() {
                       .replace(/'/g, '&apos;')
 
                   const xmlRows = [
-                    ['Дата', 'Автор', 'Раздел', 'Категория', 'Строка декомпозиции', 'Описание отчёта', 'Часы', 'Ставка', 'Сумма, BYN'],
+                    ['Дата', 'Автор', 'Раздел', 'Категория', 'Задача', 'Описание отчёта', 'Часы', 'Ставка', 'Сумма, BYN'],
                     ...rowsToExport.map(r => [
                       r.date ? new Date(r.date).toISOString().slice(0,10) : '',
                       r.author || '',
@@ -1046,7 +1046,7 @@ export default function ReportsPage() {
                   Категория {sortKey==='work_category_name' ? (sortAsc ? <ChevronUp className="h-3 w-3"/> : <ChevronDown className="h-3 w-3"/>) : <ArrowUpDown className="h-3 w-3 opacity-50"/>}
                 </button>
               </th>
-              <th className="px-1.5 md:px-2 lg:px-3 py-1.5 text-left border-b">Строка декомпозиции</th>
+              <th className="px-1.5 md:px-2 lg:px-3 py-1.5 text-left border-b">Задача</th>
               <th className="px-1.5 md:px-2 lg:px-3 py-1.5 text-left border-b">Описание отчёта</th>
               <th className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right border-b whitespace-nowrap">Часы</th>
               <th className="px-1.5 md:px-2 lg:px-3 py-1.5 text-right border-b whitespace-nowrap">Ставка</th>
