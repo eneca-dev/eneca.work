@@ -120,7 +120,14 @@ export function KanbanSwimlane({
         {/* Section Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm text-foreground">
+            <h3
+              className="font-semibold text-sm text-foreground cursor-pointer hover:underline hover:text-primary transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                // TODO: Open section modal
+                console.log('Open section modal for:', section.id)
+              }}
+            >
               {section.name}
             </h3>
             <span
@@ -160,7 +167,7 @@ export function KanbanSwimlane({
           isCollapsed ? 'max-h-0' : 'max-h-[800px]'
         )}
       >
-        <div className="flex gap-0 min-h-[100px] p-2 overflow-x-auto">
+        <div className="flex items-stretch gap-0 min-h-[100px] p-2">
           {KANBAN_COLUMNS.map((column) => (
             <KanbanDropZone
               key={column.id}

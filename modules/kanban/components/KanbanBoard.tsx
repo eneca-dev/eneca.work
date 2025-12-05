@@ -11,7 +11,14 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { Loader2, LayoutGrid } from 'lucide-react'
+import { Loader2, LayoutGrid, RefreshCw, FilterX, Building2, FolderKanban, ChevronsDownUp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useKanbanStore } from '../stores/kanban-store'
 import type { KanbanStage, KanbanSection, StageStatus } from '../types'
 import { KanbanHeader } from './KanbanHeader'
@@ -27,6 +34,7 @@ export function KanbanBoard() {
     moveStage,
     viewSettings,
     toggleSectionCollapse,
+    toggleCollapseAll,
   } = useKanbanStore()
 
   const [activeCard, setActiveCard] = useState<{
@@ -118,31 +126,106 @@ export function KanbanBoard() {
     ? board.sections
     : board.sections.filter((s) => s.stages.length > 0)
 
+  // Check if all sections are collapsed
+  const allCollapsed = board?.sections.every((s) =>
+    viewSettings.collapsedSections.includes(s.id)
+  )
+
   return (
     <div className="flex flex-col h-full">
-      {/* Board Header */}
+      {/* Filters Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b bg-background">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">
-              {board.projectName}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {board.sections.length} раздел
-              {board.sections.length === 1
-                ? ''
-                : board.sections.length < 5
-                  ? 'а'
-                  : 'ов'}
-              {' • '}
-              {board.sections.reduce((sum, s) => sum + s.stages.length, 0)} этап
-              {board.sections.reduce((sum, s) => sum + s.stages.length, 0) === 1
-                ? ''
-                : board.sections.reduce((sum, s) => sum + s.stages.length, 0) < 5
-                  ? 'а'
-                  : 'ов'}
-            </p>
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Organization Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2 h-9">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <Building2 className="h-4 w-4" />
+                <span>Организация</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => console.log('Filter: all')}>
+                Все
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Filter: non-production')}>
+                Непроизводственные отделы
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Filter: production')}>
+                Производственные отделы
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Filter: eneka')}>
+                ЭНЭКА - СП Групп
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Project Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2 h-9">
+                <FolderKanban className="h-4 w-4" />
+                <span>Проект</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[320px]">
+              <DropdownMenuItem onClick={() => console.log('Project: all')}>
+                Все
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Project: proj1')}>
+                11-PUZ-07-YY/25-УЧПТ THE VIEW
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Project: proj2')}>
+                11-ГП-04/25-А-Пионерская 41, БАТ офис
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Project: proj3')}>
+                11-ГП-04/25-С-Пионерская 41, БАТ
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Project: proj4')}>
+                11-ПР-05/25-П-Мангазея (Северный речной порт)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => console.log('Project: proj5')}>
+                12-П-29/25-С Технониколь (Термомасло)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Reset Filters */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 h-9"
+            onClick={() => console.log('Reset filters clicked')}
+          >
+            <FilterX className="h-4 w-4" />
+            <span>Сбросить фильтры</span>
+          </Button>
+
+          {/* Refresh */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 h-9"
+            onClick={() => {
+              console.log('Refresh clicked')
+              loadBoard()
+            }}
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Обновить</span>
+          </Button>
+
+          {/* Collapse All */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 h-9"
+            onClick={toggleCollapseAll}
+          >
+            <ChevronsDownUp className="h-4 w-4" />
+            <span>{allCollapsed ? 'Развернуть всё' : 'Свернуть всё'}</span>
+          </Button>
         </div>
       </div>
 
@@ -156,7 +239,7 @@ export function KanbanBoard() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-auto no-scrollbar-bg">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 [scrollbar-width:none]">
           {sectionsToShow.map((section) => (
             <KanbanSwimlane
               key={section.id}

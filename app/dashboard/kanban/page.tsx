@@ -4,7 +4,7 @@ import { KanbanBoard } from '@/modules/kanban'
 
 export default function KanbanPage() {
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <KanbanBoard />
     </div>
   )

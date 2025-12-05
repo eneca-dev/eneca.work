@@ -1,41 +1,42 @@
 import type { KanbanColumn, StageStatus, SectionStatus } from '../types'
 
 // Колонки доски (статусы этапов)
+// Тепловая карта: от холодных к горячим (активным) и остывают к финишу
 export const KANBAN_COLUMNS: KanbanColumn[] = [
   {
     id: 'backlog',
     title: 'Бэклог',
-    color: 'text-gray-600 dark:text-gray-400',
-    bgColor: 'bg-gray-100 dark:bg-gray-900/50',
-    borderColor: 'border-gray-200 dark:border-gray-700',
+    color: 'text-slate-600 dark:text-slate-400',
+    bgColor: 'bg-slate-100 dark:bg-slate-900/50',
+    borderColor: 'border-slate-200 dark:border-slate-700',
   },
   {
     id: 'planned',
     title: 'План',
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/30',
-    borderColor: 'border-blue-200 dark:border-blue-800',
+    color: 'text-teal-600 dark:text-teal-400',
+    bgColor: 'bg-teal-50 dark:bg-teal-900/30',
+    borderColor: 'border-teal-200 dark:border-teal-800',
   },
   {
     id: 'in_progress',
     title: 'В работе',
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-900/30',
-    borderColor: 'border-amber-200 dark:border-amber-800',
-  },
-  {
-    id: 'paused',
-    title: 'Пауза',
     color: 'text-orange-600 dark:text-orange-400',
     bgColor: 'bg-orange-50 dark:bg-orange-900/30',
     borderColor: 'border-orange-200 dark:border-orange-800',
   },
   {
+    id: 'paused',
+    title: 'Пауза',
+    color: 'text-stone-600 dark:text-stone-400',
+    bgColor: 'bg-stone-100 dark:bg-stone-900/50',
+    borderColor: 'border-stone-200 dark:border-stone-700',
+  },
+  {
     id: 'review',
     title: 'Проверка',
-    color: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/30',
-    borderColor: 'border-purple-200 dark:border-purple-800',
+    color: 'text-indigo-600 dark:text-indigo-400',
+    bgColor: 'bg-indigo-50 dark:bg-indigo-900/30',
+    borderColor: 'border-indigo-200 dark:border-indigo-800',
   },
   {
     id: 'done',
@@ -53,18 +54,18 @@ export const SECTION_STATUSES: Record<
 > = {
   planned: {
     label: 'План',
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-100 dark:bg-blue-900/50',
+    color: 'text-teal-600 dark:text-teal-400',
+    bgColor: 'bg-teal-100 dark:bg-teal-900/50',
   },
   in_progress: {
     label: 'В работе',
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-100 dark:bg-amber-900/50',
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-100 dark:bg-orange-900/50',
   },
   paused: {
     label: 'Пауза',
-    color: 'text-orange-600 dark:text-orange-400',
-    bgColor: 'bg-orange-100 dark:bg-orange-900/50',
+    color: 'text-stone-600 dark:text-stone-400',
+    bgColor: 'bg-stone-100 dark:bg-stone-900/50',
   },
   suspended: {
     label: 'Приостановлено',

@@ -31,23 +31,27 @@ export function KanbanDropZone({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex-1 min-w-[260px] max-w-[320px] h-full',
-        'p-2 rounded-lg transition-colors duration-200',
-        column.bgColor,
+        'flex-1',
+        'p-2 transition-colors duration-200',
+        'overflow-hidden',
         isOver && 'ring-2 ring-primary/20 ring-inset'
       )}
     >
-      <div className="flex flex-col gap-2 h-full">
+      <div
+        className={cn(
+          'flex flex-col gap-2 h-full',
+          'p-2',
+          'overflow-hidden',
+          column.bgColor,
+          isOver && 'ring-2 ring-primary/30 ring-inset'
+        )}
+      >
         {stagesInColumn.length === 0 ? (
           <div
             className={cn(
               'flex-1 flex items-center justify-center',
-              'border-2 border-dashed rounded-lg',
               'text-xs text-muted-foreground',
-              'min-h-[80px]',
-              isOver
-                ? 'border-primary/40 bg-primary/5'
-                : 'border-muted-foreground/20'
+              'min-h-[80px]'
             )}
           >
             {isOver ? 'Отпустите здесь' : ''}

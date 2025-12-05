@@ -220,7 +220,7 @@ export function Sidebar({ user, collapsed, onToggle, isUsersActive, handleLogout
       icon: CalendarDays,
     },
     {
-      title: "Kanban",
+      title: "Канбан",
       href: "/dashboard/kanban",
       icon: Columns3,
     },

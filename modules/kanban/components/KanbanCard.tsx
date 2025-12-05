@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, ChevronDown, ChevronRight, Clock } from 'lucide-react'
+import { Clock, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -29,8 +29,11 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const [isEditingPlannedHours, setIsEditingPlannedHours] = useState(false)
   const [tempPlannedHours, setTempPlannedHours] = useState(task.plannedHours.toString())
+  const [isEditingProgress, setIsEditingProgress] = useState(false)
+  const [tempProgress, setTempProgress] = useState(task.progress.toString())
 
   const updateTaskPlannedHours = useKanbanStore((state) => state.updateTaskPlannedHours)
+  const updateTaskProgress = useKanbanStore((state) => state.updateTaskProgress)
 
   const handleSavePlannedHours = () => {
     const newHours = parseFloat(tempPlannedHours)
@@ -43,6 +46,19 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
   const handleCancelEdit = () => {
     setTempPlannedHours(task.plannedHours.toString())
     setIsEditingPlannedHours(false)
+  }
+
+  const handleSaveProgress = () => {
+    const newProgress = parseFloat(tempProgress)
+    if (!isNaN(newProgress) && newProgress >= 0 && newProgress <= 100) {
+      updateTaskProgress(section.id, stage.id, task.id, newProgress)
+    }
+    setIsEditingProgress(false)
+  }
+
+  const handleCancelProgressEdit = () => {
+    setTempProgress(task.progress.toString())
+    setIsEditingProgress(false)
   }
 
   return (
@@ -159,10 +175,41 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
                 strokeLinecap="round"
               />
             </svg>
-            {/* Percentage text */}
-            <span className="absolute text-[7px] font-medium text-foreground">
-              {task.progress}%
-            </span>
+            {/* Percentage text - editable */}
+            {isEditingProgress ? (
+              <Input
+                type="number"
+                value={tempProgress}
+                onChange={(e) => setTempProgress(e.target.value)}
+                onBlur={handleSaveProgress}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') {
+                    handleSaveProgress()
+                  } else if (e.key === 'Escape') {
+                    handleCancelProgressEdit()
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute w-10 h-5 text-[7px] px-0.5 py-0 text-center"
+                autoFocus
+                min="0"
+                max="100"
+                step="10"
+              />
+            ) : (
+              <span
+                className="absolute text-[7px] font-medium text-foreground cursor-pointer hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsEditingProgress(true)
+                  setTempProgress(task.progress.toString())
+                }}
+                title="Нажмите для изменения прогресса"
+              >
+                {task.progress}%
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -180,52 +227,94 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
 }
 
 // Compact circular progress component for card
-function CompactCircularProgress({ progress }: { progress: number }) {
+function CompactCircularProgress({
+  progress,
+  stage
+}: {
+  progress: number
+  stage?: KanbanStage
+}) {
   const radius = 12
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (progress / 100) * circumference
 
+  // Calculate tooltip content
+  const getTooltipContent = () => {
+    if (!stage || !stage.tasks.length) {
+      return <p>Прогресс: {progress}%</p>
+    }
+
+    const totalPlannedHours = stage.tasks.reduce((sum, t) => sum + t.plannedHours, 0)
+    const completedHours = stage.tasks.reduce(
+      (sum, t) => sum + (t.plannedHours * t.progress) / 100,
+      0
+    )
+
+    return (
+      <div className="text-xs space-y-1">
+        <div className="font-semibold">Расчёт прогресса этапа:</div>
+        <div>Выполнено: {completedHours.toFixed(1)} ч</div>
+        <div>Всего плановых: {totalPlannedHours} ч</div>
+        <div className="pt-1 border-t border-border/50">
+          Прогресс: {progress}%
+        </div>
+        <div className="text-muted-foreground text-[10px] pt-1">
+          Рассчитывается как сумма произведений плановых часов каждой задачи на её процент готовности
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="relative inline-flex items-center justify-center flex-shrink-0">
-      <svg className="w-7 h-7 -rotate-90">
-        {/* Background circle */}
-        <circle
-          cx="14"
-          cy="14"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          className="text-muted"
-        />
-        {/* Progress circle */}
-        <circle
-          cx="14"
-          cy="14"
-          r={radius}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          className={cn(
-            'transition-all duration-500',
-            progress === 100
-              ? 'text-emerald-500'
-              : progress > 50
-                ? 'text-primary'
-                : progress > 0
-                  ? 'text-amber-500'
-                  : 'text-muted-foreground/30'
-          )}
-          strokeLinecap="round"
-        />
-      </svg>
-      {/* Percentage text */}
-      <span className="absolute text-[8px] font-medium text-foreground">
-        {progress}%
-      </span>
-    </div>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="relative inline-flex items-center justify-center flex-shrink-0 cursor-help">
+            <svg className="w-7 h-7 -rotate-90">
+              {/* Background circle */}
+              <circle
+                cx="14"
+                cy="14"
+                r={radius}
+                stroke="currentColor"
+                strokeWidth="2.5"
+                fill="none"
+                className="text-muted"
+              />
+              {/* Progress circle */}
+              <circle
+                cx="14"
+                cy="14"
+                r={radius}
+                stroke="currentColor"
+                strokeWidth="2.5"
+                fill="none"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                className={cn(
+                  'transition-all duration-500',
+                  progress === 100
+                    ? 'text-emerald-500'
+                    : progress > 50
+                      ? 'text-primary'
+                      : progress > 0
+                        ? 'text-amber-500'
+                        : 'text-muted-foreground/30'
+                )}
+                strokeLinecap="round"
+              />
+            </svg>
+            {/* Percentage text */}
+            <span className="absolute text-[8px] font-medium text-foreground pointer-events-none">
+              {progress}%
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[300px]">
+          {getTooltipContent()}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -253,6 +342,7 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
     if (tasksCount > 0) {
       setIsExpanded(!isExpanded)
     }
@@ -267,57 +357,46 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
     <div
       ref={setNodeRef}
       style={style}
+      {...attributes}
+      {...listeners}
       className={cn(
         'group relative',
+        'w-full max-w-full',
         'bg-card rounded-lg border shadow-sm',
         'transition-all duration-200 ease-out',
         'hover:shadow-md hover:border-primary/30',
-        isDragging && 'opacity-50 shadow-lg scale-[1.02] z-50'
+        'cursor-grab active:cursor-grabbing',
+        'overflow-hidden',
+        isDragging && 'opacity-50 shadow-lg scale-[1.02] z-50 cursor-grabbing'
       )}
     >
-      {/* Drag Handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        className={cn(
-          'absolute left-0 top-0 bottom-0 w-6',
-          'flex items-center justify-center',
-          'opacity-0 group-hover:opacity-100',
-          'transition-opacity duration-150',
-          'cursor-grab active:cursor-grabbing',
-          'text-muted-foreground hover:text-foreground',
-          'rounded-l-lg hover:bg-muted/50'
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="h-4 w-4" />
-      </div>
-
-      {/* Card Header - clickable to expand */}
-      <div
-        className={cn(
-          'p-3 pl-4 cursor-pointer',
-          tasksCount > 0 && 'hover:bg-muted/30 transition-colors'
-        )}
-        onClick={handleToggle}
-      >
-        {/* Title row with expand toggle */}
+      {/* Card Header */}
+      <div className="p-3 pl-4">
+        {/* Title row */}
         <div className="flex items-start gap-2 mb-2">
-          {tasksCount > 0 && (
-            <button
-              className="flex-shrink-0 p-0.5 -ml-1 rounded hover:bg-muted transition-colors"
-              onClick={handleToggle}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-            </button>
-          )}
           <h4 className="flex-1 text-sm font-medium leading-tight line-clamp-2 text-foreground">
             {stage.name}
           </h4>
+
+          {/* Expand/Collapse button */}
+          {tasksCount > 0 && (
+            <button
+              onClick={handleToggle}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={cn(
+                'flex-shrink-0 p-0.5 rounded hover:bg-muted/50 transition-colors',
+                'text-muted-foreground hover:text-foreground',
+                'cursor-pointer'
+              )}
+            >
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform duration-200',
+                  isExpanded && 'rotate-180'
+                )}
+              />
+            </button>
+          )}
         </div>
 
         {/* Info row - avatars, hours, progress */}
@@ -328,16 +407,16 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
               uniqueCategories.map((category, idx) => (
                 <Avatar
                   key={idx}
-                  className="h-6 w-6 border-2 border-background"
+                  className="h-8 w-8 border-2 border-background"
                 >
-                  <AvatarFallback className="text-[9px] bg-primary/20 text-primary font-medium">
+                  <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-medium">
                     {category?.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               ))
             ) : (
-              <Avatar className="h-6 w-6 border-2 border-background">
-                <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
+              <Avatar className="h-8 w-8 border-2 border-background">
+                <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
                   {stage.name.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -356,14 +435,14 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
             </div>
 
             {/* Circular Progress */}
-            <CompactCircularProgress progress={stage.progress} />
+            <CompactCircularProgress progress={stage.progress} stage={stage} />
           </div>
         </div>
       </div>
 
       {/* Expanded Tasks List */}
       {isExpanded && tasksCount > 0 && (
-        <div className="px-3 pb-3 border-t border-border/50">
+        <div className="px-3 pl-4 pb-3 border-t border-border/50">
           <div className="pt-2 space-y-0.5">
             {stage.tasks
               .sort((a, b) => a.order - b.order)
@@ -386,10 +465,10 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
           'w-0.5',
           isExpanded ? 'bottom-2' : 'bottom-2',
           column?.id === 'done' && 'bg-emerald-500',
-          column?.id === 'review' && 'bg-purple-500',
-          column?.id === 'in_progress' && 'bg-amber-500',
-          column?.id === 'paused' && 'bg-orange-500',
-          column?.id === 'planned' && 'bg-blue-500',
+          column?.id === 'review' && 'bg-indigo-500',
+          column?.id === 'in_progress' && 'bg-orange-500',
+          column?.id === 'paused' && 'bg-stone-500',
+          column?.id === 'planned' && 'bg-teal-500',
           column?.id === 'backlog' && 'bg-slate-400'
         )}
       />

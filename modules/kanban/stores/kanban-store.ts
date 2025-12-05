@@ -39,6 +39,7 @@ interface KanbanState {
   ) => void
   selectStage: (stage: KanbanStage | null, section: KanbanSection | null) => void
   toggleSectionCollapse: (sectionId: string) => void
+  toggleCollapseAll: () => void
   setShowEmptySwimlanes: (show: boolean) => void
 }
 
@@ -215,6 +216,23 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
         collapsedSections: collapsed
           ? viewSettings.collapsedSections.filter((id) => id !== sectionId)
           : [...viewSettings.collapsedSections, sectionId],
+      },
+    })
+  },
+
+  toggleCollapseAll: () => {
+    const { board, viewSettings } = get()
+    if (!board) return
+
+    const allSectionIds = board.sections.map((s) => s.id)
+    const allCollapsed = allSectionIds.every((id) =>
+      viewSettings.collapsedSections.includes(id)
+    )
+
+    set({
+      viewSettings: {
+        ...viewSettings,
+        collapsedSections: allCollapsed ? [] : allSectionIds,
       },
     })
   },
