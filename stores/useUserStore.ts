@@ -104,7 +104,9 @@ export const useUserStore = create<UserState>()(
               country: user.profile.country,
               city: user.profile.city,
               // legacy role removed, роль теперь только через user_roles
-              avatar_url: user.profile.avatar_url
+              avatar_url: user.profile.avatar_url,
+              user_id: user.profile.user_id,
+              email: user.profile.email
             };
             // Формируем имя из profile только если не передано готовое имя
             const firstName = user.profile.firstName || user.profile.first_name;

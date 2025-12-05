@@ -1,3 +1,16 @@
+export interface ProjectTag {
+  tag_id: string;
+  name: string;
+  color: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProjectTagFormData {
+  name: string;
+  color: string;
+}
+
 export interface Project {
   project_id: string;
   project_name: string;
@@ -16,6 +29,7 @@ export interface Project {
   project_created: string;
   project_updated: string;
   client_id: string;
+  project_tags?: ProjectTag[];
 }
 
 export interface Stage {

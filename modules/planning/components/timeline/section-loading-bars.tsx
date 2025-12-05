@@ -9,6 +9,7 @@ import {
   calculateSectionBarRenders,
   getSectionLoadingLabelParts,
   formatSectionLoadingTooltip,
+  calculateBarTop,
   type SectionLoadingPeriod,
   type BarRender,
 } from "./loading-bars-utils"
@@ -34,7 +35,6 @@ export function SectionLoadingBars({
   timeUnits,
   cellWidth,
   theme,
-  rowHeight,
 }: SectionLoadingBarsProps) {
   const isDark = theme === "dark"
 
@@ -66,27 +66,7 @@ export function SectionLoadingBars({
         const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
 
         // Вычисляем top на основе слоя
-        // Находим все бары, которые пересекаются с текущим и имеют меньший layer
-        const overlappingBars = barRenders.filter(other =>
-          other.period.startDate <= bar.period.endDate &&
-          other.period.endDate >= bar.period.startDate &&
-          other.layer < bar.layer
-        )
-
-        let top = 4 // начальный отступ
-        if (overlappingBars.length > 0) {
-          const layersMap = new Map<number, number>()
-          overlappingBars.forEach(other => {
-            const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-            layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-          })
-
-          for (let i = 0; i < bar.layer; i++) {
-            if (layersMap.has(i)) {
-              top += layersMap.get(i)! + BAR_GAP
-            }
-          }
-        }
+        const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
 
         const labelParts = getSectionLoadingLabelParts(originalPeriod, bar.width)
 
@@ -218,8 +198,6 @@ function getShortName(fullName: string): string {
 
   const parts = fullName.trim().split(/\s+/)
 
-  if (parts.length === 0) return '?'
-
   // Если имя короткое — возвращаем как есть
   if (parts[0].length <= 6) {
     return parts[0]
@@ -230,7 +208,7 @@ function getShortName(fullName: string): string {
     return `${parts[0][0]}.${parts[1][0]}.`
   }
 
-  return parts[0].substring(0, 4) + '.'
+  return parts[0].substring(0, 6) + '.'
 }
 
 /**
@@ -253,28 +231,7 @@ export function calculateSectionBarsHeight(
 
   barRenders.forEach(bar => {
     const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
-
-    const overlappingBars = barRenders.filter(other =>
-      other.period.startDate <= bar.period.endDate &&
-      other.period.endDate >= bar.period.startDate &&
-      other.layer < bar.layer
-    )
-
-    let top = 4
-    if (overlappingBars.length > 0) {
-      const layersMap = new Map<number, number>()
-      overlappingBars.forEach(other => {
-        const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-        layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-      })
-
-      for (let i = 0; i < bar.layer; i++) {
-        if (layersMap.has(i)) {
-          top += layersMap.get(i)! + BAR_GAP
-        }
-      }
-    }
-
+    const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
     maxBottom = Math.max(maxBottom, top + barHeight)
   })
 
