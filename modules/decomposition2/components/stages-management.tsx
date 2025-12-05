@@ -101,6 +101,37 @@ function formatISODateString(date: Date | null): string | null {
   return `${year}-${month}-${day}`;
 }
 
+// Маппинг меток из Excel на категории работ в системе
+const LABEL_TO_CATEGORY_MAP: Record<string, string> = {
+  'MNG': 'Управление',
+  'CLC': 'Расчёт',
+  'MDL200': 'Моделирование 200',
+  'MDL300': 'Моделирование 300',
+  'MDL400': 'Моделирование 400',
+  'DRW': 'Оформление',
+  'GTS': 'ОТР',
+};
+
+// Обратный маппинг: категории работ → метки (для копирования)
+const CATEGORY_TO_LABEL_MAP: Record<string, string> = {
+  'Управление': 'MNG',
+  'Расчёт': 'CLC',
+  'Моделирование 200': 'MDL200',
+  'Моделирование 300': 'MDL300',
+  'Моделирование 400': 'MDL400',
+  'Оформление': 'DRW',
+  'ОТР': 'GTS',
+};
+
+// Функция распределения часов по сложности (К/ВС/ГС)
+function distributeHours(totalHours: number, difficulty: string): [number, number, number] {
+  const hours = totalHours || 0;
+  if (difficulty === 'К') return [hours, 0, 0];
+  if (difficulty === 'ВС') return [0, hours, 0];
+  if (difficulty === 'ГС') return [0, 0, hours];
+  return [hours, 0, 0]; // по умолчанию К
+}
+
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, string> = {
     Низкая: "bg-emerald-100 hover:bg-emerald-200 text-emerald-900",
@@ -587,11 +618,13 @@ function SortableStage({
       const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
       let stageData = `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
       stageData += "Задачи:\n";
-      stageData += "| Описание | Тип работ | Сложность | Часы | Прогресс |\n";
-      stageData += "|---|---|---|---|---|\n";
+      stageData += "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
+      stageData += "|---|---|---|---|---|---|\n";
 
       stage.decompositions.forEach((decomp) => {
-        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
+        const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+        const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+        stageData += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
       });
 
       await navigator.clipboard.writeText(stageData);
@@ -1306,6 +1339,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
   const [selectedDecompositions, setSelectedDecompositions] = useState<Set<string>>(new Set());
   const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [previewData, setPreviewData] = useState<string[][]>([]);
   const { toast } = useToast();
   const [focusedDecompositionId, setFocusedDecompositionId] = useState<string | null>(null);
   const [pendingNewDecomposition, setPendingNewDecomposition] = useState<{ stageId: string; decompId: string } | null>(null);
@@ -1549,8 +1583,8 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         .insert({
           decomposition_stage_section_id: sectionId,
           decomposition_stage_name: 'Новый этап',
-          decomposition_stage_start: new Date().toISOString().split('T')[0],
-          decomposition_stage_finish: new Date().toISOString().split('T')[0],
+          decomposition_stage_start: null,
+          decomposition_stage_finish: null,
           decomposition_stage_description: null,
           decomposition_stage_status_id: defaultStageStatusId,
           decomposition_stage_order: nextOrder,
@@ -1666,7 +1700,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
           decomposition_item_work_category_id: defCategoryId,
           decomposition_item_planned_hours: 0,
           decomposition_item_order: nextOrder,
-          decomposition_item_planned_due_date: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
+          decomposition_item_planned_due_date: opts?.initialCompletionDate ?? null,
           decomposition_item_responsible: null,
           decomposition_item_status_id: defStatusId,
           decomposition_item_progress: 0,
@@ -1902,8 +1936,72 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
     }
   };
 
+  const handlePasteEvent = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+
+    // Пытаемся получить HTML версию (Excel экспортирует таблицы как HTML)
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+
+    let data: string[][] = [];
+
+    if (html) {
+      // Парсим HTML таблицу
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const rows = doc.querySelectorAll('tr');
+
+        data = Array.from(rows).map(row => {
+          const cells = row.querySelectorAll('td, th');
+          return Array.from(cells).map(cell => cell.textContent?.trim() || '');
+        }).filter(row => row.length > 0);
+
+      } catch (error) {
+        console.error('Ошибка парсинга HTML:', error);
+      }
+    }
+
+    // Fallback на обычный текст если HTML не удалось распарсить
+    if (data.length === 0 && text) {
+      let lines = text.trim().split(/\r?\n/);
+
+      // Если есть метаданные этапа (начинается с "Этап:"), пропускаем их
+      const tasksIndex = lines.findIndex(line => line.trim() === 'Задачи:');
+      if (tasksIndex !== -1) {
+        // Берём только строки после "Задачи:"
+        lines = lines.slice(tasksIndex + 1);
+      }
+
+      data = lines.map(line => {
+        // Разбиваем по TAB или |
+        if (line.includes('\t')) {
+          return line.split('\t').map(cell => cell.trim());
+        } else if (line.includes('|')) {
+          return line.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
+        } else {
+          return [line.trim()];
+        }
+      }).filter(row => row.length > 0);
+
+      // Убираем заголовок таблицы и разделитель
+      data = data.filter(row => {
+        // Пропускаем строку если это заголовок (содержит "Название этапа" или "Описание")
+        const isHeader = row.some(cell =>
+          /название\s+этапа|описание|метка/i.test(cell)
+        );
+        // Пропускаем разделитель (все ячейки состоят только из дефисов)
+        const isSeparator = row.every(cell => /^-+$/.test(cell));
+        return !isHeader && !isSeparator;
+      });
+    }
+
+    setPreviewData(data);
+    setPasteText(text); // Сохраняем текст как fallback
+  };
+
   const handlePaste = async () => {
-    if (!pasteText.trim()) {
+    if (previewData.length === 0) {
       toast({
         title: "Ошибка",
         description: "Пожалуйста, вставьте данные для импорта",
@@ -1919,82 +2017,95 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       const defaultStatusId =
         (statuses.find((s) => /план/i.test(s.name))?.id) ?? statuses[0]?.id ?? null;
 
-      const lines = pasteText.trim().split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-
-      const today = new Date().toISOString().split("T")[0];
       const isSeparatorRow = (parts: string[]) => parts.length > 0 && parts.every((p) => /^-+$/.test(p));
-      const isHeader = (first: string) => /название\s+этапа/i.test(first);
-      const normalizeDate = (val?: string) => {
-        const raw = (val ?? "").trim();
-        if (!raw) return today;
-        const m = raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
-        if (m) {
-          const dd = m[1].padStart(2, "0");
-          const mm = m[2].padStart(2, "0");
-          const yyyy = m[3].length === 2 ? `20${m[3]}` : m[3];
-          return `${yyyy}-${mm}-${dd}`;
-        }
-        const d = new Date(raw);
-        return Number.isNaN(d.getTime()) ? today : d.toISOString().split("T")[0];
-      };
-      const parseProgress = (val?: string) => {
-        const raw = (val ?? "").toString().trim();
-        if (!raw) return 0;
-        const m = raw.match(/(\d{1,3})/);
-        const n = m ? Number.parseInt(m[1], 10) : Number.NaN;
-        if (Number.isNaN(n)) return 0;
-        return Math.max(0, Math.min(100, n));
+      // Проверяем заголовок по первой или второй колонке (parts[0] или parts[1] = "Этап")
+      const isHeader = (parts: string[]) => {
+        if (parts.length === 0) return false;
+        // Проверяем первую колонку (если 6 колонок) или вторую (если 7+ колонок)
+        return /название\s+этапа|этап/i.test(parts[0]) ||
+               (parts.length >= 2 && /название\s+этапа|этап/i.test(parts[1]));
       };
 
-      const stageRows: Array<{ name: string; startDate?: string; endDate?: string }> = [];
       const stageMap = new Map<string, { stage: Partial<Stage>; decompositions: Decomposition[] }>();
 
-      const splitRow = (line: string): string[] => {
-        if (line.includes("|")) {
-          const arr = line.split("|").map((p) => p.trim());
-          if (arr.length && arr[0] === "") arr.shift();
-          if (arr.length && arr[arr.length - 1] === "") arr.pop();
-          return arr;
-        }
-        if (line.includes("\t")) {
-          return line.split("\t").map((p) => p.trim());
-        }
-        return line.split(";").map((p) => p.trim());
-      };
-
-      for (const line of lines) {
-        const parts = splitRow(line);
+      // Используем уже распарсенные данные из previewData
+      for (const parts of previewData) {
 
         if (parts.length === 0) continue;
         if (isSeparatorRow(parts)) continue;
+        if (isHeader(parts)) continue;
 
-        if (isHeader(parts[0])) continue;
+        // Минимум должно быть 6 колонок
+        if (parts.length < 6) continue;
 
-        if (parts.length >= 5) {
-          const [stageName, description, typeOfWork, difficulty, plannedHours, progressStr] = parts;
+        const stageName = parts[0]?.trim(); // Этап
+        const description = parts[1]?.trim(); // Задача
 
-          if (!stageMap.has(stageName)) {
-            stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
+        if (!stageName || !description) continue;
+
+        // Функция парсинга часов (обрабатывает пустые строки и прочерки)
+        const parseHours = (val: string | undefined): number => {
+          if (!val) return 0;
+          const trimmed = val.trim();
+          // Пустая строка, прочерк (—), минус (-) = 0
+          if (trimmed === '' || trimmed === '—' || trimmed === '-' || trimmed === '–') return 0;
+          const num = Number(trimmed);
+          return isNaN(num) ? 0 : num;
+        };
+
+        // Часы из конкретных колонок
+        const hoursK = parseHours(parts[2]);   // К (колонка 2)
+        const hoursVS = parseHours(parts[3]);  // ВС (колонка 3)
+        const hoursGS = parseHours(parts[4]);  // ГС (колонка 4)
+
+        const totalHours = hoursK + hoursVS + hoursGS;
+
+        // Определяем сложность по приоритету: ГС > ВС > К
+        let difficulty = '';
+        if (hoursGS > 0) difficulty = "ГС";
+        else if (hoursVS > 0) difficulty = "ВС";
+        else if (hoursK > 0) difficulty = "К";
+
+        // Метка из колонки 5
+        let label = '';
+        const labelCol = parts[5]?.trim();
+        if (labelCol && labelCol !== '' && labelCol !== '—' && labelCol !== '-' && labelCol !== '–') {
+          // Извлекаем первую метку (если несколько через запятую, например "MDL300, MDL400")
+          const labelRegex = /\b([A-Z]{3,}[0-9]*)\b/g;
+          const labelMatches = labelCol.match(labelRegex);
+          if (labelMatches && labelMatches.length > 0) {
+            label = labelMatches[0]; // Берём ПЕРВУЮ метку
           }
-
-          const decomposition: Decomposition = {
-            id: `${Date.now()}-${Math.random()}`,
-            description,
-            typeOfWork,
-            difficulty,
-            plannedHours: Number.parseInt(plannedHours ?? "") || 0,
-            progress: progressStr ? parseProgress(progressStr) : 0,
-          };
-
-          stageMap.get(stageName)!.decompositions.push(decomposition);
-          continue;
         }
 
-        if (parts.length >= 3) {
-          const [stageName, startDate, endDate] = parts;
-          stageRows.push({ name: stageName, startDate: normalizeDate(startDate), endDate: normalizeDate(endDate) });
-          continue;
+        // Маппим метку на категорию работ
+        let typeOfWork = '';
+        if (label) {
+          const categoryName = LABEL_TO_CATEGORY_MAP[label];
+          if (categoryName) {
+            typeOfWork = categoryName;
+          }
         }
+
+        // Если не нашли категорию из метки, берём первую доступную
+        if (!typeOfWork && categories.length > 0) {
+          typeOfWork = categories[0].work_category_name;
+        }
+
+        if (!stageMap.has(stageName)) {
+          stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
+        }
+
+        const decomposition: Decomposition = {
+          id: `${Date.now()}-${Math.random()}`,
+          description,
+          typeOfWork,
+          difficulty,
+          plannedHours: totalHours,
+          progress: 0,
+        };
+
+        stageMap.get(stageName)!.decompositions.push(decomposition);
       }
 
       // 1) Построим карту существующих этапов по названию (только реальные, без "__no_stage__")
@@ -2005,17 +2116,15 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
 
       // Соберём список имён этапов из вставки
       const stageNamesFromPaste = new Set<string>();
-      stageRows.forEach((r) => stageNamesFromPaste.add(r.name));
       stageMap.forEach((_, name) => stageNamesFromPaste.add(name));
 
       // 2) Создадим недостающие этапы
-      const toCreate: Array<{ name: string; start: string; finish: string; order: number }> = [];
+      const toCreate: Array<{ name: string; start: string | null; finish: string | null; order: number }> = [];
       const realStagesCount = stages.filter((s) => s.id !== "__no_stage__").length;
       let orderBase = realStagesCount;
       for (const name of stageNamesFromPaste) {
         if (!existingByName.has(name)) {
-          const row = stageRows.find((r) => r.name === name);
-          toCreate.push({ name, start: row?.startDate ?? today, finish: row?.endDate ?? today, order: ++orderBase });
+          toCreate.push({ name, start: null, finish: null, order: ++orderBase });
         }
       }
 
@@ -2042,28 +2151,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         });
       }
 
-      // 3) Обновим даты этапов, если пришли изменения
-      const updates = stageRows
-        .map((r) => ({
-          id: existingByName.get(r.name)?.id,
-          start: r.startDate,
-          end: r.endDate,
-        }))
-        .filter((u) => Boolean(u.id)) as Array<{ id: string; start?: string; end?: string }>;
-
-      await Promise.all(
-        updates.map((u) =>
-          supabase
-            .from('decomposition_stages')
-            .update({
-              ...(u.start ? { decomposition_stage_start: u.start } : {}),
-              ...(u.end ? { decomposition_stage_finish: u.end } : {}),
-            })
-            .eq('decomposition_stage_id', u.id!)
-        )
-      );
-
-      // 4) Подготовим и вставим декомпозиции
+      // 3) Подготовим и вставим декомпозиции
       type PendingItem = { stageId: string | null; payload: any };
       const itemsToInsert: PendingItem[] = [];
       const perStageOrder = new Map<string, number>();
@@ -2086,7 +2174,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
             decomposition_item_work_category_id: categoryId,
             decomposition_item_planned_hours: Number(d.plannedHours) || 0,
             decomposition_item_order: order++,
-            decomposition_item_planned_due_date: today,
+            decomposition_item_planned_due_date: null,
             decomposition_item_responsible: null,
             decomposition_item_status_id: defaultStatusId,
             decomposition_item_progress: Number(d.progress) || 0,
@@ -2156,13 +2244,14 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       }
 
       setPasteText("");
+      setPreviewData([]);
       setShowPasteDialog(false);
 
       const importedDecompsCount = Array.from(stageMap.values()).reduce((acc, v) => acc + v.decompositions.length, 0);
       const createdStagesCount = toCreate.length;
       const descParts = [] as string[];
       if (importedDecompsCount > 0) descParts.push(`задач: ${importedDecompsCount}`);
-      if (createdStagesCount > 0 || stageRows.length > 0) descParts.push(`этапов создано/обновлено: ${createdStagesCount}`);
+      if (createdStagesCount > 0) descParts.push(`этапов создано: ${createdStagesCount}`);
 
       toast({
         title: "Успешно",
@@ -2180,12 +2269,14 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
   const handleCopy = async () => {
     try {
       let decompositionTable =
-        "| Название этапа | Описание задачи (название) | Тип работ | Сложность | Плановые часы | Прогресс |\n";
+        "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
       decompositionTable += "|---|---|---|---|---|---|\n";
 
       stages.forEach((stage) => {
         stage.decompositions.forEach((decomp) => {
-          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
+          const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+          const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+          decompositionTable += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
         });
       });
 
@@ -2527,13 +2618,15 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       return;
     }
     try {
-      let text = "| Название этапа | Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+      let text = "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
       text += "|---|---|---|---|---|---|\n";
 
       stages.forEach((stage) => {
         stage.decompositions.forEach((decomp) => {
           if (selectedDecompositions.has(decomp.id)) {
-            text += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.plannedHours} | ${decomp.progress}% |\n`;
+            const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+            const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+            text += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
           }
         });
       });
@@ -2557,10 +2650,12 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
         text += `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
         text += "Задачи:\n";
-        text += "| Название этапа | Описание | Тип работ | Сложность | Часы | Прогресс |\n";
+        text += "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
         text += "|---|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
-          text += `| ${stage.name} | ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.plannedHours} | ${d.progress}% |\n`;
+          const [hoursK, hoursVS, hoursGS] = distributeHours(d.plannedHours, d.difficulty);
+          const label = CATEGORY_TO_LABEL_MAP[d.typeOfWork] || '';
+          text += `| ${stage.name} | ${d.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
         });
         text += "\n\n";
       });
@@ -2880,26 +2975,115 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
           <DecompositionStagesChart stages={chartStages} />
         </div>
 
-        <Dialog open={showPasteDialog} onOpenChange={setShowPasteDialog}>
-          <DialogContent className="max-w-3xl">
+        <Dialog open={showPasteDialog} onOpenChange={(open) => {
+          setShowPasteDialog(open);
+          if (!open) {
+            setPreviewData([]);
+            setPasteText('');
+          }
+        }}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>Вставить данные</DialogTitle>
+              <DialogTitle>Импорт этапов</DialogTitle>
               <DialogDescription className="text-sm">
-                Вставьте табличные данные в формате: Название этапа | Описание | Тип работ | Сложность |
-                Плановые часы | Прогресс
+                Скопируйте данные в правильном формате и нажмите <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Ctrl+V</kbd>
+                <br />
+                <span className="text-xs text-muted-foreground">Формат: Этапы | Задачи | К (часы) | ВС (часы) | ГС (часы) | Метка</span>
               </DialogDescription>
             </DialogHeader>
-            <Textarea
-              value={pasteText}
-              onChange={(e) => setPasteText((e.target as HTMLTextAreaElement).value)}
-              placeholder="Вставьте данные здесь..."
-              className="min-h-[300px] font-sans text-sm border border-border/60"
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPasteDialog(false)}>
+
+            <div
+              className="flex-1 overflow-auto border rounded-md"
+              onPaste={handlePasteEvent}
+              tabIndex={0}
+            >
+              {previewData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  <div className="text-center space-y-2">
+                    <ClipboardPaste className="w-12 h-12 mx-auto opacity-50" />
+                    <div>Нажмите <kbd className="px-2 py-1 bg-muted border rounded">Ctrl+V</kbd> для вставки данных</div>
+                    <div className="text-xs">Данные будут отображены в виде таблицы для предпросмотра</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Найдено: <span className="font-medium text-foreground">{previewData.length} строк</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewData([]);
+                        setPasteText('');
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Очистить
+                    </Button>
+                  </div>
+                  <div className="overflow-auto max-h-[500px] border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium border-r">#</th>
+                          <th className="px-3 py-2 text-left font-medium border-r bg-blue-50 dark:bg-blue-950/20">Этап</th>
+                          <th className="px-3 py-2 text-left font-medium border-r bg-green-50 dark:bg-green-950/20">Задача</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">К</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">ВС</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">ГС</th>
+                          <th className="px-3 py-2 text-left font-medium bg-purple-50 dark:bg-purple-950/20">Метка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.map((row, rowIndex) => (
+                          <tr key={rowIndex} className="border-t hover:bg-muted/30">
+                            <td className="px-3 py-2 text-muted-foreground border-r text-xs">{rowIndex + 1}</td>
+                            {row.map((cell, cellIndex) => (
+                              <td
+                                key={cellIndex}
+                                className={`px-3 py-2 border-r last:border-r-0 ${
+                                  cellIndex === 0 ? 'font-medium' : ''
+                                } ${
+                                  cellIndex >= 2 && cellIndex <= 4 ? 'text-center tabular-nums' : ''
+                                }`}
+                              >
+                                {cell || <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                            ))}
+                            {/* Добавляем пустые ячейки если строка короче 6 колонок */}
+                            {Array.from({ length: Math.max(0, 6 - row.length) }).map((_, i) => (
+                              <td key={`empty-${i}`} className="px-3 py-2 border-r last:border-r-0">
+                                <span className="text-muted-foreground/40">—</span>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPasteDialog(false);
+                  setPreviewData([]);
+                  setPasteText('');
+                }}
+              >
                 Отмена
               </Button>
-              <Button onClick={handlePaste}>Импортировать</Button>
+              <Button
+                onClick={handlePaste}
+                disabled={previewData.length === 0}
+              >
+                Импортировать ({previewData.length} строк)
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
