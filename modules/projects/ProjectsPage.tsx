@@ -24,7 +24,8 @@ import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
 import { useProjectTagsStore } from './stores/useProjectTagsStore';
-import { getContrastColor } from './utils/color';
+import { useTheme } from 'next-themes';
+import { getTagStyles } from './utils/color';
 // Убираем импорт старых фильтров
 // import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
@@ -79,6 +80,8 @@ export default function ProjectsPage() {
   const statuses = useSectionStatusesStore(state => state.statuses);
   const loadStatuses = useSectionStatusesStore(state => state.loadStatuses);
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
@@ -551,38 +554,103 @@ export default function ProjectsPage() {
           <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
         </div>
 
-        {/* Статусы проектов и теги — дропдаун с двумя колонками */}
+        {/* Статусы проектов и теги — refined professional dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
-              <Layers className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
-              <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                Статусы и теги проектов
+            <button className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] md:text-xs whitespace-nowrap transition-all duration-300 ease-out rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10">
+              {/* Subtle gradient background on hover */}
+              <span className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-primary/5 via-transparent to-primary/5" />
+
+              <Layers className="relative h-3.5 w-3.5 text-slate-500 dark:text-slate-400 group-hover:text-primary transition-colors duration-200" />
+              <span className={`relative font-medium text-slate-700 dark:text-slate-300 group-hover:text-primary transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                Статусы и теги
               </span>
+
+              {/* Active indicator dot */}
               {(selectedProjectStatuses.length > 0 || selectedTagIds.length > 0) && (
-                <span className="ml-1 inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                <span className="ml-1 w-2 h-2 bg-primary rounded-full shadow-sm" />
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[480px] p-0 dark:bg-slate-800 dark:border-slate-700">
-            <div className="p-2">
-              <div className="flex gap-4">
-                {/* Левая колонка: Статусы проектов */}
-                <div className="flex-1 min-w-[200px]">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Статусы проектов</div>
-                    <button
-                      className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-                      onClick={()=> setSelectedProjectStatuses([])}
-                    >
-                      Очистить
-                    </button>
+          <DropdownMenuContent
+            align="start"
+            sideOffset={8}
+            className="w-[560px] p-0 rounded-2xl border border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl shadow-black/15 dark:shadow-black/40 overflow-hidden"
+          >
+            {/* Decorative top accent line */}
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+
+            {/* Header with subtle pattern */}
+            <div className="relative px-5 py-4 border-b border-border/30">
+              {/* Subtle dot pattern background */}
+              <div
+                className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                style={{
+                  backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+                  backgroundSize: '16px 16px',
+                }}
+              />
+
+              <div className="relative flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Icon with gradient background */}
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-primary/20 rounded-xl blur-md" />
+                    <div className="relative p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
+                      <Layers className="h-4.5 w-4.5 text-primary" />
+                    </div>
                   </div>
-                  {/* Список статусов проектов как бейджи */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROJECT_STATUS_OPTIONS.map(s => {
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground tracking-tight">Фильтры проектов</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Выберите статусы и теги для отображения</p>
+                  </div>
+                </div>
+
+                {(selectedProjectStatuses.length > 0 || selectedTagIds.length > 0) && (
+                  <button
+                    onClick={() => {
+                      setSelectedProjectStatuses([])
+                      setSelectedTagIds([])
+                    }}
+                    className="group/reset flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-destructive px-2.5 py-1.5 rounded-lg hover:bg-destructive/10 transition-all duration-200"
+                  >
+                    <X className="h-3 w-3 transition-transform duration-200 group-hover/reset:rotate-90" />
+                    Сбросить
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="p-5">
+              <div className="flex gap-6">
+                {/* Левая колонка: Статусы проектов */}
+                <div className="flex-1 min-w-[240px]">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Статусы</span>
+                      {selectedProjectStatuses.length > 0 && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-primary/10 text-primary rounded-md">
+                          {selectedProjectStatuses.length}
+                        </span>
+                      )}
+                    </div>
+                    {selectedProjectStatuses.length > 0 && (
+                      <button
+                        className="text-[10px] text-muted-foreground hover:text-primary transition-colors duration-200"
+                        onClick={() => setSelectedProjectStatuses([])}
+                      >
+                        Очистить
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Статусы как компактный список */}
+                  <div className="space-y-1">
+                    {PROJECT_STATUS_OPTIONS.map((s, index) => {
                       const norm = normalizeProjectStatus(s)
                       const isSelected = norm ? selectedProjectStatuses.includes(norm) : false
+                      const badgeClasses = getProjectStatusBadgeClasses(s)
+
                       return (
                         <button
                           key={s}
@@ -591,57 +659,179 @@ export default function ProjectsPage() {
                             const setNorm = Array.from(new Set((prev || []).map(normalizeProjectStatus).filter(Boolean))) as string[]
                             return setNorm.includes(normVal) ? setNorm.filter(x => x !== normVal) : [...setNorm, normVal]
                           })}
-                          className={`px-2 py-0.5 text-xs font-medium border rounded-md transition-all cursor-pointer
-                            ${getProjectStatusBadgeClasses(s)}
-                            ${isSelected ? 'shadow-sm' : 'opacity-40 hover:opacity-70'}`}
+                          className={`
+                            group/status w-full flex items-center gap-3 px-3 py-2
+                            rounded-xl transition-all duration-200
+                            ${isSelected
+                              ? 'bg-primary/8 dark:bg-primary/12'
+                              : 'hover:bg-accent/50'
+                            }
+                          `}
+                          style={{
+                            animationDelay: `${index * 25}ms`,
+                          }}
                         >
-                          {getProjectStatusLabel(s)}
+                          {/* Custom styled checkbox */}
+                          <div className={`
+                            relative flex-shrink-0 w-[18px] h-[18px] rounded-md
+                            flex items-center justify-center
+                            transition-all duration-200 ease-out
+                            ${isSelected
+                              ? 'bg-primary shadow-sm shadow-primary/30'
+                              : 'border-2 border-muted-foreground/25 group-hover/status:border-primary/40'
+                            }
+                          `}>
+                            <svg
+                              className={`w-2.5 h-2.5 text-primary-foreground transition-all duration-200 ${isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={3}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+
+                          {/* Status badge */}
+                          <span className={`
+                            flex-1 text-left px-2.5 py-1 text-[11px] font-medium rounded-lg border
+                            transition-all duration-200
+                            ${badgeClasses}
+                            ${!isSelected ? 'opacity-70 group-hover/status:opacity-100' : 'shadow-sm'}
+                          `}>
+                            {getProjectStatusLabel(s)}
+                          </span>
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
+                {/* Vertical divider with gradient */}
+                <div className="relative w-px self-stretch">
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-border/60 to-transparent" />
+                </div>
+
                 {/* Правая колонка: Теги проектов */}
-                <div className="flex-1 min-w-[200px] border-l border-slate-200 dark:border-slate-700 pl-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Теги проектов</div>
-                    <button
-                      className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-                      onClick={()=> setSelectedTagIds([])}
-                    >
-                      Очистить
-                    </button>
-                  </div>
-                  {/* Список тегов как цветные чипсы */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {projectTags.map(tag => (
+                <div className="flex-1 min-w-[240px]">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Теги</span>
+                      {selectedTagIds.length > 0 && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-primary/10 text-primary rounded-md">
+                          {selectedTagIds.length}
+                        </span>
+                      )}
+                    </div>
+                    {selectedTagIds.length > 0 && (
                       <button
-                        key={tag.tag_id}
-                        onClick={() => setSelectedTagIds(prev =>
-                          prev.includes(tag.tag_id)
-                            ? prev.filter(id => id !== tag.tag_id)
-                            : [...prev, tag.tag_id]
-                        )}
-                        className={`px-2 py-0.5 text-xs font-medium rounded-full transition-all cursor-pointer
-                          ${selectedTagIds.includes(tag.tag_id) ? 'shadow-sm' : 'opacity-25 hover:opacity-50'}`}
-                        style={{
-                          backgroundColor: tag.color,
-                          color: getContrastColor(tag.color),
-                        }}
+                        className="text-[10px] text-muted-foreground hover:text-primary transition-colors duration-200"
+                        onClick={() => setSelectedTagIds([])}
                       >
-                        {tag.name}
+                        Очистить
                       </button>
-                    ))}
-                    {projectTags.length === 0 && (
-                      <div className="text-xs text-slate-400 dark:text-slate-500 py-2">
-                        Нет тегов
-                      </div>
                     )}
                   </div>
+
+                  {/* Теги как список с чекбоксами (как статусы) */}
+                  {projectTags.length > 0 ? (
+                    <div className="space-y-1">
+                      {projectTags.map((tag, index) => {
+                        const isSelected = selectedTagIds.includes(tag.tag_id)
+                        const styles = getTagStyles(tag.color, isDark)
+
+                        return (
+                          <button
+                            key={tag.tag_id}
+                            onClick={() => setSelectedTagIds(prev =>
+                              prev.includes(tag.tag_id)
+                                ? prev.filter(id => id !== tag.tag_id)
+                                : [...prev, tag.tag_id]
+                            )}
+                            className={`
+                              group/tag w-full flex items-center gap-3 px-3 py-2
+                              rounded-xl transition-all duration-200
+                              ${isSelected
+                                ? 'bg-primary/8 dark:bg-primary/12'
+                                : 'hover:bg-accent/50'
+                              }
+                            `}
+                            style={{
+                              animationDelay: `${index * 25}ms`,
+                            }}
+                          >
+                            {/* Custom styled checkbox */}
+                            <div className={`
+                              relative flex-shrink-0 w-[18px] h-[18px] rounded-md
+                              flex items-center justify-center
+                              transition-all duration-200 ease-out
+                              ${isSelected
+                                ? 'bg-primary shadow-sm shadow-primary/30'
+                                : 'border-2 border-muted-foreground/25 group-hover/tag:border-primary/40'
+                              }
+                            `}>
+                              <svg
+                                className={`w-2.5 h-2.5 text-primary-foreground transition-all duration-200 ${isSelected ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={3}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+
+                            {/* Tag badge - striped pattern style */}
+                            <span
+                              className={`
+                                relative overflow-hidden flex-1 text-left px-2.5 py-1 text-[11px] font-medium rounded-lg border
+                                transition-all duration-200
+                                ${isSelected ? 'shadow-sm' : ''}
+                              `}
+                              style={{
+                                backgroundColor: styles.backgroundColor,
+                                borderColor: styles.borderColor,
+                                color: styles.color,
+                              }}
+                            >
+                              {/* Diagonal stripes overlay */}
+                              <span
+                                className="absolute inset-0 pointer-events-none opacity-[0.08]"
+                                style={{
+                                  backgroundImage: `repeating-linear-gradient(
+                                    -45deg,
+                                    ${styles.stripeColor},
+                                    ${styles.stripeColor} 1px,
+                                    transparent 1px,
+                                    transparent 5px
+                                  )`,
+                                }}
+                              />
+                              <span className="relative">{tag.name}</span>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      {/* Empty state with decorative element */}
+                      <div className="relative mb-3">
+                        <div className="absolute inset-0 bg-muted/30 rounded-2xl blur-lg" />
+                        <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-muted/60 to-muted/30 border border-border/30 flex items-center justify-center">
+                          <Layers className="w-6 h-6 text-muted-foreground/40" />
+                        </div>
+                      </div>
+                      <p className="text-xs font-medium text-muted-foreground/70">Теги пока не созданы</p>
+                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">Создайте первый тег в настройках</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Footer accent */}
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
           </DropdownMenuContent>
         </DropdownMenu>
 

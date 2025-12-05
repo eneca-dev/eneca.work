@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, Loader2, Palette } from 'lucide-react';
+import { Loader2, Check, Tag } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,7 @@ import { useUserStore } from '@/stores/useUserStore';
 import type { ProjectTag, ProjectTagFormData } from '../../types';
 import { useProjectTagsStore } from '../../stores/useProjectTagsStore';
 import { TAG_COLORS } from '../../constants/project-tags';
+import { getContrastColor, getTagStyles } from '../../utils/color';
 
 interface ProjectTagFormProps {
   isOpen: boolean;
@@ -19,19 +21,30 @@ interface ProjectTagFormProps {
   onSuccess?: () => void;
 }
 
+// Утилита для затемнения цвета
+function darkenColor(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max((num >> 16) - amt, 0);
+  const G = Math.max((num >> 8 & 0x00FF) - amt, 0);
+  const B = Math.max((num & 0x0000FF) - amt, 0);
+  return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
+}
+
 export function ProjectTagForm({ isOpen, onClose, tag, onSuccess }: ProjectTagFormProps) {
   const [formData, setFormData] = useState<ProjectTagFormData>({
     name: '',
     color: '#3B82F6',
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const colorPickerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { setNotification } = useUiStore();
   const currentUser = useUserStore(state => state.profile);
   const createTag = useProjectTagsStore(state => state.createTag);
   const updateTag = useProjectTagsStore(state => state.updateTag);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const isEditing = !!tag;
 
@@ -45,28 +58,13 @@ export function ProjectTagForm({ isOpen, onClose, tag, onSuccess }: ProjectTagFo
       } else {
         setFormData({
           name: '',
-          color: '#3B82F6',
+          color: TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)],
         });
       }
+      // Focus input after modal opens
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen, tag]);
-
-  // Закрытие color picker при клике вне его области
-  useEffect(() => {
-    if (!showColorPicker) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
-        setShowColorPicker(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showColorPicker]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -92,7 +90,7 @@ export function ProjectTagForm({ isOpen, onClose, tag, onSuccess }: ProjectTagFo
       }
 
       if (result) {
-        setNotification(`Тег "${formData.name}" ${isEditing ? 'обновлен' : 'создан'}`, 'success');
+        setNotification(`Тег "${formData.name}" ${isEditing ? 'обновлён' : 'создан'}`, 'success');
         onSuccess?.();
         handleClose();
       } else {
@@ -126,109 +124,203 @@ export function ProjectTagForm({ isOpen, onClose, tag, onSuccess }: ProjectTagFo
       name: '',
       color: '#3B82F6',
     });
-    setShowColorPicker(false);
     onClose();
   };
 
   const handleColorSelect = (color: string) => {
     setFormData(prev => ({ ...prev, color }));
-    setShowColorPicker(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold">
-            {isEditing ? 'Редактировать тег' : 'Создать новый тег'}
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Тег для категоризации проектов
-          </p>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[480px] p-0 gap-0 overflow-hidden">
+        {/* Header with gradient accent */}
+        <div className="relative">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              background: `linear-gradient(135deg, ${formData.color} 0%, transparent 60%)`,
+            }}
+          />
+          <DialogHeader className="relative p-6 pb-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="p-2 rounded-lg"
+                style={{
+                  backgroundColor: `${formData.color}20`,
+                }}
+              >
+                <Tag className="h-5 w-5" style={{ color: formData.color }} />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-semibold">
+                  {isEditing ? 'Редактировать тег' : 'Новый тег'}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {isEditing ? 'Измените название или цвет тега' : 'Создайте тег для категоризации проектов'}
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 py-4">
-          {/* Название тега */}
-          <div className="space-y-2">
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
+          {/* Live preview - striped style */}
+          <div className="flex items-center justify-center py-4">
+            {(() => {
+              const styles = getTagStyles(formData.color, isDark);
+              return (
+                <div
+                  className="
+                    relative overflow-hidden inline-flex items-center gap-1.5
+                    px-4 py-2 text-sm font-medium
+                    rounded-md border
+                    transition-all duration-300 ease-out
+                  "
+                  style={{
+                    backgroundColor: styles.backgroundColor,
+                    borderColor: styles.borderColor,
+                    color: styles.color,
+                  }}
+                >
+                  {/* Diagonal stripes overlay */}
+                  <span
+                    className="absolute inset-0 pointer-events-none opacity-[0.08]"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(
+                        -45deg,
+                        ${styles.stripeColor},
+                        ${styles.stripeColor} 1px,
+                        transparent 1px,
+                        transparent 5px
+                      )`,
+                    }}
+                  />
+                  <span className="relative">{formData.name || 'Название тега'}</span>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Tag name input */}
+          <div className="space-y-1.5">
             <Label htmlFor="tagName" className="text-sm font-medium">
-              Название тега *
+              Название
             </Label>
             <Input
+              ref={inputRef}
               id="tagName"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Введите название тега"
               disabled={isLoading}
-              autoFocus
-              className="w-full"
+              className="h-11"
+              maxLength={50}
             />
+            <div className="flex items-center justify-end">
+              <span className={`text-[11px] transition-colors ${
+                formData.name.length >= 50
+                  ? 'text-destructive font-medium'
+                  : formData.name.length >= 40
+                    ? 'text-amber-500'
+                    : 'text-muted-foreground'
+              }`}>
+                {formData.name.length}/50
+              </span>
+            </div>
           </div>
 
-          {/* Цвет тега */}
-          <div className="space-y-2">
-            <Label htmlFor="tagColor" className="text-sm font-medium">
-              Цвет *
+          {/* Color picker */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">
+              Цвет
             </Label>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowColorPicker(!showColorPicker)}
-                disabled={isLoading}
-                className="w-full justify-start text-left h-10"
-              >
-                <div
-                  className="w-5 h-5 rounded mr-3 border border-border shadow-sm"
-                  style={{ backgroundColor: formData.color }}
-                />
-                <span className="flex-1">Выберите цвет тега</span>
-                <Palette className="h-4 w-4 text-muted-foreground" />
-              </Button>
-
-              {showColorPicker && (
-                <div
-                  ref={colorPickerRef}
-                  className="absolute z-50 mt-2 p-4 bg-card border border-border rounded-lg shadow-lg w-full"
-                >
-                  <div className="grid grid-cols-6 gap-2">
-                    {TAG_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => handleColorSelect(color)}
-                        className={`w-10 h-10 rounded-md border-2 hover:scale-105 transition-transform ${
-                          formData.color === color
-                            ? 'border-primary shadow-md'
-                            : 'border-border hover:border-primary/50'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title="Выбрать этот цвет"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="grid grid-cols-5 gap-2">
+              {TAG_COLORS.map((color) => {
+                const isSelected = formData.color === color;
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => handleColorSelect(color)}
+                    disabled={isLoading}
+                    className={`
+                      group relative aspect-square rounded-lg
+                      transition-all duration-200
+                      focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+                      ${isSelected ? 'scale-110 z-10' : 'hover:scale-105'}
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                    `}
+                    style={{
+                      backgroundColor: color,
+                      boxShadow: isSelected
+                        ? `0 4px 12px ${color}60, inset 0 0 0 2px rgba(255,255,255,0.3)`
+                        : `0 2px 4px ${color}30`,
+                      borderBottom: `2px solid ${darkenColor(color, 20)}`,
+                    }}
+                    title={color}
+                  >
+                    {/* Check mark for selected color */}
+                    {isSelected && (
+                      <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ color: getContrastColor(color) }}
+                      >
+                        <Check className="h-4 w-4" strokeWidth={3} />
+                      </div>
+                    )}
+                    {/* Hover shine effect */}
+                    <div
+                      className="
+                        absolute inset-0 rounded-lg opacity-0
+                        group-hover:opacity-100 transition-opacity duration-200
+                        pointer-events-none
+                      "
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%)',
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
           </div>
         </form>
 
-        <DialogFooter className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isLoading}
-          >
-            Отмена
-          </Button>
-          <Button
-            onClick={() => handleSubmit()}
-            disabled={isLoading || !formData.name.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLoading ? 'Сохранение...' : (isEditing ? 'Сохранить' : 'Создать')}
-          </Button>
+        {/* Footer */}
+        <DialogFooter className="px-6 py-4 bg-muted/30 border-t border-border/50">
+          <div className="flex items-center justify-end gap-3 w-full">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleClose}
+              disabled={isLoading}
+              className="px-4"
+            >
+              Отмена
+            </Button>
+            <Button
+              type="submit"
+              onClick={() => handleSubmit()}
+              disabled={isLoading || !formData.name.trim()}
+              className="px-6 min-w-[120px]"
+              style={{
+                backgroundColor: formData.color,
+                color: getContrastColor(formData.color),
+                borderBottom: `2px solid ${darkenColor(formData.color, 15)}`,
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Сохранение...
+                </>
+              ) : (
+                isEditing ? 'Сохранить' : 'Создать тег'
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

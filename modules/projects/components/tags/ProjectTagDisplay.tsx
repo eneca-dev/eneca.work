@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import { Tag } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import type { ProjectTag } from '../../types'
 import { ProjectTagSelector } from './ProjectTagSelector'
 import { useUserStore } from '@/stores/useUserStore'
 import { useProjectTagsPermissions } from '@/modules/permissions/hooks/usePermissions'
-import { getContrastColor } from '../../utils/color'
+import { getTagStyles } from '../../utils/color'
 
 interface ProjectTagDisplayProps {
   projectId: string
@@ -28,17 +29,16 @@ export function ProjectTagDisplay({
   const [displayTags, setDisplayTags] = useState<ProjectTag[]>(tags)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Получаем текущего пользователя и разрешения
   const currentUserId = useUserStore((state) => state.id)
   const { canAssignTagsAll, canAssignTagsManaged, canAssignTagsLead } = useProjectTagsPermissions()
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
 
-  // Проверка прав на назначение тегов
   const canAssignTags =
     canAssignTagsAll ||
     (canAssignTagsManaged && currentUserId === managerId) ||
     (canAssignTagsLead && currentUserId === leadEngineerId)
 
-  // Синхронизировать displayTags с props при изменении извне
   useEffect(() => {
     setDisplayTags(tags)
   }, [tags])
@@ -48,28 +48,55 @@ export function ProjectTagDisplay({
     setIsOpen(true)
   }
 
-  // Мгновенное обновление отображаемых тегов
   const handleTagsChange = (newTags: ProjectTag[]) => {
     setDisplayTags(newTags)
   }
 
-  // Если нет прав — показываем только читаемые теги без кнопки
+  // Компонент тега со стилем как у статусов + диагональные полоски
+  const TagChip = ({ tag, interactive = false }: { tag: ProjectTag; interactive?: boolean }) => {
+    const styles = getTagStyles(tag.color, isDark)
+    return (
+      <div
+        className={`
+          group/tag relative overflow-hidden inline-flex items-center gap-1
+          px-2 py-0.5 text-[11px] font-medium
+          rounded-md border
+          transition-all duration-200 ease-out
+          ${interactive ? 'cursor-pointer hover:shadow-sm active:scale-[0.98]' : ''}
+        `}
+        style={{
+          backgroundColor: styles.backgroundColor,
+          borderColor: styles.borderColor,
+          color: styles.color,
+        }}
+        onClick={interactive ? handleClick : undefined}
+      >
+        {/* Diagonal stripes overlay */}
+        <span
+          className="absolute inset-0 pointer-events-none opacity-[0.08]"
+          style={{
+            backgroundImage: `repeating-linear-gradient(
+              -45deg,
+              ${styles.stripeColor},
+              ${styles.stripeColor} 1px,
+              transparent 1px,
+              transparent 5px
+            )`,
+          }}
+        />
+        <span className="relative z-10">{tag.name}</span>
+      </div>
+    )
+  }
+
+  // Read-only view
   if (!canAssignTags) {
     if (displayTags.length === 0) return null
 
     return (
-      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+      <div className="flex items-center gap-1.5 flex-wrap mt-1">
         {displayTags.map((tag) => (
-          <div
-            key={tag.tag_id}
-            className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full shadow-sm"
-            style={{
-              backgroundColor: tag.color,
-              color: getContrastColor(tag.color),
-            }}
-          >
-            {tag.name}
-          </div>
+          <TagChip key={tag.tag_id} tag={tag} />
         ))}
       </div>
     )
@@ -79,32 +106,30 @@ export function ProjectTagDisplay({
     <>
       <div
         ref={containerRef}
-        className="flex items-center gap-1.5 flex-wrap mt-0.5"
+        className="flex items-center gap-1.5 flex-wrap mt-1"
         onClick={(e) => e.stopPropagation()}
       >
         {displayTags.length > 0 ? (
-          <>
-            {displayTags.map((tag) => (
-              <div
-                key={tag.tag_id}
-                className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                style={{
-                  backgroundColor: tag.color,
-                  color: getContrastColor(tag.color),
-                }}
-                onClick={handleClick}
-              >
-                {tag.name}
-              </div>
-            ))}
-          </>
+          displayTags.map((tag) => (
+            <TagChip key={tag.tag_id} tag={tag} interactive />
+          ))
         ) : (
           <button
             onClick={handleClick}
-            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="
+              group inline-flex items-center gap-1.5
+              px-2.5 py-1 text-xs font-medium
+              rounded-md
+              border border-dashed border-muted-foreground/30
+              text-muted-foreground
+              bg-transparent
+              hover:border-primary/50 hover:text-primary hover:bg-primary/5
+              transition-all duration-200
+              active:scale-[0.98]
+            "
           >
-            <Plus className="h-3 w-3" />
-            Теги
+            <Tag className="h-3 w-3 transition-transform group-hover:rotate-12" />
+            <span>Добавить тег</span>
           </button>
         )}
       </div>
