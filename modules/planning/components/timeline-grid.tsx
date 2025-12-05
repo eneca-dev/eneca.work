@@ -17,7 +17,7 @@ import { ObjectTeamBars, calculateObjectTeamBarsHeight } from "./timeline/object
 import { ProjectIntensityBar } from "./timeline/project-intensity-bar"
 import { usePlanningColumnsStore } from "../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../stores/usePlanningStore"
-import { ChevronDown, ChevronRight, Loader2, Milestone, Building2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2, Milestone, Building2, ExternalLink } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useProjectsStore } from "@/modules/projects/store"
 
@@ -420,20 +420,31 @@ export function TimelineGrid({
                     )}
                     <span
                       className={cn(
-                        "text-sm cursor-pointer hover:underline",
-                        theme === "dark" ? "text-slate-200 hover:text-teal-300" : "text-slate-800 hover:text-teal-600",
+                        "text-sm",
+                        theme === "dark" ? "text-slate-200" : "text-slate-800",
                       )}
-                      title={projectIdForGroup ? "Перейти к проекту" : undefined}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (projectIdForGroup) {
-                          focusProject(projectIdForGroup)
-                          router.push("/dashboard/projects")
-                        }
-                      }}
                     >
                       {projectName}
                     </span>
+                    {/* Кнопка перехода к проекту - появляется при наведении */}
+                    {projectIdForGroup && (
+                      <button
+                        className={cn(
+                          "ml-auto opacity-0 group-hover/project:opacity-100 transition-opacity p-1.5 rounded-md",
+                          theme === "dark"
+                            ? "hover:bg-slate-700 text-slate-400 hover:text-teal-300"
+                            : "hover:bg-slate-200 text-slate-500 hover:text-teal-600"
+                        )}
+                        title="Перейти к проекту"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          focusProject(projectIdForGroup)
+                          router.push("/dashboard/projects")
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                   {/* Полотно таймлайна с heatmap интенсивности */}
                   <div className="flex-1 flex w-full relative" style={{ flexWrap: "nowrap" }}>
@@ -688,8 +699,8 @@ export function TimelineGrid({
           {showSections && showDepartments && (departments.length > 0 || isLoadingDepartments) && (
             <div
               className={cn(
-                "relative",
-                theme === "dark" ? "bg-slate-800" : "bg-white",
+                "relative border-b",
+                theme === "dark" ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200",
               )}
               style={{ height: `${HEADER_HEIGHT * 2}px` }}
             >
