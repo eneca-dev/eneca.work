@@ -122,14 +122,34 @@ export function ProjectTagSelector({
         setLocalSelectedIds(localSelectedIds)
         onTagsChange(getSelectedTags(localSelectedIds))
         toast.error(result.error || 'Ошибка при обновлении тегов')
+        // Отправить событие отката для синхронизации дерева
+        window.dispatchEvent(new CustomEvent('projectTags:revert', {
+          detail: {
+            projectId: projectId,
+            tags: getSelectedTags(localSelectedIds)
+          }
+        }))
       } else {
-        window.dispatchEvent(new CustomEvent('projectTags:updated'))
+        // Отправить событие успешного обновления с данными для оптимистичного обновления дерева
+        window.dispatchEvent(new CustomEvent('projectTags:updated', {
+          detail: {
+            projectId: projectId,
+            tags: getSelectedTags(newSelectedIds)
+          }
+        }))
       }
     } catch (error) {
       setLocalSelectedIds(localSelectedIds)
       onTagsChange(getSelectedTags(localSelectedIds))
       toast.error('Произошла ошибка при обновлении тегов')
       console.error('Error toggling tag:', error)
+      // Отправить событие отката для синхронизации дерева
+      window.dispatchEvent(new CustomEvent('projectTags:revert', {
+        detail: {
+          projectId: projectId,
+          tags: getSelectedTags(localSelectedIds)
+        }
+      }))
     } finally {
       setIsUpdating(false)
       setUpdatingTagId(null)

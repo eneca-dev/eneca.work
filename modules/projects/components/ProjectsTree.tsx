@@ -898,6 +898,10 @@ export function ProjectsTree({
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const latestTreeRef = useRef<ProjectNode[]>([])
   const [rootParent, enableRootAnimations] = useAutoAnimate()
+
+  // Защита от двойной загрузки дерева при инициализации
+  const lastLoadTimeRef = useRef<number>(0)
+  const LOAD_DEBOUNCE_MS = 300 // Игнорировать повторные загрузки в течение 300ms
   const {
     expandedNodes,
     toggleNode: toggleNodeInStore,
@@ -1073,19 +1077,85 @@ export function ProjectsTree({
 
   // Слушатели событий обновления тегов
   useEffect(() => {
-    const handleTagUpdate = () => {
-      console.log('🏷️ Tags updated, refreshing tree')
-      loadTreeData(true) // true = это обновление, не первая загрузка
+    // Оптимистичное обновление тегов проекта (без перезагрузки дерева)
+    const handleProjectTagUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const { projectId, tags } = customEvent.detail || {}
+
+      if (!projectId) {
+        loadTreeData(true)
+        return
+      }
+
+      // Рекурсивная функция для поиска и обновления узла проекта
+      const updateProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            // Нашли проект - обновляем его теги
+            return {
+              ...node,
+              projectTags: tags || []
+            }
+          }
+          if (node.children) {
+            // Рекурсивно обрабатываем детей
+            return {
+              ...node,
+              children: updateProjectTags(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      // Иммутабельное обновление состояния дерева
+      setTreeData(currentTreeData => updateProjectTags(currentTreeData))
     }
 
-    window.addEventListener('projectTags:updated', handleTagUpdate)
-    window.addEventListener('projectTags:deleted', handleTagUpdate)
-    window.addEventListener('projectTags:created', handleTagUpdate)
+    // Откат изменений при ошибке API
+    const handleProjectTagRevert = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const { projectId, tags } = customEvent.detail || {}
+
+      if (!projectId) return
+
+      const updateProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            return {
+              ...node,
+              projectTags: tags || []
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateProjectTags(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => updateProjectTags(currentTreeData))
+    }
+
+    // Обработчик изменения определений тегов (переименование, удаление, создание)
+    const handleTagDefinitionChange = () => {
+      // Здесь нужна полная перезагрузка, т.к. изменились сами теги (названия/цвета)
+      loadTreeData(true)
+    }
+
+    window.addEventListener('projectTags:updated', handleProjectTagUpdate)
+    window.addEventListener('projectTags:revert', handleProjectTagRevert)
+    window.addEventListener('projectTags:deleted', handleTagDefinitionChange)
+    window.addEventListener('projectTags:created', handleTagDefinitionChange)
 
     return () => {
-      window.removeEventListener('projectTags:updated', handleTagUpdate)
-      window.removeEventListener('projectTags:deleted', handleTagUpdate)
-      window.removeEventListener('projectTags:created', handleTagUpdate)
+      window.removeEventListener('projectTags:updated', handleProjectTagUpdate)
+      window.removeEventListener('projectTags:revert', handleProjectTagRevert)
+      window.removeEventListener('projectTags:deleted', handleTagDefinitionChange)
+      window.removeEventListener('projectTags:created', handleTagDefinitionChange)
     }
   }, [])
 
@@ -1485,6 +1555,15 @@ export function ProjectsTree({
   }, [loading, urlSectionId, urlTab, treeData, highlightedSectionId])
 
   const loadTreeData = async (isRefresh = false) => {
+    const now = Date.now()
+
+    // Защита от двойной загрузки при инициализации (не применяется к намеренным обновлениям)
+    if (!isRefresh && now - lastLoadTimeRef.current < LOAD_DEBOUNCE_MS) {
+      return
+    }
+
+    lastLoadTimeRef.current = now
+
     return Sentry.startSpan(
       {
         op: "projects.load_tree_data",
