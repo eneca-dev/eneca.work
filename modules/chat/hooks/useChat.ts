@@ -313,28 +313,26 @@ export function useChat() {
     if (!userId || !conversationId) return
 
     try {
-      // Закрываем текущий conversation
-      await supabase
-        .from('chat_conversations')
-        .update({ status: 'closed' })
-        .eq('id', conversationId)
+      // Удаляем все сообщения из текущего conversation
+      const { error: deleteError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('conversation_id', conversationId)
 
-      // Создаём новый conversation
-      const { data: newConversation } = await supabase
-        .from('chat_conversations')
-        .insert({
-          user_id: userId,
-          status: 'active'
-        })
-        .select()
-        .single()
-
-      if (newConversation) {
-        setConversationId(newConversation.id)
-        setMessages([])
+      if (deleteError) {
+        throw deleteError
       }
+
+      // Очищаем сообщения в UI
+      setMessages([])
+
+      // Сбрасываем состояние печати
+      setIsTyping(false)
+      setIsLoading(false)
+
+      console.log('[clearMessages] Messages deleted for conversation:', conversationId)
     } catch (error) {
-      console.error('Error clearing messages:', error)
+      console.error('[clearMessages] Error:', error)
     }
   }, [userId, conversationId, supabase])
 
