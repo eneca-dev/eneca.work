@@ -28,7 +28,7 @@ export const useProjectTagsStore = create<ProjectTagsStore>()(
         loadTags: async () => {
           // Если уже загружено и есть данные, не перезагружать
           const state = get();
-          if (state.isLoaded && state.tags.length > 0) {
+          if (state.isLoaded) {
             console.log('✅ Теги проектов уже загружены из кеша:', state.tags.length);
             return;
           }
@@ -58,7 +58,10 @@ export const useProjectTagsStore = create<ProjectTagsStore>()(
           try {
             const tag = await api.createTag(data, userId);
 
-            if (!tag) return null;
+            if (!tag) {
+              set({ isLoading: false, error: null });
+              return null;
+            }
 
             // Добавляем новый тег в локальный store
             set(state => ({
@@ -88,7 +91,10 @@ export const useProjectTagsStore = create<ProjectTagsStore>()(
           try {
             const tag = await api.updateTag(id, data, userId);
 
-            if (!tag) return null;
+            if (!tag) {
+              set({ isLoading: false, error: null });
+              return null;
+            }
 
             // Обновляем тег в локальном store
             set(state => ({
@@ -120,7 +126,10 @@ export const useProjectTagsStore = create<ProjectTagsStore>()(
           try {
             const success = await api.deleteTag(id);
 
-            if (!success) return false;
+            if (!success) {
+              set({ isLoading: false, error: null });
+              return false;
+            }
 
             // Удаляем тег из локального store
             set(state => ({

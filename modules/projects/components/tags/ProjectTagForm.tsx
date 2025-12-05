@@ -95,6 +95,8 @@ export function ProjectTagForm({ isOpen, onClose, tag, onSuccess }: ProjectTagFo
         setNotification(`Тег "${formData.name}" ${isEditing ? 'обновлен' : 'создан'}`, 'success');
         onSuccess?.();
         handleClose();
+      } else {
+        setNotification(`Не удалось ${isEditing ? 'обновить' : 'создать'} тег`, 'error');
       }
     } catch (error) {
       console.warn('Ошибка сохранения тега:', error);

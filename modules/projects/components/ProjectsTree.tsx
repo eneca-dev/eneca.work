@@ -102,6 +102,8 @@ interface ProjectNode {
   isFavorite?: boolean
   // Теги проекта
   projectTags?: Array<{ tag_id: string; name: string; color: string }>
+  // Ведущий инженер проекта
+  leadEngineerId?: string | null
 }
 
 interface ProjectsTreeProps {
@@ -699,9 +701,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     projectId={node.id}
                     projectName={node.name}
                     tags={node.projectTags || []}
-                    onUpdate={() => {
-                      window.dispatchEvent(new CustomEvent('projectsTree:forceRefresh'))
-                    }}
+                    managerId={node.managerId}
+                    leadEngineerId={node.leadEngineerId}
                   />
                 </div>
 
@@ -1779,7 +1780,9 @@ export function ProjectsTree({
           // Признак избранного приходит из view_project_tree
           isFavorite: Boolean(row.is_favorite),
           // Теги проекта из view_project_tree
-          projectTags: row.project_tags || []
+          projectTags: row.project_tags || [],
+          // Ведущий инженер проекта
+          leadEngineerId: row.lead_engineer_id || null
         })
       } else {
         // Если проект уже есть, но пришёл флаг is_favorite=true — обновим

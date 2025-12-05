@@ -92,6 +92,10 @@ export function ProjectTagManagementModal({ isOpen, onClose }: ProjectTagManagem
   }, [tags, searchQuery]);
 
   const handleClose = () => {
+    setSearchQuery('');
+    setShowTagForm(false);
+    setEditingTag(null);
+    setDeletingTag(null);
     onClose();
   };
 

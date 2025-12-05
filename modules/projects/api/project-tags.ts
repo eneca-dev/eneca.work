@@ -1,6 +1,8 @@
 import { createClient } from '@/utils/supabase/client';
 import type { ProjectTag, ProjectTagFormData } from '../types';
 
+const TAG_NAME_MAX_LENGTH = 100;
+
 interface ApiResult {
   success: boolean;
   error?: string;
@@ -126,51 +128,6 @@ export async function removeTagFromProject(
 }
 
 /**
- * Массовое обновление тегов проекта (заменить все)
- */
-export async function updateProjectTags(
-  projectId: string,
-  tagIds: string[]
-): Promise<ApiResult> {
-  try {
-    const supabase = createClient();
-
-    // Удалить все существующие теги
-    const { error: deleteError } = await supabase
-      .from('project_tag_links')
-      .delete()
-      .eq('project_id', projectId);
-
-    if (deleteError) {
-      console.error('Error deleting old tags:', deleteError);
-      return { success: false, error: 'Ошибка при обновлении тегов' };
-    }
-
-    // Добавить новые теги (если есть)
-    if (tagIds.length > 0) {
-      const links = tagIds.map(tagId => ({
-        project_id: projectId,
-        tag_id: tagId,
-      }));
-
-      const { error: insertError } = await supabase
-        .from('project_tag_links')
-        .insert(links);
-
-      if (insertError) {
-        console.error('Error inserting new tags:', insertError);
-        return { success: false, error: 'Ошибка при добавлении тегов' };
-      }
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error in updateProjectTags:', error);
-    return { success: false, error: 'Произошла ошибка' };
-  }
-}
-
-/**
  * Создать новый тег
  */
 export async function createTag(
@@ -180,10 +137,18 @@ export async function createTag(
   try {
     const supabase = createClient();
 
+    const name = data.name?.trim() ?? '';
+    if (!name) {
+      throw new Error('Название тега не может быть пустым');
+    }
+    if (name.length > TAG_NAME_MAX_LENGTH) {
+      throw new Error('Название тега слишком длинное');
+    }
+
     const { data: tag, error } = await supabase
       .from('project_tags')
       .insert({
-        name: data.name.trim(),
+        name,
         color: data.color,
         created_by: userId,
         updated_by: userId,
@@ -218,10 +183,18 @@ export async function updateTag(
   try {
     const supabase = createClient();
 
+    const name = data.name?.trim() ?? '';
+    if (!name) {
+      throw new Error('Название тега не может быть пустым');
+    }
+    if (name.length > TAG_NAME_MAX_LENGTH) {
+      throw new Error('Название тега слишком длинное');
+    }
+
     const { data: tag, error } = await supabase
       .from('project_tags')
       .update({
-        name: data.name.trim(),
+        name,
         color: data.color,
         updated_by: userId,
         updated_at: new Date().toISOString(),
