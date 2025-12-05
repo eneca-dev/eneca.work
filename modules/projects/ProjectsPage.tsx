@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import FilterBar from '@/components/filter-bar/FilterBar';
-import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel, normalizeProjectStatus } from '@/modules/projects/constants/project-status';
+import { PROJECT_STATUS_OPTIONS, getProjectStatusLabel, getProjectStatusBadgeClasses, normalizeProjectStatus } from '@/modules/projects/constants/project-status';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Users, Building2, FolderOpen, Filter as FilterIcon, Filter, Building, User, Minimize, Settings, Plus, Lock, Layers, Info, RefreshCw } from 'lucide-react';
 // Острая звезда для кнопки "только избранные" в панели фильтров
@@ -578,25 +578,27 @@ export default function ProjectsPage() {
                       Очистить
                     </button>
                   </div>
-                  {/* Список статусов проектов */}
-                  <div className="space-y-0.5">
-                    {PROJECT_STATUS_OPTIONS.map(s => (
-                      <label key={s} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200 rounded">
-                        <input
-                          type="checkbox"
-                          className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
-                          checked={(() => { const norm = normalizeProjectStatus(s); return norm ? selectedProjectStatuses.includes(norm) : false })()}
-                          onChange={() => setSelectedProjectStatuses(prev => {
-                            const norm = normalizeProjectStatus(s) as string
+                  {/* Список статусов проектов как бейджи */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {PROJECT_STATUS_OPTIONS.map(s => {
+                      const norm = normalizeProjectStatus(s)
+                      const isSelected = norm ? selectedProjectStatuses.includes(norm) : false
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => setSelectedProjectStatuses(prev => {
+                            const normVal = normalizeProjectStatus(s) as string
                             const setNorm = Array.from(new Set((prev || []).map(normalizeProjectStatus).filter(Boolean))) as string[]
-                            return setNorm.includes(norm) ? setNorm.filter(x => x !== norm) : [...setNorm, norm]
+                            return setNorm.includes(normVal) ? setNorm.filter(x => x !== normVal) : [...setNorm, normVal]
                           })}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-medium dark:text-slate-200 truncate">{getProjectStatusLabel(s)}</div>
-                        </div>
-                      </label>
-                    ))}
+                          className={`px-2 py-0.5 text-xs font-medium border rounded-md transition-all cursor-pointer
+                            ${getProjectStatusBadgeClasses(s)}
+                            ${isSelected ? 'shadow-sm' : 'opacity-40 hover:opacity-70'}`}
+                        >
+                          {getProjectStatusLabel(s)}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
