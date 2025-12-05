@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { useHasPermission } from '@/modules/permissions'
 import { useProjectTagsStore } from '../../stores/useProjectTagsStore'
 import * as api from '../../api/project-tags'
@@ -39,7 +39,7 @@ interface ProjectTagSelectorProps {
   projectId: string
   projectName: string
   selectedTags: ProjectTag[]
-  onUpdate: () => void
+  onUpdate?: () => void
   onTagsChange: (tags: ProjectTag[]) => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -49,7 +49,6 @@ interface ProjectTagSelectorProps {
 export function ProjectTagSelector({
   projectId,
   selectedTags,
-  onUpdate,
   onTagsChange,
   open,
   onOpenChange,
@@ -137,8 +136,8 @@ export function ProjectTagSelector({
         onTagsChange(getSelectedTags(localSelectedIds))
         toast.error(result.error || 'Ошибка при обновлении тегов')
       } else {
-        // Успех - синхронизировать с сервером
-        onUpdate()
+        // Успех - синхронизировать с сервером через глобальное событие
+        window.dispatchEvent(new CustomEvent('projectTags:updated'))
       }
     } catch (error) {
       // Откат при ошибке
@@ -223,14 +222,6 @@ export function ProjectTagSelector({
             </button>
           )}
 
-          {/* Галочка закрытия */}
-          <button
-            onClick={() => onOpenChange(false)}
-            className="p-1 hover:bg-accent rounded transition-colors text-primary hover:text-primary/80"
-            title="Готово"
-          >
-            <Check className="h-3.5 w-3.5" />
-          </button>
         </div>
       )}
 

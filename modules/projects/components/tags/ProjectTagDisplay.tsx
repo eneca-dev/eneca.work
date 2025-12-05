@@ -13,7 +13,7 @@ interface ProjectTagDisplayProps {
   tags: ProjectTag[]
   managerId?: string | null
   leadEngineerId?: string | null
-  onUpdate: () => void
+  onUpdate?: () => void
 }
 
 export function ProjectTagDisplay({
@@ -22,7 +22,6 @@ export function ProjectTagDisplay({
   tags,
   managerId,
   leadEngineerId,
-  onUpdate,
 }: ProjectTagDisplayProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [displayTags, setDisplayTags] = useState<ProjectTag[]>(tags)
@@ -115,7 +114,6 @@ export function ProjectTagDisplay({
         projectId={projectId}
         projectName={projectName}
         selectedTags={displayTags}
-        onUpdate={onUpdate}
         onTagsChange={handleTagsChange}
         open={isOpen}
         onOpenChange={setIsOpen}
