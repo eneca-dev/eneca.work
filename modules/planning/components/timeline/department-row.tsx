@@ -311,11 +311,11 @@ export function DepartmentRow({
                       <div
                         className={cn(
                           "rounded-sm pointer-events-auto relative",
-                          departmentLoadPercentage >= 86 && departmentLoadPercentage <= 100
-                            ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
-                            : departmentLoadPercentage > 100
-                              ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
-                              : (theme === "dark" ? "border border-slate-600/60" : "border border-slate-400")
+                          departmentLoadPercentage > 100
+                            ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                            : departmentLoadPercentage >= 90
+                              ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                              : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                         )}
                         style={{
                           width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -330,11 +330,9 @@ export function DepartmentRow({
                             "absolute bottom-0 left-0 right-0",
                             departmentLoadPercentage > 100
                               ? "bg-red-500"
-                              : departmentLoadPercentage <= 50
-                                ? "bg-teal-400"
-                                : departmentLoadPercentage <= 85
-                                  ? "bg-teal-500"
-                                  : "bg-teal-600"
+                              : departmentLoadPercentage >= 90
+                                ? "bg-teal-500"
+                                : "bg-amber-500"
                           )}
                           style={{
                             height: `${Math.max(
@@ -548,11 +546,11 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                     <div
                       className={cn(
                         "rounded-sm pointer-events-auto relative",
-                        loadPct >= 86 && loadPct <= 100
-                          ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
-                          : loadPct > 100
-                            ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
-                            : (theme === "dark" ? "border border-slate-600/60" : "border border-slate-400")
+                        loadPct > 100
+                          ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                          : loadPct >= 90
+                            ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                            : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -566,11 +564,9 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                           "absolute bottom-0 left-0 right-0",
                           loadPct > 100
                             ? "bg-red-500"
-                            : loadPct <= 50
-                              ? "bg-teal-400"
-                              : loadPct <= 85
-                                ? "bg-teal-500"
-                                : "bg-teal-600"
+                            : loadPct >= 90
+                              ? "bg-teal-500"
+                              : "bg-amber-500"
                         )}
                         style={{
                           height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
