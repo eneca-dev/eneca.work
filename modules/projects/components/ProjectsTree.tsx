@@ -116,6 +116,7 @@ interface ProjectsTreeProps {
   selectedEmployeeId?: string | null
   selectedStatusIds?: string[]
   selectedProjectStatuses?: string[]
+  selectedTagIds?: string[]
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
@@ -887,6 +888,7 @@ export function ProjectsTree({
   selectedEmployeeId,
   selectedStatusIds = [],
   selectedProjectStatuses = [],
+  selectedTagIds = [],
   urlSectionId,
   urlTab,
   externalSearchQuery,
@@ -2153,6 +2155,7 @@ export function ProjectsTree({
       treeNodes: treeData.length,
       statusFilter: selectedStatusIds,
       projectStatusFilter: selectedProjectStatuses,
+      tagFilter: selectedTagIds,
       showOnlySections,
       searchQuery,
     })
@@ -2184,13 +2187,44 @@ export function ProjectsTree({
 
     data = filterByProjectStatus(data)
 
+    // Затем применяем фильтр по тегам проектов (если заданы)
+    const filterByProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+      if (!selectedTagIds || selectedTagIds.length === 0) return nodes
+      const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+        const filtered: ProjectNode[] = []
+        for (const node of nodeList) {
+          let shouldInclude = false
+          let filteredChildren: ProjectNode[] = []
+          if (node.type === 'project') {
+            // Проверяем есть ли хотя бы один из выбранных тегов у проекта
+            const nodeTags = node.projectTags || []
+            const nodeTagIds = nodeTags.map(t => t.tag_id)
+            shouldInclude = selectedTagIds.some(id => nodeTagIds.includes(id))
+          } else if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+          if (shouldInclude) {
+            filtered.push({ ...node, children: node.type === 'project' ? node.children : filteredChildren })
+          }
+        }
+        return filtered
+      }
+      return filterRecursive(nodes)
+    }
+
+    data = filterByProjectTags(data)
+
     // Затем применяем фильтр по статусам разделов
     data = filterNodesByStatus(data, selectedStatusIds)
 
     // Видимость проектов-черновиков (draft) при пустом фильтре статусов проектов
     // или если фильтр статусов проектов явно включает 'draft'.
     // Исключения: явный выбор projectId и поиск/onlyFavorites учитываются как раньше.
-    if (!selectedProjectId && (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft'))) {
+    // Также НЕ реинтегрируем черновики, если выбраны теги — они должны фильтроваться по тегам.
+    if (!selectedProjectId &&
+        (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')) &&
+        (!selectedTagIds || selectedTagIds.length === 0)) {
       const reintegrateDrafts = (original: ProjectNode[], filtered: ProjectNode[]): ProjectNode[] => {
         const isDraftProject = (n: ProjectNode) => n.type === 'project' && (normalizeProjectStatus(n.projectStatus) === 'draft')
 

@@ -23,6 +23,8 @@ import { applyProjectLocks } from '@/modules/projects/integration/project-filter
 import * as Sentry from '@sentry/nextjs'
 import { useSearchParams } from 'next/navigation';
 import { useProjectsStore } from './store';
+import { useProjectTagsStore } from './stores/useProjectTagsStore';
+import { getContrastColor } from './utils/color';
 // Убираем импорт старых фильтров
 // import { ProjectsFilters } from './filters';
 import { ProjectsTree } from './components';
@@ -78,7 +80,10 @@ export default function ProjectsPage() {
   const loadStatuses = useSectionStatusesStore(state => state.loadStatuses);
   const [selectedStatusIdsLocal, setSelectedStatusIdsLocal] = useState<string[]>([]);
   const [selectedProjectStatuses, setSelectedProjectStatuses] = useState<string[]>([]);
-  
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+
+  // Теги проектов из store
+  const { tags: projectTags, loadTags: loadProjectTags } = useProjectTagsStore();
 
   // Состояние для модального окна дашборда проекта
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
@@ -158,6 +163,7 @@ export default function ProjectsPage() {
     setTreeSearch('')
     setSelectedStatusIdsLocal([])
     setSelectedProjectStatuses([])
+    setSelectedTagIds([])
 
     // [DEBUG:PROJECTS] Лог состояния после сброса
     console.log('[DEBUG:PROJECTS] reset:after', {
@@ -215,6 +221,8 @@ export default function ProjectsPage() {
         }
         // Загружаем статусы разделов
         loadStatuses()
+        // Загружаем теги проектов
+        loadProjectTags()
       } catch (err) {
         Sentry.captureException(err)
         console.error('Failed to apply project locks', err)
@@ -543,46 +551,93 @@ export default function ProjectsPage() {
           <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
         </div>
 
-        {/* Статусы проектов — отдельный дропдаун рядом через разделитель */}
+        {/* Статусы проектов и теги — дропдаун с двумя колонками */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="inline-flex items-center gap-1 px-2 py-1 border border-transparent text-[11px] md:text-xs hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap transition-all duration-200 ease-in-out rounded-md">
               <Layers className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
               <span className={`transition-all duration-300 ease-in-out overflow-hidden ${isCompactMode ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                Статусы проектов
+                Статусы и теги проектов
               </span>
+              {(selectedProjectStatuses.length > 0 || selectedTagIds.length > 0) && (
+                <span className="ml-1 inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+              )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[280px] p-0 dark:bg-slate-800 dark:border-slate-700">
-            <div className="p-2 space-y-2">
-              <div className="text-[10px] text-slate-500 mb-1">Фильтр по статусам проектов</div>
-              <div className="flex items-center justify-between">
-                <button
-                  className="text-[11px] md:text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 rounded-md"
-                  onClick={()=> setSelectedProjectStatuses([])}
-                >
-                  Очистить
-                </button>
-              </div>
-              {/* Список статусов проектов */}
-              <div className="space-y-0.5">
-                {PROJECT_STATUS_OPTIONS.map(s => (
-                  <label key={s} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200">
-                    <input
-                      type="checkbox"
-                      className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
-                      checked={(() => { const norm = normalizeProjectStatus(s); return norm ? selectedProjectStatuses.includes(norm) : false })()}
-                      onChange={() => setSelectedProjectStatuses(prev => {
-                        const norm = normalizeProjectStatus(s) as string
-                        const setNorm = Array.from(new Set((prev || []).map(normalizeProjectStatus).filter(Boolean))) as string[]
-                        return setNorm.includes(norm) ? setNorm.filter(x => x !== norm) : [...setNorm, norm]
-                      })}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium dark:text-slate-200 truncate">{getProjectStatusLabel(s)}</div>
-                    </div>
-                  </label>
-                ))}
+          <DropdownMenuContent align="start" className="w-[480px] p-0 dark:bg-slate-800 dark:border-slate-700">
+            <div className="p-2">
+              <div className="flex gap-4">
+                {/* Левая колонка: Статусы проектов */}
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Статусы проектов</div>
+                    <button
+                      className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                      onClick={()=> setSelectedProjectStatuses([])}
+                    >
+                      Очистить
+                    </button>
+                  </div>
+                  {/* Список статусов проектов */}
+                  <div className="space-y-0.5">
+                    {PROJECT_STATUS_OPTIONS.map(s => (
+                      <label key={s} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-200 rounded">
+                        <input
+                          type="checkbox"
+                          className="border-gray-300 dark:border-slate-500 text-teal-600 focus:ring-teal-500 focus:ring-2"
+                          checked={(() => { const norm = normalizeProjectStatus(s); return norm ? selectedProjectStatuses.includes(norm) : false })()}
+                          onChange={() => setSelectedProjectStatuses(prev => {
+                            const norm = normalizeProjectStatus(s) as string
+                            const setNorm = Array.from(new Set((prev || []).map(normalizeProjectStatus).filter(Boolean))) as string[]
+                            return setNorm.includes(norm) ? setNorm.filter(x => x !== norm) : [...setNorm, norm]
+                          })}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] font-medium dark:text-slate-200 truncate">{getProjectStatusLabel(s)}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Правая колонка: Теги проектов */}
+                <div className="flex-1 min-w-[200px] border-l border-slate-200 dark:border-slate-700 pl-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Теги проектов</div>
+                    <button
+                      className="text-[10px] text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                      onClick={()=> setSelectedTagIds([])}
+                    >
+                      Очистить
+                    </button>
+                  </div>
+                  {/* Список тегов как цветные чипсы */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {projectTags.map(tag => (
+                      <button
+                        key={tag.tag_id}
+                        onClick={() => setSelectedTagIds(prev =>
+                          prev.includes(tag.tag_id)
+                            ? prev.filter(id => id !== tag.tag_id)
+                            : [...prev, tag.tag_id]
+                        )}
+                        className={`px-2 py-0.5 text-xs font-medium rounded-full transition-all cursor-pointer
+                          ${selectedTagIds.includes(tag.tag_id) ? 'shadow-sm' : 'opacity-25 hover:opacity-50'}`}
+                        style={{
+                          backgroundColor: tag.color,
+                          color: getContrastColor(tag.color),
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                    {projectTags.length === 0 && (
+                      <div className="text-xs text-slate-400 dark:text-slate-500 py-2">
+                        Нет тегов
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </DropdownMenuContent>
@@ -753,6 +808,7 @@ export default function ProjectsPage() {
           selectedEmployeeId={filterStore.selectedEmployeeId}
           selectedStatusIds={selectedStatusIdsLocal}
           selectedProjectStatuses={selectedProjectStatuses}
+          selectedTagIds={selectedTagIds}
           externalSearchQuery={treeSearch}
           urlSectionId={urlSectionId}
           urlTab={urlTab || 'overview'}

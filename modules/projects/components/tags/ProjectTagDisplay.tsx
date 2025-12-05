@@ -6,6 +6,7 @@ import type { ProjectTag } from '../../types'
 import { ProjectTagSelector } from './ProjectTagSelector'
 import { useUserStore } from '@/stores/useUserStore'
 import { useProjectTagsPermissions } from '@/modules/permissions/hooks/usePermissions'
+import { getContrastColor } from '../../utils/color'
 
 interface ProjectTagDisplayProps {
   projectId: string
@@ -64,8 +65,7 @@ export function ProjectTagDisplay({
             className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full shadow-sm"
             style={{
               backgroundColor: tag.color,
-              color: 'white',
-              textShadow: '0 1px 1px rgba(0, 0, 0, 0.15)',
+              color: getContrastColor(tag.color),
             }}
           >
             {tag.name}
@@ -90,8 +90,7 @@ export function ProjectTagDisplay({
                 className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
                 style={{
                   backgroundColor: tag.color,
-                  color: 'white',
-                  textShadow: '0 1px 1px rgba(0, 0, 0, 0.15)',
+                  color: getContrastColor(tag.color),
                 }}
                 onClick={handleClick}
               >
