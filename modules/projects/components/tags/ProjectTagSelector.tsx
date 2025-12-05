@@ -53,8 +53,9 @@ export function ProjectTagSelector({
       const viewportWidth = window.innerWidth
       const viewportHeight = window.innerHeight
 
-      let left = rect.left + window.scrollX
-      let top = rect.bottom + window.scrollY + 8
+      // Для position: fixed используем координаты относительно viewport (без scroll offset)
+      let left = rect.left
+      let top = rect.bottom + 8
 
       // Check if dropdown would overflow right edge
       if (left + dropdownWidth > viewportWidth - 16) {
@@ -64,7 +65,7 @@ export function ProjectTagSelector({
       // Check if dropdown would overflow bottom
       const estimatedHeight = Math.min(allTags.length * 40 + 60, 300)
       if (rect.bottom + estimatedHeight > viewportHeight - 16) {
-        top = rect.top + window.scrollY - estimatedHeight - 8
+        top = rect.top - estimatedHeight - 8
       }
 
       setDropdownPosition({ top, left })
@@ -182,8 +183,6 @@ export function ProjectTagSelector({
           rounded-lg border border-border/50
           bg-popover/95 backdrop-blur-sm
           shadow-xl shadow-black/10
-          animate-in fade-in-0 zoom-in-95 slide-in-from-top-2
-          duration-200
         "
         style={{
           top: dropdownPosition.top,

@@ -126,6 +126,7 @@ export function ProjectTagDisplay({
               hover:border-primary/50 hover:text-primary hover:bg-primary/5
               transition-all duration-200
               active:scale-[0.98]
+              opacity-0 group-hover/row:opacity-100
             "
           >
             <Tag className="h-3 w-3 transition-transform group-hover:rotate-12" />
