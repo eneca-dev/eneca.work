@@ -57,7 +57,7 @@ export function ProjectTagDisplay({
     if (displayTags.length === 0) return null
 
     return (
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
         {displayTags.map((tag) => (
           <div
             key={tag.tag_id}
@@ -79,7 +79,7 @@ export function ProjectTagDisplay({
     <>
       <div
         ref={containerRef}
-        className="flex items-center gap-1.5 flex-wrap"
+        className="flex items-center gap-1.5 flex-wrap mt-0.5"
         onClick={(e) => e.stopPropagation()}
       >
         {displayTags.length > 0 ? (
