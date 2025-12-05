@@ -7,7 +7,7 @@ import { createClient } from "@/utils/supabase/client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save, ChevronsDown, ChevronsUp } from "lucide-react";
+import { Trash2, Plus, Copy, ClipboardPaste, GripVertical, Loader2, ChevronDown, ChevronRight, Clock, Calendar, FolderOpen, Save, ChevronsDown, ChevronsUp, X } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -32,11 +32,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Input } from "./ui/input";
 import { DatePicker } from "./ui/date-picker";
 import { DateRangePicker, type DateRange } from "@/modules/projects/components/DateRangePicker";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
 import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore";
 import { useUserStore } from "@/stores/useUserStore";
+import { pluralizeStages, pluralizeTasks } from "@/lib/pluralize";
 
 // Типы данных
 type Decomposition = {
@@ -44,11 +46,8 @@ type Decomposition = {
   description: string;
   typeOfWork: string;
   difficulty: string;
-  responsible: string;
   plannedHours: number;
   progress: number;
-  status: string;
-  completionDate: string | null;
 };
 
 type Stage = {
@@ -56,6 +55,9 @@ type Stage = {
   name: string;
   startDate: string | null;
   endDate: string | null;
+  description: string | null;
+  statusId: string | null;
+  responsibles: string[];
   decompositions: Decomposition[];
 };
 
@@ -81,6 +83,7 @@ type Employee = {
 type StagesManagementProps = {
   sectionId: string;
   onOpenLog?: (itemId: string) => void;
+  onRefreshReady?: (refreshFn: () => void) => void;
 };
 
 // Вспомогательные функции для работы с датами
@@ -96,6 +99,37 @@ function formatISODateString(date: Date | null): string | null {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Маппинг меток из Excel на категории работ в системе
+const LABEL_TO_CATEGORY_MAP: Record<string, string> = {
+  'MNG': 'Управление',
+  'CLC': 'Расчёт',
+  'MDL200': 'Моделирование 200',
+  'MDL300': 'Моделирование 300',
+  'MDL400': 'Моделирование 400',
+  'DRW': 'Оформление',
+  'GTS': 'ОТР',
+};
+
+// Обратный маппинг: категории работ → метки (для копирования)
+const CATEGORY_TO_LABEL_MAP: Record<string, string> = {
+  'Управление': 'MNG',
+  'Расчёт': 'CLC',
+  'Моделирование 200': 'MDL200',
+  'Моделирование 300': 'MDL300',
+  'Моделирование 400': 'MDL400',
+  'Оформление': 'DRW',
+  'ОТР': 'GTS',
+};
+
+// Функция распределения часов по сложности (К/ВС/ГС)
+function distributeHours(totalHours: number, difficulty: string): [number, number, number] {
+  const hours = totalHours || 0;
+  if (difficulty === 'К') return [hours, 0, 0];
+  if (difficulty === 'ВС') return [0, hours, 0];
+  if (difficulty === 'ГС') return [0, 0, hours];
+  return [hours, 0, 0]; // по умолчанию К
 }
 
 const getDifficultyColor = (difficulty: string) => {
@@ -145,17 +179,364 @@ const getStatusColor = (status: string) => {
   return colors[status] || "bg-muted/60 hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/40";
 };
 
+// Вычислить плановые часы этапа
+const calculateStagePlannedHours = (stage: Stage): number => {
+  return stage.decompositions.reduce((sum, dec) => sum + dec.plannedHours, 0);
+};
+
+// Вычислить фактические часы этапа
+const calculateStageActualHours = (stage: Stage, actualByItemId: Record<string, number>): number => {
+  return stage.decompositions.reduce((sum, dec) => {
+    return sum + (actualByItemId[dec.id] || 0);
+  }, 0);
+};
+
+// Вычислить процент готовности этапа по формуле
+const calculateStageProgress = (stage: Stage): number => {
+  const totalPlanned = calculateStagePlannedHours(stage);
+  if (totalPlanned === 0) return 0;
+
+  const weightedProgress = stage.decompositions.reduce((sum, dec) => {
+    return sum + (dec.plannedHours / totalPlanned) * (dec.progress / 100);
+  }, 0);
+
+  return Math.round(weightedProgress * 100); // Возвращаем в процентах
+};
+
+// Цвет прогресс-бара
+const getProgressBarColor = (progress: number): string => {
+  if (progress === 0) return 'bg-gray-400 dark:bg-gray-600';
+  if (progress <= 30) return 'bg-red-500 dark:bg-red-600';
+  if (progress <= 70) return 'bg-yellow-500 dark:bg-yellow-600';
+  return 'bg-green-500 dark:bg-green-600';
+};
+
+
+// Компонент для отображения ответственных на этапе
+function StageResponsibles({
+  responsibles,
+  employees,
+  onAdd,
+  onRemove,
+}: {
+  responsibles: string[];
+  employees: Employee[];
+  onAdd: () => void;
+  onRemove: (userId: string) => void;
+}) {
+  const responsibleEmployees = employees.filter(emp => responsibles.includes(emp.user_id));
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {responsibleEmployees.map((emp) => (
+        <div
+          key={emp.user_id}
+          className="flex items-center gap-1.5 bg-primary/10 dark:bg-primary/20 hover:bg-primary/15 dark:hover:bg-primary/25 px-2.5 py-1 rounded-full border border-primary/20 transition-colors group"
+        >
+          <div className="flex items-center gap-1.5">
+            {emp.avatar_url ? (
+              <img
+                src={emp.avatar_url}
+                alt={emp.full_name}
+                className="h-5 w-5 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-5 w-5 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-[10px] font-semibold text-primary-foreground">
+                {emp.first_name?.[0]}{emp.last_name?.[0]}
+              </div>
+            )}
+            <span className="text-xs font-medium text-foreground">
+              {emp.first_name} {emp.last_name}
+            </span>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(emp.user_id);
+            }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20 rounded-full p-0.5"
+            title="Удалить ответственного"
+          >
+            <svg className="h-3 w-3 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={onAdd}
+        className="flex items-center justify-center h-7 w-7 rounded-full bg-muted/60 hover:bg-muted/80 dark:bg-muted/40 dark:hover:bg-muted/60 border border-border/40 hover:border-primary/40 transition-colors group"
+        title="Добавить ответственного"
+      >
+        <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+      </button>
+    </div>
+  );
+}
+
+// Компонент для отображения только аватаров ответственных (компактный вид)
+function StageResponsiblesAvatars({
+  responsibles,
+  employees,
+  onAdd,
+}: {
+  responsibles: string[];
+  employees: Employee[];
+  onAdd: () => void;
+}) {
+  const responsibleEmployees = employees.filter(emp => responsibles.includes(emp.user_id));
+
+  return (
+    <TooltipProvider>
+      <div className="flex items-center">
+        {responsibleEmployees.map((emp, index) => (
+          <Tooltip key={emp.user_id} delayDuration={300}>
+            <TooltipTrigger asChild>
+              <div
+                className="relative"
+                style={{
+                  marginLeft: index === 0 ? 0 : '-8px',
+                  zIndex: responsibleEmployees.length - index,
+                }}
+                onClick={onAdd}
+              >
+                {emp.avatar_url ? (
+                  <img
+                    src={emp.avatar_url}
+                    alt={emp.full_name}
+                    className="h-7 w-7 rounded-full object-cover transition-colors cursor-pointer"
+                  />
+                ) : (
+                  <div className="h-7 w-7 rounded-full bg-primary dark:bg-primary flex items-center justify-center text-[10px] font-semibold text-primary-foreground transition-colors cursor-pointer">
+                    {emp.first_name?.[0]}{emp.last_name?.[0]}
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 shadow-md">
+              <p className="text-xs text-foreground">{emp.first_name} {emp.last_name}</p>
+              {emp.position_name && <p className="text-xs text-muted-foreground">{emp.position_name}</p>}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+        {responsibleEmployees.length < 5 && (
+          <button
+            onClick={onAdd}
+            className="flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-muted/80 dark:bg-muted dark:hover:bg-muted/80 transition-colors"
+            style={{
+              marginLeft: responsibleEmployees.length > 0 ? '-8px' : 0,
+              zIndex: 0,
+            }}
+            title="Добавить ответственного"
+          >
+            <Plus className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+// Диалог для выбора ответственных
+function AssignResponsiblesDialog({
+  open,
+  onOpenChange,
+  currentResponsibles,
+  employees,
+  isLoading,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentResponsibles: string[];
+  employees: Employee[];
+  isLoading: boolean;
+  onSave: (selectedIds: string[]) => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(currentResponsibles));
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setSelectedIds(new Set(currentResponsibles));
+      setSearchQuery('');
+    }
+  }, [open, currentResponsibles]);
+
+  const filteredEmployees = employees.filter(emp => {
+    const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return fullName.includes(query) || emp.email.toLowerCase().includes(query);
+  });
+
+  const toggleEmployee = (userId: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        // Ограничение: максимум 5 сотрудников
+        if (newSet.size >= 5) {
+          return prev;
+        }
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSave = () => {
+    onSave(Array.from(selectedIds));
+    onOpenChange(false);
+  };
+
+  const maxReached = selectedIds.size >= 5;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] dark:bg-[rgb(15,23,42)] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
+        <DialogHeader>
+          <DialogTitle>Назначить ответственных на этап</DialogTitle>
+          <DialogDescription>
+            Выберите сотрудников, которые будут ответственными за этот этап
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Input
+            placeholder="Поиск по имени или email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full dark:bg-slate-700"
+          />
+          {selectedIds.size > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {employees
+                .filter(emp => selectedIds.has(emp.user_id))
+                .map(emp => (
+                  <div
+                    key={emp.user_id}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-900/70 dark:bg-emerald-950/70 text-white text-xs font-medium"
+                  >
+                    {emp.avatar_url ? (
+                      <img
+                        src={emp.avatar_url}
+                        alt={emp.full_name}
+                        className="h-5 w-5 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full bg-emerald-700 dark:bg-emerald-600 flex items-center justify-center text-[9px] font-semibold text-white">
+                        {emp.first_name?.[0]}{emp.last_name?.[0]}
+                      </div>
+                    )}
+                    <span>{emp.first_name} {emp.last_name}</span>
+                    <button
+                      onClick={() => toggleEmployee(emp.user_id)}
+                      className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
+            <TooltipProvider>
+              {filteredEmployees.map((emp) => {
+                const isSelected = selectedIds.has(emp.user_id);
+                const isDisabled = maxReached && !isSelected;
+
+                return (
+                  <div
+                    key={emp.user_id}
+                    className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+                      isSelected
+                        ? 'bg-primary/10 border-primary/40 cursor-pointer'
+                        : isDisabled
+                        ? 'bg-muted/20 border-border/20 opacity-50 cursor-default'
+                        : 'bg-muted/30 border-border/40 hover:bg-muted/50 cursor-pointer'
+                    }`}
+                    onClick={() => !isDisabled && toggleEmployee(emp.user_id)}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => !isDisabled && toggleEmployee(emp.user_id)}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={isDisabled}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      {isDisabled && (
+                        <TooltipContent className="text-xs bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-foreground shadow-md">
+                          <p>Нельзя выбрать больше 5 сотрудников</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    {emp.avatar_url ? (
+                      <img
+                        src={emp.avatar_url}
+                        alt={emp.full_name}
+                        className="h-7 w-7 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-7 w-7 rounded-full bg-primary/30 dark:bg-primary/40 flex items-center justify-center text-xs font-semibold text-primary-foreground">
+                        {emp.first_name?.[0]}{emp.last_name?.[0]}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{emp.full_name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        {emp.position_name && <span>{emp.position_name}</span>}
+                        {emp.department_name && (
+                          <>
+                            {emp.position_name && <span>•</span>}
+                            <span>{emp.department_name}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </TooltipProvider>
+            {filteredEmployees.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                Сотрудники не найдены
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-between items-center pt-4 border-t">
+          <div className="text-sm text-muted-foreground">
+            Выбрано: {selectedIds.size}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:bg-slate-600 dark:hover:bg-slate-500">
+              Отмена
+            </Button>
+            <Button onClick={handleSave} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SortableStage({
   stage,
   selectedStages,
   selectedDecompositions,
   toggleStageSelection,
-  toggleSelectAllInStage,
   toggleDecompositionSelection,
   deleteStage,
   deleteDecomposition,
   addDecomposition,
   updateStage,
+  updateStageResponsibles,
   updateDecomposition,
   onDecompositionDragEnd,
   focusedDecompositionId,
@@ -165,6 +546,7 @@ function SortableStage({
   difficultyOptions,
   responsibleOptions,
   statusOptions,
+  statuses,
   employees,
   formatProfileLabel,
   isCollapsed,
@@ -176,12 +558,12 @@ function SortableStage({
   selectedStages: Set<string>;
   selectedDecompositions: Set<string>;
   toggleStageSelection: (id: string) => void;
-  toggleSelectAllInStage: (stageId: string) => void;
   toggleDecompositionSelection: (id: string) => void;
   deleteStage: (id: string) => void;
   deleteDecomposition: (stageId: string, decompId: string) => void;
   addDecomposition: (stageId: string, opts?: { pending?: boolean; initialCompletionDate?: string }) => void;
   updateStage: (stageId: string, updates: Partial<Stage>) => void;
+  updateStageResponsibles: (stageId: string, responsibles: string[]) => void;
   updateDecomposition: (stageId: string, decompId: string, updates: Partial<Decomposition>) => void;
   onDecompositionDragEnd: (stageId: string, event: DragEndEvent) => void;
   focusedDecompositionId: string | null;
@@ -191,6 +573,7 @@ function SortableStage({
   difficultyOptions: string[];
   responsibleOptions: string[];
   statusOptions: string[];
+  statuses: SectionStatus[];
   employees: Employee[];
   formatProfileLabel: (p: { first_name: string; last_name: string; email: string | null | undefined }) => string;
   isCollapsed: boolean;
@@ -201,6 +584,9 @@ function SortableStage({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
   const { toast } = useToast();
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showResponsiblesDialog, setShowResponsiblesDialog] = useState(false);
+  const [isUpdatingResponsibles, setIsUpdatingResponsibles] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const stageNameRef = useRef<HTMLTextAreaElement | null>(null);
 
   const adjustStageNameHeight = () => {
@@ -213,10 +599,6 @@ function SortableStage({
   useEffect(() => {
     adjustStageNameHeight();
   }, [stage.name]);
-
-  const stageDecompositionIds = stage.decompositions.map((d) => d.id);
-  const isAllSelectedInStage = stageDecompositionIds.length > 0 && stageDecompositionIds.every((id) => selectedDecompositions.has(id));
-  const hasAnySelectedInStage = stageDecompositionIds.some((id) => selectedDecompositions.has(id));
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -233,13 +615,16 @@ function SortableStage({
 
   const copyStage = async () => {
     try {
-      let stageData = `Этап: ${stage.name}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
-      stageData += "Декомпозиции:\n";
-      stageData += "| Описание | Тип работ | Сложность | Ответственный | Часы | Прогресс | Статус | Дата |\n";
-      stageData += "|---|---|---|---|---|---|---|---|\n";
+      const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
+      let stageData = `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
+      stageData += "Задачи:\n";
+      stageData += "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
+      stageData += "|---|---|---|---|---|---|\n";
 
       stage.decompositions.forEach((decomp) => {
-        stageData += `| ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.progress}% | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
+        const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+        const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+        stageData += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
       });
 
       await navigator.clipboard.writeText(stageData);
@@ -265,83 +650,127 @@ function SortableStage({
         selectedStages.has(stage.id) ? "ring-1 ring-primary/20 border-primary/40 bg-muted/40 dark:bg-muted/35" : ""
       }`}
     >
-      <div className={`flex items-center ${isCollapsed ? "mb-1 gap-1" : "mb-2 gap-2"}`}>
+      <div className={`flex items-start ${isCollapsed ? "mb-1 gap-1" : "mb-2 gap-2"}`}>
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing opacity-40 hover:opacity-100 transition-opacity"
+          className="cursor-grab active:cursor-grabbing opacity-40 hover:opacity-100 transition-opacity pt-2"
         >
           <GripVertical className="h-6 w-5 text-muted-foreground" />
         </div>
         <Checkbox
           checked={selectedStages.has(stage.id)}
           onCheckedChange={() => toggleStageSelection(stage.id)}
-          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary mt-3"
         />
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleCollapse(stage.id)}
-          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0`}
-          title={isCollapsed ? "Развернуть декомпозиции" : "Свернуть декомпозиции"}
+          className={`${isCollapsed ? "h-6 w-6" : "h-7 w-7"} p-0 mt-2`}
+          title={isCollapsed ? "Развернуть задачи" : "Свернуть задачи"}
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
         <div className="flex-1">
-          <Textarea
-            ref={stageNameRef}
-            value={stage.name}
-            onChange={(e) => {
-              updateStage(stage.id, { name: (e.target as HTMLTextAreaElement).value });
-            }}
-            onInput={adjustStageNameHeight}
-            onFocus={() => setIsEditingName(true)}
-            onBlur={() => setIsEditingName(false)}
-            placeholder="Новый этап"
-            rows={1}
-            className={`${isCollapsed ? "text-base min-h-7 py-0.5 translate-y-[3px]" : "text-lg min-h-9 py-1"} font-semibold border-0 outline-none px-3 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden ${
-              isEditingName
-                ? "bg-primary/5 ring-2 ring-primary/40 ring-offset-1 ring-offset-background"
-                : "bg-transparent hover:bg-muted/40"
-            }`}
-          />
-        </div>
-        <div className="ml-auto mr-2 relative">
-          <DateRangePicker
-            value={{
-              from: parseISODateString(stage.startDate),
-              to: parseISODateString(stage.endDate)
-            }}
-            onChange={(range: DateRange) => {
-              updateStage(stage.id, {
-                startDate: formatISODateString(range.from),
-                endDate: formatISODateString(range.to)
-              });
-            }}
-            calendarWidth="500px"
-            inputWidth="200px"
-            inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
-          />
-          <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <div
+            className="flex items-center gap-3"
+            onMouseEnter={() => !isCollapsed && setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            <div className="flex items-center">
+              <StageResponsiblesAvatars
+                responsibles={stage.responsibles}
+                employees={employees}
+                onAdd={() => setShowResponsiblesDialog(true)}
+              />
+            </div>
+            <Textarea
+              ref={stageNameRef}
+              value={stage.name}
+              onChange={(e) => {
+                updateStage(stage.id, { name: (e.target as HTMLTextAreaElement).value });
+              }}
+              onInput={adjustStageNameHeight}
+              onFocus={() => setIsEditingName(true)}
+              onBlur={() => setIsEditingName(false)}
+              placeholder="Новый этап"
+              rows={1}
+              className={`${isCollapsed ? "text-base min-h-7 py-0.5 translate-y-[3px]" : "text-lg min-h-9 py-1"} flex-1 font-semibold border-0 outline-none px-3 rounded-md transition-colors focus:outline-none focus:ring-0 resize-none overflow-hidden ${
+                isEditingName
+                  ? "bg-primary/5 ring-2 ring-primary/40 ring-offset-1 ring-offset-background"
+                  : "bg-transparent hover:bg-muted/40"
+              }`}
+            />
+            <div className="relative">
+              <DateRangePicker
+                value={{
+                  from: parseISODateString(stage.startDate),
+                  to: parseISODateString(stage.endDate)
+                }}
+                onChange={(range: DateRange) => {
+                  updateStage(stage.id, {
+                    startDate: formatISODateString(range.from),
+                    endDate: formatISODateString(range.to)
+                  });
+                }}
+                calendarWidth="500px"
+                inputWidth="200px"
+                inputClassName="w-full pl-3 pr-8 h-6 rounded-full bg-muted/60 hover:bg-muted/80 border-0 text-xs text-foreground cursor-pointer focus:outline-none shadow-none"
+              />
+              <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+            <Select
+              value={stage.statusId || undefined}
+              onValueChange={(value) => {
+                updateStage(stage.id, { statusId: value || null });
+              }}
+            >
+              <SelectTrigger
+                className={`h-6 min-h-0 py-0 px-2 text-xs border-0 shadow-none rounded-full w-[115px] ${
+                  stage.statusId
+                    ? getStatusColor(statuses.find(s => s.id === stage.statusId)?.name || '')
+                    : 'bg-muted/60 hover:bg-muted/80'
+                }`}
+              >
+                <SelectValue placeholder="Статус" />
+              </SelectTrigger>
+              <SelectContent className="bg-background dark:bg-slate-700">
+                {statuses
+                  .filter(s => ['План', 'В работе', 'Пауза', 'Проверка', 'Готово'].includes(s.name))
+                  .map((status) => (
+                    <SelectItem key={status.id} value={status.id}>
+                      {status.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {!isCollapsed && (
+            <>
+              <div
+                className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                  isHovered ? 'max-h-28 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+              >
+                <div className="flex items-center gap-2 mt-2">
+                  <Textarea
+                    value={stage.description || ''}
+                    onChange={(e) => {
+                      updateStage(stage.id, { description: e.target.value });
+                    }}
+                    placeholder="Описание этапа"
+                    rows={2}
+                    className="flex-1 text-sm min-h-[48px] max-h-20 overflow-y-auto rounded-md px-3 py-1.5 bg-muted/30 dark:bg-muted/20 hover:bg-muted/40 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-
-      {stage.decompositions.length > 0 && !isCollapsed && (
-        <div
-          className={`absolute top-2 left-2 transition-opacity ${
-            hasAnySelectedInStage ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleSelectAllInStage(stage.id)}
-            className="h-8 px-3 text-xs"
-          >
-            {isAllSelectedInStage ? "Снять выбор в этапе" : "Выбрать все в этапе"}
-          </Button>
-        </div>
-      )}
 
       {!isCollapsed && (
         <>
@@ -350,38 +779,29 @@ function SortableStage({
             collisionDetection={closestCenter}
             onDragEnd={(event) => onDecompositionDragEnd(stage.id, event)}
           >
-            <div className="overflow-x-auto -mx-2">
+            <div className="overflow-x-auto ml-8">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border/30">
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="w-8 pb-2 pt-0"></th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Описание
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Тип работ
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       Сложность
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Ответственный
-                    </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap">
                       Факт ч./План ч.
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Прогресс
+                    <th className="pb-2 pt-0 px-1 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                      Прогресс,%
                     </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Статус
-                    </th>
-                    <th className="pb-2 pt-0 px-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                      Дата
-                    </th>
-                    <th className="w-8 pb-2 pt-0"></th>
+                    <th className="w-6 pb-2 pt-0"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -417,17 +837,60 @@ function SortableStage({
             </div>
           </DndContext>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => addDecomposition(stage.id)}
-            className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Добавить декомпозицию
-          </Button>
+{stage.decompositions.length > 0 ? (
+            <div className="ml-8 pt-2 pb-1">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => addDecomposition(stage.id)}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Добавить задачу
+                </Button>
+                <div className="flex items-center gap-6 ml-11 mr-[65px] border-t-2 border-border/30 pt-2">
+                  <div className="flex items-center gap-1">
+                    <div className="h-6 w-[48px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums font-medium">
+                      {calculateStageActualHours(stage, actualByItemId).toFixed(1)}
+                    </div>
+                    <span className="text-xs text-muted-foreground/50">/</span>
+                    <div className="h-6 w-[48px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums font-medium">
+                      {calculateStagePlannedHours(stage).toFixed(1)}
+                    </div>
+                  </div>
+                  <div className="h-6 w-[52px] flex items-center justify-center bg-muted/40 rounded-full px-2 text-xs text-muted-foreground tabular-nums font-semibold -ml-3">
+                    {calculateStageProgress(stage)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => addDecomposition(stage.id)}
+              className="mt-2 h-8 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Добавить задачу
+            </Button>
+          )}
         </>
       )}
+
+      <AssignResponsiblesDialog
+        open={showResponsiblesDialog}
+        onOpenChange={setShowResponsiblesDialog}
+        currentResponsibles={stage.responsibles}
+        employees={employees}
+        isLoading={isUpdatingResponsibles}
+        onSave={async (selectedIds) => {
+          setIsUpdatingResponsibles(true);
+          await updateStageResponsibles(stage.id, selectedIds);
+          setIsUpdatingResponsibles(false);
+        }}
+      />
     </Card>
   );
 }
@@ -481,100 +944,14 @@ function SortableDecompositionRow({
   const rowRef = useRef<HTMLTableRowElement | null>(null);
   const typeOfWorkTriggerRef = useRef<HTMLButtonElement | null>(null);
   const difficultyTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const responsibleTriggerRef = useRef<HTMLButtonElement | null>(null);
   const progressTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const statusTriggerRef = useRef<HTMLButtonElement | null>(null);
   const plannedHoursInputRef = useRef<HTMLInputElement | null>(null);
-  const completionDateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [openTypeOfWork, setOpenTypeOfWork] = useState(false);
   const [openDifficulty, setOpenDifficulty] = useState(false);
-  const [openResponsible, setOpenResponsible] = useState(false);
-  const [openProgress, setOpenProgress] = useState(false);
-  const [openStatus, setOpenStatus] = useState(false);
   const lastClosedSelectRef = useRef<string | null>(null);
   const [interacted, setInteracted] = useState(false);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>(decomposition.responsible || "");
-  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState<boolean>(false);
-  const responsibleContainerRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ left: number; top: number; width: number; openUp: boolean }>({ left: 0, top: 0, width: 0, openUp: false });
-  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
-  const filteredEmployees = useMemo(() => {
-    const q = employeeSearchTerm.trim().toLowerCase();
-    const list = (employees || []).filter((emp) => {
-      if (!q) return true;
-      return (
-        (emp.full_name || `${emp.first_name} ${emp.last_name}`)?.toLowerCase().includes(q) ||
-        (emp.email || '').toLowerCase().includes(q)
-      );
-    });
-    return list.slice(0, 10);
-  }, [employees, employeeSearchTerm]);
-  const updateDropdownPosition = useCallback(() => {
-    const el = responsibleContainerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const openUp = (window.innerHeight - rect.bottom) < 260;
-    const computedTop = openUp ? Math.max(8, rect.top - 260) : rect.bottom + 4;
-    setDropdownPos({ left: rect.left, top: computedTop, width: rect.width, openUp });
-  }, []);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    updateDropdownPosition();
-    const handler = () => updateDropdownPosition();
-    window.addEventListener("scroll", handler, true);
-    window.addEventListener("resize", handler);
-    return () => {
-      window.removeEventListener("scroll", handler, true);
-      window.removeEventListener("resize", handler);
-    };
-  }, [showEmployeeDropdown, updateDropdownPosition]);
-  useEffect(() => {
-    if (showEmployeeDropdown) {
-      setHighlightedIndex(filteredEmployees.length > 0 ? 0 : -1);
-    }
-  }, [employeeSearchTerm, showEmployeeDropdown, filteredEmployees.length]);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    if (highlightedIndex < 0) return;
-    const el = dropdownRef.current?.querySelector(`[data-index="${highlightedIndex}"]`) as HTMLElement | null;
-    if (el) {
-      el.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightedIndex, showEmployeeDropdown]);
-  useEffect(() => {
-    if (!showEmployeeDropdown) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (responsibleContainerRef.current?.contains(t)) return;
-      if (dropdownRef.current?.contains(t)) return;
-      setShowEmployeeDropdown(false);
-      setOpenResponsible(false);
-    };
-    document.addEventListener("mousedown", onDown, true);
-    return () => document.removeEventListener("mousedown", onDown, true);
-  }, [showEmployeeDropdown]);
-  useEffect(() => {
-    setEmployeeSearchTerm(decomposition.responsible || "");
-  }, [decomposition.responsible]);
 
-  const selectEmployee = useCallback((emp: Employee) => {
-    const label = formatProfileLabel({ first_name: emp.first_name, last_name: emp.last_name, email: emp.email });
-    onUpdate(stageId, decomposition.id, { responsible: label });
-    setEmployeeSearchTerm(label);
-    markInteracted();
-    setShowEmployeeDropdown(false);
-    setOpenResponsible(false);
-    setTimeout(() => {
-      if (plannedHoursInputRef.current) {
-        plannedHoursInputRef.current.focus();
-        plannedHoursInputRef.current.select?.();
-      } else {
-        focusNextFrom(responsibleTriggerRef.current);
-      }
-    }, 50);
-  }, [formatProfileLabel, onUpdate, stageId, decomposition.id]);
   useEffect(() => {
     const el = descriptionRef.current;
     if (!el) return;
@@ -623,6 +1000,9 @@ function SortableDecompositionRow({
     }
   };
 
+  // Блокировка редактирования при прогрессе 100%
+  const isCompleted = decomposition.progress === 100;
+
   return (
     <tr
       ref={(node) => {
@@ -646,7 +1026,7 @@ function SortableDecompositionRow({
         }, 80);
       }}
     >
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <div
           {...attributes}
           {...listeners}
@@ -655,27 +1035,32 @@ function SortableDecompositionRow({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Checkbox
           checked={isChecked}
           onCheckedChange={() => !selectionDisabled && onToggleSelection(decomposition.id)}
-          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary"
+          className="bg-transparent data-[state=checked]:bg-transparent data-[state=checked]:text-primary translate-y-[2px]"
           disabled={selectionDisabled}
         />
       </td>
-      <td className="py-1.5 px-1">
+      <td className="py-1 px-1">
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onOpenLog?.(decomposition.id);
+            if (!isCompleted) onOpenLog?.(decomposition.id);
           }}
-          className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 transition-colors"
-          title="Добавить отчет"
+          disabled={isCompleted}
+          className={`flex items-center justify-center h-6 w-6 rounded-full transition-colors ${
+            isCompleted
+              ? 'bg-muted/40 text-muted-foreground cursor-default opacity-50'
+              : 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400'
+          }`}
+          title={isCompleted ? "Задача завершена (100%)" : "Добавить отчет"}
         >
           <Clock className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td className="py-1.5 px-1">
+      <td className="py-1 px-1">
         <Textarea
           ref={descriptionRef}
           value={decomposition.description}
@@ -684,10 +1069,16 @@ function SortableDecompositionRow({
             markInteracted();
           }}
           onKeyDown={handleKeyDown}
-          className="min-h-[24px] h-auto min-w-[180px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden"
+          className={`min-h-[24px] h-auto min-w-[600px] border-0 shadow-none rounded-lg px-3 py-1 text-xs resize-none overflow-hidden ${
+            isCompleted
+              ? 'bg-muted/30 cursor-default opacity-60'
+              : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted focus:placeholder-transparent'
+          }`}
           rows={1}
-          autoFocus={autoFocus}
-          placeholder="Новая декомпозиция"
+          autoFocus={autoFocus && !isCompleted}
+          placeholder={isCompleted ? "" : "Новая задача"}
+          disabled={isCompleted}
+          readOnly={isCompleted}
           onInput={(e) => {
             const target = (e.target as HTMLTextAreaElement);
             target.style.height = "auto";
@@ -695,15 +1086,17 @@ function SortableDecompositionRow({
           }}
         />
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Select
-          open={openTypeOfWork}
+          open={openTypeOfWork && !isCompleted}
           onOpenChange={(v) => {
+            if (isCompleted) return;
             setOpenTypeOfWork(v);
             if (!v) lastClosedSelectRef.current = "typeOfWork";
           }}
           value={decomposition.typeOfWork}
           onValueChange={(value) => {
+            if (isCompleted) return;
             onUpdate(stageId, decomposition.id, { typeOfWork: value });
             markInteracted();
             setOpenTypeOfWork(false);
@@ -711,9 +1104,15 @@ function SortableDecompositionRow({
               focusNextFrom(typeOfWorkTriggerRef.current);
             }, 0);
           }}
+          disabled={isCompleted}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full bg-muted/60 hover:bg-muted/80 w-[160px] whitespace-nowrap ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            disabled={isCompleted}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[160px] whitespace-nowrap ${
+              isCompleted
+                ? 'bg-muted/30 cursor-default opacity-60'
+                : 'bg-muted/60 hover:bg-muted/80'
+            } ${openTypeOfWork ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "typeOfWork") {
@@ -727,6 +1126,7 @@ function SortableDecompositionRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            className="bg-background dark:bg-slate-700"
             onPointerDownOutside={() => {
               try {
                 typeOfWorkTriggerRef.current?.blur();
@@ -747,15 +1147,17 @@ function SortableDecompositionRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-1.5 px-2">
+      <td className="py-1 px-1">
         <Select
-          open={openDifficulty}
+          open={openDifficulty && !isCompleted}
           onOpenChange={(v) => {
+            if (isCompleted) return;
             setOpenDifficulty(v);
             if (!v) lastClosedSelectRef.current = "difficulty";
           }}
           value={decomposition.difficulty}
           onValueChange={(value) => {
+            if (isCompleted) return;
             onUpdate(stageId, decomposition.id, { difficulty: value });
             markInteracted();
             setOpenDifficulty(false);
@@ -763,9 +1165,13 @@ function SortableDecompositionRow({
               focusNextFrom(difficultyTriggerRef.current);
             }, 0);
           }}
+          disabled={isCompleted}
         >
           <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${getDifficultyColor(decomposition.difficulty)} ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
+            disabled={isCompleted}
+            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[75px] ${
+              isCompleted ? 'bg-muted/30 cursor-default opacity-60' : getDifficultyColor(decomposition.difficulty)
+            } ${openDifficulty ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (lastClosedSelectRef.current === "difficulty") {
@@ -779,6 +1185,7 @@ function SortableDecompositionRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent
+            className="bg-background dark:bg-slate-700"
             onPointerDownOutside={() => {
               try {
                 difficultyTriggerRef.current?.blur();
@@ -799,95 +1206,7 @@ function SortableDecompositionRow({
           </SelectContent>
         </Select>
       </td>
-      <td className="py-1.5 px-2">
-        <div className="relative w-[175px]" ref={responsibleContainerRef}>
-          <input
-            type="text"
-            value={employeeSearchTerm}
-            onChange={(e) => {
-              setEmployeeSearchTerm(e.target.value);
-              setShowEmployeeDropdown(true);
-              setOpenResponsible(true);
-              updateDropdownPosition();
-              setHighlightedIndex(0);
-            }}
-            onFocus={() => {
-              setShowEmployeeDropdown(true);
-              setOpenResponsible(true);
-              updateDropdownPosition();
-            }}
-            onBlur={() => {
-              // Закрытие обрабатывается глобальным обработчиком mousedown
-            }}
-            placeholder="Поиск сотрудника..."
-            className="h-6 w-full border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-3 text-xs"
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (!showEmployeeDropdown) {
-                  setShowEmployeeDropdown(true);
-                  setOpenResponsible(true);
-                  updateDropdownPosition();
-                }
-                setHighlightedIndex((idx) => {
-                  const next = filteredEmployees.length === 0 ? -1 : (idx + 1) % filteredEmployees.length;
-                  return next;
-                });
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (!showEmployeeDropdown) {
-                  setShowEmployeeDropdown(true);
-                  setOpenResponsible(true);
-                  updateDropdownPosition();
-                }
-                setHighlightedIndex((idx) => {
-                  if (filteredEmployees.length === 0) return -1;
-                  const next = idx <= 0 ? filteredEmployees.length - 1 : idx - 1;
-                  return next;
-                });
-              } else if (e.key === 'Enter') {
-                if (filteredEmployees.length > 0) {
-                  const index = highlightedIndex >= 0 ? highlightedIndex : 0;
-                  const emp = filteredEmployees[index];
-                  if (emp) selectEmployee(emp);
-                }
-              } else if (e.key === 'Escape') {
-                setShowEmployeeDropdown(false);
-                setOpenResponsible(false);
-              }
-            }}
-          />
-          {showEmployeeDropdown && openResponsible && createPortal(
-            <div
-              ref={dropdownRef}
-              className="z-[1000] rounded-md border border-border/60 bg-popover text-popover-foreground shadow-sm"
-              style={{ position: "fixed", left: dropdownPos.left, top: dropdownPos.top, width: dropdownPos.width, maxHeight: 240, overflowY: "auto" }}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              {filteredEmployees.map((emp, idx) => {
-                const disp = emp.full_name || `${emp.first_name} ${emp.last_name}` || emp.email;
-                const isActive = idx === highlightedIndex;
-                return (
-                  <button
-                    key={emp.user_id}
-                    data-index={idx}
-                    className={`w-full text-left px-3 py-1.5 text-xs flex flex-col items-start gap-0.5 ${isActive ? 'bg-muted/70' : 'hover:bg-muted/60'}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      selectEmployee(emp);
-                    }}
-                    onMouseEnter={() => setHighlightedIndex(idx)}
-                  >
-                    <span className="whitespace-normal break-words leading-snug">{disp}</span>
-                    <span className="text-[10px] text-muted-foreground leading-snug">{emp.position_name || ''}</span>
-                  </button>
-                );
-              })}
-            </div>, document.body)
-          }
-        </div>
-      </td>
-      <td className="py-1.5 pl-2 pr-1">
+      <td className="py-1 pl-1 pr-1">
         <div className="flex items-center gap-1">
           <div className="h-6 w-[48px] flex items-center justify-center border-0 bg-muted/40 shadow-none rounded-full px-2 text-xs text-center text-muted-foreground tabular-nums">
             {Number(actualByItemId[decomposition.id] || 0).toFixed(2)}
@@ -918,137 +1237,88 @@ function SortableDecompositionRow({
 
               input.value = cleaned;
             }}
-            onFocus={(e) => {
-              // Если значение 0, выделяем весь текст - тогда при вводе цифры 0 заменится
-              if (decomposition.plannedHours === 0) {
-                e.target.select();
-              }
+            onFocus={() => {
+              // Не выделяем текст при фокусе
             }}
             onKeyDown={handleKeyDown}
-            className="h-6 w-[48px] border-0 bg-muted/60 hover:bg-muted/80 focus:bg-muted shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className={`h-6 w-[48px] border-0 shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+              isCompleted
+                ? 'bg-muted/30 cursor-default opacity-60'
+                : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted'
+            }`}
+            disabled={isCompleted}
+            readOnly={isCompleted}
             ref={plannedHoursInputRef}
           />
         </div>
       </td>
-      <td className="py-1.5 px-2">
-        <Select
-          open={openProgress}
-          onOpenChange={(v) => {
-            setOpenProgress(v);
-            if (!v) lastClosedSelectRef.current = "progress";
-          }}
-          value={decomposition.progress.toString()}
-          onValueChange={(value) => {
-            onUpdate(stageId, decomposition.id, { progress: Number.parseInt(value) });
+      <td className="py-1 px-1">
+        <Input
+          ref={progressTriggerRef as unknown as React.Ref<HTMLInputElement>}
+          type="number"
+          min={0}
+          max={100}
+          value={decomposition.progress}
+          onChange={(e) => {
+            if (isCompleted) return;
+            const val = e.target.value;
+            const num = parseFloat(val);
+            const validNum = isNaN(num) || num < 0 ? 0 : Math.min(num, 100);
+            onUpdate(stageId, decomposition.id, { progress: validNum });
             markInteracted();
-            setOpenProgress(false);
-            setTimeout(() => {
-              focusNextFrom(progressTriggerRef.current);
-            }, 0);
           }}
-        >
-          <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[70px] ${getProgressColor(decomposition.progress)} ${openProgress ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if (lastClosedSelectRef.current === "progress") {
-                lastClosedSelectRef.current = null;
-                return;
-              }
-              setOpenProgress(true);
-            }}
-            ref={progressTriggerRef as unknown as React.Ref<HTMLButtonElement>}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            onPointerDownOutside={() => {
-              try {
-                progressTriggerRef.current?.blur();
-              } catch {}
-            }}
-            onCloseAutoFocus={(e) => {
-              e.preventDefault();
-              try {
-                progressTriggerRef.current?.blur();
-              } catch {}
-            }}
-          >
-            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
-              <SelectItem key={value} value={value.toString()}>
-                {value}%
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </td>
-      <td className="py-1.5 px-2">
-        <Select
-          open={openStatus}
-          onOpenChange={(v) => {
-            setOpenStatus(v);
-            if (!v) lastClosedSelectRef.current = "status";
-          }}
-          value={decomposition.status}
-          onValueChange={(value) => {
-            onUpdate(stageId, decomposition.id, { status: value });
-            markInteracted();
-            setOpenStatus(false);
-            setTimeout(() => {
-              if (completionDateTriggerRef.current) {
-                completionDateTriggerRef.current.focus();
+          onInput={(e) => {
+            if (isCompleted) return;
+            const input = e.target as HTMLInputElement;
+            // Удаляем невалидные символы (оставляем цифры и точку)
+            let cleaned = input.value.replace(/[^0-9.]/g, '');
+
+            // Ограничиваем целую часть: максимум 2 цифры, кроме случая "100"
+            const parts = cleaned.split('.');
+            let integerPart = parts[0];
+            const decimalPart = parts[1];
+
+            if (integerPart.length > 2) {
+              // Если начинается с "10", разрешаем только "100"
+              if (integerPart.startsWith('10')) {
+                integerPart = integerPart[2] === '0' ? '100' : '10';
               } else {
-                focusNextFrom(statusTriggerRef.current);
+                // Любое другое двузначное число - обрезаем до 2 цифр
+                integerPart = integerPart.slice(0, 2);
               }
-            }, 50);
-          }}
-        >
-          <SelectTrigger
-            className={`h-6 min-h-0 py-0 px-2 leading-none text-xs [&_span]:leading-none border-0 shadow-none rounded-full w-[115px] ${getStatusColor(decomposition.status)} ${openStatus ? "ring-1 ring-ring/40 ring-offset-2" : ""}`}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              if (lastClosedSelectRef.current === "status") {
-                lastClosedSelectRef.current = null;
-                return;
+            }
+
+            cleaned = integerPart + (decimalPart !== undefined ? '.' + decimalPart : '');
+
+            // Удаляем ведущие нули (но оставляем 0 перед точкой, например "0.5")
+            if (cleaned.startsWith('0') && cleaned.length > 1 && cleaned[1] !== '.') {
+              cleaned = cleaned.replace(/^0+/, '');
+              // Если после удаления осталась пустая строка или только точка, добавляем 0
+              if (cleaned === '' || cleaned === '.') {
+                cleaned = '0' + cleaned;
               }
-              setOpenStatus(true);
-            }}
-            ref={statusTriggerRef as unknown as React.Ref<HTMLButtonElement>}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            onPointerDownOutside={() => {
-              try {
-                statusTriggerRef.current?.blur();
-              } catch {}
-            }}
-            onCloseAutoFocus={(e) => {
-              e.preventDefault();
-              try {
-                statusTriggerRef.current?.blur();
-              } catch {}
-            }}
-          >
-            {statusOptions.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </td>
-      <td className="py-1.5 px-0.5">
-        <DatePicker
-          value={decomposition.completionDate}
-          onChange={(val) => {
-            onUpdate(stageId, decomposition.id, { completionDate: val });
-            markInteracted();
-            onDateConfirmed(val);
+            }
+
+            // Проверяем максимальное значение 100
+            const num = parseFloat(cleaned);
+            if (!isNaN(num) && num > 100) {
+              cleaned = '100';
+            }
+
+            input.value = cleaned;
           }}
-          triggerClassName="w-[110px] px-2"
           onKeyDown={handleKeyDown}
-          triggerRef={completionDateTriggerRef as unknown as React.Ref<HTMLButtonElement>}
+          onFocus={() => {
+            // Не выделяем текст при фокусе
+          }}
+          className={`h-6 w-[48px] border-0 shadow-none rounded-full px-2 text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+            isCompleted
+              ? 'bg-muted/30 cursor-default opacity-60'
+              : 'bg-muted/60 hover:bg-muted/80 focus:bg-muted'
+          }`}
+          placeholder="%"
+          disabled={isCompleted}
+          readOnly={isCompleted}
         />
       </td>
     </tr>
@@ -1056,7 +1326,7 @@ function SortableDecompositionRow({
 }
 
 
-export default function StagesManagement({ sectionId, onOpenLog }: StagesManagementProps) {
+export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady }: StagesManagementProps) {
   const supabase = useMemo(() => createClient(), []);
   const [stages, setStages] = useState<Stage[]>([]);
   const [categories, setCategories] = useState<WorkCategory[]>([]);
@@ -1069,6 +1339,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const [selectedDecompositions, setSelectedDecompositions] = useState<Set<string>>(new Set());
   const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [previewData, setPreviewData] = useState<string[][]>([]);
   const { toast } = useToast();
   const [focusedDecompositionId, setFocusedDecompositionId] = useState<string | null>(null);
   const [pendingNewDecomposition, setPendingNewDecomposition] = useState<{ stageId: string; decompId: string } | null>(null);
@@ -1144,6 +1415,11 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const statusOptions = useMemo(() => statuses.map(s => s.name), [statuses]);
   // responsibleOptions формируются вместе с profileNameToId, чтобы метки были уникальны
 
+  // Дефолтный статус для новых этапов
+  const defaultStageStatusId = useMemo(() => {
+    return statuses.find(s => /план/i.test(s.name))?.id || statuses[0]?.id || null;
+  }, [statuses]);
+
   const chartStages = useMemo(() =>
     stages
       .filter((s) => s.id !== "__no_stage__")
@@ -1183,28 +1459,26 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             name: s.decomposition_stage_name,
             startDate: s.decomposition_stage_start || null,
             endDate: s.decomposition_stage_finish || null,
+            description: s.decomposition_stage_description || null,
+            statusId: s.decomposition_stage_status_id || null,
+            responsibles: s.decomposition_stage_responsibles || [],
             decompositions: [],
           });
         });
         itemsRaw.forEach(it => {
           const stageId = it.decomposition_item_stage_id || '__no_stage__';
           if (stageId === '__no_stage__' && !stageMap.has('__no_stage__')) {
-            stageMap.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
+            stageMap.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, description: null, statusId: null, responsibles: [], decompositions: [] });
           }
           const stage = stageMap.get(stageId);
           if (!stage) return;
-          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
-          const statusName = it.section_statuses ? it.section_statuses.name : '';
           const decomp: Decomposition = {
             id: it.decomposition_item_id,
             description: it.decomposition_item_description || '',
             typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
             difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
-            responsible: respName,
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
-            status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -1221,34 +1495,48 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  // Загрузка фактических часов из work_logs
-  useEffect(() => {
-    const loadActuals = async () => {
-      if (stages.length === 0) {
-        setActualByItemId({});
-        return;
+  // Функция загрузки фактических часов из work_logs
+  const loadActualHours = useCallback(async () => {
+    if (stages.length === 0) {
+      setActualByItemId({});
+      return;
+    }
+    const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
+    // Фильтруем только реальные UUID, исключаем временные ID (содержат '-' больше 4 раз)
+    const realItemIds = allItemIds.filter(id => {
+      const dashCount = (id.match(/-/g) || []).length;
+      return dashCount === 4; // UUID имеет ровно 4 дефиса
+    });
+    if (realItemIds.length === 0) {
+      setActualByItemId({});
+      return;
+    }
+    try {
+      const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: realItemIds });
+      if (error) throw error;
+      const hoursById: Record<string, number> = {};
+      for (const row of (data as any[]) || []) {
+        const key = row.decomposition_item_id as string;
+        hoursById[key] = Number(row.actual_hours || 0);
       }
-      const allItemIds = stages.flatMap(s => s.decompositions.map(d => d.id));
-      if (allItemIds.length === 0) {
-        setActualByItemId({});
-        return;
-      }
-      try {
-        const { data, error } = await supabase.rpc('get_work_logs_agg_for_items', { p_item_ids: allItemIds });
-        if (error) throw error;
-        const hoursById: Record<string, number> = {};
-        for (const row of (data as any[]) || []) {
-          const key = row.decomposition_item_id as string;
-          hoursById[key] = Number(row.actual_hours || 0);
-        }
-        setActualByItemId(hoursById);
-      } catch (e) {
-        console.error('Ошибка агрегации work_logs:', e);
-        setActualByItemId({});
-      }
-    };
-    loadActuals();
+      setActualByItemId(hoursById);
+    } catch (e) {
+      console.error('Ошибка агрегации work_logs:', e);
+      setActualByItemId({});
+    }
   }, [stages, supabase]);
+
+  // Автоматическая загрузка при монтировании/изменении stages
+  useEffect(() => {
+    loadActualHours();
+  }, [loadActualHours]);
+
+  // Передаем функцию обновления наружу для вызова из других компонентов
+  useEffect(() => {
+    if (onRefreshReady) {
+      onRefreshReady(loadActualHours);
+    }
+  }, [onRefreshReady, loadActualHours]);
 
   // Загрузка сотрудников для поиска (view_users)
   useEffect(() => {
@@ -1295,11 +1583,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         .insert({
           decomposition_stage_section_id: sectionId,
           decomposition_stage_name: 'Новый этап',
-          decomposition_stage_start: new Date().toISOString().split('T')[0],
-          decomposition_stage_finish: new Date().toISOString().split('T')[0],
+          decomposition_stage_start: null,
+          decomposition_stage_finish: null,
+          decomposition_stage_description: null,
+          decomposition_stage_status_id: defaultStageStatusId,
           decomposition_stage_order: nextOrder,
         })
-        .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish')
+        .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_description, decomposition_stage_status_id')
         .single();
       if (error) throw error;
       const row = data as any;
@@ -1308,6 +1598,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         name: row.decomposition_stage_name,
         startDate: row.decomposition_stage_start || null,
         endDate: row.decomposition_stage_finish || null,
+        description: row.decomposition_stage_description || null,
+        statusId: row.decomposition_stage_status_id || null,
+        responsibles: [],
         decompositions: [],
       };
       setStages(prev => [...prev, newStage]);
@@ -1407,7 +1700,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
           decomposition_item_work_category_id: defCategoryId,
           decomposition_item_planned_hours: 0,
           decomposition_item_order: nextOrder,
-          decomposition_item_planned_due_date: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
+          decomposition_item_planned_due_date: opts?.initialCompletionDate ?? null,
           decomposition_item_responsible: null,
           decomposition_item_status_id: defStatusId,
           decomposition_item_progress: 0,
@@ -1423,11 +1716,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         description: '',
         typeOfWork: defCategoryName,
         difficulty: defDifficultyName,
-        responsible: '',
         plannedHours: 0,
         progress: 0,
-        status: defStatusName,
-        completionDate: opts?.initialCompletionDate ?? new Date().toISOString().split('T')[0],
       };
       setStages((prev) =>
         prev.map((stage) =>
@@ -1477,13 +1767,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (pendingNewDecomposition && pendingNewDecomposition.decompId === decompToDelete.decompId) {
         setPendingNewDecomposition(null);
       }
-      toast({ title: 'Успешно', description: 'Строка декомпозиции удалена' });
+      toast({ title: 'Успешно', description: 'Задача удалена' });
       setDeleteDecompDialogOpen(false);
       setDecompToDelete(null);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка удаления строки:', e);
-      toast({ title: 'Ошибка', description: 'Не удалось удалить строку декомпозиции', variant: 'destructive' });
+      toast({ title: 'Ошибка', description: 'Не удалось удалить задачу', variant: 'destructive' });
     }
   };
 
@@ -1513,6 +1803,8 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (updates.name !== undefined) payload.decomposition_stage_name = updates.name;
       if (updates.startDate !== undefined) payload.decomposition_stage_start = updates.startDate;
       if (updates.endDate !== undefined) payload.decomposition_stage_finish = updates.endDate;
+      if (updates.description !== undefined) payload.decomposition_stage_description = updates.description;
+      if (updates.statusId !== undefined) payload.decomposition_stage_status_id = updates.statusId;
       if (Object.keys(payload).length === 0) return;
       const { error } = await supabase
         .from('decomposition_stages')
@@ -1522,6 +1814,28 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка обновления этапа:', e);
+    }
+  };
+
+  const updateStageResponsibles = async (stageId: string, responsibles: string[]) => {
+    // Оптимистичное обновление
+    setStages(stages.map((s) => (s.id === stageId ? { ...s, responsibles } : s)));
+    if (stageId === '__no_stage__') return;
+    try {
+      const { error } = await supabase
+        .from('decomposition_stages')
+        .update({ decomposition_stage_responsibles: responsibles })
+        .eq('decomposition_stage_id', stageId);
+      if (error) throw error;
+      toast({ title: 'Успешно', description: 'Ответственные обновлены' });
+    } catch (e) {
+      // Откатываем при ошибке
+      const originalStage = stages.find(s => s.id === stageId);
+      if (originalStage) {
+        setStages(stages.map((s) => (s.id === stageId ? originalStage : s)));
+      }
+      console.error('Ошибка обновления ответственных:', e);
+      toast({ title: 'Ошибка', description: 'Не удалось обновить ответственных', variant: 'destructive' });
     }
   };
 
@@ -1541,7 +1855,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       if (updates.description !== undefined) payload.decomposition_item_description = updates.description;
       if (updates.typeOfWork !== undefined) payload.decomposition_item_work_category_id = categoryNameToId.get(updates.typeOfWork) || null;
       if (updates.difficulty !== undefined) payload.decomposition_item_difficulty_id = difficultyNameToId.get(updates.difficulty) || null;
-      if (updates.responsible !== undefined) payload.decomposition_item_responsible = updates.responsible ? (profileNameToId.get(updates.responsible) || null) : null;
       if (updates.plannedHours !== undefined) {
         const hours = Number(updates.plannedHours);
         payload.decomposition_item_planned_hours = isNaN(hours) || hours < 0 ? 0 : hours;
@@ -1550,8 +1863,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         const progress = Number(updates.progress);
         payload.decomposition_item_progress = isNaN(progress) || progress < 0 ? 0 : Math.min(progress, 100);
       }
-      if (updates.status !== undefined) payload.decomposition_item_status_id = statusNameToId.get(updates.status) || null;
-      if (updates.completionDate !== undefined) payload.decomposition_item_planned_due_date = updates.completionDate || null;
       if (Object.keys(payload).length === 0) return;
       const { error } = await supabase
         .from('decomposition_items')
@@ -1625,8 +1936,72 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
+  const handlePasteEvent = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+
+    // Пытаемся получить HTML версию (Excel экспортирует таблицы как HTML)
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+
+    let data: string[][] = [];
+
+    if (html) {
+      // Парсим HTML таблицу
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const rows = doc.querySelectorAll('tr');
+
+        data = Array.from(rows).map(row => {
+          const cells = row.querySelectorAll('td, th');
+          return Array.from(cells).map(cell => cell.textContent?.trim() || '');
+        }).filter(row => row.length > 0);
+
+      } catch (error) {
+        console.error('Ошибка парсинга HTML:', error);
+      }
+    }
+
+    // Fallback на обычный текст если HTML не удалось распарсить
+    if (data.length === 0 && text) {
+      let lines = text.trim().split(/\r?\n/);
+
+      // Если есть метаданные этапа (начинается с "Этап:"), пропускаем их
+      const tasksIndex = lines.findIndex(line => line.trim() === 'Задачи:');
+      if (tasksIndex !== -1) {
+        // Берём только строки после "Задачи:"
+        lines = lines.slice(tasksIndex + 1);
+      }
+
+      data = lines.map(line => {
+        // Разбиваем по TAB или |
+        if (line.includes('\t')) {
+          return line.split('\t').map(cell => cell.trim());
+        } else if (line.includes('|')) {
+          return line.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
+        } else {
+          return [line.trim()];
+        }
+      }).filter(row => row.length > 0);
+
+      // Убираем заголовок таблицы и разделитель
+      data = data.filter(row => {
+        // Пропускаем строку если это заголовок (содержит "Название этапа" или "Описание")
+        const isHeader = row.some(cell =>
+          /название\s+этапа|описание|метка/i.test(cell)
+        );
+        // Пропускаем разделитель (все ячейки состоят только из дефисов)
+        const isSeparator = row.every(cell => /^-+$/.test(cell));
+        return !isHeader && !isSeparator;
+      });
+    }
+
+    setPreviewData(data);
+    setPasteText(text); // Сохраняем текст как fallback
+  };
+
   const handlePaste = async () => {
-    if (!pasteText.trim()) {
+    if (previewData.length === 0) {
       toast({
         title: "Ошибка",
         description: "Пожалуйста, вставьте данные для импорта",
@@ -1642,106 +2017,95 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       const defaultStatusId =
         (statuses.find((s) => /план/i.test(s.name))?.id) ?? statuses[0]?.id ?? null;
 
-      const lines = pasteText.trim().split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-
-      const today = new Date().toISOString().split("T")[0];
       const isSeparatorRow = (parts: string[]) => parts.length > 0 && parts.every((p) => /^-+$/.test(p));
-      const isHeader = (first: string) => /название\s+этапа/i.test(first);
-      const normalizeDate = (val?: string) => {
-        const raw = (val ?? "").trim();
-        if (!raw) return today;
-        const m = raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
-        if (m) {
-          const dd = m[1].padStart(2, "0");
-          const mm = m[2].padStart(2, "0");
-          const yyyy = m[3].length === 2 ? `20${m[3]}` : m[3];
-          return `${yyyy}-${mm}-${dd}`;
-        }
-        const d = new Date(raw);
-        return Number.isNaN(d.getTime()) ? today : d.toISOString().split("T")[0];
-      };
-      const parseProgress = (val?: string) => {
-        const raw = (val ?? "").toString().trim();
-        if (!raw) return 0;
-        const m = raw.match(/(\d{1,3})/);
-        const n = m ? Number.parseInt(m[1], 10) : Number.NaN;
-        if (Number.isNaN(n)) return 0;
-        return Math.max(0, Math.min(100, n));
+      // Проверяем заголовок по первой или второй колонке (parts[0] или parts[1] = "Этап")
+      const isHeader = (parts: string[]) => {
+        if (parts.length === 0) return false;
+        // Проверяем первую колонку (если 6 колонок) или вторую (если 7+ колонок)
+        return /название\s+этапа|этап/i.test(parts[0]) ||
+               (parts.length >= 2 && /название\s+этапа|этап/i.test(parts[1]));
       };
 
-      const stageRows: Array<{ name: string; startDate?: string; endDate?: string }> = [];
       const stageMap = new Map<string, { stage: Partial<Stage>; decompositions: Decomposition[] }>();
 
-      const splitRow = (line: string): string[] => {
-        if (line.includes("|")) {
-          const arr = line.split("|").map((p) => p.trim());
-          if (arr.length && arr[0] === "") arr.shift();
-          if (arr.length && arr[arr.length - 1] === "") arr.pop();
-          return arr;
-        }
-        if (line.includes("\t")) {
-          return line.split("\t").map((p) => p.trim());
-        }
-        return line.split(";").map((p) => p.trim());
-      };
-
-      for (const line of lines) {
-        const parts = splitRow(line);
+      // Используем уже распарсенные данные из previewData
+      for (const parts of previewData) {
 
         if (parts.length === 0) continue;
         if (isSeparatorRow(parts)) continue;
+        if (isHeader(parts)) continue;
 
-        if (isHeader(parts[0])) continue;
+        // Минимум должно быть 6 колонок
+        if (parts.length < 6) continue;
 
-        if (parts.length >= 9) {
-          const [stageName, description, typeOfWork, difficulty, responsible, plannedHours, progressStr, status, completionDate] = parts;
+        const stageName = parts[0]?.trim(); // Этап
+        const description = parts[1]?.trim(); // Задача
 
-          if (!stageMap.has(stageName)) {
-            stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
+        if (!stageName || !description) continue;
+
+        // Функция парсинга часов (обрабатывает пустые строки и прочерки)
+        const parseHours = (val: string | undefined): number => {
+          if (!val) return 0;
+          const trimmed = val.trim();
+          // Пустая строка, прочерк (—), минус (-) = 0
+          if (trimmed === '' || trimmed === '—' || trimmed === '-' || trimmed === '–') return 0;
+          const num = Number(trimmed);
+          return isNaN(num) ? 0 : num;
+        };
+
+        // Часы из конкретных колонок
+        const hoursK = parseHours(parts[2]);   // К (колонка 2)
+        const hoursVS = parseHours(parts[3]);  // ВС (колонка 3)
+        const hoursGS = parseHours(parts[4]);  // ГС (колонка 4)
+
+        const totalHours = hoursK + hoursVS + hoursGS;
+
+        // Определяем сложность по приоритету: ГС > ВС > К
+        let difficulty = '';
+        if (hoursGS > 0) difficulty = "ГС";
+        else if (hoursVS > 0) difficulty = "ВС";
+        else if (hoursK > 0) difficulty = "К";
+
+        // Метка из колонки 5
+        let label = '';
+        const labelCol = parts[5]?.trim();
+        if (labelCol && labelCol !== '' && labelCol !== '—' && labelCol !== '-' && labelCol !== '–') {
+          // Извлекаем первую метку (если несколько через запятую, например "MDL300, MDL400")
+          const labelRegex = /\b([A-Z]{3,}[0-9]*)\b/g;
+          const labelMatches = labelCol.match(labelRegex);
+          if (labelMatches && labelMatches.length > 0) {
+            label = labelMatches[0]; // Берём ПЕРВУЮ метку
           }
-
-          const decomposition: Decomposition = {
-            id: `${Date.now()}-${Math.random()}`,
-            description,
-            typeOfWork,
-            difficulty,
-            responsible,
-            plannedHours: Number.parseInt(plannedHours ?? "") || 0,
-            progress: parseProgress(progressStr),
-            status,
-            completionDate: normalizeDate(completionDate),
-          };
-
-          stageMap.get(stageName)!.decompositions.push(decomposition);
-          continue;
-        } else if (parts.length >= 8) {
-          const [stageName, description, typeOfWork, difficulty, responsible, plannedHours, status, completionDate] = parts;
-
-          if (!stageMap.has(stageName)) {
-            stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
-          }
-
-          const decomposition: Decomposition = {
-            id: `${Date.now()}-${Math.random()}`,
-            description,
-            typeOfWork,
-            difficulty,
-            responsible,
-            plannedHours: Number.parseInt(plannedHours ?? "") || 0,
-            progress: 0,
-            status,
-            completionDate: normalizeDate(completionDate),
-          };
-
-          stageMap.get(stageName)!.decompositions.push(decomposition);
-          continue;
         }
 
-        if (parts.length >= 3) {
-          const [stageName, startDate, endDate] = parts;
-          stageRows.push({ name: stageName, startDate: normalizeDate(startDate), endDate: normalizeDate(endDate) });
-          continue;
+        // Маппим метку на категорию работ
+        let typeOfWork = '';
+        if (label) {
+          const categoryName = LABEL_TO_CATEGORY_MAP[label];
+          if (categoryName) {
+            typeOfWork = categoryName;
+          }
         }
+
+        // Если не нашли категорию из метки, берём первую доступную
+        if (!typeOfWork && categories.length > 0) {
+          typeOfWork = categories[0].work_category_name;
+        }
+
+        if (!stageMap.has(stageName)) {
+          stageMap.set(stageName, { stage: { name: stageName }, decompositions: [] });
+        }
+
+        const decomposition: Decomposition = {
+          id: `${Date.now()}-${Math.random()}`,
+          description,
+          typeOfWork,
+          difficulty,
+          plannedHours: totalHours,
+          progress: 0,
+        };
+
+        stageMap.get(stageName)!.decompositions.push(decomposition);
       }
 
       // 1) Построим карту существующих этапов по названию (только реальные, без "__no_stage__")
@@ -1752,17 +2116,15 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
       // Соберём список имён этапов из вставки
       const stageNamesFromPaste = new Set<string>();
-      stageRows.forEach((r) => stageNamesFromPaste.add(r.name));
       stageMap.forEach((_, name) => stageNamesFromPaste.add(name));
 
       // 2) Создадим недостающие этапы
-      const toCreate: Array<{ name: string; start: string; finish: string; order: number }> = [];
+      const toCreate: Array<{ name: string; start: string | null; finish: string | null; order: number }> = [];
       const realStagesCount = stages.filter((s) => s.id !== "__no_stage__").length;
       let orderBase = realStagesCount;
       for (const name of stageNamesFromPaste) {
         if (!existingByName.has(name)) {
-          const row = stageRows.find((r) => r.name === name);
-          toCreate.push({ name, start: row?.startDate ?? today, finish: row?.endDate ?? today, order: ++orderBase });
+          toCreate.push({ name, start: null, finish: null, order: ++orderBase });
         }
       }
 
@@ -1775,6 +2137,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             decomposition_stage_start: x.start,
             decomposition_stage_finish: x.finish,
             decomposition_stage_order: x.order,
+            decomposition_stage_status_id: defaultStatusId,
           })))
           .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_start, decomposition_stage_finish');
         if (createErr) throw createErr;
@@ -1788,28 +2151,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         });
       }
 
-      // 3) Обновим даты этапов, если пришли изменения
-      const updates = stageRows
-        .map((r) => ({
-          id: existingByName.get(r.name)?.id,
-          start: r.startDate,
-          end: r.endDate,
-        }))
-        .filter((u) => Boolean(u.id)) as Array<{ id: string; start?: string; end?: string }>;
-
-      await Promise.all(
-        updates.map((u) =>
-          supabase
-            .from('decomposition_stages')
-            .update({
-              ...(u.start ? { decomposition_stage_start: u.start } : {}),
-              ...(u.end ? { decomposition_stage_finish: u.end } : {}),
-            })
-            .eq('decomposition_stage_id', u.id!)
-        )
-      );
-
-      // 4) Подготовим и вставим декомпозиции
+      // 3) Подготовим и вставим декомпозиции
       type PendingItem = { stageId: string | null; payload: any };
       const itemsToInsert: PendingItem[] = [];
       const perStageOrder = new Map<string, number>();
@@ -1825,8 +2167,6 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         for (const d of data.decompositions) {
           const categoryId = (d.typeOfWork ? (categoryNameToId.get(d.typeOfWork) || null) : null) ?? defaultCategoryId;
           const difficultyId = (d.difficulty ? (difficultyNameToId.get(d.difficulty) || null) : null) ?? defaultDifficultyId;
-          const statusId = (d.status ? (statusNameToId.get(d.status) || null) : null) ?? defaultStatusId;
-          const responsibleId = d.responsible ? (profileNameToId.get(d.responsible) || null) : null;
 
           const payload: any = {
             decomposition_item_section_id: sectionId,
@@ -1834,9 +2174,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             decomposition_item_work_category_id: categoryId,
             decomposition_item_planned_hours: Number(d.plannedHours) || 0,
             decomposition_item_order: order++,
-            decomposition_item_planned_due_date: d.completionDate || today,
-            decomposition_item_responsible: responsibleId,
-            decomposition_item_status_id: statusId,
+            decomposition_item_planned_due_date: null,
+            decomposition_item_responsible: null,
+            decomposition_item_status_id: defaultStatusId,
             decomposition_item_progress: Number(d.progress) || 0,
             decomposition_item_stage_id: targetStageId, // null означает "без этапа"
             decomposition_item_difficulty_id: difficultyId,
@@ -1875,28 +2215,26 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             name: s.decomposition_stage_name,
             startDate: s.decomposition_stage_start || null,
             endDate: s.decomposition_stage_finish || null,
+            description: s.decomposition_stage_description || null,
+            statusId: s.decomposition_stage_status_id || null,
+            responsibles: s.decomposition_stage_responsibles || [],
             decompositions: [],
           });
         });
         itemsRaw.forEach(it => {
           const stageId = it.decomposition_item_stage_id || '__no_stage__';
           if (stageId === '__no_stage__' && !stageMapReload.has('__no_stage__')) {
-            stageMapReload.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, decompositions: [] });
+            stageMapReload.set('__no_stage__', { id: '__no_stage__', name: 'Без этапа', startDate: null, endDate: null, description: null, statusId: null, responsibles: [], decompositions: [] });
           }
           const stage = stageMapReload.get(stageId);
           if (!stage) return;
-          const respName = it.profiles ? ((it.profiles.first_name + ' ' + it.profiles.last_name).trim() || it.profiles.email) : '';
-          const statusName = it.section_statuses ? it.section_statuses.name : '';
           const decomp: Decomposition = {
             id: it.decomposition_item_id,
             description: it.decomposition_item_description || '',
             typeOfWork: (cats.find((c: any) => c.work_category_id === it.decomposition_item_work_category_id)?.work_category_name) || '',
             difficulty: (diffs.find((d: any) => d.difficulty_id === it.decomposition_item_difficulty_id)?.difficulty_abbr) || '',
-            responsible: respName,
             plannedHours: Number(it.decomposition_item_planned_hours || 0),
             progress: Number(it.decomposition_item_progress || 0),
-            status: statusName || '',
-            completionDate: it.decomposition_item_planned_due_date || null,
           };
           stage.decompositions.push(decomp);
         });
@@ -1906,13 +2244,14 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       }
 
       setPasteText("");
+      setPreviewData([]);
       setShowPasteDialog(false);
 
       const importedDecompsCount = Array.from(stageMap.values()).reduce((acc, v) => acc + v.decompositions.length, 0);
       const createdStagesCount = toCreate.length;
       const descParts = [] as string[];
-      if (importedDecompsCount > 0) descParts.push(`декомпозиций: ${importedDecompsCount}`);
-      if (createdStagesCount > 0 || stageRows.length > 0) descParts.push(`этапов создано/обновлено: ${createdStagesCount}`);
+      if (importedDecompsCount > 0) descParts.push(`задач: ${importedDecompsCount}`);
+      if (createdStagesCount > 0) descParts.push(`этапов создано: ${createdStagesCount}`);
 
       toast({
         title: "Успешно",
@@ -1930,12 +2269,14 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   const handleCopy = async () => {
     try {
       let decompositionTable =
-        "| Название этапа | Описание декомпозиции (название) | Тип работ | Сложность | Отвественный | Плановые часы | Статус | Дата (декомпозиции) |\n";
-      decompositionTable += "|---|---|---|---|---|---|---|---|\n";
+        "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
+      decompositionTable += "|---|---|---|---|---|---|\n";
 
       stages.forEach((stage) => {
         stage.decompositions.forEach((decomp) => {
-          decompositionTable += `| ${stage.name} | ${decomp.description} | ${decomp.typeOfWork} | ${decomp.difficulty} | ${decomp.responsible} | ${decomp.plannedHours} | ${decomp.status} | ${decomp.completionDate || ''} |\n`;
+          const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+          const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+          decompositionTable += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
         });
       });
 
@@ -1966,11 +2307,14 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
   // Handlers для работы с шаблонами
   const handleApplyTemplate = async (templateId: string) => {
     try {
-      // Подготовить статусы для передачи в applyTemplate
-      const statusesForTemplate = statuses.map(s => ({ id: s.id, name: s.name }));
-      const newStages = await applyTemplate(templateId, sectionId, statusesForTemplate);
+      const newStages = await applyTemplate(templateId, sectionId, defaultStageStatusId);
+      // Преобразовать newStages, добавив поле responsibles для совместимости с локальным типом Stage
+      const newStagesWithResponsibles = newStages.map(stage => ({
+        ...stage,
+        responsibles: [] as string[]
+      }));
       // Добавить новые этапы в state БЕЗ перезагрузки страницы
-      setStages([...stages, ...newStages]);
+      setStages([...stages, ...newStagesWithResponsibles]);
       toast({
         title: "Успешно",
         description: "Шаблон успешно применен",
@@ -2102,7 +2446,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   const confirmBulkDeleteDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи для удаления", variant: "destructive" });
       return;
     }
 
@@ -2126,11 +2470,11 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       );
       setSelectedDecompositions(new Set());
 
-      toast({ title: "Успешно", description: `Удалено декомпозиций: ${count}` });
+      toast({ title: "Успешно", description: `Удалено задач: ${count}` });
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Ошибка пакетного удаления декомпозиций:', e);
-      toast({ title: "Ошибка", description: "Не удалось удалить декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не удалось удалить задачи", variant: "destructive" });
     }
   };
 
@@ -2149,7 +2493,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
   const bulkDeleteDecompositions = () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции для удаления", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи для удаления", variant: "destructive" });
       return;
     }
     setBulkDeleteDecompsDialogOpen(true);
@@ -2173,26 +2517,10 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const toggleSelectAllInStage = (stageId: string) => {
-    const stage = stages.find((s) => s.id === stageId);
-    if (!stage) return;
-    const ids = stage.decompositions.map((d) => d.id);
-    const allSelected = ids.length > 0 && ids.every((id) => selectedDecompositions.has(id));
-    setSelectedDecompositions((prev) => {
-      const next = new Set(prev);
-      if (allSelected) {
-        ids.forEach((id) => next.delete(id));
-      } else {
-        ids.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
-
   const moveSelectedDecompositionsToStage = (targetStageId: string) => {
     if (!targetStageId) return;
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
       return;
     }
     setStages((prev) => {
@@ -2211,29 +2539,104 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       return next;
     });
     setSelectedDecompositions(new Set());
-    toast({ title: "Успешно", description: "Декомпозиции перемещены" });
+    toast({ title: "Успешно", description: "Задачи перемещены" });
   };
 
-  const duplicateSelectedDecompositions = () => {
+  const duplicateSelectedDecompositions = async () => {
     if (selectedDecompositions.size === 0) {
-      toast({ title: "Ошибка", description: "Не выбраны декомпозиции", variant: "destructive" });
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
       return;
     }
-    setStages((prev) =>
-      prev.map((stage) => {
-        const toDuplicate = stage.decompositions.filter((d) => selectedDecompositions.has(d.id));
-        if (toDuplicate.length === 0) return stage;
-        const clones = toDuplicate.map((d) => ({ ...d, id: `${stage.id}-${Date.now()}-${Math.random()}` }));
-        return { ...stage, decompositions: [...stage.decompositions, ...clones] };
-      })
-    );
-    setSelectedDecompositions(new Set());
-    toast({ title: "Успешно", description: "Декомпозиции продублированы" });
+
+    try {
+      // Собираем все декомпозиции для дублирования
+      const itemsToDuplicate: Array<{ stage: Stage; decomp: Decomposition }> = [];
+      stages.forEach((stage) => {
+        stage.decompositions.forEach((decomp) => {
+          if (selectedDecompositions.has(decomp.id)) {
+            itemsToDuplicate.push({ stage, decomp });
+          }
+        });
+      });
+
+      // Вставляем в БД
+      const itemsToInsert = itemsToDuplicate.map(({ stage, decomp }) => ({
+        decomposition_item_section_id: sectionId,
+        decomposition_item_stage_id: stage.id === '__no_stage__' ? null : stage.id,
+        decomposition_item_description: decomp.description,
+        decomposition_item_work_category_id: categoryNameToId.get(decomp.typeOfWork) || null,
+        decomposition_item_difficulty_id: difficultyNameToId.get(decomp.difficulty) || null,
+        decomposition_item_planned_hours: decomp.plannedHours,
+        decomposition_item_progress: decomp.progress,
+        decomposition_item_order: 999 // Будет в конце
+      }));
+
+      const { data: insertedItems, error } = await supabase
+        .from('decomposition_items')
+        .insert(itemsToInsert)
+        .select('*');
+
+      if (error) throw error;
+
+      // Обновляем локальное состояние с реальными ID из БД
+      setStages((prev) =>
+        prev.map((stage) => {
+          const newDecomps = (insertedItems || [])
+            .filter((item: any) =>
+              (item.decomposition_item_stage_id === stage.id) ||
+              (item.decomposition_item_stage_id === null && stage.id === '__no_stage__')
+            )
+            .map((item: any) => ({
+              id: item.decomposition_item_id,
+              description: item.decomposition_item_description || '',
+              typeOfWork: categories.find(c => c.work_category_id === item.decomposition_item_work_category_id)?.work_category_name || '',
+              difficulty: difficulties.find(d => d.difficulty_id === item.decomposition_item_difficulty_id)?.difficulty_abbr || '',
+              plannedHours: Number(item.decomposition_item_planned_hours || 0),
+              progress: Number(item.decomposition_item_progress || 0),
+            }));
+
+          if (newDecomps.length === 0) return stage;
+          return { ...stage, decompositions: [...stage.decompositions, ...newDecomps] };
+        })
+      );
+
+      setSelectedDecompositions(new Set());
+      toast({ title: "Успешно", description: "Задачи продублированы и сохранены" });
+    } catch (e) {
+      console.error('Ошибка дублирования декомпозиций:', e);
+      toast({ title: "Ошибка", description: "Не удалось продублировать задачи", variant: "destructive" });
+    }
   };
 
   const eligibleTargetStages = stages.filter((stage) =>
     stage.decompositions.every((d) => !selectedDecompositions.has(d.id))
   );
+
+  const copySelectedDecompositionsToClipboard = async () => {
+    if (selectedDecompositions.size === 0) {
+      toast({ title: "Ошибка", description: "Не выбраны задачи", variant: "destructive" });
+      return;
+    }
+    try {
+      let text = "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
+      text += "|---|---|---|---|---|---|\n";
+
+      stages.forEach((stage) => {
+        stage.decompositions.forEach((decomp) => {
+          if (selectedDecompositions.has(decomp.id)) {
+            const [hoursK, hoursVS, hoursGS] = distributeHours(decomp.plannedHours, decomp.difficulty);
+            const label = CATEGORY_TO_LABEL_MAP[decomp.typeOfWork] || '';
+            text += `| ${stage.name} | ${decomp.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
+          }
+        });
+      });
+
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Успешно", description: "Задачи скопированы в буфер обмена" });
+    } catch (e) {
+      toast({ title: "Ошибка", description: "Не удалось скопировать", variant: "destructive" });
+    }
+  };
 
   const copySelectedStagesToClipboard = async () => {
     if (selectedStages.size === 0) {
@@ -2244,12 +2647,15 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
       let text = "";
       stages.forEach((stage) => {
         if (!selectedStages.has(stage.id)) return;
-        text += `Этап: ${stage.name}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
-        text += "Декомпозиции:\n";
-        text += "| Описание | Тип работ | Сложность | Ответственный | Часы | Прогресс | Статус | Дата |\n";
-        text += "|---|---|---|---|---|---|---|---|\n";
+        const statusName = stage.statusId ? statuses.find(s => s.id === stage.statusId)?.name || 'Нет' : 'Нет';
+        text += `Этап: ${stage.name}\nОписание: ${stage.description || 'Нет описания'}\nСтатус: ${statusName}\nДата начала: ${stage.startDate}\nДата завершения: ${stage.endDate}\n\n`;
+        text += "Задачи:\n";
+        text += "| Название этапа | Описание | К | ВС | ГС | Метка |\n";
+        text += "|---|---|---|---|---|---|\n";
         stage.decompositions.forEach((d) => {
-          text += `| ${d.description} | ${d.typeOfWork} | ${d.difficulty} | ${d.responsible} | ${d.plannedHours} | ${d.progress}% | ${d.status} | ${d.completionDate || ''} |\n`;
+          const [hoursK, hoursVS, hoursGS] = distributeHours(d.plannedHours, d.difficulty);
+          const label = CATEGORY_TO_LABEL_MAP[d.typeOfWork] || '';
+          text += `| ${stage.name} | ${d.description} | ${hoursK} | ${hoursVS} | ${hoursGS} | ${label} |\n`;
         });
         text += "\n\n";
       });
@@ -2260,32 +2666,102 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
     }
   };
 
-  const duplicateSelectedStages = () => {
+  const duplicateSelectedStages = async () => {
     if (selectedStages.size === 0) {
       toast({ title: "Ошибка", description: "Не выбраны этапы", variant: "destructive" });
       return;
     }
-    setStages((prev) => {
-      const clones: Stage[] = [];
-      prev.forEach((stage) => {
-        if (!selectedStages.has(stage.id)) return;
-        const newStageId = `${Date.now()}-${Math.random()}`;
-        const newStage: Stage = {
+
+    try {
+      const stagesToDuplicate = stages.filter((s) => selectedStages.has(s.id));
+      const newStages: Stage[] = [];
+
+      // Дублируем каждый этап по очереди
+      for (const stage of stagesToDuplicate) {
+        // Находим максимальный order
+        const maxOrder = stages.reduce((max, s) => Math.max(max, s.id === '__no_stage__' ? 0 : 999), 0);
+
+        // Вставляем этап в БД
+        const { data: insertedStage, error: stageError } = await supabase
+          .from('decomposition_stages')
+          .insert({
+            decomposition_stage_section_id: sectionId,
+            decomposition_stage_name: `${stage.name} (Копия)`,
+            decomposition_stage_start: stage.startDate,
+            decomposition_stage_finish: stage.endDate,
+            decomposition_stage_description: stage.description,
+            decomposition_stage_status_id: stage.statusId,
+            decomposition_stage_order: maxOrder + 1,
+          })
+          .select('*')
+          .single();
+
+        if (stageError) throw stageError;
+
+        const newStageId = (insertedStage as any).decomposition_stage_id;
+
+        // Копируем ответственных
+        if (stage.responsibles.length > 0) {
+          const responsibleInserts = stage.responsibles.map(userId => ({
+            decomposition_stage_id: newStageId,
+            user_id: userId
+          }));
+          await supabase.from('decomposition_stage_responsibles').insert(responsibleInserts);
+        }
+
+        // Вставляем декомпозиции
+        const newDecompositions: Decomposition[] = [];
+        if (stage.decompositions.length > 0) {
+          const decompsToInsert = stage.decompositions.map((d) => ({
+            decomposition_item_section_id: sectionId,
+            decomposition_item_stage_id: newStageId,
+            decomposition_item_description: d.description,
+            decomposition_item_work_category_id: categoryNameToId.get(d.typeOfWork) || null,
+            decomposition_item_difficulty_id: difficultyNameToId.get(d.difficulty) || null,
+            decomposition_item_planned_hours: d.plannedHours,
+            decomposition_item_progress: d.progress,
+            decomposition_item_order: 999
+          }));
+
+          const { data: insertedDecomps, error: decompsError } = await supabase
+            .from('decomposition_items')
+            .insert(decompsToInsert)
+            .select('*');
+
+          if (decompsError) throw decompsError;
+
+          (insertedDecomps || []).forEach((item: any) => {
+            newDecompositions.push({
+              id: item.decomposition_item_id,
+              description: item.decomposition_item_description || '',
+              typeOfWork: categories.find(c => c.work_category_id === item.decomposition_item_work_category_id)?.work_category_name || '',
+              difficulty: difficulties.find(d => d.difficulty_id === item.decomposition_item_difficulty_id)?.difficulty_abbr || '',
+              plannedHours: Number(item.decomposition_item_planned_hours || 0),
+              progress: Number(item.decomposition_item_progress || 0),
+            });
+          });
+        }
+
+        newStages.push({
           id: newStageId,
           name: `${stage.name} (Копия)`,
           startDate: stage.startDate,
           endDate: stage.endDate,
-          decompositions: stage.decompositions.map((d) => ({
-            ...d,
-            id: `${newStageId}-${Date.now()}-${Math.random()}`,
-          })),
-        };
-        clones.push(newStage);
-      });
-      return [...prev, ...clones];
-    });
-    setSelectedStages(new Set());
-    toast({ title: "Успешно", description: "Этапы продублированы" });
+          description: stage.description,
+          statusId: stage.statusId,
+          responsibles: stage.responsibles,
+          decompositions: newDecompositions,
+        });
+      }
+
+      // Обновляем локальное состояние
+      setStages((prev) => [...prev, ...newStages]);
+      setSelectedStages(new Set());
+      toast({ title: "Успешно", description: "Этапы продублированы и сохранены" });
+    } catch (e) {
+      console.error('Ошибка дублирования этапов:', e);
+      toast({ title: "Ошибка", description: "Не удалось продублировать этапы", variant: "destructive" });
+    }
   };
 
   const toggleStageCollapsed = (stageId: string) => {
@@ -2382,7 +2858,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <Card
-            className={`pointer-events-auto p-3 shadow-lg border-border/60 transition-all duration-200 ${
+            className={`pointer-events-auto p-3 shadow-lg border-2 border-border/60 transition-all duration-200 bg-secondary max-w-4xl ${
               selectedDecompositions.size > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
             }`}
             aria-hidden={!(selectedDecompositions.size > 0)}
@@ -2390,21 +2866,22 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <div className="flex items-center gap-4">
               {selectedDecompositions.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Декомпозиции:</span>
+                  <span className="text-sm text-muted-foreground dark:text-white">Задачи:</span>
                   <span className="text-sm font-medium">{selectedDecompositions.size}</span>
-                  <Button variant="outline" size="sm" onClick={selectAllDecompositions} className="h-8 text-xs">
-                    {selectedDecompositions.size === stages.flatMap((s) => s.decompositions).length ? "Снять выбор" : "Выбрать все"}
+                  <Button variant="secondary" size="sm" onClick={selectAllDecompositions} className="h-8 text-xs border border-border dark:border-slate-600">
+                    {selectedDecompositions.size === stages.flatMap((s) => s.decompositions).length ? "Снять выбор" : "Выбрать все задачи"}
                   </Button>
                   <div className="flex items-center gap-2">
                     <Button
+                      variant="secondary"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs border border-border dark:border-slate-600"
                       disabled={selectedDecompositions.size === 0}
                       onClick={() => setShowMoveDialog(true)}
                     >
                       Переместить
                     </Button>
-                    <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={copySelectedStagesToClipboard}>
+                    <Button variant="secondary" size="sm" className="h-8 text-xs border border-border dark:border-slate-600" onClick={copySelectedDecompositionsToClipboard}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />Копировать
                     </Button>
                     <Button size="sm" className="h-8 text-xs" onClick={duplicateSelectedDecompositions}>
@@ -2422,7 +2899,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
 
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <Card
-            className={`pointer-events-auto p-3 shadow-lg border-border/60 transition-all duration-200 ${
+            className={`pointer-events-auto p-3 shadow-lg border-2 border-border/60 transition-all duration-200 bg-secondary max-w-4xl ${
               selectedStages.size > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
             }`}
             aria-hidden={!(selectedStages.size > 0)}
@@ -2430,13 +2907,13 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <div className="flex items-center gap-4">
               {selectedStages.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Этапы:</span>
+                  <span className="text-sm text-muted-foreground dark:text-white">Этапы:</span>
                   <span className="text-sm font-medium">{selectedStages.size}</span>
-                  <Button variant="outline" size="sm" onClick={selectAllStages} className="h-8 text-xs">
+                  <Button variant="secondary" size="sm" onClick={selectAllStages} className="h-8 text-xs border border-border dark:border-slate-600">
                     {selectedStages.size === stages.length ? "Снять выбор" : "Выбрать все этапы"}
                   </Button>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 text-xs" onClick={copySelectedStagesToClipboard}>
+                    <Button variant="secondary" size="sm" className="h-8 text-xs border border-border dark:border-slate-600" onClick={copySelectedStagesToClipboard}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />Копировать
                     </Button>
                     <Button size="sm" className="h-8 text-xs" onClick={duplicateSelectedStages}>
@@ -2462,12 +2939,12 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
                   selectedStages={selectedStages}
                   selectedDecompositions={selectedDecompositions}
                   toggleStageSelection={toggleStageSelection}
-                  toggleSelectAllInStage={toggleSelectAllInStage}
                   toggleDecompositionSelection={toggleDecompositionSelection}
                   deleteStage={deleteStage}
                   deleteDecomposition={deleteDecomposition}
                   addDecomposition={addDecomposition}
                   updateStage={updateStage}
+                  updateStageResponsibles={updateStageResponsibles}
                   updateDecomposition={updateDecomposition}
                   onDecompositionDragEnd={handleDecompositionDragEnd}
                   focusedDecompositionId={focusedDecompositionId}
@@ -2481,6 +2958,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
                   difficultyOptions={difficultyOptions}
                   responsibleOptions={responsibleOptions}
                   statusOptions={statusOptions}
+                  statuses={statuses}
                   employees={employees}
                   formatProfileLabel={formatProfileLabel}
                   isCollapsed={collapsedStageIds.has(stage.id)}
@@ -2497,26 +2975,115 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
           <DecompositionStagesChart stages={chartStages} />
         </div>
 
-        <Dialog open={showPasteDialog} onOpenChange={setShowPasteDialog}>
-          <DialogContent className="max-w-3xl">
+        <Dialog open={showPasteDialog} onOpenChange={(open) => {
+          setShowPasteDialog(open);
+          if (!open) {
+            setPreviewData([]);
+            setPasteText('');
+          }
+        }}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>Вставить данные</DialogTitle>
+              <DialogTitle>Импорт этапов</DialogTitle>
               <DialogDescription className="text-sm">
-                Вставьте табличные данные в формате: Название этапа | Описание | Тип работ | Сложность | Ответственный |
-                Плановые часы | Прогресс | Статус | Дата
+                Скопируйте данные в правильном формате и нажмите <kbd className="px-1.5 py-0.5 text-xs bg-muted border rounded">Ctrl+V</kbd>
+                <br />
+                <span className="text-xs text-muted-foreground">Формат: Этапы | Задачи | К (часы) | ВС (часы) | ГС (часы) | Метка</span>
               </DialogDescription>
             </DialogHeader>
-            <Textarea
-              value={pasteText}
-              onChange={(e) => setPasteText((e.target as HTMLTextAreaElement).value)}
-              placeholder="Вставьте данные здесь..."
-              className="min-h-[300px] font-sans text-sm border border-border/60"
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPasteDialog(false)}>
+
+            <div
+              className="flex-1 overflow-auto border rounded-md"
+              onPaste={handlePasteEvent}
+              tabIndex={0}
+            >
+              {previewData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  <div className="text-center space-y-2">
+                    <ClipboardPaste className="w-12 h-12 mx-auto opacity-50" />
+                    <div>Нажмите <kbd className="px-2 py-1 bg-muted border rounded">Ctrl+V</kbd> для вставки данных</div>
+                    <div className="text-xs">Данные будут отображены в виде таблицы для предпросмотра</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Найдено: <span className="font-medium text-foreground">{previewData.length} строк</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewData([]);
+                        setPasteText('');
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Очистить
+                    </Button>
+                  </div>
+                  <div className="overflow-auto max-h-[500px] border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium border-r">#</th>
+                          <th className="px-3 py-2 text-left font-medium border-r bg-blue-50 dark:bg-blue-950/20">Этап</th>
+                          <th className="px-3 py-2 text-left font-medium border-r bg-green-50 dark:bg-green-950/20">Задача</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">К</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">ВС</th>
+                          <th className="px-3 py-2 text-center font-medium border-r bg-amber-50 dark:bg-amber-950/20">ГС</th>
+                          <th className="px-3 py-2 text-left font-medium bg-purple-50 dark:bg-purple-950/20">Метка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.map((row, rowIndex) => (
+                          <tr key={rowIndex} className="border-t hover:bg-muted/30">
+                            <td className="px-3 py-2 text-muted-foreground border-r text-xs">{rowIndex + 1}</td>
+                            {row.map((cell, cellIndex) => (
+                              <td
+                                key={cellIndex}
+                                className={`px-3 py-2 border-r last:border-r-0 ${
+                                  cellIndex === 0 ? 'font-medium' : ''
+                                } ${
+                                  cellIndex >= 2 && cellIndex <= 4 ? 'text-center tabular-nums' : ''
+                                }`}
+                              >
+                                {cell || <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                            ))}
+                            {/* Добавляем пустые ячейки если строка короче 6 колонок */}
+                            {Array.from({ length: Math.max(0, 6 - row.length) }).map((_, i) => (
+                              <td key={`empty-${i}`} className="px-3 py-2 border-r last:border-r-0">
+                                <span className="text-muted-foreground/40">—</span>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPasteDialog(false);
+                  setPreviewData([]);
+                  setPasteText('');
+                }}
+              >
                 Отмена
               </Button>
-              <Button onClick={handlePaste}>Импортировать</Button>
+              <Button
+                onClick={handlePaste}
+                disabled={previewData.length === 0}
+              >
+                Импортировать ({previewData.length} строк)
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -2526,7 +3093,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <DialogHeader>
               <DialogTitle>Переместить в этап</DialogTitle>
               <DialogDescription className="text-sm">
-                Выберите этап, в который перенести выбранные декомпозиции
+                Выберите этап, в который перенести выбранные задачи
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto">
@@ -2576,7 +3143,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить этап?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить этот этап? Все декомпозиции в этом этапе также будут удалены. Это действие нельзя отменить.
+                Вы уверены, что хотите удалить этот этап? Все задачи в этом этапе также будут удалены. Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2597,9 +3164,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         <AlertDialog open={deleteDecompDialogOpen} onOpenChange={setDeleteDecompDialogOpen}>
           <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
             <AlertDialogHeader>
-              <AlertDialogTitle>Удалить строку декомпозиции?</AlertDialogTitle>
+              <AlertDialogTitle>Удалить задачу?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить эту строку декомпозиции? Это действие нельзя отменить.
+                Вы уверены, что хотите удалить эту задачу? Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2622,7 +3189,7 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
             <AlertDialogHeader>
               <AlertDialogTitle>Удалить выбранные этапы?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedStages.size} {selectedStages.size === 1 ? 'этап' : 'этапов'}? Все декомпозиции в этих этапах также будут удалены. Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedStages.size} {pluralizeStages(selectedStages.size)}? Все задачи в этих этапах также будут удалены. Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -2643,9 +3210,9 @@ export default function StagesManagement({ sectionId, onOpenLog }: StagesManagem
         <AlertDialog open={bulkDeleteDecompsDialogOpen} onOpenChange={setBulkDeleteDecompsDialogOpen}>
           <AlertDialogContent className="dark:!bg-slate-800 dark:!border-slate-600">
             <AlertDialogHeader>
-              <AlertDialogTitle>Удалить выбранные декомпозиции?</AlertDialogTitle>
+              <AlertDialogTitle>Удалить выбранные задачи?</AlertDialogTitle>
               <AlertDialogDescription>
-                Вы уверены, что хотите удалить {selectedDecompositions.size} {selectedDecompositions.size === 1 ? 'декомпозицию' : 'декомпозиций'}? Это действие нельзя отменить.
+                Вы уверены, что хотите удалить {selectedDecompositions.size} {pluralizeTasks(selectedDecompositions.size)}? Это действие нельзя отменить.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
