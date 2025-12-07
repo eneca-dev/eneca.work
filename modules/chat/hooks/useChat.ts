@@ -277,16 +277,16 @@ export function useChat() {
       console.log('[sendMessage] Insert success:', data)
 
       // Realtime автоматически заменит временное сообщение на реальное
-      // Сбрасываем состояние загрузки сразу после успешной вставки
-      setIsLoading(false)
+      // isLoading сбросится когда придёт ответ от бота через Realtime
 
-      // Устанавливаем таймаут для isTyping (60 секунд) на случай если бот не ответит
+      // Устанавливаем таймаут для isTyping и isLoading (60 секунд) на случай если бот не ответит
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current)
       }
       typingTimeoutRef.current = setTimeout(() => {
         console.warn('[useChat] Typing timeout - bot did not respond')
         setIsTyping(false)
+        setIsLoading(false)
       }, 60000) // 60 секунд
     } catch (error) {
       console.error('[sendMessage] Error:', error)
