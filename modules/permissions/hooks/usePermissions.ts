@@ -198,10 +198,10 @@ export const useCalendarPermissions = () => {
  */
 export const useAnnouncementsPermissions = () => {
   const { hasPermission } = usePermissions()
-  
+
   // Локальные булевы переменные для избежания повторных вызовов
   const canManage = hasPermission('announcements.manage')
-  
+
   return {
     canView: true,
     canCreate: canManage,
@@ -209,10 +209,23 @@ export const useAnnouncementsPermissions = () => {
     canEditOwn: canManage,
     canDeleteAll: canManage,
     canDeleteOwn: canManage,
-    
+
     // Логические комбинации
     canEditAnnouncements: canManage,
     canDeleteAnnouncements: canManage,
     canManage: canManage
+  }
+}
+
+/**
+ * Хук для работы с разрешениями на теги проектов
+ */
+export const useProjectTagsPermissions = () => {
+  const { hasPermission } = usePermissions()
+
+  return {
+    canAssignTagsAll: hasPermission('projects.tags.assign.all'),
+    canAssignTagsManaged: hasPermission('projects.tags.assign.managed'),
+    canAssignTagsLead: hasPermission('projects.tags.assign.lead'),
   }
 } 

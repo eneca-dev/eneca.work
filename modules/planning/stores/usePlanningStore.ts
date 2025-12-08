@@ -2690,7 +2690,8 @@ export const usePlanningStore = create<PlanningState>()(
 
           // Создаем новый promise и сохраняем его
           loadFreshnessPromise = (async () => {
-            set({ freshnessCache: { ...state.freshnessCache, isLoading: true } })
+            const currentCache = get().freshnessCache
+            set({ freshnessCache: { ...currentCache, isLoading: true } })
 
             try {
               const freshness = await fetchTeamFreshness()
@@ -2730,7 +2731,8 @@ export const usePlanningStore = create<PlanningState>()(
               })
             } catch (error) {
               console.error("❌ Ошибка загрузки freshness:", error)
-              set({ freshnessCache: { ...state.freshnessCache, isLoading: false } })
+              const currentCache = get().freshnessCache
+              set({ freshnessCache: { ...currentCache, isLoading: false } })
             } finally {
               loadFreshnessPromise = null
             }
