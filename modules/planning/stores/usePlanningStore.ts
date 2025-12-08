@@ -784,6 +784,7 @@ export const usePlanningStore = create<PlanningState>()(
                   startDate: new Date(item.loading_start),
                   endDate: new Date(item.loading_finish),
                   rate: item.loading_rate || 1,
+                  comment: item.loading_comment || undefined,
                 })
               }
             })
@@ -1175,6 +1176,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
+              comment: item.loading_comment || undefined,
               createdAt: parseTimestampTz(item.loading_created) || new Date(),
               updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
             }))
@@ -3059,6 +3061,7 @@ export const usePlanningStore = create<PlanningState>()(
                   startDate: new Date(item.loading_start),
                   endDate: new Date(item.loading_finish),
                   rate: item.loading_rate || 1,
+                  comment: item.loading_comment || undefined,
                 })
               }
             })
