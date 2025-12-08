@@ -721,9 +721,9 @@ export async function updateLoading(
     stageId?: string
     comment?: string
   },
-): Promise<{ 
-  success: boolean; 
-  error?: string; 
+): Promise<{
+  success: boolean;
+  error?: string;
   updatedLoading?: {
     id: string
     sectionId: string
@@ -733,6 +733,7 @@ export async function updateLoading(
     startDate: Date
     endDate: Date
     rate: number
+    comment?: string
   }
 }> {
   try {
@@ -784,7 +785,8 @@ export async function updateLoading(
         project_name,
         loading_start,
         loading_finish,
-        loading_rate
+        loading_rate,
+        loading_comment
       `)
       .eq("loading_id", loadingId)
       .single()
@@ -804,6 +806,7 @@ export async function updateLoading(
       startDate: new Date(loadingData.loading_start),
       endDate: new Date(loadingData.loading_finish),
       rate: loadingData.loading_rate || 1,
+      comment: loadingData.loading_comment || undefined,
     }
 
     console.log("Загрузка успешно обновлена с актуальными данными:", updatedLoading)

@@ -1246,6 +1246,7 @@ export const usePlanningStore = create<PlanningState>()(
               endDate: loadingData.endDate.toISOString().split("T")[0],
               rate: loadingData.rate,
               stageId: loadingData.stageId,
+              comment: loadingData.comment || undefined,
             }
 
             // Вызываем API
@@ -1512,6 +1513,7 @@ export const usePlanningStore = create<PlanningState>()(
                 startDate: result.updatedLoading.startDate,
                 endDate: result.updatedLoading.endDate,
                 rate: result.updatedLoading.rate,
+                comment: result.updatedLoading.comment,
               }
             }
 
