@@ -12,6 +12,8 @@ import { useTaskTransferStore } from '@/modules/task-transfer/store'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useProjectsStore } from '../store'
+import { useProjectTagsStore } from '../stores/useProjectTagsStore'
+import { ProjectTagDisplay, ProjectTagManagementModal } from './tags'
 import { Avatar, Tooltip } from './Avatar'
 import { AssignResponsibleModal } from './AssignResponsibleModal'
 import { usePermissionsStore } from '@/modules/permissions/store/usePermissionsStore'
@@ -98,6 +100,10 @@ interface ProjectNode {
     | 'customer approval'
   // Признак избранного проекта (только для узлов типа 'project')
   isFavorite?: boolean
+  // Теги проекта
+  projectTags?: Array<{ tag_id: string; name: string; color: string }>
+  // Ведущий инженер проекта
+  leadEngineerId?: string | null
 }
 
 interface ProjectsTreeProps {
@@ -110,6 +116,7 @@ interface ProjectsTreeProps {
   selectedEmployeeId?: string | null
   selectedStatusIds?: string[]
   selectedProjectStatuses?: string[]
+  selectedTagIds?: string[]
   urlSectionId?: string | null
   urlTab?: 'overview' | 'details' | 'comments'
   externalSearchQuery?: string
@@ -688,6 +695,18 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     </span>
                   )}
                 </div>
+
+                {/* Теги проекта */}
+                <div className="ml-2" onClick={(e) => e.stopPropagation()}>
+                  <ProjectTagDisplay
+                    projectId={node.id}
+                    projectName={node.name}
+                    tags={node.projectTags || []}
+                    managerId={node.managerId}
+                    leadEngineerId={node.leadEngineerId}
+                  />
+                </div>
+
                 {/* Развернуть весь проект */}
                 <button
                   onClick={(e) => { e.stopPropagation(); expandAllFromNode(node) }}
@@ -869,6 +888,7 @@ export function ProjectsTree({
   selectedEmployeeId,
   selectedStatusIds = [],
   selectedProjectStatuses = [],
+  selectedTagIds = [],
   urlSectionId,
   urlTab,
   externalSearchQuery,
@@ -878,6 +898,10 @@ export function ProjectsTree({
   const [treeData, setTreeData] = useState<ProjectNode[]>([])
   const latestTreeRef = useRef<ProjectNode[]>([])
   const [rootParent, enableRootAnimations] = useAutoAnimate()
+
+  // Защита от двойной загрузки дерева при инициализации
+  const lastLoadTimeRef = useRef<number>(0)
+  const LOAD_DEBOUNCE_MS = 300 // Игнорировать повторные загрузки в течение 300ms
   const {
     expandedNodes,
     toggleNode: toggleNodeInStore,
@@ -896,6 +920,7 @@ export function ProjectsTree({
     groupByClient,
     toggleGroupByClient
   } = useProjectsStore()
+  const loadTags = useProjectTagsStore(state => state.loadTags)
   const { theme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -903,6 +928,7 @@ export function ProjectsTree({
   const [searchQuery, setSearchQuery] = useState('')
   // Удалены локальные refs и dropdown для статусов; управление сверху
   const [showStatusManagementModal, setShowStatusManagementModal] = useState(false)
+  const [showTagManagementModal, setShowTagManagementModal] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedSection, setSelectedSection] = useState<ProjectNode | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -948,6 +974,7 @@ export function ProjectsTree({
     const collapseAll = () => collapseAllNodes()
     const onlySections = () => setShowOnlySections((v) => v) // отключено, держим состояние как есть
     const openStatusManagement = () => setShowStatusManagementModal(true)
+    const openTagManagement = () => setShowTagManagementModal(true)
     const toggleOnlyFavorites = () => setShowOnlyFavorites(v => !v)
     const resetOnlyFavorites = () => setShowOnlyFavorites(false)
 
@@ -957,6 +984,7 @@ export function ProjectsTree({
     // обработчик toggleOnlySections оставлен на будущее, но логика отключена
     // window.addEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
     window.addEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+    window.addEventListener('projectsTree:openTagManagement', openTagManagement as EventListener)
     window.addEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
     window.addEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
 
@@ -966,10 +994,16 @@ export function ProjectsTree({
       window.removeEventListener('projectsTree:collapseAll', collapseAll as EventListener)
       // window.removeEventListener('projectsTree:toggleOnlySections', onlySections as EventListener)
       window.removeEventListener('projectsTree:openStatusManagement', openStatusManagement as EventListener)
+      window.removeEventListener('projectsTree:openTagManagement', openTagManagement as EventListener)
       window.removeEventListener('projectsTree:toggleOnlyFavorites', toggleOnlyFavorites as EventListener)
       window.removeEventListener('projectsTree:resetOnlyFavorites', resetOnlyFavorites as EventListener)
     }
   }, [toggleGroupByClient, toggleShowManagers, collapseAllNodes, showOnlySections, groupByClient, expandedNodes])
+
+  // Загрузка тегов при монтировании
+  useEffect(() => {
+    loadTags()
+  }, [loadTags])
 
   // Загрузка данных
   useEffect(() => {
@@ -1038,6 +1072,90 @@ export function ProjectsTree({
       window.removeEventListener('projectsTree:reload', reload as EventListener)
       window.removeEventListener('projectsTree:created', handleCreated as EventListener)
       window.removeEventListener('projectsTree:focusNode', handleFocusNode as EventListener)
+    }
+  }, [])
+
+  // Слушатели событий обновления тегов
+  useEffect(() => {
+    // Оптимистичное обновление тегов проекта (без перезагрузки дерева)
+    const handleProjectTagUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const { projectId, tags } = customEvent.detail || {}
+
+      if (!projectId) {
+        loadTreeData(true)
+        return
+      }
+
+      // Рекурсивная функция для поиска и обновления узла проекта
+      const updateProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            // Нашли проект - обновляем его теги
+            return {
+              ...node,
+              projectTags: tags || []
+            }
+          }
+          if (node.children) {
+            // Рекурсивно обрабатываем детей
+            return {
+              ...node,
+              children: updateProjectTags(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      // Иммутабельное обновление состояния дерева
+      setTreeData(currentTreeData => updateProjectTags(currentTreeData))
+    }
+
+    // Откат изменений при ошибке API
+    const handleProjectTagRevert = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const { projectId, tags } = customEvent.detail || {}
+
+      if (!projectId) return
+
+      const updateProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+        return nodes.map(node => {
+          if (node.type === 'project' && node.id === projectId) {
+            return {
+              ...node,
+              projectTags: tags || []
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: updateProjectTags(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      setTreeData(currentTreeData => updateProjectTags(currentTreeData))
+    }
+
+    // Обработчик изменения определений тегов (переименование, удаление, создание)
+    const handleTagDefinitionChange = () => {
+      // Здесь нужна полная перезагрузка, т.к. изменились сами теги (названия/цвета)
+      loadTreeData(true)
+    }
+
+    window.addEventListener('projectTags:updated', handleProjectTagUpdate)
+    window.addEventListener('projectTags:revert', handleProjectTagRevert)
+    window.addEventListener('projectTags:deleted', handleTagDefinitionChange)
+    window.addEventListener('projectTags:created', handleTagDefinitionChange)
+
+    return () => {
+      window.removeEventListener('projectTags:updated', handleProjectTagUpdate)
+      window.removeEventListener('projectTags:revert', handleProjectTagRevert)
+      window.removeEventListener('projectTags:deleted', handleTagDefinitionChange)
+      window.removeEventListener('projectTags:created', handleTagDefinitionChange)
     }
   }, [])
 
@@ -1437,6 +1555,15 @@ export function ProjectsTree({
   }, [loading, urlSectionId, urlTab, treeData, highlightedSectionId])
 
   const loadTreeData = async (isRefresh = false) => {
+    const now = Date.now()
+
+    // Защита от двойной загрузки при инициализации (не применяется к намеренным обновлениям)
+    if (!isRefresh && now - lastLoadTimeRef.current < LOAD_DEBOUNCE_MS) {
+      return
+    }
+
+    lastLoadTimeRef.current = now
+
     return Sentry.startSpan(
       {
         op: "projects.load_tree_data",
@@ -1732,7 +1859,11 @@ export function ProjectsTree({
           projectStatus: normalizeProjectStatus(row.project_status),
           children: [],
           // Признак избранного приходит из view_project_tree
-          isFavorite: Boolean(row.is_favorite)
+          isFavorite: Boolean(row.is_favorite),
+          // Теги проекта из view_project_tree
+          projectTags: row.project_tags || [],
+          // Ведущий инженер проекта
+          leadEngineerId: row.lead_engineer_id || null
         })
       } else {
         // Если проект уже есть, но пришёл флаг is_favorite=true — обновим
@@ -2103,6 +2234,7 @@ export function ProjectsTree({
       treeNodes: treeData.length,
       statusFilter: selectedStatusIds,
       projectStatusFilter: selectedProjectStatuses,
+      tagFilter: selectedTagIds,
       showOnlySections,
       searchQuery,
     })
@@ -2134,13 +2266,44 @@ export function ProjectsTree({
 
     data = filterByProjectStatus(data)
 
+    // Затем применяем фильтр по тегам проектов (если заданы)
+    const filterByProjectTags = (nodes: ProjectNode[]): ProjectNode[] => {
+      if (!selectedTagIds || selectedTagIds.length === 0) return nodes
+      const filterRecursive = (nodeList: ProjectNode[]): ProjectNode[] => {
+        const filtered: ProjectNode[] = []
+        for (const node of nodeList) {
+          let shouldInclude = false
+          let filteredChildren: ProjectNode[] = []
+          if (node.type === 'project') {
+            // Проверяем есть ли хотя бы один из выбранных тегов у проекта
+            const nodeTags = node.projectTags || []
+            const nodeTagIds = nodeTags.map(t => t.tag_id)
+            shouldInclude = selectedTagIds.some(id => nodeTagIds.includes(id))
+          } else if (node.children && node.children.length > 0) {
+            filteredChildren = filterRecursive(node.children)
+            shouldInclude = filteredChildren.length > 0
+          }
+          if (shouldInclude) {
+            filtered.push({ ...node, children: node.type === 'project' ? node.children : filteredChildren })
+          }
+        }
+        return filtered
+      }
+      return filterRecursive(nodes)
+    }
+
+    data = filterByProjectTags(data)
+
     // Затем применяем фильтр по статусам разделов
     data = filterNodesByStatus(data, selectedStatusIds)
 
     // Видимость проектов-черновиков (draft) при пустом фильтре статусов проектов
     // или если фильтр статусов проектов явно включает 'draft'.
     // Исключения: явный выбор projectId и поиск/onlyFavorites учитываются как раньше.
-    if (!selectedProjectId && (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft'))) {
+    // Также НЕ реинтегрируем черновики, если выбраны теги — они должны фильтроваться по тегам.
+    if (!selectedProjectId &&
+        (!selectedProjectStatuses || selectedProjectStatuses.length === 0 || selectedProjectStatuses.includes('draft')) &&
+        (!selectedTagIds || selectedTagIds.length === 0)) {
       const reintegrateDrafts = (original: ProjectNode[], filtered: ProjectNode[]): ProjectNode[] => {
         const isDraftProject = (n: ProjectNode) => n.type === 'project' && (normalizeProjectStatus(n.projectStatus) === 'draft')
 
@@ -2550,7 +2713,11 @@ export function ProjectsTree({
         onClose={() => setShowStatusManagementModal(false)}
       />
 
-
+      {/* Модальное окно управления тегами */}
+      <ProjectTagManagementModal
+        isOpen={showTagManagementModal}
+        onClose={() => setShowTagManagementModal(false)}
+      />
 
       {/* Модальное окно создания задания для объекта */}
       {showCreateAssignmentModal && selectedObjectForAssignment && (
