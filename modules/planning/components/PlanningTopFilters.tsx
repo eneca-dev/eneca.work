@@ -348,13 +348,11 @@ export default function PlanningTopFilters() {
     groupByProject,
     fetchSections,
     fetchDepartments,
-    loadVacations,
     loadFreshness,
     toggleSectionExpanded,
     toggleDepartmentExpanded,
     isLoadingSections,
     isLoadingDepartments,
-    vacationsCache,
   } = usePlanningStore()
   const expandedSections = usePlanningStore(s => s.expandedSections)
   const expandedProjectGroups = usePlanningStore(s => s.expandedProjectGroups)
@@ -368,7 +366,7 @@ export default function PlanningTopFilters() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Комбинированный флаг загрузки: показывает индикатор при любой загрузке данных
-  const isAnyLoading = isRefreshing || isLoadingSections || isLoadingDepartments || vacationsCache.isLoading
+  const isAnyLoading = isRefreshing || isLoadingSections || isLoadingDepartments
 
   // Гарантируем дефолт: отделы включены, разделы выключены при первом монтировании
   const [initialized, setInitialized] = useState(false)
@@ -860,8 +858,6 @@ export default function PlanningTopFilters() {
             // Обновляем данные с сохранением текущих фильтров
             await fetchSections()
             if (showDepartments) {
-              // Форсируем обновление отпусков (игнорируя кэш)
-              await loadVacations(true)
               await fetchDepartments()
             }
 

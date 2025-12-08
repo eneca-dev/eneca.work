@@ -18,9 +18,6 @@ import { fetchTeamFreshness, confirmTeamActivity as confirmTeamActivityAPI, conf
 // Переменная для хранения текущего Promise запроса саммари проектов
 let fetchProjectSummariesPromise: Promise<void> | null = null
 
-// Переменная для хранения текущего Promise загрузки отпусков
-let loadVacationsPromise: Promise<void> | null = null
-
 // Переменная для хранения текущего Promise загрузки freshness
 let loadFreshnessPromise: Promise<void> | null = null
 
@@ -86,41 +83,6 @@ interface PlanningState {
   // Поиск
   searchQuery: string
   projectSearchQuery: string
-
-  // Кэш отпусков, больничных и отгулов (загружаем ВСЕ без фильтров, фильтруем на клиенте)
-  vacationsCache: {
-    // ВСЕ отпуска (без фильтрации по отделу/команде)
-    data: Record<string, Record<string, number>>  // userId -> { date -> rate }
-    // Метаданные по сотрудникам (для фильтрации на клиенте)
-    metadata: Record<string, {
-      departmentId: string | null
-      teamId: string | null
-    }>
-    // Границы загруженного диапазона (с буфером)
-    cacheStartDate: string | null
-    cacheEndDate: string | null
-    // Метаданные
-    lastLoaded: number | null
-    isLoading: boolean
-  }
-
-  // Кэш больничных
-  sickLeavesCache: {
-    data: Record<string, Record<string, number>>  // userId -> { date -> rate }
-    metadata: Record<string, {
-      departmentId: string | null
-      teamId: string | null
-    }>
-  }
-
-  // Кэш отгулов
-  timeOffsCache: {
-    data: Record<string, Record<string, number>>  // userId -> { date -> rate }
-    metadata: Record<string, {
-      departmentId: string | null
-      teamId: string | null
-    }>
-  }
 
   // Кэш актуальности команд (freshness)
   freshnessCache: {
@@ -202,10 +164,6 @@ interface PlanningState {
   collapseAllProjectGroups: () => void
   filterSectionsByName: (query: string) => void
   filterSectionsByProject: (query: string) => void
-
-  // Методы для работы с отпусками
-  loadVacations: (forceReload?: boolean) => Promise<void>
-  clearVacationsCache: () => void
 
   // Методы для работы с актуальностью команд (freshness)
   loadFreshness: (forceReload?: boolean) => Promise<void>
@@ -306,28 +264,6 @@ export const usePlanningStore = create<PlanningState>()(
         loadingsMap: {},
         searchQuery: "",
         projectSearchQuery: "",
-
-        // Начальное состояние кэша отпусков
-        vacationsCache: {
-          data: {},
-          metadata: {},
-          cacheStartDate: null,
-          cacheEndDate: null,
-          lastLoaded: null,
-          isLoading: false,
-        },
-
-        // Начальное состояние кэша больничных
-        sickLeavesCache: {
-          data: {},
-          metadata: {},
-        },
-
-        // Начальное состояние кэша отгулов
-        timeOffsCache: {
-          data: {},
-          metadata: {},
-        },
 
         // Начальное состояние кэша актуальности команд
         freshnessCache: {
@@ -755,7 +691,6 @@ export const usePlanningStore = create<PlanningState>()(
                   departmentName: item.final_department_name,
                   loadings: [],
                   dailyWorkloads: {},
-                  vacationsDaily: {},
                   hasLoadings: item.has_loadings,
                   loadingsCount: item.loadings_count,
                   employmentRate: item.employment_rate || 1,
@@ -807,59 +742,6 @@ export const usePlanningStore = create<PlanningState>()(
                   }
                 })
               }
-            })
-
-            // Получаем события ИЗ КЭША (фильтруем на клиенте по metadata)
-            const vacationsCache = get().vacationsCache.data
-            const vacationsMetadata = get().vacationsCache.metadata
-            const sickLeavesCache = get().sickLeavesCache.data
-            const timeOffsCache = get().timeOffsCache.data
-
-            let vacationsProcessed = 0
-            let sickLeavesProcessed = 0
-            let timeOffsProcessed = 0
-
-            employeesMap.forEach((employee) => {
-              const userId = employee.id
-
-              // Проверяем, должны ли отображаться события этого сотрудника (фильтрация на клиенте)
-              const employeeMetadata = vacationsMetadata[userId]
-              const shouldIncludeEvents =
-                employeeMetadata &&
-                (!selectedDepartmentId || employeeMetadata.departmentId === selectedDepartmentId) &&
-                (!selectedTeamId || employeeMetadata.teamId === selectedTeamId)
-
-              if (shouldIncludeEvents) {
-                if (vacationsCache[userId]) {
-                  employee.vacationsDaily = vacationsCache[userId]
-                  vacationsProcessed += Object.keys(vacationsCache[userId]).length
-                } else {
-                  employee.vacationsDaily = {}
-                }
-
-                if (sickLeavesCache[userId]) {
-                  employee.sickLeavesDaily = sickLeavesCache[userId]
-                  sickLeavesProcessed += Object.keys(sickLeavesCache[userId]).length
-                } else {
-                  employee.sickLeavesDaily = {}
-                }
-
-                if (timeOffsCache[userId]) {
-                  employee.timeOffsDaily = timeOffsCache[userId]
-                  timeOffsProcessed += Object.keys(timeOffsCache[userId]).length
-                } else {
-                  employee.timeOffsDaily = {}
-                }
-              } else {
-                employee.vacationsDaily = {}
-                employee.sickLeavesDaily = {}
-                employee.timeOffsDaily = {}
-              }
-            })
-            console.log("🏝️ События из кэша:", {
-              отпуска: vacationsProcessed,
-              больничные: sickLeavesProcessed,
-              отгулы: timeOffsProcessed
             })
 
             // Теперь обрабатываем организационную структуру
@@ -1041,7 +923,6 @@ export const usePlanningStore = create<PlanningState>()(
                       hasLoadings: true,
                       loadingsCount: (teamShortageLoadings.get(team.id) || []).length,
                       dailyWorkloads: daily,
-                      vacationsDaily: {},
                       loadings: teamShortageLoadings.get(team.id) || [],
                       isShortage: true,
                       shortageDescription: null,
@@ -2434,235 +2315,6 @@ export const usePlanningStore = create<PlanningState>()(
           set({ sections: sectionsWithLoadings })
         },
 
-        // Загрузка отпусков с буферным кэшированием
-        loadVacations: async (forceReload = false) => {
-          // Если принудительное обновление, сбрасываем существующий promise
-          if (forceReload) {
-            loadVacationsPromise = null
-          }
-
-          // Если запрос уже выполняется, возвращаем существующий Promise
-          if (loadVacationsPromise) {
-            return loadVacationsPromise
-          }
-
-          // Создаём новый Promise и сохраняем его
-          loadVacationsPromise = (async () => {
-            const cache = get().vacationsCache
-
-            // ✅ НЕМЕДЛЕННО устанавливаем флаг
-            set({ vacationsCache: { ...cache, isLoading: true } })
-
-            const { usePlanningViewStore } = await import("../stores/usePlanningViewStore")
-
-            const { startDate, daysToShow } = usePlanningViewStore.getState()
-
-            // Вычисляем ВИДИМЫЙ диапазон (FIX: off-by-one error)
-            const visibleStart = new Date(startDate)
-            const visibleEnd = new Date(startDate)
-            visibleEnd.setDate(visibleEnd.getDate() + daysToShow - 1) // ← исправлено: -1
-
-          // Константы кэширования
-          const CACHE_BUFFER_DAYS = 60        // Буфер с каждой стороны
-          const CACHE_TTL_MS = 10 * 60 * 1000 // 10 минут
-
-          // Проверяем кэш (только по датам, БЕЗ фильтров!)
-          if (!forceReload && cache.cacheStartDate && cache.cacheEndDate) {
-            const cacheStart = new Date(cache.cacheStartDate)
-            const cacheEnd = new Date(cache.cacheEndDate)
-
-            // Проверяем TTL
-            const isExpired = Date.now() - (cache.lastLoaded || 0) > CACHE_TTL_MS
-
-            // Проверяем буфер
-            const hasBuffer = visibleStart >= cacheStart && visibleEnd <= cacheEnd
-
-            // Проверяем запас в буфере (для предзагрузки)
-            const daysUntilCacheStart = Math.floor((visibleStart.getTime() - cacheStart.getTime()) / (1000 * 60 * 60 * 24))
-            const daysUntilCacheEnd = Math.floor((cacheEnd.getTime() - visibleEnd.getTime()) / (1000 * 60 * 60 * 24))
-            const RELOAD_THRESHOLD_DAYS = 30
-
-            if (!isExpired && hasBuffer && daysUntilCacheStart >= RELOAD_THRESHOLD_DAYS && daysUntilCacheEnd >= RELOAD_THRESHOLD_DAYS) {
-              console.log("✅ Используем кэш отпусков", {
-                кэш: `${cache.cacheStartDate} — ${cache.cacheEndDate}`,
-                видимо: `${visibleStart.toISOString().split("T")[0]} — ${visibleEnd.toISOString().split("T")[0]}`,
-                запасСлева: daysUntilCacheStart,
-                запасСправа: daysUntilCacheEnd
-              })
-              // Сбрасываем флаг isLoading перед возвратом
-              set({ vacationsCache: { ...cache, isLoading: false } })
-              return
-            }
-
-            if (isExpired) {
-              console.log("🔄 Кэш отпусков устарел (TTL истёк)")
-            } else if (!hasBuffer) {
-              console.log("🔄 Видимый диапазон вышел за границы кэша")
-            } else {
-              console.log("🔄 Мало запаса в буфере, предзагрузка")
-            }
-          } else {
-            console.log("🔄 Кэш отпусков пуст, первая загрузка")
-          }
-
-          try {
-            // Вычисляем диапазон С БУФЕРОМ
-            const cacheStart = new Date(visibleStart)
-            cacheStart.setDate(cacheStart.getDate() - CACHE_BUFFER_DAYS)
-
-            const cacheEnd = new Date(visibleEnd)
-            cacheEnd.setDate(cacheEnd.getDate() + CACHE_BUFFER_DAYS)
-
-            const cacheStartStr = cacheStart.toISOString().split("T")[0]
-            const cacheEndStr = cacheEnd.toISOString().split("T")[0]
-
-            console.log(`🏝️ Загрузка отпусков, больничных и отгулов (без фильтров): ${cacheStartStr} — ${cacheEndStr}`)
-
-            // Загружаем ВСЕ события из calendar_events (БЕЗ ФИЛЬТРОВ по department/team!)
-            const { data: calendarEvents, error } = await supabase
-              .from("calendar_events")
-              .select(`
-                calendar_event_id,
-                calendar_event_type,
-                calendar_event_created_by,
-                calendar_event_date_start,
-                calendar_event_date_end,
-                profiles:calendar_event_created_by (
-                  department_id,
-                  team_id
-                )
-              `)
-              .eq("calendar_event_is_global", false)
-              .in("calendar_event_type", ["Отпуск одобрен", "Больничный", "Отгул"])
-              .gte("calendar_event_date_start", cacheStartStr)
-              .lte("calendar_event_date_start", cacheEndStr)
-
-            if (error) throw error
-
-            // Вспомогательная функция для раскладывания события по дням
-            const expandEventToDays = (startDate: Date, endDate: Date | null): string[] => {
-              const days: string[] = []
-              const current = new Date(startDate)
-              const end = endDate ? new Date(endDate) : new Date(startDate)
-
-              while (current <= end) {
-                days.push(current.toISOString().split("T")[0])
-                current.setDate(current.getDate() + 1)
-              }
-              return days
-            }
-
-            // Группируем по типу и user_id
-            const vacationsMap: Record<string, Record<string, number>> = {}
-            const sickLeavesMap: Record<string, Record<string, number>> = {}
-            const timeOffsMap: Record<string, Record<string, number>> = {}
-            const metadata: Record<string, { departmentId: string | null; teamId: string | null }> = {}
-
-            calendarEvents?.forEach((event: any) => {
-              const userId = event.calendar_event_created_by
-              const eventType = event.calendar_event_type
-              const profile = Array.isArray(event.profiles) ? event.profiles[0] : event.profiles
-
-              const days = expandEventToDays(
-                new Date(event.calendar_event_date_start),
-                event.calendar_event_date_end ? new Date(event.calendar_event_date_end) : null
-              )
-
-              // Определяем целевую карту в зависимости от типа события
-              let targetMap: Record<string, Record<string, number>>
-
-              if (eventType === "Отпуск одобрен") {
-                targetMap = vacationsMap
-              } else if (eventType === "Больничный") {
-                targetMap = sickLeavesMap
-              } else if (eventType === "Отгул") {
-                targetMap = timeOffsMap
-              } else {
-                return // Пропускаем неизвестные типы
-              }
-
-              // Инициализируем карту для пользователя если нужно
-              if (!targetMap[userId]) {
-                targetMap[userId] = {}
-              }
-
-              // Добавляем все дни события
-              days.forEach(day => {
-                targetMap[userId][day] = 1
-              })
-
-              // Сохраняем метаданные для фильтрации на клиенте (один раз на пользователя)
-              if (!metadata[userId] && profile) {
-                metadata[userId] = {
-                  departmentId: profile.department_id,
-                  teamId: profile.team_id,
-                }
-              }
-            })
-
-            set({
-              vacationsCache: {
-                data: vacationsMap,
-                metadata,
-                cacheStartDate: cacheStartStr,
-                cacheEndDate: cacheEndStr,
-                lastLoaded: Date.now(),
-                isLoading: false,
-              },
-              sickLeavesCache: {
-                data: sickLeavesMap,
-                metadata,
-              },
-              timeOffsCache: {
-                data: timeOffsMap,
-                metadata,
-              },
-            })
-
-            const totalDays = Math.floor((cacheEnd.getTime() - cacheStart.getTime()) / (1000 * 60 * 60 * 24))
-            console.log(`✅ Загружено событий: отпуска (${Object.keys(vacationsMap).length}), больничные (${Object.keys(sickLeavesMap).length}), отгулы (${Object.keys(timeOffsMap).length}) за ${totalDays} дней`)
-          } catch (error) {
-            console.error("❌ Ошибка загрузки отпусков:", error)
-            Sentry.captureException(error, {
-              tags: {
-                module: 'planning',
-                action: 'load_vacations',
-                store: 'usePlanningStore'
-              }
-            })
-            set({ vacationsCache: { ...get().vacationsCache, isLoading: false } })
-          } finally {
-            // Очищаем Promise после завершения
-            loadVacationsPromise = null
-          }
-          })()
-
-          return loadVacationsPromise
-        },
-
-        // Очистка кэша отпусков, больничных и отгулов
-        clearVacationsCache: () => {
-          console.log("🗑️ Очистка кэша событий (отпуска, больничные, отгулы)")
-          set({
-            vacationsCache: {
-              data: {},
-              metadata: {},
-              cacheStartDate: null,
-              cacheEndDate: null,
-              lastLoaded: null,
-              isLoading: false,
-            },
-            sickLeavesCache: {
-              data: {},
-              metadata: {},
-            },
-            timeOffsCache: {
-              data: {},
-              metadata: {},
-            },
-          })
-        },
-
         // Загрузка данных актуальности команд (freshness)
         loadFreshness: async (forceReload = false) => {
           const state = get()
@@ -3080,60 +2732,6 @@ export const usePlanningStore = create<PlanningState>()(
                   }
                 })
               }
-            })
-
-            // Получаем события ИЗ КЭША (фильтруем на клиенте по metadata)
-            const vacationsCache = get().vacationsCache.data
-            const vacationsMetadata = get().vacationsCache.metadata
-            const sickLeavesCache = get().sickLeavesCache.data
-            const timeOffsCache = get().timeOffsCache.data
-
-            let vacationsProcessed = 0
-            let sickLeavesProcessed = 0
-            let timeOffsProcessed = 0
-
-            employeesMap.forEach((employee) => {
-              const userId = employee.id
-
-              // Проверяем, должны ли отображаться события этого сотрудника (фильтрация на клиенте)
-              const employeeMetadata = vacationsMetadata[userId]
-              const shouldIncludeEvents =
-                employeeMetadata &&
-                (!selectedDepartmentId || employeeMetadata.departmentId === selectedDepartmentId) &&
-                (!selectedTeamId || employeeMetadata.teamId === selectedTeamId) &&
-                (!selectedEmployeeId || userId === selectedEmployeeId)
-
-              if (shouldIncludeEvents) {
-                if (vacationsCache[userId]) {
-                  employee.vacationsDaily = vacationsCache[userId]
-                  vacationsProcessed += Object.keys(vacationsCache[userId]).length
-                } else {
-                  employee.vacationsDaily = {}
-                }
-
-                if (sickLeavesCache[userId]) {
-                  employee.sickLeavesDaily = sickLeavesCache[userId]
-                  sickLeavesProcessed += Object.keys(sickLeavesCache[userId]).length
-                } else {
-                  employee.sickLeavesDaily = {}
-                }
-
-                if (timeOffsCache[userId]) {
-                  employee.timeOffsDaily = timeOffsCache[userId]
-                  timeOffsProcessed += Object.keys(timeOffsCache[userId]).length
-                } else {
-                  employee.timeOffsDaily = {}
-                }
-              } else {
-                employee.vacationsDaily = {}
-                employee.sickLeavesDaily = {}
-                employee.timeOffsDaily = {}
-              }
-            })
-            console.log("🏝️ События из кэша (дни):", {
-              отпуска: vacationsProcessed,
-              больничные: sickLeavesProcessed,
-              отгулы: timeOffsProcessed
             })
 
             // Теперь обрабатываем организационную структуру
