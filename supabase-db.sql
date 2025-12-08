@@ -131,6 +131,30 @@ CREATE TABLE public.countries (
   name text NOT NULL UNIQUE,
   CONSTRAINT countries_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.dec_template_stages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  template_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  stage_order integer NOT NULL DEFAULT 0,
+  items jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(items) = 'array'::text),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT dec_template_stages_pkey PRIMARY KEY (id),
+  CONSTRAINT dec_template_stages_template_id_fkey FOREIGN KEY (template_id) REFERENCES public.dec_templates(id)
+);
+CREATE TABLE public.dec_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  department_id uuid NOT NULL,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_active boolean NOT NULL DEFAULT true,
+  CONSTRAINT dec_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT dec_templates_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
+  CONSTRAINT dec_templates_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(user_id)
+);
 CREATE TABLE public.decomposition_difficulty_levels (
   difficulty_id uuid NOT NULL DEFAULT gen_random_uuid(),
   difficulty_abbr text NOT NULL UNIQUE CHECK (length(TRIM(BOTH FROM difficulty_abbr)) > 0),
@@ -177,6 +201,7 @@ CREATE TABLE public.decomposition_stages (
   decomposition_stage_created_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  decomposition_stage_responsibles ARRAY DEFAULT '{}'::uuid[],
   CONSTRAINT decomposition_stages_pkey PRIMARY KEY (decomposition_stage_id),
   CONSTRAINT decomposition_stages_decomposition_stage_section_id_fkey FOREIGN KEY (decomposition_stage_section_id) REFERENCES public.sections(section_id),
   CONSTRAINT decomposition_stages_decomposition_stage_status_id_fkey FOREIGN KEY (decomposition_stage_status_id) REFERENCES public.section_statuses(id),
@@ -218,7 +243,7 @@ CREATE TABLE public.departments (
   department_name text UNIQUE,
   department_id uuid NOT NULL,
   department_head_id uuid,
-  subdivision_id uuid,
+  subdivision_id uuid NOT NULL,
   CONSTRAINT departments_pkey PRIMARY KEY (department_id),
   CONSTRAINT departments_department_head_id_fkey FOREIGN KEY (department_head_id) REFERENCES public.profiles(user_id),
   CONSTRAINT departments_subdivision_id_fkey FOREIGN KEY (subdivision_id) REFERENCES public.subdivisions(subdivision_id)
@@ -370,7 +395,7 @@ CREATE TABLE public.profiles (
   first_name text NOT NULL,
   last_name text NOT NULL,
   department_id uuid,
-  team_id uuid,
+  team_id uuid NOT NULL,
   position_id uuid NOT NULL,
   email text NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -382,6 +407,7 @@ CREATE TABLE public.profiles (
   avatar_url text,
   city_id uuid,
   subdivision_id uuid,
+  is_service boolean NOT NULL DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT profiles_department_membership_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id),
   CONSTRAINT profiles_team_membership_fkey FOREIGN KEY (team_id) REFERENCES public.teams(team_id),
@@ -402,6 +428,22 @@ CREATE TABLE public.project_deletion_log (
   error_message text,
   deleted_counts jsonb,
   CONSTRAINT project_deletion_log_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.project_tag_links (
+  project_id uuid NOT NULL,
+  tag_id uuid NOT NULL,
+  assigned_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT project_tag_links_pkey PRIMARY KEY (project_id, tag_id),
+  CONSTRAINT project_tag_links_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(project_id),
+  CONSTRAINT project_tag_links_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.project_tags(tag_id)
+);
+CREATE TABLE public.project_tags (
+  tag_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  color text DEFAULT '#9CA3AF'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT project_tags_pkey PRIMARY KEY (tag_id)
 );
 CREATE TABLE public.projects (
   project_id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -544,11 +586,21 @@ CREATE TABLE public.teams (
   ws_team_id integer,
   team_name text,
   team_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  department_id uuid,
+  department_id uuid NOT NULL,
   team_lead_id uuid,
   CONSTRAINT teams_pkey PRIMARY KEY (team_id),
   CONSTRAINT teams_team_lead_id_fkey FOREIGN KEY (team_lead_id) REFERENCES public.profiles(user_id),
   CONSTRAINT teams_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(department_id)
+);
+CREATE TABLE public.teams_activity (
+  activity_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  team_id uuid NOT NULL,
+  confirmed_by uuid NOT NULL,
+  confirmed_at timestamp with time zone NOT NULL DEFAULT now(),
+  activity_type text NOT NULL DEFAULT 'data_confirmed'::text,
+  CONSTRAINT teams_activity_pkey PRIMARY KEY (activity_id),
+  CONSTRAINT fk_team FOREIGN KEY (team_id) REFERENCES public.teams(team_id),
+  CONSTRAINT fk_confirmed_by FOREIGN KEY (confirmed_by) REFERENCES public.profiles(user_id)
 );
 CREATE TABLE public.user_favorite_projects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

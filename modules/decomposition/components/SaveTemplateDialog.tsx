@@ -59,7 +59,7 @@ export function SaveTemplateDialog({ isOpen, onClose, onSave, isLoading }: SaveT
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
               className="col-span-3"
-              placeholder="Например: Стандартная декомпозиция ОВ"
+              placeholder="Например: Стандартная задача ОВ"
             />
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}

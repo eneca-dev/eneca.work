@@ -200,7 +200,6 @@ useEffect(() => {
       selectedManagerId
     })
 
-    // Вызываем fetchSections для немедленного обновления данных
     if (selectedSubdivisionId || selectedProjectId || selectedDepartmentId || selectedTeamId || selectedEmployeeId || selectedManagerId || selectedStageId || selectedObjectId) {
       fetchSections()
     }
@@ -213,8 +212,6 @@ useEffect(() => {
   // 3. Пользователь изменяет фильтр по отделу (selectedDepartmentId)
   // 4. Пользователь изменяет фильтр по команде (selectedTeamId)
   // 5. Пользователь сбрасывает фильтры (selectedSubdivisionId/selectedDepartmentId/selectedTeamId → null)
-  // Функция fetchDepartments в deps может вызывать частые срабатывания, но внутри неё есть
-  // защита от одновременных вызовов через isDepartmentsFetching флаг
   useEffect(() => {
     if (showDepartments) {
       fetchDepartments()

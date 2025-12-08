@@ -127,8 +127,6 @@ export default function UsersPage() {
     employment_rate: "1",
     salary: "1500",
     is_hourly: false,
-    // Новые поля для ролей
-    primary_role: "user",
     roles_display_string: "user (осн.)",
     roles_count: 1,
     has_multiple_roles: false,

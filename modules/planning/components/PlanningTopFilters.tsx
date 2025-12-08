@@ -349,6 +349,7 @@ export default function PlanningTopFilters() {
     fetchSections,
     fetchDepartments,
     loadVacations,
+    loadFreshness,
     toggleSectionExpanded,
     toggleDepartmentExpanded,
     isLoadingSections,
@@ -864,6 +865,8 @@ export default function PlanningTopFilters() {
               await fetchDepartments()
             }
 
+             // Форсируем обновление актуальности команд (игнорируя кэш)
+            await loadFreshness(true)
             // Детерминированно восстанавливаем раскрытые разделы и отделы (не переворачиваем уже корректные)
             const stateAfter = usePlanningStore.getState()
             expandedSectionIds.forEach((id) => {

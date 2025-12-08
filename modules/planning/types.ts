@@ -218,3 +218,29 @@ export interface ProjectSummary {
   // Суммарная вовлеченность
   engagedEmployeesTotal: number
 }
+
+// Данные актуальности (freshness) команды из view_planning_team_freshness
+export interface TeamFreshness {
+  teamId: string
+  teamName: string
+  departmentId: string
+  departmentName: string
+  lastUpdate: Date | null
+  daysSinceUpdate: number | undefined
+}
+
+// Агрегированные данные актуальности отдела (вычисляется на клиенте)
+export interface DepartmentFreshness {
+  departmentId: string
+  daysSinceUpdate: number  // MAX среди команд отдела (worst case)
+  teamsCount: number
+}
+// Единица таймлайна (день на временной шкале)
+export interface TimelineUnit {
+  date: Date
+  label: string
+  isWeekend?: boolean
+  isWorkingDay?: boolean
+  width?: number
+  left?: number
+}

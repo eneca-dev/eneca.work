@@ -62,7 +62,7 @@ export async function fetchDepartmentProjects(): Promise<DepartmentProjectData[]
     },
     async (span) => {
       try {
-        span.setAttribute("table", "view_planning_analytics_departments_projects")
+        span.setAttribute("table", "view_planning_analytics_departments_projects_2")
 
         const { data, error } = await supabase
           .from("view_planning_analytics_departments_projects_2")
@@ -78,7 +78,7 @@ export async function fetchDepartmentProjects(): Promise<DepartmentProjectData[]
             tags: {
               module: 'planning-analytics',
               action: 'fetch_department_projects',
-              table: 'view_planning_analytics_departments_projects'
+              table: 'view_planning_analytics_departments_projects_2'
             },
             extra: {
               error_code: error.code,
@@ -162,7 +162,7 @@ export async function fetchDepartmentStats(): Promise<DepartmentStats[]> {
     },
     async (span) => {
       try {
-        span.setAttribute("table", "view_planning_analytics_departments")
+        span.setAttribute("table", "view_planning_analytics_departments_2")
 
         const { data, error } = await supabase
           .from("view_planning_analytics_departments_2")
@@ -177,7 +177,7 @@ export async function fetchDepartmentStats(): Promise<DepartmentStats[]> {
             tags: {
               module: 'planning-analytics',
               action: 'fetch_department_stats',
-              table: 'view_planning_analytics_departments'
+              table: 'view_planning_analytics_departments_2'
             },
             extra: {
               error_code: error.code,
@@ -228,6 +228,7 @@ export function aggregateDepartmentStats(
   avg_department_loading: number
   total_loading_rate: number
   total_loadings_count: number
+  absence_count: number
 } {
   // Фильтруем статистику по выбранным отделам
   const filteredStats = departmentStats.filter(stat =>
@@ -243,7 +244,8 @@ export function aggregateDepartmentStats(
       projects_in_work_today: 0,
       avg_department_loading: 0,
       total_loading_rate: 0,
-      total_loadings_count: 0
+      total_loadings_count: 0,
+      absence_count: 0
     }
   }
 

@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
-import type { Department, Employee, Loading } from "../../types"
+import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
 import { usePlanningStore } from "../../stores/usePlanningStore"
@@ -11,6 +11,8 @@ import { useState, Fragment, useMemo } from "react"
 import { Avatar, Tooltip } from "../avatar"
 import { LoadingModal } from "./loading-modal"
 import { AddShortageModal } from "./AddShortageModal"
+import { FreshnessIndicator } from "./FreshnessIndicator"
+import { useTeamActivityPermissions } from "../../hooks/useTeamActivityPermissions"
 import {
   loadingsToPeriods,
   groupVacationPeriods,
@@ -26,7 +28,7 @@ import {
 interface DepartmentRowProps {
   department: Department
   departmentIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   headerHeight: number
@@ -98,6 +100,36 @@ export function DepartmentRow({
   const toggleTeamExpanded = usePlanningStore((s) => s.toggleTeamExpanded)
   const toggleEmployeeExpanded = usePlanningStore((s) => s.toggleEmployeeExpanded)
 
+  // Получаем данные freshness из стора и функцию подтверждения
+  const freshnessCache = usePlanningStore(s => s.freshnessCache.data)
+  const confirmActivity = usePlanningStore(s => s.confirmTeamActivity)
+  const confirmMultipleActivity = usePlanningStore(s => s.confirmMultipleTeamsActivity)
+
+  // Проверка прав на актуализацию данных команды
+  const { canActualizeDepartment, canActualizeTeam } = useTeamActivityPermissions()
+
+  // Вычисляем freshness для отдела на основе команд (максимум = самые старые данные)
+  const departmentFreshness = useMemo(() => {
+    if (!department.teams || department.teams.length === 0) return undefined
+
+    // Собираем данные freshness всех команд
+    const teamFreshness = department.teams
+      .map(team => freshnessCache[team.id])
+      .filter((f): f is NonNullable<typeof f> => f !== undefined && f.daysSinceUpdate !== undefined)
+
+    if (teamFreshness.length === 0) return undefined
+
+    // Находим команду с максимальным daysSinceUpdate (самые старые данные)
+    const oldestTeam = teamFreshness.reduce((max, current) =>
+      current.daysSinceUpdate! > max.daysSinceUpdate! ? current : max
+    )
+
+    return {
+      daysSinceUpdate: oldestTeam.daysSinceUpdate,
+      lastUpdate: oldestTeam.lastUpdate
+    }
+  }, [department.teams, freshnessCache])
+
   // Получаем всех сотрудников отдела из всех команд (исключая строку дефицита)
   const allEmployees = department.teams.flatMap((team) => team.employees.filter((e) => !(e as any).isShortage))
 
@@ -131,8 +163,8 @@ export function DepartmentRow({
               className={cn(
                 "p-3 font-medium flex items-center justify-between transition-colors h-full border-b border-r",
                 theme === "dark"
-                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                  : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                  ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                  : "border-slate-200 bg-white group-hover/row:bg-slate-100",
               )}
               style={{
                 width: `${COLUMN_WIDTHS.section}px`,
@@ -172,9 +204,28 @@ export function DepartmentRow({
                   )}
                 </div>
               </div>
+
+              {/* Правая часть с индикатором актуальности */}
+              <div className="flex items-center gap-2 pr-2">
+                {departmentFreshness && (
+                  <FreshnessIndicator
+                    teamId={department.teams[0]?.id || department.id}
+                    teamName={department.name}
+                    daysSinceUpdate={departmentFreshness.daysSinceUpdate}
+                    lastUpdate={departmentFreshness.lastUpdate}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    size="sm"
+                    onConfirm={confirmActivity}
+                    teamIds={department.teams.map(t => t.id)}
+                    onConfirmMultiple={confirmMultipleActivity}
+                    disabled={!canActualizeDepartment()}
+                    tooltipSide={departmentIndex === 0 ? 'left' : 'top'}
+                  />
+                )}
+              </div>
             </div>
 
-            
+
 
             {/* Столбец "Объект" (может быть скрыт) */}
             {columnVisibility.object && (
@@ -182,8 +233,8 @@ export function DepartmentRow({
                 className={cn(
                   "p-3 transition-colors h-full flex items-center justify-center border-b border-r",
                   theme === "dark"
-                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-emerald-900"
-                    : "border-slate-200 bg-white group-hover/row:bg-emerald-50",
+                    ? "border-slate-700 bg-slate-800 group-hover/row:bg-slate-700"
+                    : "border-slate-200 bg-white group-hover/row:bg-slate-100",
                 )}
                 style={{
                   width: `${COLUMN_WIDTHS.object}px`,
@@ -232,7 +283,7 @@ export function DepartmentRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-emerald-900" : "group-hover/row:bg-emerald-50",
+                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-60"
@@ -259,8 +310,12 @@ export function DepartmentRow({
                     <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                       <div
                         className={cn(
-                          "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                          theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                          "rounded-sm pointer-events-auto relative",
+                          departmentLoadPercentage > 100
+                            ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                            : departmentLoadPercentage >= 90
+                              ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                              : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                         )}
                         style={{
                           width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -272,14 +327,12 @@ export function DepartmentRow({
                         {/* Внутренняя заливка, показывающая процент загрузки */}
                         <div
                           className={cn(
-                            "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                            "absolute bottom-0 left-0 right-0",
                             departmentLoadPercentage > 100
-                              ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
-                              : departmentLoadPercentage <= 50
-                                ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
-                                : departmentLoadPercentage <= 85
-                                  ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                  : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                              ? "bg-red-500"
+                              : departmentLoadPercentage >= 90
+                                ? "bg-teal-500"
+                                : "bg-amber-500"
                           )}
                           style={{
                             height: `${Math.max(
@@ -317,6 +370,7 @@ export function DepartmentRow({
                 totalFixedWidth={totalFixedWidth}
                 isExpanded={expandedTeams[team.id] || false}
                 onToggleExpand={() => toggleTeamExpanded(team.id)}
+                canActualizeTeam={canActualizeTeam}
               />
               {(expandedTeams[team.id] || false) && (() => {
                 // Формируем список сотрудников так, чтобы тимлид был первым, остальные — в исходном порядке
@@ -359,7 +413,7 @@ export function DepartmentRow({
 // Компонент строки команды внутри отдела
 interface TeamRowProps {
   team: Department["teams"][number]
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -367,15 +421,20 @@ interface TeamRowProps {
   totalFixedWidth: number
   isExpanded: boolean
   onToggleExpand: () => void
+  canActualizeTeam: (teamId: string) => boolean
 }
 
-function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalFixedWidth, isExpanded, onToggleExpand }: TeamRowProps) {
+function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalFixedWidth, isExpanded, onToggleExpand, canActualizeTeam }: TeamRowProps) {
   const reducedRowHeight = Math.floor(rowHeight * 0.75)
   // Емкость команды: только реальные сотрудники, без строки дефицита
   const totalTeamCapacity = (team.employees || [])
     .filter((e) => !(e as any).isShortage)
     .reduce((sum, e) => sum + (e.employmentRate || 1), 0)
   const [showAddShortage, setShowAddShortage] = useState(false)
+
+  // Получаем данные freshness для команды
+  const freshness = usePlanningStore(s => s.freshnessCache.data[team.id])
+  const confirmActivity = usePlanningStore(s => s.confirmTeamActivity)
 
   return (
     <div className={cn("group/row min-w-full relative", theme === "dark" ? "border-slate-700" : "border-slate-200")}
@@ -413,8 +472,18 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                 )}
               </div>
             </div>
-            {/* Кнопка добавления дефицита для команды */}
+            {/* Индикатор актуальности и кнопка добавления дефицита для команды */}
             <div className="flex items-center gap-2">
+              <FreshnessIndicator
+                teamId={team.id}
+                teamName={team.name}
+                daysSinceUpdate={freshness?.daysSinceUpdate}
+                lastUpdate={freshness?.lastUpdate}
+                theme={theme === 'dark' ? 'dark' : 'light'}
+                size="sm"
+                onConfirm={confirmActivity}
+                disabled={!canActualizeTeam(team.id)}
+              />
               <button
                 className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center transition-opacity",
@@ -455,6 +524,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                   isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                  theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
                   isFirstDayOfMonth(unit.date)
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
@@ -475,8 +545,12 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   <div className="absolute inset-0 flex items-end justify-center p-1 pointer-events-none">
                     <div
                       className={cn(
-                        "rounded-sm transition-all duration-200 border-2 pointer-events-auto relative",
-                        theme === "dark" ? "border-slate-600/60" : "border-slate-400"
+                        "rounded-sm pointer-events-auto relative",
+                        loadPct > 100
+                          ? (theme === "dark" ? "border-2 border-red-400" : "border-2 border-red-500")
+                          : loadPct >= 90
+                            ? (theme === "dark" ? "border-2 border-teal-400" : "border-2 border-teal-500")
+                            : (theme === "dark" ? "border border-amber-500/50" : "border border-amber-600/50")
                       )}
                       style={{
                         width: `${Math.max(cellWidth - 6, 3)}px`,
@@ -487,14 +561,12 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                     >
                       <div
                         className={cn(
-                          "absolute bottom-0 left-0 right-0 transition-all duration-200",
+                          "absolute bottom-0 left-0 right-0",
                           loadPct > 100
-                            ? (theme === "dark" ? "bg-red-500" : "bg-red-600")
-                            : loadPct <= 50
-                              ? (theme === "dark" ? "bg-blue-500" : "bg-blue-500")
-                              : loadPct <= 85
-                                ? (theme === "dark" ? "bg-amber-500" : "bg-amber-500")
-                                : (theme === "dark" ? "bg-emerald-500" : "bg-emerald-500")
+                            ? "bg-red-500"
+                            : loadPct >= 90
+                              ? "bg-teal-500"
+                              : "bg-amber-500"
                         )}
                         style={{
                           height: `${Math.max(Math.min((loadPct / 100) * (reducedRowHeight - 14), reducedRowHeight - 14), 2)}px`,
@@ -528,7 +600,7 @@ interface EmployeeRowProps {
   employee: Employee
   departmentPosition: number
   employeeIndex: number
-  timeUnits: { date: Date; label: string; isWeekend?: boolean }[]
+  timeUnits: TimelineUnit[]
   theme: string
   rowHeight: number
   padding: number
@@ -559,9 +631,9 @@ export function EmployeeRow({
 }: EmployeeRowProps) {
   // Состояния для модальных окон
   const [showLoadingModal, setShowLoadingModal] = useState(false)
-  const [loadingModalMode, setLoadingModalMode] = useState<"create" | "edit">("create")
-  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
   const [showAddShortage, setShowAddShortage] = useState(false)
+  // Состояние для редактирования загрузки
+  const [editingLoading, setEditingLoading] = useState<Loading | null>(null)
 
   // Состояние для отслеживания наведения на аватар
   const [hoveredAvatar, setHoveredAvatar] = useState(false)
@@ -758,8 +830,6 @@ export function EmployeeRow({
                       if (employee.isShortage) {
                         setShowAddShortage(true)
                       } else {
-                        setLoadingModalMode("create")
-                        setEditingLoading(null)
                         setShowLoadingModal(true)
                       }
                     }}
@@ -833,9 +903,10 @@ export function EmployeeRow({
                       key={`${bar.period.id}-${idx}`}
                       className={cn(
                         "absolute rounded transition-all duration-200 pointer-events-auto",
-                        bar.period.type === "loading" ? "cursor-pointer hover:brightness-110" : "cursor-default",
                         // Всегда используем горизонтальное выравнивание
-                        "flex items-center"
+                        "flex items-center",
+                        // Курсор pointer для загрузок (можно редактировать)
+                        bar.period.type === "loading" && "cursor-pointer hover:brightness-110"
                       )}
                       style={{
                         left: `${bar.left}px`,
@@ -853,12 +924,10 @@ export function EmployeeRow({
                         filter: "brightness(1.1)",
                       }}
                       title={formatBarTooltip(bar.period)}
-                      onClick={(e) => {
-                        e.stopPropagation()
+                      onClick={() => {
+                        // Открыть модалку редактирования для загрузок
                         if (bar.period.type === "loading" && bar.period.loading) {
-                          setLoadingModalMode("edit")
                           setEditingLoading(bar.period.loading)
-                          setShowLoadingModal(true)
                         }
                       }}
                     >
@@ -1071,6 +1140,7 @@ export function EmployeeRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
+                    theme === "dark" ? "group-hover/employee:bg-slate-700/50" : "group-hover/employee:bg-slate-200/50",
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
@@ -1099,18 +1169,29 @@ export function EmployeeRow({
         </div>
       </div>
 
-      {/* Универсальное модальное окно для создания/редактирования загрузки */}
+      {/* Модальное окно для создания загрузки */}
       <LoadingModal
         isOpen={showLoadingModal}
-        onClose={() => {
-          setShowLoadingModal(false)
-          setEditingLoading(null)
-        }}
+        onClose={() => setShowLoadingModal(false)}
         theme={theme}
-        mode={loadingModalMode}
-        employee={loadingModalMode === "create" ? employee : undefined}
-        loading={loadingModalMode === "edit" ? editingLoading || undefined : undefined}
+        employee={employee}
+        mode="create"
       />
+
+      {/* Модальное окно для редактирования загрузки */}
+      {editingLoading && (
+        <LoadingModal
+          isOpen={!!editingLoading}
+          onClose={() => setEditingLoading(null)}
+          theme={theme}
+          mode="edit"
+          loading={editingLoading}
+          onLoadingUpdated={() => {
+            // Store автоматически обновит state через realtime subscriptions
+          }}
+        />
+      )}
+
       {showAddShortage && (
         <AddShortageModal
           teamId={employee.teamId}

@@ -782,7 +782,7 @@ export function SectionPanel({ isOpen, onClose, sectionId, initialTab = 'overvie
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
             >
-              Декомпозиция
+              Задачи
             </button>
             
             <button
