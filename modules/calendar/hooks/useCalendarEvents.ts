@@ -36,9 +36,11 @@ export function useCalendarEvents() {
 
           // Загружаем все события без фильтрации на сервере
           // Фильтрация будет происходить на клиенте: глобальные события + события текущего пользователя
+          // функциональнсоть перенесена: не загружаем отпуска, больничные, отгулы
           const { data, error } = await supabase
             .from('calendar_events')
             .select('*')
+            .not('calendar_event_type', 'in', '("Отгул","Больничный","Отпуск запрошен","Отпуск одобрен","Отпуск отклонен")')
             .order('calendar_event_date_start', { ascending: true });
 
           if (error) {
