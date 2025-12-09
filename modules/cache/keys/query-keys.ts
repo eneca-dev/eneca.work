@@ -136,8 +136,27 @@ export const queryKeys = {
   // -------------------------------------------------------------------------
   notifications: {
     all: ['notifications'] as const,
-    list: (userId: string) => [...queryKeys.notifications.all, 'list', userId] as const,
-    unreadCount: (userId: string) => [...queryKeys.notifications.all, 'unread', userId] as const,
+    lists: () => [...queryKeys.notifications.all, 'list'] as const,
+    list: (
+      userId: string,
+      filters?: {
+        onlyUnread?: boolean
+        includeArchived?: boolean
+        types?: string[]
+      }
+    ) => [...queryKeys.notifications.lists(), userId, filters] as const,
+    infinite: (
+      userId: string,
+      filters?: {
+        onlyUnread?: boolean
+        includeArchived?: boolean
+        types?: string[]
+      }
+    ) => [...queryKeys.notifications.list(userId, filters), 'infinite'] as const,
+    unreadCount: (userId: string) =>
+      [...queryKeys.notifications.all, 'unread-count', userId] as const,
+    typeCounts: (userId: string, options?: { includeArchived?: boolean }) =>
+      [...queryKeys.notifications.all, 'type-counts', userId, options] as const,
   },
 
   // -------------------------------------------------------------------------
