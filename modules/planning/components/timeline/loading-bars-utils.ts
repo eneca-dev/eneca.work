@@ -173,6 +173,52 @@ function findFreeLayer(period: BarPeriod, placedPeriods: Array<{ period: BarPeri
 }
 
 /**
+ * Вычисляет вертикальную позицию (top) бара с учётом пересекающихся баров в нижних слоях.
+ * Используется для корректного вертикального размещения баров при их наложении по времени.
+ *
+ * @param bar - текущий бар, для которого вычисляется позиция
+ * @param allBars - все бары для проверки пересечений
+ * @param baseBarHeight - базовая высота бара (для ставки 1)
+ * @param barGap - отступ между барами
+ * @param initialOffset - начальный отступ сверху (по умолчанию 4)
+ * @returns вертикальная позиция top в пикселях
+ */
+export function calculateBarTop(
+  bar: BarRender,
+  allBars: BarRender[],
+  baseBarHeight: number,
+  barGap: number,
+  initialOffset: number = 4
+): number {
+  // Находим все бары, которые пересекаются с текущим и имеют меньший layer
+  const overlappingBars = allBars.filter(other =>
+    other.period.startDate <= bar.period.endDate &&
+    other.period.endDate >= bar.period.startDate &&
+    other.layer < bar.layer
+  )
+
+  let top = initialOffset
+
+  if (overlappingBars.length > 0) {
+    // Создаём карту слой -> максимальная высота бара в этом слое
+    const layersMap = new Map<number, number>()
+    overlappingBars.forEach(other => {
+      const otherHeight = baseBarHeight * (other.period.rate || 1)
+      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
+    })
+
+    // Суммируем высоты всех слоёв ниже текущего
+    for (let i = 0; i < bar.layer; i++) {
+      if (layersMap.has(i)) {
+        top += layersMap.get(i)! + barGap
+      }
+    }
+  }
+
+  return top
+}
+
+/**
  * Вычисляет слои для всех периодов с учетом перекрытий
  */
 export function calculateLayers(periods: BarPeriod[]): number[] {

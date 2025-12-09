@@ -719,6 +719,7 @@ export const usePlanningStore = create<PlanningState>()(
                   startDate: new Date(item.loading_start),
                   endDate: new Date(item.loading_finish),
                   rate: item.loading_rate || 1,
+                  comment: item.loading_comment || undefined,
                 })
               }
             })
@@ -1056,6 +1057,7 @@ export const usePlanningStore = create<PlanningState>()(
               startDate: parseTimestampTz(item.loading_start) || new Date(),
               endDate: parseTimestampTz(item.loading_finish) || new Date(),
               rate: item.loading_rate || 1,
+              comment: item.loading_comment || undefined,
               createdAt: parseTimestampTz(item.loading_created) || new Date(),
               updatedAt: parseTimestampTz(item.loading_updated) || new Date(),
             }))
@@ -1127,6 +1129,7 @@ export const usePlanningStore = create<PlanningState>()(
               endDate: loadingData.endDate.toISOString().split("T")[0],
               rate: loadingData.rate,
               stageId: loadingData.stageId,
+              comment: loadingData.comment || undefined,
             }
 
             // Вызываем API
@@ -1393,6 +1396,7 @@ export const usePlanningStore = create<PlanningState>()(
                 startDate: result.updatedLoading.startDate,
                 endDate: result.updatedLoading.endDate,
                 rate: result.updatedLoading.rate,
+                comment: result.updatedLoading.comment,
               }
             }
 
@@ -2338,7 +2342,8 @@ export const usePlanningStore = create<PlanningState>()(
 
           // Создаем новый promise и сохраняем его
           loadFreshnessPromise = (async () => {
-            set({ freshnessCache: { ...state.freshnessCache, isLoading: true } })
+            const currentCache = get().freshnessCache
+            set({ freshnessCache: { ...currentCache, isLoading: true } })
 
             try {
               const freshness = await fetchTeamFreshness()
@@ -2378,7 +2383,8 @@ export const usePlanningStore = create<PlanningState>()(
               })
             } catch (error) {
               console.error("❌ Ошибка загрузки freshness:", error)
-              set({ freshnessCache: { ...state.freshnessCache, isLoading: false } })
+              const currentCache = get().freshnessCache
+              set({ freshnessCache: { ...currentCache, isLoading: false } })
             } finally {
               loadFreshnessPromise = null
             }
@@ -2709,6 +2715,7 @@ export const usePlanningStore = create<PlanningState>()(
                   startDate: new Date(item.loading_start),
                   endDate: new Date(item.loading_finish),
                   rate: item.loading_rate || 1,
+                  comment: item.loading_comment || undefined,
                 })
               }
             })

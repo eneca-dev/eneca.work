@@ -7,6 +7,9 @@ export * from './configs'
 // Экспорт основного стора
 export { useFilterStore } from './store'
 
+// Экспорт хуков
+export { useFilterValidation } from './hooks/useFilterValidation'
+
 // Экспорт компонентов
 export { FilterSelect } from './FilterSelect'
 export { PlanningFilters } from './PlanningFilters'

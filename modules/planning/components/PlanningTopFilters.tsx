@@ -7,6 +7,7 @@ import { Building, Filter as FilterIcon, FolderOpen, Search, Settings, Calendar 
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
+import { useFilterValidation } from '@/modules/planning/filters/hooks/useFilterValidation'
 import { useHasPermission } from '@/modules/permissions/hooks/usePermissions'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
@@ -327,6 +328,10 @@ import { createPortal } from 'react-dom'
 export default function PlanningTopFilters() {
   const router = useRouter()
   const filterStore = useFilterStore()
+
+  // Валидация фильтров после rehydration из localStorage
+  useFilterValidation()
+
   const statuses = useSectionStatusesStore(state => state.statuses)
   const loadStatuses = useSectionStatusesStore(state => state.loadStatuses)
   const { startDate, daysToShow, setStartDate, scrollBackward, scrollForward } = usePlanningViewStore()
@@ -395,21 +400,32 @@ export default function PlanningTopFilters() {
 
   // Базовая инициализация справочников фильтров (если пусто)
   useEffect(() => {
+    // Пропускаем если данные уже загружены validation hook
+    const alreadyLoaded =
+      filterStore.subdivisions.length > 0 &&
+      filterStore.managers.length > 0 &&
+      filterStore.departments.length > 0 &&
+      filterStore.employees.length > 0
+
     // Применяем блокировки по permissions (hierarchy)
     applyPlanningLocks().catch(console.error)
 
-    if (filterStore.subdivisions.length === 0) {
-      filterStore.loadSubdivisions()
+    // Загружаем данные только если ещё не загружены
+    if (!alreadyLoaded) {
+      if (filterStore.subdivisions.length === 0) {
+        filterStore.loadSubdivisions()
+      }
+      if (filterStore.managers.length === 0) {
+        filterStore.loadManagers()
+      }
+      if (filterStore.departments.length === 0) {
+        filterStore.loadDepartments()
+      }
+      if (filterStore.employees.length === 0) {
+        filterStore.loadEmployees()
+      }
     }
-    if (filterStore.managers.length === 0) {
-      filterStore.loadManagers()
-    }
-    if (filterStore.departments.length === 0) {
-      filterStore.loadDepartments()
-    }
-    if (filterStore.employees.length === 0) {
-      filterStore.loadEmployees()
-    }
+
     if (filterStore.projects.length === 0) {
       filterStore.loadProjects(filterStore.selectedManagerId || null)
     }

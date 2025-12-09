@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ChatMessage } from '../types/chat'
-import { sendChatMessage } from '../api/chat'
-import { getHistory, saveMessage, clearHistory } from '../utils/chatCache'
 import { useUserStore } from '@/stores/useUserStore'
 import { useSidebarState } from '@/hooks/useSidebarState'
+import { createClient } from '@/utils/supabase/client'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -15,17 +15,162 @@ export function useChat() {
   const [chatSize, setChatSize] = useState({ width: 320, height: 448 })
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const userId = useUserStore(state => state.id)
   const { collapsed } = useSidebarState()
+  const supabase = createClient()
 
-  // Загрузка истории при монтировании
+  // Загрузка или создание conversation
   useEffect(() => {
-    if (userId) {
-      const history = getHistory(userId)
-      setMessages(history)
+    if (!userId) return
+
+    const initConversation = async () => {
+      try {
+        // Пытаемся найти активный conversation
+        const { data: existingConversation } = await supabase
+          .from('chat_conversations')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        if (existingConversation) {
+          setConversationId(existingConversation.id)
+          await loadMessages(existingConversation.id)
+        } else {
+          // Создаём новый conversation
+          const { data: newConversation } = await supabase
+            .from('chat_conversations')
+            .insert({
+              user_id: userId,
+              status: 'active'
+            })
+            .select()
+            .single()
+
+          if (newConversation) {
+            setConversationId(newConversation.id)
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing conversation:', error)
+      }
     }
-  }, [userId])
+
+    initConversation()
+  }, [userId, supabase])
+
+  // Загрузка истории сообщений
+  const loadMessages = async (convId: string) => {
+    try {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('conversation_id', convId)
+        .eq('kind', 'message')
+        .order('created_at', { ascending: true })
+
+      if (data) {
+        setMessages(data.map(msg => ({
+          ...msg,
+          created_at: new Date(msg.created_at)
+        })))
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error)
+    }
+  }
+
+  // Realtime подписка на новые сообщения
+  useEffect(() => {
+    if (!conversationId || !userId) return
+
+    console.log('[Realtime] Creating subscription for conversation:', conversationId)
+
+    const channel = supabase
+      .channel(`chat:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        (payload) => {
+          const newMessage = payload.new as ChatMessage
+          console.log('[Realtime] Received message:', newMessage)
+
+          setMessages(prev => {
+            console.log('[Realtime] Current messages count:', prev.length)
+
+            // Если это сообщение уже есть (по реальному ID) - пропускаем
+            if (prev.some(m => m.id === newMessage.id)) {
+              console.log('[Realtime] Message already exists, skipping')
+              return prev
+            }
+
+            // Если это сообщение от пользователя, ищем и заменяем временное
+            if (newMessage.role === 'user') {
+              const tempMessages = prev.filter(m => m.id.startsWith('temp-'))
+              console.log('[Realtime] Temp messages:', tempMessages)
+
+              const tempIndex = prev.findIndex(m =>
+                m.id.startsWith('temp-') &&
+                m.content === newMessage.content &&
+                m.role === 'user'
+              )
+
+              if (tempIndex !== -1) {
+                // Заменяем временное на реальное
+                console.log('[Realtime] Replacing temp message at index:', tempIndex)
+                const updated = [...prev]
+                updated[tempIndex] = {
+                  ...newMessage,
+                  created_at: new Date(newMessage.created_at)
+                }
+                return updated
+              } else {
+                console.log('[Realtime] No temp message found to replace')
+              }
+            }
+
+            // Добавляем новое сообщение
+            console.log('[Realtime] Adding new message')
+            return [...prev, {
+              ...newMessage,
+              created_at: new Date(newMessage.created_at)
+            }]
+          })
+
+          // Если пришёл финальный ответ от бота
+          if (newMessage.role === 'assistant' && newMessage.is_final) {
+            // Очищаем таймаут и останавливаем индикатор печати
+            if (typingTimeoutRef.current) {
+              clearTimeout(typingTimeoutRef.current)
+              typingTimeoutRef.current = null
+            }
+            setIsLoading(false)
+            setIsTyping(false)
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Subscription status:', status)
+      })
+
+    return () => {
+      console.log('[Realtime] Unsubscribing')
+      channel.unsubscribe()
+      // Очищаем таймаут при размонтировании
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
+  }, [conversationId, userId, supabase])
 
   const toggleChat = useCallback(() => {
     setIsOpen(prev => !prev)
@@ -86,54 +231,110 @@ export function useChat() {
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading || !userId) return
+    if (!content.trim() || isLoading || !userId || !conversationId) return
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    saveMessage(userMessage, userId)
+    console.log('[sendMessage] Starting...', { userId, conversationId, content })
 
     setIsLoading(true)
     setIsTyping(true)
 
-    try {
-      const response = await sendChatMessage({ message: content })
+    // Optimistic UI update - сразу показываем сообщение пользователя
+    const tempId = `temp-${Date.now()}`
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      conversation_id: conversationId,
+      user_id: userId,
+      role: 'user',
+      kind: 'message',
+      content,
+      is_final: true,
+      created_at: new Date()
+    }
 
-      const botMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date()
+    setMessages(prev => [...prev, optimisticMessage])
+
+    try {
+      // Записываем в БД - это триггернёт webhook на Python агент
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          user_id: userId,
+          role: 'user',
+          kind: 'message',
+          content,
+          is_final: true
+        })
+        .select()
+
+      if (error) {
+        console.error('[sendMessage] Insert error:', error)
+        // Удаляем optimistic сообщение при ошибке
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        throw error
       }
 
-      setMessages(prev => [...prev, botMessage])
-      saveMessage(botMessage, userId)
+      console.log('[sendMessage] Insert success:', data)
+
+      // Realtime автоматически заменит временное сообщение на реальное
+      // isLoading сбросится когда придёт ответ от бота через Realtime
+
+      // Устанавливаем таймаут для isTyping и isLoading (60 секунд) на случай если бот не ответит
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        console.warn('[useChat] Typing timeout - bot did not respond')
+        setIsTyping(false)
+        setIsLoading(false)
+      }, 60000) // 60 секунд
     } catch (error) {
+      console.error('[sendMessage] Error:', error)
+
+      // Показываем ошибку
       const errorMessage: ChatMessage = {
         id: crypto.randomUUID(),
+        conversation_id: conversationId,
+        user_id: userId,
         role: 'assistant',
-        content: 'Произошла ошибка. Попробуйте еще раз.',
-        timestamp: new Date()
+        kind: 'message',
+        content: 'Произошла ошибка при отправке сообщения. Попробуйте еще раз.',
+        is_final: true,
+        created_at: new Date()
       }
 
       setMessages(prev => [...prev, errorMessage])
-      saveMessage(errorMessage, userId)
-    } finally {
       setIsLoading(false)
       setIsTyping(false)
     }
-  }, [userId, isLoading])
+  }, [userId, conversationId, isLoading, supabase])
 
-  const clearMessages = useCallback(() => {
-    if (!userId) return
-    clearHistory(userId)
-    setMessages([])
-  }, [userId])
+  const clearMessages = useCallback(async () => {
+    if (!userId || !conversationId) return
+
+    try {
+      // Удаляем все сообщения из текущего conversation
+      const { error: deleteError } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('conversation_id', conversationId)
+
+      if (deleteError) {
+        throw deleteError
+      }
+
+      // Очищаем сообщения в UI
+      setMessages([])
+
+      // Сбрасываем состояние печати
+      setIsTyping(false)
+      setIsLoading(false)
+
+      console.log('[clearMessages] Messages deleted for conversation:', conversationId)
+    } catch (error) {
+      console.error('[clearMessages] Error:', error)
+    }
+  }, [userId, conversationId, supabase])
 
   return {
     messages,
