@@ -19,12 +19,14 @@ import {
   getResourceGraphData,
   getUserWorkload,
   getProjectTags,
+  getCompanyCalendarEvents,
 } from '../actions'
 
 import type {
   ResourceGraphFilters,
   Project,
   ProjectTag,
+  CompanyCalendarEvent,
 } from '../types'
 
 // ============================================================================
@@ -75,7 +77,21 @@ export const useUserWorkload = createDetailCacheQuery<Project[]>({
 export const useTagOptions = createSimpleCacheQuery<ProjectTag[]>({
   queryKey: ['project-tags', 'list'],
   queryFn: getProjectTags,
-  staleTime: staleTimePresets.static, // 30 минут - теги редко меняются
+  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+})
+
+/**
+ * Хук для получения праздников и переносов рабочих дней компании
+ *
+ * Данные кешируются на 24 часа, т.к. праздники очень редко меняются
+ *
+ * @example
+ * const { data: events, isLoading } = useCompanyCalendarEvents()
+ */
+export const useCompanyCalendarEvents = createSimpleCacheQuery<CompanyCalendarEvent[]>({
+  queryKey: ['company-calendar-events', 'list'],
+  queryFn: getCompanyCalendarEvents,
+  staleTime: staleTimePresets.eternal, // 24 часа - праздники практически не меняются
 })
 
 // ============================================================================

@@ -22,7 +22,7 @@ import type {
 } from '../../types'
 import { TimelineBar } from './TimelineBar'
 import type { DayCell } from './TimelineHeader'
-import { ROW_HEIGHT, SIDEBAR_WIDTH } from '../../constants'
+import { ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../constants'
 
 // ============================================================================
 // Grid Background
@@ -33,22 +33,26 @@ interface TimelineGridProps {
 }
 
 export function TimelineGrid({ dayCells }: TimelineGridProps) {
-  const cellWidth = 100 / dayCells.length
-
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none">
       {dayCells.map((cell, i) => {
-        if (!cell.isWeekend && !cell.isToday) return null
+        // Простая логика: нерабочий день = красный фон
+        const isDayOff = !cell.isWorkday
+        const showBackground = cell.isToday || isDayOff
+
+        if (!showBackground) return null
+
         return (
           <div
             key={i}
             className={cn(
               'absolute top-0 bottom-0',
-              cell.isToday ? 'bg-primary/5' : 'bg-muted/30'
+              cell.isToday && 'bg-primary/5',
+              !cell.isToday && isDayOff && 'bg-red-50/50 dark:bg-red-950/20'
             )}
             style={{
-              left: `${i * cellWidth}%`,
-              width: `${cellWidth}%`,
+              left: i * DAY_CELL_WIDTH,
+              width: DAY_CELL_WIDTH,
             }}
           />
         )
@@ -58,7 +62,7 @@ export function TimelineGrid({ dayCells }: TimelineGridProps) {
         <div
           key={`line-${i}`}
           className="absolute top-0 bottom-0 w-px bg-border/30"
-          style={{ left: `${(i + 1) * cellWidth}%` }}
+          style={{ left: (i + 1) * DAY_CELL_WIDTH }}
         />
       ))}
     </div>
@@ -101,6 +105,9 @@ function BaseRow({
   barColor,
   barLabel,
 }: BaseRowProps) {
+  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const totalWidth = SIDEBAR_WIDTH + timelineWidth
+
   return (
     <>
       <div
@@ -108,11 +115,15 @@ function BaseRow({
           'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
           depth === 0 && 'bg-muted/20'
         )}
-        style={{ height: ROW_HEIGHT }}
+        style={{ height: ROW_HEIGHT, minWidth: totalWidth }}
       >
-        {/* Sidebar */}
+        {/* Sidebar - sticky left при горизонтальном скролле */}
         <div
-          className="flex items-center gap-1 shrink-0 border-r border-border px-2"
+          className={cn(
+            'flex items-center gap-1 shrink-0 border-r border-border px-2',
+            'sticky left-0 z-10',
+            depth === 0 ? 'bg-card' : 'bg-background'
+          )}
           style={{
             width: SIDEBAR_WIDTH,
             paddingLeft: 8 + depth * 16,
@@ -142,8 +153,8 @@ function BaseRow({
           </span>
         </div>
 
-        {/* Timeline area */}
-        <div className="flex-1 relative">
+        {/* Timeline area - fixed width */}
+        <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
           {barStartDate && barEndDate && (
             <TimelineBar

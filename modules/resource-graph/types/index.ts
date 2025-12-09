@@ -161,6 +161,56 @@ export interface ProjectTag {
   color: string | null
 }
 
+// ============================================================================
+// Calendar Types - Праздники и переносы
+// ============================================================================
+
+/** Тип события календаря */
+export type CalendarEventType = 'Праздник' | 'Перенос'
+
+/**
+ * Событие календаря компании (праздник или перенос)
+ */
+export interface CompanyCalendarEvent {
+  /** ID события */
+  id: string
+  /** Тип: Праздник или Перенос */
+  type: CalendarEventType
+  /** Дата начала */
+  dateStart: string
+  /** Дата окончания (может быть null для однодневных событий) */
+  dateEnd: string | null
+  /** Название/комментарий (например "Новый год") */
+  name: string | null
+  /**
+   * Является ли рабочим днём (для переносов)
+   * true = суббота стала рабочей
+   * false = будний день стал выходным
+   * null = не применимо (для праздников)
+   */
+  isWorkday: boolean | null
+}
+
+/**
+ * Информация о дне для timeline
+ */
+export interface DayInfo {
+  /** Дата */
+  date: Date
+  /** Является ли праздником */
+  isHoliday: boolean
+  /** Название праздника */
+  holidayName: string | null
+  /** Является ли рабочим днём (с учётом переносов) */
+  isWorkday: boolean
+  /** Является ли выходным днём по умолчанию (Сб/Вс) */
+  isDefaultWeekend: boolean
+  /** Это перенесённый рабочий день */
+  isTransferredWorkday: boolean
+  /** Это перенесённый выходной */
+  isTransferredDayOff: boolean
+}
+
 /** Тип фильтра */
 export type FilterType =
   | 'subdivision'

@@ -1,99 +1,86 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
-import { addDays, startOfDay } from 'date-fns'
+import { forwardRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, TimelineRange } from '../../types'
-import { TimelineHeader, generateDayCells } from './TimelineHeader'
+import { TimelineHeader, type DayCell } from './TimelineHeader'
 import { ProjectRow } from './TimelineRow'
 import { SIDEBAR_WIDTH } from '../../constants'
 
-// Конфигурация timeline
-const DAYS_BEFORE_TODAY = 7 // Неделя до сегодня
-const DAYS_AFTER_TODAY = 45 // ~1.5 месяца после
-const TOTAL_DAYS = DAYS_BEFORE_TODAY + DAYS_AFTER_TODAY
-
-/**
- * Вычисляет диапазон timeline
- */
-function calculateTimelineRange(): TimelineRange {
-  const today = startOfDay(new Date())
-  const start = addDays(today, -DAYS_BEFORE_TODAY)
-  const end = addDays(today, DAYS_AFTER_TODAY - 1)
-
-  return {
-    start,
-    end,
-    totalDays: TOTAL_DAYS,
-  }
-}
-
 interface ResourceGraphTimelineProps {
   projects: Project[]
+  dayCells: DayCell[]
+  range: TimelineRange
   isLoading?: boolean
   className?: string
+  /** Hide the header (when rendered externally in sticky area) */
+  hideHeader?: boolean
+  /** Scroll event handler for sync with header */
+  onScroll?: () => void
 }
 
 /**
  * Главный компонент графика ресурсов с timeline
  *
- * Отображает иерархическую структуру проектов с временной шкалой:
- * - Project → Stage → Object → Section → DecompositionStage
- * - Бары для Section и DecompositionStage (у них есть даты)
+ * Full-width layout без границ
  */
-export function ResourceGraphTimeline({
-  projects,
-  isLoading,
-  className,
-}: ResourceGraphTimelineProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // Вычисляем диапазон timeline
-  const range = useMemo(() => calculateTimelineRange(), [])
-
-  // Генерируем ячейки дней
-  const dayCells = useMemo(() => generateDayCells(range), [range])
-
-  if (isLoading) {
-    return (
-      <div className={cn('flex items-center justify-center h-96', className)}>
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (projects.length === 0) {
-    return (
-      <div className={cn('flex items-center justify-center h-96 text-muted-foreground', className)}>
-        Нет данных для отображения
-      </div>
-    )
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className={cn('flex flex-col border border-border rounded-lg overflow-hidden bg-background', className)}
-    >
-      {/* Header area */}
-      <div className="flex border-b border-border">
-        {/* Sidebar header */}
-        <div
-          className="shrink-0 flex items-center px-3 py-2 border-r border-border bg-muted/30"
-          style={{ width: SIDEBAR_WIDTH }}
-        >
-          <span className="text-sm font-medium text-muted-foreground">Структура</span>
+export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTimelineProps>(
+  function ResourceGraphTimeline(
+    {
+      projects,
+      dayCells,
+      range,
+      isLoading,
+      className,
+      hideHeader = false,
+      onScroll,
+    },
+    ref
+  ) {
+    if (isLoading) {
+      return (
+        <div className={cn('flex items-center justify-center h-full', className)}>
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
+      )
+    }
 
-        {/* Timeline header */}
-        <div className="flex-1 overflow-hidden">
-          <TimelineHeader dayCells={dayCells} />
+    if (projects.length === 0) {
+      return (
+        <div className={cn('flex items-center justify-center h-full text-muted-foreground', className)}>
+          Нет данных для отображения
         </div>
-      </div>
+      )
+    }
 
-      {/* Content area - scrollable */}
-      <div className="flex-1 overflow-auto">
+    return (
+      <div
+        ref={ref}
+        onScroll={onScroll}
+        className={cn('flex flex-col h-full overflow-auto', className)}
+      >
+        {/* Header area - only shown when not hidden (header in parent sticky area) */}
+        {!hideHeader && (
+          <div className="flex border-b border-border/50 sticky top-0 z-10 bg-background">
+            {/* Sidebar header */}
+            <div
+              className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"
+              style={{ width: SIDEBAR_WIDTH }}
+            >
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Структура
+              </span>
+            </div>
+
+            {/* Timeline header */}
+            <div className="flex-1 overflow-hidden">
+              <TimelineHeader dayCells={dayCells} />
+            </div>
+          </div>
+        )}
+
+        {/* Content area - project rows */}
         {projects.map((project) => (
           <ProjectRow
             key={project.id}
@@ -103,6 +90,6 @@ export function ResourceGraphTimeline({
           />
         ))}
       </div>
-    </div>
-  )
-}
+    )
+  }
+)

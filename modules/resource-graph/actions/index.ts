@@ -13,6 +13,7 @@ import type {
   Project,
   ResourceGraphRow,
   ProjectTag,
+  CompanyCalendarEvent,
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 
@@ -407,6 +408,60 @@ export async function getProjectStructure(): Promise<ActionResult<{
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка загрузки проектной структуры',
+    }
+  }
+}
+
+// ============================================================================
+// Calendar Actions - Праздники и переносы
+// ============================================================================
+
+/**
+ * Получить глобальные события календаря (праздники и переносы)
+ *
+ * Возвращает только глобальные события компании (is_global = true)
+ * с типом "Праздник" или "Перенос"
+ *
+ * @returns Список праздников и переносов рабочих дней
+ */
+export async function getCompanyCalendarEvents(): Promise<ActionResult<CompanyCalendarEvent[]>> {
+  try {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .select(`
+        calendar_event_id,
+        calendar_event_type,
+        calendar_event_date_start,
+        calendar_event_date_end,
+        calendar_event_comment,
+        calendar_event_is_weekday
+      `)
+      .eq('calendar_event_is_global', true)
+      .in('calendar_event_type', ['Праздник', 'Перенос'])
+      .order('calendar_event_date_start')
+
+    if (error) {
+      console.error('[getCompanyCalendarEvents] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const events: CompanyCalendarEvent[] = (data || []).map(row => ({
+      id: row.calendar_event_id,
+      type: row.calendar_event_type as 'Праздник' | 'Перенос',
+      dateStart: row.calendar_event_date_start,
+      dateEnd: row.calendar_event_date_end,
+      name: row.calendar_event_comment,
+      isWorkday: row.calendar_event_is_weekday,
+    }))
+
+    return { success: true, data: events }
+  } catch (error) {
+    console.error('[getCompanyCalendarEvents] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки календарных событий',
     }
   }
 }

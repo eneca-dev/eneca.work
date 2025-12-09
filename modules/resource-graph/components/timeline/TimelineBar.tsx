@@ -3,6 +3,7 @@
 import { differenceInDays, parseISO, startOfDay, format } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import { DAY_CELL_WIDTH } from '../../constants'
 import type { TimelineRange } from '../../types'
 import {
   Tooltip,
@@ -12,12 +13,16 @@ import {
 } from '@/components/ui/tooltip'
 
 interface BarPosition {
+  /** Позиция в пикселях от левого края */
   left: number
+  /** Ширина в пикселях */
   width: number
+  /** Количество дней (для определения отображения текста) */
+  days: number
 }
 
 /**
- * Вычисляет позицию бара на timeline в процентах
+ * Вычисляет позицию бара на timeline в пикселях
  */
 export function calculateBarPosition(
   startDate: string | null,
@@ -40,8 +45,9 @@ export function calculateBarPosition(
   const duration = differenceInDays(visibleEnd, visibleStart) + 1
 
   return {
-    left: (dayFromStart / range.totalDays) * 100,
-    width: (duration / range.totalDays) * 100,
+    left: dayFromStart * DAY_CELL_WIDTH,
+    width: duration * DAY_CELL_WIDTH,
+    days: duration,
   }
 }
 
@@ -89,13 +95,13 @@ export function TimelineBar({
               className
             )}
             style={{
-              left: `${position.left}%`,
-              width: `${Math.max(position.width, 0.5)}%`,
+              left: position.left,
+              width: Math.max(position.width, DAY_CELL_WIDTH / 2),
               backgroundColor: barColor,
             }}
           >
-            {/* Текст внутри бара если достаточно места */}
-            {position.width > 8 && label && (
+            {/* Текст внутри бара если достаточно места (> 3 дней) */}
+            {position.days > 3 && label && (
               <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-medium truncate px-1">
                 {label}
               </span>

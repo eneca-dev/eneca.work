@@ -28,6 +28,8 @@ interface FilterSelectProps {
   disabled?: boolean
   loading?: boolean
   className?: string
+  /** Компактный режим для inline размещения */
+  compact?: boolean
 }
 
 // ============================================================================
@@ -44,37 +46,46 @@ export function FilterSelect({
   disabled = false,
   loading = false,
   className,
+  compact = false,
 }: FilterSelectProps) {
   const isDisabled = disabled || loading
 
   return (
-    <div className={cn('flex flex-col gap-1 min-w-[160px]', className)}>
+    <div
+      className={cn(
+        'flex gap-1',
+        compact ? 'flex-row items-center min-w-[140px]' : 'flex-col min-w-[160px]',
+        className
+      )}
+    >
       <label
         htmlFor={id}
         className={cn(
-          'text-xs font-medium flex items-center gap-1.5',
+          'font-medium flex items-center gap-1.5 whitespace-nowrap',
           'text-muted-foreground',
+          compact ? 'text-[11px]' : 'text-xs',
           !isDisabled && 'group-hover:text-foreground'
         )}
       >
         {label}
-        {loading && <Loader2 size={12} className="animate-spin text-primary" />}
+        {loading && !compact && <Loader2 size={12} className="animate-spin text-primary" />}
       </label>
 
-      <div className="relative">
+      <div className="relative flex-1">
         <select
           id={id}
           value={value || ''}
           onChange={(e) => onChange(e.target.value || null)}
           disabled={isDisabled}
           className={cn(
-            'w-full text-sm rounded-md border px-3 py-2 pr-8',
-            'transition-colors duration-200 appearance-none',
+            'w-full rounded-md border appearance-none',
+            'transition-colors duration-200',
             'bg-background border-input text-foreground',
-            'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+            'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
             !isDisabled && 'hover:border-primary/50',
             isDisabled && 'opacity-50 cursor-not-allowed',
-            loading && 'cursor-wait'
+            loading && 'cursor-wait',
+            compact ? 'text-xs px-2 py-1 pr-6' : 'text-sm px-3 py-2 pr-8'
           )}
         >
           <option value="">{placeholder}</option>
@@ -87,14 +98,15 @@ export function FilterSelect({
 
         <div
           className={cn(
-            'absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none',
+            'absolute inset-y-0 right-0 flex items-center pointer-events-none',
+            compact ? 'pr-1.5' : 'pr-2',
             isDisabled ? 'opacity-50' : 'opacity-70'
           )}
         >
           {loading ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={compact ? 12 : 14} className="animate-spin" />
           ) : (
-            <ChevronDown size={14} />
+            <ChevronDown size={compact ? 12 : 14} />
           )}
         </div>
       </div>

@@ -4,6 +4,9 @@ import { QueryClient, isServer } from '@tanstack/react-query'
  * Конфигурация staleTime для разных типов данных
  */
 export const staleTimePresets = {
+  /** Праздники, годовые справочники - практически не меняются */
+  eternal: 24 * 60 * 60 * 1000, // 24 часа
+
   /** Справочники - редко меняются */
   static: 10 * 60 * 1000, // 10 минут
 

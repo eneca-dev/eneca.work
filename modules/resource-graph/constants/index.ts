@@ -40,11 +40,11 @@ export const LOADING_STATUS_COLORS = {
 /** Высота строки в пикселях */
 export const ROW_HEIGHT = 40
 
-/** Минимальная ширина ячейки дня */
-export const MIN_DAY_WIDTH = 24
+/** Фиксированная ширина ячейки дня в пикселях */
+export const DAY_CELL_WIDTH = 36
 
 /** Ширина боковой панели */
-export const SIDEBAR_WIDTH = 280
+export const SIDEBAR_WIDTH = 320
 
 // ============================================================================
 // Default Values

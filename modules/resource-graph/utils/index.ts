@@ -16,6 +16,8 @@ import type {
   Section,
   DecompositionStage,
   DecompositionItem,
+  CompanyCalendarEvent,
+  DayInfo,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -330,4 +332,116 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
   }
 
   return Array.from(projectsMap.values())
+}
+
+// ============================================================================
+// Calendar Utilities - Праздники и переносы
+// ============================================================================
+
+/**
+ * Форматирует дату в строку для использования в качестве ключа
+ *
+ * @param date - Дата
+ * @returns Строка в формате 'YYYY-MM-DD'
+ */
+export function formatDateKey(date: Date): string {
+  return format(date, 'yyyy-MM-dd')
+}
+
+/**
+ * Создаёт карту информации о днях на основе событий календаря
+ *
+ * Учитывает:
+ * - Праздники (isHoliday = true, isWorkday = false)
+ * - Переносы: рабочая суббота (isTransferredWorkday = true)
+ * - Переносы: выходной будний день (isTransferredDayOff = true)
+ *
+ * @param events - Массив событий календаря
+ * @returns Map<dateKey, DayInfo>
+ */
+export function buildCalendarMap(events: CompanyCalendarEvent[]): Map<string, Partial<DayInfo>> {
+  const map = new Map<string, Partial<DayInfo>>()
+
+  for (const event of events) {
+    // Парсим дату начала
+    const startDate = new Date(event.dateStart)
+    const endDate = event.dateEnd ? new Date(event.dateEnd) : startDate
+
+    // Обрабатываем каждый день диапазона
+    let current = startDate
+    while (current <= endDate) {
+      const key = formatDateKey(current)
+
+      if (event.type === 'Праздник') {
+        // Праздник - день становится выходным
+        map.set(key, {
+          ...map.get(key),
+          isHoliday: true,
+          holidayName: event.name,
+          isWorkday: false,
+        })
+      } else if (event.type === 'Перенос') {
+        // Перенос рабочего дня
+        if (event.isWorkday === true) {
+          // Суббота/воскресенье становится рабочим днём
+          map.set(key, {
+            ...map.get(key),
+            isTransferredWorkday: true,
+            isWorkday: true,
+          })
+        } else if (event.isWorkday === false) {
+          // Будний день становится выходным
+          map.set(key, {
+            ...map.get(key),
+            isTransferredDayOff: true,
+            isWorkday: false,
+          })
+        }
+      }
+
+      current = addDays(current, 1)
+    }
+  }
+
+  return map
+}
+
+/**
+ * Вычисляет полную информацию о дне с учётом праздников и переносов
+ *
+ * @param date - Дата
+ * @param calendarMap - Карта календарных событий
+ * @returns Полная информация о дне
+ */
+export function getDayInfo(date: Date, calendarMap: Map<string, Partial<DayInfo>>): DayInfo {
+  const key = formatDateKey(date)
+  const calendarInfo = calendarMap.get(key)
+  const dayOfWeek = date.getDay()
+  const isDefaultWeekend = dayOfWeek === 0 || dayOfWeek === 6
+
+  // Базовые значения
+  const baseInfo: DayInfo = {
+    date,
+    isHoliday: false,
+    holidayName: null,
+    isWorkday: !isDefaultWeekend, // По умолчанию: Пн-Пт - рабочие, Сб-Вс - выходные
+    isDefaultWeekend,
+    isTransferredWorkday: false,
+    isTransferredDayOff: false,
+  }
+
+  // Если нет информации в календаре - возвращаем базовые значения
+  if (!calendarInfo) {
+    return baseInfo
+  }
+
+  // Применяем информацию из календаря
+  return {
+    ...baseInfo,
+    isHoliday: calendarInfo.isHoliday ?? baseInfo.isHoliday,
+    holidayName: calendarInfo.holidayName ?? baseInfo.holidayName,
+    isWorkday: calendarInfo.isWorkday ?? baseInfo.isWorkday,
+    isTransferredWorkday: calendarInfo.isTransferredWorkday ?? baseInfo.isTransferredWorkday,
+    isTransferredDayOff: calendarInfo.isTransferredDayOff ?? baseInfo.isTransferredDayOff,
+  }
 }
