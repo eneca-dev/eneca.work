@@ -22,7 +22,11 @@ import { useAnnouncements } from "@/modules/announcements/hooks/useAnnouncements
 import { useAnnouncementsPermissions } from "@/modules/permissions/hooks/usePermissions"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
 import { toast } from "@/components/ui/use-toast"
-import { getNotificationTypeCounts } from "@/modules/notifications/api/notifications"
+import { useUserStore } from "@/stores/useUserStore"
+import {
+  useNotificationsInfinite,
+  useNotificationTypeCounts,
+} from "../hooks/use-notifications"
 
 interface NotificationsPanelProps {
   // Переименовано для соответствия правилу сериализуемых пропсов в Next.js
@@ -67,29 +71,52 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     }, 16)
   , [setPointerPosition])
 
-  // Серверные счетчики по типам (без архива)
-  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
-  const [isLoadingTypeCounts, setIsLoadingTypeCounts] = useState(false)
   // Локальный индикатор ручного обновления по кнопке
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   // Количество точек в анимации загрузки счетчиков типов (1..3)
   const [loadingDots, setLoadingDots] = useState(1)
 
-  const { 
-    notifications, 
-    isLoading, 
-    error, 
-    fetchNotifications, 
+  // Получаем текущего пользователя
+  const userId = useUserStore((s) => s.id)
+
+  // UI state из store (пока оставляем)
+  const {
     markAsRead,
     markAsReadInDB,
     clearAll,
-    // Поля для пагинации
-    hasMore,
-    isLoadingMore,
-    loadMoreNotifications,
-    setServerTypeFilter,
-    clearServerFilters
   } = useNotificationsStore()
+
+  // TanStack Query hooks для данных
+  const {
+    data: queryData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isPending: isLoading,
+    error: queryError,
+    refetch
+  } = useNotificationsInfinite({
+    userId: userId!,
+    filters: {
+      onlyUnread: readFilter === 'unread',
+      includeArchived: readFilter === 'archived',
+      types: selectedTypes.size > 0 ? Array.from(selectedTypes) : undefined,
+    }
+  }, { enabled: !!userId })
+
+  // Преобразуем страницы в плоский массив
+  const notifications = useMemo(() => queryData?.pages.flat() ?? [], [queryData])
+
+  // Алиасы для совместимости
+  const hasMore = hasNextPage
+  const isLoadingMore = isFetchingNextPage
+  const error = queryError?.message || null
+
+  // Счётчики типов
+  const { data: typeCounts = {}, isPending: isLoadingTypeCounts } = useNotificationTypeCounts({
+    userId: userId!,
+    options: { includeArchived: readFilter === 'archived' }
+  }, { enabled: !!userId && isTypeFilterOpen })
 
   // Локальные состояния для клиентской пагинации при активных фильтрах
   // Клиентская предзагрузка не используется
@@ -140,25 +167,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // Фоновая предзагрузка отключена вместе с поиском
 
-  // При открытии поповера типов — загружаем серверные счетчики (исключая архив)
-  useEffect(() => {
-    if (!isTypeFilterOpen) return
-    if (!currentUserId) return
-    let cancelled = false
-    const loadCounts = async () => {
-      try {
-        setIsLoadingTypeCounts(true)
-        const counts = await getNotificationTypeCounts(currentUserId, { includeArchived: false })
-        if (!cancelled) setTypeCounts(counts)
-      } catch (e) {
-        console.error('Ошибка загрузки счетчиков типов уведомлений:', e)
-      } finally {
-        if (!cancelled) setIsLoadingTypeCounts(false)
-      }
-    }
-    loadCounts()
-    return () => { cancelled = true }
-  }, [isTypeFilterOpen, currentUserId])
+  // Счётчики типов загружаются через TanStack Query hook выше
 
   // Анимация точек во время загрузки счетчиков типов
   useEffect(() => {
@@ -192,16 +201,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
     setVisibleFilteredCount(10)
   }, [])
 
-  // Реакция на изменение выбранных типов: инициируем серверную фильтрацию пачками по 10
-  useEffect(() => {
-    const typesArray = Array.from(selectedTypes)
-    if (typesArray.length > 0) {
-      const normalized = typesArray // нормализация больше не нужна
-      setServerTypeFilter(normalized)
-    } else {
-      clearServerFilters()
-    }
-  }, [selectedTypes, setServerTypeFilter, clearServerFilters])
+  // TanStack Query автоматически refetch при изменении selectedTypes через query key
 
   // Обработчики для модального окна создания объявлений
   const handleCreateAnnouncement = useCallback(() => {
@@ -269,13 +269,13 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
       if (isNearBottom && hasMore && !isLoadingMore && !isLoading) {
         console.log('📜 Достигнут конец списка, загружаем дополнительные уведомления')
-        loadMoreNotifications()
+        fetchNextPage()
       }
     }
 
     scrollElement.addEventListener('scroll', handleScroll, { passive: true })
     return () => scrollElement.removeEventListener('scroll', handleScroll)
-  }, [hasMore, isLoadingMore, isLoading, loadMoreNotifications, isClientFilterMode, visibleFilteredCount])
+  }, [hasMore, isLoadingMore, isLoading, fetchNextPage, isClientFilterMode, visibleFilteredCount])
 
   // Авто-прочтение отключено: больше не помечаем как прочитанные при появлении в зоне видимости
 
@@ -353,14 +353,14 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Эффект для обновления уведомлений при первом открытии панели
   useEffect(() => {
     // Проверяем условия для обновления уведомлений
-    if (hasPanelBeenOpened || !currentUserId) return
+    if (hasPanelBeenOpened || !userId) return
 
     console.log('🔄 Панель уведомлений открыта впервые - обновляем уведомления')
     setHasPanelBeenOpened(true)
     setIsRefreshingOnOpen(true)
 
     // Запускаем обновление уведомлений
-    fetchNotifications()
+    refetch()
       .then(() => {
         console.log('✅ Уведомления успешно обновлены при открытии панели')
       })
@@ -372,7 +372,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           setIsRefreshingOnOpen(false)
         }
       })
-  }, [hasPanelBeenOpened, currentUserId, fetchNotifications])
+  }, [hasPanelBeenOpened, userId, refetch])
 
   // Фильтрация уведомлений
   const filteredNotifications = useMemo(() => {
@@ -437,7 +437,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
           span.setAttribute("refresh.trigger", "manual")
           span.setAttribute("notifications.current_count", notifications.length)
 
-          await fetchNotifications()
+          await refetch()
 
           span.setAttribute("refresh.success", true)
 
@@ -714,7 +714,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
                 {/* Триггер для догрузки при достижении низа (страховка) */}
                 {hasMore && !isLoadingMore && (
                   <div className="flex justify-center py-2">
-                    <Button variant="ghost" size="sm" onClick={loadMoreNotifications}>
+                    <Button variant="ghost" size="sm" onClick={() => fetchNextPage()}>
                       Загрузить ещё
                     </Button>
                   </div>

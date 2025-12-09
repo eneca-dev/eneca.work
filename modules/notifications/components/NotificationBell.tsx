@@ -5,8 +5,10 @@ import * as Sentry from "@sentry/nextjs"
 import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useNotificationsStore } from "@/stores"
+import { useUserStore } from "@/stores/useUserStore"
 import { NotificationsPanel } from "./NotificationsPanel"
 import { cn } from "@/lib/utils"
+import { useUnreadCount } from "../hooks/use-notifications"
 
 interface NotificationBellProps {
   collapsed?: boolean
@@ -17,7 +19,12 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
   const togglePanel = useNotificationsStore((s) => s.togglePanel)
   const closePanel = useNotificationsStore((s) => s.closePanel)
   const [mounted, setMounted] = useState(false)
-  const unreadCount = useNotificationsStore((state) => state.unreadCount)
+
+  // Получаем userId
+  const userId = useUserStore((s) => s.id)
+
+  // Получаем unreadCount через TanStack Query
+  const { data: unreadCount = 0 } = useUnreadCount(userId!, { enabled: !!userId && mounted })
   
   // Проверяем, что компонент полностью гидратировался
   useEffect(() => {
