@@ -158,7 +158,7 @@ export default function CalendarPage() {
           {/* Action buttons on the right */}
           <div className="flex flex-wrap gap-4">
             <Button onClick={() => setActiveDialog("event")}>Добавить событие</Button>
-            <Button onClick={() => setActiveDialog("work-schedule")}>Изменить рабочий график</Button>
+            <Button onClick={() => setActiveDialog("work-schedule")}>Изменить рабочий график компании</Button>
             {/* Функциональность перенесена в загрузки 
             <Button
               onClick={() => setShowVacationManagement(true)}
@@ -200,7 +200,7 @@ export default function CalendarPage() {
       <Dialog open={activeDialog === "work-schedule"} onOpenChange={handleCloseDialog}>
         <DialogContent className="!max-w-4xl sm:!max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Изменить рабочий график</DialogTitle>
+            <DialogTitle>Изменить рабочий график компании</DialogTitle>
           </DialogHeader>
           <UnifiedWorkScheduleForm onClose={handleCloseDialog} />
         </DialogContent>
