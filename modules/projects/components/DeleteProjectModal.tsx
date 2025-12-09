@@ -280,7 +280,7 @@ export function DeleteProjectModal({
       { label: 'Загрузки', count: stats.loadings_count, icon: '⏰' },
       { label: 'Передачи', count: stats.assignments_count, icon: '🔄' },
       { label: 'Договоры', count: stats.contracts_count, icon: '📄' },
-      { label: 'Декомпозиция', count: stats.decompositions_count, icon: '🔧' }
+      { label: 'Задача', count: stats.decompositions_count, icon: '🔧' }
     ]
 
     return (

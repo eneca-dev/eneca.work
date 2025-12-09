@@ -63,7 +63,7 @@ export function ProjectIntensityBar({
         return (
           <div
             key={idx}
-            className="pointer-events-auto"
+            className="pointer-events-auto relative flex items-center justify-center"
             style={{
               width: `${unit.width ?? cellWidth}px`,
               minWidth: `${unit.width ?? cellWidth}px`,
@@ -72,7 +72,21 @@ export function ProjectIntensityBar({
               flexShrink: 0,
             }}
             title={hasLoad ? `${day.totalRate.toFixed(1)} ставок • ${day.teamsCount} команд • ${day.employeesCount} человек` : undefined}
-          />
+          >
+            {hasLoad && (
+              <span
+                className="select-none"
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 500,
+                  color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)',
+                  lineHeight: 1,
+                }}
+              >
+                {day.totalRate >= 10 ? Math.round(day.totalRate) : (day.totalRate % 1 === 0 ? day.totalRate : day.totalRate.toFixed(1))}
+              </span>
+            )}
+          </div>
         )
       })}
     </div>
