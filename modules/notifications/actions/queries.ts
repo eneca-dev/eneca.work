@@ -45,16 +45,33 @@ export async function getNotificationsPaginated(input: {
     const limit = input.limit ?? 20
     const { userId, page, filters } = input
 
+    // DEBUG: Логируем входные параметры
+    console.log('🔍 [Server Action] getNotificationsPaginated called:', {
+      userId,
+      page,
+      limit,
+      filters,
+      includeArchived: filters?.includeArchived ?? false,
+    })
+
     // Выбираем API функцию в зависимости от фильтров
     let result
     if (filters?.types && filters.types.length > 0) {
       // Фильтрация по типам
+      console.log('🔍 [Server Action] Using getUserNotificationsByTypes')
       result = await getUserNotificationsByTypes(userId, filters.types, page, limit, {
         includeArchived: filters.includeArchived ?? false,
       })
     } else {
-      // Обычная пагинация с опциональным фильтром "только непрочитанные"
-      result = await getUserNotifications(userId, page, limit, filters?.onlyUnread ?? false)
+      // Обычная пагинация с опциональными фильтрами
+      console.log('🔍 [Server Action] Using getUserNotifications with includeArchived:', filters?.includeArchived ?? false)
+      result = await getUserNotifications(
+        userId,
+        page,
+        limit,
+        filters?.onlyUnread ?? false,
+        filters?.includeArchived ?? false
+      )
     }
 
     // Трансформируем данные в UI-формат

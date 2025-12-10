@@ -10,7 +10,13 @@ import { ru } from "date-fns/locale"
 import { ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
 import type { Notification } from "@/modules/notifications/utils/transform"
 import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useUserStore } from "@/stores/useUserStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
+import {
+  useMarkAsRead,
+  useMarkAsUnread,
+  useArchiveNotification,
+} from "../hooks/use-notifications"
 import { useProjectsStore } from "@/modules/projects/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -68,7 +74,15 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     ? notification.payload?.section_comment?.author_name 
     : null
 
-  const { markAsRead, markAsUnread, markAsReadInDB, markAsUnreadInDB, setArchivedInDB, setNotificationArchived } = useNotificationsStore()
+  // Получаем userId для mutations
+  const userId = useUserStore((s) => s.id)
+
+  // Mutation hooks для операций с уведомлениями
+  const markAsReadMutation = useMarkAsRead(userId!)
+  const markAsUnreadMutation = useMarkAsUnread(userId!)
+  const archiveMutation = useArchiveNotification(userId!)
+
+  // UI state из Zustand (hover, pointer position)
   const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
   const setHoveredNotification = useNotificationsStore((s) => s.setHoveredNotification)
   const clearHoveredNotification = useNotificationsStore((s) => s.clearHoveredNotification)
@@ -370,45 +384,13 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 variant="ghost"
                 size="icon"
                 ref={readBtnRef}
-                onClick={async (e) => {
+                onClick={(e) => {
                   e.stopPropagation()
-                  try {
-                    await Sentry.startSpan({ op: "notifications.toggle_read_click", name: "Toggle Read Click" }, async (span) => {
-                      span.setAttribute("notification.id", notification.id)
-                      if (!notification.isRead) {
-                        markAsRead(notification.id)
-                        try {
-                          await markAsReadInDB(notification.id)
-                          span.setAttribute("mark.success", true)
-                        } catch (error) {
-                          span.setAttribute("mark.success", false)
-                          span.recordException(error as Error)
-                          Sentry.captureException(error, {
-                            tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'db_error' },
-                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                          })
-                        }
-                      } else {
-                        // Делаем непрочитанным локально и в БД
-                        markAsUnread(notification.id)
-                        try {
-                          await markAsUnreadInDB(notification.id)
-                          span.setAttribute("unmark.success", true)
-                        } catch (error) {
-                          span.setAttribute("unmark.success", false)
-                          span.recordException(error as Error)
-                          Sentry.captureException(error, {
-                            tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_unread_click', error_type: 'db_error' },
-                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                          })
-                        }
-                      }
-                    })
-                  } catch (error) {
-                    Sentry.captureException(error, {
-                      tags: { module: 'notifications', component: 'NotificationItem', action: 'toggle_read_click', error_type: 'unexpected_error' },
-                      extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                    })
+                  // Используем mutation hooks с автоматическим optimistic update и rollback
+                  if (!notification.isRead) {
+                    markAsReadMutation.mutate({ id: notification.id, userId: userId! })
+                  } else {
+                    markAsUnreadMutation.mutate({ id: notification.id, userId: userId! })
                   }
                 }}
                 {...createButtonHoverHandlers(readBtnRef, setIsReadButtonHovered)}
@@ -462,58 +444,12 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                 ref={archiveBtnRef}
                 onClick={async (e) => {
                   e.stopPropagation()
-                  try {
-                    await Sentry.startSpan({ op: "notifications.archive_click", name: "Archive Notification" }, async (span) => {
-                      span.setAttribute("notification.id", notification.id)
-                      if (!notification.isRead) {
-                        markAsRead(notification.id)
-                        try {
-                          await markAsReadInDB(notification.id)
-                        } catch (error) {
-                          // Логируем ошибку вместо молчаливого игнорирования и делаем минимальное восстановление (ретрай)
-                          Sentry.captureException(error, {
-                            tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read', error_type: 'db_error' },
-                            extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                          })
-                          console.error('Не удалось отметить уведомление прочитанным в БД перед архивированием', {
-                            notificationId: notification.id,
-                            error,
-                          })
-
-                          // Минимальное восстановление: однократная отложенная попытка
-                          setTimeout(() => {
-                            markAsReadInDB(notification.id).catch((retryError) => {
-                              Sentry.captureException(retryError, {
-                                tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click_mark_read_retry', error_type: 'db_error' },
-                                extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                              })
-                              console.error('Повторная попытка отметить прочитанным в БД не удалась', {
-                                notificationId: notification.id,
-                                error: retryError,
-                              })
-                            })
-                          }, 2000)
-                        }
-                      }
-                      setNotificationArchived(notification.id, true)
-                      try {
-                        await setArchivedInDB(notification.id, true)
-                        span.setAttribute("archive.success", true)
-                      } catch (error) {
-                        span.setAttribute("archive.success", false)
-                        span.recordException(error as Error)
-                        Sentry.captureException(error, {
-                          tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'db_error' },
-                          extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                        })
-                      }
-                    })
-                  } catch (error) {
-                    Sentry.captureException(error, {
-                      tags: { module: 'notifications', component: 'NotificationItem', action: 'archive_click', error_type: 'unexpected_error' },
-                      extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                    })
+                  // Если непрочитанное, сначала отметить прочитанным
+                  if (!notification.isRead) {
+                    await markAsReadMutation.mutateAsync({ id: notification.id, userId: userId! })
                   }
+                  // Затем архивировать
+                  archiveMutation.mutate({ id: notification.id, userId: userId!, isArchived: true })
                 }}
                 {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
                 className={cn(
@@ -533,30 +469,10 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
               variant="ghost"
               size="icon"
               ref={archiveBtnRef}
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation()
-                try {
-                  await Sentry.startSpan({ op: "notifications.unarchive_click", name: "Unarchive Notification" }, async (span) => {
-                    span.setAttribute("notification.id", notification.id)
-                    setNotificationArchived(notification.id, false)
-                    try {
-                      await setArchivedInDB(notification.id, false)
-                      span.setAttribute("unarchive.success", true)
-                    } catch (error) {
-                      span.setAttribute("unarchive.success", false)
-                      span.recordException(error as Error)
-                      Sentry.captureException(error, {
-                        tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'db_error' },
-                        extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                      })
-                    }
-                  })
-                } catch (error) {
-                  Sentry.captureException(error, {
-                    tags: { module: 'notifications', component: 'NotificationItem', action: 'unarchive_click', error_type: 'unexpected_error' },
-                    extra: { notification_id: notification.id, timestamp: new Date().toISOString() }
-                  })
-                }
+                // Разархивировать уведомление
+                archiveMutation.mutate({ id: notification.id, userId: userId!, isArchived: false })
               }}
               {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
               className={cn(

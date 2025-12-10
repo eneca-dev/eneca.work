@@ -81,8 +81,6 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
 
   // UI state из store (пока оставляем)
   const {
-    markAsRead,
-    markAsReadInDB,
     clearAll,
   } = useNotificationsStore()
 
