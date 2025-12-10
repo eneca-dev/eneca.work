@@ -6,13 +6,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
     const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '100') || 100), 500)
+    const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc'
     const offset = (page - 1) * limit
 
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      console.error('Authentication error in feedback analytics data:', authError?.message)
+      console.error('Authentication error in user reports:', authError?.message)
       return NextResponse.json(
         { error: 'Unauthorized', data: [] },
         { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -41,10 +42,10 @@ export async function GET(request: Request) {
       )
     }
 
+    // Получаем общее количество записей
     const { count, error: countError } = await supabase
-      .from("user_feedback")
+      .from("user_reports")
       .select("*", { count: 'exact', head: true })
-      .or("completed.eq.true,next_survey_at.eq.infinity")
 
     if (countError) {
       console.error('Error fetching count:', countError.message)
@@ -54,24 +55,45 @@ export async function GET(request: Request) {
       )
     }
 
-    const { data: feedbackData, error: feedbackError } = await supabase
-      .from("user_feedback")
-      .select("id, user_id, first_name, last_name, score, had_problems, problem_text, created_at, updated_at, completed, answers, next_survey_at")
-      .or("completed.eq.true,next_survey_at.eq.infinity")
-      .order("created_at", { ascending: false })
+    // Получаем данные с JOIN к profiles
+    const { data: reportsData, error: reportsError } = await supabase
+      .from("user_reports")
+      .select(`
+        user_report_id,
+        user_report_short_description,
+        user_report_detailed_description,
+        user_report_created_at,
+        user_report_created_by,
+        profiles:user_report_created_by (
+          first_name,
+          last_name
+        )
+      `)
+      .order("user_report_created_at", { ascending: sortOrder === 'asc' })
       .range(offset, offset + limit - 1)
 
-    if (feedbackError) {
-      console.error('Error fetching feedback data:', feedbackError.message)
+    if (reportsError) {
+      console.error('Error fetching user reports data:', reportsError.message)
       return NextResponse.json(
         { error: 'Failed to fetch data', data: [] },
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
+    // Преобразуем данные для удобства использования на фронтенде
+    const formattedData = (reportsData || []).map((report: any) => ({
+      user_report_id: report.user_report_id,
+      user_report_short_description: report.user_report_short_description,
+      user_report_detailed_description: report.user_report_detailed_description,
+      user_report_created_at: report.user_report_created_at,
+      user_report_created_by: report.user_report_created_by,
+      first_name: report.profiles?.first_name || 'Неизвестно',
+      last_name: report.profiles?.last_name || '',
+    }))
+
     return NextResponse.json(
       {
-        data: feedbackData || [],
+        data: formattedData,
         pagination: {
           page,
           limit,
@@ -82,7 +104,7 @@ export async function GET(request: Request) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Unexpected error in feedback analytics data:', error instanceof Error ? error.message : 'Unknown error')
+    console.error('Unexpected error in user reports:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(
       { error: 'Internal server error', data: [] },
       { status: 500, headers: { 'Content-Type': 'application/json' } }
