@@ -9,11 +9,6 @@
 import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { MarkAsReadInput, ArchiveNotificationInput } from './types'
-import {
-  markNotificationAsRead,
-  markNotificationAsUnread,
-  markAllNotificationsAsRead,
-} from '@/modules/notifications/api/notifications'
 import { createClient } from '@/utils/supabase/server'
 
 /**
@@ -43,7 +38,23 @@ export async function markAsRead(
         span.setAttribute('user.id', input.userId)
         span.setAttribute('user_notification.id', input.id)
 
-        await markNotificationAsRead(input.userId, input.id)
+        // ВАЖНО: Используем прямой запрос с серверным клиентом
+        // Избегаем использования API-функции markNotificationAsRead(),
+        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        const supabase = await createClient()
+        const { error } = await supabase
+          .from('user_notifications')
+          .update({
+            is_read: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', input.userId)
+          .eq('id', input.id)
+
+        if (error) {
+          console.error('[markAsRead] Supabase error:', error)
+          throw error
+        }
 
         span.setAttribute('mark.success', true)
         return { success: true, data: undefined }
@@ -104,7 +115,23 @@ export async function markAsUnread(
         span.setAttribute('user.id', input.userId)
         span.setAttribute('user_notification.id', input.id)
 
-        await markNotificationAsUnread(input.userId, input.id)
+        // ВАЖНО: Используем прямой запрос с серверным клиентом
+        // Избегаем использования API-функции markNotificationAsUnread(),
+        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        const supabase = await createClient()
+        const { error } = await supabase
+          .from('user_notifications')
+          .update({
+            is_read: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', input.userId)
+          .eq('id', input.id)
+
+        if (error) {
+          console.error('[markAsUnread] Supabase error:', error)
+          throw error
+        }
 
         span.setAttribute('unmark.success', true)
         return { success: true, data: undefined }
@@ -244,7 +271,23 @@ export async function markAllAsRead(input: {
       try {
         span.setAttribute('user.id', input.userId)
 
-        await markAllNotificationsAsRead(input.userId)
+        // ВАЖНО: Используем прямой запрос с серверным клиентом
+        // Избегаем использования API-функции markAllNotificationsAsRead(),
+        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        const supabase = await createClient()
+        const { error } = await supabase
+          .from('user_notifications')
+          .update({
+            is_read: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', input.userId)
+          .eq('is_read', false)
+
+        if (error) {
+          console.error('[markAllAsRead] Supabase error:', error)
+          throw error
+        }
 
         span.setAttribute('mark_all.success', true)
         return { success: true, data: undefined }
