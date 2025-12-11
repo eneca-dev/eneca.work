@@ -303,15 +303,8 @@ export function useMarkAsRead() {
         )
       }
     },
-    onSettled: (data, error, variables, context) => {
-      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
-      if (!error && context?.infiniteQueries) {
-        context.infiniteQueries.clear()
-      }
-
-      // Always refetch after mutation to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
-    },
+    // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
+    // при изменении таблицы user_notifications (см. modules/cache/realtime/config.ts)
   })
 }
 
@@ -398,15 +391,8 @@ export function useMarkAsUnread() {
         )
       }
     },
-    onSettled: (data, error, variables, context) => {
-      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
-      if (!error && context?.infiniteQueries) {
-        context.infiniteQueries.clear()
-      }
-
-      // Always refetch after mutation to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
-    },
+    // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
+    // при изменении таблицы user_notifications (см. modules/cache/realtime/config.ts)
   })
 }
 
@@ -568,15 +554,8 @@ export function useArchiveNotification() {
         )
       }
     },
-    onSettled: (data, error, variables, context) => {
-      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
-      if (!error && context?.infiniteQueries) {
-        context.infiniteQueries.clear()
-      }
-
-      // Always refetch after mutation to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
-    },
+    // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
+    // при изменении таблицы user_notifications (см. modules/cache/realtime/config.ts)
   })
 }
 
