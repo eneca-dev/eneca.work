@@ -6,7 +6,12 @@
 
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query'
 import {
   createCacheQuery,
   createInfiniteCacheQuery,
@@ -65,6 +70,74 @@ export interface TypeCountsParams {
   options?: {
     includeArchived?: boolean
   }
+}
+
+// ============================================================================
+// Helper Functions для Optimistic Updates
+// ============================================================================
+
+/**
+ * Применяет операцию к элементам в infinite query с early exit оптимизацией.
+ *
+ * Обходит все queries, соответствующие queryKeyBase, и применяет operation
+ * к каждой странице. Прекращает обработку оставшихся страниц после того,
+ * как operation вернёт found: true.
+ *
+ * @param queryClient - TanStack Query client
+ * @param queryKeyBase - Базовый query key для поиска queries
+ * @param operation - Функция для трансформации страницы.
+ *   Возвращает { page, found }, где:
+ *   - page: обновлённая страница
+ *   - found: true если целевой элемент найден (triggers early exit)
+ *
+ * @example
+ * ```typescript
+ * updateInfiniteQueriesWithEarlyExit(
+ *   queryClient,
+ *   queryKeys.notifications.lists(),
+ *   (page) => {
+ *     const notification = page.find((n) => n.id === targetId)
+ *     if (!notification) return { page, found: false }
+ *
+ *     const newPage = page.map((n) =>
+ *       n.id === targetId ? { ...n, isRead: true } : n
+ *     )
+ *     return { page: newPage, found: true }
+ *   }
+ * )
+ * ```
+ */
+function updateInfiniteQueriesWithEarlyExit(
+  queryClient: QueryClient,
+  queryKeyBase: readonly unknown[],
+  operation: (page: Notification[]) => { page: Notification[]; found: boolean }
+): void {
+  queryClient
+    .getQueryCache()
+    .findAll({ queryKey: queryKeyBase })
+    .forEach((query) => {
+      let found = false // Early exit flag
+
+      queryClient.setQueryData<InfiniteData<Notification[]>>(
+        query.queryKey,
+        (old) => {
+          if (!old?.pages || found) return old
+
+          const newPages = old.pages.map((page) => {
+            if (found) return page // Skip remaining pages
+
+            const result = operation(page)
+            if (result.found) {
+              found = true // Mark as found for early exit
+            }
+
+            return result.page
+          })
+
+          return { ...old, pages: newPages }
+        }
+      )
+    })
 }
 
 // ============================================================================
@@ -188,22 +261,19 @@ export function useMarkAsRead() {
         })
 
       // Optimistic update: mark as read in ALL infinite query lists
-      queryClient
-        .getQueryCache()
-        .findAll({ queryKey: queryKeys.notifications.lists() })
-        .forEach((query) => {
-          queryClient.setQueryData(query.queryKey, (old: any) => {
-            if (!old?.pages) return old
-            return {
-              ...old,
-              pages: old.pages.map((page: Notification[]) =>
-                page.map((n: Notification) =>
-                  n.id === id ? { ...n, isRead: true } : n
-                )
-              ),
-            }
-          })
-        })
+      updateInfiniteQueriesWithEarlyExit(
+        queryClient,
+        queryKeys.notifications.lists(),
+        (page) => {
+          const notification = page.find((n) => n.id === id)
+          if (!notification) return { page, found: false }
+
+          const newPage = page.map((n) =>
+            n.id === id ? { ...n, isRead: true } : n
+          )
+          return { page: newPage, found: true }
+        }
+      )
 
       // Optimistic update: decrement unreadCount
       queryClient.setQueryData(
@@ -286,22 +356,19 @@ export function useMarkAsUnread() {
         })
 
       // Optimistic update: mark as unread in ALL infinite query lists
-      queryClient
-        .getQueryCache()
-        .findAll({ queryKey: queryKeys.notifications.lists() })
-        .forEach((query) => {
-          queryClient.setQueryData(query.queryKey, (old: any) => {
-            if (!old?.pages) return old
-            return {
-              ...old,
-              pages: old.pages.map((page: Notification[]) =>
-                page.map((n: Notification) =>
-                  n.id === id ? { ...n, isRead: false } : n
-                )
-              ),
-            }
-          })
-        })
+      updateInfiniteQueriesWithEarlyExit(
+        queryClient,
+        queryKeys.notifications.lists(),
+        (page) => {
+          const notification = page.find((n) => n.id === id)
+          if (!notification) return { page, found: false }
+
+          const newPage = page.map((n) =>
+            n.id === id ? { ...n, isRead: false } : n
+          )
+          return { page: newPage, found: true }
+        }
+      )
 
       // Optimistic update: increment unreadCount
       queryClient.setQueryData(
@@ -405,15 +472,17 @@ export function useArchiveNotification() {
             }
 
             // Remove from list (archiving)
-            queryClient.setQueryData(query.queryKey, (old: any) => {
-              if (!old?.pages) return old
-              return {
-                ...old,
-                pages: old.pages.map((page: Notification[]) =>
-                  page.filter((n: Notification) => n.id !== id)
-                ),
+            updateInfiniteQueriesWithEarlyExit(
+              queryClient,
+              queryKeys.notifications.lists(),
+              (page) => {
+                const notification = page.find((n) => n.id === id)
+                if (!notification) return { page, found: false }
+
+                const newPage = page.filter((n) => n.id !== id)
+                return { page: newPage, found: true }
               }
-            })
+            )
           })
 
         // If notification was unread, decrement count
@@ -427,20 +496,17 @@ export function useArchiveNotification() {
       // Optimistic update: unarchive (isArchived = false)
       else {
         // Remove from archived lists
-        queryClient
-          .getQueryCache()
-          .findAll({ queryKey: queryKeys.notifications.lists() })
-          .forEach((query) => {
-            queryClient.setQueryData(query.queryKey, (old: any) => {
-              if (!old?.pages) return old
-              return {
-                ...old,
-                pages: old.pages.map((page: Notification[]) =>
-                  page.filter((n: Notification) => n.id !== id)
-                ),
-              }
-            })
-          })
+        updateInfiniteQueriesWithEarlyExit(
+          queryClient,
+          queryKeys.notifications.lists(),
+          (page) => {
+            const notification = page.find((n) => n.id === id)
+            if (!notification) return { page, found: false }
+
+            const newPage = page.filter((n) => n.id !== id)
+            return { page: newPage, found: true }
+          }
+        )
 
         // If notification object is provided, add to non-archived lists
         if (notification) {
@@ -460,18 +526,21 @@ export function useArchiveNotification() {
 
               // If this is NOT an archived list (includeArchived !== true)
               if (!filters?.includeArchived) {
-                queryClient.setQueryData(query.queryKey, (old: any) => {
-                  if (!old?.pages || old.pages.length === 0) return old
+                queryClient.setQueryData<InfiniteData<Notification[]>>(
+                  query.queryKey,
+                  (old) => {
+                    if (!old?.pages || old.pages.length === 0) return old
 
-                  // Add to beginning of first page
-                  return {
-                    ...old,
-                    pages: [
-                      [unarchivedNotification, ...old.pages[0]],
-                      ...old.pages.slice(1),
-                    ],
+                    // Add to beginning of first page
+                    return {
+                      ...old,
+                      pages: [
+                        [unarchivedNotification, ...old.pages[0]],
+                        ...old.pages.slice(1),
+                      ],
+                    }
                   }
-                })
+                )
               }
             })
         }
