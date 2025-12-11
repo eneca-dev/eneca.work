@@ -29,6 +29,19 @@ import {
 import type { Notification } from '../utils/transform'
 
 // ============================================================================
+// Типы для optimistic updates
+// ============================================================================
+
+/**
+ * Контекст для optimistic updates
+ * Хранит минимально необходимые данные для rollback
+ */
+interface OptimisticUpdateContext {
+  infiniteQueries: Map<readonly unknown[], unknown>
+  unreadCount?: number
+}
+
+// ============================================================================
 // Типы для фильтров
 // ============================================================================
 
@@ -160,13 +173,18 @@ export function useMarkAsRead() {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
-      // Snapshot ALL infinite queries and unreadCount
-      const previousData = new Map()
+      // КОПИРУЕМ ТОЛЬКО НЕОБХОДИМОЕ
+      const previousData: OptimisticUpdateContext = {
+        infiniteQueries: new Map(),
+        unreadCount: queryClient.getQueryData(queryKeys.notifications.unreadCount(userId)),
+      }
+
+      // Находим и сохраняем ТОЛЬКО infinite queries (списки уведомлений)
       queryClient
         .getQueryCache()
-        .findAll({ queryKey: queryKeys.notifications.all })
+        .findAll({ queryKey: queryKeys.notifications.lists() })
         .forEach((query) => {
-          previousData.set(query.queryKey, query.state.data)
+          previousData.infiniteQueries.set(query.queryKey, query.state.data)
         })
 
       // Optimistic update: mark as read in ALL infinite query lists
@@ -193,17 +211,34 @@ export function useMarkAsRead() {
         (old: number = 0) => Math.max(0, old - 1)
       )
 
-      return { previousData }
+      return previousData
     },
     onError: (error, variables, context) => {
-      // Rollback on error: restore all queries
-      if (context?.previousData) {
-        context.previousData.forEach((data, queryKey) => {
+      if (!context) return
+
+      // Restore только infinite queries
+      if (context.infiniteQueries) {
+        context.infiniteQueries.forEach((data, queryKey) => {
           queryClient.setQueryData(queryKey, data)
         })
+        // ОЧИСТИТЬ MAP для предотвращения memory leak (Проблема 7)
+        context.infiniteQueries.clear()
+      }
+
+      // Restore unreadCount
+      if (context.unreadCount !== undefined && userId) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(userId),
+          context.unreadCount
+        )
       }
     },
-    onSettled: () => {
+    onSettled: (data, error, variables, context) => {
+      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
+      if (!error && context?.infiniteQueries) {
+        context.infiniteQueries.clear()
+      }
+
       // Always refetch after mutation to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
     },
@@ -236,13 +271,18 @@ export function useMarkAsUnread() {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
-      // Snapshot ALL infinite queries and unreadCount
-      const previousData = new Map()
+      // КОПИРУЕМ ТОЛЬКО НЕОБХОДИМОЕ
+      const previousData: OptimisticUpdateContext = {
+        infiniteQueries: new Map(),
+        unreadCount: queryClient.getQueryData(queryKeys.notifications.unreadCount(userId)),
+      }
+
+      // Находим и сохраняем ТОЛЬКО infinite queries (списки уведомлений)
       queryClient
         .getQueryCache()
-        .findAll({ queryKey: queryKeys.notifications.all })
+        .findAll({ queryKey: queryKeys.notifications.lists() })
         .forEach((query) => {
-          previousData.set(query.queryKey, query.state.data)
+          previousData.infiniteQueries.set(query.queryKey, query.state.data)
         })
 
       // Optimistic update: mark as unread in ALL infinite query lists
@@ -269,17 +309,34 @@ export function useMarkAsUnread() {
         (old: number = 0) => old + 1
       )
 
-      return { previousData }
+      return previousData
     },
     onError: (error, variables, context) => {
-      // Rollback on error: restore all queries
-      if (context?.previousData) {
-        context.previousData.forEach((data, queryKey) => {
+      if (!context) return
+
+      // Restore только infinite queries
+      if (context.infiniteQueries) {
+        context.infiniteQueries.forEach((data, queryKey) => {
           queryClient.setQueryData(queryKey, data)
         })
+        // ОЧИСТИТЬ MAP для предотвращения memory leak (Проблема 7)
+        context.infiniteQueries.clear()
+      }
+
+      // Restore unreadCount
+      if (context.unreadCount !== undefined && userId) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(userId),
+          context.unreadCount
+        )
       }
     },
-    onSettled: () => {
+    onSettled: (data, error, variables, context) => {
+      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
+      if (!error && context?.infiniteQueries) {
+        context.infiniteQueries.clear()
+      }
+
       // Always refetch after mutation to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
     },
@@ -315,13 +372,18 @@ export function useArchiveNotification() {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
-      // Snapshot ALL infinite queries and unreadCount
-      const previousData = new Map()
+      // КОПИРУЕМ ТОЛЬКО НЕОБХОДИМОЕ
+      const previousData: OptimisticUpdateContext = {
+        infiniteQueries: new Map(),
+        unreadCount: queryClient.getQueryData(queryKeys.notifications.unreadCount(userId)),
+      }
+
+      // Находим и сохраняем ТОЛЬКО infinite queries (списки уведомлений)
       queryClient
         .getQueryCache()
-        .findAll({ queryKey: queryKeys.notifications.all })
+        .findAll({ queryKey: queryKeys.notifications.lists() })
         .forEach((query) => {
-          previousData.set(query.queryKey, query.state.data)
+          previousData.infiniteQueries.set(query.queryKey, query.state.data)
         })
 
       // Optimistic update: remove from ALL infinite query lists if archiving
@@ -415,17 +477,34 @@ export function useArchiveNotification() {
         }
       }
 
-      return { previousData }
+      return previousData
     },
     onError: (error, variables, context) => {
-      // Rollback on error: restore all queries
-      if (context?.previousData) {
-        context.previousData.forEach((data, queryKey) => {
+      if (!context) return
+
+      // Restore только infinite queries
+      if (context.infiniteQueries) {
+        context.infiniteQueries.forEach((data, queryKey) => {
           queryClient.setQueryData(queryKey, data)
         })
+        // ОЧИСТИТЬ MAP для предотвращения memory leak (Проблема 7)
+        context.infiniteQueries.clear()
+      }
+
+      // Restore unreadCount
+      if (context.unreadCount !== undefined && userId) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(userId),
+          context.unreadCount
+        )
       }
     },
-    onSettled: () => {
+    onSettled: (data, error, variables, context) => {
+      // ОЧИСТИТЬ MAP если не было ошибки (при ошибке уже очищено в onError)
+      if (!error && context?.infiniteQueries) {
+        context.infiniteQueries.clear()
+      }
+
       // Always refetch after mutation to ensure consistency
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all })
     },
