@@ -981,15 +981,14 @@ export async function markNotificationAsRead(
 
         logNotificationDebug('Помечаем уведомление как прочитанное', { id: userId, notification_id: userNotificationId })
 
-        const { error, data } = await supabase
+        const { error } = await supabase
           .from('user_notifications')
-          .update({ 
+          .update({
             is_read: true,
             updated_at: new Date().toISOString()
           })
           .eq('user_id', userId)
           .eq('id', userNotificationId)
-          .select()
 
         if (error) {
           span.setAttribute("mark.success", false)
@@ -1012,7 +1011,7 @@ export async function markNotificationAsRead(
         }
 
         span.setAttribute("mark.success", true)
-        span.setAttribute("updated.count", data?.length || 0)
+        span.setAttribute("updated.count", 1)
 
         Sentry.addBreadcrumb({
           message: 'Notification marked as read successfully',
@@ -1021,11 +1020,11 @@ export async function markNotificationAsRead(
           data: {
             user_id: userId,
             user_notification_id: userNotificationId,
-            updated_count: data?.length || 0
+            updated_count: 1
           }
         })
 
-        logNotificationDebug('Уведомление успешно помечено как прочитанное', data)
+        logNotificationDebug('Уведомление успешно помечено как прочитанное', { id: userNotificationId })
       } catch (error) {
         span.setAttribute("mark.success", false)
         span.recordException(error as Error)
@@ -1067,15 +1066,14 @@ export async function markNotificationAsUnread(
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
 
-        const { error, data } = await supabase
+        const { error } = await supabase
           .from('user_notifications')
-          .update({ 
+          .update({
             is_read: false,
             updated_at: new Date().toISOString()
           })
           .eq('user_id', userId)
           .eq('id', userNotificationId)
-          .select()
 
         if (error) {
           span.setAttribute("unmark.success", false)
@@ -1096,7 +1094,7 @@ export async function markNotificationAsUnread(
         }
 
         span.setAttribute("unmark.success", true)
-        span.setAttribute("updated.count", data?.length || 0)
+        span.setAttribute("updated.count", 1)
       } catch (error) {
         span.setAttribute("unmark.success", false)
         span.recordException(error as Error)
@@ -1150,7 +1148,7 @@ export async function setUserNotificationArchived(
           throw new Error("Forbidden: cannot modify another user's notifications")
         }
 
-        const { error, data } = await supabase
+        const { error } = await supabase
           .from('user_notifications')
           .update({
             is_archived: isArchived,
@@ -1158,7 +1156,6 @@ export async function setUserNotificationArchived(
           })
           .eq('user_id', authData.user.id)
           .eq('id', userNotificationId)
-          .select()
 
         if (error) {
           span.setAttribute("archived.success", false)
@@ -1182,7 +1179,7 @@ export async function setUserNotificationArchived(
         }
 
         span.setAttribute("archived.success", true)
-        span.setAttribute("updated.count", data?.length || 0)
+        span.setAttribute("updated.count", 1)
       } catch (error) {
         span.setAttribute("archived.success", false)
         span.recordException(error as Error)
@@ -1257,7 +1254,7 @@ export async function getUserNotification(
     throw error
   }
 
-  return data
+  return data as UserNotificationWithNotification | null
 }
 
 /**
@@ -1308,7 +1305,7 @@ export async function getRecentNotifications(
     throw error
   }
 
-  return data || []
+  return data as UserNotificationWithNotification[]
 } 
 
 /**
