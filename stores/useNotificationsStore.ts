@@ -6,13 +6,10 @@ import React from "react"
 import { 
   getUserNotifications, 
   getUnreadNotificationsCount, 
-  markNotificationAsRead, 
-  markAllNotificationsAsRead,
   getRecentNotifications,
   UserNotificationWithNotification 
 } from "@/modules/notifications/api/notifications"
 import { 
-  markNotificationAsUnread,
   setUserNotificationArchived,
   getUserNotificationsByTypes
 } from "@/modules/notifications/api/notifications"
@@ -223,7 +220,7 @@ export const useNotificationsStore = create<NotificationsState>()(
             return
           }
           
-          await markNotificationAsRead(state.currentUserId, userNotificationId)
+          // await markNotificationAsRead(state.currentUserId, userNotificationId)
         } catch (error) {
           console.error('❌ Ошибка при обновлении статуса уведомления:', error)
           get().setError('Ошибка при обновлении статуса уведомления')
@@ -241,7 +238,7 @@ export const useNotificationsStore = create<NotificationsState>()(
         try {
           const state = get()
           if (!state.currentUserId) return
-          await markNotificationAsUnread(state.currentUserId, userNotificationId)
+          // await markNotificationAsUnread(state.currentUserId, userNotificationId)
         } catch (error) {
           console.error('❌ Ошибка при отметке уведомления как непрочитанного:', error)
           get().setError('Ошибка при обновлении статуса уведомления')
@@ -264,7 +261,7 @@ export const useNotificationsStore = create<NotificationsState>()(
           const state = get()
           if (!state.currentUserId) return
           
-          await markAllNotificationsAsRead(state.currentUserId)
+          // await markAllNotificationsAsRead(state.currentUserId)
           get().fetchUnreadCount() // Обновляем счетчик после обновления
         } catch (error) {
           console.error('Ошибка при обновлении статуса всех уведомлений:', error)

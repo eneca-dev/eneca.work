@@ -453,37 +453,42 @@ export function useArchiveNotification() {
 
       // Optimistic update: remove from ALL infinite query lists if archiving
       if (isArchived) {
-        // Find notification to check if it was unread (before removal)
+        // 1. Find notification ONCE to check if it was unread (before removal)
         let wasUnread = false
-        queryClient
+        let found = false
+
+        for (const query of queryClient
           .getQueryCache()
-          .findAll({ queryKey: queryKeys.notifications.lists() })
-          .forEach((query) => {
-            const data = query.state.data as any
-            if (data?.pages) {
-              const notification = data.pages
-                .flat()
-                .find((n: Notification) => n.id === id)
-              if (notification && !notification.isRead) {
-                wasUnread = true
+          .findAll({ queryKey: queryKeys.notifications.lists() })) {
+          if (found) break // Early exit after finding
+
+          const data = query.state.data as any
+          if (data?.pages) {
+            for (const page of data.pages) {
+              const notification = page.find((n: Notification) => n.id === id)
+              if (notification) {
+                wasUnread = !notification.isRead
+                found = true
+                break
               }
             }
+          }
+        }
 
-            // Remove from list (archiving)
-            updateInfiniteQueriesWithEarlyExit(
-              queryClient,
-              queryKeys.notifications.lists(),
-              (page) => {
-                const notification = page.find((n) => n.id === id)
-                if (!notification) return { page, found: false }
+        // 2. Remove from all lists ONCE (outside the loop)
+        updateInfiniteQueriesWithEarlyExit(
+          queryClient,
+          queryKeys.notifications.lists(),
+          (page) => {
+            const notification = page.find((n) => n.id === id)
+            if (!notification) return { page, found: false }
 
-                const newPage = page.filter((n) => n.id !== id)
-                return { page: newPage, found: true }
-              }
-            )
-          })
+            const newPage = page.filter((n) => n.id !== id)
+            return { page: newPage, found: true }
+          }
+        )
 
-        // If notification was unread, decrement count
+        // 3. If notification was unread, decrement count
         if (wasUnread) {
           queryClient.setQueryData(
             queryKeys.notifications.unreadCount(userId),
