@@ -303,6 +303,12 @@ export function useMarkAsRead() {
         )
       }
     },
+    onSuccess: (data, variables, context) => {
+      // ОЧИСТИТЬ MAP после успешной mutation (Проблема 7)
+      if (context?.infiniteQueries) {
+        context.infiniteQueries.clear()
+      }
+    },
     // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
     // при изменении таблицы user_notifications (см. modules/cache/realtime/config.ts)
   })
@@ -389,6 +395,12 @@ export function useMarkAsUnread() {
           queryKeys.notifications.unreadCount(userId),
           context.unreadCount
         )
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      // ОЧИСТИТЬ MAP после успешной mutation (Проблема 7)
+      if (context?.infiniteQueries) {
+        context.infiniteQueries.clear()
       }
     },
     // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
@@ -552,6 +564,12 @@ export function useArchiveNotification() {
           queryKeys.notifications.unreadCount(userId),
           context.unreadCount
         )
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      // ОЧИСТИТЬ MAP после успешной mutation (Проблема 7)
+      if (context?.infiniteQueries) {
+        context.infiniteQueries.clear()
       }
     },
     // onSettled удалён - Realtime синхронизация автоматически инвалидирует кеш
