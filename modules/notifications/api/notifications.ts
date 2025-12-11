@@ -15,20 +15,7 @@ import {
 
 // Экспортируем тип для использования в других модулях
 export type { UserNotificationWithNotification }
-import { createClient as createBrowserClient } from '@/utils/supabase/client'
-import { createClient as createServerClient } from '@/utils/supabase/server'
-
-// Универсальная функция для создания Supabase клиента (работает и на клиенте, и на сервере)
-async function createClient() {
-  // Проверяем, выполняется ли код на сервере (в Server Action/Route Handler)
-  if (typeof window === 'undefined') {
-    // Серверная среда - используем серверный клиент
-    return await createServerClient()
-  } else {
-    // Клиентская среда - используем клиентский клиент
-    return createBrowserClient()
-  }
-}
+import { createClient } from '@/utils/supabase/client'
 
 // URL для Edge Function
 const NOTIFICATIONS_ENDPOINT = '/api/notifications'
@@ -684,7 +671,7 @@ export async function getUserNotifications(
     },
     async (span) => {
       try {
-        const supabase = await createClient()
+        const supabase = createClient()
         const offset = (page - 1) * limit
 
         span.setAttribute("user.id", userId)
@@ -822,7 +809,7 @@ export async function getUserNotificationsByTypes(
       name: "Get User Notifications By Types",
     },
     async (span) => {
-      const supabase = await createClient()
+      const supabase = createClient()
       const offset = (page - 1) * limit
 
       try {
@@ -957,7 +944,7 @@ export async function getUserNotificationsByTypes(
  * Получить количество непрочитанных уведомлений
  */
 export async function getUnreadNotificationsCount(userId: string): Promise<number> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { count, error } = await supabase
     .from('user_notifications')
@@ -987,7 +974,7 @@ export async function markNotificationAsRead(
     },
     async (span) => {
       try {
-        const supabase = await createClient()
+        const supabase = createClient()
 
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
@@ -1075,7 +1062,7 @@ export async function markNotificationAsUnread(
     },
     async (span) => {
       try {
-        const supabase = await createClient()
+        const supabase = createClient()
 
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
@@ -1143,7 +1130,7 @@ export async function setUserNotificationArchived(
     },
     async (span) => {
       try {
-        const supabase = await createClient()
+        const supabase = createClient()
         span.setAttribute("user.id", userId)
         span.setAttribute("user_notification.id", userNotificationId)
         span.setAttribute("archived.value", isArchived)
@@ -1222,7 +1209,7 @@ export async function setUserNotificationArchived(
  * Отметить все уведомления как прочитанные
  */
 export async function markAllNotificationsAsRead(userId: string): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { error } = await supabase
     .from('user_notifications')
@@ -1246,7 +1233,7 @@ export async function getUserNotification(
   userId: string,
   notificationId: string
 ): Promise<UserNotificationWithNotification | null> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { data, error } = await supabase
     .from('user_notifications')
@@ -1280,7 +1267,7 @@ export async function deleteUserNotification(
   userId: string,
   notificationId: string
 ): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { error } = await supabase
     .from('user_notifications')
@@ -1301,7 +1288,7 @@ export async function getRecentNotifications(
   userId: string,
   limit: number = 5
 ): Promise<UserNotificationWithNotification[]> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const { data, error } = await supabase
     .from('user_notifications')
@@ -1332,7 +1319,7 @@ export async function getNotificationTypeCounts(
   userId: string,
   options?: { includeArchived?: boolean }
 ): Promise<Record<string, number>> {
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const includeArchived = options?.includeArchived ?? false
 
@@ -1372,7 +1359,7 @@ export async function getNotificationTypeCounts(
  * Временная функция для отладки - проверяет все записи в user_notifications
  */
 export async function debugUserNotifications(userId: string): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   
   logNotificationDebug('DEBUG: Проверка user_notifications для пользователя', { id: userId })
   
@@ -1452,7 +1439,7 @@ export async function debugUserNotifications(userId: string): Promise<void> {
  * Тестовая функция для создания тестового уведомления
  */
 export async function createTestNotification(userId: string): Promise<void> {
-  const supabase = await createClient()
+  const supabase = createClient()
   
   try {
     // Сначала проверим, есть ли entity_type для 'test'

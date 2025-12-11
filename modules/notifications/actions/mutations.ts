@@ -12,9 +12,9 @@ import type { MarkAsReadInput, ArchiveNotificationInput } from './types'
 import {
   markNotificationAsRead,
   markNotificationAsUnread,
-  setUserNotificationArchived,
   markAllNotificationsAsRead,
 } from '@/modules/notifications/api/notifications'
+import { createClient } from '@/utils/supabase/server'
 
 /**
  * Отметить уведомление как прочитанное
@@ -167,11 +167,23 @@ export async function archiveNotification(
         span.setAttribute('user_notification.id', input.id)
         span.setAttribute('archived.value', input.isArchived)
 
-        await setUserNotificationArchived(
-          input.userId,
-          input.id,
-          input.isArchived
-        )
+        // ВАЖНО: Используем прямой запрос с серверным клиентом
+        // Избегаем использования API-функции setUserNotificationArchived(),
+        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        const supabase = await createClient()
+        const { error } = await supabase
+          .from('user_notifications')
+          .update({
+            is_archived: input.isArchived,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', input.userId)
+          .eq('id', input.id)
+
+        if (error) {
+          console.error('[archiveNotification] Supabase error:', error)
+          throw error
+        }
 
         span.setAttribute('archive.success', true)
         return { success: true, data: undefined }

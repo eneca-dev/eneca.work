@@ -14,6 +14,8 @@ import {
   getNotificationTypeCounts as getNotificationTypeCountsAPI
 } from '@/modules/notifications/api/notifications'
 import { transformNotificationData, type Notification } from '@/modules/notifications/utils/transform'
+import { createClient } from '@/utils/supabase/server'
+import type { UserNotificationWithNotification } from '@/types/notifications'
 
 /**
  * Получить уведомления с пагинацией и фильтрами (для infinite scroll)
@@ -60,18 +62,48 @@ export async function getNotificationsPaginated(input: {
       // Фильтрация по типам
       console.log('🔍 [Server Action] Using getUserNotificationsByTypes')
       result = await getUserNotificationsByTypes(userId, filters.types, page, limit, {
-        includeArchived: filters.includeArchived ?? false,
+        includeArchived: filters?.includeArchived ?? false,
       })
     } else {
       // Обычная пагинация с опциональными фильтрами
-      console.log('🔍 [Server Action] Using getUserNotifications with includeArchived:', filters?.includeArchived ?? false)
-      result = await getUserNotifications(
-        userId,
-        page,
-        limit,
-        filters?.onlyUnread ?? false,
-        filters?.includeArchived ?? false
-      )
+      // ВАЖНО: Используем прямой запрос с серверным клиентом для поддержки includeArchived
+      console.log('🔍 [Server Action] Using direct Supabase query with includeArchived:', filters?.includeArchived ?? false)
+
+      const supabase = await createClient()
+      const offset = (page - 1) * limit
+
+      let query = supabase
+        .from('user_notifications')
+        .select(`
+          *,
+          notifications:notification_id (
+            *,
+            entity_types:entity_type_id (*)
+          )
+        `, { count: 'exact' })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (filters?.onlyUnread) {
+        query = query.eq('is_read', false)
+      }
+
+      if (!filters?.includeArchived) {
+        query = query.eq('is_archived', false)
+      }
+
+      const { data, error, count } = await query.range(offset, offset + limit - 1)
+
+      if (error) {
+        console.error('[getNotificationsPaginated] Supabase error:', error)
+        throw error
+      }
+
+      result = {
+        notifications: (data || []) as UserNotificationWithNotification[],
+        totalCount: count || 0,
+        hasMore: (count || 0) > offset + limit,
+      }
     }
 
     // Трансформируем данные в UI-формат
