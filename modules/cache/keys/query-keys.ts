@@ -47,6 +47,13 @@ export interface LoadingFilters extends BaseFilters {
   status?: 'active' | 'archived'
 }
 
+export interface BudgetFilters extends BaseFilters {
+  entityType?: 'section' | 'object' | 'stage' | 'project'
+  entityId?: string
+  isActive?: boolean
+  tagIds?: string[]
+}
+
 // ============================================================================
 // Query Keys Factory
 // ============================================================================
@@ -159,6 +166,31 @@ export const queryKeys = {
     lists: () => [...queryKeys.resourceGraph.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.resourceGraph.lists(), filters] as const,
     user: (userId: string) => [...queryKeys.resourceGraph.all, 'user', userId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Budgets (бюджеты)
+  // -------------------------------------------------------------------------
+  budgets: {
+    all: ['budgets'] as const,
+    lists: () => [...queryKeys.budgets.all, 'list'] as const,
+    list: (filters?: BudgetFilters) => [...queryKeys.budgets.lists(), filters] as const,
+    details: () => [...queryKeys.budgets.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.budgets.details(), id] as const,
+    versions: (budgetId: string) => [...queryKeys.budgets.detail(budgetId), 'versions'] as const,
+    byEntity: (entityType: string, entityId: string) =>
+      [...queryKeys.budgets.all, 'entity', entityType, entityId] as const,
+    sectionSummary: (projectId?: string) =>
+      [...queryKeys.budgets.all, 'section-summary', projectId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Budget Tags (теги бюджетов)
+  // -------------------------------------------------------------------------
+  budgetTags: {
+    all: ['budget-tags'] as const,
+    list: () => [...queryKeys.budgetTags.all, 'list'] as const,
+    detail: (id: string) => [...queryKeys.budgetTags.all, 'detail', id] as const,
   },
 } as const
 
