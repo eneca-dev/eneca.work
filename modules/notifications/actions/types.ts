@@ -5,6 +5,7 @@
  */
 
 import type { Database } from '@/types/db'
+import type { Notification } from '../utils/transform'
 
 // ============================================================================
 // Database Types
@@ -74,9 +75,6 @@ export interface TypeCountsOptions {
 export interface MarkAsReadInput {
   /** user_notifications.id (NOT notification_id) */
   id: string
-
-  /** Current user ID for authorization */
-  userId: string
 }
 
 /**
@@ -86,11 +84,11 @@ export interface ArchiveNotificationInput {
   /** user_notifications.id */
   id: string
 
-  /** Current user ID for authorization */
-  userId: string
-
   /** Archive status to set */
   isArchived: boolean
+
+  /** Full notification object for optimistic updates (optional) */
+  notification?: Notification
 }
 
 // ============================================================================

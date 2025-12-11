@@ -74,13 +74,10 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
     ? notification.payload?.section_comment?.author_name 
     : null
 
-  // Получаем userId для mutations
-  const userId = useUserStore((s) => s.id)
-
   // Mutation hooks для операций с уведомлениями
-  const markAsReadMutation = useMarkAsRead(userId!)
-  const markAsUnreadMutation = useMarkAsUnread(userId!)
-  const archiveMutation = useArchiveNotification(userId!)
+  const markAsReadMutation = useMarkAsRead()
+  const markAsUnreadMutation = useMarkAsUnread()
+  const archiveMutation = useArchiveNotification()
 
   // UI state из Zustand (hover, pointer position)
   const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
@@ -388,9 +385,9 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   e.stopPropagation()
                   // Используем mutation hooks с автоматическим optimistic update и rollback
                   if (!notification.isRead) {
-                    markAsReadMutation.mutate({ id: notification.id, userId: userId! })
+                    markAsReadMutation.mutate({ id: notification.id })
                   } else {
-                    markAsUnreadMutation.mutate({ id: notification.id, userId: userId! })
+                    markAsUnreadMutation.mutate({ id: notification.id })
                   }
                 }}
                 {...createButtonHoverHandlers(readBtnRef, setIsReadButtonHovered)}
@@ -446,10 +443,10 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
                   e.stopPropagation()
                   // Если непрочитанное, сначала отметить прочитанным
                   if (!notification.isRead) {
-                    await markAsReadMutation.mutateAsync({ id: notification.id, userId: userId! })
+                    await markAsReadMutation.mutateAsync({ id: notification.id })
                   }
                   // Затем архивировать
-                  archiveMutation.mutate({ id: notification.id, userId: userId!, isArchived: true })
+                  archiveMutation.mutate({ id: notification.id, isArchived: true })
                 }}
                 {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
                 className={cn(
@@ -471,8 +468,12 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
               ref={archiveBtnRef}
               onClick={(e) => {
                 e.stopPropagation()
-                // Разархивировать уведомление
-                archiveMutation.mutate({ id: notification.id, userId: userId!, isArchived: false })
+                // Разархивировать уведомление с optimistic update
+                archiveMutation.mutate({
+                  id: notification.id,
+                  isArchived: false,
+                  notification: notification, // передаем полный объект для optimistic add
+                })
               }}
               {...createButtonHoverHandlers(archiveBtnRef, setIsArchiveButtonHovered)}
               className={cn(

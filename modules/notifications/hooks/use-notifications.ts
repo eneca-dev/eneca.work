@@ -14,6 +14,7 @@ import {
   queryKeys,
   staleTimePresets,
 } from '@/modules/cache'
+import { useUserStore } from '@/stores/useUserStore'
 import {
   getNotificationsPaginated,
   getUnreadCount,
@@ -147,13 +148,15 @@ export const useNotificationTypeCounts = createCacheQuery<
  * markAsReadMutation.mutate({ id: notificationId, userId })
  * ```
  */
-export function useMarkAsRead(userId: string) {
+export function useMarkAsRead() {
   const queryClient = useQueryClient()
+  const userId = useUserStore((s) => s.id)
 
   return useMutation({
-    mutationFn: (input: { id: string; userId: string }) =>
+    mutationFn: (input: { id: string }) =>
       markAsReadAction(input),
     onMutate: async ({ id }) => {
+      if (!userId) return
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
@@ -221,13 +224,15 @@ export function useMarkAsRead(userId: string) {
  * markAsUnreadMutation.mutate({ id: notificationId, userId })
  * ```
  */
-export function useMarkAsUnread(userId: string) {
+export function useMarkAsUnread() {
   const queryClient = useQueryClient()
+  const userId = useUserStore((s) => s.id)
 
   return useMutation({
-    mutationFn: (input: { id: string; userId: string }) =>
+    mutationFn: (input: { id: string }) =>
       markAsUnreadAction(input),
     onMutate: async ({ id }) => {
+      if (!userId) return
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
@@ -298,13 +303,15 @@ export function useMarkAsUnread(userId: string) {
  * archiveMutation.mutate({ id: notificationId, userId, isArchived: false })
  * ```
  */
-export function useArchiveNotification(userId: string) {
+export function useArchiveNotification() {
   const queryClient = useQueryClient()
+  const userId = useUserStore((s) => s.id)
 
   return useMutation({
-    mutationFn: (input: { id: string; userId: string; isArchived: boolean }) =>
-      archiveNotificationAction(input),
-    onMutate: async ({ id, isArchived }) => {
+    mutationFn: (input: { id: string; isArchived: boolean; notification?: Notification }) =>
+      archiveNotificationAction({ id: input.id, isArchived: input.isArchived }),
+    onMutate: async ({ id, isArchived, notification }) => {
+      if (!userId) return
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.notifications.all })
 
@@ -355,6 +362,58 @@ export function useArchiveNotification(userId: string) {
           )
         }
       }
+      // Optimistic update: unarchive (isArchived = false)
+      else {
+        // Remove from archived lists
+        queryClient
+          .getQueryCache()
+          .findAll({ queryKey: queryKeys.notifications.lists() })
+          .forEach((query) => {
+            queryClient.setQueryData(query.queryKey, (old: any) => {
+              if (!old?.pages) return old
+              return {
+                ...old,
+                pages: old.pages.map((page: Notification[]) =>
+                  page.filter((n: Notification) => n.id !== id)
+                ),
+              }
+            })
+          })
+
+        // If notification object is provided, add to non-archived lists
+        if (notification) {
+          const unarchivedNotification = {
+            ...notification,
+            isArchived: false,
+          }
+
+          // Add to beginning of non-archived lists
+          queryClient
+            .getQueryCache()
+            .findAll({ queryKey: queryKeys.notifications.lists() })
+            .forEach((query) => {
+              // Check queryKey - only add to non-archived lists
+              const key = query.queryKey as any[]
+              const filters = key.find((k) => k?.filters)?.filters
+
+              // If this is NOT an archived list (includeArchived !== true)
+              if (!filters?.includeArchived) {
+                queryClient.setQueryData(query.queryKey, (old: any) => {
+                  if (!old?.pages || old.pages.length === 0) return old
+
+                  // Add to beginning of first page
+                  return {
+                    ...old,
+                    pages: [
+                      [unarchivedNotification, ...old.pages[0]],
+                      ...old.pages.slice(1),
+                    ],
+                  }
+                })
+              }
+            })
+        }
+      }
 
       return { previousData }
     },
@@ -386,7 +445,7 @@ export function useArchiveNotification(userId: string) {
  * markAllAsReadMutation.mutate({ userId })
  * ```
  */
-export const useMarkAllAsRead = createCacheMutation<{ userId: string }, void>({
-  mutationFn: ({ userId }) => markAllAsReadAction({ userId }),
-  invalidateKeys: [queryKeys.notifications.all],
+export const useMarkAllAsRead = createCacheMutation<void, void>({
+  mutationFn: () => markAllAsReadAction(),
+  invalidateKeys: [queryKeys.notifications.all as unknown as unknown[]],
 })

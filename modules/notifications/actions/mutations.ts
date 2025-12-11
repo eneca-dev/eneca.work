@@ -10,16 +10,17 @@ import * as Sentry from '@sentry/nextjs'
 import type { ActionResult } from '@/modules/cache'
 import type { MarkAsReadInput, ArchiveNotificationInput } from './types'
 import { createClient } from '@/utils/supabase/server'
+import { validateUserWithSpan } from './validate-user'
 
 /**
  * Отметить уведомление как прочитанное
  *
- * @param input - { id: user_notifications.id, userId: string }
+ * @param input - { id: user_notifications.id }
  * @returns ActionResult<void>
  *
  * @example
  * ```typescript
- * const result = await markAsRead({ id: 'notif-123', userId: 'user-456' })
+ * const result = await markAsRead({ id: 'notif-123' })
  * if (result.success) {
  *   console.log('Marked as read')
  * }
@@ -35,20 +36,26 @@ export async function markAsRead(
     },
     async (span) => {
       try {
-        span.setAttribute('user.id', input.userId)
         span.setAttribute('user_notification.id', input.id)
 
-        // ВАЖНО: Используем прямой запрос с серверным клиентом
-        // Избегаем использования API-функции markNotificationAsRead(),
-        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        // 1. Валидация авторизации
         const supabase = await createClient()
+        const userOrError = await validateUserWithSpan(supabase, 'markAsRead', span)
+
+        if ('error' in userOrError) {
+          return { success: false, error: userOrError.error }
+        }
+
+        const userId = userOrError.userId
+
+        // 2. Обновление уведомления
         const { error } = await supabase
           .from('user_notifications')
           .update({
             is_read: true,
             updated_at: new Date().toISOString(),
           })
-          .eq('user_id', input.userId)
+          .eq('user_id', userId)
           .eq('id', input.id)
 
         if (error) {
@@ -69,7 +76,6 @@ export async function markAsRead(
             error_type: 'mutation_error',
           },
           extra: {
-            user_id: input.userId,
             user_notification_id: input.id,
             timestamp: new Date().toISOString(),
           },
@@ -91,12 +97,12 @@ export async function markAsRead(
 /**
  * Отметить уведомление как непрочитанное
  *
- * @param input - { id: user_notifications.id, userId: string }
+ * @param input - { id: user_notifications.id }
  * @returns ActionResult<void>
  *
  * @example
  * ```typescript
- * const result = await markAsUnread({ id: 'notif-123', userId: 'user-456' })
+ * const result = await markAsUnread({ id: 'notif-123' })
  * if (result.success) {
  *   console.log('Marked as unread')
  * }
@@ -112,20 +118,26 @@ export async function markAsUnread(
     },
     async (span) => {
       try {
-        span.setAttribute('user.id', input.userId)
         span.setAttribute('user_notification.id', input.id)
 
-        // ВАЖНО: Используем прямой запрос с серверным клиентом
-        // Избегаем использования API-функции markNotificationAsUnread(),
-        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        // 1. Валидация авторизации
         const supabase = await createClient()
+        const userOrError = await validateUserWithSpan(supabase, 'markAsUnread', span)
+
+        if ('error' in userOrError) {
+          return { success: false, error: userOrError.error }
+        }
+
+        const userId = userOrError.userId
+
+        // 2. Обновление уведомления
         const { error } = await supabase
           .from('user_notifications')
           .update({
             is_read: false,
             updated_at: new Date().toISOString(),
           })
-          .eq('user_id', input.userId)
+          .eq('user_id', userId)
           .eq('id', input.id)
 
         if (error) {
@@ -146,7 +158,6 @@ export async function markAsUnread(
             error_type: 'mutation_error',
           },
           extra: {
-            user_id: input.userId,
             user_notification_id: input.id,
             timestamp: new Date().toISOString(),
           },
@@ -168,16 +179,16 @@ export async function markAsUnread(
 /**
  * Архивировать/разархивировать уведомление
  *
- * @param input - { id: user_notifications.id, userId: string, isArchived: boolean }
+ * @param input - { id: user_notifications.id, isArchived: boolean }
  * @returns ActionResult<void>
  *
  * @example
  * ```typescript
  * // Архивировать
- * const result = await archiveNotification({ id: 'notif-123', userId: 'user-456', isArchived: true })
+ * const result = await archiveNotification({ id: 'notif-123', isArchived: true })
  *
  * // Разархивировать
- * const result = await archiveNotification({ id: 'notif-123', userId: 'user-456', isArchived: false })
+ * const result = await archiveNotification({ id: 'notif-123', isArchived: false })
  * ```
  */
 export async function archiveNotification(
@@ -190,21 +201,27 @@ export async function archiveNotification(
     },
     async (span) => {
       try {
-        span.setAttribute('user.id', input.userId)
         span.setAttribute('user_notification.id', input.id)
         span.setAttribute('archived.value', input.isArchived)
 
-        // ВАЖНО: Используем прямой запрос с серверным клиентом
-        // Избегаем использования API-функции setUserNotificationArchived(),
-        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        // 1. Валидация авторизации
         const supabase = await createClient()
+        const userOrError = await validateUserWithSpan(supabase, 'archiveNotification', span)
+
+        if ('error' in userOrError) {
+          return { success: false, error: userOrError.error }
+        }
+
+        const userId = userOrError.userId
+
+        // 2. Обновление архивного статуса
         const { error } = await supabase
           .from('user_notifications')
           .update({
             is_archived: input.isArchived,
             updated_at: new Date().toISOString(),
           })
-          .eq('user_id', input.userId)
+          .eq('user_id', userId)
           .eq('id', input.id)
 
         if (error) {
@@ -225,7 +242,6 @@ export async function archiveNotification(
             error_type: 'mutation_error',
           },
           extra: {
-            user_id: input.userId,
             user_notification_id: input.id,
             is_archived: input.isArchived,
             timestamp: new Date().toISOString(),
@@ -248,20 +264,17 @@ export async function archiveNotification(
 /**
  * Отметить все уведомления пользователя как прочитанные
  *
- * @param input - { userId: string }
  * @returns ActionResult<void>
  *
  * @example
  * ```typescript
- * const result = await markAllAsRead({ userId: 'user-456' })
+ * const result = await markAllAsRead()
  * if (result.success) {
  *   console.log('All notifications marked as read')
  * }
  * ```
  */
-export async function markAllAsRead(input: {
-  userId: string
-}): Promise<ActionResult<void>> {
+export async function markAllAsRead(): Promise<ActionResult<void>> {
   return Sentry.startSpan(
     {
       op: 'notifications.mark_all_as_read_action',
@@ -269,19 +282,24 @@ export async function markAllAsRead(input: {
     },
     async (span) => {
       try {
-        span.setAttribute('user.id', input.userId)
-
-        // ВАЖНО: Используем прямой запрос с серверным клиентом
-        // Избегаем использования API-функции markAllNotificationsAsRead(),
-        // которая использует клиентский Supabase client и падает с "Not authenticated" в Server Action
+        // 1. Валидация авторизации
         const supabase = await createClient()
+        const userOrError = await validateUserWithSpan(supabase, 'markAllAsRead', span)
+
+        if ('error' in userOrError) {
+          return { success: false, error: userOrError.error }
+        }
+
+        const userId = userOrError.userId
+
+        // 2. Обновление всех непрочитанных уведомлений
         const { error } = await supabase
           .from('user_notifications')
           .update({
             is_read: true,
             updated_at: new Date().toISOString(),
           })
-          .eq('user_id', input.userId)
+          .eq('user_id', userId)
           .eq('is_read', false)
 
         if (error) {
@@ -302,7 +320,6 @@ export async function markAllAsRead(input: {
             error_type: 'mutation_error',
           },
           extra: {
-            user_id: input.userId,
             timestamp: new Date().toISOString(),
           },
         })
