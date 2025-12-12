@@ -41,6 +41,16 @@ export type FeedbackComment = {
   next_survey_at: string | null
 }
 
+export type UserReport = {
+  user_report_id: string
+  user_report_short_description: string
+  user_report_detailed_description: string | null
+  user_report_created_at: string
+  user_report_created_by: string
+  first_name: string
+  last_name: string
+}
+
 /**
  * Получить агрегированную статистику по опросам
  */

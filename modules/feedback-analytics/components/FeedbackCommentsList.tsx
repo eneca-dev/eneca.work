@@ -253,7 +253,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
                         </Badge>
                       )}
                       {isDeclined && (
-                        <Badge variant="outline" className="text-xs border-red-500 text-red-500">
+                        <Badge variant="outline" className="text-xs border-gray-400 text-gray-500 dark:border-gray-600 dark:text-gray-400">
                           Отказался от опроса
                         </Badge>
                       )}
@@ -274,7 +274,7 @@ export function FeedbackCommentsList({ comments, isLoading }: FeedbackCommentsLi
                           })}
                         </>
                       ) : comment.next_survey_at === 'infinity' ? (
-                        <span className="text-red-500">Отказался</span>
+                        <span className="text-gray-500 dark:text-gray-400">Отказался</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
