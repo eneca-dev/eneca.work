@@ -2,36 +2,22 @@
  * Resource Graph - Main Component
  *
  * Главный компонент модуля графика ресурсов с timeline
- * Full-width layout со sticky сворачиваемой панелью фильтров
+ * Использует InlineFilter для фильтрации в стиле GitHub Projects
  */
 
 'use client'
 
 import { useState, useMemo, useCallback, useRef } from 'react'
-import {
-  ChevronDown,
-  ChevronUp,
-  Database,
-  FilterX,
-  Tag,
-  Loader2,
-  X,
-} from 'lucide-react'
+import { Database } from 'lucide-react'
 import { addDays, startOfDay } from 'date-fns'
-import { useResourceGraphData, useTagOptions, useCompanyCalendarEvents } from '../hooks'
-import { useDisplaySettingsStore, useFiltersStore } from '../stores'
-import { FilterSelect } from '../filters/FilterSelect'
-import {
-  useManagerOptions,
-  useProjectOptions,
-  useSubdivisionOptions,
-  useDepartmentOptions,
-  useEmployeeOptions,
-} from '../filters/useFilterOptions'
+import { useResourceGraphData, useCompanyCalendarEvents } from '../hooks'
+import { useDisplaySettingsStore, useFiltersStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
+import { useFilterOptions } from '../filters'
 import { ResourceGraphTimeline, TimelineHeader, generateDayCells } from './timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
 import { cn } from '@/lib/utils'
 import type { TimelineRange } from '../types'
+import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
 
 // Timeline config - 180 дней (полгода)
 const DAYS_BEFORE_TODAY = 30  // Месяц назад
@@ -45,21 +31,7 @@ function calculateTimelineRange(): TimelineRange {
   return { start, end, totalDays: TOTAL_DAYS }
 }
 
-/**
- * Проверяет, установлен ли хотя бы один фильтр
- */
-function hasAnyFilter(filters: Record<string, unknown>): boolean {
-  return Object.values(filters).some(
-    (value) =>
-      value !== undefined &&
-      value !== null &&
-      value !== '' &&
-      !(Array.isArray(value) && value.length === 0)
-  )
-}
-
 export function ResourceGraph() {
-  const [isExpanded, setIsExpanded] = useState(true)
   const [loadAll, setLoadAll] = useState(false)
 
   // Refs for scroll synchronization
@@ -102,35 +74,29 @@ export function ResourceGraph() {
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
 
-  // Filters and settings
-  const {
-    filters,
-    setManagerId,
-    setProjectId,
-    setSubdivisionId,
-    setDepartmentId,
-    setEmployeeId,
-    setTagIds,
-    clearFilters,
-  } = useFiltersStore()
+  // Filters store
+  const { filterString, setFilterString } = useFiltersStore()
   const { settings } = useDisplaySettingsStore()
 
-  // Load filter options
-  const { data: managers = [], isLoading: loadingManagers } = useManagerOptions()
-  const { data: projects = [], isLoading: loadingProjects } = useProjectOptions(filters.managerId)
-  const { data: subdivisions = [], isLoading: loadingSubdivisions } = useSubdivisionOptions()
-  const { data: departments = [], isLoading: loadingDepartments } = useDepartmentOptions(filters.subdivisionId)
-  const { data: employees = [], isLoading: loadingEmployees } = useEmployeeOptions(filters.departmentId)
-  const { data: tags = [], isLoading: loadingTags } = useTagOptions()
+  // Load filter options for autocomplete
+  const { options: filterOptions, isLoading: loadingOptions } = useFilterOptions()
 
-  // Проверяем наличие фильтров
-  const filtersApplied = useMemo(() => hasAnyFilter(filters), [filters])
+  // Parse filter string to query params
+  const queryParams = useMemo(() => {
+    const parsed = parseFilterString(filterString, RESOURCE_GRAPH_FILTER_CONFIG)
+    return tokensToQueryParams(parsed.tokens, RESOURCE_GRAPH_FILTER_CONFIG)
+  }, [filterString])
 
-  // Определяем, нужно ли загружать данные
+  // Check if any filters are applied
+  const filtersApplied = useMemo(() => {
+    return Object.keys(queryParams).length > 0
+  }, [queryParams])
+
+  // Determine if we should fetch data
   const shouldFetchData = filtersApplied || loadAll
 
   // Data fetching
-  const { data, isLoading, error } = useResourceGraphData(filters, {
+  const { data, isLoading, error } = useResourceGraphData(queryParams, {
     enabled: shouldFetchData,
   })
 
@@ -138,162 +104,29 @@ export function ResourceGraph() {
     setLoadAll(true)
   }, [])
 
-  const handleClearAll = useCallback(() => {
-    clearFilters()
-    setLoadAll(false)
-  }, [clearFilters])
-
-  const handleTagToggle = useCallback(
-    (tagId: string) => {
-      const currentTags = filters.tagIds || []
-      const isSelected = currentTags.includes(tagId)
-
-      if (isSelected) {
-        setTagIds(currentTags.filter((id) => id !== tagId))
-      } else {
-        setTagIds([...currentTags, tagId])
-      }
-    },
-    [filters.tagIds, setTagIds]
-  )
-
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-card border-b shadow-sm">
-        {/* Main toolbar */}
-        <div className="px-4 py-2 flex items-center justify-between gap-4">
+        {/* Main toolbar with InlineFilter */}
+        <div className="px-4 py-3 flex items-center gap-4">
           {/* Left: Title & Stats */}
-          <div className="flex items-center gap-4">
-            <div>
-              <h1 className="text-lg font-semibold">График ресурсов</h1>
-              <p className="text-xs text-muted-foreground">
-                {shouldFetchData
-                  ? `Проектов: ${data?.length || 0}${loadAll && !filtersApplied ? ' (все)' : ''}`
-                  : 'Выберите фильтры'}
-              </p>
-            </div>
+          <div className="shrink-0">
+            <h1 className="text-lg font-semibold">График ресурсов</h1>
+            <p className="text-xs text-muted-foreground">
+              {shouldFetchData
+                ? `Проектов: ${data?.length || 0}${loadAll && !filtersApplied ? ' (все)' : ''}`
+                : 'Выберите фильтры'}
+            </p>
           </div>
 
-          {/* Center: Tags */}
-          <div className="flex-1 flex items-center gap-2 min-w-0">
-            <Tag size={14} className="text-muted-foreground shrink-0" />
-            {loadingTags ? (
-              <Loader2 size={14} className="animate-spin text-muted-foreground" />
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => {
-                  const isSelected = filters.tagIds?.includes(tag.id)
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={() => handleTagToggle(tag.id)}
-                      className={cn(
-                        'px-2 py-0.5 text-xs font-medium rounded-full transition-all',
-                        'border',
-                        isSelected
-                          ? 'border-transparent text-white'
-                          : 'border-border bg-background hover:bg-muted'
-                      )}
-                      style={
-                        isSelected && tag.color
-                          ? { backgroundColor: tag.color }
-                          : undefined
-                      }
-                    >
-                      {tag.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Right: Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            {(filtersApplied || loadAll) && (
-              <button
-                onClick={handleClearAll}
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs',
-                  'text-destructive hover:bg-destructive/10 transition-colors'
-                )}
-              >
-                <FilterX size={14} />
-                Сбросить
-              </button>
-            )}
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs',
-                'border border-border hover:bg-muted transition-colors'
-              )}
-            >
-              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              Фильтры
-            </button>
-          </div>
-        </div>
-
-        {/* Expandable Filters */}
-        <div
-          className={cn(
-            'overflow-hidden transition-all duration-300 ease-in-out',
-            isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          )}
-        >
-          <div className="px-4 py-3 border-t bg-muted/30 flex flex-wrap gap-3">
-            <FilterSelect
-              id="manager-filter"
-              label="Руководитель"
-              value={filters.managerId ?? null}
-              onChange={setManagerId}
-              options={managers}
-              placeholder="Все"
-              loading={loadingManagers}
-              compact
-            />
-            <FilterSelect
-              id="project-filter"
-              label="Проект"
-              value={filters.projectId ?? null}
-              onChange={setProjectId}
-              options={projects}
-              placeholder="Все"
-              loading={loadingProjects}
-              compact
-            />
-            <div className="w-px h-8 bg-border self-center" />
-            <FilterSelect
-              id="subdivision-filter"
-              label="Подразделение"
-              value={filters.subdivisionId ?? null}
-              onChange={setSubdivisionId}
-              options={subdivisions}
-              placeholder="Все"
-              loading={loadingSubdivisions}
-              compact
-            />
-            <FilterSelect
-              id="department-filter"
-              label="Отдел"
-              value={filters.departmentId ?? null}
-              onChange={setDepartmentId}
-              options={departments}
-              placeholder="Все"
-              loading={loadingDepartments}
-              compact
-            />
-            <FilterSelect
-              id="employee-filter"
-              label="Сотрудник"
-              value={filters.employeeId ?? null}
-              onChange={setEmployeeId}
-              options={employees}
-              placeholder="Все"
-              loading={loadingEmployees}
-              compact
+          {/* InlineFilter */}
+          <div className="flex-1 min-w-0">
+            <InlineFilter
+              config={RESOURCE_GRAPH_FILTER_CONFIG}
+              value={filterString}
+              onChange={setFilterString}
+              options={filterOptions}
             />
           </div>
         </div>
@@ -333,8 +166,11 @@ export function ResourceGraph() {
               <h2 className="text-lg font-medium mb-2">
                 Выберите данные для отображения
               </h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Используйте теги или фильтры выше, чтобы выбрать проекты.
+              <p className="text-sm text-muted-foreground mb-4">
+                Используйте фильтр выше для поиска проектов.
+              </p>
+              <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
+                подразделение:"ОВ" проект:"Название"
               </p>
               <button
                 onClick={handleLoadAll}

@@ -9,13 +9,13 @@
 
 import { createClient } from '@/utils/supabase/server'
 import type {
-  ResourceGraphFilters,
   Project,
   ResourceGraphRow,
   ProjectTag,
   CompanyCalendarEvent,
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
+import type { FilterQueryParams } from '@/modules/inline-filter'
 
 // ============================================================================
 // Result Types
@@ -33,12 +33,13 @@ type ActionResult<T> =
  * Получить данные для графика ресурсов
  *
  * Загружает полную иерархию: Проект → Стадия → Объект → Раздел → Этап декомпозиции → Элемент декомпозиции
+ * Фильтрация по разделу: если раздел проходит фильтр, вся структура выше и ниже тоже проходит
  *
- * @param filters - Фильтры для запроса
+ * @param filters - Параметры фильтрации (из InlineFilter)
  * @returns Список проектов с полной структурой
  */
 export async function getResourceGraphData(
-  filters?: ResourceGraphFilters
+  filters?: FilterQueryParams
 ): Promise<ActionResult<Project[]>> {
   try {
     const supabase = await createClient()
@@ -49,65 +50,87 @@ export async function getResourceGraphData(
       .select('*')
 
     // Apply tag filter first (requires subquery to get project IDs)
-    let projectIdsFromTags: string[] | null = null
-    if (filters?.tagIds && filters.tagIds.length > 0) {
-      const { data: tagLinks, error: tagError } = await supabase
-        .from('project_tag_links')
-        .select('project_id')
-        .in('tag_id', filters.tagIds)
+    // Метки передаются как названия, нужно сначала найти их ID
+    const tagValues = filters?.tag_id
+    if (tagValues) {
+      const tagArray = Array.isArray(tagValues) ? tagValues : [tagValues]
+      if (tagArray.length > 0) {
+        // Проверяем: это UUID или названия?
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagArray[0])
 
-      if (tagError) {
-        console.error('[getResourceGraphData] Tag filter error:', tagError)
-        return { success: false, error: tagError.message }
+        let tagUuids: string[]
+        if (isUuid) {
+          tagUuids = tagArray
+        } else {
+          // Ищем теги по названиям (case-insensitive)
+          const { data: tags, error: tagsError } = await supabase
+            .from('project_tags')
+            .select('tag_id, name')
+            .in('name', tagArray)
+
+          if (tagsError) {
+            console.error('[getResourceGraphData] Tag lookup error:', tagsError)
+            return { success: false, error: tagsError.message }
+          }
+
+          tagUuids = tags?.map(t => t.tag_id) || []
+          if (tagUuids.length === 0) {
+            return { success: true, data: [] }
+          }
+        }
+
+        const { data: tagLinks, error: tagError } = await supabase
+          .from('project_tag_links')
+          .select('project_id')
+          .in('tag_id', tagUuids)
+
+        if (tagError) {
+          console.error('[getResourceGraphData] Tag filter error:', tagError)
+          return { success: false, error: tagError.message }
+        }
+
+        // Get unique project IDs
+        const projectIdsFromTags = [...new Set(tagLinks?.map(l => l.project_id) || [])]
+
+        // If no projects match tags, return empty result
+        if (projectIdsFromTags.length === 0) {
+          return { success: true, data: [] }
+        }
+
+        query = query.in('project_id', projectIdsFromTags)
       }
+    }
 
-      // Get unique project IDs
-      projectIdsFromTags = [...new Set(tagLinks?.map(l => l.project_id) || [])]
-
-      // If no projects match tags, return empty result
-      if (projectIdsFromTags.length === 0) {
-        return { success: true, data: [] }
+    // Apply subdivision filter (фильтр по подразделению - по названию)
+    if (filters?.subdivision_id && typeof filters.subdivision_id === 'string') {
+      // Проверяем: это UUID или название?
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.subdivision_id)
+      if (isUuid) {
+        query = query.eq('section_subdivision_id', filters.subdivision_id)
+      } else {
+        // Фильтрация по названию (case-insensitive)
+        query = query.ilike('section_subdivision_name', filters.subdivision_id)
       }
-
-      query = query.in('project_id', projectIdsFromTags)
     }
 
-    // Apply filters
-    if (filters?.managerId) {
-      query = query.eq('manager_id', filters.managerId)
+    // Apply department filter (фильтр по отделу - по названию)
+    if (filters?.department_id && typeof filters.department_id === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.department_id)
+      if (isUuid) {
+        query = query.eq('section_department_id', filters.department_id)
+      } else {
+        query = query.ilike('section_department_name', filters.department_id)
+      }
     }
 
-    if (filters?.projectId) {
-      query = query.eq('project_id', filters.projectId)
-    }
-
-    if (filters?.stageId) {
-      query = query.eq('stage_id', filters.stageId)
-    }
-
-    if (filters?.objectId) {
-      query = query.eq('object_id', filters.objectId)
-    }
-
-    if (filters?.sectionId) {
-      query = query.eq('section_id', filters.sectionId)
-    }
-
-    if (filters?.employeeId) {
-      // Filter by responsible (section or item)
-      query = query.or(
-        `section_responsible_id.eq.${filters.employeeId},item_responsible_id.eq.${filters.employeeId}`
-      )
-    }
-
-    if (filters?.search) {
-      // Search in project, stage, object, section names
-      query = query.or(
-        `project_name.ilike.%${filters.search}%,` +
-        `stage_name.ilike.%${filters.search}%,` +
-        `object_name.ilike.%${filters.search}%,` +
-        `section_name.ilike.%${filters.search}%`
-      )
+    // Apply project filter (по названию или ID)
+    if (filters?.project_id && typeof filters.project_id === 'string') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.project_id)
+      if (isUuid) {
+        query = query.eq('project_id', filters.project_id)
+      } else {
+        query = query.ilike('project_name', filters.project_id)
+      }
     }
 
     // Order for consistent hierarchy
