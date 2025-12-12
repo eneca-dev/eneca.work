@@ -9,6 +9,7 @@ import {
   generateAssignmentNotificationText,
   generateAnnouncementNotificationText
 } from '@/types/notifications'
+import type { RpcNotificationRow } from '../actions/types'
 
 /**
  * UI-формат уведомления (используется в компонентах)
@@ -24,6 +25,47 @@ export interface Notification {
   type?: "info" | "warning" | "error" | "success"
   payload?: Record<string, any>
   entityType?: string
+}
+
+/**
+ * Adapter: Transforms flat RPC result to nested structure
+ *
+ * Converts RPC output (flat with n_ prefixes) → UserNotificationWithNotification (nested)
+ * Used when fetching notifications via get_user_notifications_filtered RPC function
+ *
+ * @param rpcRow - Flat row from get_user_notifications_filtered RPC
+ * @returns Nested structure compatible with transformNotificationData()
+ */
+export function adaptRpcToNested(rpcRow: RpcNotificationRow): UserNotificationWithNotification {
+  return {
+    // user_notifications fields
+    id: rpcRow.id,
+    notification_id: rpcRow.notification_id,
+    user_id: rpcRow.user_id,
+    is_read: rpcRow.is_read,
+    is_archived: rpcRow.is_archived,
+    created_at: rpcRow.created_at,
+    updated_at: rpcRow.updated_at,
+
+    // Reconstruct nested notifications object
+    notifications: {
+      id: rpcRow.notification_id,
+      entity_type_id: rpcRow.n_entity_type_id,
+      payload: rpcRow.n_payload,
+      rendered_text: rpcRow.n_rendered_text,
+      created_at: rpcRow.n_created_at,
+      source_comment_id: rpcRow.n_source_comment_id,
+      updated_at: rpcRow.n_created_at, // RPC doesn't return notifications.updated_at, use created_at
+
+      // Reconstruct nested entity_types object
+      entity_types: {
+        id: rpcRow.n_entity_type_id,
+        entity_name: rpcRow.entity_type_name,
+        created_at: '', // Not returned by RPC, not needed for transform
+        updated_at: '', // Not returned by RPC, not needed for transform
+      }
+    }
+  } as UserNotificationWithNotification
 }
 
 /**

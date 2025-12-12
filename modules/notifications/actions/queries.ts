@@ -7,9 +7,10 @@
 'use server'
 
 import type { ActionResult } from '@/modules/cache'
-import { transformNotificationData, type Notification } from '@/modules/notifications/utils/transform'
+import { transformNotificationData, adaptRpcToNested, type Notification } from '@/modules/notifications/utils/transform'
 import { createClient } from '@/utils/supabase/server'
 import type { UserNotificationWithNotification } from '@/types/notifications'
+import type { RpcNotificationRow } from './types'
 
 /**
  * Получить уведомления с пагинацией и фильтрами (для infinite scroll)
@@ -40,75 +41,49 @@ export async function getNotificationsPaginated(input: {
   try {
     const limit = input.limit ?? 20
     const { userId, page, filters } = input
+    const offset = (page - 1) * limit
 
     // DEBUG: Логируем входные параметры
-    console.log('🔍 [Server Action] getNotificationsPaginated called:', {
+    console.log('🔍 [RPC] getNotificationsPaginated called:', {
       userId,
       page,
       limit,
+      offset,
       filters,
-      includeArchived: filters?.includeArchived ?? false,
     })
 
-    // Прямой запрос к Supabase
     const supabase = await createClient()
-    const offset = (page - 1) * limit
 
-    let query = supabase
-      .from('user_notifications')
-      .select(`
-        *,
-        notifications:notification_id (
-          *,
-          entity_types:entity_type_id (*)
-        )
-      `, { count: 'exact' })
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    // Применяем фильтры
-    if (filters?.onlyUnread) {
-      query = query.eq('is_read', false)
-    }
-
-    if (!filters?.includeArchived) {
-      query = query.eq('is_archived', false)
-    }
-
-    if (filters?.types && filters.types.length > 0) {
-      // Фильтрация по типам - через JOIN с notifications.entity_types
-      // Примечание: types должны быть строковыми значениями (напр., ['announcement', 'task'])
-      console.log('🔍 [Server Action] Filtering by types:', filters.types)
-      // Используем вложенный фильтр через notifications
-      // ВАЖНО: Supabase не поддерживает фильтрацию по вложенным связям напрямую
-      // Поэтому нужно сделать два запроса или использовать RPC функцию
-      // Для простоты - делаем без фильтрации по типам в первом запросе
-    }
-
-    const { data, error, count } = await query.range(offset, offset + limit - 1)
+    // Call RPC function with server-side filtering
+    // Type assertion needed because RPC is not in generated types yet
+    const { data, error } = await (supabase.rpc as any)('get_user_notifications_filtered', {
+      p_user_id: userId,
+      p_limit: limit,
+      p_offset: offset,
+      p_only_unread: filters?.onlyUnread ?? false,
+      p_include_archived: filters?.includeArchived ?? false,
+      p_types: filters?.types && filters.types.length > 0 ? filters.types : null,
+    }) as { data: RpcNotificationRow[] | null; error: any }
 
     if (error) {
-      console.error('[getNotificationsPaginated] Supabase error:', error)
+      console.error('[getNotificationsPaginated] RPC error:', error)
       throw error
     }
 
-    // Если есть фильтр по типам, фильтруем на клиенте (временно)
-    let filteredData = data || []
-    if (filters?.types && filters.types.length > 0) {
-      filteredData = filteredData.filter(item => {
-        const entityTypeName = (item.notifications as any)?.entity_types?.name
-        return entityTypeName && filters.types!.includes(entityTypeName)
-      })
-    }
+    // Extract total_count from first row (window function returns same value in all rows)
+    const totalCount = data && data.length > 0 ? data[0].total_count : 0
 
-    const result = {
-      notifications: filteredData as UserNotificationWithNotification[],
-      totalCount: count || 0,
-      hasMore: (count || 0) > offset + limit,
-    }
+    console.log('🔍 [RPC] Results:', {
+      rowsReturned: data?.length ?? 0,
+      totalCount,
+      hasMore: totalCount > offset + limit,
+    })
 
-    // Трансформируем данные в UI-формат
-    const notifications = result.notifications.map(transformNotificationData)
+    // Transform: flat RPC → nested → UI format
+    const notifications = (data || []).map((rpcRow) => {
+      const nested = adaptRpcToNested(rpcRow)
+      return transformNotificationData(nested)
+    })
 
     return { success: true, data: notifications }
   } catch (error) {
@@ -184,7 +159,7 @@ export async function getNotificationTypeCounts(
       .from('user_notifications')
       .select(`
         notifications:notification_id (
-          entity_types:entity_type_id (name)
+          entity_types:entity_type_id (entity_name)
         )
       `)
       .eq('user_id', userId)
@@ -202,7 +177,7 @@ export async function getNotificationTypeCounts(
 
     if (data) {
       for (const item of data) {
-        const typeName = (item.notifications as any)?.entity_types?.name
+        const typeName = (item.notifications as any)?.entity_types?.entity_name
         if (typeName) {
           counts[typeName] = (counts[typeName] || 0) + 1
         }

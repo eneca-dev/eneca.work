@@ -113,12 +113,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Локальные состояния для клиентской пагинации при активных фильтрах
   // Клиентская предзагрузка не используется
   const [visibleFilteredCount, setVisibleFilteredCount] = useState(10)
-  // Клиентский режим фильтрации используется только для статуса прочитанности,
-  // фильтрация по типам переведена на серверную пагинацию
-  const isClientFilterMode = useMemo(
-    () => (selectedTypes.size === 0 && readFilter !== 'all'),
-    [selectedTypes, readFilter]
-  )
+  // Server-side filtering handles all filters now (types, read status, archived)
+  // No client-side filtering needed
+  const isClientFilterMode = false
 
   // Форматирование даты не используется (дебаг отключен)
 

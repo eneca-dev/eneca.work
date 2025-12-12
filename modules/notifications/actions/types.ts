@@ -102,3 +102,37 @@ export interface ArchiveNotificationInput {
  * @deprecated Use UserNotificationWithNotification directly
  */
 export type NotificationItem = UserNotificationWithNotification
+
+// ============================================================================
+// RPC Function Types
+// ============================================================================
+
+/**
+ * Result type from get_user_notifications_filtered RPC function
+ * Returns flat structure with prefixed columns (n_ for notifications fields)
+ *
+ * @see supabase/migrations/2025-12-12_add_get_user_notifications_filtered_rpc.sql
+ */
+export interface RpcNotificationRow {
+  // user_notifications columns
+  id: string
+  notification_id: string
+  user_id: string
+  is_read: boolean
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+
+  // notifications columns (prefixed with n_)
+  n_entity_type_id: string
+  n_payload: Record<string, any>
+  n_rendered_text: string | null
+  n_created_at: string
+  n_source_comment_id: string | null
+
+  // entity_types columns
+  entity_type_name: string
+
+  // Total count (window function returns same value in all rows)
+  total_count: number
+}
