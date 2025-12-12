@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useNotificationsUiStore } from "@/stores/useNotificationsUiStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { ChatInterface } from "@/modules/chat"
@@ -70,8 +70,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
-  const isNotificationsOpen = useNotificationsStore((s) => s.isPanelOpen)
-  const notificationsPanelWidth = useNotificationsStore((s) => s.panelWidthPx)
+  const isNotificationsOpen = useNotificationsUiStore((s) => s.isPanelOpen)
+  const notificationsPanelWidth = useNotificationsUiStore((s) => s.panelWidthPx)
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)

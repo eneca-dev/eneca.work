@@ -9,7 +9,7 @@ import { formatDistanceToNow, format, differenceInHours } from "date-fns"
 import { ru } from "date-fns/locale"
 import { ChevronDown, Square, SquareCheck, Archive, Undo2, PencilIcon } from "lucide-react"
 import type { Notification } from "@/modules/notifications/utils/transform"
-import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useNotificationsUiStore } from "@/stores/useNotificationsUiStore"
 import { useUserStore } from "@/stores/useUserStore"
 import { useAnnouncementsStore } from "@/modules/announcements/store"
 import {
@@ -80,11 +80,11 @@ export function NotificationItem({ notification, isVisible = false, onEditAnnoun
   const archiveMutation = useArchiveNotification()
 
   // UI state из Zustand (hover, pointer position)
-  const hoveredNotificationId = useNotificationsStore((s) => s.hoveredNotificationId)
-  const setHoveredNotification = useNotificationsStore((s) => s.setHoveredNotification)
-  const clearHoveredNotification = useNotificationsStore((s) => s.clearHoveredNotification)
+  const hoveredNotificationId = useNotificationsUiStore((s) => s.hoveredNotificationId)
+  const setHoveredNotification = useNotificationsUiStore((s) => s.setHoveredNotification)
+  const clearHoveredNotification = useNotificationsUiStore((s) => s.clearHoveredNotification)
   // Подписываемся на координаты курсора из стора, чтобы реактивно восстанавливать hover
-  const lastPointerPosition = useNotificationsStore((s) => s.lastPointerPosition)
+  const lastPointerPosition = useNotificationsUiStore((s) => s.lastPointerPosition)
   const { highlightAnnouncement, announcements } = useAnnouncementsStore()
   const { highlightSection } = useProjectsStore()
   // canManage permission allows full management of announcements (create, edit, delete, etc.)

@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { throttle } from "@/utils/throttle"
 import * as Sentry from "@sentry/nextjs"
 import { cn } from "@/lib/utils"
-import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useNotificationsUiStore } from "@/stores/useNotificationsUiStore"
 import { NotificationItem } from "./NotificationItem"
 import { Button } from "@/components/ui/button"
 import { X, Loader2, RefreshCw, Filter, SlidersHorizontal, Check, Megaphone } from "lucide-react"
@@ -57,10 +57,9 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Трекинг позиции указателя внутри панели для устойчивого hover
-  const setPointerPosition = useNotificationsStore((s) => s.setPointerPosition)
-  const clearPointerPosition = useNotificationsStore((s) => s.clearPointerPosition)
-  const panelWidthPx = useNotificationsStore((s) => s.panelWidthPx)
-  const currentUserId = useNotificationsStore((s) => s.currentUserId)
+  const setPointerPosition = useNotificationsUiStore((s) => s.setPointerPosition)
+  const clearPointerPosition = useNotificationsUiStore((s) => s.clearPointerPosition)
+  const panelWidthPx = useNotificationsUiStore((s) => s.panelWidthPx)
   const allFilteredRef = useRef(0)
   const isMountedRef = useRef(true)
 
@@ -76,13 +75,8 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Количество точек в анимации загрузки счетчиков типов (1..3)
   const [loadingDots, setLoadingDots] = useState(1)
 
-  // Получаем текущего пользователя
+  // Получаем текущего пользователя (currentUserId больше не в store)
   const userId = useUserStore((s) => s.id)
-
-  // UI state из store (пока оставляем)
-  const {
-    clearAll,
-  } = useNotificationsStore()
 
   // TanStack Query hooks для данных
   const {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import * as Sentry from "@sentry/nextjs"
 import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useNotificationsStore } from "@/stores"
+import { useNotificationsUiStore } from "@/stores/useNotificationsUiStore"
 import { useUserStore } from "@/stores/useUserStore"
 import { NotificationsPanel } from "./NotificationsPanel"
 import { cn } from "@/lib/utils"
@@ -15,9 +15,9 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ collapsed = false }: NotificationBellProps) {
-  const isOpen = useNotificationsStore((s) => s.isPanelOpen)
-  const togglePanel = useNotificationsStore((s) => s.togglePanel)
-  const closePanel = useNotificationsStore((s) => s.closePanel)
+  const isOpen = useNotificationsUiStore((s) => s.isPanelOpen)
+  const togglePanel = useNotificationsUiStore((s) => s.togglePanel)
+  const closePanel = useNotificationsUiStore((s) => s.closePanel)
   const [mounted, setMounted] = useState(false)
 
   // Получаем userId

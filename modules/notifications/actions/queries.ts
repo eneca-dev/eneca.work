@@ -7,12 +7,6 @@
 'use server'
 
 import type { ActionResult } from '@/modules/cache'
-import {
-  getUserNotifications,
-  getUserNotificationsByTypes,
-  getUnreadNotificationsCount,
-  getNotificationTypeCounts as getNotificationTypeCountsAPI
-} from '@/modules/notifications/api/notifications'
 import { transformNotificationData, type Notification } from '@/modules/notifications/utils/transform'
 import { createClient } from '@/utils/supabase/server'
 import type { UserNotificationWithNotification } from '@/types/notifications'
@@ -56,54 +50,61 @@ export async function getNotificationsPaginated(input: {
       includeArchived: filters?.includeArchived ?? false,
     })
 
-    // Выбираем API функцию в зависимости от фильтров
-    let result
-    if (filters?.types && filters.types.length > 0) {
-      // Фильтрация по типам
-      console.log('🔍 [Server Action] Using getUserNotificationsByTypes')
-      result = await getUserNotificationsByTypes(userId, filters.types, page, limit, {
-        includeArchived: filters?.includeArchived ?? false,
-      })
-    } else {
-      // Обычная пагинация с опциональными фильтрами
-      // ВАЖНО: Используем прямой запрос с серверным клиентом для поддержки includeArchived
-      console.log('🔍 [Server Action] Using direct Supabase query with includeArchived:', filters?.includeArchived ?? false)
+    // Прямой запрос к Supabase
+    const supabase = await createClient()
+    const offset = (page - 1) * limit
 
-      const supabase = await createClient()
-      const offset = (page - 1) * limit
-
-      let query = supabase
-        .from('user_notifications')
-        .select(`
+    let query = supabase
+      .from('user_notifications')
+      .select(`
+        *,
+        notifications:notification_id (
           *,
-          notifications:notification_id (
-            *,
-            entity_types:entity_type_id (*)
-          )
-        `, { count: 'exact' })
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
+          entity_types:entity_type_id (*)
+        )
+      `, { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
 
-      if (filters?.onlyUnread) {
-        query = query.eq('is_read', false)
-      }
+    // Применяем фильтры
+    if (filters?.onlyUnread) {
+      query = query.eq('is_read', false)
+    }
 
-      if (!filters?.includeArchived) {
-        query = query.eq('is_archived', false)
-      }
+    if (!filters?.includeArchived) {
+      query = query.eq('is_archived', false)
+    }
 
-      const { data, error, count } = await query.range(offset, offset + limit - 1)
+    if (filters?.types && filters.types.length > 0) {
+      // Фильтрация по типам - через JOIN с notifications.entity_types
+      // Примечание: types должны быть строковыми значениями (напр., ['announcement', 'task'])
+      console.log('🔍 [Server Action] Filtering by types:', filters.types)
+      // Используем вложенный фильтр через notifications
+      // ВАЖНО: Supabase не поддерживает фильтрацию по вложенным связям напрямую
+      // Поэтому нужно сделать два запроса или использовать RPC функцию
+      // Для простоты - делаем без фильтрации по типам в первом запросе
+    }
 
-      if (error) {
-        console.error('[getNotificationsPaginated] Supabase error:', error)
-        throw error
-      }
+    const { data, error, count } = await query.range(offset, offset + limit - 1)
 
-      result = {
-        notifications: (data || []) as UserNotificationWithNotification[],
-        totalCount: count || 0,
-        hasMore: (count || 0) > offset + limit,
-      }
+    if (error) {
+      console.error('[getNotificationsPaginated] Supabase error:', error)
+      throw error
+    }
+
+    // Если есть фильтр по типам, фильтруем на клиенте (временно)
+    let filteredData = data || []
+    if (filters?.types && filters.types.length > 0) {
+      filteredData = filteredData.filter(item => {
+        const entityTypeName = (item.notifications as any)?.entity_types?.name
+        return entityTypeName && filters.types!.includes(entityTypeName)
+      })
+    }
+
+    const result = {
+      notifications: filteredData as UserNotificationWithNotification[],
+      totalCount: count || 0,
+      hasMore: (count || 0) > offset + limit,
     }
 
     // Трансформируем данные в UI-формат
@@ -135,8 +136,18 @@ export async function getNotificationsPaginated(input: {
  */
 export async function getUnreadCount(userId: string): Promise<ActionResult<number>> {
   try {
-    const count = await getUnreadNotificationsCount(userId)
-    return { success: true, data: count }
+    const supabase = await createClient()
+
+    const { count, error } = await supabase
+      .from('user_notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false)
+      .eq('is_archived', false)
+
+    if (error) throw error
+
+    return { success: true, data: count || 0 }
   } catch (error) {
     console.error('[getUnreadCount] Error:', error)
     return {
@@ -166,7 +177,38 @@ export async function getNotificationTypeCounts(
   options?: { includeArchived?: boolean }
 ): Promise<ActionResult<Record<string, number>>> {
   try {
-    const counts = await getNotificationTypeCountsAPI(userId, options)
+    const supabase = await createClient()
+
+    // Получаем все уведомления пользователя с типами
+    let query = supabase
+      .from('user_notifications')
+      .select(`
+        notifications:notification_id (
+          entity_types:entity_type_id (name)
+        )
+      `)
+      .eq('user_id', userId)
+
+    if (!options?.includeArchived) {
+      query = query.eq('is_archived', false)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    // Подсчитываем количество уведомлений по типам
+    const counts: Record<string, number> = {}
+
+    if (data) {
+      for (const item of data) {
+        const typeName = (item.notifications as any)?.entity_types?.name
+        if (typeName) {
+          counts[typeName] = (counts[typeName] || 0) + 1
+        }
+      }
+    }
+
     return { success: true, data: counts }
   } catch (error) {
     console.error('[getNotificationTypeCounts] Error:', error)

@@ -4,11 +4,10 @@ export { NotificationItem } from './components/NotificationItem'
 export { NotificationsPanel } from './components/NotificationsPanel'
 export { NotificationsProvider } from './components/NotificationsProvider'
 
-// Stores (UI state only)
-export { useNotificationsStore, useNotifications } from '@/stores/useNotificationsStore'
+// Stores (UI state only - новый минимальный store)
+export { useNotificationsUiStore } from '@/stores/useNotificationsUiStore'
 
 // Types
-export type { DatabaseNotification, DatabaseUserNotification } from '@/stores/useNotificationsStore'
 export type { Notification } from './utils/transform'
 
 // Hooks (TanStack Query)
