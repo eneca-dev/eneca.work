@@ -141,18 +141,8 @@ export interface Project {
 }
 
 // ============================================================================
-// Filter Types (по образцу planning/filters)
+// Filter Types
 // ============================================================================
-
-/** Опция фильтра */
-export interface FilterOption {
-  id: string
-  name: string
-  departmentId?: string
-  managerId?: string
-  subdivisionId?: string
-  teamId?: string
-}
 
 /** Тег проекта */
 export interface ProjectTag {
@@ -209,59 +199,6 @@ export interface DayInfo {
   isTransferredWorkday: boolean
   /** Это перенесённый выходной */
   isTransferredDayOff: boolean
-}
-
-/** Тип фильтра */
-export type FilterType =
-  | 'subdivision'
-  | 'manager'
-  | 'project'
-  | 'stage'
-  | 'object'
-  | 'section'
-  | 'department'
-  | 'team'
-  | 'employee'
-
-/** Состояние фильтров */
-export interface FilterState {
-  // Проектный блок
-  selectedManagerId: string | null
-  selectedProjectId: string | null
-  selectedStageId: string | null
-  selectedObjectId: string | null
-  selectedSectionId: string | null
-  // Организационный блок
-  selectedSubdivisionId: string | null
-  selectedDepartmentId: string | null
-  selectedTeamId: string | null
-  selectedEmployeeId: string | null
-}
-
-/** Фильтры для загрузки данных */
-export interface ResourceGraphFilters {
-  /** ID менеджера проекта */
-  managerId?: string
-  /** ID проекта */
-  projectId?: string
-  /** ID стадии */
-  stageId?: string
-  /** ID объекта */
-  objectId?: string
-  /** ID раздела */
-  sectionId?: string
-  /** ID подразделения */
-  subdivisionId?: string
-  /** ID департамента */
-  departmentId?: string
-  /** ID команды */
-  teamId?: string
-  /** ID сотрудника */
-  employeeId?: string
-  /** ID тегов проекта (массив для мульти-выбора) */
-  tagIds?: string[]
-  /** Поиск по названию */
-  search?: string
 }
 
 // ============================================================================

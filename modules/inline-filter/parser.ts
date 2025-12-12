@@ -5,6 +5,23 @@
 
 import type { FilterConfig, ParsedToken, ParsedFilter, FilterQueryParams } from './types'
 
+// ============================================================================
+// Константы
+// ============================================================================
+
+/** Максимальное количество токенов в строке фильтра */
+export const MAX_TOKENS = 20
+
+/** Максимальная длина значения фильтра */
+export const MAX_VALUE_LENGTH = 500
+
+/** Максимальная длина всей строки фильтра */
+export const MAX_FILTER_STRING_LENGTH = 2000
+
+// ============================================================================
+// Регулярные выражения
+// ============================================================================
+
 /**
  * Регулярное выражение для парсинга токенов
  * Матчит: ключ:"значение с пробелами" или ключ:значение
@@ -13,11 +30,15 @@ import type { FilterConfig, ParsedToken, ParsedFilter, FilterQueryParams } from 
  * 1 - ключ (все символы до двоеточия)
  * 2 - значение в кавычках (без кавычек)
  * 3 - значение без кавычек
+ *
+ * @internal Используется только внутри модуля
  */
 const TOKEN_REGEX = /([^\s:]+):(?:"([^"]+)"|([^\s]+))/g
 
 /**
  * Парсит строку фильтров в структурированный объект
+ *
+ * Включает защиту от слишком длинных строк и большого количества токенов.
  *
  * @example
  * parseFilterString('подразделение:"ОВ" проект:Солнечный', config)
@@ -25,7 +46,9 @@ const TOKEN_REGEX = /([^\s:]+):(?:"([^"]+)"|([^\s]+))/g
  */
 export function parseFilterString(input: string, config: FilterConfig): ParsedFilter {
   const tokens: ParsedToken[] = []
-  const trimmedInput = input.trim()
+
+  // Защита от слишком длинных строк
+  const trimmedInput = input.trim().slice(0, MAX_FILTER_STRING_LENGTH)
 
   if (!trimmedInput) {
     return { tokens: [], raw: '' }
@@ -35,15 +58,23 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
   const validKeys = new Set(Object.keys(config.keys))
 
   let match: RegExpExecArray | null
-  // Сбрасываем lastIndex перед использованием
+  // Сбрасываем lastIndex перед использованием (важно для глобального regex)
   TOKEN_REGEX.lastIndex = 0
 
   while ((match = TOKEN_REGEX.exec(trimmedInput)) !== null) {
+    // Лимит на количество токенов
+    if (tokens.length >= MAX_TOKENS) break
+
     const key = match[1]
     const value = match[2] ?? match[3] // Значение в кавычках или без
 
     // Игнорируем неизвестные ключи
     if (!validKeys.has(key)) {
+      continue
+    }
+
+    // Игнорируем слишком длинные значения
+    if (value.length > MAX_VALUE_LENGTH) {
       continue
     }
 
@@ -61,19 +92,45 @@ export function parseFilterString(input: string, config: FilterConfig): ParsedFi
 }
 
 /**
+ * Экранирует специальные символы в значении фильтра
+ *
+ * @internal
+ */
+function escapeFilterValue(value: string): string {
+  // Экранируем обратные слеши и кавычки
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
  * Сериализует токены обратно в строку
- * Автоматически добавляет кавычки если значение содержит пробелы
+ *
+ * - Автоматически добавляет кавычки если значение содержит пробелы или спецсимволы
+ * - Экранирует кавычки внутри значений
  *
  * @example
  * serializeFilter([{ key: 'подразделение', value: 'ОВ и К' }])
  * // 'подразделение:"ОВ и К"'
+ *
+ * @example
+ * serializeFilter([{ key: 'проект', value: 'Тест "Альфа"' }])
+ * // 'проект:"Тест \"Альфа\""'
  */
 export function serializeFilter(tokens: ParsedToken[]): string {
   return tokens
     .map((token) => {
-      const needsQuotes = token.value.includes(' ')
-      const value = needsQuotes ? `"${token.value}"` : token.value
-      return `${token.key}:${value}`
+      const hasSpaces = token.value.includes(' ')
+      const hasQuotes = token.value.includes('"')
+      const hasBackslash = token.value.includes('\\')
+
+      // Нужны кавычки если есть пробелы или спецсимволы
+      const needsQuotes = hasSpaces || hasQuotes || hasBackslash
+
+      if (needsQuotes) {
+        const escapedValue = escapeFilterValue(token.value)
+        return `${token.key}:"${escapedValue}"`
+      }
+
+      return `${token.key}:${token.value}`
     })
     .join(' ')
 }

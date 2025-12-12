@@ -35,6 +35,10 @@ export type {
   ParsedFilter,
   FilterOption,
   FilterQueryParams,
+  FilterValueType,
+  FilterOperator,
+  FilterEnumValue,
+  FilterKeyColor,
 } from './types'
 
 // Parser utilities
@@ -53,5 +57,5 @@ export { InlineFilter } from './components'
 export type { InlineFilterProps } from './components'
 
 // Hooks
-export { useInlineFilter } from './hooks'
-export type { UseInlineFilterOptions, UseInlineFilterReturn } from './hooks'
+export { useInlineFilter, useFilterContext } from './hooks'
+export type { UseInlineFilterOptions, UseInlineFilterReturn, FilterInputContext, UseFilterContextOptions } from './hooks'

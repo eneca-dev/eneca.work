@@ -1,14 +1,23 @@
+'use client'
+
 /**
  * Хук для работы с инлайн-фильтром
+ *
+ * Предоставляет:
+ * - Управление состоянием строки фильтра
+ * - Мемоизированные производные данные (токены, query params)
+ * - Методы для программного управления фильтрами
+ *
+ * @example
+ * const { value, setValue, parsedTokens, queryParams, hasFilters, clear, addToken, removeToken } =
+ *   useInlineFilter({ config })
  */
 
 import { useState, useMemo, useCallback } from 'react'
 import type { FilterConfig, ParsedToken, FilterQueryParams } from '../types'
 import {
   parseFilterString,
-  serializeFilter,
   tokensToQueryParams,
-  hasActiveFilters,
   addOrUpdateToken,
   removeToken as removeTokenUtil,
 } from '../parser'
@@ -63,9 +72,10 @@ export function useInlineFilter({
     [parsedTokens, config]
   )
 
+  // Используем уже вычисленные parsedTokens вместо повторного парсинга
   const hasFilters = useMemo(
-    () => hasActiveFilters(value, config),
-    [value, config]
+    () => parsedTokens.length > 0,
+    [parsedTokens]
   )
 
   const clear = useCallback(() => {

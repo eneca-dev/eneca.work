@@ -1,24 +1,46 @@
 'use client'
 
 /**
- * InlineFilter — компонент инлайн-фильтра в стиле GitHub Projects
+ * InlineFilter — минималистичный инлайн-фильтр в стиле GitHub
  *
- * Дизайн: Industrial/IDE aesthetic — профессиональный инструмент для работы с данными
- * Вдохновение: GitHub search, VS Code command palette
+ * Простой input с автокомплитом, подсветкой применённых фильтров
+ *
+ * @example
+ * const config: FilterConfig = {
+ *   keys: {
+ *     'проект': {
+ *       field: 'project_id',
+ *       label: 'Проект',
+ *       icon: FolderKanban,
+ *       color: 'amber',
+ *     },
+ *   }
+ * }
+ * <InlineFilter config={config} value={filter} onChange={setFilter} options={options} />
  */
 
 import * as React from 'react'
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
-import { Search, X, Filter, ChevronDown } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-import type { FilterConfig, FilterOption, ParsedToken } from '../types'
+import type { FilterConfig, FilterOption } from '../types'
 import { parseFilterString } from '../parser'
+import { useFilterContext, type FilterInputContext } from '../hooks/useFilterContext'
+import { FilterSuggestions, COLOR_MAP, DEFAULT_COLOR, type FilterSuggestion } from './FilterSuggestions'
+
+// ============================================================================
+// Константы
+// ============================================================================
+
+/** Задержка закрытия dropdown после blur (мс) */
+const BLUR_CLOSE_DELAY_MS = 150
+
+/** Максимальное количество подсказок в dropdown */
+const MAX_SUGGESTIONS = 8
+
+/** Дефолтная задержка debounce (мс) */
+const DEFAULT_DEBOUNCE_MS = 300
 
 export interface InlineFilterProps {
   /** Конфигурация фильтра */
@@ -47,10 +69,12 @@ export function InlineFilter({
   debounceMs = 300,
 }: InlineFilterProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const suggestionsId = useId()
   const [localValue, setLocalValue] = useState(value)
   const [isFocused, setIsFocused] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0)
+  const [cursorPosition, setCursorPosition] = useState(0)
 
   // Debounced value для onChange
   const [debouncedValue] = useDebounceValue(localValue, debounceMs)
@@ -69,35 +93,12 @@ export function InlineFilter({
     }
   }, [debouncedValue, onChange, value])
 
-  // Парсим токены для отображения чипов
-  const parsedTokens = useMemo(
-    () => parseFilterString(localValue, config).tokens,
-    [localValue, config]
-  )
-
-  // Определяем контекст ввода для автокомплита
-  const inputContext = useMemo(() => {
-    const cursorPos = inputRef.current?.selectionStart ?? localValue.length
-    const beforeCursor = localValue.slice(0, cursorPos)
-
-    // Ищем незавершённый токен (ключ: без закрывающей кавычки или пробела)
-    const partialKeyMatch = beforeCursor.match(/(\S+):(?:"([^"]*)|(\S*))$/)
-    if (partialKeyMatch) {
-      const key = partialKeyMatch[1]
-      const partialValue = partialKeyMatch[2] ?? partialKeyMatch[3] ?? ''
-      if (config.keys[key]) {
-        return { type: 'value' as const, key, partialValue }
-      }
-    }
-
-    // Ищем частичный ключ (без двоеточия)
-    const partialKey = beforeCursor.match(/(\S+)$/)
-    if (partialKey && !partialKey[0].includes(':')) {
-      return { type: 'key' as const, partial: partialKey[1] }
-    }
-
-    return { type: 'empty' as const }
-  }, [localValue, config])
+  // Определяем контекст ввода для автокомплита (используем хук)
+  const inputContext = useFilterContext({
+    value: localValue,
+    cursorPosition,
+    config,
+  })
 
   // Генерируем подсказки
   const suggestions = useMemo(() => {
@@ -113,11 +114,12 @@ export function InlineFilter({
             type: 'key',
             label: key,
             insertText: `${key}:`,
+            key: key,
           })
         }
       })
     } else if (inputContext.type === 'value') {
-      // Подсказки значений
+      // Подсказки значений - показываем сразу после выбора ключа
       const keyOptions = options.filter((opt) => opt.key === inputContext.key)
       const partial = inputContext.partialValue.toLowerCase()
 
@@ -140,9 +142,8 @@ export function InlineFilter({
   // Обработка выбора подсказки
   const applySuggestion = useCallback(
     (suggestion: (typeof suggestions)[0]) => {
-      const cursorPos = inputRef.current?.selectionStart ?? localValue.length
-      const beforeCursor = localValue.slice(0, cursorPos)
-      const afterCursor = localValue.slice(cursorPos)
+      const beforeCursor = localValue.slice(0, cursorPosition)
+      const afterCursor = localValue.slice(cursorPosition)
 
       let newValue: string
       let newCursorPos: number
@@ -155,7 +156,7 @@ export function InlineFilter({
         newCursorPos = replaceStart + suggestion.insertText.length
       } else {
         // Заменяем частичное значение
-        const partialMatch = beforeCursor.match(/(\S+):(?:"([^"]*)|(\S*))$/)
+        const partialMatch = beforeCursor.match(/(\S+):(?:"([^"]*)|(\S*))?$/)
         if (partialMatch) {
           const keyWithColon = partialMatch[1] + ':'
           const replaceStart = beforeCursor.lastIndexOf(keyWithColon) + keyWithColon.length
@@ -168,16 +169,26 @@ export function InlineFilter({
       }
 
       setLocalValue(newValue)
-      setShowSuggestions(false)
+      setCursorPosition(newCursorPos)
       setSelectedSuggestionIndex(0)
 
+      // Для значения закрываем, для ключа - оставляем открытыми
+      if (suggestion.type === 'value') {
+        setShowSuggestions(false)
+      } else {
+        // Для ключа оставляем открытым чтобы показать значения
+        setShowSuggestions(true)
+      }
+
       // Восстанавливаем фокус и позицию курсора
-      setTimeout(() => {
-        inputRef.current?.focus()
-        inputRef.current?.setSelectionRange(newCursorPos, newCursorPos)
-      }, 0)
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          inputRef.current.setSelectionRange(newCursorPos, newCursorPos)
+        }
+      })
     },
-    [localValue]
+    [localValue, cursorPosition]
   )
 
   // Обработка клавиатуры
@@ -207,233 +218,195 @@ export function InlineFilter({
     [showSuggestions, suggestions, selectedSuggestionIndex, applySuggestion]
   )
 
-  // Удаление токена по клику на чип
-  const removeToken = useCallback(
-    (token: ParsedToken) => {
-      const newValue = localValue.replace(token.raw, '').replace(/\s+/g, ' ').trim()
-      setLocalValue(newValue)
-      onChange(newValue)
-    },
-    [localValue, onChange]
-  )
-
   // Очистка всех фильтров
   const clearAll = useCallback(() => {
     setLocalValue('')
+    setCursorPosition(0)
     onChange('')
     inputRef.current?.focus()
   }, [onChange])
 
-  const hasFilters = parsedTokens.length > 0
+  // Парсим токены для подсветки
+  const parsedTokens = useMemo(
+    () => parseFilterString(localValue, config).tokens,
+    [localValue, config]
+  )
+  const filterCount = parsedTokens.length
 
-  // Получаем лейбл ключа из конфига
-  const getKeyLabel = (key: string) => config.keys[key]?.label ?? key
+  // Создаём подсвеченный текст с цветными ключами
+  const highlightedContent = useMemo(() => {
+    if (!localValue || parsedTokens.length === 0) return null
+
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+
+    // Находим позиции всех токенов в строке
+    parsedTokens.forEach((token, idx) => {
+      const tokenStart = localValue.indexOf(token.raw, lastIndex)
+      if (tokenStart === -1) return
+
+      // Добавляем текст до токена (пробелы и т.д.)
+      if (tokenStart > lastIndex) {
+        parts.push(
+          <span key={`text-${idx}`} className="text-foreground">
+            {localValue.slice(lastIndex, tokenStart)}
+          </span>
+        )
+      }
+
+      // Получаем цвет для ключа из конфига
+      const keyConfig = config.keys[token.key]
+      const color = keyConfig?.color ? COLOR_MAP[keyConfig.color] : DEFAULT_COLOR
+
+      // Разбиваем токен на ключ и значение
+      const colonIndex = token.raw.indexOf(':')
+      const keyPart = token.raw.slice(0, colonIndex + 1)
+      const valuePart = token.raw.slice(colonIndex + 1)
+
+      // Простая подсветка: ключ цветной, значение обычное
+      parts.push(
+        <span key={`token-${idx}`}>
+          <span className={color}>{keyPart}</span>
+          <span className="text-sky-300">{valuePart}</span>
+        </span>
+      )
+
+      lastIndex = tokenStart + token.raw.length
+    })
+
+    // Добавляем оставшийся текст
+    if (lastIndex < localValue.length) {
+      parts.push(
+        <span key="text-end" className="text-foreground">
+          {localValue.slice(lastIndex)}
+        </span>
+      )
+    }
+
+    return parts
+  }, [localValue, parsedTokens])
+
+  // Определяем есть ли результаты для текущего контекста
+  const hasNoResults = inputContext.type === 'value' && suggestions.length === 0 && inputContext.partialValue.length > 0
+
+  // Обработчик изменения input
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value
+    const newCursorPos = e.target.selectionStart ?? newValue.length
+    setLocalValue(newValue)
+    setCursorPosition(newCursorPos)
+    setShowSuggestions(true)
+    setSelectedSuggestionIndex(0)
+  }, [])
+
+  // Обновляем позицию курсора при кликах и навигации
+  const handleSelect = useCallback(() => {
+    if (inputRef.current) {
+      setCursorPosition(inputRef.current.selectionStart ?? localValue.length)
+    }
+  }, [localValue.length])
 
   return (
     <div className={cn('relative w-full', className)}>
-      {/* Основной контейнер фильтра */}
+      {/* Основной контейнер */}
       <div
         className={cn(
-          'group relative flex items-center gap-2',
-          'rounded-lg border bg-background transition-all duration-200',
-          'hover:border-muted-foreground/30',
+          'flex items-center',
+          'rounded-md border bg-background',
+          'transition-colors duration-150',
           isFocused
-            ? 'border-primary/50 ring-2 ring-primary/20 shadow-sm'
-            : 'border-border',
-          hasFilters && 'pb-2'
+            ? 'border-primary ring-1 ring-primary/30'
+            : 'border-border hover:border-muted-foreground/40'
         )}
       >
-        {/* Иконка фильтра */}
+        {/* Иконка поиска */}
         <div className="flex items-center pl-3 text-muted-foreground">
-          <Filter className="h-4 w-4" />
+          <Search className="h-4 w-4" />
         </div>
 
-        {/* Input */}
-        <div className="relative flex-1">
+        {/* Input с подсветкой */}
+        <div className="relative flex-1 overflow-hidden">
+          {/* Слой подсветки (визуально поверх, но не блокирует клики) */}
+          {highlightedContent && (
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-center px-2 py-1.5 text-sm whitespace-pre"
+              aria-hidden="true"
+            >
+              {highlightedContent}
+            </div>
+          )}
+
+          {/* Настоящий input */}
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded={showSuggestions && isFocused && suggestions.length > 0}
+            aria-haspopup="listbox"
+            aria-controls={suggestionsId}
+            aria-activedescendant={
+              showSuggestions && suggestions.length > 0
+                ? `${suggestionsId}-option-${selectedSuggestionIndex}`
+                : undefined
+            }
             value={localValue}
-            onChange={(e) => {
-              setLocalValue(e.target.value)
-              setShowSuggestions(true)
-              setSelectedSuggestionIndex(0)
-            }}
+            onChange={handleInputChange}
+            onSelect={handleSelect}
             onFocus={() => {
               setIsFocused(true)
               setShowSuggestions(true)
+              handleSelect()
             }}
             onBlur={() => {
               setIsFocused(false)
-              // Задержка чтобы клик по подсказке успел сработать
               setTimeout(() => setShowSuggestions(false), 150)
             }}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder ?? 'Фильтр: подразделение:"ОВ" проект:"Название"'}
+            placeholder={placeholder ?? 'Filter...'}
             className={cn(
-              'w-full bg-transparent py-2.5 pr-8 text-sm outline-none',
-              'font-mono tracking-tight',
-              'placeholder:text-muted-foreground/50 placeholder:font-sans placeholder:tracking-normal'
+              'relative w-full bg-transparent px-2 py-1.5 text-sm outline-none',
+              'placeholder:text-muted-foreground/60',
+              // Прозрачный текст когда есть подсветка
+              highlightedContent ? 'text-transparent' : 'text-foreground'
             )}
+            style={{ caretColor: 'hsl(var(--foreground))' }}
             spellCheck={false}
             autoComplete="off"
           />
+        </div>
 
-          {/* Кнопка очистки */}
-          {localValue && (
+        {/* Счётчик фильтров + кнопка очистки */}
+        {filterCount > 0 && (
+          <div className="flex items-center gap-1 pr-2">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {filterCount}
+            </span>
             <button
               type="button"
               onClick={clearAll}
               className={cn(
-                'absolute right-2 top-1/2 -translate-y-1/2',
-                'rounded p-0.5 text-muted-foreground/50',
-                'hover:text-muted-foreground hover:bg-muted',
-                'transition-colors duration-150'
+                'rounded p-0.5 text-muted-foreground/60',
+                'hover:text-foreground hover:bg-muted',
+                'transition-colors duration-100'
               )}
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
-          )}
-        </div>
-
-        {/* Подсказка с доступными ключами */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'mr-2 flex items-center gap-1 rounded px-2 py-1',
-                'text-xs text-muted-foreground',
-                'hover:bg-muted hover:text-foreground',
-                'transition-colors duration-150'
-              )}
-            >
-              <span className="hidden sm:inline">Поля</span>
-              <ChevronDown className="h-3 w-3" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-56 p-2"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <div className="space-y-1">
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                Доступные фильтры
-              </p>
-              {Object.entries(config.keys).map(([key, keyConfig]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    const insertion = localValue ? ` ${key}:` : `${key}:`
-                    setLocalValue(localValue + insertion)
-                    inputRef.current?.focus()
-                  }}
-                  className={cn(
-                    'flex w-full items-center justify-between rounded px-2 py-1.5',
-                    'text-sm hover:bg-muted transition-colors'
-                  )}
-                >
-                  <span className="font-mono text-xs">{key}:</span>
-                  {keyConfig.label && (
-                    <span className="text-xs text-muted-foreground">
-                      {keyConfig.label}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* Чипы токенов */}
-        {hasFilters && (
-          <div className="absolute bottom-1 left-10 right-2 flex flex-wrap gap-1">
-            {parsedTokens.map((token, idx) => (
-              <span
-                key={`${token.key}-${token.value}-${idx}`}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded px-1.5 py-0.5',
-                  'bg-primary/10 text-primary text-xs font-medium',
-                  'border border-primary/20',
-                  'animate-in fade-in-0 zoom-in-95 duration-150'
-                )}
-              >
-                <span className="text-primary/60">{getKeyLabel(token.key)}:</span>
-                <span>{token.value}</span>
-                <button
-                  type="button"
-                  onClick={() => removeToken(token)}
-                  className="ml-0.5 rounded hover:bg-primary/20 p-0.5 transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
           </div>
         )}
       </div>
 
       {/* Dropdown подсказок */}
-      {showSuggestions && suggestions.length > 0 && isFocused && (
-        <div
-          className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1',
-            'rounded-lg border bg-popover shadow-lg',
-            'animate-in fade-in-0 slide-in-from-top-2 duration-150'
-          )}
-        >
-          <div className="p-1">
-            {suggestions.map((suggestion, idx) => (
-              <button
-                key={`${suggestion.type}-${suggestion.label}`}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault() // Предотвращаем blur
-                  applySuggestion(suggestion)
-                }}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm',
-                  'transition-colors duration-75',
-                  idx === selectedSuggestionIndex
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-muted'
-                )}
-              >
-                {suggestion.type === 'key' ? (
-                  <>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {suggestion.label}:
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {config.keys[suggestion.label]?.label}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground">
-                      {suggestion.key}:
-                    </span>
-                    <span>{suggestion.label}</span>
-                  </>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Подсказка по синтаксису */}
-          <div className="border-t px-2 py-1.5">
-            <p className="text-[10px] text-muted-foreground">
-              <kbd className="rounded bg-muted px-1 py-0.5 font-mono">Tab</kbd>
-              {' '}или{' '}
-              <kbd className="rounded bg-muted px-1 py-0.5 font-mono">Enter</kbd>
-              {' '}— выбрать,{' '}
-              <kbd className="rounded bg-muted px-1 py-0.5 font-mono">Esc</kbd>
-              {' '}— закрыть
-            </p>
-          </div>
-        </div>
+      {showSuggestions && isFocused && (suggestions.length > 0 || hasNoResults) && (
+        <FilterSuggestions
+          suggestions={suggestions}
+          selectedIndex={selectedSuggestionIndex}
+          config={config}
+          onSelect={applySuggestion}
+          showNoResults={hasNoResults}
+          noResultsText={inputContext.type === 'value' ? inputContext.partialValue : ''}
+          id={suggestionsId}
+        />
       )}
     </div>
   )
