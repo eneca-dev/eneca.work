@@ -81,6 +81,19 @@ export interface DecompositionStage {
 }
 
 /**
+ * Точка готовности (плановая или фактическая)
+ */
+export interface ReadinessPoint {
+  /** Дата */
+  date: string
+  /** Готовность в % (0-100) */
+  value: number
+}
+
+/** @deprecated Используй ReadinessPoint */
+export type ReadinessCheckpoint = ReadinessPoint
+
+/**
  * Раздел проекта
  * Project → Stage → Object → Section
  */
@@ -94,12 +107,17 @@ export interface Section {
     firstName: string | null
     lastName: string | null
     name: string | null
+    avatarUrl: string | null
   }
   status: {
     id: string | null
     name: string | null
     color: string | null
   }
+  /** Контрольные точки плановой готовности */
+  readinessCheckpoints: ReadinessCheckpoint[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness: ReadinessPoint[]
   decompositionStages: DecompositionStage[]
 }
 

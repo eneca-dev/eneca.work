@@ -5590,6 +5590,360 @@ export type Database = {
           },
         ]
       }
+      section_readiness_checkpoints: {
+        Row: {
+          checkpoint_date: string
+          checkpoint_id: string
+          created_at: string | null
+          created_by: string | null
+          planned_readiness: number
+          section_id: string
+        }
+        Insert: {
+          checkpoint_date: string
+          checkpoint_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          planned_readiness: number
+          section_id: string
+        }
+        Update: {
+          checkpoint_date?: string
+          checkpoint_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          planned_readiness?: number
+          section_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_section_budget_summary"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_analytics"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_decomposition_totals"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_checkpoints_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_id"]
+          },
+        ]
+      }
+      section_readiness_snapshots: {
+        Row: {
+          actual_readiness: number
+          created_at: string | null
+          section_id: string
+          snapshot_date: string
+          snapshot_id: string
+        }
+        Insert: {
+          actual_readiness: number
+          created_at?: string | null
+          section_id: string
+          snapshot_date: string
+          snapshot_id?: string
+        }
+        Update: {
+          actual_readiness?: number
+          created_at?: string | null
+          section_id?: string
+          snapshot_date?: string
+          snapshot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_section_budget_summary"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_analytics"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_decomposition_totals"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_readiness_snapshots_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_id"]
+          },
+        ]
+      }
       section_statuses: {
         Row: {
           color: string
@@ -10305,11 +10659,14 @@ export type Database = {
           project_status:
             | Database["public"]["Enums"]["project_status_enum"]
             | null
+          section_actual_readiness: Json | null
           section_department_id: string | null
           section_department_name: string | null
           section_end_date: string | null
           section_id: string | null
           section_name: string | null
+          section_readiness_checkpoints: Json | null
+          section_responsible_avatar: string | null
           section_responsible_first_name: string | null
           section_responsible_id: string | null
           section_responsible_last_name: string | null
@@ -17610,6 +17967,10 @@ export type Database = {
           team_name: string
         }[]
       }
+      calculate_section_readiness: {
+        Args: { p_section_id: string }
+        Returns: number
+      }
       can_view_project_budget: {
         Args: { project_uuid: string }
         Returns: boolean
@@ -17619,6 +17980,14 @@ export type Database = {
         Returns: boolean
       }
       compute_user_permissions: { Args: { p_user_id: string }; Returns: Json }
+      create_daily_readiness_snapshots: {
+        Args: { p_date?: string }
+        Returns: {
+          action: string
+          readiness: number
+          section_id: string
+        }[]
+      }
       delete_project_cascade: {
         Args: { project_id_param: string }
         Returns: undefined
@@ -17683,6 +18052,13 @@ export type Database = {
           vacation_date: string
         }[]
       }
+      get_notification_type_counts: {
+        Args: { p_include_archived?: boolean; p_user_id: string }
+        Returns: {
+          count: number
+          type_name: string
+        }[]
+      }
       get_project_delete_stats: {
         Args: { project_id_param: string }
         Returns: {
@@ -17723,6 +18099,32 @@ export type Database = {
         }[]
       }
       get_user_id_by_email: { Args: { email_param: string }; Returns: string }
+      get_user_notifications_filtered: {
+        Args: {
+          p_include_archived?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_only_unread?: boolean
+          p_types?: string[]
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          entity_type_name: string
+          id: string
+          is_archived: boolean
+          is_read: boolean
+          n_created_at: string
+          n_entity_type_id: string
+          n_payload: Json
+          n_rendered_text: string
+          n_source_comment_id: string
+          notification_id: string
+          total_count: number
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_user_permissions: { Args: { p_user_id: string }; Returns: string[] }
       get_work_logs_agg_for_items: {
         Args: { p_item_ids: string[] }

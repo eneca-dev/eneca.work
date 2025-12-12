@@ -18,6 +18,7 @@ import type {
   DecompositionItem,
   CompanyCalendarEvent,
   DayInfo,
+  ReadinessCheckpoint,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -235,6 +236,20 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
     // Get or create section
     let section = object.sections.find(s => s.id === row.section_id)
     if (!section) {
+      // Парсим JSONB checkpoints (плановая готовность)
+      const rawCheckpoints = row.section_readiness_checkpoints
+      let readinessCheckpoints: ReadinessCheckpoint[] = []
+      if (rawCheckpoints && Array.isArray(rawCheckpoints)) {
+        readinessCheckpoints = rawCheckpoints as ReadinessCheckpoint[]
+      }
+
+      // Парсим JSONB actual readiness (фактическая готовность)
+      const rawActual = (row as Record<string, unknown>).section_actual_readiness
+      let actualReadiness: ReadinessCheckpoint[] = []
+      if (rawActual && Array.isArray(rawActual)) {
+        actualReadiness = rawActual as ReadinessCheckpoint[]
+      }
+
       section = {
         id: row.section_id,
         name: row.section_name || '',
@@ -245,12 +260,15 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
           firstName: row.section_responsible_first_name || null,
           lastName: row.section_responsible_last_name || null,
           name: row.section_responsible_name || null,
+          avatarUrl: (row as Record<string, unknown>).section_responsible_avatar as string | null || null,
         },
         status: {
           id: row.section_status_id || null,
           name: row.section_status_name || null,
           color: row.section_status_color || null,
         },
+        readinessCheckpoints,
+        actualReadiness,
         decompositionStages: [],
       }
       object.sections.push(section)

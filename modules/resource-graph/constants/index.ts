@@ -40,6 +40,9 @@ export const LOADING_STATUS_COLORS = {
 /** Высота строки в пикселях */
 export const ROW_HEIGHT = 40
 
+/** Высота строки раздела (двухстрочная) */
+export const SECTION_ROW_HEIGHT = 56
+
 /** Фиксированная ширина ячейки дня в пикселях */
 export const DAY_CELL_WIDTH = 36
 
