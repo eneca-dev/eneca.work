@@ -13,6 +13,16 @@ export interface WorkLog {
   employeeName: string
 }
 
+// Тип бюджета раздела
+export type BudgetType = "main" | "premium"
+
+// Бюджет раздела
+export interface SectionBudget {
+  amount: number // плановая сумма бюджета в рублях
+  spent: number // потрачено из бюджета
+  type: BudgetType // тип бюджета: основной или премиальный
+}
+
 export type StageStatus = "backlog" | "plan" | "in_progress" | "paused" | "review" | "done"
 
 // Тип вехи
@@ -34,6 +44,25 @@ export interface Milestone {
   isCompleted: boolean
 }
 
+// Бюджет задачи
+export interface TaskBudget {
+  amount: number // плановая сумма
+  spent: number // потрачено
+}
+
+// Недельная статистика для раздела
+export interface WeeklyStats {
+  weekNumber: number // номер недели (1, 2, 3...)
+  weekStart: string // дата начала недели
+  weekEnd: string // дата конца недели
+  // Фактические показатели (накопительно)
+  actualProgress: number // фактическая готовность в % (0-100)
+  actualBudgetSpent: number // потрачено бюджета в % от общего (0-100)
+  actualHoursSpent: number // потрачено часов в % от общего (0-100)
+  // Плановый показатель (общий для всех метрик)
+  plannedProgress: number // плановая готовность к этой неделе в % (0-100) - применяется ко всем барам
+}
+
 export interface DecompositionTask {
   id: string
   description: string
@@ -41,6 +70,10 @@ export interface DecompositionTask {
   progress: number // 0-100
   responsibleName: string | null
   order: number
+  budget?: TaskBudget // бюджет задачи
+  startDate?: string // дата начала задачи
+  endDate?: string // дата окончания задачи
+  workLogs?: WorkLog[] // отчёты по задаче
 }
 
 export interface DecompositionStage {
@@ -64,6 +97,9 @@ export interface PlanningSection {
   endDate: string | null
   stages: DecompositionStage[]
   milestones: Milestone[] // Вехи раздела
+  budget?: SectionBudget // Плановый бюджет раздела
+  weeklyStats?: WeeklyStats[] // Недельная статистика раздела
+  totalPlannedHours?: number // Общее плановое количество часов
 }
 
 // Объект внутри стадии проекта (например: "Здание 1", "Корпус A")

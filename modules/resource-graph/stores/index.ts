@@ -6,8 +6,46 @@
 
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-import type { TimelineScale, DisplaySettings, ResourceGraphFilters, TreeNodeType } from '../types'
+import { Building2, Users, FolderKanban, Tag } from 'lucide-react'
+import type { TimelineScale, DisplaySettings, TreeNodeType } from '../types'
 import { DEFAULT_DISPLAY_SETTINGS } from '../constants'
+import type { FilterConfig, FilterQueryParams } from '@/modules/inline-filter'
+import { parseFilterString, tokensToQueryParams, hasActiveFilters } from '@/modules/inline-filter'
+
+// ============================================================================
+// Filter Config (конфигурация ключей фильтра)
+// ============================================================================
+
+export const RESOURCE_GRAPH_FILTER_CONFIG: FilterConfig = {
+  keys: {
+    'подразделение': {
+      field: 'subdivision_id',
+      label: 'Подразделение',
+      icon: Building2,
+      color: 'violet',
+    },
+    'отдел': {
+      field: 'department_id',
+      label: 'Отдел',
+      icon: Users,
+      color: 'blue',
+    },
+    'проект': {
+      field: 'project_id',
+      label: 'Проект',
+      icon: FolderKanban,
+      color: 'amber',
+    },
+    'метка': {
+      field: 'tag_id',
+      label: 'Метка проекта',
+      multiple: true,
+      icon: Tag,
+      color: 'emerald',
+    },
+  },
+  placeholder: 'Фильтр: подразделение:"ОВ" проект:"Название"',
+}
 
 // ============================================================================
 // Display Settings Store
@@ -59,187 +97,45 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
 )
 
 // ============================================================================
-// Filters Store
+// Filters Store (упрощённый - одна строка фильтра)
 // ============================================================================
 
 interface FiltersState {
-  filters: ResourceGraphFilters
-
-  // Setters
-  setFilters: (filters: Partial<ResourceGraphFilters>) => void
-  setManagerId: (managerId: string | null) => void
-  setProjectId: (projectId: string | null) => void
-  setStageId: (stageId: string | null) => void
-  setObjectId: (objectId: string | null) => void
-  setSectionId: (sectionId: string | null) => void
-  setSubdivisionId: (subdivisionId: string | null) => void
-  setDepartmentId: (departmentId: string | null) => void
-  setTeamId: (teamId: string | null) => void
-  setEmployeeId: (employeeId: string | null) => void
-  setTagIds: (tagIds: string[]) => void
-  setSearch: (search: string) => void
-
-  // Clear
+  /** Строка инлайн-фильтра */
+  filterString: string
+  /** Установить строку фильтра */
+  setFilterString: (value: string) => void
+  /** Очистить фильтры */
   clearFilters: () => void
-  clearProjectFilters: () => void
-  clearOrgFilters: () => void
+  /** Получить распарсенные параметры для запроса */
+  getQueryParams: () => FilterQueryParams
+  /** Проверить есть ли активные фильтры */
+  hasFilters: () => boolean
 }
-
-const DEFAULT_FILTERS: ResourceGraphFilters = {}
 
 export const useFiltersStore = create<FiltersState>()(
   devtools(
     persist(
-      (set) => ({
-        filters: DEFAULT_FILTERS,
+      (set, get) => ({
+        filterString: '',
 
-        setFilters: (newFilters) =>
-          set((state) => ({
-            filters: { ...state.filters, ...newFilters },
-          })),
+        setFilterString: (value) => set({ filterString: value }),
 
-        // Project filters (with cascade)
-        setManagerId: (managerId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              managerId: managerId || undefined,
-              // Cascade: clear dependent filters
-              projectId: undefined,
-              stageId: undefined,
-              objectId: undefined,
-              sectionId: undefined,
-            },
-          })),
+        clearFilters: () => set({ filterString: '' }),
 
-        setProjectId: (projectId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              projectId: projectId || undefined,
-              // Cascade: clear dependent filters
-              stageId: undefined,
-              objectId: undefined,
-              sectionId: undefined,
-            },
-          })),
+        getQueryParams: () => {
+          const { filterString } = get()
+          const parsed = parseFilterString(filterString, RESOURCE_GRAPH_FILTER_CONFIG)
+          return tokensToQueryParams(parsed.tokens, RESOURCE_GRAPH_FILTER_CONFIG)
+        },
 
-        setStageId: (stageId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              stageId: stageId || undefined,
-              // Cascade: clear dependent filters
-              objectId: undefined,
-              sectionId: undefined,
-            },
-          })),
-
-        setObjectId: (objectId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              objectId: objectId || undefined,
-              // Cascade: clear dependent filters
-              sectionId: undefined,
-            },
-          })),
-
-        setSectionId: (sectionId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              sectionId: sectionId || undefined,
-            },
-          })),
-
-        // Org filters (with cascade)
-        setSubdivisionId: (subdivisionId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              subdivisionId: subdivisionId || undefined,
-              // Cascade: clear dependent filters
-              departmentId: undefined,
-              teamId: undefined,
-              employeeId: undefined,
-            },
-          })),
-
-        setDepartmentId: (departmentId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              departmentId: departmentId || undefined,
-              // Cascade: clear dependent filters
-              teamId: undefined,
-              employeeId: undefined,
-            },
-          })),
-
-        setTeamId: (teamId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              teamId: teamId || undefined,
-              // Cascade: clear dependent filters
-              employeeId: undefined,
-            },
-          })),
-
-        setEmployeeId: (employeeId) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              employeeId: employeeId || undefined,
-            },
-          })),
-
-        setTagIds: (tagIds) =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              tagIds: tagIds.length > 0 ? tagIds : undefined,
-            },
-          })),
-
-        setSearch: (search) =>
-          set((state) => ({
-            filters: { ...state.filters, search: search || undefined },
-          })),
-
-        clearFilters: () =>
-          set({ filters: DEFAULT_FILTERS }),
-
-        clearProjectFilters: () =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              managerId: undefined,
-              projectId: undefined,
-              stageId: undefined,
-              objectId: undefined,
-              sectionId: undefined,
-              tagIds: undefined,
-            },
-          })),
-
-        clearOrgFilters: () =>
-          set((state) => ({
-            filters: {
-              ...state.filters,
-              subdivisionId: undefined,
-              departmentId: undefined,
-              teamId: undefined,
-              employeeId: undefined,
-            },
-          })),
+        hasFilters: () => {
+          const { filterString } = get()
+          return hasActiveFilters(filterString, RESOURCE_GRAPH_FILTER_CONFIG)
+        },
       }),
       {
         name: 'resource-graph-filters',
-        partialize: (state) => ({
-          filters: state.filters,
-        }),
       }
     )
   )
@@ -329,11 +225,8 @@ export const useUIStateStore = create<UIState>()(
       expandAll: (type) =>
         set((state) => {
           if (type) {
-            // Expand all of specific type - need data to know IDs
-            // This is a placeholder - real implementation would need data
             return state
           }
-          // Expand all - reset to empty (all collapsed by default)
           return { expandedNodes: createEmptyExpandedNodes() }
         }),
 

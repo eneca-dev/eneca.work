@@ -23,11 +23,12 @@ import {
 } from '../actions'
 
 import type {
-  ResourceGraphFilters,
   Project,
   ProjectTag,
   CompanyCalendarEvent,
 } from '../types'
+
+import type { FilterQueryParams } from '@/modules/inline-filter'
 
 // ============================================================================
 // Query Keys (re-export from cache module)
@@ -44,9 +45,9 @@ export const resourceGraphKeys = queryKeys.resourceGraph
  * Хук для получения данных графика ресурсов
  *
  * @example
- * const { data, isLoading, error } = useResourceGraphData({ projectId: 'xxx' })
+ * const { data, isLoading, error } = useResourceGraphData({ project_id: 'xxx' })
  */
-export const useResourceGraphData = createCacheQuery<Project[], ResourceGraphFilters>({
+export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParams>({
   queryKey: (filters) => queryKeys.resourceGraph.list(filters),
   queryFn: getResourceGraphData,
   staleTime: staleTimePresets.fast,

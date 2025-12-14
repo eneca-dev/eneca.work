@@ -1,38 +1,15 @@
 /**
- * Resource Graph Filters - Filter Options Hook
+ * Resource Graph Filters - Filter Options Hooks
  *
- * Хуки загружают всю структуру один раз и фильтруют на клиенте
+ * Хуки для загрузки данных структур (для автокомплита InlineFilter)
  */
 
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { getOrgStructure, getProjectStructure } from '../actions'
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface FilterOption {
-  id: string
-  name: string
-}
-
-interface OrgStructure {
-  subdivisions: Array<{ id: string; name: string }>
-  departments: Array<{ id: string; name: string; subdivisionId: string | null }>
-  teams: Array<{ id: string; name: string; departmentId: string | null }>
-  employees: Array<{ id: string; name: string; teamId: string | null }>
-}
-
-interface ProjectStructure {
-  managers: Array<{ id: string; name: string }>
-  projects: Array<{ id: string; name: string; managerId: string | null }>
-  stages: Array<{ id: string; name: string; projectId: string | null }>
-  objects: Array<{ id: string; name: string; stageId: string | null }>
-  sections: Array<{ id: string; name: string; objectId: string | null }>
-}
+import { getOrgStructure, getProjectStructure, getProjectTags } from '../actions'
+import type { FilterOption } from '@/modules/inline-filter'
 
 // ============================================================================
 // Query Keys
@@ -42,15 +19,15 @@ const filterStructureKeys = {
   all: ['filter-structure'] as const,
   org: () => [...filterStructureKeys.all, 'org'] as const,
   project: () => [...filterStructureKeys.all, 'project'] as const,
+  tags: () => [...filterStructureKeys.all, 'tags'] as const,
 }
 
 // ============================================================================
-// Base Structure Hooks (load once, cache long)
+// Base Structure Hooks
 // ============================================================================
 
 /**
- * Загрузить всю организационную структуру
- * Кешируется на 10 минут
+ * Загрузить организационную структуру
  */
 export function useOrgStructure() {
   return useQuery({
@@ -60,14 +37,13 @@ export function useOrgStructure() {
       if (!result.success) throw new Error(result.error)
       return result.data
     },
-    staleTime: 10 * 60 * 1000, // 10 минут
-    gcTime: 30 * 60 * 1000, // 30 минут в кеше
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   })
 }
 
 /**
- * Загрузить всю проектную структуру
- * Кешируется на 5 минут
+ * Загрузить проектную структуру
  */
 export function useProjectStructure() {
   return useQuery({
@@ -77,146 +53,77 @@ export function useProjectStructure() {
       if (!result.success) throw new Error(result.error)
       return result.data
     },
-    staleTime: 5 * 60 * 1000, // 5 минут
-    gcTime: 15 * 60 * 1000, // 15 минут в кеше
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  })
+}
+
+/**
+ * Загрузить теги проектов
+ */
+export function useProjectTags() {
+  return useQuery({
+    queryKey: filterStructureKeys.tags(),
+    queryFn: async () => {
+      const result = await getProjectTags()
+      if (!result.success) throw new Error(result.error)
+      return result.data
+    },
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   })
 }
 
 // ============================================================================
-// Project Filter Hooks (client-side filtering)
+// Combined Filter Options Hook (для InlineFilter)
 // ============================================================================
 
 /**
- * Хук для получения руководителей проектов
+ * Хук для получения всех опций фильтров в формате InlineFilter
+ *
+ * Возвращает массив FilterOption[] для автокомплита
  */
-export function useManagerOptions() {
-  const { data: structure, isLoading, error } = useProjectStructure()
+export function useFilterOptions() {
+  const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()
+  const { data: projectStructure, isLoading: loadingProject } = useProjectStructure()
+  const { data: tags, isLoading: loadingTags } = useProjectTags()
 
-  const managers = useMemo(() => {
-    return structure?.managers || []
-  }, [structure?.managers])
+  const options = useMemo<FilterOption[]>(() => {
+    const result: FilterOption[] = []
 
-  return { data: managers, isLoading, error }
-}
+    // Подразделения
+    if (orgStructure?.subdivisions) {
+      for (const item of orgStructure.subdivisions) {
+        result.push({ id: item.id, name: item.name, key: 'подразделение' })
+      }
+    }
 
-/**
- * Хук для получения проектов (фильтруется по менеджеру на клиенте)
- */
-export function useProjectOptions(managerId?: string | null) {
-  const { data: structure, isLoading, error } = useProjectStructure()
+    // Отделы
+    if (orgStructure?.departments) {
+      for (const item of orgStructure.departments) {
+        result.push({ id: item.id, name: item.name, key: 'отдел' })
+      }
+    }
 
-  const projects = useMemo(() => {
-    if (!structure?.projects) return []
-    if (!managerId) return structure.projects
-    return structure.projects.filter(p => p.managerId === managerId)
-  }, [structure?.projects, managerId])
+    // Проекты
+    if (projectStructure?.projects) {
+      for (const item of projectStructure.projects) {
+        result.push({ id: item.id, name: item.name, key: 'проект' })
+      }
+    }
 
-  return { data: projects, isLoading, error }
-}
+    // Метки
+    if (tags) {
+      for (const tag of tags) {
+        result.push({ id: tag.id, name: tag.name, key: 'метка' })
+      }
+    }
 
-/**
- * Хук для получения стадий (фильтруется по проекту на клиенте)
- */
-export function useStageOptions(projectId?: string | null) {
-  const { data: structure, isLoading, error } = useProjectStructure()
+    return result
+  }, [orgStructure, projectStructure, tags])
 
-  const stages = useMemo(() => {
-    if (!structure?.stages) return []
-    if (!projectId) return []
-    return structure.stages.filter(s => s.projectId === projectId)
-  }, [structure?.stages, projectId])
-
-  return { data: stages, isLoading, error }
-}
-
-/**
- * Хук для получения объектов (фильтруется по стадии на клиенте)
- */
-export function useObjectOptions(stageId?: string | null) {
-  const { data: structure, isLoading, error } = useProjectStructure()
-
-  const objects = useMemo(() => {
-    if (!structure?.objects) return []
-    if (!stageId) return []
-    return structure.objects.filter(o => o.stageId === stageId)
-  }, [structure?.objects, stageId])
-
-  return { data: objects, isLoading, error }
-}
-
-/**
- * Хук для получения разделов (фильтруется по объекту на клиенте)
- */
-export function useSectionOptions(objectId?: string | null) {
-  const { data: structure, isLoading, error } = useProjectStructure()
-
-  const sections = useMemo(() => {
-    if (!structure?.sections) return []
-    if (!objectId) return []
-    return structure.sections.filter(s => s.objectId === objectId)
-  }, [structure?.sections, objectId])
-
-  return { data: sections, isLoading, error }
-}
-
-// ============================================================================
-// Org Filter Hooks (client-side filtering)
-// ============================================================================
-
-/**
- * Хук для получения подразделений
- */
-export function useSubdivisionOptions() {
-  const { data: structure, isLoading, error } = useOrgStructure()
-
-  const subdivisions = useMemo(() => {
-    return structure?.subdivisions || []
-  }, [structure?.subdivisions])
-
-  return { data: subdivisions, isLoading, error }
-}
-
-/**
- * Хук для получения отделов (фильтруется по подразделению на клиенте)
- */
-export function useDepartmentOptions(subdivisionId?: string | null) {
-  const { data: structure, isLoading, error } = useOrgStructure()
-
-  const departments = useMemo(() => {
-    if (!structure?.departments) return []
-    if (!subdivisionId) return structure.departments
-    return structure.departments.filter(d => d.subdivisionId === subdivisionId)
-  }, [structure?.departments, subdivisionId])
-
-  return { data: departments, isLoading, error }
-}
-
-/**
- * Хук для получения команд (фильтруется по отделу на клиенте)
- */
-export function useTeamOptions(departmentId?: string | null) {
-  const { data: structure, isLoading, error } = useOrgStructure()
-
-  const teams = useMemo(() => {
-    if (!structure?.teams) return []
-    if (!departmentId) return []
-    return structure.teams.filter(t => t.departmentId === departmentId)
-  }, [structure?.teams, departmentId])
-
-  return { data: teams, isLoading, error }
-}
-
-/**
- * Хук для получения сотрудников (фильтруется по команде на клиенте)
- */
-export function useEmployeeOptions(teamId?: string | null) {
-  const { data: structure, isLoading, error } = useOrgStructure()
-
-  const employees = useMemo(() => {
-    if (!structure?.employees) return []
-    if (!teamId) return []
-    return structure.employees.filter(e => e.teamId === teamId)
-  }, [structure?.employees, teamId])
-
-  return { data: employees, isLoading, error }
+  return {
+    options,
+    isLoading: loadingOrg || loadingProject || loadingTags,
+  }
 }

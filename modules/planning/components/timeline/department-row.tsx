@@ -15,9 +15,6 @@ import { FreshnessIndicator } from "./FreshnessIndicator"
 import { useTeamActivityPermissions } from "../../hooks/useTeamActivityPermissions"
 import {
   loadingsToPeriods,
-  groupVacationPeriods,
-  groupSickLeavePeriods,
-  groupTimeOffPeriods,
   calculateBarRenders,
   formatBarLabel,
   formatBarTooltip,
@@ -644,14 +641,10 @@ export function EmployeeRow({
   // Базовая высота строки сотрудника (90% от rowHeight)
   const reducedRowHeight = Math.floor(rowHeight * 0.9)
 
-  // Преобразуем загрузки, отпуска, больничные и отгулы в периоды для отрисовки
   const allPeriods = useMemo(() => {
     const loadingPeriods = loadingsToPeriods(employee.loadings)
-    const vacationPeriods = groupVacationPeriods(employee.vacationsDaily)
-    const sickLeavePeriods = groupSickLeavePeriods(employee.sickLeavesDaily)
-    const timeOffPeriods = groupTimeOffPeriods(employee.timeOffsDaily)
-    return [...loadingPeriods, ...vacationPeriods, ...sickLeavePeriods, ...timeOffPeriods]
-  }, [employee.loadings, employee.vacationsDaily, employee.sickLeavesDaily, employee.timeOffsDaily])
+    return loadingPeriods
+  }, [employee.loadings])
 
   // Вычисляем параметры отрисовки всех полосок
   const barRenders = useMemo(() => {

@@ -1,7 +1,7 @@
 /**
  * Resource Graph Module - Public API
  *
- * Модуль графика ресурсов
+ * Модуль графика ресурсов с инлайн-фильтрами
  *
  * @example
  * // Import component
@@ -14,7 +14,7 @@
  * import { useDisplaySettingsStore, useFiltersStore, useUIStateStore } from '@/modules/resource-graph'
  *
  * // Import types
- * import type { Project, ResourceGraphFilters, ResourceGraphRow } from '@/modules/resource-graph'
+ * import type { Project, ResourceGraphRow } from '@/modules/resource-graph'
  */
 
 // ============================================================================
@@ -41,6 +41,7 @@ export {
   useDisplaySettingsStore,
   useFiltersStore,
   useUIStateStore,
+  RESOURCE_GRAPH_FILTER_CONFIG,
 } from './stores'
 
 // ============================================================================
@@ -60,19 +61,10 @@ export {
 // ============================================================================
 
 export {
-  ResourceGraphFilters,
-  FilterSelect,
-  useManagerOptions,
-  useProjectOptions,
-  useStageOptions,
-  useObjectOptions,
-  useSectionOptions,
-  useSubdivisionOptions,
-  useDepartmentOptions,
-  useTeamOptions,
-  useEmployeeOptions,
   useOrgStructure,
   useProjectStructure,
+  useProjectTags,
+  useFilterOptions,
 } from './filters'
 
 // ============================================================================
@@ -93,10 +85,6 @@ export type {
   Stage,
   Project,
   // Filter types
-  FilterOption,
-  FilterType,
-  FilterState,
-  ResourceGraphFilters,
   ProjectTag,
   // View types
   TimelineRange,

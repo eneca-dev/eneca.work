@@ -1,4 +1,97 @@
-import type { Project } from "./types"
+import type { Project, SectionBudget, WeeklyStats } from "./types"
+
+// Генерация недельной статистики для раздела
+// Показывает: плановую готовность (линия), фактическую готовность, потраченный бюджет, потраченные часы
+const generateWeeklyStats = (
+  startDate: string,
+  totalWeeks: number,
+  scenario: "on_track" | "behind" | "ahead" | "budget_overrun"
+): WeeklyStats[] => {
+  const stats: WeeklyStats[] = []
+  const start = new Date(startDate)
+
+  for (let i = 0; i < totalWeeks; i++) {
+    const weekStart = new Date(start)
+    weekStart.setDate(start.getDate() + i * 7)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+
+    // Плановая готовность (линейный рост)
+    const plannedProgress = Math.min(Math.round(((i + 1) / totalWeeks) * 100), 100)
+
+    let actualProgress: number
+    let actualBudgetSpent: number
+    let actualHoursSpent: number
+
+    switch (scenario) {
+      case "behind":
+        // Отстаём от плана, но бюджет тратим быстрее
+        actualProgress = Math.min(Math.round(plannedProgress * 0.75), 100)
+        actualBudgetSpent = Math.min(Math.round(plannedProgress * 0.9), 100)
+        actualHoursSpent = Math.min(Math.round(plannedProgress * 0.85), 100)
+        break
+      case "ahead":
+        // Опережаем план
+        actualProgress = Math.min(Math.round(plannedProgress * 1.15), 100)
+        actualBudgetSpent = Math.min(Math.round(plannedProgress * 0.95), 100)
+        actualHoursSpent = Math.min(Math.round(plannedProgress * 1.1), 100)
+        break
+      case "budget_overrun":
+        // Идём по плану, но перерасход бюджета
+        actualProgress = Math.min(Math.round(plannedProgress * 0.95), 100)
+        actualBudgetSpent = Math.min(Math.round(plannedProgress * 1.25), 100)
+        actualHoursSpent = Math.min(Math.round(plannedProgress * 1.1), 100)
+        break
+      default: // on_track
+        actualProgress = Math.min(Math.round(plannedProgress * (0.95 + Math.random() * 0.1)), 100)
+        actualBudgetSpent = Math.min(Math.round(plannedProgress * (0.9 + Math.random() * 0.15)), 100)
+        actualHoursSpent = Math.min(Math.round(plannedProgress * (0.92 + Math.random() * 0.12)), 100)
+    }
+
+    stats.push({
+      weekNumber: i + 1,
+      weekStart: weekStart.toISOString().split('T')[0],
+      weekEnd: weekEnd.toISOString().split('T')[0],
+      actualProgress,
+      actualBudgetSpent,
+      actualHoursSpent,
+      plannedProgress,
+    })
+  }
+
+  return stats
+}
+
+// Предопределённые недельные статистики для демонстрации
+// Все недели начинаются с понедельника и заканчиваются воскресеньем
+// plannedProgress - общий плановый процент готовности на неделю (применяется ко всем барам)
+const weeklyStatsSection1: WeeklyStats[] = [
+  { weekNumber: 1, weekStart: "2025-11-17", weekEnd: "2025-11-23", actualProgress: 15, actualBudgetSpent: 18, actualHoursSpent: 20, plannedProgress: 17 },
+  { weekNumber: 2, weekStart: "2025-11-24", weekEnd: "2025-11-30", actualProgress: 35, actualBudgetSpent: 42, actualHoursSpent: 38, plannedProgress: 33 },
+  { weekNumber: 3, weekStart: "2025-12-01", weekEnd: "2025-12-07", actualProgress: 52, actualBudgetSpent: 65, actualHoursSpent: 55, plannedProgress: 50 },
+  { weekNumber: 4, weekStart: "2025-12-08", weekEnd: "2025-12-14", actualProgress: 68, actualBudgetSpent: 78, actualHoursSpent: 72, plannedProgress: 67 },
+  { weekNumber: 5, weekStart: "2025-12-15", weekEnd: "2025-12-21", actualProgress: 85, actualBudgetSpent: 88, actualHoursSpent: 82, plannedProgress: 83 },
+  { weekNumber: 6, weekStart: "2025-12-22", weekEnd: "2025-12-28", actualProgress: 100, actualBudgetSpent: 95, actualHoursSpent: 98, plannedProgress: 100 },
+]
+
+// Сценарий: значительное отставание + перерасход бюджета (>100%)
+const weeklyStatsSection2: WeeklyStats[] = [
+  { weekNumber: 1, weekStart: "2025-11-17", weekEnd: "2025-11-23", actualProgress: 8, actualBudgetSpent: 22, actualHoursSpent: 18, plannedProgress: 15 },
+  { weekNumber: 2, weekStart: "2025-11-24", weekEnd: "2025-11-30", actualProgress: 18, actualBudgetSpent: 45, actualHoursSpent: 38, plannedProgress: 30 },
+  { weekNumber: 3, weekStart: "2025-12-01", weekEnd: "2025-12-07", actualProgress: 32, actualBudgetSpent: 72, actualHoursSpent: 58, plannedProgress: 45 },
+  { weekNumber: 4, weekStart: "2025-12-08", weekEnd: "2025-12-14", actualProgress: 45, actualBudgetSpent: 95, actualHoursSpent: 78, plannedProgress: 60 },
+  { weekNumber: 5, weekStart: "2025-12-15", weekEnd: "2025-12-21", actualProgress: 58, actualBudgetSpent: 112, actualHoursSpent: 98, plannedProgress: 75 },
+  { weekNumber: 6, weekStart: "2025-12-22", weekEnd: "2025-12-28", actualProgress: 72, actualBudgetSpent: 125, actualHoursSpent: 108, plannedProgress: 90 },
+]
+
+const weeklyStatsSection3: WeeklyStats[] = [
+  { weekNumber: 1, weekStart: "2025-11-17", weekEnd: "2025-11-23", actualProgress: 20, actualBudgetSpent: 15, actualHoursSpent: 18, plannedProgress: 17 },
+  { weekNumber: 2, weekStart: "2025-11-24", weekEnd: "2025-11-30", actualProgress: 42, actualBudgetSpent: 35, actualHoursSpent: 40, plannedProgress: 33 },
+  { weekNumber: 3, weekStart: "2025-12-01", weekEnd: "2025-12-07", actualProgress: 65, actualBudgetSpent: 55, actualHoursSpent: 62, plannedProgress: 50 },
+  { weekNumber: 4, weekStart: "2025-12-08", weekEnd: "2025-12-14", actualProgress: 82, actualBudgetSpent: 72, actualHoursSpent: 80, plannedProgress: 67 },
+  { weekNumber: 5, weekStart: "2025-12-15", weekEnd: "2025-12-21", actualProgress: 95, actualBudgetSpent: 88, actualHoursSpent: 92, plannedProgress: 83 },
+  { weekNumber: 6, weekStart: "2025-12-22", weekEnd: "2025-12-28", actualProgress: 100, actualBudgetSpent: 92, actualHoursSpent: 100, plannedProgress: 100 },
+]
 
 // Mock data - hierarchical structure: Project → Stage → Object → Section → DecompositionStage → Task
 // Today: Dec 4, 2025. Timeline shows Nov 20 - Jan 1
@@ -21,6 +114,9 @@ export const mockProjects: Project[] = [
                 name: "7. П-47/25-ТМ(ПС)",
                 startDate: "2025-11-20",
                 endDate: "2025-12-18",
+                budget: { amount: 185000, spent: 142000, type: "main" },
+                totalPlannedHours: 120,
+                weeklyStats: weeklyStatsSection1,
                 milestones: [
                   {
                     id: "m1",
@@ -69,10 +165,21 @@ export const mockProjects: Project[] = [
                       { id: "w6", date: "2025-11-26", hours: 8, employeeName: "Иван Жамойть" },
                     ],
                     tasks: [
-                      { id: "t1", description: "Создание базовой 3D модели здания", plannedHours: 16, progress: 100, responsibleName: "Иван Жамойть", order: 1 },
-                      { id: "t2", description: "Проработка конструктивных узлов", plannedHours: 12, progress: 100, responsibleName: "Иван Жамойть", order: 2 },
-                      { id: "t3", description: "Экспорт в расчётную модель", plannedHours: 8, progress: 100, responsibleName: "Иван Жамойть", order: 3 },
-                      { id: "t4", description: "Проверка коллизий", plannedHours: 4, progress: 100, responsibleName: "Иван Жамойть", order: 4 },
+                      { id: "t1", description: "Создание базовой 3D модели здания", plannedHours: 16, progress: 100, responsibleName: "Иван Жамойть", order: 1, budget: { amount: 32000, spent: 32000 }, startDate: "2025-11-20", endDate: "2025-11-21", workLogs: [
+                        { id: "w1", date: "2025-11-20", hours: 6, employeeName: "Иван Жамойть" },
+                        { id: "w2", date: "2025-11-21", hours: 8, employeeName: "Иван Жамойть" },
+                      ]},
+                      { id: "t2", description: "Проработка конструктивных узлов", plannedHours: 12, progress: 100, responsibleName: "Иван Жамойть", order: 2, budget: { amount: 24000, spent: 24000 }, startDate: "2025-11-24", endDate: "2025-11-25", workLogs: [
+                        { id: "w4", date: "2025-11-24", hours: 8, employeeName: "Иван Жамойть" },
+                        { id: "w5a", date: "2025-11-25", hours: 4, employeeName: "Иван Жамойть" },
+                      ]},
+                      { id: "t3", description: "Экспорт в расчётную модель", plannedHours: 8, progress: 100, responsibleName: "Иван Жамойть", order: 3, budget: { amount: 16000, spent: 16000 }, startDate: "2025-11-25", endDate: "2025-11-26", workLogs: [
+                        { id: "w5b", date: "2025-11-25", hours: 4, employeeName: "Иван Жамойть" },
+                        { id: "w6a", date: "2025-11-26", hours: 4, employeeName: "Иван Жамойть" },
+                      ]},
+                      { id: "t4", description: "Проверка коллизий", plannedHours: 4, progress: 100, responsibleName: "Иван Жамойть", order: 4, budget: { amount: 8000, spent: 8000 }, startDate: "2025-11-26", endDate: "2025-11-26", workLogs: [
+                        { id: "w6b", date: "2025-11-26", hours: 4, employeeName: "Иван Жамойть" },
+                      ]},
                     ],
                   },
                   {
@@ -95,10 +202,19 @@ export const mockProjects: Project[] = [
                       { id: "w11", date: "2025-12-03", hours: 8, employeeName: "Петр Сидоров" },
                     ],
                     tasks: [
-                      { id: "t5", description: "Статический расчёт каркаса", plannedHours: 12, progress: 100, responsibleName: "Иван Жамойть", order: 1 },
-                      { id: "t6", description: "Расчёт фундаментов", plannedHours: 10, progress: 100, responsibleName: "Иван Жамойть", order: 2 },
-                      { id: "t7", description: "Расчёт перекрытий", plannedHours: 8, progress: 80, responsibleName: "Петр Сидоров", order: 3 },
-                      { id: "t8", description: "Формирование отчёта", plannedHours: 5, progress: 60, responsibleName: "Петр Сидоров", order: 4 },
+                      { id: "t5", description: "Статический расчёт каркаса", plannedHours: 12, progress: 100, responsibleName: "Иван Жамойть", order: 1, budget: { amount: 18000, spent: 18000 }, startDate: "2025-11-27", endDate: "2025-11-28", workLogs: [
+                        { id: "w7", date: "2025-11-27", hours: 6, employeeName: "Иван Жамойть" },
+                        { id: "w8", date: "2025-11-28", hours: 6, employeeName: "Иван Жамойть" },
+                      ]},
+                      { id: "t6", description: "Расчёт фундаментов", plannedHours: 10, progress: 100, responsibleName: "Иван Жамойть", order: 2, budget: { amount: 15000, spent: 15000 }, startDate: "2025-12-01", endDate: "2025-12-01", workLogs: [
+                        { id: "w9a", date: "2025-12-01", hours: 6, employeeName: "Петр Сидоров" },
+                      ]},
+                      { id: "t7", description: "Расчёт перекрытий", plannedHours: 8, progress: 80, responsibleName: "Петр Сидоров", order: 3, budget: { amount: 12000, spent: 9000 }, startDate: "2025-12-02", endDate: "2025-12-03", workLogs: [
+                        { id: "w10", date: "2025-12-02", hours: 6, employeeName: "Петр Сидоров" },
+                      ]},
+                      { id: "t8", description: "Формирование отчёта", plannedHours: 5, progress: 60, responsibleName: "Петр Сидоров", order: 4, budget: { amount: 7500, spent: 4500 }, startDate: "2025-12-03", endDate: "2025-12-03", workLogs: [
+                        { id: "w11", date: "2025-12-03", hours: 8, employeeName: "Петр Сидоров" },
+                      ]},
                     ],
                   },
                   {
@@ -117,9 +233,13 @@ export const mockProjects: Project[] = [
                       { id: "w13", date: "2025-12-03", hours: 6, employeeName: "Алексей Шаблев" },
                     ],
                     tasks: [
-                      { id: "t9", description: "Моделирование инженерных систем", plannedHours: 14, progress: 50, responsibleName: "Алексей Шаблев", order: 1 },
-                      { id: "t10", description: "Трассировка коммуникаций", plannedHours: 10, progress: 30, responsibleName: "Алексей Шаблев", order: 2 },
-                      { id: "t11", description: "Проверка пересечений", plannedHours: 8, progress: 0, responsibleName: "Алексей Шаблев", order: 3 },
+                      { id: "t9", description: "Моделирование инженерных систем", plannedHours: 14, progress: 50, responsibleName: "Алексей Шаблев", order: 1, budget: { amount: 21000, spent: 10500 }, startDate: "2025-12-02", endDate: "2025-12-03", workLogs: [
+                        { id: "w12", date: "2025-12-02", hours: 7, employeeName: "Алексей Шаблев" },
+                      ]},
+                      { id: "t10", description: "Трассировка коммуникаций", plannedHours: 10, progress: 30, responsibleName: "Алексей Шаблев", order: 2, budget: { amount: 15000, spent: 4500 }, startDate: "2025-12-03", endDate: "2025-12-04", workLogs: [
+                        { id: "w13", date: "2025-12-03", hours: 6, employeeName: "Алексей Шаблев" },
+                      ]},
+                      { id: "t11", description: "Проверка пересечений", plannedHours: 8, progress: 0, responsibleName: "Алексей Шаблев", order: 3, budget: { amount: 12000, spent: 0 }, startDate: "2025-12-05", endDate: "2025-12-06", workLogs: []},
                     ],
                   },
                 ],
@@ -129,6 +249,7 @@ export const mockProjects: Project[] = [
                 name: "ВК - Водоснабжение и канализация",
                 startDate: "2025-11-25",
                 endDate: "2025-12-20",
+                budget: { amount: 45000, spent: 18500, type: "premium" },
                 milestones: [
                   {
                     id: "m4",
@@ -175,8 +296,14 @@ export const mockProjects: Project[] = [
                       { id: "w18", date: "2025-11-28", hours: 5, employeeName: "Дмитрий Волков" },
                     ],
                     tasks: [
-                      { id: "t18", description: "Анализ ТЗ и исходных данных", plannedHours: 8, progress: 100, responsibleName: "Дмитрий Волков", order: 1 },
-                      { id: "t19", description: "Разработка концепции", plannedHours: 12, progress: 100, responsibleName: "Дмитрий Волков", order: 2 },
+                      { id: "t18", description: "Анализ ТЗ и исходных данных", plannedHours: 8, progress: 100, responsibleName: "Дмитрий Волков", order: 1, budget: { amount: 8000, spent: 8000 }, startDate: "2025-11-25", endDate: "2025-11-26", workLogs: [
+                        { id: "w15", date: "2025-11-25", hours: 4, employeeName: "Дмитрий Волков" },
+                        { id: "w16", date: "2025-11-26", hours: 5, employeeName: "Дмитрий Волков" },
+                      ]},
+                      { id: "t19", description: "Разработка концепции", plannedHours: 12, progress: 100, responsibleName: "Дмитрий Волков", order: 2, budget: { amount: 10500, spent: 10500 }, startDate: "2025-11-27", endDate: "2025-11-29", workLogs: [
+                        { id: "w17", date: "2025-11-27", hours: 4, employeeName: "Дмитрий Волков" },
+                        { id: "w18", date: "2025-11-28", hours: 5, employeeName: "Дмитрий Волков" },
+                      ]},
                     ],
                   },
                   {
@@ -195,10 +322,14 @@ export const mockProjects: Project[] = [
                       { id: "w21", date: "2025-12-03", hours: 5, employeeName: "Сергей Новиков" },
                     ],
                     tasks: [
-                      { id: "t20", description: "Расчёт водопотребления", plannedHours: 15, progress: 40, responsibleName: "Сергей Новиков", order: 1 },
-                      { id: "t21", description: "Подбор оборудования", plannedHours: 12, progress: 20, responsibleName: "Сергей Новиков", order: 2 },
-                      { id: "t22", description: "Схема водоснабжения", plannedHours: 10, progress: 0, responsibleName: "Сергей Новиков", order: 3 },
-                      { id: "t23", description: "Схема канализации", plannedHours: 8, progress: 0, responsibleName: "Сергей Новиков", order: 4 },
+                      { id: "t20", description: "Расчёт водопотребления", plannedHours: 15, progress: 40, responsibleName: "Сергей Новиков", order: 1, budget: { amount: 7500, spent: 3000 }, startDate: "2025-12-02", endDate: "2025-12-04", workLogs: [
+                        { id: "w20", date: "2025-12-02", hours: 6, employeeName: "Сергей Новиков" },
+                      ]},
+                      { id: "t21", description: "Подбор оборудования", plannedHours: 12, progress: 20, responsibleName: "Сергей Новиков", order: 2, budget: { amount: 6000, spent: 1200 }, startDate: "2025-12-04", endDate: "2025-12-06", workLogs: [
+                        { id: "w21", date: "2025-12-03", hours: 5, employeeName: "Сергей Новиков" },
+                      ]},
+                      { id: "t22", description: "Схема водоснабжения", plannedHours: 10, progress: 0, responsibleName: "Сергей Новиков", order: 3, budget: { amount: 5000, spent: 0 }, startDate: "2025-12-06", endDate: "2025-12-08", workLogs: [] },
+                      { id: "t23", description: "Схема канализации", plannedHours: 8, progress: 0, responsibleName: "Сергей Новиков", order: 4, budget: { amount: 4000, spent: 0 }, startDate: "2025-12-08", endDate: "2025-12-10", workLogs: [] },
                     ],
                   },
                 ],
@@ -214,6 +345,9 @@ export const mockProjects: Project[] = [
                 name: "КР - Конструктивные решения",
                 startDate: "2025-12-09",
                 endDate: "2025-12-20",
+                budget: { amount: 210000, spent: 0, type: "main" },
+                totalPlannedHours: 95,
+                weeklyStats: weeklyStatsSection2,
                 milestones: [
                   {
                     id: "m7",
@@ -247,9 +381,9 @@ export const mockProjects: Project[] = [
                     ],
                     workLogs: [],
                     tasks: [
-                      { id: "t12", description: "Оформление чертежей планов", plannedHours: 10, progress: 0, responsibleName: "Мария Власовец", order: 1 },
-                      { id: "t13", description: "Оформление разрезов", plannedHours: 8, progress: 0, responsibleName: "Мария Власовец", order: 2 },
-                      { id: "t14", description: "Спецификации и ведомости", plannedHours: 7, progress: 0, responsibleName: "Мария Власовец", order: 3 },
+                      { id: "t12", description: "Оформление чертежей планов", plannedHours: 10, progress: 0, responsibleName: "Мария Власовец", order: 1, budget: { amount: 50000, spent: 0 }, startDate: "2025-12-09", endDate: "2025-12-10", workLogs: [] },
+                      { id: "t13", description: "Оформление разрезов", plannedHours: 8, progress: 0, responsibleName: "Мария Власовец", order: 2, budget: { amount: 40000, spent: 0 }, startDate: "2025-12-11", endDate: "2025-12-12", workLogs: [] },
+                      { id: "t14", description: "Спецификации и ведомости", plannedHours: 7, progress: 0, responsibleName: "Мария Власовец", order: 3, budget: { amount: 35000, spent: 0 }, startDate: "2025-12-12", endDate: "2025-12-13", workLogs: [] },
                     ],
                   },
                   {
@@ -266,9 +400,9 @@ export const mockProjects: Project[] = [
                     ],
                     workLogs: [],
                     tasks: [
-                      { id: "t15", description: "Детальные узлы", plannedHours: 12, progress: 0, responsibleName: "Ольга Мироненко", order: 1 },
-                      { id: "t16", description: "Схемы армирования", plannedHours: 10, progress: 0, responsibleName: "Ольга Мироненко", order: 2 },
-                      { id: "t17", description: "Финальная проверка комплекта", plannedHours: 6, progress: 0, responsibleName: "Анна Козлова", order: 3 },
+                      { id: "t15", description: "Детальные узлы", plannedHours: 12, progress: 0, responsibleName: "Ольга Мироненко", order: 1, budget: { amount: 45000, spent: 0 }, startDate: "2025-12-14", endDate: "2025-12-16", workLogs: [] },
+                      { id: "t16", description: "Схемы армирования", plannedHours: 10, progress: 0, responsibleName: "Ольга Мироненко", order: 2, budget: { amount: 30000, spent: 0 }, startDate: "2025-12-16", endDate: "2025-12-17", workLogs: [] },
+                      { id: "t17", description: "Финальная проверка комплекта", plannedHours: 6, progress: 0, responsibleName: "Анна Козлова", order: 3, budget: { amount: 10000, spent: 0 }, startDate: "2025-12-18", endDate: "2025-12-18", workLogs: [] },
                     ],
                   },
                 ],
@@ -297,6 +431,9 @@ export const mockProjects: Project[] = [
                 name: "1. ТХ - Технологические решения",
                 startDate: "2025-11-22",
                 endDate: "2025-12-25",
+                budget: { amount: 320000, spent: 195000, type: "main" },
+                totalPlannedHours: 150,
+                weeklyStats: weeklyStatsSection3,
                 milestones: [
                   {
                     id: "m9",
@@ -348,10 +485,21 @@ export const mockProjects: Project[] = [
                       { id: "w30", date: "2025-12-03", hours: 4, employeeName: "Виктор Соколов" },
                     ],
                     tasks: [
-                      { id: "t27", description: "Технологическая схема производства", plannedHours: 20, progress: 100, responsibleName: "Андрей Петров", order: 1 },
-                      { id: "t28", description: "Планировка оборудования", plannedHours: 18, progress: 90, responsibleName: "Андрей Петров", order: 2 },
-                      { id: "t29", description: "Расчёт мощностей", plannedHours: 16, progress: 60, responsibleName: "Виктор Соколов", order: 3 },
-                      { id: "t30", description: "Экспликация помещений", plannedHours: 16, progress: 30, responsibleName: "Виктор Соколов", order: 4 },
+                      { id: "t27", description: "Технологическая схема производства", plannedHours: 20, progress: 100, responsibleName: "Андрей Петров", order: 1, budget: { amount: 80000, spent: 80000 }, startDate: "2025-11-22", endDate: "2025-11-26", workLogs: [
+                        { id: "w22", date: "2025-11-24", hours: 8, employeeName: "Андрей Петров" },
+                        { id: "w23", date: "2025-11-25", hours: 8, employeeName: "Андрей Петров" },
+                        { id: "w24", date: "2025-11-26", hours: 8, employeeName: "Андрей Петров" },
+                      ]},
+                      { id: "t28", description: "Планировка оборудования", plannedHours: 18, progress: 90, responsibleName: "Андрей Петров", order: 2, budget: { amount: 72000, spent: 65000 }, startDate: "2025-11-27", endDate: "2025-11-28", workLogs: [
+                        { id: "w25", date: "2025-11-27", hours: 8, employeeName: "Андрей Петров" },
+                        { id: "w26", date: "2025-11-28", hours: 8, employeeName: "Андрей Петров" },
+                      ]},
+                      { id: "t29", description: "Расчёт мощностей", plannedHours: 16, progress: 60, responsibleName: "Виктор Соколов", order: 3, budget: { amount: 64000, spent: 38000 }, startDate: "2025-12-01", endDate: "2025-12-03", workLogs: [
+                        { id: "w28", date: "2025-12-01", hours: 4, employeeName: "Виктор Соколов" },
+                        { id: "w29", date: "2025-12-02", hours: 4, employeeName: "Виктор Соколов" },
+                        { id: "w30", date: "2025-12-03", hours: 4, employeeName: "Виктор Соколов" },
+                      ]},
+                      { id: "t30", description: "Экспликация помещений", plannedHours: 16, progress: 30, responsibleName: "Виктор Соколов", order: 4, budget: { amount: 64000, spent: 12000 }, startDate: "2025-12-03", endDate: "2025-12-05", workLogs: [] },
                     ],
                   },
                   {
@@ -367,8 +515,8 @@ export const mockProjects: Project[] = [
                     ],
                     workLogs: [],
                     tasks: [
-                      { id: "t31", description: "Внутреннее согласование", plannedHours: 8, progress: 0, responsibleName: "Николай Федоров", order: 1 },
-                      { id: "t32", description: "Согласование с заказчиком", plannedHours: 7, progress: 0, responsibleName: "Николай Федоров", order: 2 },
+                      { id: "t31", description: "Внутреннее согласование", plannedHours: 8, progress: 0, responsibleName: "Николай Федоров", order: 1, budget: { amount: 20000, spent: 0 }, startDate: "2025-12-08", endDate: "2025-12-10", workLogs: [] },
+                      { id: "t32", description: "Согласование с заказчиком", plannedHours: 7, progress: 0, responsibleName: "Николай Федоров", order: 2, budget: { amount: 20000, spent: 0 }, startDate: "2025-12-10", endDate: "2025-12-12", workLogs: [] },
                     ],
                   },
                 ],
@@ -378,6 +526,7 @@ export const mockProjects: Project[] = [
                 name: "АР - Архитектурные решения",
                 startDate: "2025-12-10",
                 endDate: "2026-01-05",
+                budget: { amount: 65000, spent: 0, type: "premium" },
                 milestones: [
                   {
                     id: "m12",
@@ -411,9 +560,9 @@ export const mockProjects: Project[] = [
                     ],
                     workLogs: [],
                     tasks: [
-                      { id: "t36", description: "Эскизное проектирование", plannedHours: 20, progress: 0, responsibleName: "Кирилл Орлов", order: 1 },
-                      { id: "t37", description: "3D визуализация", plannedHours: 15, progress: 0, responsibleName: "Кирилл Орлов", order: 2 },
-                      { id: "t38", description: "Презентация концепции", plannedHours: 10, progress: 0, responsibleName: "Кирилл Орлов", order: 3 },
+                      { id: "t36", description: "Эскизное проектирование", plannedHours: 20, progress: 0, responsibleName: "Кирилл Орлов", order: 1, budget: { amount: 25000, spent: 0 }, startDate: "2025-12-10", endDate: "2025-12-13", workLogs: [] },
+                      { id: "t37", description: "3D визуализация", plannedHours: 15, progress: 0, responsibleName: "Кирилл Орлов", order: 2, budget: { amount: 18000, spent: 0 }, startDate: "2025-12-14", endDate: "2025-12-16", workLogs: [] },
+                      { id: "t38", description: "Презентация концепции", plannedHours: 10, progress: 0, responsibleName: "Кирилл Орлов", order: 3, budget: { amount: 12000, spent: 0 }, startDate: "2025-12-17", endDate: "2025-12-18", workLogs: [] },
                     ],
                   },
                   {
@@ -430,9 +579,9 @@ export const mockProjects: Project[] = [
                     ],
                     workLogs: [],
                     tasks: [
-                      { id: "t39", description: "Планы этажей", plannedHours: 16, progress: 0, responsibleName: "Татьяна Белова", order: 1 },
-                      { id: "t40", description: "Фасады и разрезы", plannedHours: 16, progress: 0, responsibleName: "Кирилл Орлов", order: 2 },
-                      { id: "t41", description: "Узлы и детали", plannedHours: 16, progress: 0, responsibleName: "Кирилл Орлов", order: 3 },
+                      { id: "t39", description: "Планы этажей", plannedHours: 16, progress: 0, responsibleName: "Татьяна Белова", order: 1, budget: { amount: 5000, spent: 0 }, startDate: "2025-12-19", endDate: "2025-12-24", workLogs: [] },
+                      { id: "t40", description: "Фасады и разрезы", plannedHours: 16, progress: 0, responsibleName: "Кирилл Орлов", order: 2, budget: { amount: 3000, spent: 0 }, startDate: "2025-12-25", endDate: "2025-12-27", workLogs: [] },
+                      { id: "t41", description: "Узлы и детали", plannedHours: 16, progress: 0, responsibleName: "Кирилл Орлов", order: 3, budget: { amount: 2000, spent: 0 }, startDate: "2025-12-28", endDate: "2025-12-30", workLogs: [] },
                     ],
                   },
                 ],
