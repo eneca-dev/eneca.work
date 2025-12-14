@@ -66,7 +66,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
   // Мемоизированная троттлинговая функция (~60fps)
   const throttledSetPointerPosition = useMemo(() =>
     throttle((pos: { x: number; y: number }) => {
-      setPointerPosition(pos)
+      setPointerPosition(pos.x, pos.y)
     }, 16)
   , [setPointerPosition])
 
