@@ -451,31 +451,11 @@ export function useArchiveNotification() {
           previousData.infiniteQueries.set(query.queryKey, query.state.data)
         })
 
-      // Optimistic update: remove from ALL infinite query lists if archiving
+      // Optimistic update: remove from ALL infinite query lists if archiving (atomic read + remove to prevent race condition)
       if (isArchived) {
-        // 1. Find notification ONCE to check if it was unread (before removal)
+        // Atomic operation: read status + remove in one pass
         let wasUnread = false
-        let found = false
 
-        for (const query of queryClient
-          .getQueryCache()
-          .findAll({ queryKey: queryKeys.notifications.lists() })) {
-          if (found) break // Early exit after finding
-
-          const data = query.state.data as any
-          if (data?.pages) {
-            for (const page of data.pages) {
-              const notification = page.find((n: Notification) => n.id === id)
-              if (notification) {
-                wasUnread = !notification.isRead
-                found = true
-                break
-              }
-            }
-          }
-        }
-
-        // 2. Remove from all lists ONCE (outside the loop)
         updateInfiniteQueriesWithEarlyExit(
           queryClient,
           queryKeys.notifications.lists(),
@@ -483,12 +463,17 @@ export function useArchiveNotification() {
             const notification = page.find((n) => n.id === id)
             if (!notification) return { page, found: false }
 
+            // Read isRead status DURING removal (prevents race condition with Realtime)
+            if (!notification.isRead) {
+              wasUnread = true
+            }
+
             const newPage = page.filter((n) => n.id !== id)
             return { page: newPage, found: true }
           }
         )
 
-        // 3. If notification was unread, decrement count
+        // Decrement unread count if notification was unread
         if (wasUnread) {
           queryClient.setQueryData(
             queryKeys.notifications.unreadCount(userId),

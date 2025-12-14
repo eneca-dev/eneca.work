@@ -472,7 +472,7 @@ export function NotificationsPanel({ onCloseAction, collapsed = false }: Notific
       ref={panelRef}
       className={cn(
         // Фиксированная панель на всю высоту экрана, располагается сразу справа от сайдбара
-        "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-30",
+        "fixed inset-y-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-lg z-50",
       )}
       // Панель без дебаг-колонки
       style={{ width: panelWidthPx, left: collapsed ? 80 : 256 }}
