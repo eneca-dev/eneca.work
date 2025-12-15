@@ -78,6 +78,8 @@ export interface DecompositionStage {
     color: string | null
   }
   items: DecompositionItem[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness?: ReadinessPoint[]
 }
 
 /**
@@ -92,6 +94,70 @@ export interface ReadinessPoint {
 
 /** @deprecated Используй ReadinessPoint */
 export type ReadinessCheckpoint = ReadinessPoint
+
+// ============================================================================
+// Work Log Types - Отчёты о работе
+// ============================================================================
+
+/**
+ * Отчёт о работе (work_log)
+ * Привязан к decomposition_item
+ */
+export interface WorkLog {
+  /** ID отчёта */
+  id: string
+  /** ID элемента декомпозиции */
+  itemId: string
+  /** Дата отчёта */
+  date: string
+  /** Количество часов */
+  hours: number
+  /** Сумма в деньгах (hours * hourly_rate) */
+  amount: number
+  /** Описание работы (для tooltip) */
+  description: string
+  /** Кто создал отчёт */
+  createdBy: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+  }
+}
+
+// ============================================================================
+// Loading Types - Загрузки сотрудников
+// ============================================================================
+
+/**
+ * Загрузка сотрудника на этап декомпозиции
+ */
+export interface Loading {
+  /** ID загрузки */
+  id: string
+  /** ID этапа декомпозиции */
+  stageId: string
+  /** Дата начала загрузки */
+  startDate: string
+  /** Дата окончания загрузки */
+  finishDate: string
+  /** Ставка (0.25, 0.5, 0.75, 1) */
+  rate: number
+  /** Комментарий к загрузке */
+  comment: string | null
+  /** Статус загрузки */
+  status: 'active' | 'completed' | 'cancelled'
+  /** Это запрос на ресурс (нехватка) */
+  isShortage: boolean
+  /** Сотрудник */
+  employee: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+    avatarUrl: string | null
+  }
+}
 
 /**
  * Раздел проекта

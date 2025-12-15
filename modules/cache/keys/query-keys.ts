@@ -166,6 +166,12 @@ export const queryKeys = {
     lists: () => [...queryKeys.resourceGraph.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.resourceGraph.lists(), filters] as const,
     user: (userId: string) => [...queryKeys.resourceGraph.all, 'user', userId] as const,
+    /** Work logs для раздела (lazy load при развороте) */
+    workLogs: (sectionId: string) => [...queryKeys.resourceGraph.all, 'workLogs', sectionId] as const,
+    /** Loadings для раздела (lazy load при развороте) */
+    loadings: (sectionId: string) => [...queryKeys.resourceGraph.all, 'loadings', sectionId] as const,
+    /** Stage readiness для раздела (lazy load при развороте) */
+    stageReadiness: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageReadiness', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------

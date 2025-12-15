@@ -31,6 +31,9 @@ export {
   useResourceGraphData,
   useUserWorkload,
   useTagOptions,
+  useWorkLogs,
+  useLoadings,
+  useStageReadiness,
 } from './hooks'
 
 // ============================================================================
@@ -54,6 +57,10 @@ export {
   getOrgStructure,
   getProjectStructure,
   getProjectTags,
+  getWorkLogsForSection,
+  getLoadingsForSection,
+  getStageReadinessSnapshots,
+  getStageReadinessForSection,
 } from './actions'
 
 // ============================================================================
@@ -84,6 +91,10 @@ export type {
   ProjectObject,
   Stage,
   Project,
+  // Work logs
+  WorkLog,
+  // Loadings
+  Loading,
   // Filter types
   ProjectTag,
   // View types
@@ -107,6 +118,10 @@ export {
   isWeekend,
   getWeekBounds,
   transformRowsToHierarchy,
+  // Employee colors
+  EMPLOYEE_COLORS,
+  getEmployeeColor,
+  getInitials,
 } from './utils'
 
 // ============================================================================
@@ -118,6 +133,8 @@ export {
   RATE_COLORS,
   LOADING_STATUS_COLORS,
   ROW_HEIGHT,
+  SECTION_ROW_HEIGHT,
+  STAGE_ROW_HEIGHT,
   DAY_CELL_WIDTH,
   SIDEBAR_WIDTH,
   DEFAULT_MONTHS_RANGE,

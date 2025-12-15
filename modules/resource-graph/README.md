@@ -2,8 +2,207 @@
 
 Модуль графика ресурсов — визуализация иерархии проектов с timeline, плановой и фактической готовностью.
 
+---
+
+## Принципы дизайна
+
+Модуль следует принципам **минималистичного интерфейса** с двумя стилями компонентов, оптимизированными для тёмной темы.
+
+### Два стиля компонентов
+
+#### 1. Glass-Morphic стиль (для Work Logs, дат)
+
+Прозрачные элементы с эффектом стекла:
+- **Прозрачные фоны** с градиентами: `from-white/[0.08] to-white/[0.03]`
+- **Тонкие границы** с низкой прозрачностью: `border-white/[0.12]`
+- **Backdrop blur** для эффекта стекла: `backdrop-blur-sm`
+- **Hover эффекты** — усиление прозрачности и мягкое свечение
+
+#### 2. Solid Chip стиль (для Loadings, статусов)
+
+Цветные чипы без эффектов стекла:
+- **Заливка фона** с низкой прозрачностью: `${color}1A` (10%)
+- **Цветная рамка**: `${color}40` (25%)
+- **Цветной текст**: `color: ${color}`
+- **Минимальные скругления**: `rounded` (4px), НЕ `rounded-full`
+- **Простой hover**: `hover:brightness-110`
+
+### Ключевые принципы
+
+#### 1. Минимализм
+- Показывать только **ключевую информацию**, детали — в tooltip
+- **Агрегация данных** — группировать по дням вместо множества отдельных блоков
+- **Компактные элементы** — пилюли 18-22px высотой
+- Избегать visual clutter — один элемент на ячейку дня
+
+#### 2. Цвета по сущностям
+- **Сотрудники** — уникальный цвет из палитры на основе ID (один человек = один цвет везде)
+- **Статусы** — цвет из базы данных
+- **Периоды** — полупрозрачная заливка цветом статуса
+
+#### 3. Цветовая палитра
+
+```css
+/* Палитра для сотрудников */
+--employee-colors: [
+  '#3b82f6', /* blue */
+  '#8b5cf6', /* violet */
+  '#06b6d4', /* cyan */
+  '#22c55e', /* green */
+  '#f59e0b', /* amber */
+  '#ef4444', /* red */
+  '#ec4899', /* pink */
+  '#14b8a6', /* teal */
+  '#f97316', /* orange */
+  '#6366f1', /* indigo */
+];
+
+/* Текст */
+--text-primary: rgba(255, 255, 255, 0.9);
+--text-secondary: rgba(255, 255, 255, 0.6);
+--text-muted: rgba(255, 255, 255, 0.4);
+
+/* Tooltip */
+--tooltip-bg: rgba(24, 24, 27, 0.95);
+```
+
+#### 4. Типографика
+
+- **Основной текст**: 10-11px, `font-medium`
+- **Числа**: `tabular-nums` для выравнивания
+- **Ставки**: показывать как число (0.5, 1), не дроби
+- **Вторичный текст**: `text-white/40` или `opacity-70`
+
+#### 5. Динамическая высота строк
+
+- Строка увеличивается если элементов много (загрузки, work logs)
+- Базовая высота 40px, увеличивается на 21px за каждый элемент
+
+### Примеры компонентов
+
+#### Loading Chip (Solid стиль)
+```tsx
+<div
+  className="
+    flex items-center gap-1 px-1
+    rounded                           /* НЕ rounded-full! */
+    transition-colors duration-150
+    hover:brightness-110
+  "
+  style={{
+    backgroundColor: `${color}1A`,    // 10% opacity
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: `${color}40`,        // 25% opacity
+  }}
+>
+  <div className="shrink-0 rounded" style={{ backgroundColor: `${color}30` }}>
+    {/* Avatar или инициалы */}
+  </div>
+  <span style={{ color }}>{lastName}</span>
+  <span style={{ color }} className="opacity-70">{rate}</span>
+</div>
+```
+
+#### Glass Pill (Work Log Marker)
+```tsx
+<div className="
+  h-[22px] rounded-md
+  bg-gradient-to-b from-white/[0.08] to-white/[0.03]
+  border border-white/[0.12]
+  backdrop-blur-sm
+  transition-all duration-200
+  group-hover:from-white/[0.12] group-hover:to-white/[0.06]
+  group-hover:border-white/[0.2]
+  group-hover:shadow-[0_0_12px_rgba(255,255,255,0.08)]
+">
+  <span className="text-[10px] font-medium text-white/90 tabular-nums">
+    {hours}
+  </span>
+</div>
+```
+
+#### Status Chip (Solid стиль)
+```tsx
+<span
+  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium"
+  style={{
+    backgroundColor: `${color}1A`,  // 10% opacity
+    borderColor: `${color}59`,      // 35% opacity
+    color: color,
+  }}
+>
+  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+  {statusName}
+</span>
+```
+
+#### Glass Tooltip
+```tsx
+<TooltipContent className="
+  bg-zinc-900/95 backdrop-blur-xl
+  border border-white/10
+  shadow-xl shadow-black/40
+  rounded-lg px-3 py-2.5
+">
+  {/* Content */}
+</TooltipContent>
+```
+
+#### ProgressCircle (SVG кольцо с процентом)
+```tsx
+interface ProgressCircleProps {
+  progress: number      // 0-100
+  size?: number         // default: 24
+  strokeWidth?: number  // default: 2.5
+  color?: string        // hex цвет (опционально)
+}
+
+function ProgressCircle({ progress, size = 24, strokeWidth = 2.5, color }: ProgressCircleProps) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (progress / 100) * circumference
+  const progressColor = color || getProgressColor(progress)
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        {/* Background ring */}
+        <circle cx={size / 2} cy={size / 2} r={radius}
+          fill="transparent" stroke="currentColor"
+          strokeWidth={strokeWidth} className="text-white/10" />
+        {/* Progress ring */}
+        <circle cx={size / 2} cy={size / 2} r={radius}
+          fill="transparent" stroke={progressColor}
+          strokeWidth={strokeWidth} strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} />
+      </svg>
+      {/* Percentage inside */}
+      <span className="absolute inset-0 flex items-center justify-center text-[8px] font-medium"
+        style={{ color: progressColor }}>
+        {Math.round(progress)}
+      </span>
+    </div>
+  )
+}
+
+// Цветовая градация по прогрессу
+function getProgressColor(progress: number): string {
+  if (progress >= 80) return '#22c55e'  // green
+  if (progress >= 50) return '#f59e0b'  // amber
+  if (progress >= 20) return '#f97316'  // orange
+  return '#ef4444'                       // red
+}
+```
+
+---
+
 ## К разработке
 
+- [ ] **stage_readiness_snapshots** — таблица для хранения истории готовности этапов
+  - Структура: `(id, stage_id, snapshot_date, readiness_value, created_at)`
+  - Функция `calculate_stage_readiness(stage_id)` для расчёта
+  - Функция `create_daily_stage_readiness_snapshots(date)` для pg_cron
 - [ ] pg_cron для автоматического создания снэпшотов фактической готовности
 - [ ] UI для ввода/редактирования плановой готовности (checkpoints)
 - [ ] Drag-and-drop для изменения сроков
@@ -57,7 +256,7 @@
 - **Визуализация:** линейный график (SVG) с точками
 - **Цвет:** зелёный (#10b981)
 
-### Фактическая готовность
+### Фактическая готовность (Section)
 
 - **Таблица:** `section_readiness_snapshots`
 - **Расчёт:** взвешенное среднее по `planned_hours`
@@ -72,6 +271,22 @@
   - Жёлтый (50-79%)
   - Оранжевый (20-49%)
   - Красный (<20%)
+
+### Готовность этапа декомпозиции (DecompositionStage)
+
+- **Расчёт:** client-side, взвешенное среднее по элементам
+  - Формула: `SUM(item.progress * item.plannedHours) / SUM(item.plannedHours)`
+- **Визуализация:** `ProgressCircle` — круговой индикатор с процентом внутри
+- **Цвет кольца:** берётся из статуса этапа (`stage.status.color`)
+- **Отображение часов:** `{факт}/{план}` рядом с кольцом
+- **Даты:** компактный формат `ДД.ММ — ДД.ММ`
+
+### Элемент декомпозиции (DecompositionItem)
+
+- **Визуализация:** `ProgressCircle` с процентом прогресса
+- **Цвет кольца:** градация по значению прогресса
+- **Отображение часов:** `{факт}/{план}` (факт считается из work logs)
+- **Текст:** уменьшенный (`text-[11px]`) для длинных названий
 
 ### Фильтрация (InlineFilter)
 

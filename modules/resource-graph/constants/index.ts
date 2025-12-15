@@ -43,11 +43,30 @@ export const ROW_HEIGHT = 40
 /** Высота строки раздела (двухстрочная) */
 export const SECTION_ROW_HEIGHT = 56
 
+/** Высота строки этапа декомпозиции (двухстрочная + место для загрузок и готовности) */
+export const STAGE_ROW_HEIGHT = 64
+
 /** Фиксированная ширина ячейки дня в пикселях */
 export const DAY_CELL_WIDTH = 36
 
 /** Ширина боковой панели */
 export const SIDEBAR_WIDTH = 320
+
+// ============================================================================
+// Work Log Display Constants
+// ============================================================================
+
+/** Минимальная высота блока work log */
+export const WORK_LOG_MIN_HEIGHT = 20
+
+/** Пикселей на час (масштаб высоты) */
+export const WORK_LOG_HOURS_SCALE = 4
+
+/** Отступ между блоками work log */
+export const WORK_LOG_GAP = 2
+
+/** Минимальная ширина блока work log */
+export const WORK_LOG_WIDTH = 32
 
 // ============================================================================
 // Default Values

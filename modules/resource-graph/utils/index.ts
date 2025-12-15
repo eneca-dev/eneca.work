@@ -463,3 +463,58 @@ export function getDayInfo(date: Date, calendarMap: Map<string, Partial<DayInfo>
     isTransferredDayOff: calendarInfo.isTransferredDayOff ?? baseInfo.isTransferredDayOff,
   }
 }
+
+// ============================================================================
+// Employee Color Utilities - Цвета сотрудников
+// ============================================================================
+
+/**
+ * Палитра цветов для сотрудников
+ * Яркие, различимые цвета для тёмной темы
+ */
+export const EMPLOYEE_COLORS = [
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#06b6d4', // cyan
+  '#22c55e', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#f97316', // orange
+  '#6366f1', // indigo
+] as const
+
+/**
+ * Цвет на основе ID сотрудника
+ * Один и тот же сотрудник всегда получает один цвет
+ *
+ * @param employeeId - UUID сотрудника
+ * @returns Hex цвет из палитры
+ */
+export function getEmployeeColor(employeeId: string | null): string {
+  if (!employeeId) return '#6b7280' // gray-500 для неназначенных
+
+  // Простой хеш из ID для получения индекса цвета
+  let hash = 0
+  for (let i = 0; i < employeeId.length; i++) {
+    hash = ((hash << 5) - hash) + employeeId.charCodeAt(i)
+    hash = hash & hash // Convert to 32bit integer
+  }
+
+  const index = Math.abs(hash) % EMPLOYEE_COLORS.length
+  return EMPLOYEE_COLORS[index]
+}
+
+/**
+ * Получить инициалы из имени и фамилии
+ *
+ * @param firstName - Имя
+ * @param lastName - Фамилия
+ * @returns Инициалы (1-2 буквы)
+ */
+export function getInitials(firstName: string | null, lastName: string | null): string {
+  const first = firstName?.charAt(0)?.toUpperCase() || ''
+  const last = lastName?.charAt(0)?.toUpperCase() || ''
+  return first + last || '?'
+}
