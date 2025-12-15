@@ -25,6 +25,7 @@ export interface BarPeriod {
   sectionName?: string
   stageId?: string
   stageName?: string
+  comment?: string // Комментарий к загрузке
   loading?: Loading // Исходная загрузка для доступа к полным данным
 }
 
@@ -284,6 +285,7 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     sectionName: loading.sectionName,
     stageId: loading.stageId,
     stageName: loading.stageName,
+    comment: loading.comment,
     loading,
   }))
 }
@@ -530,6 +532,7 @@ export function formatBarTooltip(period: BarPeriod): string {
   if (period.stageName) lines.push(`Этап: ${period.stageName}`)
   lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
   lines.push(`Ставка: ${period.rate}`)
+  if (period.comment) lines.push(`Комментарий: ${period.comment}`)
 
   return lines.join("\n")
 }
