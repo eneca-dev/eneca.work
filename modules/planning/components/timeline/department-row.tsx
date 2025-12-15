@@ -1072,6 +1072,37 @@ export function EmployeeRow({
                           </span>
                         )
                       })()}
+
+                      {/* Overlay для нерабочих дней */}
+                      {(() => {
+                        const nonWorkingSegments = splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits)
+
+                        return nonWorkingSegments.map((segment, segmentIdx) => {
+                          // Вычисляем left и width для overlay
+                          const overlayLeft = (timeUnits[segment.startIdx]?.left ?? 0) - (timeUnits[bar.startIdx]?.left ?? 0)
+
+                          let overlayWidth = 0
+                          for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+                            overlayWidth += timeUnits[idx]?.width ?? cellWidth
+                          }
+
+                          return (
+                            <div
+                              key={`non-working-${segmentIdx}`}
+                              className="absolute pointer-events-none"
+                              style={{
+                                left: `${overlayLeft}px`,
+                                width: `${overlayWidth}px`,
+                                top: '-1px',
+                                bottom: '-1px',
+                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+                                borderTop: `3px dashed ${bar.color}`,
+                                borderBottom: `3px dashed ${bar.color}`,
+                              }}
+                            />
+                          )
+                        })
+                      })()}
                     </div>
                   )
                 })
