@@ -1076,15 +1076,19 @@ export function EmployeeRow({
                       {/* Overlay для нерабочих дней */}
                       {(() => {
                         const nonWorkingSegments = splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits)
+                        const HORIZONTAL_GAP = 6 // Константа из loading-bars-utils.ts
 
                         return nonWorkingSegments.map((segment, segmentIdx) => {
-                          // Вычисляем left и width для overlay
-                          const overlayLeft = (timeUnits[segment.startIdx]?.left ?? 0) - (timeUnits[bar.startIdx]?.left ?? 0)
+                          // Вычисляем left относительно бара, но компенсируем HORIZONTAL_GAP чтобы совпадать с сеткой
+                          const barStartLeft = timeUnits[bar.startIdx]?.left ?? 0
+                          const segmentStartLeft = timeUnits[segment.startIdx]?.left ?? 0
+                          const overlayLeft = segmentStartLeft - barStartLeft - HORIZONTAL_GAP / 2
 
                           let overlayWidth = 0
                           for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
                             overlayWidth += timeUnits[idx]?.width ?? cellWidth
                           }
+                          overlayWidth -= 3 // Делаем правый край на 2px левее
 
                           return (
                             <div
