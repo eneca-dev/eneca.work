@@ -321,6 +321,45 @@ function splitPeriodByWorkingDays(
 }
 
 /**
+ * Разбивает период на сегменты нерабочих дней (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ * Инверсия функции splitPeriodByWorkingDays()
+ */
+export function splitPeriodByNonWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: TimelineUnit[]
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend
+
+    if (!isWorking) {
+      // Нерабочий день - начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
+      }
+    } else {
+      // Рабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
+      }
+    }
+  }
+
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
+  }
+
+  return segments
+}
+
+/**
  * Вычисляет параметры отрисовки для всех периодов
  * Разбивает загрузки на сегменты, исключая нерабочие дни (выходные и праздники)
  */

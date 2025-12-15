@@ -268,71 +268,133 @@ renders.push({
 
 ### Этап 5: Добавление overlay для нерабочих дней
 
-**Файл:** [modules/planning/components/timeline/department-row.tsx](modules/planning/components/timeline/department-row.tsx)
+#### Шаг 5.1: Создать утилиту `splitPeriodByNonWorkingDays()`
 
-**Место: внутри рендера бара (после строки 893, перед закрывающим `</div>`)**
+**Файл:** [modules/planning/components/timeline/loading-bars-utils.ts](modules/planning/components/timeline/loading-bars-utils.ts)
 
-**Добавить код:**
+**Место:** После функции `splitPeriodByWorkingDays()` (после строки 321)
+
+**Добавить:**
 
 ```typescript
-{/* Вычисляем позиции нерабочих дней внутри бара */}
-{(() => {
-  const HORIZONTAL_GAP = 6
-  const nonWorkingDayRanges: Array<{ left: number; width: number }> = []
-  let currentRangeStart: number | null = null
-  let currentRangeWidth = 0
+/**
+ * Разбивает период на сегменты нерабочих дней (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ * Инверсия функции splitPeriodByWorkingDays()
+ */
+export function splitPeriodByNonWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: TimelineUnit[]
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
 
-  for (let cellIdx = bar.startIdx; cellIdx <= bar.endIdx; cellIdx++) {
-    const unit = timeUnits[cellIdx]
-    const isNonWorking = unit?.isWorkingDay === false
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend
 
-    if (isNonWorking) {
-      if (currentRangeStart === null) {
-        // Начинаем новый диапазон нерабочих дней
-        currentRangeStart = (unit.left ?? 0) - (timeUnits[bar.startIdx]?.left ?? 0) - HORIZONTAL_GAP / 2
+    if (!isWorking) {
+      // Нерабочий день - начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
       }
-      currentRangeWidth += unit.width ?? 0
     } else {
-      if (currentRangeStart !== null) {
-        // Завершаем текущий диапазон
-        nonWorkingDayRanges.push({
-          left: currentRangeStart,
-          width: currentRangeWidth - 2,
-        })
-        currentRangeStart = null
-        currentRangeWidth = 0
+      // Рабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
       }
     }
   }
 
-  // Завершаем последний диапазон если был
-  if (currentRangeStart !== null) {
-    nonWorkingDayRanges.push({
-      left: currentRangeStart,
-      width: currentRangeWidth - 4,
-    })
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
   }
 
-  // Рендерим overlay для каждого диапазона
-  return nonWorkingDayRanges.map((range, rangeIdx) => (
-    <div
-      key={`non-working-${rangeIdx}`}
-      className="absolute pointer-events-none"
-      style={{
-        left: `${range.left}px`,
-        width: `${range.width}px`,
-        top: '-1px',
-        bottom: '-1px',
-        backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
-        borderTop: `3px dashed ${bar.color}`,
-        borderBottom: `3px dashed ${bar.color}`,
-      }}
-    />
-  ))
+  return segments
+}
+```
+
+**Технические детали:**
+- Инвертирована логика `splitPeriodByWorkingDays()`
+- Используется та же проверка: `isWorkingDay ?? !isWeekend`
+- Экспортируется для использования в `department-row.tsx`
+
+---
+
+#### Шаг 5.2: Добавить импорт в `department-row.tsx`
+
+**Файл:** [modules/planning/components/timeline/department-row.tsx](modules/planning/components/timeline/department-row.tsx)
+
+**Изменить импорт:**
+
+```typescript
+import {
+  loadingsToPeriods,
+  calculateBarRenders,
+  calculateBarTop,
+  splitPeriodByNonWorkingDays,  // ← Добавить
+  formatBarLabel,
+  formatBarTooltip,
+  getBarLabelParts,
+  type BarPeriod,
+} from "./loading-bars-utils"
+```
+
+---
+
+#### Шаг 5.3: Добавить overlay в рендер бара
+
+**Файл:** [modules/planning/components/timeline/department-row.tsx](modules/planning/components/timeline/department-row.tsx)
+
+**Место:** Внутри рендера бара, после основного `div` с баром (перед закрывающим `</div>`)
+
+**Добавить:**
+
+```typescript
+{/* Overlay для нерабочих дней */}
+{(() => {
+  const nonWorkingSegments = splitPeriodByNonWorkingDays(bar.startIdx, bar.endIdx, timeUnits)
+
+  return nonWorkingSegments.map((segment, segmentIdx) => {
+    // Вычисляем left и width для overlay
+    const overlayLeft = (timeUnits[segment.startIdx]?.left ?? 0) - (timeUnits[bar.startIdx]?.left ?? 0)
+
+    let overlayWidth = 0
+    for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
+      overlayWidth += timeUnits[idx]?.width ?? cellWidth
+    }
+
+    return (
+      <div
+        key={`non-working-${segmentIdx}`}
+        className="absolute pointer-events-none"
+        style={{
+          left: `${overlayLeft}px`,
+          width: `${overlayWidth}px`,
+          top: '-1px',
+          bottom: '-1px',
+          backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+          borderTop: `3px dashed ${bar.color}`,
+          borderBottom: `3px dashed ${bar.color}`,
+        }}
+      />
+    )
+  })
 })()}
 ```
 
-**Важно:** Добавить `position: relative` к контейнеру бара (строка ~897):
+---
+
+#### Шаг 5.4: Добавить `position: relative` к контейнеру бара
+
+**Файл:** [modules/planning/components/timeline/department-row.tsx](modules/planning/components/timeline/department-row.tsx)
+
+**Найти:** `className` контейнера бара (где `absolute rounded transition-all`)
+
+**Добавить:** `relative` в список классов
 
 ```typescript
 className={cn(

@@ -17,6 +17,7 @@ import {
   loadingsToPeriods,
   calculateBarRenders,
   calculateBarTop,
+  splitPeriodByNonWorkingDays,
   formatBarLabel,
   formatBarTooltip,
   getBarLabelParts,
