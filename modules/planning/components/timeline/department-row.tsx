@@ -881,9 +881,10 @@ export function EmployeeRow({
                         }
                       }}
                     >
-                      {(() => {
-                        // Адаптивное отображение для загрузок
-                        if (bar.period.type === "loading") {
+                      <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
+                        {(() => {
+                          // Адаптивное отображение для загрузок
+                          if (bar.period.type === "loading") {
                           const labelParts = getBarLabelParts(bar.period, bar.width)
                           const rate = bar.period.rate || 1
 
@@ -1068,7 +1069,8 @@ export function EmployeeRow({
                             {formatBarLabel(bar.period)}
                           </span>
                         )
-                      })()}
+                        })()}
+                      </div>
 
                       {/* Overlay для нерабочих дней */}
                       {(() => {
@@ -1094,9 +1096,9 @@ export function EmployeeRow({
                               style={{
                                 left: `${overlayLeft}px`,
                                 width: `${overlayWidth}px`,
-                                top: '-1px',
-                                bottom: '-1px',
-                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+                                top: '-3px',
+                                bottom: '-3px',
+                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)',
                                 borderTop: `3px dashed ${bar.color}`,
                                 borderBottom: `3px dashed ${bar.color}`,
                               }}
