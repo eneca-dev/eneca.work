@@ -900,11 +900,19 @@ export function EmployeeRow({
 
                           if (labelParts.displayMode === 'icon-only') {
                             return (
-                              <FolderKanban
-                                size={11}
-                                className="text-white"
-                                style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                              />
+                              <div className="flex items-center gap-1">
+                                <FolderKanban
+                                  size={11}
+                                  className="text-white"
+                                  style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                />
+                                {hasComment && (
+                                  <MessageSquare
+                                    className="w-3 h-3 text-white/70 flex-shrink-0"
+                                    style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                  />
+                                )}
+                              </div>
                             )
                           }
 
@@ -915,13 +923,21 @@ export function EmployeeRow({
                             if (maxLines === 1) {
                               // Одна строка для маленьких баров
                               return (
-                                <span
-                                  className="text-[10px] font-semibold text-white truncate"
-                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                  title={displayText}
-                                >
-                                  {displayText}
-                                </span>
+                                <div className="flex items-center gap-1 overflow-hidden">
+                                  <span
+                                    className="text-[10px] font-semibold text-white truncate"
+                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                                    title={displayText}
+                                  >
+                                    {displayText}
+                                  </span>
+                                  {hasComment && (
+                                    <MessageSquare
+                                      className="w-3 h-3 text-white/70 flex-shrink-0"
+                                      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                    />
+                                  )}
+                                </div>
                               )
                             }
 
@@ -972,6 +988,12 @@ export function EmployeeRow({
                                   >
                                     {displayText}
                                   </span>
+                                  {hasComment && (
+                                    <MessageSquare
+                                      className="w-3 h-3 text-white/70 flex-shrink-0"
+                                      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                    />
+                                  )}
                                 </div>
                               )
                             }
@@ -1021,6 +1043,12 @@ export function EmployeeRow({
                                 >
                                   {displayText}
                                 </span>
+                                {hasComment && (
+                                  <MessageSquare
+                                    className="w-3 h-3 text-white/70 flex-shrink-0"
+                                    style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                  />
+                                )}
                               </div>
                             )
                           }
