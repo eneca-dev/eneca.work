@@ -881,9 +881,11 @@ export function EmployeeRow({
                         }
                       }}
                     >
-                      {(() => {
-                        // Адаптивное отображение для загрузок
-                        if (bar.period.type === "loading") {
+                      {/* Контейнер для текста - должен быть поверх оверлея выходных */}
+                      <div className="relative w-full h-full flex items-center" style={{ zIndex: 2 }}>
+                        {(() => {
+                          // Адаптивное отображение для загрузок
+                          if (bar.period.type === "loading") {
                           const labelParts = getBarLabelParts(bar.period, bar.width)
                           const rate = bar.period.rate || 1
 
@@ -1068,7 +1070,8 @@ export function EmployeeRow({
                             {formatBarLabel(bar.period)}
                           </span>
                         )
-                      })()}
+                        })()}
+                      </div>
 
                       {/* Overlay для нерабочих дней */}
                       {(() => {
@@ -1094,11 +1097,12 @@ export function EmployeeRow({
                               style={{
                                 left: `${overlayLeft}px`,
                                 width: `${overlayWidth}px`,
-                                top: '-1px',
-                                bottom: '-1px',
-                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+                                top: '-3px',
+                                bottom: '-3px',
+                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)',
                                 borderTop: `3px dashed ${bar.color}`,
                                 borderBottom: `3px dashed ${bar.color}`,
+                                zIndex: 1,
                               }}
                             />
                           )
