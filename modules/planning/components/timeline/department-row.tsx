@@ -16,6 +16,7 @@ import { useTeamActivityPermissions } from "../../hooks/useTeamActivityPermissio
 import {
   loadingsToPeriods,
   calculateBarRenders,
+  calculateBarTop,
   formatBarLabel,
   formatBarTooltip,
   getBarLabelParts,
@@ -691,29 +692,8 @@ export function EmployeeRow({
     barRenders.forEach(bar => {
       const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
 
-      // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
-      const overlappingBars = barRenders.filter(other =>
-        other.period.startDate <= bar.period.endDate &&
-        other.period.endDate >= bar.period.startDate &&
-        other.layer < bar.layer
-      )
-
-      // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
-      let top = 8 // начальный отступ
-      if (overlappingBars.length > 0) {
-        const layersMap = new Map<number, number>()
-        overlappingBars.forEach(other => {
-          const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-          layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-        })
-
-        // Суммируем высоты только тех слоёв, которые реально пересекаются
-        for (let i = 0; i < bar.layer; i++) {
-          if (layersMap.has(i)) {
-            top += layersMap.get(i)! + BAR_GAP
-          }
-        }
-      }
+      // Используем централизованную функцию для расчёта top
+      const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
       maxBottom = Math.max(maxBottom, top + barHeight)
     })
@@ -867,29 +847,8 @@ export function EmployeeRow({
                 return barRenders.map((bar, idx) => {
                   const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
 
-                  // Находим все полосы, которые пересекаются с текущей по времени И имеют меньший layer
-                  const overlappingBars = barRenders.filter(other =>
-                    other.period.startDate <= bar.period.endDate &&
-                    other.period.endDate >= bar.period.startDate &&
-                    other.layer < bar.layer
-                  )
-
-                  // Рассчитываем top на основе ТОЛЬКО пересекающихся полос
-                  let top = 8 // Начальный отступ
-                  if (overlappingBars.length > 0) {
-                    const layersMap = new Map<number, number>()
-                    overlappingBars.forEach(other => {
-                      const otherHeight = BASE_BAR_HEIGHT * (other.period.rate || 1)
-                      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-                    })
-
-                    // Суммируем высоты только тех слоёв, которые реально пересекаются
-                    for (let i = 0; i < bar.layer; i++) {
-                      if (layersMap.has(i)) {
-                        top += layersMap.get(i)! + BAR_GAP
-                      }
-                    }
-                  }
+                  // Используем централизованную функцию для расчёта top
+                  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
                   return (
                     <div
