@@ -371,31 +371,25 @@ export function calculateBarRenders(
     // Определяем цвет на основе типа периода
     const color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
 
-    // Разбиваем на сегменты по рабочим дням
-    const segments = splitPeriodByWorkingDays(actualStartIdx, actualEndIdx, timeUnits)
+    // Создаем один непрерывный бар от начала до конца (включая нерабочие дни)
+    const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
 
-    // Создаем отдельный рендер для каждого сегмента
-    for (const segment of segments) {
-      // Используем позиции из timeUnits если доступны, иначе старый метод
-      const left = (timeUnits[segment.startIdx]?.left ?? segment.startIdx * cellWidth) + HORIZONTAL_GAP / 2
-
-      // Вычисляем ширину сегмента суммированием ширин всех ячеек
-      let width = 0
-      for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
-        width += timeUnits[idx]?.width ?? cellWidth
-      }
-      width -= HORIZONTAL_GAP
-
-      renders.push({
-        period,
-        startIdx: segment.startIdx,
-        endIdx: segment.endIdx,
-        left,
-        width,
-        layer,
-        color,
-      })
+    // Вычисляем ширину всего периода суммированием ширин всех ячеек
+    let width = 0
+    for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
+      width += timeUnits[idx]?.width ?? cellWidth
     }
+    width -= HORIZONTAL_GAP
+
+    renders.push({
+      period,
+      startIdx: actualStartIdx,
+      endIdx: actualEndIdx,
+      left,
+      width,
+      layer,
+      color,
+    })
   }
 
   return renders
