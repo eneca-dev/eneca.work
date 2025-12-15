@@ -5,6 +5,12 @@
 import type { Loading, TimelineUnit } from "../../types"
 
 /**
+ * Константы для расчёта высоты и позиционирования полосок загрузки
+ */
+export const BASE_BAR_HEIGHT = 140 // Базовая высота полоски для ставки 1.0
+export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
+
+/**
  * Интерфейс для периода загрузки
  */
 export interface BarPeriod {

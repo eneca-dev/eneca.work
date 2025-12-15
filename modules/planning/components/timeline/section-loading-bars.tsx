@@ -10,6 +10,8 @@ import {
   getSectionLoadingLabelParts,
   formatSectionLoadingTooltip,
   calculateBarTop,
+  BASE_BAR_HEIGHT,
+  BAR_GAP,
   type SectionLoadingPeriod,
   type BarRender,
 } from "./loading-bars-utils"
@@ -21,10 +23,6 @@ interface SectionLoadingBarsProps {
   theme: string
   rowHeight: number
 }
-
-// Константы для расчёта высоты (как в EmployeeRow)
-const BASE_BAR_HEIGHT = 56 // Базовая высота бара для ставки 1
-const BAR_GAP = 3 // Отступ между барами
 
 /**
  * Компонент для отображения чипов загрузок в строке раздела

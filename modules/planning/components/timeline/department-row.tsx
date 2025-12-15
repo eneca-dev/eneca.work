@@ -21,6 +21,8 @@ import {
   formatBarLabel,
   formatBarTooltip,
   getBarLabelParts,
+  BASE_BAR_HEIGHT,
+  BAR_GAP,
   type BarPeriod,
 } from "./loading-bars-utils"
 
@@ -677,11 +679,6 @@ export function EmployeeRow({
 
     return maxRate
   }, [allPeriods])
-
-  // Базовая высота полоски для 1 ставки и зазор между ними
-  // Рассчитано так, чтобы при 0.25 ставки текст 8px был читаемым (56 * 0.25 = 14px)
-  const BASE_BAR_HEIGHT = 56 // Высота для полной ставки (rate = 1)
-  const BAR_GAP = 3 // Минимальное расстояние между полосками
 
   // Динамический расчёт высоты строки на основе загрузок
   const actualRowHeight = useMemo(() => {
