@@ -883,7 +883,7 @@ export function EmployeeRow({
                     <Fragment key={`${bar.period.id}-${idx}`}>
                     <div
                       className={cn(
-                        "absolute rounded transition-all duration-200 pointer-events-auto",
+                        "absolute transition-all duration-200 pointer-events-auto",
                         // Всегда используем горизонтальное выравнивание
                         "flex items-center",
                         // Курсор pointer для загрузок (можно редактировать)
@@ -903,6 +903,11 @@ export function EmployeeRow({
                         paddingBottom: "4px",
                         overflow: "hidden",
                         filter: "brightness(1.1)",
+                        // Закругляем верхние углы всегда, нижние - только если нет комментария
+                        borderTopLeftRadius: '4px',
+                        borderTopRightRadius: '4px',
+                        borderBottomLeftRadius: bar.period.comment ? '0' : '4px',
+                        borderBottomRightRadius: bar.period.comment ? '0' : '4px',
                       }}
                       title={formatBarTooltip(bar.period)}
                       onClick={() => {
@@ -1148,12 +1153,12 @@ export function EmployeeRow({
                         <div
                           style={{
                             position: 'absolute',
-                            top: '0',
-                            left: '0',
-                            right: '0',
+                            top: '-2px',
+                            left: '3px',
+                            right: '3px',
                             height: `${COMMENT_GAP}px`,
-                            borderTop: `1px dashed ${bar.color}`,
-                            opacity: 0.6,
+                            borderTop: `2px dashed ${theme === 'dark' ? '#000000' : '#ffffff'}`,
+                            opacity: 1,
                           }}
                         />
 
@@ -1161,7 +1166,7 @@ export function EmployeeRow({
                         <div
                           className="absolute flex items-center gap-1.5 px-2"
                           style={{
-                            top: `${COMMENT_GAP}px`,
+                            top: `${COMMENT_GAP - 2}px`,
                             left: '0',
                             right: '0',
                             height: `${COMMENT_HEIGHT}px`,
@@ -1170,8 +1175,13 @@ export function EmployeeRow({
                               console.log('🎨 Comment bg:', bar.color, '->', bgColor)
                               return bgColor
                             })(),
+                            borderLeft: `2px solid ${bar.color}`,
+                            borderRight: `2px solid ${bar.color}`,
+                            borderBottom: `2px solid ${bar.color}`,
                             borderBottomLeftRadius: '4px',
                             borderBottomRightRadius: '4px',
+                            opacity: 0.8,
+                            filter: "brightness(1.1)",
                           }}
                         >
                           <span
