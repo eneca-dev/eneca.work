@@ -284,7 +284,7 @@ export function DepartmentRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
+                    !isTodayDate && (theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50"),
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-60"
@@ -525,7 +525,7 @@ function TeamRow({ team, timeUnits, theme, rowHeight, padding, cellWidth, totalF
                   theme === "dark" ? "border-slate-700" : "border-slate-200",
                   isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                   isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                  theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50",
+                  !isTodayDate && (theme === "dark" ? "group-hover/row:bg-slate-700/50" : "group-hover/row:bg-slate-200/50"),
                   isFirstDayOfMonth(unit.date)
                     ? theme === "dark"
                       ? "border-l border-l-slate-600"
@@ -1120,7 +1120,7 @@ export function EmployeeRow({
                     theme === "dark" ? "border-slate-700" : "border-slate-200",
                     isWeekendDay ? (theme === "dark" ? "bg-slate-900/80" : "") : "",
                     isTodayDate ? (theme === "dark" ? "bg-teal-600/30" : "bg-teal-400/40") : "",
-                    theme === "dark" ? "group-hover/employee:bg-slate-700/50" : "group-hover/employee:bg-slate-200/50",
+                    !isTodayDate && (theme === "dark" ? "group-hover/employee:bg-slate-700/50" : "group-hover/employee:bg-slate-200/50"),
                     isFirstDayOfMonth(unit.date)
                       ? theme === "dark"
                         ? "border-l border-l-slate-600"
