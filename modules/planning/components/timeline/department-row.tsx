@@ -28,6 +28,27 @@ import {
   type BarPeriod,
 } from "./loading-bars-utils"
 
+// Helper для конвертации цвета в rgba
+function hexToRgba(color: string, alpha: number): string {
+  // Если цвет уже в формате rgb/rgba, извлекаем r, g, b
+  if (color.startsWith('rgb')) {
+    const match = color.match(/\d+/g)
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`
+    }
+  }
+
+  // Убираем # если есть
+  let hex = color.replace('#', '')
+
+  // Конвертируем в RGB
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 interface DepartmentRowProps {
   department: Department
   departmentIndex: number
@@ -1111,52 +1132,61 @@ export function EmployeeRow({
                       })()}
                     </div>
 
-                    {/* Комментарий под полоской с полупрозрачным фоном - ВЫНЕСЕН ЗА ПРЕДЕЛЫ BAR DIV */}
+                    {/* Комментарий под полоской с градиентным фоном */}
                     {bar.period.type === 'loading' && bar.period.comment && (
                       <div
-                        className="absolute flex items-center gap-1.5 px-2 py-1 pointer-events-none"
+                        className="absolute pointer-events-none"
                         style={{
-                          top: `${top + barHeight + COMMENT_GAP}px`,
+                          top: `${top + barHeight}px`,
                           left: `${bar.left}px`,
                           width: `${bar.width}px`,
-                          minHeight: `${COMMENT_HEIGHT}px`,
-                          backgroundColor: theme === 'dark'
-                            ? 'rgba(15, 23, 42, 0.75)'  // slate-900 с прозрачностью
-                            : 'rgba(248, 250, 252, 0.9)', // slate-50 с прозрачностью
-                          backdropFilter: 'blur(4px)',
-                          borderRadius: '3px',
-                          border: theme === 'dark'
-                            ? '1px solid rgba(100, 116, 139, 0.2)'  // slate-500 с прозрачностью
-                            : '1px solid rgba(203, 213, 225, 0.5)', // slate-300 с прозрачностью
-                          boxShadow: theme === 'dark'
-                            ? '0 1px 3px rgba(0, 0, 0, 0.3)'
-                            : '0 1px 2px rgba(0, 0, 0, 0.1)',
+                          height: `${COMMENT_GAP + COMMENT_HEIGHT}px`,
                           zIndex: 3,
                         }}
                       >
-                        <MessageSquare
-                          size={12}
-                          className={cn(
-                            "flex-shrink-0",
-                            theme === 'dark' ? "text-slate-400" : "text-slate-500"
-                          )}
-                          strokeWidth={1.5}
+                        {/* Пунктирная линия-разделитель */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '0',
+                            left: '0',
+                            right: '0',
+                            height: `${COMMENT_GAP}px`,
+                            borderTop: `1px dashed ${bar.color}`,
+                            opacity: 0.6,
+                          }}
                         />
-                        <span
-                          className={cn(
-                            "text-[9px] leading-tight truncate",
-                            theme === 'dark' ? "text-slate-300" : "text-slate-700"
-                            )}
+
+                        {/* Сам комментарий */}
+                        <div
+                          className="absolute flex items-center gap-1.5 px-2"
+                          style={{
+                            top: `${COMMENT_GAP}px`,
+                            left: '0',
+                            right: '0',
+                            height: `${COMMENT_HEIGHT}px`,
+                            backgroundColor: (() => {
+                              const bgColor = hexToRgba(bar.color, 0.5)
+                              console.log('🎨 Comment bg:', bar.color, '->', bgColor)
+                              return bgColor
+                            })(),
+                            borderBottomLeftRadius: '4px',
+                            borderBottomRightRadius: '4px',
+                          }}
+                        >
+                          <span
+                            className="text-[10px] leading-tight truncate text-white font-medium"
                             style={{
+                              textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
                               fontFamily: 'system-ui, -apple-system, sans-serif',
-                              letterSpacing: '0.01em',
                             }}
                             title={bar.period.comment}
                           >
                             {bar.period.comment}
                           </span>
                         </div>
-                      )}
+                      </div>
+                    )}
                     </Fragment>
                   )
                 })
