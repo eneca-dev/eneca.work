@@ -10,6 +10,10 @@ import type { Loading, TimelineUnit } from "../../types"
 export const BASE_BAR_HEIGHT = 42 // Фиксированная высота полоски загрузки
 export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
 
+// Константы для комментариев
+export const COMMENT_HEIGHT = 18 // Высота плашки комментария в пикселях
+export const COMMENT_GAP = 2     // Отступ между полоской и комментарием
+
 /**
  * Интерфейс для периода загрузки
  */
@@ -212,8 +216,15 @@ export function calculateBarTop(
     // Создаём карту слой -> максимальная высота бара в этом слое
     const layersMap = new Map<number, number>()
     overlappingBars.forEach(other => {
-      const otherHeight = baseBarHeight // Фиксированная высота
-      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
+      // Базовая высота полоски
+      let effectiveHeight = baseBarHeight
+
+      // Если у загрузки есть комментарий — добавляем его высоту
+      if (other.period.type === 'loading' && other.period.comment) {
+        effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
+      }
+
+      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, effectiveHeight))
     })
 
     // Суммируем высоты всех слоёв ниже текущего

@@ -1,7 +1,7 @@
 "use client" 
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, MessageSquare } from "lucide-react"
 import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -23,6 +23,8 @@ import {
   getBarLabelParts,
   BASE_BAR_HEIGHT,
   BAR_GAP,
+  COMMENT_HEIGHT,
+  COMMENT_GAP,
   type BarPeriod,
 } from "./loading-bars-utils"
 
@@ -684,7 +686,7 @@ export function EmployeeRow({
   const actualRowHeight = useMemo(() => {
     if (barRenders.length === 0) return reducedRowHeight
 
-    // Рассчитываем необходимую высоту для вертикального размещения всех полосок
+    // Рассчитываем необходимую высоту для вертикального размещения всех полосок + комментарии
     let maxBottom = 0
 
     barRenders.forEach(bar => {
@@ -693,7 +695,15 @@ export function EmployeeRow({
       // Используем централизованную функцию для расчёта top
       const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
-      maxBottom = Math.max(maxBottom, top + barHeight)
+      // Базовая высота: позиция + высота полоски
+      let totalBarHeight = top + barHeight
+
+      // Если есть комментарий - добавляем его высоту
+      if (bar.period.type === 'loading' && bar.period.comment) {
+        totalBarHeight += COMMENT_GAP + COMMENT_HEIGHT
+      }
+
+      maxBottom = Math.max(maxBottom, totalBarHeight)
     })
 
     // Возвращаем максимум из минимальной высоты и требуемой высоты + отступ снизу
@@ -849,8 +859,8 @@ export function EmployeeRow({
                   const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
 
                   return (
+                    <Fragment key={`${bar.period.id}-${idx}`}>
                     <div
-                      key={`${bar.period.id}-${idx}`}
                       className={cn(
                         "absolute rounded transition-all duration-200 pointer-events-auto",
                         // Всегда используем горизонтальное выравнивание
@@ -1100,6 +1110,54 @@ export function EmployeeRow({
                         })
                       })()}
                     </div>
+
+                    {/* Комментарий под полоской с полупрозрачным фоном - ВЫНЕСЕН ЗА ПРЕДЕЛЫ BAR DIV */}
+                    {bar.period.type === 'loading' && bar.period.comment && (
+                      <div
+                        className="absolute flex items-center gap-1.5 px-2 py-1 pointer-events-none"
+                        style={{
+                          top: `${top + barHeight + COMMENT_GAP}px`,
+                          left: `${bar.left}px`,
+                          width: `${bar.width}px`,
+                          minHeight: `${COMMENT_HEIGHT}px`,
+                          backgroundColor: theme === 'dark'
+                            ? 'rgba(15, 23, 42, 0.75)'  // slate-900 с прозрачностью
+                            : 'rgba(248, 250, 252, 0.9)', // slate-50 с прозрачностью
+                          backdropFilter: 'blur(4px)',
+                          borderRadius: '3px',
+                          border: theme === 'dark'
+                            ? '1px solid rgba(100, 116, 139, 0.2)'  // slate-500 с прозрачностью
+                            : '1px solid rgba(203, 213, 225, 0.5)', // slate-300 с прозрачностью
+                          boxShadow: theme === 'dark'
+                            ? '0 1px 3px rgba(0, 0, 0, 0.3)'
+                            : '0 1px 2px rgba(0, 0, 0, 0.1)',
+                          zIndex: 3,
+                        }}
+                      >
+                        <MessageSquare
+                          size={12}
+                          className={cn(
+                            "flex-shrink-0",
+                            theme === 'dark' ? "text-slate-400" : "text-slate-500"
+                          )}
+                          strokeWidth={1.5}
+                        />
+                        <span
+                          className={cn(
+                            "text-[9px] leading-tight truncate",
+                            theme === 'dark' ? "text-slate-300" : "text-slate-700"
+                            )}
+                            style={{
+                              fontFamily: 'system-ui, -apple-system, sans-serif',
+                              letterSpacing: '0.01em',
+                            }}
+                            title={bar.period.comment}
+                          >
+                            {bar.period.comment}
+                          </span>
+                        </div>
+                      )}
+                    </Fragment>
                   )
                 })
               })()}
