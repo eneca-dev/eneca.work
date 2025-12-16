@@ -61,7 +61,7 @@ export function SectionLoadingBars({
         const originalPeriod = getOriginalPeriod(bar)
         if (!originalPeriod) return null
 
-        const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+        const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
 
         // Вычисляем top на основе слоя
         const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)

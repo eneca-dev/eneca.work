@@ -7,7 +7,7 @@ import type { Loading, TimelineUnit } from "../../types"
 /**
  * Константы для расчёта высоты и позиционирования полосок загрузки
  */
-export const BASE_BAR_HEIGHT = 140 // Базовая высота полоски для ставки 1.0
+export const BASE_BAR_HEIGHT = 56 // Фиксированная высота полоски загрузки
 export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
 
 /**
@@ -210,7 +210,7 @@ export function calculateBarTop(
     // Создаём карту слой -> максимальная высота бара в этом слое
     const layersMap = new Map<number, number>()
     overlappingBars.forEach(other => {
-      const otherHeight = baseBarHeight * (other.period.rate || 1)
+      const otherHeight = baseBarHeight // Фиксированная высота
       layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
     })
 
