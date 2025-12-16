@@ -1132,8 +1132,8 @@ export function EmployeeRow({
                                 top: '-3px',
                                 bottom: '-3px',
                                 backgroundImage: theme === 'dark'
-                                  ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0, 0, 0, 0.3) 4px, rgba(0, 0, 0, 0.3) 7px)'
-                                  : 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.4) 4px, rgba(255, 255, 255, 0.4) 7px)',
+                                  ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0, 0, 0, 0.1) 4px, rgba(0, 0, 0, 0.1) 15px)'
+                                  : 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.1) 4px, rgba(255, 255, 255, 0.1) 15px)',
                                 borderTop: `3px dashed ${bar.color}`,
                                 borderBottom: `3px dashed ${bar.color}`,
                                 zIndex: 1,
@@ -1164,7 +1164,7 @@ export function EmployeeRow({
                             left: '3px',
                             right: '3px',
                             height: `${COMMENT_GAP}px`,
-                            borderTop: `2px dashed ${theme === 'dark' ? '#000000' : '#ffffff'}`,
+                            borderTop: `2px dashed ${theme === 'dark' ? '#212c40' : '#ffffff'}`,
                             opacity: 1,
                           }}
                         />
