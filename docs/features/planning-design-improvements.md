@@ -1026,47 +1026,459 @@ className={cn(
 ### Этап 6: Светлый тултип в светлой теме
 
 **Описание:**
-Изменить цвет тултипа на светлый в светлой теме. Сейчас тултипы темные в обеих темах, что создает низкий контраст в светлой теме.
+Заменить нативный браузерный тултип (`title`) на Radix UI Tooltip с адаптивными стилями. Сейчас используется атрибут `title`, который не стилизуется и всегда темный, что создает низкий контраст в светлой теме.
 
 **Затрагиваемые файлы:**
-- Нужно найти где определяется стиль атрибута `title` или компонент `Tooltip`
-- Возможные файлы:
-  - `components/ui/tooltip.tsx` (если есть кастомный компонент)
-  - `app/globals.css` (глобальные стили для нативных тултипов)
-  - Радикс UI Tooltip стили
+- `modules/planning/components/timeline/department-row.tsx:876` - атрибут `title` на полоске загрузки
+- `modules/planning/components/timeline/loading-bars-utils.ts:532-543` - функция `formatBarTooltip()`
+- `components/ui/tooltip.tsx` - готовый компонент Radix Tooltip
 
 **Текущее состояние:**
-В коде используется атрибут `title` для тултипов:
+В коде используется нативный атрибут `title` для тултипов:
 ```tsx
-title={formatBarTooltip(bar.period)}
+// department-row.tsx:876
+<div
+  title={formatBarTooltip(bar.period)}
+  onClick={() => { /* ... */ }}
+>
+  {/* Контент полоски */}
+</div>
 ```
 
-Нативные браузерные тултипы (`title`) не стилизуются через CSS. Нужно:
+Функция `formatBarTooltip()` возвращает строку с переносами `\n`:
+```typescript
+// loading-bars-utils.ts:532-543
+export function formatBarTooltip(period: BarPeriod): string {
+  const lines: string[] = []
+  if (period.projectName) lines.push(`Проект: ${period.projectName}`)
+  if (period.objectName) lines.push(`Объект: ${period.objectName}`)
+  if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)
+  if (period.stageName) lines.push(`Этап декомпозиции: ${period.stageName}`)
+  lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
+  lines.push(`Ставка: ${period.rate}`)
+  if (period.comment) lines.push(`Комментарий: ${period.comment}`)
 
-**Планируемые изменения:**
-
-**Вариант 1: Использовать Radix Tooltip (предпочтительный)**
-1. Заменить атрибут `title` на компонент `Tooltip` из Radix UI
-2. Настроить стили тултипа в зависимости от темы:
-```tsx
-<Tooltip>
-  <TooltipTrigger>{bar}</TooltipTrigger>
-  <TooltipContent className={cn(
-    theme === 'dark'
-      ? 'bg-slate-800 text-white'
-      : 'bg-white text-slate-800 border border-slate-200'
-  )}>
-    {formatBarTooltip(bar.period)}
-  </TooltipContent>
-</Tooltip>
+  return lines.join("\n")
+}
 ```
 
-**Вариант 2: CSS-based решение**
-Создать кастомный тултип через CSS `::before`/`::after` (более сложно)
+**Проблема:**
+- Нативные браузерные тултипы (`title`) **не стилизуются** через CSS
+- Всегда отображаются темными (или системными цветами)
+- Низкий контраст в светлой теме
+- Не поддерживают многострочный текст (переносы `\n` работают плохо)
 
-**Решение:** Использовать **Вариант 1** с Radix Tooltip
+---
+
+**Решение: Использовать Radix UI Tooltip**
+
+**Вариант 1: Использовать Radix Tooltip (ВЫБРАН)**
+
+Преимущества:
+- ✅ Полный контроль над стилями
+- ✅ Адаптивность к теме (светлый/тёмный)
+- ✅ Поддержка многострочного текста
+- ✅ Консистентность с остальным UI приложения
+- ✅ Готовый компонент уже есть в `components/ui/tooltip.tsx`
+
+---
+
+**Детальные шаги реализации:**
+
+#### Шаг 6.1: Создать компонент LoadingBarTooltipContent
+
+**Файл:** `modules/planning/components/timeline/loading-bar-tooltip.tsx` (новый файл)
+
+**Создать специализированный компонент для рендеринга содержимого тултипа:**
+
+```tsx
+import React from "react"
+import type { BarPeriod } from "./loading-bars-utils"
+
+interface LoadingBarTooltipContentProps {
+  period: BarPeriod
+}
+
+/**
+ * Форматирует дату в формате ДД.ММ.ГГГГ
+ */
+function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date)
+}
+
+/**
+ * Компонент содержимого тултипа для полоски загрузки
+ */
+export function LoadingBarTooltipContent({ period }: LoadingBarTooltipContentProps) {
+  return (
+    <div className="flex flex-col gap-0.5 text-sm">
+      {period.projectName && (
+        <div>
+          <span className="font-medium">Проект:</span> {period.projectName}
+        </div>
+      )}
+      {period.objectName && (
+        <div>
+          <span className="font-medium">Объект:</span> {period.objectName}
+        </div>
+      )}
+      {period.sectionName && (
+        <div>
+          <span className="font-medium">Раздел:</span> {period.sectionName}
+        </div>
+      )}
+      {period.stageName && (
+        <div>
+          <span className="font-medium">Этап декомпозиции:</span> {period.stageName}
+        </div>
+      )}
+      <div>
+        <span className="font-medium">Период:</span> {formatDate(period.startDate)} — {formatDate(period.endDate)}
+      </div>
+      <div>
+        <span className="font-medium">Ставка:</span> {period.rate}
+      </div>
+      {period.comment && (
+        <div>
+          <span className="font-medium">Комментарий:</span> {period.comment}
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+**Обоснование создания отдельного компонента:**
+- Разделение ответственности: логика форматирования отделена от логики рендеринга
+- Легче тестировать и модифицировать
+- Можно переиспользовать в других местах
+
+**Визуальный результат:**
+На этом шаге визуального изменения нет — создаётся только компонент. Тултип пока не отображается, так как он ещё не подключён к полоскам загрузки.
+
+---
+
+#### Шаг 6.2: Обновить TooltipContent для адаптации к теме
+
+**Файл:** `components/ui/tooltip.tsx:14-28`
+
+**Текущая реализация:**
+```tsx
+const TooltipContent = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <TooltipPrimitive.Content
+    ref={ref}
+    sideOffset={sideOffset}
+    className={cn(
+      "z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      className,
+    )}
+    {...props}
+  />
+))
+```
+
+**Проблема:** `bg-popover` и `text-popover-foreground` настроены в `globals.css` и могут быть тёмными в обеих темах.
+
+**Решение:** Не нужно менять базовый компонент! Вместо этого передадим кастомный `className` при использовании.
+
+**Визуальный результат:**
+На этом шаге визуального изменения нет — базовый компонент `TooltipContent` остаётся без изменений. Стили будут переопределены на следующем шаге.
+
+---
+
+#### Шаг 6.3: Заменить `title` на Radix Tooltip в department-row.tsx
+
+**Файл:** `modules/planning/components/timeline/department-row.tsx`
+
+**Шаг 6.3.1: Добавить импорты**
+
+**Было (строка ~1-5):**
+```tsx
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText } from "lucide-react"
+```
+
+**Станет:**
+```tsx
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { LoadingBarTooltipContent } from "./loading-bar-tooltip"
+import { useTheme } from "next-themes"
+```
+
+**Визуальный результат:**
+На этом шаге визуального изменения нет — только добавляются необходимые импорты.
+
+---
+
+**Шаг 6.3.2: Получить текущую тему**
+
+**Место:** В начале компонента `DepartmentRow` (после хуков)
+
+**Добавить:**
+```tsx
+const { theme } = useTheme()
+```
+
+**Визуальный результат:**
+На этом шаге визуального изменения нет — только добавляется доступ к текущей теме.
+
+---
+
+**Шаг 6.3.3: Обернуть рендеринг полосок в TooltipProvider**
+
+**Было (строка ~845):**
+```tsx
+return barRenders.map((bar, idx) => {
+  const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
+  const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
+
+  return (
+    <div
+      key={bar.period.id}
+      className="absolute cursor-pointer rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      style={{
+        left: `${bar.left}px`,
+        width: `${bar.width}px`,
+        top: `${top}px`,
+        height: `${barHeight}px`,
+        backgroundColor: bar.color,
+        paddingLeft: "6px",
+        paddingRight: "6px",
+        paddingTop: "4px",
+        paddingBottom: "4px",
+        overflow: "hidden",
+        filter: "brightness(1.1)",
+      }}
+      title={formatBarTooltip(bar.period)} // ← УДАЛИТЬ ЭТУ СТРОКУ
+      onClick={() => {
+        if (bar.period.type === "loading" && bar.period.loading) {
+          setEditingLoading(bar.period.loading)
+        }
+      }}
+    >
+      {/* Контент полоски */}
+    </div>
+  )
+})
+```
+
+**Станет:**
+```tsx
+return (
+  <TooltipProvider delayDuration={300}>
+    {barRenders.map((bar, idx) => {
+      const barHeight = BASE_BAR_HEIGHT
+      const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 8)
+
+      return (
+        <Tooltip key={bar.period.id}>
+          <TooltipTrigger asChild>
+            <div
+              className="absolute cursor-pointer rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              style={{
+                left: `${bar.left}px`,
+                width: `${bar.width}px`,
+                top: `${top}px`,
+                height: `${barHeight}px`,
+                backgroundColor: bar.color,
+                paddingLeft: "6px",
+                paddingRight: "6px",
+                paddingTop: "4px",
+                paddingBottom: "4px",
+                overflow: "hidden",
+                filter: "brightness(1.1)",
+              }}
+              onClick={() => {
+                if (bar.period.type === "loading" && bar.period.loading) {
+                  setEditingLoading(bar.period.loading)
+                }
+              }}
+            >
+              {/* Контент полоски (без изменений) */}
+              {/* ... весь существующий код рендеринга контента ... */}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            className={cn(
+              "max-w-sm z-[100]",
+              theme === "dark"
+                ? "bg-slate-800 text-white border-slate-700"
+                : "bg-white text-slate-900 border-slate-200"
+            )}
+          >
+            <LoadingBarTooltipContent period={bar.period} />
+          </TooltipContent>
+        </Tooltip>
+      )
+    })}
+  </TooltipProvider>
+)
+```
+
+---
+
+**Ключевые изменения:**
+1. **Обернули весь `map`** в `<TooltipProvider>` — это обязательно для работы Radix Tooltip
+2. **Каждую полоску обернули в `<Tooltip>`** с `<TooltipTrigger>` и `<TooltipContent>`
+3. **Использовали `asChild`** в `TooltipTrigger` — чтобы не создавать дополнительный wrapper
+4. **Удалили атрибут `title`**
+5. **Настроили стили `TooltipContent`:**
+   - `side="top"` — тултип сверху
+   - `max-w-sm` — максимальная ширина
+   - `z-[100]` — высокий z-index для отображения поверх всего
+   - Условные стили для светлой/тёмной темы
+
+**Визуальный результат:**
+
+✅ **ДО (с нативным `title`):**
+```
+При наведении на полоску загрузки:
+┌─────────────────────────────────┐
+│ [Тёмный системный тултип]       │ ← Всегда тёмный, плохая читаемость
+│ Проект: Название проекта        │
+│ Объект: Название объекта Раздел │ ← Переносы строк работают плохо
+│ : ...                           │
+└─────────────────────────────────┘
+```
+
+✅ **ПОСЛЕ (с Radix Tooltip):**
+
+**В тёмной теме:**
+```
+При наведении на полоску загрузки:
+┌────────────────────────────────────────┐
+│ ╔════════════════════════════════════╗ │
+│ ║ Проект: Жилой комплекс "Сосны"    ║ │ ← Тёмный фон (slate-800)
+│ ║ Объект: Корпус 1                  ║ │   Белый текст
+│ ║ Раздел: АР                        ║ │   Чёткие переносы строк
+│ ║ Этап декомпозиции: Эскизный проект║ │
+│ ║ Период: 15.01.2025 — 31.01.2025   ║ │
+│ ║ Ставка: 1                         ║ │
+│ ║ Комментарий: Срочно               ║ │
+│ ╚════════════════════════════════════╝ │
+└────────────────────────────────────────┘
+  Хороший контраст, легко читается
+```
+
+**В светлой теме:**
+```
+При наведении на полоску загрузки:
+┌────────────────────────────────────────┐
+│ ╔════════════════════════════════════╗ │
+│ ║ Проект: Жилой комплекс "Сосны"    ║ │ ← Белый фон (white)
+│ ║ Объект: Корпус 1                  ║ │   Тёмный текст (slate-900)
+│ ║ Раздел: АР                        ║ │   Светлая рамка (slate-200)
+│ ║ Этап декомпозиции: Эскизный проект║ │   Чёткие переносы строк
+│ ║ Период: 15.01.2025 — 31.01.2025   ║ │
+│ ║ Ставка: 1                         ║ │
+│ ║ Комментарий: Срочно               ║ │
+│ ╚════════════════════════════════════╝ │
+└────────────────────────────────────────┘
+  Отличный контраст, комфортное чтение
+```
+
+**Визуальные улучшения:**
+- ✅ **Адаптивные цвета:** тултип меняет цвет в зависимости от темы
+- ✅ **Многострочность:** каждое поле на отдельной строке с правильными отступами
+- ✅ **Читаемость:** жирный текст для меток ("Проект:", "Ставка:"), обычный для значений
+- ✅ **Контраст:** высокий контраст в обеих темах
+- ✅ **Плавная анимация:** появление/исчезновение с fade-in/fade-out
+- ✅ **Позиционирование:** тултип появляется над полоской (не перекрывает её)
+- ✅ **Задержка:** 300ms перед появлением (не раздражает при быстром наведении)
+
+---
+
+#### Шаг 6.4: (Опционально) Удалить функцию formatBarTooltip
+
+**Файл:** `modules/planning/components/timeline/loading-bars-utils.ts:532-543`
+
+Теперь `formatBarTooltip()` не используется нигде, можно удалить или пометить как deprecated:
+
+```typescript
+/**
+ * @deprecated Используйте компонент LoadingBarTooltipContent вместо этой функции
+ * Форматирует tooltip для полоски
+ */
+export function formatBarTooltip(period: BarPeriod): string {
+  // ... существующий код ...
+}
+```
+
+**Визуальный результат:**
+На этом шаге визуального изменения нет — удаляется или помечается как deprecated неиспользуемая функция. Это опциональный шаг для чистоты кода.
+
+---
 
 **Зависимости:** Нет
+
+**Итоговый результат этапа:**
+- ✅ Тултипы адаптируются к теме (светлый фон в светлой теме)
+- ✅ Многострочный текст отображается корректно
+- ✅ Улучшенная читаемость и контрастность
+- ✅ Консистентность с остальным UI приложения
+
+**Финальный визуальный результат Этапа 6:**
+
+После завершения всех шагов пользователь увидит:
+
+**Поведение при наведении на полоску загрузки:**
+1. **Задержка 300ms** — тултип не появляется мгновенно (предотвращает спам при быстром движении мыши)
+2. **Плавное появление** — анимация fade-in + zoom-in (200ms)
+3. **Позиционирование сверху** — тултип над полоской, не перекрывает её
+4. **Адаптивная ширина** — максимум `max-w-sm` (~384px), подстраивается под контент
+
+**Сравнение ДО/ПОСЛЕ:**
+
+| Параметр | ДО (title) | ПОСЛЕ (Radix Tooltip) |
+|----------|------------|----------------------|
+| **Цвет фона (светлая тема)** | Тёмный (системный) ❌ | Белый ✅ |
+| **Цвет фона (тёмная тема)** | Тёмный (системный) ✅ | Тёмный slate-800 ✅ |
+| **Контраст (светлая тема)** | Низкий ❌ | Высокий ✅ |
+| **Многострочность** | Плохая поддержка ❌ | Отличная ✅ |
+| **Форматирование текста** | Нет ❌ | Жирные метки ✅ |
+| **Анимация** | Нет ❌ | Плавная ✅ |
+| **Стилизация** | Невозможна ❌ | Полный контроль ✅ |
+| **Читаемость** | Средняя | Отличная ✅ |
+
+**Пример итогового вида в светлой теме:**
+```
+     [Полоска загрузки — синий цвет]
+              ↓ (при наведении)
+┌──────────────────────────────────────────┐
+│ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ │ ← Белый фон
+│ ┃ Проект: Жилой комплекс "Сосны"     ┃ │   Светло-серая рамка
+│ ┃ Объект: Корпус 1                   ┃ │   Тёмный текст (slate-900)
+│ ┃ Раздел: АР                         ┃ │   Жирные метки
+│ ┃ Этап декомпозиции: Эскизный проект ┃ │
+│ ┃ Период: 15.01.2025 — 31.01.2025    ┃ │
+│ ┃ Ставка: 1                          ┃ │
+│ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ │
+└──────────────────────────────────────────┘
+```
+
+**Пример итогового вида в тёмной теме:**
+```
+     [Полоска загрузки — синий цвет]
+              ↓ (при наведении)
+┌──────────────────────────────────────────┐
+│ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ │ ← Тёмный фон (slate-800)
+│ ┃ Проект: Жилой комплекс "Сосны"     ┃ │   Тёмная рамка (slate-700)
+│ ┃ Объект: Корпус 1                   ┃ │   Белый текст
+│ ┃ Раздел: АР                         ┃ │   Жирные метки
+│ ┃ Этап декомпозиции: Эскизный проект ┃ │
+│ ┃ Период: 15.01.2025 — 31.01.2025    ┃ │
+│ ┃ Ставка: 1                          ┃ │
+│ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ │
+└──────────────────────────────────────────┘
+```
 
 ---
 
