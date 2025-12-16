@@ -2342,21 +2342,181 @@ export function formatBarTooltip(period: BarPeriod): string {
 
 ---
 
-### Этап 7: Изменить отображение выходных на загрузке
+### Этап 7: Диагональная штриховка для нерабочих дней
 
 **Описание:**
-*Отложено на уточнение.*
+Заменить белый полупрозрачный прямоугольник на полосках загрузки на белую диагональную штриховку для обозначения нерабочих дней (выходные, праздники). Это улучшит визуальное восприятие и сделает различие между рабочими и нерабочими днями более очевидным.
 
-Возможные варианты:
-- Изменить стиль overlay (цвет, паттерн)
-- Изменить тип границы (solid вместо dashed)
-- Убрать overlay полностью
-- Другое
+**Параметры штриховки:**
+- Угол наклона: 45°
+- Расстояние между линиями: 2px
+- Толщина линий: 1px
+- Цвет: белый (с прозрачностью для адаптации под светлую/тёмную тему)
 
 **Затрагиваемые файлы:**
-- `modules/planning/components/timeline/department-row.tsx:1134-1168` - overlay для нерабочих дней
+- `modules/planning/components/timeline/department-row.tsx:734-1302` - компонент EmployeeRow (добавление SVG паттерна)
+- `modules/planning/components/timeline/department-row.tsx:1108-1142` - overlay для нерабочих дней (замена backgroundColor на SVG паттерн)
 
-**Зависимости:** TBD
+**Зависимости:** Нет
+
+**Детальные шаги реализации:**
+
+#### Шаг 7.1: Создание SVG паттерна для диагональной штриховки
+**Файл:** `modules/planning/components/timeline/department-row.tsx:734-1302` (компонент EmployeeRow)
+
+**Описание:**
+Добавить SVG `<defs>` с двумя паттернами диагональных линий: один для светлой темы, один для тёмной темы. Паттерн должен располагаться в начале компонента EmployeeRow, перед основным рендером.
+
+**Добавить после строки 734:**
+```tsx
+export function EmployeeRow({
+  employee,
+  // ... props
+}: EmployeeRowProps) {
+  // ... existing state and hooks
+
+  return (
+    <>
+      {/* SVG паттерны для диагональной штриховки нерабочих дней */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          {/* Паттерн для светлой темы */}
+          <pattern
+            id="diagonal-pattern-light"
+            width="2"
+            height="2"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="2"
+              stroke="rgba(255, 255, 255, 0.4)"
+              strokeWidth="1"
+            />
+          </pattern>
+
+          {/* Паттерн для тёмной темы */}
+          <pattern
+            id="diagonal-pattern-dark"
+            width="2"
+            height="2"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="2"
+              stroke="rgba(0, 0, 0, 0.3)"
+              strokeWidth="1"
+            />
+          </pattern>
+        </defs>
+      </svg>
+
+      <div className="group/employee min-w-full">
+        {/* ... existing render */}
+      </div>
+    </>
+  )
+}
+```
+
+**Технические детали:**
+- `width="2"` и `height="2"` - размер повторяющегося паттерна (расстояние между линиями)
+- `patternUnits="userSpaceOnUse"` - паттерн масштабируется в пикселях
+- `patternTransform="rotate(45)"` - поворот на 45°
+- `stroke="rgba(255, 255, 255, 0.4)"` - белые линии с прозрачностью 40% для светлой темы
+- `stroke="rgba(0, 0, 0, 0.3)"` - **тёмные** линии с прозрачностью 30% для тёмной темы
+- `strokeWidth="1"` - толщина линии 1px
+
+---
+
+#### Шаг 7.2: Применение SVG паттерна в overlay нерабочих дней
+**Файл:** `modules/planning/components/timeline/department-row.tsx:1108-1142` (overlay для нерабочих дней)
+
+**Было:**
+```tsx
+return (
+  <div
+    key={`non-working-${segmentIdx}`}
+    className="absolute pointer-events-none"
+    style={{
+      left: `${overlayLeft}px`,
+      width: `${overlayWidth}px`,
+      top: '-3px',
+      bottom: '-3px',
+      backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)',
+      borderTop: `3px dashed ${bar.color}`,
+      borderBottom: `3px dashed ${bar.color}`,
+      zIndex: 1,
+    }}
+  />
+)
+```
+
+**Станет:**
+```tsx
+return (
+  <div
+    key={`non-working-${segmentIdx}`}
+    className="absolute pointer-events-none"
+    style={{
+      left: `${overlayLeft}px`,
+      width: `${overlayWidth}px`,
+      top: '-3px',
+      bottom: '-3px',
+      backgroundImage: theme === 'dark'
+        ? 'url(#diagonal-pattern-dark)'
+        : 'url(#diagonal-pattern-light)',
+      borderTop: `3px dashed ${bar.color}`,
+      borderBottom: `3px dashed ${bar.color}`,
+      zIndex: 1,
+    }}
+  />
+)
+```
+
+**Изменения:**
+- Заменено `backgroundColor` на `backgroundImage` с ссылкой на SVG паттерн
+- Используется `url(#diagonal-pattern-dark)` для тёмной темы
+- Используется `url(#diagonal-pattern-light)` для светлой темы
+- Остальные стили (borders, positioning, zIndex) остаются без изменений
+
+---
+
+#### Шаг 7.3: Тестирование визуального отображения
+
+**Чек-лист тестирования:**
+
+**Позитивные сценарии:**
+- [ ] Штриховка отображается на полосках загрузки в местах нерабочих дней (светлая тема)
+- [ ] Штриховка отображается на полосках загрузки в местах нерабочих дней (тёмная тема)
+- [ ] Угол штриховки составляет 45° (визуально)
+- [ ] Расстояние между линиями штриховки составляет 2px (визуально)
+- [ ] Толщина линий штриховки составляет 1px (визуально)
+- [ ] Пунктирные границы сверху/снизу остались на месте
+- [ ] Штриховка не мешает читаемости текста на полоске
+
+**Негативные сценарии:**
+- [ ] Штриховка не отображается на рабочих днях
+- [ ] Нет артефактов рендеринга при переключении темы
+- [ ] Нет визуальных глюков при прокрутке таймлайна
+
+**Edge-cases:**
+- [ ] Штриховка корректно отображается на коротких сегментах (1 день)
+- [ ] Штриховка корректно отображается на длинных сегментах (несколько недель)
+- [ ] Штриховка корректно отображается при наложении нескольких загрузок
+
+**Проверка производительности:**
+- [ ] Нет задержек при рендеринге большого количества загрузок с штриховкой
+- [ ] Нет утечек памяти при переключении тем
+
+---
 
 ---
 
@@ -2368,7 +2528,7 @@ export function formatBarTooltip(period: BarPeriod): string {
 - [ ] Числовое значение ставки отображается чипом в начале загрузки
 - [ ] Зеленая полоска "сегодня" не исчезает при наведении на строку
 - [ ] Тултип в светлой теме имеет светлый фон
-- [ ] ~~Выходные дни (отложено)~~
+- [ ] Нерабочие дни отображаются диагональной штриховкой (45°, 2px расстояние, 1px толщина)
 - [ ] Нет ошибок в консоли
 - [ ] `npm run build` проходит успешно
 - [ ] Ручное тестирование пройдено

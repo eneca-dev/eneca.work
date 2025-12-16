@@ -1131,7 +1131,9 @@ export function EmployeeRow({
                                 width: `${overlayWidth}px`,
                                 top: '-3px',
                                 bottom: '-3px',
-                                backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)',
+                                backgroundImage: theme === 'dark'
+                                  ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0, 0, 0, 0.3) 4px, rgba(0, 0, 0, 0.3) 7px)'
+                                  : 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.4) 4px, rgba(255, 255, 255, 0.4) 7px)',
                                 borderTop: `3px dashed ${bar.color}`,
                                 borderBottom: `3px dashed ${bar.color}`,
                                 zIndex: 1,
