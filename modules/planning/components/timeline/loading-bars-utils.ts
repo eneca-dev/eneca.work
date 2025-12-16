@@ -21,6 +21,8 @@ export interface BarPeriod {
   rate: number
   projectId?: string
   projectName?: string
+  objectId?: string
+  objectName?: string
   sectionId?: string | null
   sectionName?: string
   stageId?: string
@@ -281,6 +283,8 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     rate: loading.rate || 1,
     projectId: loading.projectId,
     projectName: loading.projectName,
+    objectId: loading.objectId,
+    objectName: loading.objectName,
     sectionId: loading.sectionId,
     sectionName: loading.sectionName,
     stageId: loading.stageId,
@@ -469,7 +473,7 @@ export function formatBarLabel(period: BarPeriod): string {
 export interface BarLabelParts {
   project?: string
   section?: string
-  stage?: string
+  object?: string // Заменили stage на object
   displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
 }
 
@@ -498,7 +502,7 @@ export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelP
   return {
     project: period.projectName,
     section: period.sectionName,
-    stage: period.stageName,
+    object: period.objectName, // Заменили stageName на objectName
     displayMode
   }
 }
@@ -528,8 +532,9 @@ function formatDate(date: Date): string {
 export function formatBarTooltip(period: BarPeriod): string {
   const lines: string[] = []
   if (period.projectName) lines.push(`Проект: ${period.projectName}`)
+  if (period.objectName) lines.push(`Объект: ${period.objectName}`)
   if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)
-  if (period.stageName) lines.push(`Этап: ${period.stageName}`)
+  if (period.stageName) lines.push(`Этап декомпозиции: ${period.stageName}`)
   lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
   lines.push(`Ставка: ${period.rate}`)
   if (period.comment) lines.push(`Комментарий: ${period.comment}`)

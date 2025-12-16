@@ -311,11 +311,11 @@ if (labelParts.displayMode === 'minimal') {
 На загрузке отображать название проекта и название объекта вместо этапа декомпозиции. Это обеспечит более высокоуровневую информацию о загрузке.
 
 **Затрагиваемые файлы:**
-- `modules/planning/types.ts` - интерфейс `Loading` (проверить наличие полей `objectName`, `objectId`)
-- `modules/planning/components/timeline/loading-bars-utils.ts:16-30` - интерфейс `BarPeriod`
+- `modules/planning/types.ts:1-22` - интерфейс `Loading`
+- `modules/planning/components/timeline/loading-bars-utils.ts:15-29` - интерфейс `BarPeriod`
 - `modules/planning/components/timeline/loading-bars-utils.ts:273-291` - функция `loadingsToPeriods()`
 - `modules/planning/components/timeline/loading-bars-utils.ts:469-504` - интерфейс `BarLabelParts` и функция `getBarLabelParts()`
-- `modules/planning/components/timeline/department-row.tsx:1056-1119` - рендеринг текста в полоске
+- `modules/planning/components/timeline/department-row.tsx` - рендеринг текста в полоске
 
 **Текущее отображение:**
 ```
@@ -326,21 +326,559 @@ if (labelParts.displayMode === 'minimal') {
 **Планируемое отображение:**
 ```
 Проект (FolderKanban icon)
-Объект (Building2 icon или аналогичная)
+Объект (Building2 icon)
 ```
 
-**Планируемые изменения:**
-1. Проверить наличие `objectName` в интерфейсе `Loading`
-2. Добавить `objectName` и `objectId` в `BarPeriod` (если отсутствуют)
-3. Обновить `loadingsToPeriods()` для передачи `objectName`
-4. Изменить `BarLabelParts`:
-   - Заменить `stage?: string` на `object?: string`
-5. Обновить логику `getBarLabelParts()` для использования объекта вместо этапа
-6. Обновить рендеринг в `department-row.tsx`:
-   - Заменить `Milestone` icon на `Building2` (или другую подходящую иконку)
-   - Изменить отображаемый текст с `labelParts.stage` на `labelParts.object`
+**Детальные шаги реализации:**
+
+#### Шаг 2.1: Добавить поля objectId и objectName в интерфейс Loading
+**Файл:** `modules/planning/types.ts:1-22`
+
+**Проблема:** В интерфейсе `Loading` отсутствуют поля `objectId` и `objectName`, которые нужны для отображения объекта на загрузке.
+
+**Было:**
+```typescript
+export interface Loading {
+  id: string
+  projectId?: string
+  projectName?: string
+  projectStatus?: string
+  sectionId: string | null
+  sectionName?: string
+  stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
+  stageName?: string // Название этапа для отображения
+  employeeId?: string
+  responsibleId?: string
+  responsibleName?: string
+  responsibleAvatarUrl?: string
+  responsibleTeamName?: string
+  startDate: Date
+  endDate: Date
+  rate: number
+  status?: string
+  comment?: string
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+**Станет:**
+```typescript
+export interface Loading {
+  id: string
+  projectId?: string
+  projectName?: string
+  projectStatus?: string
+  objectId?: string // ID объекта
+  objectName?: string // Название объекта для отображения
+  sectionId: string | null
+  sectionName?: string
+  stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
+  stageName?: string // Название этапа для отображения
+  employeeId?: string
+  responsibleId?: string
+  responsibleName?: string
+  responsibleAvatarUrl?: string
+  responsibleTeamName?: string
+  startDate: Date
+  endDate: Date
+  rate: number
+  status?: string
+  comment?: string
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+---
+
+#### Шаг 2.2: Добавить поля objectId и objectName в интерфейс BarPeriod
+**Файл:** `modules/planning/components/timeline/loading-bars-utils.ts:15-29`
+
+**Было:**
+```typescript
+export interface BarPeriod {
+  id: string
+  type: "loading"
+  startDate: Date
+  endDate: Date
+  rate: number
+  projectId?: string
+  projectName?: string
+  sectionId?: string | null
+  sectionName?: string
+  stageId?: string
+  stageName?: string
+  comment?: string
+  loading?: Loading
+}
+```
+
+**Станет:**
+```typescript
+export interface BarPeriod {
+  id: string
+  type: "loading"
+  startDate: Date
+  endDate: Date
+  rate: number
+  projectId?: string
+  projectName?: string
+  objectId?: string
+  objectName?: string
+  sectionId?: string | null
+  sectionName?: string
+  stageId?: string
+  stageName?: string
+  comment?: string
+  loading?: Loading
+}
+```
+
+---
+
+#### Шаг 2.3: Обновить функцию loadingsToPeriods() для передачи objectName
+**Файл:** `modules/planning/components/timeline/loading-bars-utils.ts:273-291`
+
+**Было:**
+```typescript
+export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] {
+  if (!loadings || loadings.length === 0) return []
+
+  return loadings.map((loading) => ({
+    id: loading.id,
+    type: "loading",
+    startDate: new Date(loading.startDate),
+    endDate: new Date(loading.endDate),
+    rate: loading.rate || 1,
+    projectId: loading.projectId,
+    projectName: loading.projectName,
+    sectionId: loading.sectionId,
+    sectionName: loading.sectionName,
+    stageId: loading.stageId,
+    stageName: loading.stageName,
+    comment: loading.comment,
+    loading,
+  }))
+}
+```
+
+**Станет:**
+```typescript
+export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] {
+  if (!loadings || loadings.length === 0) return []
+
+  return loadings.map((loading) => ({
+    id: loading.id,
+    type: "loading",
+    startDate: new Date(loading.startDate),
+    endDate: new Date(loading.endDate),
+    rate: loading.rate || 1,
+    projectId: loading.projectId,
+    projectName: loading.projectName,
+    objectId: loading.objectId,
+    objectName: loading.objectName,
+    sectionId: loading.sectionId,
+    sectionName: loading.sectionName,
+    stageId: loading.stageId,
+    stageName: loading.stageName,
+    comment: loading.comment,
+    loading,
+  }))
+}
+```
+
+---
+
+#### Шаг 2.4: Заменить stage на object в интерфейсе BarLabelParts
+**Файл:** `modules/planning/components/timeline/loading-bars-utils.ts:469-474`
+
+**Было:**
+```typescript
+export interface BarLabelParts {
+  project?: string
+  section?: string
+  stage?: string
+  displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
+}
+```
+
+**Станет:**
+```typescript
+export interface BarLabelParts {
+  project?: string
+  section?: string
+  object?: string // Заменили stage на object
+  displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
+}
+```
+
+---
+
+#### Шаг 2.5: Обновить функцию getBarLabelParts() для использования object // пропали этапы
+**Файл:** `modules/planning/components/timeline/loading-bars-utils.ts:476-504`
+
+**Было:**
+```typescript
+export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelParts {
+  if (period.type !== "loading") {
+    return { displayMode: 'full' }
+  }
+
+  // ... логика определения displayMode ...
+
+  return {
+    project: period.projectName,
+    section: period.sectionName,
+    stage: period.stageName,
+    displayMode
+  }
+}
+```
+
+**Станет:**
+```typescript
+export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelParts {
+  if (period.type !== "loading") {
+    return { displayMode: 'full' }
+  }
+
+  // ... логика определения displayMode ...
+
+  return {
+    project: period.projectName,
+    section: period.sectionName,
+    object: period.objectName, // Заменили stageName на objectName
+    displayMode
+  }
+}
+```
+
+---
+
+#### Шаг 2.6: Обновить рендеринг в department-row.tsx - заменить импорт иконки
+**Файл:** `modules/planning/components/timeline/department-row.tsx:4`
+
+**Было:**
+```typescript
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
+```
+
+**Станет:**
+```typescript
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText } from "lucide-react"
+```
+
+**Обоснование:** Удаляем `Milestone` т.к. больше не будем отображать этап, а `Building2` уже импортирован для отображения объекта.
+
+---
+
+#### Шаг 2.7: Обновить рендеринг icon-only mode
+**Файл:** `modules/planning/components/timeline/department-row.tsx:~894-902`
+
+**Было:**
+```typescript
+if (labelParts.displayMode === 'icon-only') {
+  return (
+    <FolderKanban
+      size={11}
+      className="text-white"
+      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+    />
+  )
+}
+```
+
+**Станет:** (без изменений, т.к. показываем только иконку проекта)
+
+---
+
+#### Шаг 2.8: Обновить рендеринг minimal mode - заменить stage на object
+**Файл:** `modules/planning/components/timeline/department-row.tsx:~904-933`
+
+**Было:**
+```typescript
+if (labelParts.displayMode === 'minimal') {
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+      {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[10px] font-semibold text-white truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.project}
+          >
+            {labelParts.project}
+          </span>
+        </div>
+      )})()}
+      {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <Milestone size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[9px] font-medium text-white/90 truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.stage}
+          >
+            {labelParts.stage}
+          </span>
+        </div>
+      )})()}
+    </div>
+  )
+}
+```
+
+**Станет:**
+```typescript
+if (labelParts.displayMode === 'minimal') {
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+      {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[10px] font-semibold text-white truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.project}
+          >
+            {labelParts.project}
+          </span>
+        </div>
+      )})()}
+      {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[9px] font-medium text-white/90 truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.object}
+          >
+            {labelParts.object}
+          </span>
+        </div>
+      )})()}
+    </div>
+  )
+}
+```
+
+**Изменения:**
+- Заменили `labelParts.stage` на `labelParts.object`
+- Заменили иконку `Milestone` на `Building2`
+
+---
+
+#### Шаг 2.9: Обновить рендеринг compact mode - заменить stage на object
+**Файл:** `modules/planning/components/timeline/department-row.tsx:~936-966`
+
+**Было:**
+```typescript
+if (labelParts.displayMode === 'compact') {
+  // Средние бары
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+      {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[10px] font-semibold text-white truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.project}
+          >
+            {labelParts.project}
+          </span>
+        </div>
+      )})()}
+      {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <Milestone size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[9px] font-medium text-white/90 truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.stage}
+          >
+            {labelParts.stage}
+          </span>
+        </div>
+      )})()}
+    </div>
+  )
+}
+```
+
+**Станет:**
+```typescript
+if (labelParts.displayMode === 'compact') {
+  // Средние бары
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+      {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[10px] font-semibold text-white truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.project}
+          >
+            {labelParts.project}
+          </span>
+        </div>
+      )})()}
+      {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+          <span
+            className="text-[9px] font-medium text-white/90 truncate"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+            title={labelParts.object}
+          >
+            {labelParts.object}
+          </span>
+        </div>
+      )})()}
+    </div>
+  )
+}
+```
+
+**Изменения:**
+- Заменили `labelParts.stage` на `labelParts.object`
+- Заменили иконку `Milestone` на `Building2`
+
+---
+
+#### Шаг 2.10: Обновить рендеринг full mode - заменить stage на object
+**Файл:** `modules/planning/components/timeline/department-row.tsx:~969-1003`
+
+**Было:**
+```typescript
+// full mode - многострочное отображение с иконками
+let lineCount = 0
+return (
+  <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
+    {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+      <div className="flex items-center gap-1 overflow-hidden">
+        <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+        <span
+          className="text-[10px] font-semibold text-white truncate"
+          style={{
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+            lineHeight: "1.2"
+          }}
+          title={labelParts.project}
+        >
+          {labelParts.project}
+        </span>
+      </div>
+    )})()}
+    {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+      <div className="flex items-center gap-1 overflow-hidden">
+        <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+        <span
+          className="text-[9px] font-medium text-white/90 truncate"
+          style={{
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+            lineHeight: "1.2"
+          }}
+          title={labelParts.stage}
+        >
+          {labelParts.stage}
+        </span>
+      </div>
+    )})()}
+  </div>
+)
+```
+
+**Станет:**
+```typescript
+// full mode - многострочное отображение с иконками
+let lineCount = 0
+return (
+  <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
+    {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+      <div className="flex items-center gap-1 overflow-hidden">
+        <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+        <span
+          className="text-[10px] font-semibold text-white truncate"
+          style={{
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+            lineHeight: "1.2"
+          }}
+          title={labelParts.project}
+        >
+          {labelParts.project}
+        </span>
+      </div>
+    )})()}
+    {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+      <div className="flex items-center gap-1 overflow-hidden">
+        <Building2 size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+        <span
+          className="text-[9px] font-medium text-white/90 truncate"
+          style={{
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+            lineHeight: "1.2"
+          }}
+          title={labelParts.object}
+        >
+          {labelParts.object}
+        </span>
+      </div>
+    )})()}
+  </div>
+)
+```
+
+**Изменения:**
+- Заменили `labelParts.stage` на `labelParts.object`
+- Заменили иконку `Milestone` на `Building2`
+
+---
 
 **Зависимости:** Этап 1
+
+**Статус:** ✅ **ЗАВЕРШЕН**
+
+**Выполненные изменения:**
+
+1. **Обновлены типы (`modules/planning/types.ts`):**
+   - Добавлены поля `objectId` и `objectName` в интерфейс `Loading`
+
+2. **Обновлены утилиты (`modules/planning/components/timeline/loading-bars-utils.ts`):**
+   - Добавлены поля `objectId` и `objectName` в интерфейс `BarPeriod`
+   - Обновлена функция `loadingsToPeriods()` для маппинга полей объекта
+   - Заменено поле `stage` на `object` в интерфейсе `BarLabelParts`
+   - Обновлена функция `getBarLabelParts()` для использования `objectName`
+   - Обновлена функция `formatBarTooltip()` для отображения названия объекта
+
+3. **Обновлен компонент рендеринга (`modules/planning/components/timeline/department-row.tsx`):**
+   - Удалена иконка `Milestone` из импортов
+   - Обновлен режим icon-only: заменен этап на объект с иконкой `Building2`
+   - Обновлен минимальный режим: заменен этап на объект с иконкой `Building2`
+   - Обновлен компактный режим: заменен этап на объект с иконкой `Building2`
+   - Обновлен полный режим: заменен этап на объект с иконкой `Building2`
+
+4. **Обновлен store (`modules/planning/stores/usePlanningStore.ts`):**
+   - Добавлен маппинг полей `objectId` и `objectName` для загрузок сотрудников
+   - Добавлен маппинг полей `objectId` и `objectName` для секций с загрузками
+
+5. **Создана миграция базы данных:**
+   - `supabase/migrations/20251216_add_object_fields_to_view_employee_workloads.sql`
+   - Добавлены поля `object_id` и `object_name` в конец представления `view_employee_workloads`
+   - Добавлен JOIN с таблицей `objects` через `s.section_object_id`
+
+**Результат:**
+- ✅ На загрузках теперь отображается "Объект" вместо "Этап декомпозиции"
+- ✅ Используется иконка `Building2` (здание) вместо `Milestone` (флажок)
+- ✅ В тултипе показывается название объекта
+- ✅ Все адаптивные режимы обновлены
 
 ---
 

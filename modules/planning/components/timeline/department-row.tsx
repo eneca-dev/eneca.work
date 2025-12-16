@@ -1,7 +1,7 @@
 "use client" 
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText } from "lucide-react"
 import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -907,7 +907,7 @@ export function EmployeeRow({
                               <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
                                 {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
                                   <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                     <span
                                       className="text-[10px] font-semibold text-white truncate"
                                       style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
@@ -917,15 +917,15 @@ export function EmployeeRow({
                                     </span>
                                   </div>
                                 )})()}
-                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
                                   <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                     <span
                                       className="text-[9px] font-medium text-white/90 truncate"
                                       style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.stage}
+                                      title={labelParts.object}
                                     >
-                                      {labelParts.stage}
+                                      {labelParts.object}
                                     </span>
                                   </div>
                                 )})()}
@@ -934,7 +934,7 @@ export function EmployeeRow({
                           }
 
                           if (labelParts.displayMode === 'compact') {
-                            // Средние бары
+                            // Компактный режим
                             let lineCount = 0
                             return (
                               <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
@@ -950,15 +950,15 @@ export function EmployeeRow({
                                     </span>
                                   </div>
                                 )})()}
-                                {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
                                   <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Milestone size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                     <span
                                       className="text-[9px] font-medium text-white/90 truncate"
                                       style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.stage}
+                                      title={labelParts.object}
                                     >
-                                      {labelParts.stage}
+                                      {labelParts.object}
                                     </span>
                                   </div>
                                 )})()}
@@ -972,7 +972,7 @@ export function EmployeeRow({
                             <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
                               {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
                                 <div className="flex items-center gap-1 overflow-hidden">
-                                  <FolderKanban size={9} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                   <span
                                     className="text-[10px] font-semibold text-white truncate"
                                     style={{
@@ -985,18 +985,18 @@ export function EmployeeRow({
                                   </span>
                                 </div>
                               )})()}
-                              {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+                              {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
                                 <div className="flex items-center gap-1 overflow-hidden">
-                                  <Milestone size={8} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                  <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
                                   <span
                                     className="text-[9px] font-medium text-white/90 truncate"
                                     style={{
                                       textShadow: "0 1px 2px rgba(0,0,0,0.5)",
                                       lineHeight: "1.2"
                                     }}
-                                    title={labelParts.stage}
+                                    title={labelParts.object}
                                   >
-                                    {labelParts.stage}
+                                    {labelParts.object}
                                   </span>
                                 </div>
                               )})()}
