@@ -23,6 +23,7 @@ import type {
   LoadingCreateData,
   LoadingEditData,
   EmployeeViewData,
+  ProgressUpdateData,
 } from '../types'
 
 /**
@@ -114,4 +115,11 @@ export function useLoadingEditModal() {
  */
 export function useEmployeeViewModal() {
   return useModal<EmployeeViewData>()
+}
+
+/**
+ * Хук для диалога обновления готовности
+ */
+export function useProgressUpdateModal() {
+  return useModal<ProgressUpdateData>()
 }

@@ -255,7 +255,8 @@ export function StageReadinessArea({
             className="absolute flex items-center gap-1 pointer-events-none"
             style={{
               left: lastPoint.x,
-              top: lastPoint.y - 14,
+              // Если значение > 70%, показываем подпись снизу чтобы не обрезалась
+              top: lastPoint.value > 70 ? lastPoint.y + 8 : lastPoint.y - 14,
               transform: 'translateX(-50%)',
             }}
           >

@@ -155,6 +155,19 @@ export interface EmployeeViewData {
 }
 
 // ============================================================================
+// Progress Update Dialog Types
+// ============================================================================
+
+export interface ProgressUpdateData {
+  /** ID задачи */
+  itemId: string
+  /** Название задачи (для отображения) */
+  itemName: string
+  /** Текущий процент готовности */
+  currentProgress: number
+}
+
+// ============================================================================
 // Global Modal Store Types
 // ============================================================================
 
@@ -172,6 +185,7 @@ export type ModalType =
   | 'loading-create'
   | 'loading-edit'
   | 'employee-view'
+  | 'progress-update'
 
 export interface GlobalModalState {
   /** Текущая открытая модалка */

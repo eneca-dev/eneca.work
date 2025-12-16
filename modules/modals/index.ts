@@ -49,6 +49,8 @@ export type {
   LoadingEditData,
   // Employee
   EmployeeViewData,
+  // Progress
+  ProgressUpdateData,
 } from './types'
 
 // ============================================================================
@@ -77,6 +79,8 @@ export {
   useLoadingEditModal,
   // Employee
   useEmployeeViewModal,
+  // Progress
+  useProgressUpdateModal,
 } from './hooks'
 
 // ============================================================================
