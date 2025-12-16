@@ -78,23 +78,20 @@ export function PlannedReadinessArea({
         )}
       </svg>
 
-      {/* Подписи процентов на ключевых точках */}
+      {/* Подписи процентов на ключевых точках — маленькие метки рядом с линией */}
       {points.map((p, i) => (
         <div
           key={i}
           className="absolute flex flex-col items-center pointer-events-none"
           style={{
             left: p.x,
-            top: p.y - 16,
+            top: p.y - 12,
             transform: 'translateX(-50%)',
           }}
         >
           <span
-            className="text-[9px] font-medium tabular-nums px-1 py-0.5 rounded"
-            style={{
-              color: '#10b981',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            }}
+            className="text-[8px] font-medium tabular-nums text-emerald-500"
+            style={{ textShadow: '0 0 2px rgba(0,0,0,0.8)' }}
           >
             {p.value}%
           </span>

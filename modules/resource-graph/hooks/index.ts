@@ -11,6 +11,7 @@ import {
   createCacheQuery,
   createDetailCacheQuery,
   createSimpleCacheQuery,
+  createCacheMutation,
   staleTimePresets,
   queryKeys,
 } from '@/modules/cache'
@@ -23,6 +24,7 @@ import {
   getWorkLogsForSection,
   getLoadingsForSection,
   getStageReadinessForSection,
+  updateItemProgress,
 } from '../actions'
 
 import type {
@@ -169,10 +171,119 @@ export const useStageReadiness = createDetailCacheQuery<Record<string, Readiness
 })
 
 // ============================================================================
-// Mutation Hooks (TODO)
+// Budgets Hooks - Re-export from budgets module
 // ============================================================================
 
-// TODO: Add mutation hooks when actions are implemented
+/**
+ * Хук для получения бюджетов раздела
+ *
+ * @example
+ * const { data: budgets, isLoading } = useSectionBudgets(sectionId, { enabled: isExpanded })
+ */
+export { useBudgetsByEntity as useSectionBudgets } from '@/modules/budgets'
+
+// ============================================================================
+// Mutation Hooks
+// ============================================================================
+
+/**
+ * Тип входных данных для обновления прогресса
+ */
+interface UpdateItemProgressInput {
+  itemId: string
+  progress: number
+}
+
+/**
+ * Рекурсивно обновляет progress у item в иерархии проектов
+ * Включает защитные проверки для случаев когда структура данных неполная
+ */
+function updateProgressInHierarchy(
+  projects: Project[] | undefined,
+  itemId: string,
+  newProgress: number
+): Project[] {
+  if (!projects || !Array.isArray(projects)) return projects || []
+
+  return projects.map((project) => {
+    // Проверяем что project имеет нужную структуру
+    if (!project?.stages || !Array.isArray(project.stages)) {
+      return project
+    }
+
+    return {
+      ...project,
+      stages: project.stages.map((stage) => {
+        if (!stage?.objects || !Array.isArray(stage.objects)) {
+          return stage
+        }
+
+        return {
+          ...stage,
+          objects: stage.objects.map((obj) => {
+            if (!obj?.sections || !Array.isArray(obj.sections)) {
+              return obj
+            }
+
+            return {
+              ...obj,
+              sections: obj.sections.map((section) => {
+                if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
+                  return section
+                }
+
+                return {
+                  ...section,
+                  decompositionStages: section.decompositionStages.map((dStage) => {
+                    if (!dStage?.items || !Array.isArray(dStage.items)) {
+                      return dStage
+                    }
+
+                    return {
+                      ...dStage,
+                      items: dStage.items.map((item) =>
+                        item.id === itemId ? { ...item, progress: newProgress } : item
+                      ),
+                    }
+                  }),
+                }
+              }),
+            }
+          }),
+        }
+      }),
+    }
+  })
+}
+
+/**
+ * Мутация для обновления прогресса задачи с optimistic update
+ *
+ * @example
+ * const mutation = useUpdateItemProgress()
+ * mutation.mutate({ itemId: 'xxx', progress: 50 })
+ */
+export const useUpdateItemProgress = createCacheMutation<
+  UpdateItemProgressInput,
+  { itemId: string; progress: number }
+>({
+  mutationFn: ({ itemId, progress }) => updateItemProgress(itemId, progress),
+
+  optimisticUpdate: {
+    // Обновляем все списки resource graph (с любыми фильтрами)
+    queryKey: queryKeys.resourceGraph.all,
+    updater: (oldData, input) => {
+      // oldData это Project[] из кеша
+      return updateProgressInHierarchy(oldData as Project[] | undefined, input.itemId, input.progress)
+    },
+  },
+
+  // НЕ инвалидируем данные - optimistic update уже обновил кеш корректно
+  // Инвалидация вызывала полную перезагрузку данных, что замедляло UI
+  // invalidateKeys: [queryKeys.resourceGraph.all],
+})
+
+// TODO: Add more mutation hooks
 // export const useUpdateLoading = createUpdateMutation({ ... })
 // export const useCreateLoading = createCacheMutation({ ... })
 // export const useDeleteLoading = createDeleteMutation({ ... })

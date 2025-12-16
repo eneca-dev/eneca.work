@@ -96,37 +96,48 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
 
       onMutate: config.optimisticUpdate
         ? async (input: TInput) => {
-            // Получаем query key
+            // Получаем query key (может быть partial key для matching)
             const queryKey =
               typeof config.optimisticUpdate!.queryKey === 'function'
                 ? config.optimisticUpdate!.queryKey(input)
                 : config.optimisticUpdate!.queryKey
 
-            // Отменяем текущие запросы
+            // Отменяем текущие запросы с этим ключом (partial match)
             await queryClient.cancelQueries({ queryKey })
 
-            // Сохраняем предыдущее состояние
-            const previousData = queryClient.getQueryData<TData[]>(queryKey)
+            // Собираем предыдущие данные для всех matching queries
+            const previousQueries: Array<{ queryKey: readonly unknown[]; data: TData[] }> = []
 
-            // Применяем optimistic update
-            if (previousData !== undefined) {
-              queryClient.setQueryData<TData[]>(
-                queryKey,
-                config.optimisticUpdate!.updater(previousData, input)
-              )
-            }
+            // Применяем optimistic update ко ВСЕМ queries с matching key
+            queryClient.setQueriesData<TData[]>(
+              { queryKey },
+              (oldData) => {
+                if (oldData !== undefined) {
+                  // Сохраняем для отката
+                  const fullQueryKey = queryClient.getQueryCache()
+                    .findAll({ queryKey })
+                    .find(q => q.state.data === oldData)?.queryKey || queryKey
+                  previousQueries.push({ queryKey: fullQueryKey, data: oldData })
+
+                  // Применяем update
+                  return config.optimisticUpdate!.updater(oldData, input)
+                }
+                return oldData
+              }
+            )
 
             // Возвращаем контекст для отката
-            return { previousData, queryKey } as TContext
+            return { previousQueries, queryKey } as TContext
           }
         : undefined,
 
       onError: (error, input, context) => {
         // Откатываем optimistic update при ошибке
         if (config.optimisticUpdate && context) {
-          const ctx = context as { previousData: TData[]; queryKey: readonly unknown[] }
-          if (ctx.previousData !== undefined) {
-            queryClient.setQueryData(ctx.queryKey, ctx.previousData)
+          const ctx = context as { previousQueries: Array<{ queryKey: readonly unknown[]; data: TData[] }>; queryKey: readonly unknown[] }
+          // Восстанавливаем все предыдущие данные
+          for (const { queryKey: qk, data } of ctx.previousQueries || []) {
+            queryClient.setQueryData(qk, data)
           }
         }
 

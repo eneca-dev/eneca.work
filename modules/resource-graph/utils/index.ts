@@ -19,6 +19,7 @@ import type {
   CompanyCalendarEvent,
   DayInfo,
   ReadinessCheckpoint,
+  BudgetSpendingPoint,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -250,6 +251,13 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         actualReadiness = rawActual as ReadinessCheckpoint[]
       }
 
+      // Парсим JSONB budget spending (расходование бюджета)
+      const rawBudgetSpending = (row as Record<string, unknown>).section_budget_spending
+      let budgetSpending: BudgetSpendingPoint[] = []
+      if (rawBudgetSpending && Array.isArray(rawBudgetSpending)) {
+        budgetSpending = rawBudgetSpending as BudgetSpendingPoint[]
+      }
+
       section = {
         id: row.section_id,
         name: row.section_name || '',
@@ -269,6 +277,7 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
         },
         readinessCheckpoints,
         actualReadiness,
+        budgetSpending,
         decompositionStages: [],
       }
       object.sections.push(section)

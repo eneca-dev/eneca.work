@@ -6387,6 +6387,80 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_readiness_snapshots: {
+        Row: {
+          created_at: string | null
+          readiness_value: number
+          snapshot_date: string
+          snapshot_id: string
+          stage_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          readiness_value: number
+          snapshot_date: string
+          snapshot_id?: string
+          stage_id: string
+        }
+        Update: {
+          created_at?: string | null
+          readiness_value?: number
+          snapshot_date?: string
+          snapshot_id?: string
+          stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "decomposition_stages"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_decomposition_stage_agg"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["decomposition_stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_pivot"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "stage_readiness_snapshots_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_difficulty_stats"
+            referencedColumns: ["stage_id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           external_id: string | null
@@ -8294,7 +8368,7 @@ export type Database = {
       }
       work_logs: {
         Row: {
-          budget_id: string | null
+          budget_id: string
           decomposition_item_id: string
           work_log_amount: number | null
           work_log_created_at: string
@@ -8306,7 +8380,7 @@ export type Database = {
           work_log_id: string
         }
         Insert: {
-          budget_id?: string | null
+          budget_id: string
           decomposition_item_id: string
           work_log_amount?: number | null
           work_log_created_at?: string
@@ -8318,7 +8392,7 @@ export type Database = {
           work_log_id?: string
         }
         Update: {
-          budget_id?: string | null
+          budget_id?: string
           decomposition_item_id?: string
           work_log_amount?: number | null
           work_log_created_at?: string
@@ -10660,6 +10734,7 @@ export type Database = {
             | Database["public"]["Enums"]["project_status_enum"]
             | null
           section_actual_readiness: Json | null
+          section_budget_spending: Json | null
           section_department_id: string | null
           section_department_name: string | null
           section_end_date: string | null

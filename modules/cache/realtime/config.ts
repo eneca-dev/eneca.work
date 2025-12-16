@@ -114,10 +114,28 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'work_logs',
     invalidateKeys: [
-      // Инвалидируем все workLogs кеши
-      // При изменении конкретного work_log нужно инвалидировать кеш раздела
-      // Но мы не знаем section_id из payload, поэтому инвалидируем все workLogs
+      // Инвалидируем все workLogs кеши (lazy-loaded данные)
       [...queryKeys.resourceGraph.all, 'workLogs'],
+      // Инвалидируем resourceGraph.all для обновления section_budget_spending во view
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
+  // Бюджеты
+  // ============================================================================
+  {
+    table: 'budgets',
+    invalidateKeys: [
+      // При изменении бюджета обновляем данные графика ресурсов
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'budget_versions',
+    invalidateKeys: [
+      // При изменении версии бюджета (суммы) обновляем данные графика ресурсов
+      queryKeys.resourceGraph.all,
     ],
   },
 

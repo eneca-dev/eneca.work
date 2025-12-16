@@ -1,15 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO, format, addDays } from 'date-fns'
+import { differenceInDays, parseISO, addDays, format } from 'date-fns'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider,
-} from '@/components/ui/tooltip'
 
 interface ActualReadinessAreaProps {
   /** Снэпшоты фактической готовности */
@@ -93,98 +87,102 @@ export function ActualReadinessArea({
 
   if (points.length === 0) return null
 
-  // Создаём SVG path для заливки (от точек до низа)
+  // Создаём SVG paths для заливки и линии
   const baseY = SECTION_ROW_HEIGHT * 0.85
-  const areaPath = useMemo(() => {
-    if (points.length < 1) return ''
+  const { areaPath, linePath } = useMemo(() => {
+    if (points.length < 1) return { areaPath: '', linePath: '' }
 
-    // Начинаем с нижней левой точки
-    let path = `M ${points[0].x} ${baseY}`
-
-    // Идём вверх к первой точке
-    path += ` L ${points[0].x} ${points[0].y}`
-
-    // Соединяем все точки
+    // Area path (заливка)
+    let areaPath = `M ${points[0].x} ${baseY}`
+    areaPath += ` L ${points[0].x} ${points[0].y}`
     for (let i = 1; i < points.length; i++) {
-      path += ` L ${points[i].x} ${points[i].y}`
+      areaPath += ` L ${points[i].x} ${points[i].y}`
+    }
+    areaPath += ` L ${points[points.length - 1].x} ${baseY}`
+    areaPath += ' Z'
+
+    // Line path (верхняя граница)
+    let linePath = `M ${points[0].x} ${points[0].y}`
+    for (let i = 1; i < points.length; i++) {
+      linePath += ` L ${points[i].x} ${points[i].y}`
     }
 
-    // Идём вниз к базовой линии и замыкаем
-    path += ` L ${points[points.length - 1].x} ${baseY}`
-    path += ' Z'
-
-    return path
+    return { areaPath, linePath }
   }, [points, baseY])
 
   // Находим последнюю точку для отображения текущего значения
   const lastPoint = points[points.length - 1]
 
   return (
-    <TooltipProvider delayDuration={50}>
-      <div
-        className="absolute inset-0 pointer-events-none"
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+    >
+      <svg
+        className="absolute inset-0"
         style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
       >
-        <svg
-          className="absolute inset-0"
-          style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
-        >
-          {/* Градиентная заливка синим */}
-          <defs>
-            <linearGradient id="actualReadinessGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1} />
-            </linearGradient>
-          </defs>
+        {/* Градиентная заливка синим */}
+        <defs>
+          <linearGradient id="actualReadinessGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.08} />
+          </linearGradient>
+        </defs>
 
-          {areaPath && (
-            <path
-              d={areaPath}
-              fill="url(#actualReadinessGradient)"
-            />
-          )}
-        </svg>
-
-        {/* Подпись последнего значения */}
-        {lastPoint && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className="absolute flex flex-col items-center pointer-events-auto cursor-default"
-                style={{
-                  left: lastPoint.x,
-                  top: lastPoint.y - 16,
-                  transform: 'translateX(-50%)',
-                }}
-              >
-                <span
-                  className="text-[9px] font-medium tabular-nums px-1 py-0.5 rounded transition-colors hover:bg-blue-500/20"
-                  style={{
-                    color: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  }}
-                >
-                  {Math.round(lastPoint.value)}%
-                </span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              <div className="space-y-1">
-                <div className="text-muted-foreground text-[10px]">
-                  {format(parseISO(lastPoint.date), 'dd.MM.yyyy')}
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Факт:</span>
-                  <span className="font-medium" style={{ color: '#3b82f6' }}>
-                    {Math.round(lastPoint.value)}%
-                  </span>
-                </div>
-              </div>
-            </TooltipContent>
-          </Tooltip>
+        {/* Заливка */}
+        {areaPath && (
+          <path
+            d={areaPath}
+            fill="url(#actualReadinessGradient)"
+          />
         )}
-      </div>
-    </TooltipProvider>
+
+        {/* Верхняя граница — сплошная линия */}
+        {linePath && (
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#3b82f6"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity="0.8"
+          />
+        )}
+
+        {/* Точка на конце линии */}
+        {lastPoint && (
+          <circle
+            cx={lastPoint.x}
+            cy={lastPoint.y}
+            r="3"
+            fill="#3b82f6"
+            stroke="white"
+            strokeWidth="1"
+          />
+        )}
+      </svg>
+
+      {/* Подпись последнего значения — простой текст как у плана */}
+      {lastPoint && (
+        <div
+          className="absolute flex flex-col items-center pointer-events-none"
+          style={{
+            left: lastPoint.x,
+            top: lastPoint.y - 12,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <span
+            className="text-[8px] font-medium tabular-nums text-blue-500"
+            style={{ textShadow: '0 0 2px rgba(0,0,0,0.8)' }}
+          >
+            {Math.round(lastPoint.value)}%
+          </span>
+        </div>
+      )}
+    </div>
   )
 }
 

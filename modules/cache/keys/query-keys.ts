@@ -138,6 +138,11 @@ export const queryKeys = {
     list: () => [...queryKeys.categories.all, 'list'] as const,
   },
 
+  workCategories: {
+    all: ['work-categories'] as const,
+    list: () => [...queryKeys.workCategories.all, 'list'] as const,
+  },
+
   // -------------------------------------------------------------------------
   // Notifications
   // -------------------------------------------------------------------------

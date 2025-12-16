@@ -62,7 +62,7 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
       >
         {/* Header area - only shown when not hidden (header in parent sticky area) */}
         {!hideHeader && (
-          <div className="flex border-b border-border/50 sticky top-0 z-10 bg-background">
+          <div className="flex border-b border-border/50 sticky top-0 z-20 bg-background">
             {/* Sidebar header */}
             <div
               className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"

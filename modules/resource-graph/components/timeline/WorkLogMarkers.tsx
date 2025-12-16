@@ -216,6 +216,18 @@ function WorkLogPill({ day }: WorkLogPillProps) {
                         {log.hours}ч
                       </span>
                     </div>
+                    {/* Budget badge */}
+                    {log.budget && (
+                      <div className="flex items-center gap-1">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: log.budget.typeColor || '#6b7280' }}
+                        />
+                        <span className="text-[9px] text-white/40 truncate">
+                          {log.budget.name}
+                        </span>
+                      </div>
+                    )}
                     {log.createdBy.name && (
                       <div className="text-[10px]" style={{ color: `${logColor}99` }}>
                         {log.createdBy.name}
@@ -232,6 +244,22 @@ function WorkLogPill({ day }: WorkLogPillProps) {
             <p className="text-[11px] text-white/60 leading-relaxed">
               {day.logs[0].description}
             </p>
+          )}
+
+          {/* Budget info (for single log) */}
+          {!hasMultiple && day.logs[0]?.budget && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: day.logs[0].budget.typeColor || '#6b7280' }}
+              />
+              <span className="text-[10px] text-white/50">
+                {day.logs[0].budget.name}
+                {day.logs[0].budget.typeName && (
+                  <span className="text-white/30 ml-1">({day.logs[0].budget.typeName})</span>
+                )}
+              </span>
+            </div>
           )}
 
           {/* Author (for single log) */}

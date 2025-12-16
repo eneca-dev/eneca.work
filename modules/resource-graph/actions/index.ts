@@ -503,7 +503,7 @@ export async function getCompanyCalendarEvents(): Promise<ActionResult<CompanyCa
  * Используется при развороте раздела на графике ресурсов.
  *
  * @param sectionId - ID раздела
- * @returns Список отчётов с информацией о создателе
+ * @returns Список отчётов с информацией о создателе и бюджете
  */
 export async function getWorkLogsForSection(
   sectionId: string
@@ -511,7 +511,7 @@ export async function getWorkLogsForSection(
   try {
     const supabase = await createClient()
 
-    // Получаем work_logs через join с decomposition_items и profiles
+    // Получаем work_logs через join с decomposition_items, profiles и budgets
     const { data, error } = await supabase
       .from('work_logs')
       .select(`
@@ -529,6 +529,14 @@ export async function getWorkLogsForSection(
           user_id,
           first_name,
           last_name
+        ),
+        budgets (
+          budget_id,
+          name,
+          budget_types (
+            name,
+            color
+          )
         )
       `)
       .eq('decomposition_items.decomposition_item_section_id', sectionId)
@@ -542,6 +550,8 @@ export async function getWorkLogsForSection(
     // Трансформируем данные в WorkLog[]
     const workLogs: WorkLog[] = (data || []).map(row => {
       const profile = row.profiles as { user_id: string; first_name: string | null; last_name: string | null } | null
+      const budget = row.budgets as { budget_id: string; name: string; budget_types: { name: string; color: string } | null } | null
+
       return {
         id: row.work_log_id,
         itemId: row.decomposition_item_id,
@@ -556,6 +566,12 @@ export async function getWorkLogsForSection(
           name: profile
             ? `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || null
             : null,
+        },
+        budget: {
+          id: budget?.budget_id || '',
+          name: budget?.name || 'Без бюджета',
+          typeName: budget?.budget_types?.name || null,
+          typeColor: budget?.budget_types?.color || null,
         },
       }
     })
@@ -709,7 +725,7 @@ export async function getStageReadinessSnapshots(
  * Получить снэпшоты готовности для всех этапов раздела
  *
  * Загружает readiness snapshots для всех decomposition_stages в разделе.
- * Более эффективно чем отдельные запросы для каждого этапа.
+ * Также рассчитывает сегодняшнюю готовность на лету из decomposition_items.
  *
  * @param sectionId - ID раздела
  * @returns Map<stageId, ReadinessPoint[]>
@@ -720,10 +736,16 @@ export async function getStageReadinessForSection(
   try {
     const supabase = await createClient()
 
-    // Получаем все этапы раздела
+    // Получаем все этапы раздела с их items для расчёта сегодняшней готовности
     const { data: stages, error: stagesError } = await supabase
       .from('decomposition_stages')
-      .select('decomposition_stage_id')
+      .select(`
+        decomposition_stage_id,
+        decomposition_items (
+          decomposition_item_progress,
+          decomposition_item_planned_hours
+        )
+      `)
       .eq('decomposition_stage_section_id', sectionId)
 
     if (stagesError) {
@@ -736,7 +758,7 @@ export async function getStageReadinessForSection(
       return { success: true, data: {} }
     }
 
-    // Получаем все снэпшоты для этих этапов
+    // Получаем все снэпшоты для этих этапов (исторические данные до вчера)
     const { data, error } = await supabase
       .from('stage_readiness_snapshots')
       .select('stage_id, snapshot_date, readiness_value')
@@ -748,7 +770,7 @@ export async function getStageReadinessForSection(
       return { success: false, error: error.message }
     }
 
-    // Группируем по stage_id
+    // Группируем исторические снэпшоты по stage_id
     const result: Record<string, ReadinessPoint[]> = {}
     for (const row of data || []) {
       if (!result[row.stage_id]) {
@@ -760,12 +782,109 @@ export async function getStageReadinessForSection(
       })
     }
 
+    // Добавляем сегодняшнюю готовность, рассчитанную на лету
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+
+    for (const stage of stages || []) {
+      const stageId = stage.decomposition_stage_id
+      const items = stage.decomposition_items as Array<{
+        decomposition_item_progress: number | null
+        decomposition_item_planned_hours: number | null
+      }> || []
+
+      // Рассчитываем взвешенное среднее: SUM(progress * hours) / SUM(hours)
+      let totalWeightedProgress = 0
+      let totalPlannedHours = 0
+
+      for (const item of items) {
+        const hours = item.decomposition_item_planned_hours || 0
+        const progress = item.decomposition_item_progress || 0
+        if (hours > 0) {
+          totalWeightedProgress += progress * hours
+          totalPlannedHours += hours
+        }
+      }
+
+      const todayReadiness = totalPlannedHours > 0
+        ? Math.round(totalWeightedProgress / totalPlannedHours)
+        : 0
+
+      // Добавляем сегодняшнюю точку только если есть данные для расчёта
+      if (totalPlannedHours > 0) {
+        if (!result[stageId]) {
+          result[stageId] = []
+        }
+
+        // Проверяем, нет ли уже точки на сегодня (не перезаписываем)
+        const hasToday = result[stageId].some(p => p.date === today)
+        if (!hasToday) {
+          result[stageId].push({
+            date: today,
+            value: todayReadiness,
+          })
+        }
+      }
+    }
+
     return { success: true, data: result }
   } catch (error) {
     console.error('[getStageReadinessForSection] Error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка загрузки готовности этапов',
+    }
+  }
+}
+
+// ============================================================================
+// Mutation Actions - Обновление данных
+// ============================================================================
+
+/**
+ * Обновить процент готовности задачи (decomposition_item)
+ *
+ * @param itemId - ID задачи
+ * @param progress - Новый процент готовности (0-100)
+ * @returns Успех или ошибка
+ */
+export async function updateItemProgress(
+  itemId: string,
+  progress: number
+): Promise<ActionResult<{ itemId: string; progress: number }>> {
+  try {
+    // Валидация
+    if (!itemId) {
+      return { success: false, error: 'ID задачи обязателен' }
+    }
+
+    if (typeof progress !== 'number' || progress < 0 || progress > 100) {
+      return { success: false, error: 'Готовность должна быть числом от 0 до 100' }
+    }
+
+    // Округляем до целого
+    const roundedProgress = Math.round(progress)
+
+    const supabase = await createClient()
+
+    const { error } = await supabase
+      .from('decomposition_items')
+      .update({ decomposition_item_progress: roundedProgress })
+      .eq('decomposition_item_id', itemId)
+
+    if (error) {
+      console.error('[updateItemProgress] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { itemId, progress: roundedProgress },
+    }
+  } catch (error) {
+    console.error('[updateItemProgress] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления готовности',
     }
   }
 }

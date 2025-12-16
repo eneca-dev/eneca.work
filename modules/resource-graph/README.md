@@ -336,7 +336,7 @@ modules/resource-graph/
 │       ├── TimelineRow.tsx    # Все row компоненты
 │       ├── TimelineBar.tsx    # Бар периода
 │       ├── ReadinessGraph.tsx # Линия плановой готовности
-│       └── ActualReadinessBars.tsx # Столбики фактической
+│       └── StageReadinessArea.tsx # Area chart готовности этапов
 ├── utils/
 │   └── index.ts               # Утилиты трансформации
 └── constants/

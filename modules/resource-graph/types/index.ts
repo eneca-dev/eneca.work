@@ -95,6 +95,18 @@ export interface ReadinessPoint {
 /** @deprecated Используй ReadinessPoint */
 export type ReadinessCheckpoint = ReadinessPoint
 
+/**
+ * Точка расходования бюджета (накопительно по дням)
+ */
+export interface BudgetSpendingPoint {
+  /** Дата */
+  date: string
+  /** Накопленная сумма расхода */
+  spent: number
+  /** Процент от бюджета (0-100+) */
+  percentage: number
+}
+
 // ============================================================================
 // Work Log Types - Отчёты о работе
 // ============================================================================
@@ -122,6 +134,13 @@ export interface WorkLog {
     firstName: string | null
     lastName: string | null
     name: string | null
+  }
+  /** Бюджет (budget_id теперь обязателен) */
+  budget: {
+    id: string
+    name: string
+    typeName: string | null
+    typeColor: string | null
   }
 }
 
@@ -184,6 +203,8 @@ export interface Section {
   readinessCheckpoints: ReadinessCheckpoint[]
   /** Фактическая готовность (ежедневные снэпшоты) */
   actualReadiness: ReadinessPoint[]
+  /** Расходование бюджета (накопительно по дням) */
+  budgetSpending: BudgetSpendingPoint[]
   decompositionStages: DecompositionStage[]
 }
 
