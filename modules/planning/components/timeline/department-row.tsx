@@ -893,42 +893,66 @@ export function EmployeeRow({
 
                           if (labelParts.displayMode === 'icon-only') {
                             return (
-                              <FolderKanban
-                                size={11}
-                                className="text-white"
-                                style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                              />
+                              <div className="flex items-center gap-1">
+                                {/* Rate chip - integrated subtle style */}
+                                <span
+                                  className="px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <FolderKanban
+                                  size={11}
+                                  className="text-white"
+                                  style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                                />
+                              </div>
                             )
                           }
 
                           if (labelParts.displayMode === 'minimal') {
                             let lineCount = 0
                             return (
-                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
-                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[10px] font-semibold text-white truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.project}
-                                    >
-                                      {labelParts.project}
-                                    </span>
-                                  </div>
-                                )})()}
-                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[9px] font-medium text-white/90 truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.object}
-                                    >
-                                      {labelParts.object}
-                                    </span>
-                                  </div>
-                                )})()}
+                              <div className="flex items-start gap-1 overflow-hidden w-full h-full">
+                                {/* Rate chip - subtle integrated */}
+                                <span
+                                  className="mt-0.5 px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded flex-shrink-0"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <div className="flex flex-col justify-center items-start overflow-hidden flex-1" style={{ gap: "2px" }}>
+                                  {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[10px] font-semibold text-white truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.project}
+                                      >
+                                        {labelParts.project}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                  {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[9px] font-medium text-white/90 truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.object}
+                                      >
+                                        {labelParts.object}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                </div>
                               </div>
                             )
                           }
@@ -937,31 +961,43 @@ export function EmployeeRow({
                             // Компактный режим
                             let lineCount = 0
                             return (
-                              <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
-                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[10px] font-semibold text-white truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.project}
-                                    >
-                                      {labelParts.project}
-                                    </span>
-                                  </div>
-                                )})()}
-                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
-                                  <div className="flex items-center gap-1 w-full overflow-hidden">
-                                    <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[9px] font-medium text-white/90 truncate"
-                                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
-                                      title={labelParts.object}
-                                    >
-                                      {labelParts.object}
-                                    </span>
-                                  </div>
-                                )})()}
+                              <div className="flex items-start gap-1 overflow-hidden w-full h-full">
+                                {/* Rate chip - subtle integrated */}
+                                <span
+                                  className="mt-0.5 px-1 py-0.5 bg-black/15 text-white text-[9px] font-semibold rounded flex-shrink-0"
+                                  style={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                  }}
+                                >
+                                  {bar.period.rate || 1}
+                                </span>
+                                <div className="flex flex-col justify-center items-start overflow-hidden flex-1" style={{ gap: "2px" }}>
+                                  {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <FolderKanban size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[10px] font-semibold text-white truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.project}
+                                      >
+                                        {labelParts.project}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                  {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                    <div className="flex items-center gap-1 w-full overflow-hidden">
+                                      <Building2 size={9} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                      <span
+                                        className="text-[9px] font-medium text-white/90 truncate"
+                                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)", lineHeight: "1.3" }}
+                                        title={labelParts.object}
+                                      >
+                                        {labelParts.object}
+                                      </span>
+                                    </div>
+                                  )})()}
+                                </div>
                               </div>
                             )
                           }
@@ -969,37 +1005,49 @@ export function EmployeeRow({
                           // full mode - многострочное отображение с иконками
                           let lineCount = 0
                           return (
-                            <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
-                              {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[10px] font-semibold text-white truncate"
-                                    style={{
-                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                                      lineHeight: "1.2"
-                                    }}
-                                    title={labelParts.project}
-                                  >
-                                    {labelParts.project}
-                                  </span>
-                                </div>
-                              )})()}
-                              {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[9px] font-medium text-white/90 truncate"
-                                    style={{
-                                      textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-                                      lineHeight: "1.2"
-                                    }}
-                                    title={labelParts.object}
-                                  >
-                                    {labelParts.object}
-                                  </span>
-                                </div>
-                              )})()}
+                            <div className="flex items-start gap-1.5 overflow-hidden w-full">
+                              {/* Rate chip - subtle integrated, slightly larger in full mode */}
+                              <span
+                                className="mt-0.5 px-1.5 py-0.5 bg-black/15 text-white text-[10px] font-semibold rounded flex-shrink-0"
+                                style={{
+                                  fontVariantNumeric: 'tabular-nums',
+                                  textShadow: "0 1px 1px rgba(0,0,0,0.4)"
+                                }}
+                              >
+                                {bar.period.rate || 1}
+                              </span>
+                              <div className="flex flex-col justify-center overflow-hidden flex-1" style={{ gap: "1px" }}>
+                                {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 overflow-hidden">
+                                    <FolderKanban size={11} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[10px] font-semibold text-white truncate"
+                                      style={{
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                        lineHeight: "1.2"
+                                      }}
+                                      title={labelParts.project}
+                                    >
+                                      {labelParts.project}
+                                    </span>
+                                  </div>
+                                )})()}
+                                {labelParts.object && lineCount < maxLines && (() => { lineCount++; return (
+                                  <div className="flex items-center gap-1 overflow-hidden">
+                                    <Building2 size={10} className="text-white/90 flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
+                                    <span
+                                      className="text-[9px] font-medium text-white/90 truncate"
+                                      style={{
+                                        textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                                        lineHeight: "1.2"
+                                      }}
+                                      title={labelParts.object}
+                                    >
+                                      {labelParts.object}
+                                    </span>
+                                  </div>
+                                )})()}
+                              </div>
                             </div>
                           )
                         }
