@@ -1164,7 +1164,7 @@ export function EmployeeRow({
 
                         {/* Сам комментарий */}
                         <div
-                          className="absolute flex items-center gap-1.5 px-2"
+                          className="absolute flex items-center gap-1 px-2 pointer-events-auto cursor-pointer"
                           style={{
                             top: `${COMMENT_GAP - 2}px`,
                             left: '0',
@@ -1183,14 +1183,27 @@ export function EmployeeRow({
                             opacity: 0.8,
                             filter: "brightness(1.1)",
                           }}
+                          title={bar.period.comment}
+                          onClick={() => {
+                            // Открыть модалку редактирования для загрузки
+                            if (bar.period.type === "loading" && bar.period.loading) {
+                              setEditingLoading(bar.period.loading)
+                            }
+                          }}
                         >
+                          <MessageSquare
+                            size={11}
+                            className="text-white flex-shrink-0"
+                            style={{
+                              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))",
+                            }}
+                          />
                           <span
                             className="text-[10px] leading-tight truncate text-white font-medium"
                             style={{
                               textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
                               fontFamily: 'system-ui, -apple-system, sans-serif',
                             }}
-                            title={bar.period.comment}
                           >
                             {bar.period.comment}
                           </span>
