@@ -203,35 +203,29 @@ export function calculateBarTop(
   barGap: number,
   initialOffset: number = 4
 ): number {
-  // Находим все бары, которые пересекаются с текущим и имеют меньший layer
-  const overlappingBars = allBars.filter(other =>
-    other.period.startDate <= bar.period.endDate &&
-    other.period.endDate >= bar.period.startDate &&
-    other.layer < bar.layer
-  )
-
   let top = initialOffset
 
-  if (overlappingBars.length > 0) {
-    // Создаём карту слой -> максимальная высота бара в этом слое
-    const layersMap = new Map<number, number>()
-    overlappingBars.forEach(other => {
-      // Базовая высота полоски
-      let effectiveHeight = baseBarHeight
+  // Для каждого слоя ниже текущего, находим максимальную высоту бара в этом слое
+  for (let layer = 0; layer < bar.layer; layer++) {
+    // Находим все бары в этом слое
+    const barsInLayer = allBars.filter(other => other.layer === layer)
 
-      // Если у загрузки есть комментарий — добавляем его высоту
-      if (other.period.type === 'loading' && other.period.comment) {
-        effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
-      }
+    if (barsInLayer.length > 0) {
+      // Находим максимальную высоту среди баров этого слоя
+      let maxHeightInLayer = baseBarHeight
 
-      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, effectiveHeight))
-    })
+      barsInLayer.forEach(other => {
+        let effectiveHeight = baseBarHeight
 
-    // Суммируем высоты всех слоёв ниже текущего
-    for (let i = 0; i < bar.layer; i++) {
-      if (layersMap.has(i)) {
-        top += layersMap.get(i)! + barGap
-      }
+        // Если у загрузки есть комментарий — добавляем его высоту
+        if (other.period.type === 'loading' && other.period.comment) {
+          effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
+        }
+
+        maxHeightInLayer = Math.max(maxHeightInLayer, effectiveHeight)
+      })
+
+      top += maxHeightInLayer + barGap
     }
   }
 
