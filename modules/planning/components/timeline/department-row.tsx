@@ -1,7 +1,7 @@
 "use client" 
 
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone, MessageSquare } from "lucide-react"
+import { ChevronDown, ChevronRight, Building2, Users, FolderKanban, FileText, Milestone } from "lucide-react"
 import type { Department, Employee, Loading, TimelineUnit } from "../../types"
 import { isToday, isFirstDayOfMonth } from "../../utils/date-utils"
 import { usePlanningColumnsStore } from "../../stores/usePlanningColumnsStore"
@@ -887,60 +887,21 @@ export function EmployeeRow({
                           // Адаптивное отображение для загрузок
                           if (bar.period.type === "loading") {
                           const labelParts = getBarLabelParts(bar.period, bar.width)
-                          const rate = bar.period.rate || 1
-                          const hasComment = !!bar.period.comment
 
-                          // Определяем максимальное количество строк в зависимости от rate (высоты)
-                          let maxLines = 3
-                          if (rate < 0.5) {
-                            maxLines = 1 // Очень низкие бары - только одна строка
-                          } else if (rate < 1) {
-                            maxLines = 2 // Средние бары - максимум 2 строки
-                          }
+                          // При фиксированной высоте 42px помещается 2 строки текста
+                          const maxLines = 2
 
                           if (labelParts.displayMode === 'icon-only') {
                             return (
-                              <div className="flex items-center gap-1">
-                                <FolderKanban
-                                  size={11}
-                                  className="text-white"
-                                  style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                />
-                                {hasComment && (
-                                  <MessageSquare
-                                    className="w-3 h-3 text-white/70 flex-shrink-0"
-                                    style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                  />
-                                )}
-                              </div>
+                              <FolderKanban
+                                size={11}
+                                className="text-white"
+                                style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+                              />
                             )
                           }
 
                           if (labelParts.displayMode === 'minimal') {
-                            // Узкие бары - многострочное отображение, используем высоту
-                            const displayText = labelParts.project || labelParts.stage
-
-                            if (maxLines === 1) {
-                              // Одна строка для маленьких баров
-                              return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <span
-                                    className="text-[10px] font-semibold text-white truncate"
-                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                    title={displayText}
-                                  >
-                                    {displayText}
-                                  </span>
-                                  {hasComment && (
-                                    <MessageSquare
-                                      className="w-3 h-3 text-white/70 flex-shrink-0"
-                                      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                    />
-                                  )}
-                                </div>
-                              )
-                            }
-
                             let lineCount = 0
                             return (
                               <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
@@ -974,30 +935,6 @@ export function EmployeeRow({
 
                           if (labelParts.displayMode === 'compact') {
                             // Средние бары
-                            const displayText = labelParts.project || labelParts.stage
-
-                            if (maxLines === 1) {
-                              const Icon = labelParts.project ? FolderKanban : Milestone
-                              return (
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                  <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                  <span
-                                    className="text-[10px] font-semibold text-white truncate"
-                                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                    title={displayText}
-                                  >
-                                    {displayText}
-                                  </span>
-                                  {hasComment && (
-                                    <MessageSquare
-                                      className="w-3 h-3 text-white/70 flex-shrink-0"
-                                      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                    />
-                                  )}
-                                </div>
-                              )
-                            }
-
                             let lineCount = 0
                             return (
                               <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
@@ -1030,29 +967,6 @@ export function EmployeeRow({
                           }
 
                           // full mode - многострочное отображение с иконками
-                          if (maxLines === 1) {
-                            const displayText = labelParts.project || labelParts.stage
-                            const Icon = labelParts.project ? FolderKanban : Milestone
-                            return (
-                              <div className="flex items-center gap-1 overflow-hidden">
-                                <Icon size={10} className="text-white flex-shrink-0" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                <span
-                                  className="text-[11px] font-semibold text-white truncate"
-                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                                  title={displayText}
-                                >
-                                  {displayText}
-                                </span>
-                                {hasComment && (
-                                  <MessageSquare
-                                    className="w-3 h-3 text-white/70 flex-shrink-0"
-                                    style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                  />
-                                )}
-                              </div>
-                            )
-                          }
-
                           let lineCount = 0
                           return (
                             <div className="flex flex-col justify-center overflow-hidden w-full" style={{ gap: "1px" }}>
@@ -1086,35 +1000,6 @@ export function EmployeeRow({
                                   </span>
                                 </div>
                               )})()}
-
-                              {/* Блок комментария */}
-                              {hasComment && (
-                                rate >= 0.5 ? (
-                                  // Для высоких полосок (≥ 0.5 ставки): иконка + текст в несколько строк
-                                  <div className="flex items-start gap-1 mt-0.5" title={bar.period.comment}>
-                                    <MessageSquare className="w-3 h-3 flex-shrink-0 text-white/70" style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }} />
-                                    <span
-                                      className="text-[9px] font-medium text-white tracking-wide leading-tight overflow-hidden"
-                                      style={{
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: Math.max(1, maxLines - 1),
-                                        WebkitBoxOrient: 'vertical',
-                                        textShadow: "0 1px 2px rgba(0,0,0,0.5)"
-                                      }}
-                                    >
-                                      {bar.period.comment}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  // Для низких полосок (< 0.5 ставки): только иконка
-                                  <div title={bar.period.comment}>
-                                    <MessageSquare
-                                      className="w-3 h-3 text-white/70"
-                                      style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
-                                    />
-                                  </div>
-                                )
-                              )}
                             </div>
                           )
                         }

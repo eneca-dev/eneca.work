@@ -228,7 +228,7 @@ export function calculateSectionBarsHeight(
   let maxBottom = 0
 
   barRenders.forEach(bar => {
-    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+    const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
     const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
     maxBottom = Math.max(maxBottom, top + barHeight)
   })

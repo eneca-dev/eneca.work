@@ -7,7 +7,7 @@ import type { Loading, TimelineUnit } from "../../types"
 /**
  * Константы для расчёта высоты и позиционирования полосок загрузки
  */
-export const BASE_BAR_HEIGHT = 56 // Фиксированная высота полоски загрузки
+export const BASE_BAR_HEIGHT = 42 // Фиксированная высота полоски загрузки
 export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
 
 /**

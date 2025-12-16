@@ -24,6 +24,8 @@
 - `modules/planning/components/timeline/loading-bars-utils.ts:213` - функция `calculateBarTop()` (фикс наложения баров)
 - `modules/planning/components/timeline/department-row.tsx:690-691` - расчет `actualRowHeight`
 - `modules/planning/components/timeline/department-row.tsx:846` - рендер полоски
+- `modules/planning/components/timeline/department-row.tsx:890-893` - логика `maxLines` (убрать зависимость от rate)
+- `modules/planning/components/timeline/department-row.tsx:895-1120` - адаптивная логика отображения (упростить, убрать комментарии)
 - `modules/planning/components/timeline/section-loading-bars.tsx:64` - рендер полоски в секции
 - `modules/planning/components/timeline/section-loading-bars.tsx:231` - расчет высоты секции
 
@@ -152,6 +154,150 @@ overlappingBars.forEach(other => {
   layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
 })
 ```
+
+---
+
+#### Шаг 1.7: Убрать зависимость maxLines от rate
+**Файл:** `modules/planning/components/timeline/department-row.tsx:893-899`
+
+**Проблема:** Логика `maxLines` всё ещё зависит от `rate` (ставки), но теперь высота фиксированная. Это приводит к тому, что на загрузках с маленькой ставкой (< 0.5) отображается только одна строка, хотя физически места больше.
+
+**Было:**
+```typescript
+// Определяем максимальное количество строк в зависимости от rate (высоты)
+let maxLines = 3
+if (rate < 0.5) {
+  maxLines = 1 // Очень низкие бары - только одна строка
+} else if (rate < 1) {
+  maxLines = 2 // Средние бары - максимум 2 строки
+}
+```
+
+**Станет:**
+```typescript
+// При фиксированной высоте 42px помещается 2 строки текста
+const maxLines = 2
+```
+
+**Обоснование:**
+- Высота бара фиксированная (42px)
+- Размер шрифта: 10px для основного текста, 9px для второстепенного
+- LineHeight: 1.2-1.3
+- Отступы: 4px сверху и снизу
+- **Итого:** В 42px помещается 2 строки текста + комментарий
+
+---
+
+#### Шаг 1.8: Обновить адаптивную логику отображения
+**Файл:** `modules/planning/components/timeline/department-row.tsx:919-1120`
+
+**Проблема:** Блоки `if (maxLines === 1)` больше не нужны, так как `maxLines` всегда = 2.
+
+**Изменения:**
+1. Удалить все блоки `if (maxLines === 1)` из режимов 'minimal', 'compact', 'full'
+2. Оставить только многострочную логику с `lineCount`
+3. Упростить условия отображения
+
+**Было (пример для 'minimal' mode):**
+```typescript
+if (labelParts.displayMode === 'minimal') {
+  const displayText = labelParts.project || labelParts.stage
+
+  if (maxLines === 1) {
+    // Одна строка для маленьких баров
+    return (...)
+  }
+
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full">
+      {labelParts.project && lineCount < maxLines && ...}
+      {labelParts.stage && lineCount < maxLines && ...}
+    </div>
+  )
+}
+```
+
+**Станет:**
+```typescript
+if (labelParts.displayMode === 'minimal') {
+  let lineCount = 0
+  return (
+    <div className="flex flex-col justify-center items-start overflow-hidden w-full h-full" style={{ gap: "2px" }}>
+      {labelParts.project && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <FolderKanban size={9} className="text-white flex-shrink-0" />
+          <span className="text-[10px] font-semibold text-white truncate">
+            {labelParts.project}
+          </span>
+        </div>
+      )})()}
+      {labelParts.stage && lineCount < maxLines && (() => { lineCount++; return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <Milestone size={8} className="text-white/90 flex-shrink-0" />
+          <span className="text-[9px] font-medium text-white/90 truncate">
+            {labelParts.stage}
+          </span>
+        </div>
+      )})()}
+    </div>
+  )
+}
+```
+
+Аналогично для режимов 'compact' и 'full'.
+
+---
+
+#### Шаг 1.9: Убрать комментарий из отображения на загрузке
+**Файл:** `modules/planning/components/timeline/department-row.tsx:890-1120`
+
+**Проблема:** Комментарии сейчас отображаются внутри полоски загрузки, занимая место для основной информации (проект, этап). Согласно Этапу 3, комментарий должен выводиться отдельной строкой **под** загрузкой.
+
+**Изменения:**
+1. Удалить переменную `const hasComment = !!bar.period.comment`
+2. Удалить все блоки с `MessageSquare` иконкой и текстом комментария из всех режимов отображения ('icon-only', 'minimal', 'compact', 'full')
+3. Удалить блок комментария (строки 1090-1117) из режима 'full'
+
+**Было (примеры):**
+
+**Icon-only mode:**
+```typescript
+{hasComment && (
+  <MessageSquare
+    className="w-3 h-3 text-white/70 flex-shrink-0"
+    style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}
+  />
+)}
+```
+
+**Full mode:**
+```typescript
+{/* Блок комментария */}
+{hasComment && (
+  rate >= 0.5 ? (
+    <div className="flex items-start gap-1 mt-0.5" title={bar.period.comment}>
+      <MessageSquare className="w-3 h-3 flex-shrink-0 text-white/70" />
+      <span className="text-[9px] font-medium text-white tracking-wide leading-tight">
+        {bar.period.comment}
+      </span>
+    </div>
+  ) : (
+    <div title={bar.period.comment}>
+      <MessageSquare className="w-3 h-3 text-white/70" />
+    </div>
+  )
+)}
+```
+
+**Станет:**
+- Все упоминания комментария удалены
+- Комментарий будет реализован в Этапе 3 как отдельная строка под загрузкой
+
+**Обоснование:**
+- Освобождается место для основной информации (проект + объект/этап)
+- Комментарий не теряется — будет отображаться под загрузкой в Этапе 3
+- Упрощается логика рендеринга
 
 ---
 
