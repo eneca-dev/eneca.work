@@ -73,6 +73,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.loadings.all,
       queryKeys.sections.all, // Подсчёты в секциях
+      // Resource graph loadings (lazy-loaded per section)
+      [...queryKeys.resourceGraph.all, 'loadings'],
     ],
   },
   {
@@ -87,6 +89,53 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+    ],
+  },
+
+  // ============================================================================
+  // Готовность разделов
+  // ============================================================================
+  {
+    table: 'section_readiness_checkpoints',
+    invalidateKeys: [
+      queryKeys.resourceGraph.all, // Плановая готовность
+    ],
+  },
+  {
+    table: 'section_readiness_snapshots',
+    invalidateKeys: [
+      queryKeys.resourceGraph.all, // Фактическая готовность
+    ],
+  },
+
+  // ============================================================================
+  // Отчёты о работе (work_logs)
+  // ============================================================================
+  {
+    table: 'work_logs',
+    invalidateKeys: [
+      // Инвалидируем все workLogs кеши (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'workLogs'],
+      // Инвалидируем resourceGraph.all для обновления section_budget_spending во view
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
+  // Бюджеты
+  // ============================================================================
+  {
+    table: 'budgets',
+    invalidateKeys: [
+      // При изменении бюджета обновляем данные графика ресурсов
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'budget_versions',
+    invalidateKeys: [
+      // При изменении версии бюджета (суммы) обновляем данные графика ресурсов
+      queryKeys.resourceGraph.all,
     ],
   },
 

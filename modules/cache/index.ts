@@ -84,6 +84,25 @@ export {
   type CacheProjectRow,
 } from './actions/projects'
 
+// Server Actions - Users
+export {
+  getUsers,
+  getCurrentUser,
+  type CachedUser,
+} from './actions/users'
+
+// Server Actions - Work Categories
+export {
+  getWorkCategories,
+  type WorkCategory,
+} from './actions/work-categories'
+
+// User Hooks (pre-built)
+export { useUsers, useCurrentUser } from './hooks/use-users'
+
+// Work Categories Hooks (pre-built)
+export { useWorkCategories } from './hooks/use-work-categories'
+
 // Base action utilities
 export { safeAction } from './actions/base'
 

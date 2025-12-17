@@ -18,6 +18,8 @@ import type {
   DecompositionItem,
   CompanyCalendarEvent,
   DayInfo,
+  ReadinessCheckpoint,
+  BudgetSpendingPoint,
 } from '../types'
 import { DEFAULT_MONTHS_RANGE } from '../constants'
 
@@ -235,9 +237,31 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
     // Get or create section
     let section = object.sections.find(s => s.id === row.section_id)
     if (!section) {
+      // Парсим JSONB checkpoints (плановая готовность)
+      const rawCheckpoints = row.section_readiness_checkpoints
+      let readinessCheckpoints: ReadinessCheckpoint[] = []
+      if (rawCheckpoints && Array.isArray(rawCheckpoints)) {
+        readinessCheckpoints = rawCheckpoints as ReadinessCheckpoint[]
+      }
+
+      // Парсим JSONB actual readiness (фактическая готовность)
+      const rawActual = (row as Record<string, unknown>).section_actual_readiness
+      let actualReadiness: ReadinessCheckpoint[] = []
+      if (rawActual && Array.isArray(rawActual)) {
+        actualReadiness = rawActual as ReadinessCheckpoint[]
+      }
+
+      // Парсим JSONB budget spending (расходование бюджета)
+      const rawBudgetSpending = (row as Record<string, unknown>).section_budget_spending
+      let budgetSpending: BudgetSpendingPoint[] = []
+      if (rawBudgetSpending && Array.isArray(rawBudgetSpending)) {
+        budgetSpending = rawBudgetSpending as BudgetSpendingPoint[]
+      }
+
       section = {
         id: row.section_id,
         name: row.section_name || '',
+        description: row.section_description || null,
         startDate: row.section_start_date || null,
         endDate: row.section_end_date || null,
         responsible: {
@@ -245,12 +269,16 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
           firstName: row.section_responsible_first_name || null,
           lastName: row.section_responsible_last_name || null,
           name: row.section_responsible_name || null,
+          avatarUrl: (row as Record<string, unknown>).section_responsible_avatar as string | null || null,
         },
         status: {
           id: row.section_status_id || null,
           name: row.section_status_name || null,
           color: row.section_status_color || null,
         },
+        readinessCheckpoints,
+        actualReadiness,
+        budgetSpending,
         decompositionStages: [],
       }
       object.sections.push(section)
@@ -444,4 +472,59 @@ export function getDayInfo(date: Date, calendarMap: Map<string, Partial<DayInfo>
     isTransferredWorkday: calendarInfo.isTransferredWorkday ?? baseInfo.isTransferredWorkday,
     isTransferredDayOff: calendarInfo.isTransferredDayOff ?? baseInfo.isTransferredDayOff,
   }
+}
+
+// ============================================================================
+// Employee Color Utilities - Цвета сотрудников
+// ============================================================================
+
+/**
+ * Палитра цветов для сотрудников
+ * Яркие, различимые цвета для тёмной темы
+ */
+export const EMPLOYEE_COLORS = [
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#06b6d4', // cyan
+  '#22c55e', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#f97316', // orange
+  '#6366f1', // indigo
+] as const
+
+/**
+ * Цвет на основе ID сотрудника
+ * Один и тот же сотрудник всегда получает один цвет
+ *
+ * @param employeeId - UUID сотрудника
+ * @returns Hex цвет из палитры
+ */
+export function getEmployeeColor(employeeId: string | null): string {
+  if (!employeeId) return '#6b7280' // gray-500 для неназначенных
+
+  // Простой хеш из ID для получения индекса цвета
+  let hash = 0
+  for (let i = 0; i < employeeId.length; i++) {
+    hash = ((hash << 5) - hash) + employeeId.charCodeAt(i)
+    hash = hash & hash // Convert to 32bit integer
+  }
+
+  const index = Math.abs(hash) % EMPLOYEE_COLORS.length
+  return EMPLOYEE_COLORS[index]
+}
+
+/**
+ * Получить инициалы из имени и фамилии
+ *
+ * @param firstName - Имя
+ * @param lastName - Фамилия
+ * @returns Инициалы (1-2 буквы)
+ */
+export function getInitials(firstName: string | null, lastName: string | null): string {
+  const first = firstName?.charAt(0)?.toUpperCase() || ''
+  const last = lastName?.charAt(0)?.toUpperCase() || ''
+  return first + last || '?'
 }

@@ -78,6 +78,104 @@ export interface DecompositionStage {
     color: string | null
   }
   items: DecompositionItem[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness?: ReadinessPoint[]
+}
+
+/**
+ * Точка готовности (плановая или фактическая)
+ */
+export interface ReadinessPoint {
+  /** Дата */
+  date: string
+  /** Готовность в % (0-100) */
+  value: number
+}
+
+/** @deprecated Используй ReadinessPoint */
+export type ReadinessCheckpoint = ReadinessPoint
+
+/**
+ * Точка расходования бюджета (накопительно по дням)
+ */
+export interface BudgetSpendingPoint {
+  /** Дата */
+  date: string
+  /** Накопленная сумма расхода */
+  spent: number
+  /** Процент от бюджета (0-100+) */
+  percentage: number
+}
+
+// ============================================================================
+// Work Log Types - Отчёты о работе
+// ============================================================================
+
+/**
+ * Отчёт о работе (work_log)
+ * Привязан к decomposition_item
+ */
+export interface WorkLog {
+  /** ID отчёта */
+  id: string
+  /** ID элемента декомпозиции */
+  itemId: string
+  /** Дата отчёта */
+  date: string
+  /** Количество часов */
+  hours: number
+  /** Сумма в деньгах (hours * hourly_rate) */
+  amount: number
+  /** Описание работы (для tooltip) */
+  description: string
+  /** Кто создал отчёт */
+  createdBy: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+  }
+  /** Бюджет (budget_id теперь обязателен) */
+  budget: {
+    id: string
+    name: string
+    typeName: string | null
+    typeColor: string | null
+  }
+}
+
+// ============================================================================
+// Loading Types - Загрузки сотрудников
+// ============================================================================
+
+/**
+ * Загрузка сотрудника на этап декомпозиции
+ */
+export interface Loading {
+  /** ID загрузки */
+  id: string
+  /** ID этапа декомпозиции */
+  stageId: string
+  /** Дата начала загрузки */
+  startDate: string
+  /** Дата окончания загрузки */
+  finishDate: string
+  /** Ставка (0.25, 0.5, 0.75, 1) */
+  rate: number
+  /** Комментарий к загрузке */
+  comment: string | null
+  /** Статус загрузки */
+  status: 'active' | 'completed' | 'cancelled'
+  /** Это запрос на ресурс (нехватка) */
+  isShortage: boolean
+  /** Сотрудник */
+  employee: {
+    id: string | null
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+    avatarUrl: string | null
+  }
 }
 
 /**
@@ -87,6 +185,7 @@ export interface DecompositionStage {
 export interface Section {
   id: string
   name: string
+  description: string | null
   startDate: string | null
   endDate: string | null
   responsible: {
@@ -94,12 +193,19 @@ export interface Section {
     firstName: string | null
     lastName: string | null
     name: string | null
+    avatarUrl: string | null
   }
   status: {
     id: string | null
     name: string | null
     color: string | null
   }
+  /** Контрольные точки плановой готовности */
+  readinessCheckpoints: ReadinessCheckpoint[]
+  /** Фактическая готовность (ежедневные снэпшоты) */
+  actualReadiness: ReadinessPoint[]
+  /** Расходование бюджета (накопительно по дням) */
+  budgetSpending: BudgetSpendingPoint[]
   decompositionStages: DecompositionStage[]
 }
 

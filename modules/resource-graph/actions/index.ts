@@ -8,22 +8,18 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import type { ActionResult } from '@/modules/cache'
 import type {
   Project,
   ResourceGraphRow,
   ProjectTag,
   CompanyCalendarEvent,
+  WorkLog,
+  Loading,
+  ReadinessPoint,
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
-
-// ============================================================================
-// Result Types
-// ============================================================================
-
-type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string }
 
 // ============================================================================
 // Query Actions
@@ -485,6 +481,591 @@ export async function getCompanyCalendarEvents(): Promise<ActionResult<CompanyCa
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка загрузки календарных событий',
+    }
+  }
+}
+
+// ============================================================================
+// Work Logs Actions - Отчёты о работе
+// ============================================================================
+
+/**
+ * Получить отчёты о работе для раздела
+ *
+ * Загружает все work_logs для всех decomposition_items в данном разделе.
+ * Используется при развороте раздела на графике ресурсов.
+ *
+ * @param sectionId - ID раздела
+ * @returns Список отчётов с информацией о создателе и бюджете
+ */
+export async function getWorkLogsForSection(
+  sectionId: string
+): Promise<ActionResult<WorkLog[]>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем work_logs через join с decomposition_items, profiles и budgets
+    const { data, error } = await supabase
+      .from('work_logs')
+      .select(`
+        work_log_id,
+        decomposition_item_id,
+        work_log_date,
+        work_log_hours,
+        work_log_amount,
+        work_log_description,
+        work_log_created_by,
+        decomposition_items!inner (
+          decomposition_item_section_id
+        ),
+        profiles:work_log_created_by (
+          user_id,
+          first_name,
+          last_name
+        ),
+        budgets (
+          budget_id,
+          name,
+          budget_types (
+            name,
+            color
+          )
+        )
+      `)
+      .eq('decomposition_items.decomposition_item_section_id', sectionId)
+      .order('work_log_date', { ascending: false })
+
+    if (error) {
+      console.error('[getWorkLogsForSection] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Трансформируем данные в WorkLog[]
+    const workLogs: WorkLog[] = (data || []).map(row => {
+      const profile = row.profiles as { user_id: string; first_name: string | null; last_name: string | null } | null
+      const budget = row.budgets as { budget_id: string; name: string; budget_types: { name: string; color: string } | null } | null
+
+      return {
+        id: row.work_log_id,
+        itemId: row.decomposition_item_id,
+        date: row.work_log_date,
+        hours: Number(row.work_log_hours) || 0,
+        amount: Number(row.work_log_amount) || 0,
+        description: row.work_log_description || '',
+        createdBy: {
+          id: profile?.user_id || null,
+          firstName: profile?.first_name || null,
+          lastName: profile?.last_name || null,
+          name: profile
+            ? `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || null
+            : null,
+        },
+        budget: {
+          id: budget?.budget_id || '',
+          name: budget?.name || 'Без бюджета',
+          typeName: budget?.budget_types?.name || null,
+          typeColor: budget?.budget_types?.color || null,
+        },
+      }
+    })
+
+    return { success: true, data: workLogs }
+  } catch (error) {
+    console.error('[getWorkLogsForSection] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки отчётов',
+    }
+  }
+}
+
+// ============================================================================
+// Loadings Actions - Загрузки сотрудников
+// ============================================================================
+
+/**
+ * Получить загрузки для раздела
+ *
+ * Загружает все loadings для всех decomposition_stages в данном разделе.
+ * Используется при развороте раздела на графике ресурсов.
+ *
+ * @param sectionId - ID раздела
+ * @returns Список загрузок с информацией о сотрудниках
+ */
+export async function getLoadingsForSection(
+  sectionId: string
+): Promise<ActionResult<Loading[]>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем loadings через join с decomposition_stages и profiles
+    const { data, error } = await supabase
+      .from('loadings')
+      .select(`
+        loading_id,
+        loading_stage,
+        loading_start,
+        loading_finish,
+        loading_rate,
+        loading_comment,
+        loading_status,
+        is_shortage,
+        loading_responsible,
+        decomposition_stages!inner (
+          decomposition_stage_section_id
+        ),
+        profiles:loading_responsible (
+          user_id,
+          first_name,
+          last_name,
+          avatar_url
+        )
+      `)
+      .eq('decomposition_stages.decomposition_stage_section_id', sectionId)
+      .order('loading_start', { ascending: true })
+
+    if (error) {
+      console.error('[getLoadingsForSection] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Трансформируем данные в Loading[]
+    const loadings: Loading[] = (data || []).map(row => {
+      const profile = row.profiles as {
+        user_id: string
+        first_name: string | null
+        last_name: string | null
+        avatar_url: string | null
+      } | null
+
+      return {
+        id: row.loading_id,
+        stageId: row.loading_stage,
+        startDate: row.loading_start,
+        finishDate: row.loading_finish,
+        rate: Number(row.loading_rate) || 1,
+        comment: row.loading_comment,
+        status: row.loading_status as Loading['status'],
+        isShortage: row.is_shortage,
+        employee: {
+          id: profile?.user_id || null,
+          firstName: profile?.first_name || null,
+          lastName: profile?.last_name || null,
+          name: profile
+            ? `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || null
+            : null,
+          avatarUrl: profile?.avatar_url || null,
+        },
+      }
+    })
+
+    return { success: true, data: loadings }
+  } catch (error) {
+    console.error('[getLoadingsForSection] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки назначений',
+    }
+  }
+}
+
+// ============================================================================
+// Stage Readiness Actions - Готовность этапов декомпозиции
+// ============================================================================
+
+/**
+ * Получить снэпшоты готовности для этапа декомпозиции
+ *
+ * Загружает все readiness snapshots для указанного этапа.
+ * Используется для построения графика готовности на timeline.
+ *
+ * @param stageId - ID этапа декомпозиции
+ * @returns Список точек готовности (дата + значение)
+ */
+export async function getStageReadinessSnapshots(
+  stageId: string
+): Promise<ActionResult<ReadinessPoint[]>> {
+  try {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('stage_readiness_snapshots')
+      .select('snapshot_date, readiness_value')
+      .eq('stage_id', stageId)
+      .order('snapshot_date', { ascending: true })
+
+    if (error) {
+      console.error('[getStageReadinessSnapshots] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const points: ReadinessPoint[] = (data || []).map(row => ({
+      date: row.snapshot_date,
+      value: row.readiness_value,
+    }))
+
+    return { success: true, data: points }
+  } catch (error) {
+    console.error('[getStageReadinessSnapshots] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки готовности этапа',
+    }
+  }
+}
+
+/**
+ * Получить снэпшоты готовности для всех этапов раздела
+ *
+ * Загружает readiness snapshots для всех decomposition_stages в разделе.
+ * Также рассчитывает сегодняшнюю готовность на лету из decomposition_items.
+ *
+ * @param sectionId - ID раздела
+ * @returns Map<stageId, ReadinessPoint[]>
+ */
+export async function getStageReadinessForSection(
+  sectionId: string
+): Promise<ActionResult<Record<string, ReadinessPoint[]>>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем все этапы раздела с их items для расчёта сегодняшней готовности
+    const { data: stages, error: stagesError } = await supabase
+      .from('decomposition_stages')
+      .select(`
+        decomposition_stage_id,
+        decomposition_items (
+          decomposition_item_progress,
+          decomposition_item_planned_hours
+        )
+      `)
+      .eq('decomposition_stage_section_id', sectionId)
+
+    if (stagesError) {
+      console.error('[getStageReadinessForSection] Stages error:', stagesError)
+      return { success: false, error: stagesError.message }
+    }
+
+    const stageIds = (stages || []).map(s => s.decomposition_stage_id)
+    if (stageIds.length === 0) {
+      return { success: true, data: {} }
+    }
+
+    // Получаем все снэпшоты для этих этапов (исторические данные до вчера)
+    const { data, error } = await supabase
+      .from('stage_readiness_snapshots')
+      .select('stage_id, snapshot_date, readiness_value')
+      .in('stage_id', stageIds)
+      .order('snapshot_date', { ascending: true })
+
+    if (error) {
+      console.error('[getStageReadinessForSection] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Группируем исторические снэпшоты по stage_id
+    const result: Record<string, ReadinessPoint[]> = {}
+    for (const row of data || []) {
+      if (!result[row.stage_id]) {
+        result[row.stage_id] = []
+      }
+      result[row.stage_id].push({
+        date: row.snapshot_date,
+        value: row.readiness_value,
+      })
+    }
+
+    // Добавляем сегодняшнюю готовность, рассчитанную на лету
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+
+    for (const stage of stages || []) {
+      const stageId = stage.decomposition_stage_id
+      const items = stage.decomposition_items as Array<{
+        decomposition_item_progress: number | null
+        decomposition_item_planned_hours: number | null
+      }> || []
+
+      // Рассчитываем взвешенное среднее: SUM(progress * hours) / SUM(hours)
+      let totalWeightedProgress = 0
+      let totalPlannedHours = 0
+
+      for (const item of items) {
+        const hours = item.decomposition_item_planned_hours || 0
+        const progress = item.decomposition_item_progress || 0
+        if (hours > 0) {
+          totalWeightedProgress += progress * hours
+          totalPlannedHours += hours
+        }
+      }
+
+      const todayReadiness = totalPlannedHours > 0
+        ? Math.round(totalWeightedProgress / totalPlannedHours)
+        : 0
+
+      // Добавляем сегодняшнюю точку только если есть данные для расчёта
+      if (totalPlannedHours > 0) {
+        if (!result[stageId]) {
+          result[stageId] = []
+        }
+
+        // Проверяем, нет ли уже точки на сегодня (не перезаписываем)
+        const hasToday = result[stageId].some(p => p.date === today)
+        if (!hasToday) {
+          result[stageId].push({
+            date: today,
+            value: todayReadiness,
+          })
+        }
+      }
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('[getStageReadinessForSection] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки готовности этапов',
+    }
+  }
+}
+
+// ============================================================================
+// Mutation Actions - Обновление данных
+// ============================================================================
+
+/**
+ * Обновить процент готовности задачи (decomposition_item)
+ *
+ * @param itemId - ID задачи
+ * @param progress - Новый процент готовности (0-100)
+ * @returns Успех или ошибка
+ */
+export async function updateItemProgress(
+  itemId: string,
+  progress: number
+): Promise<ActionResult<{ itemId: string; progress: number }>> {
+  try {
+    // Валидация
+    if (!itemId) {
+      return { success: false, error: 'ID задачи обязателен' }
+    }
+
+    if (typeof progress !== 'number' || progress < 0 || progress > 100) {
+      return { success: false, error: 'Готовность должна быть числом от 0 до 100' }
+    }
+
+    // Округляем до целого
+    const roundedProgress = Math.round(progress)
+
+    const supabase = await createClient()
+
+    const { error } = await supabase
+      .from('decomposition_items')
+      .update({ decomposition_item_progress: roundedProgress })
+      .eq('decomposition_item_id', itemId)
+
+    if (error) {
+      console.error('[updateItemProgress] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { itemId, progress: roundedProgress },
+    }
+  } catch (error) {
+    console.error('[updateItemProgress] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления готовности',
+    }
+  }
+}
+
+// ============================================================================
+// Timeline Resize Actions - Изменение сроков через drag
+// ============================================================================
+
+/**
+ * Обновить даты загрузки сотрудника
+ *
+ * @param loadingId - ID загрузки
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateLoadingDates(
+  loadingId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    // Проверяем что startDate <= finishDate
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('loadings')
+      .update({
+        loading_start: startDate,
+        loading_finish: finishDate,
+      })
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[updateLoadingDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { loadingId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateLoadingDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
+    }
+  }
+}
+
+/**
+ * Обновить даты этапа декомпозиции
+ *
+ * @param stageId - ID этапа декомпозиции
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateStageDates(
+  stageId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ stageId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация
+    if (!stageId) {
+      return { success: false, error: 'ID этапа обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('decomposition_stages')
+      .update({
+        decomposition_stage_start: startDate,
+        decomposition_stage_finish: finishDate,
+      })
+      .eq('decomposition_stage_id', stageId)
+
+    if (error) {
+      console.error('[updateStageDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { stageId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateStageDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат этапа',
+    }
+  }
+}
+
+/**
+ * Обновить даты раздела
+ *
+ * @param sectionId - ID раздела
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param endDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateSectionDates(
+  sectionId: string,
+  startDate: string,
+  endDate: string
+): Promise<ActionResult<{ sectionId: string; startDate: string; endDate: string }>> {
+  try {
+    // Валидация
+    if (!sectionId) {
+      return { success: false, error: 'ID раздела обязателен' }
+    }
+
+    if (!startDate || !endDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    if (startDate > endDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('sections')
+      .update({
+        section_start_date: startDate,
+        section_end_date: endDate,
+      })
+      .eq('section_id', sectionId)
+
+    if (error) {
+      console.error('[updateSectionDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { sectionId, startDate, endDate },
+    }
+  } catch (error) {
+    console.error('[updateSectionDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат раздела',
     }
   }
 }

@@ -178,8 +178,11 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
       {/* Дни */}
       <div className="flex h-10">
         {dayCells.map((cell, i) => {
-          // Простая логика: нерабочий день = красный фон
-          const isDayOff = !cell.isWorkday
+          // Логика цветов выходных:
+          // - Праздники и дополнительные выходные (переносы) → желтоватый
+          // - Стандартные выходные (Сб/Вс) → серый
+          const isSpecialDayOff = cell.isHoliday || cell.isTransferredDayOff
+          const isRegularWeekend = cell.isWeekend && !cell.isWorkday && !isSpecialDayOff
 
           return (
             <div
@@ -188,8 +191,10 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 'flex flex-col items-center justify-center text-[10px]',
                 // Сегодня - высший приоритет
                 cell.isToday && 'bg-primary/10',
-                // Нерабочий день (выходной, праздник, перенос) - красный фон
-                !cell.isToday && isDayOff && 'bg-red-50 dark:bg-red-950/30',
+                // Праздники и дополнительные выходные - желтоватый фон
+                !cell.isToday && isSpecialDayOff && 'bg-amber-50 dark:bg-amber-950/30',
+                // Стандартные выходные (Сб/Вс) - серый фон
+                !cell.isToday && isRegularWeekend && 'bg-gray-100 dark:bg-gray-800/50',
                 i < dayCells.length - 1 && 'border-r border-border/20'
               )}
               style={{ width: DAY_CELL_WIDTH }}
@@ -199,7 +204,8 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
                 className={cn(
                   'font-medium',
                   cell.isToday && 'text-primary',
-                  !cell.isToday && isDayOff && 'text-red-600 dark:text-red-400'
+                  !cell.isToday && isSpecialDayOff && 'text-amber-600 dark:text-amber-400',
+                  !cell.isToday && isRegularWeekend && 'text-gray-500 dark:text-gray-400'
                 )}
               >
                 {cell.dayOfMonth}
@@ -207,7 +213,9 @@ export function TimelineHeader({ dayCells }: TimelineHeaderProps) {
               <span
                 className={cn(
                   'uppercase',
-                  isDayOff ? 'text-red-400 dark:text-red-500' : 'text-muted-foreground'
+                  isSpecialDayOff ? 'text-amber-500 dark:text-amber-500' :
+                  isRegularWeekend ? 'text-gray-400 dark:text-gray-500' :
+                  'text-muted-foreground'
                 )}
               >
                 {cell.dayOfWeek}

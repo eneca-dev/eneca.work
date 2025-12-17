@@ -56,6 +56,10 @@ export {
 export { InlineFilter } from './components'
 export type { InlineFilterProps } from './components'
 
+// Internal components (for advanced usage - not recommended for general use)
+export { FilterSuggestions, COLOR_MAP, DEFAULT_COLOR } from './components'
+export type { FilterSuggestion, FilterSuggestionsProps } from './components'
+
 // Hooks
 export { useInlineFilter, useFilterContext } from './hooks'
 export type { UseInlineFilterOptions, UseInlineFilterReturn, FilterInputContext, UseFilterContextOptions } from './hooks'
