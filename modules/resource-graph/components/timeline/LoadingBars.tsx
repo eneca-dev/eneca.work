@@ -12,6 +12,7 @@ import { format, parseISO } from 'date-fns'
 import type { Loading, TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
 import { getEmployeeColor, getInitials } from '../../utils'
+import { useTimelineResize } from '../../hooks'
 
 // Константы для расчёта высоты
 const CHIP_HEIGHT = 18
@@ -21,6 +22,9 @@ const MIN_ROW_PADDING = 6
 
 // Отступ от краёв столбцов
 const EDGE_PADDING = 4
+
+// Ширина resize handle
+const RESIZE_HANDLE_WIDTH = 6
 
 /**
  * Рассчитать высоту строки на основе количества загрузок
@@ -39,13 +43,24 @@ interface LoadingBarsProps {
   range: TimelineRange
   /** Ширина таймлайна в пикселях */
   timelineWidth: number
+  /** ID раздела (для мутации) */
+  sectionId?: string
+  /** Callback при изменении дат загрузки */
+  onLoadingResize?: (loadingId: string, startDate: string, finishDate: string) => void
 }
 
 /**
  * Чипы загрузок на таймлайне
  * Минималистичные пилюли с аватаром и ставкой
+ * Поддерживают drag-to-resize для изменения дат
  */
-export function LoadingBars({ loadings, range, timelineWidth }: LoadingBarsProps) {
+export function LoadingBars({
+  loadings,
+  range,
+  timelineWidth,
+  sectionId,
+  onLoadingResize,
+}: LoadingBarsProps) {
   // Фильтруем только активные загрузки
   const activeLoadings = useMemo(() => {
     return loadings.filter(l => l.status === 'active' && !l.isShortage)
@@ -56,7 +71,7 @@ export function LoadingBars({ loadings, range, timelineWidth }: LoadingBarsProps
   return (
     <TooltipProvider delayDuration={0}>
       <div
-        className="absolute inset-x-0 pointer-events-none"
+        className="absolute inset-x-0"
         style={{
           top: VERTICAL_OFFSET,
           height: activeLoadings.length * (CHIP_HEIGHT + CHIP_GAP),
@@ -69,6 +84,7 @@ export function LoadingBars({ loadings, range, timelineWidth }: LoadingBarsProps
             range={range}
             chipHeight={CHIP_HEIGHT}
             verticalPosition={index * (CHIP_HEIGHT + CHIP_GAP)}
+            onResize={onLoadingResize}
           />
         ))}
       </div>
@@ -81,19 +97,47 @@ interface LoadingChipProps {
   range: TimelineRange
   chipHeight: number
   verticalPosition: number
+  onResize?: (loadingId: string, startDate: string, finishDate: string) => void
 }
 
 /**
- * Отдельный чип загрузки - минималистичный стиль как status chip
+ * Отдельный чип загрузки - минималистичный стиль с поддержкой resize
  */
-function LoadingChip({ loading, range, chipHeight, verticalPosition }: LoadingChipProps) {
+function LoadingChip({
+  loading,
+  range,
+  chipHeight,
+  verticalPosition,
+  onResize,
+}: LoadingChipProps) {
+  // Resize hook
+  const {
+    leftHandleProps,
+    rightHandleProps,
+    isResizing,
+    previewPosition,
+    previewDates,
+  } = useTimelineResize({
+    startDate: loading.startDate,
+    endDate: loading.finishDate,
+    range,
+    onResize: (newStartDate, newEndDate) => {
+      onResize?.(loading.id, newStartDate, newEndDate)
+    },
+    minDays: 1,
+    disabled: !onResize,
+  })
+
   const position = calculateBarPosition(loading.startDate, loading.finishDate, range)
 
   if (!position) return null
 
+  // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
+  const displayPosition = previewPosition ?? position
+
   // Применяем отступы от краёв столбцов
-  const paddedLeft = position.left + EDGE_PADDING
-  const paddedWidth = Math.max(position.width - EDGE_PADDING * 2, CHIP_HEIGHT)
+  const paddedLeft = displayPosition.left + EDGE_PADDING
+  const paddedWidth = Math.max(displayPosition.width - EDGE_PADDING * 2, CHIP_HEIGHT)
 
   const initials = getInitials(loading.employee.firstName, loading.employee.lastName)
   const hasAvatar = !!loading.employee.avatarUrl
@@ -103,17 +147,22 @@ function LoadingChip({ loading, range, chipHeight, verticalPosition }: LoadingCh
   // Цвет на основе ID сотрудника (одинаковый цвет для одного человека)
   const chipColor = getEmployeeColor(loading.employee.id)
 
+  // Показываем preview даты в tooltip во время resize
+  const displayStartDate = isResizing && previewDates ? previewDates.startDate : loading.startDate
+  const displayFinishDate = isResizing && previewDates ? previewDates.endDate : loading.finishDate
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className="
-            absolute pointer-events-auto cursor-default
+          className={`
+            absolute
             flex items-center gap-1 px-1
             rounded
             transition-colors duration-150
-            hover:brightness-110
-          "
+            ${isResizing ? 'ring-2 ring-white/30 z-50' : 'hover:brightness-110'}
+            ${onResize ? 'cursor-default' : 'cursor-default pointer-events-auto'}
+          `}
           style={{
             left: paddedLeft,
             width: paddedWidth,
@@ -122,9 +171,26 @@ function LoadingChip({ loading, range, chipHeight, verticalPosition }: LoadingCh
             backgroundColor: `${chipColor}1A`, // 10% opacity
             borderWidth: 1,
             borderStyle: 'solid',
-            borderColor: `${chipColor}40`, // 25% opacity
+            borderColor: isResizing ? chipColor : `${chipColor}40`, // 25% opacity or full during resize
           }}
         >
+          {/* Left resize handle */}
+          {onResize && (
+            <div
+              {...leftHandleProps}
+              className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
+              style={{
+                ...leftHandleProps.style,
+                left: -RESIZE_HANDLE_WIDTH / 2,
+                width: RESIZE_HANDLE_WIDTH,
+              }}
+            >
+              <div
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
+              />
+            </div>
+          )}
+
           {/* Avatar */}
           <div
             className="shrink-0 rounded overflow-hidden"
@@ -169,6 +235,23 @@ function LoadingChip({ loading, range, chipHeight, verticalPosition }: LoadingCh
               {loading.rate}
             </span>
           )}
+
+          {/* Right resize handle */}
+          {onResize && (
+            <div
+              {...rightHandleProps}
+              className="absolute top-0 bottom-0 hover:bg-white/20 transition-colors group"
+              style={{
+                ...rightHandleProps.style,
+                right: -RESIZE_HANDLE_WIDTH / 2,
+                width: RESIZE_HANDLE_WIDTH,
+              }}
+            >
+              <div
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-2/3 rounded-full bg-white/0 group-hover:bg-white/40 transition-colors"
+              />
+            </div>
+          )}
         </div>
       </TooltipTrigger>
 
@@ -208,16 +291,23 @@ function LoadingChip({ loading, range, chipHeight, verticalPosition }: LoadingCh
             </div>
           </div>
 
-          {/* Period */}
+          {/* Period - показываем preview даты во время resize */}
           <div className="flex items-center gap-2 text-[11px] text-white/60">
             <span className="text-white/40">Период:</span>
-            <span className="tabular-nums">
-              {formatDate(loading.startDate)} — {formatDate(loading.finishDate)}
+            <span className={`tabular-nums ${isResizing ? 'text-white font-medium' : ''}`}>
+              {formatDate(displayStartDate)} — {formatDate(displayFinishDate)}
             </span>
           </div>
 
+          {/* Resize hint */}
+          {isResizing && (
+            <div className="pt-1 border-t border-white/10 text-[10px] text-white/40">
+              Отпустите для сохранения
+            </div>
+          )}
+
           {/* Comment */}
-          {loading.comment && (
+          {loading.comment && !isResizing && (
             <div className="pt-1 border-t border-white/10">
               <p className="text-[11px] text-white/60 leading-relaxed">
                 {loading.comment}

@@ -185,6 +185,7 @@ export interface Loading {
 export interface Section {
   id: string
   name: string
+  description: string | null
   startDate: string | null
   endDate: string | null
   responsible: {

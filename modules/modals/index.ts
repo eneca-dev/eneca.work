@@ -124,8 +124,8 @@ export { WorkLogCreateModal, type WorkLogCreateModalProps } from './components/w
 export { ProgressUpdateDialog, type ProgressUpdateDialogProps } from './components/progress'
 
 // Section
-// export { SectionViewModal } from './components/section/SectionViewModal'
-// export { SectionEditModal } from './components/section/SectionEditModal'
+export { SectionModal, type SectionModalProps } from './components/section'
+export { SectionMetrics } from './components/section'
 
 // Stage
 // export { StageViewModal } from './components/stage/StageViewModal'

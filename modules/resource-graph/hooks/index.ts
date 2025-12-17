@@ -25,6 +25,9 @@ import {
   getLoadingsForSection,
   getStageReadinessForSection,
   updateItemProgress,
+  updateLoadingDates,
+  updateStageDates,
+  updateSectionDates,
 } from '../actions'
 
 import type {
@@ -283,7 +286,258 @@ export const useUpdateItemProgress = createCacheMutation<
   // invalidateKeys: [queryKeys.resourceGraph.all],
 })
 
-// TODO: Add more mutation hooks
-// export const useUpdateLoading = createUpdateMutation({ ... })
-// export const useCreateLoading = createCacheMutation({ ... })
-// export const useDeleteLoading = createDeleteMutation({ ... })
+// ============================================================================
+// Timeline Resize Mutation Hooks
+// ============================================================================
+
+/**
+ * Тип входных данных для обновления дат загрузки
+ */
+interface UpdateLoadingDatesInput {
+  loadingId: string
+  sectionId: string // Нужен для инвалидации кеша
+  startDate: string
+  finishDate: string
+}
+
+/**
+ * Обновляет даты в массиве загрузок
+ */
+function updateLoadingDatesInCache(
+  loadings: Loading[] | undefined,
+  loadingId: string,
+  startDate: string,
+  finishDate: string
+): Loading[] {
+  if (!loadings) return []
+
+  return loadings.map((loading) =>
+    loading.id === loadingId
+      ? { ...loading, startDate, finishDate }
+      : loading
+  )
+}
+
+/**
+ * Мутация для обновления дат загрузки с optimistic update
+ *
+ * @example
+ * const mutation = useUpdateLoadingDates()
+ * mutation.mutate({
+ *   loadingId: 'xxx',
+ *   sectionId: 'yyy',
+ *   startDate: '2024-01-01',
+ *   finishDate: '2024-01-15'
+ * })
+ */
+export const useUpdateLoadingDates = createCacheMutation<
+  UpdateLoadingDatesInput,
+  { loadingId: string; startDate: string; finishDate: string }
+>({
+  mutationFn: ({ loadingId, startDate, finishDate }) =>
+    updateLoadingDates(loadingId, startDate, finishDate),
+
+  optimisticUpdate: {
+    // Динамический ключ на основе sectionId для правильного кеша Loading[]
+    queryKey: (input) => queryKeys.resourceGraph.loadings(input.sectionId),
+    updater: (oldData, input) => {
+      // oldData это Loading[] из кеша useLoadings(sectionId)
+      return updateLoadingDatesInCache(
+        oldData as Loading[] | undefined,
+        input.loadingId,
+        input.startDate,
+        input.finishDate
+      )
+    },
+  },
+})
+
+/**
+ * Тип входных данных для обновления дат этапа
+ */
+interface UpdateStageDatesInput {
+  stageId: string
+  startDate: string
+  finishDate: string
+}
+
+/**
+ * Рекурсивно обновляет даты этапа в иерархии проектов
+ */
+function updateStageDatesInHierarchy(
+  projects: Project[] | undefined,
+  stageId: string,
+  startDate: string,
+  finishDate: string
+): Project[] {
+  if (!projects || !Array.isArray(projects)) return projects || []
+
+  return projects.map((project) => {
+    if (!project?.stages || !Array.isArray(project.stages)) {
+      return project
+    }
+
+    return {
+      ...project,
+      stages: project.stages.map((stage) => {
+        if (!stage?.objects || !Array.isArray(stage.objects)) {
+          return stage
+        }
+
+        return {
+          ...stage,
+          objects: stage.objects.map((obj) => {
+            if (!obj?.sections || !Array.isArray(obj.sections)) {
+              return obj
+            }
+
+            return {
+              ...obj,
+              sections: obj.sections.map((section) => {
+                if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
+                  return section
+                }
+
+                return {
+                  ...section,
+                  decompositionStages: section.decompositionStages.map((dStage) =>
+                    dStage.id === stageId
+                      ? { ...dStage, startDate, finishDate }
+                      : dStage
+                  ),
+                }
+              }),
+            }
+          }),
+        }
+      }),
+    }
+  })
+}
+
+/**
+ * Мутация для обновления дат этапа декомпозиции с optimistic update
+ *
+ * @example
+ * const mutation = useUpdateStageDates()
+ * mutation.mutate({
+ *   stageId: 'xxx',
+ *   startDate: '2024-01-01',
+ *   finishDate: '2024-01-31'
+ * })
+ */
+export const useUpdateStageDates = createCacheMutation<
+  UpdateStageDatesInput,
+  { stageId: string; startDate: string; finishDate: string }
+>({
+  mutationFn: ({ stageId, startDate, finishDate }) =>
+    updateStageDates(stageId, startDate, finishDate),
+
+  optimisticUpdate: {
+    queryKey: queryKeys.resourceGraph.all,
+    updater: (oldData, input) => {
+      return updateStageDatesInHierarchy(
+        oldData as Project[] | undefined,
+        input.stageId,
+        input.startDate,
+        input.finishDate
+      )
+    },
+  },
+})
+
+/**
+ * Тип входных данных для обновления дат раздела
+ */
+interface UpdateSectionDatesInput {
+  sectionId: string
+  startDate: string
+  endDate: string
+}
+
+/**
+ * Рекурсивно обновляет даты раздела в иерархии проектов
+ */
+function updateSectionDatesInHierarchy(
+  projects: Project[] | undefined,
+  sectionId: string,
+  startDate: string,
+  endDate: string
+): Project[] {
+  if (!projects || !Array.isArray(projects)) return projects || []
+
+  return projects.map((project) => {
+    if (!project?.stages || !Array.isArray(project.stages)) {
+      return project
+    }
+
+    return {
+      ...project,
+      stages: project.stages.map((stage) => {
+        if (!stage?.objects || !Array.isArray(stage.objects)) {
+          return stage
+        }
+
+        return {
+          ...stage,
+          objects: stage.objects.map((obj) => {
+            if (!obj?.sections || !Array.isArray(obj.sections)) {
+              return obj
+            }
+
+            return {
+              ...obj,
+              sections: obj.sections.map((section) =>
+                section.id === sectionId
+                  ? { ...section, startDate, endDate }
+                  : section
+              ),
+            }
+          }),
+        }
+      }),
+    }
+  })
+}
+
+/**
+ * Мутация для обновления дат раздела с optimistic update
+ *
+ * @example
+ * const mutation = useUpdateSectionDates()
+ * mutation.mutate({
+ *   sectionId: 'xxx',
+ *   startDate: '2024-01-01',
+ *   endDate: '2024-03-31'
+ * })
+ */
+export const useUpdateSectionDates = createCacheMutation<
+  UpdateSectionDatesInput,
+  { sectionId: string; startDate: string; endDate: string }
+>({
+  mutationFn: ({ sectionId, startDate, endDate }) =>
+    updateSectionDates(sectionId, startDate, endDate),
+
+  optimisticUpdate: {
+    queryKey: queryKeys.resourceGraph.all,
+    updater: (oldData, input) => {
+      return updateSectionDatesInHierarchy(
+        oldData as Project[] | undefined,
+        input.sectionId,
+        input.startDate,
+        input.endDate
+      )
+    },
+  },
+})
+
+// ============================================================================
+// Timeline Resize Hook
+// ============================================================================
+
+export { useTimelineResize } from './useTimelineResize'
+export type {
+  UseTimelineResizeOptions,
+  UseTimelineResizeReturn,
+  ResizeEdge,
+} from './useTimelineResize'

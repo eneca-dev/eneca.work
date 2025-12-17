@@ -70,7 +70,7 @@ If you are reviewing code (not generating):
 Action: (I will generate the instrumented code below).
 WHEN TO INVOKE:
 User Request: When user asks "Add logging", "Setup Sentry", or "Trace this error".
-Pipeline Phase 3: When pipeline-manager instructs to add observability.
+Full Pipeline Фаза 3: При финальной проверке фичи (добавление observability).
 Debugging: When user provides a stack trace and asks for analysis (Sentry Guardian understands the tags/context best).
 HANDOFF INSTRUCTIONS:
 "Please instrument the following files with Sentry spans and tags."

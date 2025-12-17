@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronRight, Wallet, Loader2, Plus } from 'lucide-react'
+import { ChevronRight, Wallet, Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -9,12 +9,24 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { BudgetCreateModal } from '@/modules/modals'
-import type { BudgetCurrent } from '@/modules/budgets'
+import { useDeactivateBudget, type BudgetCurrent } from '@/modules/budgets'
 import type { DayCell } from './TimelineHeader'
 import type { TimelineRange } from '../../types'
 import { TimelineGrid } from './TimelineRow'
 import { calculateBarPosition } from './TimelineBar'
+import { SectionPeriodFrame } from './SectionPeriodFrame'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../constants'
 
 // ============================================================================
@@ -73,6 +85,14 @@ export function BudgetsRow({
   const totalPlanned = budgets?.reduce((sum, b) => sum + (b.planned_amount || 0), 0) ?? 0
   const totalSpent = budgets?.reduce((sum, b) => sum + (b.spent_amount || 0), 0) ?? 0
   const budgetCount = budgets?.length ?? 0
+  const totalPercentage = totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0
+
+  // Цвет общего процента
+  const getTotalProgressColor = () => {
+    if (totalPercentage >= 90) return 'text-red-500'
+    if (totalPercentage >= 70) return 'text-amber-500'
+    return 'text-emerald-500'
+  }
 
   // Форматирование суммы
   const formatAmount = (amount: number) => {
@@ -111,29 +131,33 @@ export function BudgetsRow({
           <Wallet className="w-3.5 h-3.5 text-amber-500 shrink-0" />
 
           {/* Label */}
-          <span className="text-[11px] text-muted-foreground font-medium">
+          <span className="text-[11px] text-muted-foreground font-medium shrink-0">
             Бюджеты
           </span>
 
           {/* Loading */}
           {isLoading && (
-            <Loader2 className="w-3 h-3 text-muted-foreground animate-spin ml-1" />
+            <Loader2 className="w-3 h-3 text-muted-foreground animate-spin ml-auto" />
           )}
 
-          {/* Summary */}
+          {/* Summary - compact */}
           {!isLoading && budgetCount > 0 && (
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-[10px] text-muted-foreground/70 ml-auto tabular-nums">
-                    {budgetCount} шт. · {formatAmount(totalSpent)} / {formatAmount(totalPlanned)}
+                  <span className={cn(
+                    'text-[10px] font-medium ml-auto tabular-nums shrink-0',
+                    getTotalProgressColor()
+                  )}>
+                    {totalPercentage}%
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
                   <div className="space-y-1">
                     <div>Всего бюджетов: {budgetCount}</div>
-                    <div>Освоено: {formatAmount(totalSpent)} BYN</div>
+                    <div>Освоено: {formatAmount(totalSpent)} BYN ({totalPercentage}%)</div>
                     <div>Запланировано: {formatAmount(totalPlanned)} BYN</div>
+                    <div>Остаток: {formatAmount(totalPlanned - totalSpent)} BYN</div>
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -141,7 +165,7 @@ export function BudgetsRow({
           )}
 
           {!isLoading && budgetCount === 0 && (
-            <span className="text-[10px] text-muted-foreground/50 ml-auto">
+            <span className="text-[10px] text-muted-foreground/50 ml-auto shrink-0">
               нет
             </span>
           )}
@@ -172,9 +196,14 @@ export function BudgetsRow({
           </TooltipProvider>
         </div>
 
-        {/* Timeline - empty */}
+        {/* Timeline - показываем период раздела */}
         <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
+          <SectionPeriodFrame
+            startDate={sectionStartDate}
+            endDate={sectionEndDate}
+            range={range}
+          />
         </div>
       </div>
 
@@ -192,6 +221,7 @@ export function BudgetsRow({
               range={range}
               sectionStartDate={sectionStartDate}
               sectionEndDate={sectionEndDate}
+              onRefetch={refetch}
             />
           ))}
         </>
@@ -231,9 +261,22 @@ interface BudgetItemRowProps {
   range: TimelineRange
   sectionStartDate: string | null
   sectionEndDate: string | null
+  onRefetch?: () => void
 }
 
-function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, range, sectionStartDate, sectionEndDate }: BudgetItemRowProps) {
+function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, range, sectionStartDate, sectionEndDate, onRefetch }: BudgetItemRowProps) {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const deactivateMutation = useDeactivateBudget()
+
+  const handleDelete = () => {
+    deactivateMutation.mutate(budget.budget_id, {
+      onSuccess: () => {
+        setIsDeleteDialogOpen(false)
+        onRefetch?.()
+      },
+    })
+  }
+
   const formatAmount = (amount: number) => {
     return Math.round(amount).toLocaleString('ru-RU')
   }
@@ -253,12 +296,12 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
   return (
     <div
-      className="flex border-b border-border/30 hover:bg-muted/20 transition-colors"
+      className="group flex border-b border-border/30 hover:bg-muted/20 transition-colors"
       style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
     >
       {/* Sidebar */}
       <div
-        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
+        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background group-hover:bg-muted/20"
         style={{
           width: SIDEBAR_WIDTH,
           paddingLeft: 8 + depth * 16,
@@ -296,6 +339,64 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {/* Delete button */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className={cn(
+                      'p-0.5 rounded transition-all shrink-0 ml-1',
+                      'text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10',
+                      'opacity-0 group-hover:opacity-100'
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Удалить бюджет
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <AlertDialogContent className="max-w-sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-base">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                Удалить бюджет?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm">
+                Бюджет «{budget.name}» будет деактивирован.
+                <br />
+                <span className="text-amber-600 dark:text-amber-400">
+                  Связь с журналом работ будет потеряна.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="text-xs h-8">Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deactivateMutation.isPending}
+                className="bg-red-500 hover:bg-red-600 text-xs h-8"
+              >
+                {deactivateMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    Удаление...
+                  </>
+                ) : (
+                  'Удалить'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Timeline - progress bar в пределах периода раздела */}

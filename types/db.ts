@@ -6056,6 +6056,13 @@ export type Database = {
             foreignKeyName: "sections_section_object_id_fkey"
             columns: ["section_object_id"]
             isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["object_id"]
+          },
+          {
+            foreignKeyName: "sections_section_object_id_fkey"
+            columns: ["section_object_id"]
+            isOneToOne: false
             referencedRelation: "view_project_tree"
             referencedColumns: ["object_id"]
           },
@@ -9827,6 +9834,13 @@ export type Database = {
             foreignKeyName: "sections_section_object_id_fkey"
             columns: ["section_object_id"]
             isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["object_id"]
+          },
+          {
+            foreignKeyName: "sections_section_object_id_fkey"
+            columns: ["section_object_id"]
+            isOneToOne: false
             referencedRelation: "view_project_tree"
             referencedColumns: ["object_id"]
           },
@@ -10537,6 +10551,13 @@ export type Database = {
             foreignKeyName: "sections_section_object_id_fkey"
             columns: ["section_object_id"]
             isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["object_id"]
+          },
+          {
+            foreignKeyName: "sections_section_object_id_fkey"
+            columns: ["section_object_id"]
+            isOneToOne: false
             referencedRelation: "view_project_tree"
             referencedColumns: ["object_id"]
           },
@@ -10737,6 +10758,7 @@ export type Database = {
           section_budget_spending: Json | null
           section_department_id: string | null
           section_department_name: string | null
+          section_description: string | null
           section_end_date: string | null
           section_id: string | null
           section_name: string | null
@@ -12467,6 +12489,8 @@ export type Database = {
             | Database["public"]["Enums"]["loading_status_type"]
             | null
           loadings_count: number | null
+          object_id: string | null
+          object_name: string | null
           original_department_id: string | null
           original_department_name: string | null
           original_team_id: string | null
@@ -17712,6 +17736,13 @@ export type Database = {
             foreignKeyName: "sections_section_object_id_fkey"
             columns: ["object_id"]
             isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["object_id"]
+          },
+          {
+            foreignKeyName: "sections_section_object_id_fkey"
+            columns: ["object_id"]
+            isOneToOne: false
             referencedRelation: "view_project_tree"
             referencedColumns: ["object_id"]
           },
@@ -18055,12 +18086,17 @@ export type Database = {
         Returns: boolean
       }
       compute_user_permissions: { Args: { p_user_id: string }; Returns: Json }
+      create_all_readiness_snapshots: {
+        Args: { company_timezone?: string; target_date?: string }
+        Returns: Json
+      }
       create_daily_readiness_snapshots: {
-        Args: { p_date?: string }
+        Args: { company_timezone?: string; target_date?: string }
         Returns: {
-          action: string
-          readiness: number
-          section_id: string
+          out_created: boolean
+          out_readiness: number
+          out_section_id: string
+          out_section_name: string
         }[]
       }
       delete_project_cascade: {

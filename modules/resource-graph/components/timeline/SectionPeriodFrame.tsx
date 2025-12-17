@@ -2,22 +2,50 @@
 
 import type { TimelineRange } from '../../types'
 import { calculateBarPosition } from './TimelineBar'
+import { useTimelineResize } from '../../hooks'
 
 interface SectionPeriodFrameProps {
   startDate: string | null
   endDate: string | null
   range: TimelineRange
   color?: string | null
+  /** Callback для resize (если передан — включается drag-to-resize) */
+  onResize?: (newStartDate: string, newEndDate: string) => void
 }
+
+// Константа для ширины resize handle
+const SECTION_RESIZE_HANDLE_WIDTH = 8
 
 /**
  * Рамка периода раздела — серая заливка с вертикальными линиями по краям
+ * Поддерживает drag-to-resize если передан onResize callback
  */
-export function SectionPeriodFrame({ startDate, endDate, range, color }: SectionPeriodFrameProps) {
+export function SectionPeriodFrame({
+  startDate,
+  endDate,
+  range,
+  color,
+  onResize,
+}: SectionPeriodFrameProps) {
   const position = calculateBarPosition(startDate, endDate, range)
 
   if (!position) return null
 
+  // Если есть onResize и даты валидны — рендерим resizable версию
+  if (onResize && startDate && endDate) {
+    return (
+      <ResizableSectionPeriodFrame
+        startDate={startDate}
+        endDate={endDate}
+        range={range}
+        color={color}
+        onResize={onResize}
+        position={position}
+      />
+    )
+  }
+
+  // Иначе — обычная статичная версия
   const frameColor = color || '#3b82f6'
   const borderWidth = 2
 
@@ -48,6 +76,102 @@ export function SectionPeriodFrame({ startDate, endDate, range, color }: Section
           backgroundColor: `${frameColor}60`,
         }}
       />
+    </div>
+  )
+}
+
+/**
+ * Resizable версия SectionPeriodFrame
+ * Выделена в отдельный компонент чтобы хук вызывался безусловно
+ */
+function ResizableSectionPeriodFrame({
+  startDate,
+  endDate,
+  range,
+  color,
+  onResize,
+  position,
+}: {
+  startDate: string
+  endDate: string
+  range: TimelineRange
+  color?: string | null
+  onResize: (newStartDate: string, newEndDate: string) => void
+  position: { left: number; width: number }
+}) {
+  const {
+    leftHandleProps,
+    rightHandleProps,
+    isResizing,
+    previewPosition,
+  } = useTimelineResize({
+    startDate,
+    endDate,
+    range,
+    onResize,
+    minDays: 1,
+  })
+
+  // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
+  const displayPosition = previewPosition ?? position
+
+  const frameColor = color || '#3b82f6'
+  const borderWidth = 2
+
+  return (
+    <div
+      className={`absolute ${isResizing ? 'z-40' : ''}`}
+      style={{
+        left: displayPosition.left,
+        width: displayPosition.width,
+        top: 0,
+        bottom: 0,
+        backgroundColor: isResizing ? 'rgba(156, 163, 175, 0.15)' : 'rgba(156, 163, 175, 0.08)',
+      }}
+    >
+      {/* Левая вертикальная линия + resize handle */}
+      <div
+        className="absolute left-0 top-0 bottom-0"
+        style={{
+          width: borderWidth,
+          backgroundColor: isResizing ? frameColor : `${frameColor}60`,
+        }}
+      />
+      <div
+        {...leftHandleProps}
+        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+        style={{
+          left: -SECTION_RESIZE_HANDLE_WIDTH / 2,
+          width: SECTION_RESIZE_HANDLE_WIDTH,
+          zIndex: 20,
+        }}
+      >
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+        />
+      </div>
+
+      {/* Правая вертикальная линия + resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0"
+        style={{
+          width: borderWidth,
+          backgroundColor: isResizing ? frameColor : `${frameColor}60`,
+        }}
+      />
+      <div
+        {...rightHandleProps}
+        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+        style={{
+          right: -SECTION_RESIZE_HANDLE_WIDTH / 2,
+          width: SECTION_RESIZE_HANDLE_WIDTH,
+          zIndex: 20,
+        }}
+      >
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+        />
+      </div>
     </div>
   )
 }

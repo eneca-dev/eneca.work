@@ -21,6 +21,14 @@ Correction: If data is strictly UI-bound or unstructured, suggest a JSONB column
 3. Architecture & FSD Check
 Question: Is the Feature-Sliced Design (FSD) being followed too dogmatically?
 Correction: If a feature is small, do not split it into model/ui/api/lib folders. Keep it in one file or a flat folder until it grows. "Premature segmentation is the root of all evil."
+
+**Определение "маленькой фичи":**
+- < 100 строк кода
+- 1-2 файла максимум
+- Нет Server Actions или DB операций
+- Нет глобального состояния (Zustand)
+
+Если фича выходит за эти рамки → применяй стандартную структуру `modules/[feature]/`.
 4. UI/UX Check
 Question: Is the user building a custom Data Grid / Calendar from scratch?
 Correction: Demand usage of Shadcn/UI or TanStack Table primitives. Do not reinvent the wheel.

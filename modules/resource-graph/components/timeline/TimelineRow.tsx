@@ -44,8 +44,24 @@ import { ActualReadinessArea } from './ActualReadinessArea'
 import { BudgetSpendingArea } from './BudgetSpendingArea'
 import { BudgetsRow } from './BudgetsRow'
 import { SectionTooltipOverlay } from './SectionTooltipOverlay'
-import { useWorkLogs, useLoadings, useStageReadiness, useSectionBudgets } from '../../hooks'
+import {
+  useWorkLogs,
+  useLoadings,
+  useStageReadiness,
+  useSectionBudgets,
+  useUpdateLoadingDates,
+  useUpdateStageDates,
+  useUpdateSectionDates,
+  useTimelineResize,
+} from '../../hooks'
+import dynamic from 'next/dynamic'
 import { WorkLogCreateModal, ProgressUpdateDialog } from '@/modules/modals'
+
+// Dynamic import to avoid circular dependency during build
+const SectionModal = dynamic(
+  () => import('@/modules/modals/components/section/SectionModal').then(mod => mod.SectionModal),
+  { ssr: false }
+)
 import type { DayCell } from './TimelineHeader'
 import { ROW_HEIGHT, SECTION_ROW_HEIGHT, STAGE_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../constants'
 
@@ -627,6 +643,31 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
   const depth = 4
 
+  // Mutation для обновления дат загрузки
+  const updateLoadingDates = useUpdateLoadingDates()
+
+  // Mutation для обновления дат этапа
+  const updateStageDates = useUpdateStageDates()
+
+  // Callback для resize загрузок
+  const handleLoadingResize = (loadingId: string, startDate: string, finishDate: string) => {
+    updateLoadingDates.mutate({
+      loadingId,
+      sectionId,
+      startDate,
+      finishDate,
+    })
+  }
+
+  // Callback для resize этапа
+  const handleStageResize = (newStartDate: string, newFinishDate: string) => {
+    updateStageDates.mutate({
+      stageId: stage.id,
+      startDate: newStartDate,
+      finishDate: newFinishDate,
+    })
+  }
+
   // Фильтруем loadings только для этого этапа (активные)
   const stageLoadings = useMemo(() => {
     return loadings?.filter(l => l.stageId === stage.id && l.status === 'active' && !l.isShortage) || []
@@ -820,12 +861,13 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
         <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
 
-          {/* Фоновая заливка периода */}
+          {/* Фоновая заливка периода (с поддержкой resize) */}
           <PeriodBackground
             startDate={stage.startDate}
             endDate={stage.finishDate}
             range={range}
             color={stage.status.color}
+            onResize={handleStageResize}
           />
 
           {/* Верхняя зона: Загрузки сотрудников */}
@@ -838,6 +880,8 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
                 loadings={stageLoadings}
                 range={range}
                 timelineWidth={timelineWidth}
+                sectionId={sectionId}
+                onLoadingResize={handleLoadingResize}
               />
             )}
           </div>
@@ -879,7 +923,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
 }
 
 // ============================================================================
-// Period Background (фоновая заливка периода)
+// Period Background (фоновая заливка периода с поддержкой resize)
 // ============================================================================
 
 interface PeriodBackgroundProps {
@@ -887,18 +931,38 @@ interface PeriodBackgroundProps {
   endDate: string | null
   range: TimelineRange
   color?: string | null
+  /** Callback для resize (если передан — включается drag-to-resize) */
+  onResize?: (newStartDate: string, newEndDate: string) => void
 }
+
+// Константа для ширины resize handle
+const PERIOD_RESIZE_HANDLE_WIDTH = 8
 
 /**
  * Фоновая заливка периода с вертикальными линиями по краям
  * Используется для разделов и этапов декомпозиции
+ * Поддерживает drag-to-resize если передан onResize callback
  */
-function PeriodBackground({ startDate, endDate, range, color }: PeriodBackgroundProps) {
+function PeriodBackground({ startDate, endDate, range, color, onResize }: PeriodBackgroundProps) {
   const position = calculateBarPosition(startDate, endDate, range)
 
   if (!position) return null
 
-  // Цвет с низкой прозрачностью для фона
+  // Если есть onResize и даты валидны — рендерим resizable версию
+  if (onResize && startDate && endDate) {
+    return (
+      <ResizablePeriodBackground
+        startDate={startDate}
+        endDate={endDate}
+        range={range}
+        color={color}
+        onResize={onResize}
+        position={position}
+      />
+    )
+  }
+
+  // Иначе — обычная статичная версия
   const bgColor = color || '#3b82f6'
 
   return (
@@ -912,6 +976,88 @@ function PeriodBackground({ startDate, endDate, range, color }: PeriodBackground
         borderRight: `2px solid ${bgColor}40`,
       }}
     />
+  )
+}
+
+/**
+ * Resizable версия PeriodBackground
+ * Выделена в отдельный компонент чтобы хук вызывался безусловно
+ */
+function ResizablePeriodBackground({
+  startDate,
+  endDate,
+  range,
+  color,
+  onResize,
+  position,
+}: {
+  startDate: string
+  endDate: string
+  range: TimelineRange
+  color?: string | null
+  onResize: (newStartDate: string, newEndDate: string) => void
+  position: { left: number; width: number }
+}) {
+  const {
+    leftHandleProps,
+    rightHandleProps,
+    isResizing,
+    previewPosition,
+  } = useTimelineResize({
+    startDate,
+    endDate,
+    range,
+    onResize,
+    minDays: 1,
+  })
+
+  // Используем preview позицию пока она есть (даже после окончания drag, пока ждём обновления props)
+  const displayPosition = previewPosition ?? position
+
+  // Цвет с низкой прозрачностью для фона
+  const bgColor = color || '#3b82f6'
+
+  return (
+    <div
+      className={`absolute inset-y-0 ${isResizing ? 'z-40' : ''}`}
+      style={{
+        left: displayPosition.left,
+        width: displayPosition.width,
+        backgroundColor: isResizing ? `${bgColor}25` : `${bgColor}15`,
+        borderLeft: `2px solid ${isResizing ? bgColor : `${bgColor}40`}`,
+        borderRight: `2px solid ${isResizing ? bgColor : `${bgColor}40`}`,
+      }}
+    >
+      {/* Left resize handle */}
+      <div
+        {...leftHandleProps}
+        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+        style={{
+          left: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
+          width: PERIOD_RESIZE_HANDLE_WIDTH,
+          zIndex: 10,
+        }}
+      >
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+        />
+      </div>
+
+      {/* Right resize handle */}
+      <div
+        {...rightHandleProps}
+        className="absolute top-0 bottom-0 hover:bg-white/10 transition-colors cursor-ew-resize group"
+        style={{
+          right: -PERIOD_RESIZE_HANDLE_WIDTH / 2,
+          width: PERIOD_RESIZE_HANDLE_WIDTH,
+          zIndex: 10,
+        }}
+      >
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-white/0 group-hover:bg-white/30 transition-colors"
+        />
+      </div>
+    </div>
   )
 }
 
@@ -929,6 +1075,7 @@ interface SectionRowProps {
 
 function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
 
   // Lazy load work logs при развороте объекта (не раздела!)
@@ -951,6 +1098,18 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
     'section',
     isObjectExpanded ? section.id : undefined // Загружаем только когда объект развёрнут
   )
+
+  // Mutation для обновления дат раздела
+  const updateSectionDates = useUpdateSectionDates()
+
+  // Callback для resize раздела
+  const handleSectionResize = (newStartDate: string, newEndDate: string) => {
+    updateSectionDates.mutate({
+      sectionId: section.id,
+      startDate: newStartDate,
+      endDate: newEndDate,
+    })
+  }
 
   // Расчёт сегодняшней готовности секции из всех задач всех этапов
   const sectionTodayReadiness = useMemo(() => {
@@ -1146,8 +1305,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
               title={`${section.name} — нажмите для просмотра`}
               onClick={(e) => {
                 e.stopPropagation()
-                // TODO: Открыть SectionModal когда будет создана
-                console.log('[SectionRow] Section clicked:', section.id, section.name)
+                setIsSectionModalOpen(true)
               }}
             >
               {section.name}
@@ -1239,12 +1397,13 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
         {/* Timeline area - fixed width */}
         <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Рамка периода раздела (прямоугольник) */}
+          {/* Рамка периода раздела (прямоугольник с поддержкой resize) */}
           <SectionPeriodFrame
             startDate={section.startDate}
             endDate={section.endDate}
             range={range}
             color={section.status.color}
+            onResize={handleSectionResize}
           />
           {/* Заливка плановой готовности с процентами */}
           {section.readinessCheckpoints.length > 0 && (
@@ -1325,6 +1484,18 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
           ))}
         </>
       )}
+
+      {/* Section Modal */}
+      <SectionModal
+        isOpen={isSectionModalOpen}
+        onClose={() => setIsSectionModalOpen(false)}
+        section={section}
+        sectionId={section.id}
+        onSuccess={() => {
+          // Invalidate section data after update
+          refetchWorkLogs()
+        }}
+      />
     </>
   )
 }

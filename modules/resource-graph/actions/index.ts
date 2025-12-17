@@ -8,6 +8,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import type { ActionResult } from '@/modules/cache'
 import type {
   Project,
   ResourceGraphRow,
@@ -19,14 +20,6 @@ import type {
 } from '../types'
 import { transformRowsToHierarchy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
-
-// ============================================================================
-// Result Types
-// ============================================================================
-
-type ActionResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: string }
 
 // ============================================================================
 // Query Actions
@@ -885,6 +878,194 @@ export async function updateItemProgress(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка обновления готовности',
+    }
+  }
+}
+
+// ============================================================================
+// Timeline Resize Actions - Изменение сроков через drag
+// ============================================================================
+
+/**
+ * Обновить даты загрузки сотрудника
+ *
+ * @param loadingId - ID загрузки
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateLoadingDates(
+  loadingId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ loadingId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    // Проверяем что startDate <= finishDate
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('loadings')
+      .update({
+        loading_start: startDate,
+        loading_finish: finishDate,
+      })
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[updateLoadingDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { loadingId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateLoadingDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат загрузки',
+    }
+  }
+}
+
+/**
+ * Обновить даты этапа декомпозиции
+ *
+ * @param stageId - ID этапа декомпозиции
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param finishDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateStageDates(
+  stageId: string,
+  startDate: string,
+  finishDate: string
+): Promise<ActionResult<{ stageId: string; startDate: string; finishDate: string }>> {
+  try {
+    // Валидация
+    if (!stageId) {
+      return { success: false, error: 'ID этапа обязателен' }
+    }
+
+    if (!startDate || !finishDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    if (startDate > finishDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('decomposition_stages')
+      .update({
+        decomposition_stage_start: startDate,
+        decomposition_stage_finish: finishDate,
+      })
+      .eq('decomposition_stage_id', stageId)
+
+    if (error) {
+      console.error('[updateStageDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { stageId, startDate, finishDate },
+    }
+  } catch (error) {
+    console.error('[updateStageDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат этапа',
+    }
+  }
+}
+
+/**
+ * Обновить даты раздела
+ *
+ * @param sectionId - ID раздела
+ * @param startDate - Новая дата начала (YYYY-MM-DD)
+ * @param endDate - Новая дата окончания (YYYY-MM-DD)
+ * @returns Успех или ошибка
+ */
+export async function updateSectionDates(
+  sectionId: string,
+  startDate: string,
+  endDate: string
+): Promise<ActionResult<{ sectionId: string; startDate: string; endDate: string }>> {
+  try {
+    // Валидация
+    if (!sectionId) {
+      return { success: false, error: 'ID раздела обязателен' }
+    }
+
+    if (!startDate || !endDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    if (startDate > endDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    const { error } = await supabase
+      .from('sections')
+      .update({
+        section_start_date: startDate,
+        section_end_date: endDate,
+      })
+      .eq('section_id', sectionId)
+
+    if (error) {
+      console.error('[updateSectionDates] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: true,
+      data: { sectionId, startDate, endDate },
+    }
+  } catch (error) {
+    console.error('[updateSectionDates] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления дат раздела',
     }
   }
 }

@@ -161,7 +161,7 @@ export function SectionTooltipOverlay({
   return (
     <TooltipProvider delayDuration={100}>
       <div
-        className="absolute inset-0 z-10"
+        className="absolute inset-0 z-10 pointer-events-none"
         style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
       >
         {dayMetrics.map((day) => (
@@ -187,7 +187,7 @@ function DayTooltip({ day }: DayTooltipProps) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className="absolute top-0 bottom-0 cursor-default hover:bg-primary/5 transition-colors"
+          className="absolute top-0 bottom-0 cursor-default hover:bg-primary/5 transition-colors pointer-events-auto"
           style={{
             left,
             width: DAY_CELL_WIDTH,

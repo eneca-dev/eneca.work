@@ -194,9 +194,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Агент | Задача | Когда вызывать |
 |-------|--------|----------------|
-| **Pragmatic Architect** | Проверка на over-engineering | Фаза 1, Шаг 2.1 (планирование) |
+| **Pragmatic Architect** | Проверка на over-engineering | Фаза 1, Фаза 2.1 (планирование) |
 | **Cache Guardian** | Валидация actions/hooks | После написания actions/hooks |
 | **Clean Code Guardian** | Структура, naming, TS | После создания компонентов > 50 строк |
+| **Sentry Guardian** | Мониторинг и трейсинг | Фаза 3 или по запросу ("add logging") |
+| **Modal Architect** | Дизайн модальных окон | При создании/изменении модалок |
+
+### Приоритеты при конфликтах:
+```
+Cache Guardian > Clean Code Guardian > Pragmatic Architect
+```
+Если агенты дают противоречивые рекомендации, следуй приоритету выше.
 
 ### Важно:
 

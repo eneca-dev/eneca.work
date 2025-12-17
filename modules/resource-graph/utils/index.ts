@@ -261,6 +261,7 @@ export function transformRowsToHierarchy(rows: ResourceGraphRow[]): Project[] {
       section = {
         id: row.section_id,
         name: row.section_name || '',
+        description: row.section_description || null,
         startDate: row.section_start_date || null,
         endDate: row.section_end_date || null,
         responsible: {
