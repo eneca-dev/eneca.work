@@ -10,6 +10,8 @@ import {
   getSectionLoadingLabelParts,
   formatSectionLoadingTooltip,
   calculateBarTop,
+  BASE_BAR_HEIGHT,
+  BAR_GAP,
   type SectionLoadingPeriod,
   type BarRender,
 } from "./loading-bars-utils"
@@ -21,10 +23,6 @@ interface SectionLoadingBarsProps {
   theme: string
   rowHeight: number
 }
-
-// Константы для расчёта высоты (как в EmployeeRow)
-const BASE_BAR_HEIGHT = 56 // Базовая высота бара для ставки 1
-const BAR_GAP = 3 // Отступ между барами
 
 /**
  * Компонент для отображения чипов загрузок в строке раздела
@@ -63,7 +61,7 @@ export function SectionLoadingBars({
         const originalPeriod = getOriginalPeriod(bar)
         if (!originalPeriod) return null
 
-        const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+        const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
 
         // Вычисляем top на основе слоя
         const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
@@ -230,7 +228,7 @@ export function calculateSectionBarsHeight(
   let maxBottom = 0
 
   barRenders.forEach(bar => {
-    const barHeight = BASE_BAR_HEIGHT * (bar.period.rate || 1)
+    const barHeight = BASE_BAR_HEIGHT // Фиксированная высота
     const top = calculateBarTop(bar, barRenders, BASE_BAR_HEIGHT, BAR_GAP, 4)
     maxBottom = Math.max(maxBottom, top + barHeight)
   })

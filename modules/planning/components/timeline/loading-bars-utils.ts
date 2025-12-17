@@ -5,6 +5,16 @@
 import type { Loading, TimelineUnit } from "../../types"
 
 /**
+ * Константы для расчёта высоты и позиционирования полосок загрузки
+ */
+export const BASE_BAR_HEIGHT = 42 // Фиксированная высота полоски загрузки
+export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
+
+// Константы для комментариев
+export const COMMENT_HEIGHT = 18 // Высота плашки комментария в пикселях
+export const COMMENT_GAP = 2     // Отступ между полоской и комментарием
+
+/**
  * Интерфейс для периода загрузки
  */
 export interface BarPeriod {
@@ -15,10 +25,13 @@ export interface BarPeriod {
   rate: number
   projectId?: string
   projectName?: string
+  objectId?: string
+  objectName?: string
   sectionId?: string | null
   sectionName?: string
   stageId?: string
   stageName?: string
+  comment?: string // Комментарий к загрузке
   loading?: Loading // Исходная загрузка для доступа к полным данным
 }
 
@@ -190,28 +203,29 @@ export function calculateBarTop(
   barGap: number,
   initialOffset: number = 4
 ): number {
-  // Находим все бары, которые пересекаются с текущим и имеют меньший layer
-  const overlappingBars = allBars.filter(other =>
-    other.period.startDate <= bar.period.endDate &&
-    other.period.endDate >= bar.period.startDate &&
-    other.layer < bar.layer
-  )
-
   let top = initialOffset
 
-  if (overlappingBars.length > 0) {
-    // Создаём карту слой -> максимальная высота бара в этом слое
-    const layersMap = new Map<number, number>()
-    overlappingBars.forEach(other => {
-      const otherHeight = baseBarHeight * (other.period.rate || 1)
-      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-    })
+  // Для каждого слоя ниже текущего, находим максимальную высоту бара в этом слое
+  for (let layer = 0; layer < bar.layer; layer++) {
+    // Находим все бары в этом слое
+    const barsInLayer = allBars.filter(other => other.layer === layer)
 
-    // Суммируем высоты всех слоёв ниже текущего
-    for (let i = 0; i < bar.layer; i++) {
-      if (layersMap.has(i)) {
-        top += layersMap.get(i)! + barGap
-      }
+    if (barsInLayer.length > 0) {
+      // Находим максимальную высоту среди баров этого слоя
+      let maxHeightInLayer = baseBarHeight
+
+      barsInLayer.forEach(other => {
+        let effectiveHeight = baseBarHeight
+
+        // Если у загрузки есть комментарий — добавляем его высоту
+        if (other.period.type === 'loading' && other.period.comment) {
+          effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
+        }
+
+        maxHeightInLayer = Math.max(maxHeightInLayer, effectiveHeight)
+      })
+
+      top += maxHeightInLayer + barGap
     }
   }
 
@@ -274,10 +288,13 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     rate: loading.rate || 1,
     projectId: loading.projectId,
     projectName: loading.projectName,
+    objectId: loading.objectId,
+    objectName: loading.objectName,
     sectionId: loading.sectionId,
     sectionName: loading.sectionName,
     stageId: loading.stageId,
     stageName: loading.stageName,
+    comment: loading.comment,
     loading,
   }))
 }
@@ -305,6 +322,45 @@ function splitPeriodByWorkingDays(
       }
     } else {
       // Нерабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
+      }
+    }
+  }
+
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
+  }
+
+  return segments
+}
+
+/**
+ * Разбивает период на сегменты нерабочих дней (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ * Инверсия функции splitPeriodByWorkingDays()
+ */
+export function splitPeriodByNonWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: TimelineUnit[]
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend
+
+    if (!isWorking) {
+      // Нерабочий день - начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
+      }
+    } else {
+      // Рабочий день - завершаем текущий сегмент если он был
       if (segmentStart !== null) {
         segments.push({ startIdx: segmentStart, endIdx: i - 1 })
         segmentStart = null
@@ -371,31 +427,25 @@ export function calculateBarRenders(
     // Определяем цвет на основе типа периода
     const color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
 
-    // Разбиваем на сегменты по рабочим дням
-    const segments = splitPeriodByWorkingDays(actualStartIdx, actualEndIdx, timeUnits)
+    // Создаем один непрерывный бар от начала до конца (включая нерабочие дни)
+    const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
 
-    // Создаем отдельный рендер для каждого сегмента
-    for (const segment of segments) {
-      // Используем позиции из timeUnits если доступны, иначе старый метод
-      const left = (timeUnits[segment.startIdx]?.left ?? segment.startIdx * cellWidth) + HORIZONTAL_GAP / 2
-
-      // Вычисляем ширину сегмента суммированием ширин всех ячеек
-      let width = 0
-      for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
-        width += timeUnits[idx]?.width ?? cellWidth
-      }
-      width -= HORIZONTAL_GAP
-
-      renders.push({
-        period,
-        startIdx: segment.startIdx,
-        endIdx: segment.endIdx,
-        left,
-        width,
-        layer,
-        color,
-      })
+    // Вычисляем ширину всего периода суммированием ширин всех ячеек
+    let width = 0
+    for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
+      width += timeUnits[idx]?.width ?? cellWidth
     }
+    width -= HORIZONTAL_GAP
+
+    renders.push({
+      period,
+      startIdx: actualStartIdx,
+      endIdx: actualEndIdx,
+      left,
+      width,
+      layer,
+      color,
+    })
   }
 
   return renders
@@ -428,7 +478,7 @@ export function formatBarLabel(period: BarPeriod): string {
 export interface BarLabelParts {
   project?: string
   section?: string
-  stage?: string
+  object?: string // Заменили stage на object
   displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
 }
 
@@ -457,7 +507,7 @@ export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelP
   return {
     project: period.projectName,
     section: period.sectionName,
-    stage: period.stageName,
+    object: period.objectName, // Заменили stageName на objectName
     displayMode
   }
 }
@@ -487,10 +537,12 @@ function formatDate(date: Date): string {
 export function formatBarTooltip(period: BarPeriod): string {
   const lines: string[] = []
   if (period.projectName) lines.push(`Проект: ${period.projectName}`)
+  if (period.objectName) lines.push(`Объект: ${period.objectName}`)
   if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)
-  if (period.stageName) lines.push(`Этап: ${period.stageName}`)
+  if (period.stageName) lines.push(`Этап декомпозиции: ${period.stageName}`)
   lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
   lines.push(`Ставка: ${period.rate}`)
+  if (period.comment) lines.push(`Комментарий: ${period.comment}`)
 
   return lines.join("\n")
 }

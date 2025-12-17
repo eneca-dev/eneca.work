@@ -1346,6 +1346,9 @@ export function LoadingModal({
           comment: "",
         })
 
+        // Clear manual rate input
+        setManualRateInput("")
+
         // Clear project search
         setProjectSearchTerm("")
 
@@ -1376,6 +1379,9 @@ export function LoadingModal({
 
       // Clear pending stage selection when modal closes
       setPendingStageSelection(null)
+
+      // Clear manual rate input when modal closes
+      setManualRateInput("")
 
       // Reset edit mode states
       setHasChanges(false)

@@ -3,6 +3,8 @@ export interface Loading {
   projectId?: string
   projectName?: string
   projectStatus?: string
+  objectId?: string // ID объекта
+  objectName?: string // Название объекта для отображения
   sectionId: string | null
   sectionName?: string
   stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
