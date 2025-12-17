@@ -30,6 +30,8 @@ interface FilterSelectProps {
   className?: string
   /** Компактный режим для inline размещения */
   compact?: boolean
+  /** data-testid для тестирования */
+  testId?: string
 }
 
 // ============================================================================
@@ -47,6 +49,7 @@ export function FilterSelect({
   loading = false,
   className,
   compact = false,
+  testId,
 }: FilterSelectProps) {
   const isDisabled = disabled || loading
 
@@ -74,6 +77,7 @@ export function FilterSelect({
       <div className="relative flex-1">
         <select
           id={id}
+          data-testid={testId}
           value={value || ''}
           onChange={(e) => onChange(e.target.value || null)}
           disabled={isDisabled}

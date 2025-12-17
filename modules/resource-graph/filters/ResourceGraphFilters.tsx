@@ -104,7 +104,7 @@ export function ResourceGraphFilters() {
   const hasActiveFilters = Object.values(filters).some(v => v !== undefined && v !== '')
 
   return (
-    <div className="bg-card border-b">
+    <div className="bg-card border-b" data-testid="resource-graph-filters">
       {/* Search */}
       <div className="p-4 border-b">
         <div className="relative max-w-md">
@@ -128,7 +128,7 @@ export function ResourceGraphFilters() {
       </div>
 
       {/* Tags Section */}
-      <div className="px-4 py-3 border-b flex items-center gap-3">
+      <div className="px-4 py-3 border-b flex items-center gap-3" data-testid="tags-container">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Tag size={14} />
           <span className="text-xs font-medium uppercase tracking-wider">Теги:</span>
@@ -144,6 +144,7 @@ export function ResourceGraphFilters() {
               return (
                 <button
                   key={tag.id}
+                  data-testid={`tag-${tag.id}`}
                   onClick={() => handleTagToggle(tag.id)}
                   className={cn(
                     'px-2.5 py-1 text-xs font-medium rounded-full transition-all duration-200',
@@ -163,6 +164,7 @@ export function ResourceGraphFilters() {
             })}
             {(filters.tagIds?.length ?? 0) > 0 && (
               <button
+                data-testid="tags-reset"
                 onClick={() => setTagIds([])}
                 className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
@@ -184,6 +186,7 @@ export function ResourceGraphFilters() {
             </h3>
             {(filters.managerId || filters.projectId || filters.stageId || filters.objectId || filters.sectionId || (filters.tagIds && filters.tagIds.length > 0)) && (
               <button
+                data-testid="reset-project-filters"
                 onClick={clearProjectFilters}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
@@ -195,6 +198,7 @@ export function ResourceGraphFilters() {
           <div className="flex flex-wrap gap-3">
             <FilterSelect
               id="manager-filter"
+              testId="filter-manager"
               label="Руководитель"
               value={filters.managerId ?? null}
               onChange={setManagerId}
@@ -204,6 +208,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="project-filter"
+              testId="filter-project"
               label="Проект"
               value={filters.projectId ?? null}
               onChange={setProjectId}
@@ -213,6 +218,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="stage-filter"
+              testId="filter-stage"
               label="Стадия"
               value={filters.stageId ?? null}
               onChange={setStageId}
@@ -223,6 +229,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="object-filter"
+              testId="filter-object"
               label="Объект"
               value={filters.objectId ?? null}
               onChange={setObjectId}
@@ -233,6 +240,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="section-filter"
+              testId="filter-section"
               label="Раздел"
               value={filters.sectionId ?? null}
               onChange={setSectionId}
@@ -252,6 +260,7 @@ export function ResourceGraphFilters() {
             </h3>
             {(filters.subdivisionId || filters.departmentId || filters.teamId || filters.employeeId) && (
               <button
+                data-testid="reset-org-filters"
                 onClick={clearOrgFilters}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
@@ -263,6 +272,7 @@ export function ResourceGraphFilters() {
           <div className="flex flex-wrap gap-3">
             <FilterSelect
               id="subdivision-filter"
+              testId="filter-subdivision"
               label="Подразделение"
               value={filters.subdivisionId ?? null}
               onChange={setSubdivisionId}
@@ -272,6 +282,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="department-filter"
+              testId="filter-department"
               label="Отдел"
               value={filters.departmentId ?? null}
               onChange={setDepartmentId}
@@ -281,6 +292,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="team-filter"
+              testId="filter-team"
               label="Команда"
               value={filters.teamId ?? null}
               onChange={setTeamId}
@@ -291,6 +303,7 @@ export function ResourceGraphFilters() {
             />
             <FilterSelect
               id="employee-filter"
+              testId="filter-employee"
               label="Сотрудник"
               value={filters.employeeId ?? null}
               onChange={setEmployeeId}
@@ -307,6 +320,7 @@ export function ResourceGraphFilters() {
       {hasActiveFilters && (
         <div className="px-4 pb-4">
           <button
+            data-testid="reset-all-filters"
             onClick={clearFilters}
             className={cn(
               'px-4 py-2 text-sm rounded-md',

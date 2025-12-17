@@ -7,7 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:types": "npx supabase gen types typescript --project-id gvrcbvifirhxxdnvrwlz > types/db.ts"
+    "db:types": "npx supabase gen types typescript --project-id gvrcbvifirhxxdnvrwlz > types/db.ts",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:ui:dev": "cross-env TEST_MODE=dev playwright test --ui",
+    "test:ui:remote": "cross-env TEST_URL=https://dev.eneca.work playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:resource-graph": "playwright test tests/resource-graph",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -104,11 +111,13 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tanstack/react-query-devtools": "^5.91.1",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "cross-env": "^10.1.0",
     "eslint": "9.28.0",
     "eslint-config-next": "15.3.3",
     "postcss": "^8",

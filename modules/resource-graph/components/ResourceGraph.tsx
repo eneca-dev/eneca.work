@@ -176,7 +176,7 @@ export function ResourceGraph() {
           </div>
 
           {/* Center: Tags */}
-          <div className="flex-1 flex items-center gap-2 min-w-0">
+          <div className="flex-1 flex items-center gap-2 min-w-0" data-testid="tags-container">
             <Tag size={14} className="text-muted-foreground shrink-0" />
             {loadingTags ? (
               <Loader2 size={14} className="animate-spin text-muted-foreground" />
@@ -188,6 +188,7 @@ export function ResourceGraph() {
                     <button
                       key={tag.id}
                       onClick={() => handleTagToggle(tag.id)}
+                      data-testid={`tag-${tag.id}`}
                       className={cn(
                         'px-2 py-0.5 text-xs font-medium rounded-full transition-all',
                         'border',
@@ -243,7 +244,7 @@ export function ResourceGraph() {
             isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
           )}
         >
-          <div className="px-4 py-3 border-t bg-muted/30 flex flex-wrap gap-3">
+          <div className="px-4 py-3 border-t bg-muted/30 flex flex-wrap gap-3" data-testid="resource-graph-filters">
             <FilterSelect
               id="manager-filter"
               label="Руководитель"
@@ -253,6 +254,7 @@ export function ResourceGraph() {
               placeholder="Все"
               loading={loadingManagers}
               compact
+              testId="filter-manager"
             />
             <FilterSelect
               id="project-filter"
@@ -263,6 +265,7 @@ export function ResourceGraph() {
               placeholder="Все"
               loading={loadingProjects}
               compact
+              testId="filter-project"
             />
             <div className="w-px h-8 bg-border self-center" />
             <FilterSelect
@@ -274,6 +277,7 @@ export function ResourceGraph() {
               placeholder="Все"
               loading={loadingSubdivisions}
               compact
+              testId="filter-subdivision"
             />
             <FilterSelect
               id="department-filter"
@@ -284,6 +288,7 @@ export function ResourceGraph() {
               placeholder="Все"
               loading={loadingDepartments}
               compact
+              testId="filter-department"
             />
             <FilterSelect
               id="employee-filter"
@@ -294,6 +299,7 @@ export function ResourceGraph() {
               placeholder="Все"
               loading={loadingEmployees}
               compact
+              testId="filter-employee"
             />
           </div>
         </div>
