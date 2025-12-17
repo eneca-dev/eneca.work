@@ -3,6 +3,8 @@ export interface Loading {
   projectId?: string
   projectName?: string
   projectStatus?: string
+  objectId?: string // ID объекта
+  objectName?: string // Название объекта для отображения
   sectionId: string | null
   sectionName?: string
   stageId: string // ОБЯЗАТЕЛЬНОЕ поле - загрузка всегда привязана к этапу
@@ -72,12 +74,6 @@ export interface Employee {
   hasLoadings?: boolean
   loadingsCount?: number
   dailyWorkloads?: Record<string, number>
-  // Календарные дни отпуска сотрудника: ключ — ISO-дата (YYYY-MM-DD), значение — 1 (полная ставка)
-  vacationsDaily?: Record<string, number>
-  // Календарные дни больничного: ключ — ISO-дата (YYYY-MM-DD), значение — 1 (полная ставка)
-  sickLeavesDaily?: Record<string, number>
-  // Календарные дни отгулов: ключ — ISO-дата (YYYY-MM-DD), значение — 1 (полная ставка)
-  timeOffsDaily?: Record<string, number>
   loadings?: Loading[]
   createdAt?: Date // Приходит как ISO строка, преобразуется в Date
   updatedAt?: Date // Приходит как ISO строка, преобразуется в Date

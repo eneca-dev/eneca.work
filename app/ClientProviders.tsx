@@ -6,21 +6,25 @@ import { GlobalNotification } from "@/components/ui/notification";
 import { NoSSR } from "@/components/NoSSR";
 import { UserPermissionsSyncProvider } from "@/modules/permissions";
 import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
+import { QueryProvider, RealtimeSync } from "@/modules/cache";
 
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-      <NoSSR>
-        <UserPermissionsSyncProvider>
-          <FeedbackProvider>
-            <ThemeSync />
-            {children}
-            <Toaster />
-            <GlobalNotification />
-          </FeedbackProvider>
-        </UserPermissionsSyncProvider>
-      </NoSSR>
-    </ThemeProvider>
+    <QueryProvider>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <NoSSR>
+          <RealtimeSync />
+          <UserPermissionsSyncProvider>
+            <FeedbackProvider>
+              <ThemeSync />
+              {children}
+              <Toaster />
+              <GlobalNotification />
+            </FeedbackProvider>
+          </UserPermissionsSyncProvider>
+        </NoSSR>
+      </ThemeProvider>
+    </QueryProvider>
   );
 } 

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useAnnouncementsStore } from '@/modules/announcements/store';
-import { useNotificationsStore } from '@/stores/useNotificationsStore';
+// Удалён import useNotificationsStore - больше не используется
 import { Announcement, AnnouncementFormData } from '@/modules/announcements/types';
 import { toast } from 'sonner';
 
@@ -209,15 +209,9 @@ export function useAnnouncements() {
 
       if (error) throw error;
 
-      // Если изменен заголовок, синхронизируем заголовки соответствующих уведомлений
-      if (announcementData.header && announcementData.header.trim()) {
-        try {
-          useNotificationsStore.getState().updateAnnouncementTitle(id, announcementData.header.trim());
-        } catch (e) {
-          // Безопасно игнорируем проблемы локальной синхронизации уведомлений
-          console.warn('Не удалось обновить заголовки уведомлений локально:', e);
-        }
-      }
+      // Удалена локальная синхронизация заголовков уведомлений
+      // Теперь данные уведомлений управляются через TanStack Query и автоматически
+      // обновляются через Realtime подписку из cache module
 
       // Перезагружаем все объявления после обновления
       await fetchAnnouncements();

@@ -165,10 +165,13 @@ function UserDialog({ open, onOpenChange, user, onUserUpdated, isSelfEdit = fals
       if (currentDepartmentId !== targetDepartmentId) return false
 
       // Руководитель отдела может редактировать только team_lead и user
-      const targetRole = user?.role?.toLowerCase()
+      // Проверяем ВСЕ роли пользователя через roles_display_string, а не только основную роль
+      const rolesString = (user as any)?.roles_display_string || user?.role || ''
+      const targetRoles = rolesString.toLowerCase().split(',').map((r: string) => r.trim())
       const allowedRoles = ['team_lead', 'user']
 
-      return allowedRoles.includes(targetRole || '')
+      // Разрешаем редактирование, если хотя бы одна из ролей пользователя входит в список разрешённых
+      return targetRoles.some((role: string) => allowedRoles.includes(role))
     }
 
     return false

@@ -5,20 +5,33 @@
 import type { Loading, TimelineUnit } from "../../types"
 
 /**
- * Интерфейс для периода (загрузка, отпуск, больничный или отгул)
+ * Константы для расчёта высоты и позиционирования полосок загрузки
+ */
+export const BASE_BAR_HEIGHT = 42 // Фиксированная высота полоски загрузки
+export const BAR_GAP = 3 // Минимальное расстояние между полосками при стакинге
+
+// Константы для комментариев
+export const COMMENT_HEIGHT = 18 // Высота плашки комментария в пикселях
+export const COMMENT_GAP = 2     // Отступ между полоской и комментарием
+
+/**
+ * Интерфейс для периода загрузки
  */
 export interface BarPeriod {
   id: string
-  type: "loading" | "vacation" | "sick_leave" | "time_off"
+  type: "loading"
   startDate: Date
   endDate: Date
   rate: number
   projectId?: string
   projectName?: string
+  objectId?: string
+  objectName?: string
   sectionId?: string | null
   sectionName?: string
   stageId?: string
   stageName?: string
+  comment?: string // Комментарий к загрузке
   loading?: Loading // Исходная загрузка для доступа к полным данным
 }
 
@@ -139,27 +152,6 @@ export function getStageColor(stageId: string | undefined, isDark: boolean): str
 }
 
 /**
- * Цвет для отпусков
- */
-export function getVacationColor(isDark: boolean): string {
-  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400
-}
-
-/**
- * Цвет для больничных
- */
-export function getSickLeaveColor(isDark: boolean): string {
-  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400 
-}
-
-/**
- * Цвет для отгулов
- */
-export function getTimeOffColor(isDark: boolean): string {
-  return isDark ? "rgb(100, 116, 139)" : "rgb(148, 163, 184)" // slate-500 / slate-400 
-}
-
-/**
  * Проверяет, пересекаются ли два периода
  */
 function periodsOverlap(period1: BarPeriod, period2: BarPeriod): boolean {
@@ -211,28 +203,29 @@ export function calculateBarTop(
   barGap: number,
   initialOffset: number = 4
 ): number {
-  // Находим все бары, которые пересекаются с текущим и имеют меньший layer
-  const overlappingBars = allBars.filter(other =>
-    other.period.startDate <= bar.period.endDate &&
-    other.period.endDate >= bar.period.startDate &&
-    other.layer < bar.layer
-  )
-
   let top = initialOffset
 
-  if (overlappingBars.length > 0) {
-    // Создаём карту слой -> максимальная высота бара в этом слое
-    const layersMap = new Map<number, number>()
-    overlappingBars.forEach(other => {
-      const otherHeight = baseBarHeight * (other.period.rate || 1)
-      layersMap.set(other.layer, Math.max(layersMap.get(other.layer) || 0, otherHeight))
-    })
+  // Для каждого слоя ниже текущего, находим максимальную высоту бара в этом слое
+  for (let layer = 0; layer < bar.layer; layer++) {
+    // Находим все бары в этом слое
+    const barsInLayer = allBars.filter(other => other.layer === layer)
 
-    // Суммируем высоты всех слоёв ниже текущего
-    for (let i = 0; i < bar.layer; i++) {
-      if (layersMap.has(i)) {
-        top += layersMap.get(i)! + barGap
-      }
+    if (barsInLayer.length > 0) {
+      // Находим максимальную высоту среди баров этого слоя
+      let maxHeightInLayer = baseBarHeight
+
+      barsInLayer.forEach(other => {
+        let effectiveHeight = baseBarHeight
+
+        // Если у загрузки есть комментарий — добавляем его высоту
+        if (other.period.type === 'loading' && other.period.comment) {
+          effectiveHeight += COMMENT_GAP + COMMENT_HEIGHT
+        }
+
+        maxHeightInLayer = Math.max(maxHeightInLayer, effectiveHeight)
+      })
+
+      top += maxHeightInLayer + barGap
     }
   }
 
@@ -259,165 +252,6 @@ export function calculateLayers(periods: BarPeriod[]): number[] {
   }
 
   return layers
-}
-
-/**
- * Группирует последовательные даты отпусков в периоды
- */
-export function groupVacationPeriods(vacationsDaily: Record<string, number> | undefined): BarPeriod[] {
-  if (!vacationsDaily) return []
-
-  // Сортируем даты
-  const dates = Object.keys(vacationsDaily)
-    .filter((dateKey) => vacationsDaily[dateKey] > 0)
-    .sort()
-
-  if (dates.length === 0) return []
-
-  const periods: BarPeriod[] = []
-  let currentStart = new Date(dates[0])
-  let currentEnd = new Date(dates[0])
-
-  for (let i = 1; i < dates.length; i++) {
-    const currentDate = new Date(dates[i])
-    const prevDate = new Date(dates[i - 1])
-
-    // Проверяем, является ли текущая дата последовательной (следующий день)
-    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (dayDiff === 1) {
-      // Продолжаем текущий период
-      currentEnd = currentDate
-    } else {
-      // Сохраняем текущий период и начинаем новый
-      periods.push({
-        id: `vacation-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-        type: "vacation",
-        startDate: currentStart,
-        endDate: currentEnd,
-        rate: 1,
-      })
-      currentStart = currentDate
-      currentEnd = currentDate
-    }
-  }
-
-  // Добавляем последний период
-  periods.push({
-    id: `vacation-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-    type: "vacation",
-    startDate: currentStart,
-    endDate: currentEnd,
-    rate: 1,
-  })
-
-  return periods
-}
-
-/**
- * Группирует последовательные даты больничных в периоды
- */
-export function groupSickLeavePeriods(sickLeavesDaily: Record<string, number> | undefined): BarPeriod[] {
-  if (!sickLeavesDaily) return []
-
-  // Сортируем даты
-  const dates = Object.keys(sickLeavesDaily)
-    .filter((dateKey) => sickLeavesDaily[dateKey] > 0)
-    .sort()
-
-  if (dates.length === 0) return []
-
-  const periods: BarPeriod[] = []
-  let currentStart = new Date(dates[0])
-  let currentEnd = new Date(dates[0])
-
-  for (let i = 1; i < dates.length; i++) {
-    const currentDate = new Date(dates[i])
-    const prevDate = new Date(dates[i - 1])
-
-    // Проверяем, является ли текущая дата последовательной (следующий день)
-    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (dayDiff === 1) {
-      // Продолжаем текущий период
-      currentEnd = currentDate
-    } else {
-      // Сохраняем текущий период и начинаем новый
-      periods.push({
-        id: `sick-leave-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-        type: "sick_leave",
-        startDate: currentStart,
-        endDate: currentEnd,
-        rate: 1,
-      })
-      currentStart = currentDate
-      currentEnd = currentDate
-    }
-  }
-
-  // Добавляем последний период
-  periods.push({
-    id: `sick-leave-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-    type: "sick_leave",
-    startDate: currentStart,
-    endDate: currentEnd,
-    rate: 1,
-  })
-
-  return periods
-}
-
-/**
- * Группирует последовательные даты отгулов в периоды
- */
-export function groupTimeOffPeriods(timeOffsDaily: Record<string, number> | undefined): BarPeriod[] {
-  if (!timeOffsDaily) return []
-
-  // Сортируем даты
-  const dates = Object.keys(timeOffsDaily)
-    .filter((dateKey) => timeOffsDaily[dateKey] > 0)
-    .sort()
-
-  if (dates.length === 0) return []
-
-  const periods: BarPeriod[] = []
-  let currentStart = new Date(dates[0])
-  let currentEnd = new Date(dates[0])
-
-  for (let i = 1; i < dates.length; i++) {
-    const currentDate = new Date(dates[i])
-    const prevDate = new Date(dates[i - 1])
-
-    // Проверяем, является ли текущая дата последовательной (следующий день)
-    const dayDiff = Math.round((currentDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (dayDiff === 1) {
-      // Продолжаем текущий период
-      currentEnd = currentDate
-    } else {
-      // Сохраняем текущий период и начинаем новый
-      periods.push({
-        id: `time-off-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-        type: "time_off",
-        startDate: currentStart,
-        endDate: currentEnd,
-        rate: 1,
-      })
-      currentStart = currentDate
-      currentEnd = currentDate
-    }
-  }
-
-  // Добавляем последний период
-  periods.push({
-    id: `time-off-${currentStart.toISOString()}-${currentEnd.toISOString()}`,
-    type: "time_off",
-    startDate: currentStart,
-    endDate: currentEnd,
-    rate: 1,
-  })
-
-  return periods
 }
 
 /**
@@ -454,10 +288,13 @@ export function loadingsToPeriods(loadings: Loading[] | undefined): BarPeriod[] 
     rate: loading.rate || 1,
     projectId: loading.projectId,
     projectName: loading.projectName,
+    objectId: loading.objectId,
+    objectName: loading.objectName,
     sectionId: loading.sectionId,
     sectionName: loading.sectionName,
     stageId: loading.stageId,
     stageName: loading.stageName,
+    comment: loading.comment,
     loading,
   }))
 }
@@ -485,6 +322,45 @@ function splitPeriodByWorkingDays(
       }
     } else {
       // Нерабочий день - завершаем текущий сегмент если он был
+      if (segmentStart !== null) {
+        segments.push({ startIdx: segmentStart, endIdx: i - 1 })
+        segmentStart = null
+      }
+    }
+  }
+
+  // Завершаем последний сегмент если он был
+  if (segmentStart !== null) {
+    segments.push({ startIdx: segmentStart, endIdx })
+  }
+
+  return segments
+}
+
+/**
+ * Разбивает период на сегменты нерабочих дней (выходные и праздники)
+ * Возвращает массив сегментов [startIdx, endIdx]
+ * Инверсия функции splitPeriodByWorkingDays()
+ */
+export function splitPeriodByNonWorkingDays(
+  startIdx: number,
+  endIdx: number,
+  timeUnits: TimelineUnit[]
+): Array<{ startIdx: number; endIdx: number }> {
+  const segments: Array<{ startIdx: number; endIdx: number }> = []
+  let segmentStart: number | null = null
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const unit = timeUnits[i]
+    const isWorking = unit.isWorkingDay ?? !unit.isWeekend
+
+    if (!isWorking) {
+      // Нерабочий день - начинаем новый сегмент или продолжаем текущий
+      if (segmentStart === null) {
+        segmentStart = i
+      }
+    } else {
+      // Рабочий день - завершаем текущий сегмент если он был
       if (segmentStart !== null) {
         segments.push({ startIdx: segmentStart, endIdx: i - 1 })
         segmentStart = null
@@ -549,66 +425,27 @@ export function calculateBarRenders(
       : endIdx
 
     // Определяем цвет на основе типа периода
-    let color: string
-    if (period.type === "vacation") {
-      color = getVacationColor(isDark)
-    } else if (period.type === "sick_leave") {
-      color = getSickLeaveColor(isDark)
-    } else if (period.type === "time_off") {
-      color = getTimeOffColor(isDark)
-    } else {
-      // loading
-      color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
+    const color = getSectionColor(period.projectId, period.sectionId, period.stageId, isDark)
+
+    // Создаем один непрерывный бар от начала до конца (включая нерабочие дни)
+    const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
+
+    // Вычисляем ширину всего периода суммированием ширин всех ячеек
+    let width = 0
+    for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
+      width += timeUnits[idx]?.width ?? cellWidth
     }
+    width -= HORIZONTAL_GAP
 
-    // Для загрузок (type="loading") разбиваем на сегменты по рабочим дням
-    // Для отпусков, больничных и отгулов оставляем сплошным
-    if (period.type === "loading") {
-      const segments = splitPeriodByWorkingDays(actualStartIdx, actualEndIdx, timeUnits)
-
-      // Создаем отдельный рендер для каждого сегмента
-      for (const segment of segments) {
-        // Используем позиции из timeUnits если доступны, иначе старый метод
-        const left = (timeUnits[segment.startIdx]?.left ?? segment.startIdx * cellWidth) + HORIZONTAL_GAP / 2
-
-        // Вычисляем ширину сегмента суммированием ширин всех ячеек
-        let width = 0
-        for (let idx = segment.startIdx; idx <= segment.endIdx; idx++) {
-          width += timeUnits[idx]?.width ?? cellWidth
-        }
-        width -= HORIZONTAL_GAP
-
-        renders.push({
-          period,
-          startIdx: segment.startIdx,
-          endIdx: segment.endIdx,
-          left,
-          width,
-          layer,
-          color,
-        })
-      }
-    } else {
-      // Для отпусков, больничных и отгулов создаем один сплошной бар
-      const left = (timeUnits[actualStartIdx]?.left ?? actualStartIdx * cellWidth) + HORIZONTAL_GAP / 2
-
-      // Вычисляем ширину суммированием ширин всех ячеек
-      let width = 0
-      for (let idx = actualStartIdx; idx <= actualEndIdx; idx++) {
-        width += timeUnits[idx]?.width ?? cellWidth
-      }
-      width -= HORIZONTAL_GAP
-
-      renders.push({
-        period,
-        startIdx: actualStartIdx,
-        endIdx: actualEndIdx,
-        left,
-        width,
-        layer,
-        color,
-      })
-    }
+    renders.push({
+      period,
+      startIdx: actualStartIdx,
+      endIdx: actualEndIdx,
+      left,
+      width,
+      layer,
+      color,
+    })
   }
 
   return renders
@@ -627,16 +464,6 @@ export function getMaxLayers(periods: BarPeriod[]): number {
  * Форматирует текст для отображения на полоске
  */
 export function formatBarLabel(period: BarPeriod): string {
-  if (period.type === "vacation") {
-    return "Отпуск"
-  }
-  if (period.type === "sick_leave") {
-    return "Больничный"
-  }
-  if (period.type === "time_off") {
-    return "Отгул"
-  }
-
   const parts: string[] = []
   if (period.stageName) parts.push(period.stageName)
   if (period.sectionName) parts.push(period.sectionName)
@@ -651,7 +478,7 @@ export function formatBarLabel(period: BarPeriod): string {
 export interface BarLabelParts {
   project?: string
   section?: string
-  stage?: string
+  object?: string // Заменили stage на object
   displayMode: 'full' | 'compact' | 'minimal' | 'icon-only'
 }
 
@@ -680,7 +507,7 @@ export function getBarLabelParts(period: BarPeriod, barWidth: number): BarLabelP
   return {
     project: period.projectName,
     section: period.sectionName,
-    stage: period.stageName,
+    object: period.objectName, // Заменили stageName на objectName
     displayMode
   }
 }
@@ -708,22 +535,14 @@ function formatDate(date: Date): string {
  * Форматирует tooltip для полоски
  */
 export function formatBarTooltip(period: BarPeriod): string {
-  if (period.type === "vacation") {
-    return `Отпуск\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
-  }
-  if (period.type === "sick_leave") {
-    return `Больничный\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
-  }
-  if (period.type === "time_off") {
-    return `Отгул\nПериод: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`
-  }
-
   const lines: string[] = []
   if (period.projectName) lines.push(`Проект: ${period.projectName}`)
+  if (period.objectName) lines.push(`Объект: ${period.objectName}`)
   if (period.sectionName) lines.push(`Раздел: ${period.sectionName}`)
-  if (period.stageName) lines.push(`Этап: ${period.stageName}`)
+  if (period.stageName) lines.push(`Этап декомпозиции: ${period.stageName}`)
   lines.push(`Период: ${formatDate(period.startDate)} — ${formatDate(period.endDate)}`)
   lines.push(`Ставка: ${period.rate}`)
+  if (period.comment) lines.push(`Комментарий: ${period.comment}`)
 
   return lines.join("\n")
 }

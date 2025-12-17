@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { useUserStore } from "@/stores/useUserStore"
-import { useNotificationsStore } from "@/stores/useNotificationsStore"
+import { useNotificationsUiStore } from "@/stores/useNotificationsUiStore"
 // Удален import getUserRoleAndPermissions - используем новую систему permissions
 import { toast } from "@/components/ui/use-toast"
 import { ChatInterface } from "@/modules/chat"
@@ -70,8 +70,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // УДАЛЕНО: Legacy permissions - теперь используем permissions модуль
   const router = useRouter()
   const supabase = createClient()
-  const isNotificationsOpen = useNotificationsStore((s) => s.isPanelOpen)
-  const notificationsPanelWidth = useNotificationsStore((s) => s.panelWidthPx)
   
   // Реф для отслеживания актуальности компонента
   const isMounted = useRef(true)
@@ -102,10 +100,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Мемоизированный стиль для контента - предотвращает создание нового объекта при каждом рендере
   const contentStyle = useMemo(() => ({
-    marginLeft: (sidebarCollapsed ? 80 : 256) + (isNotificationsOpen ? notificationsPanelWidth : 0),
+    marginLeft: sidebarCollapsed ? 80 : 256,
     transition: 'margin-left 300ms cubic-bezier(0.4, 0, 0.2, 1)',
     willChange: 'margin-left' as const
-  }), [sidebarCollapsed, isNotificationsOpen, notificationsPanelWidth])
+  }), [sidebarCollapsed])
 
   // Мемоизируем функцию получения пользователя
   const fetchUser = useCallback(async () => {

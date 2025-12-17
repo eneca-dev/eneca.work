@@ -1,25 +1,24 @@
 "use client"
 
-import { createContext, useContext, useEffect, ReactNode, useState, useCallback } from 'react'
+import { useEffect, ReactNode, useCallback } from 'react'
 import * as Sentry from "@sentry/nextjs"
-import { createClient } from '@/utils/supabase/client'
-import { useNotificationsStore } from '@/stores/useNotificationsStore'
+import { useNotificationsUiStore } from '@/stores/useNotificationsUiStore'
 import { useAnnouncements } from '@/modules/announcements/hooks/useAnnouncements'
 
 interface NotificationsProviderProps {
   children: ReactNode
 }
 
+/**
+ * NotificationsProvider - упрощённый провайдер для модуля уведомлений
+ *
+ * Теперь провайдер ТОЛЬКО управляет callback для обновления модулей.
+ * Все остальное (данные, Realtime, пагинация) управляется через:
+ * - TanStack Query (modules/notifications/hooks/use-notifications.ts)
+ * - Cache Module Realtime (modules/cache/realtime/config.ts)
+ */
 export function NotificationsProvider({ children }: NotificationsProviderProps) {
-  const [mounted, setMounted] = useState(false)
-  const {
-    setCurrentUserId,
-    fetchNotifications,
-    initializeRealtime,
-    unsubscribeFromNotifications,
-    setModuleUpdateCallback,
-    currentUserId,
-  } = useNotificationsStore()
+  const { setModuleUpdateCallback } = useNotificationsUiStore()
 
   // Хуки для обновления модулей
   const { fetchAnnouncements } = useAnnouncements()
@@ -100,155 +99,15 @@ export function NotificationsProvider({ children }: NotificationsProviderProps) 
     )
   }, [fetchAnnouncements]) // Добавляем зависимости для стабильности
 
-  // Устанавливаем колбэк для обновления модулей
+  // Устанавливаем колбэк для обновления модулей при клике на уведомление
   useEffect(() => {
     setModuleUpdateCallback(updateModuleByEntityType)
-    
+
     // Очищаем колбэк при размонтировании
     return () => {
       setModuleUpdateCallback(null)
     }
   }, [setModuleUpdateCallback, updateModuleByEntityType])
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted || typeof window === 'undefined') return
-    
-    const supabase = createClient()
-    
-    // Получаем текущего пользователя
-    const getCurrentUser = async () => {
-      return Sentry.startSpan(
-        {
-          op: "notifications.get_current_user",
-          name: "Get Current User",
-        },
-        async (span) => {
-          try {
-            console.log('🔍 NOTIFICATIONS Provider: Получение текущего пользователя...')
-            const { data: { user }, error } = await supabase.auth.getUser()
-            
-            if (error) {
-              span.setAttribute("auth.success", false)
-              span.setAttribute("auth.error", error.message)
-              Sentry.captureException(error, {
-                tags: {
-                  module: 'notifications',
-                  component: 'NotificationsProvider',
-                  action: 'get_current_user',
-                  error_type: 'auth_error'
-                },
-                extra: {
-                  timestamp: new Date().toISOString()
-                }
-              })
-              console.error('❌ NOTIFICATIONS Provider: Ошибка получения пользователя:', error)
-              setCurrentUserId(null) // Очищаем при ошибке
-              return
-            }
-            
-            if (user) {
-              span.setAttribute("auth.success", true)
-              span.setAttribute("user.id", user.id)
-              span.setAttribute("user.found", true)
-              
-              console.log('👤 NOTIFICATIONS Provider: Пользователь найден:', user.id)
-              setCurrentUserId(user.id)
-              
-              Sentry.addBreadcrumb({
-                message: 'Current user retrieved successfully',
-                category: 'notifications',
-                level: 'info',
-                data: {
-                  user_id: user.id
-                }
-              })
-            } else {
-              span.setAttribute("auth.success", true)
-              span.setAttribute("user.found", false)
-              console.warn('⚠️ NOTIFICATIONS Provider: Пользователь не найден')
-              setCurrentUserId(null) // Очищаем если пользователя нет
-            }
-          } catch (error) {
-            span.setAttribute("auth.success", false)
-            span.recordException(error as Error)
-            Sentry.captureException(error, {
-              tags: {
-                module: 'notifications',
-                component: 'NotificationsProvider',
-                action: 'get_current_user',
-                error_type: 'unexpected_error'
-              },
-              extra: {
-                timestamp: new Date().toISOString()
-              }
-            })
-            console.error('❌ NOTIFICATIONS Provider: Неожиданная ошибка при получении пользователя:', error)
-            setCurrentUserId(null) // Очищаем при ошибке
-          }
-        }
-      )
-    }
-
-    // Подписываемся на изменения аутентификации
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 NOTIFICATIONS Provider: Auth state change:', event, session?.user?.id)
-      
-      if (event === 'SIGNED_OUT') {
-        console.log('👋 NOTIFICATIONS Provider: Пользователь вышел')
-        setCurrentUserId(null)
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        const userId = session?.user?.id || null
-        console.log('👤 NOTIFICATIONS Provider: Пользователь вошел:', userId)
-        setCurrentUserId(userId)
-      } else if (event === 'USER_UPDATED') {
-        const userId = session?.user?.id || null
-        console.log('🔄 NOTIFICATIONS Provider: Данные пользователя обновлены:', userId)
-        setCurrentUserId(userId)
-      }
-    })
-
-    // Получаем текущего пользователя при инициализации
-    getCurrentUser()
-
-    // Отписываемся при размонтировании
-    return () => {
-      subscription.unsubscribe()
-    }
-  }, [setCurrentUserId, mounted])
-
-  useEffect(() => {
-    if (!mounted || typeof window === 'undefined') return
-    
-    const initializeProvider = async () => {
-      if (currentUserId) {
-        console.log('🚀 NOTIFICATIONS Provider: Инициализация для пользователя:', currentUserId)
-
-        // Отладочная проверка базы данных
-        const { debugUserNotifications, createTestNotification } = await import('../api/notifications')
-        await debugUserNotifications(currentUserId)
-
-        // Временно: создаем тестовое уведомление для диагностики
-        // Раскомментируйте следующую строку если нужно создать тестовое уведомление:
-        // await createTestNotification(currentUserId)
-
-        // Загрузка уведомлений уже происходит в setCurrentUserId, поэтому здесь только инициализируем Realtime
-        console.log('📡 NOTIFICATIONS Provider: Инициализация Realtime...')
-        initializeRealtime()
-      } else {
-        console.log('⏳ NOTIFICATIONS Provider: currentUserId не установлен, очищаем уведомления')
-        // Если пользователя нет, отписываемся от всех подписок
-        unsubscribeFromNotifications()
-      }
-    }
-
-    initializeProvider()
-  }, [currentUserId, initializeRealtime, unsubscribeFromNotifications, mounted])
 
   return <>{children}</>
 }

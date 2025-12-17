@@ -49,7 +49,6 @@ export function TimelineView() {
     fetchProjectSummaries,
     fetchSections,
     fetchDepartments,
-    loadVacations,
     loadGlobalCalendarEvents,
     globalCalendarEvents,
     setFilters,
@@ -217,25 +216,6 @@ useEffect(() => {
       fetchDepartments()
     }
   }, [showDepartments, selectedSubdivisionId, selectedDepartmentId, selectedTeamId, fetchDepartments])
-
-  // Загружаем отпуска при изменении видимого диапазона таймлайна (скролл)
-  // Кэш с буфером ±60 дней обеспечивает минимум запросов к БД
-  // Функция loadVacations в deps может вызывать частые срабатывания, но внутри неё есть
-  // защита от одновременных вызовов через isLoading флаг + проверка валидности кэша
-  useEffect(() => {
-    if (showDepartments) {
-      loadVacations(false) // false = не форсировать, проверить кэш
-    }
-  }, [startDate, daysToShow, showDepartments, loadVacations])
-
-  // Обновляем отпуска при изменении организационных фильтров
-  // Форсируем обновление (true), так как изменились видимые сотрудники
-  // Это обеспечивает синхронность данных отпусков с выбранными фильтрами
-  useEffect(() => {
-    if (showDepartments) {
-      loadVacations(true) // true = форсировать обновление, игнорируя кэш
-    }
-  }, [selectedSubdivisionId, selectedDepartmentId, selectedTeamId, showDepartments, loadVacations])
 
   // Добавляем обработчик изменения размера окна
   useEffect(() => {
@@ -549,7 +529,7 @@ useEffect(() => {
           <div
             ref={headerScrollRef}
             className={cn(
-              "sticky top-0 z-40 relative",
+              "sticky top-0 z-39 relative",
               theme === "dark" ? "bg-slate-900" : "bg-white",
             )}
           >
