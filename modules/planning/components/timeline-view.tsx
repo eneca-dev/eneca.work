@@ -529,7 +529,7 @@ useEffect(() => {
           <div
             ref={headerScrollRef}
             className={cn(
-              "sticky top-0 z-40 relative",
+              "sticky top-0 z-39 relative",
               theme === "dark" ? "bg-slate-900" : "bg-white",
             )}
           >
