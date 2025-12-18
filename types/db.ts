@@ -2035,6 +2035,7 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start: string | null
           decomposition_stage_status_id: string | null
+          stage_status_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2049,6 +2050,7 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          stage_status_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2063,6 +2065,7 @@ export type Database = {
           decomposition_stage_section_id?: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          stage_status_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2274,6 +2277,13 @@ export type Database = {
             columns: ["decomposition_stage_status_id"]
             isOneToOne: false
             referencedRelation: "section_statuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decomposition_stages_stage_status_id_fkey"
+            columns: ["stage_status_id"]
+            isOneToOne: false
+            referencedRelation: "stage_statuses"
             referencedColumns: ["id"]
           },
         ]
@@ -5962,6 +5972,39 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      stage_statuses: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          kanban_order: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
