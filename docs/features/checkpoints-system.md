@@ -34,6 +34,42 @@
 
 ---
 
+## Логика типов чекпоинтов (Checkpoint Types)
+
+### Концепция
+
+**В таблице `checkpoint_types` хранятся N предустановленных типов + 1 специальный тип `custom`:**
+
+| Тип | Пример | `is_custom` | Описание |
+|-----|--------|-------------|----------|
+| Предустановленные | `exam`, `task_transfer`, `milestone` | `false` | Типы с фиксированными `name`, `icon`, `color` |
+| Custom (шаблон) | `custom` | `true` | Пустой тип для произвольных чекпоинтов |
+
+### Поведение при создании чекпоинта
+
+**Поле `title` в `section_checkpoints`:**
+
+1. **Для предустановленных типов** (`is_custom=false`):
+   - Пользователь **может** ввести своё название
+   - Если оставит пустым → берётся `checkpoint_types.name` (автоподстановка в Server Action)
+
+2. **Для типа `custom`** (`is_custom=true`):
+   - Пользователь **обязан** ввести название
+   - Валидация на уровне UI + Server Action
+
+### Права на управление типами
+
+**Admin (`checkpoints.types.manage`):**
+- Создавать новые типы (автоматически `is_custom=true`)
+- Редактировать **любые** типы (встроенные и custom)
+- Удалять **любые** типы (если FK constraint позволяет — тип не используется в чекпоинтах)
+
+**Остальные роли:**
+- **Только выбирают** тип из справочника при создании чекпоинта
+- Видят все типы в SELECT dropdown (встроенные + custom)
+
+---
+
 ## Критерии готовности (Definition of Done)
 
 ### 1. База данных
@@ -504,7 +540,9 @@ export type ActionResult<T> =
 export interface CreateCheckpointInput {
   sectionId: string
   typeId: string
-  title: string
+  title: string // Название чекпоинта. Логика:
+                // - Для предустановленных типов: опционально (если пусто — берется checkpoint_types.name)
+                // - Для типа 'custom': обязательно (UI должна валидировать)
   checkpointDate: string // ISO date 'YYYY-MM-DD'
   description?: string | null
   customIcon?: string | null
@@ -1455,6 +1493,8 @@ curl http://localhost:3000/api/test/checkpoints/existing-checkpoint-uuid/audit
 
 **Зачем:**
 - Создание нового чекпоинта с привязкой к разделу и типу
+- Автоматическая подстановка `checkpoint_types.name` в `title`, если пользователь оставил поле пустым (кроме типа `custom`)
+- Валидация: для типа `custom` (is_custom=true) title обязателен
 - Автоматическое создание записей в checkpoint_section_links (M:N связь)
 - Автоматическая запись в audit trail (operation_type: CREATE)
 - Проверка прав доступа через `canManageCheckpoint`
@@ -1480,13 +1520,33 @@ export async function createCheckpoint(
       return { success: false, error: permission.error || 'Недостаточно прав' }
     }
 
-    // 2. Создать checkpoint
+    // 2. Если title пустой — получить name из checkpoint_types
+    let finalTitle = input.title?.trim()
+    if (!finalTitle) {
+      const { data: typeData } = await supabase
+        .from('checkpoint_types')
+        .select('name, is_custom')
+        .eq('type_id', input.typeId)
+        .single()
+
+      if (typeData) {
+        // Для custom типа title обязателен (UI должна была валидировать)
+        if (typeData.is_custom) {
+          return { success: false, error: 'Для произвольного типа необходимо указать название' }
+        }
+        finalTitle = typeData.name
+      } else {
+        return { success: false, error: 'Тип чекпоинта не найден' }
+      }
+    }
+
+    // 3. Создать checkpoint
     const { data: checkpoint, error: insertError } = await supabase
       .from('section_checkpoints')
       .insert({
         section_id: input.sectionId,
         type_id: input.typeId,
-        title: input.title,
+        title: finalTitle,
         checkpoint_date: input.checkpointDate,
         description: input.description ?? null,
         custom_icon: input.customIcon ?? null,
@@ -1501,7 +1561,7 @@ export async function createCheckpoint(
       return { success: false, error: insertError?.message || 'Ошибка создания чекпоинта' }
     }
 
-    // 3. Создать связи с дополнительными разделами (если есть)
+    // 4. Создать связи с дополнительными разделами (если есть)
     if (input.linkedSectionIds && input.linkedSectionIds.length > 0) {
       const links = input.linkedSectionIds.map(sectionId => ({
         checkpoint_id: checkpoint.checkpoint_id,
@@ -1518,16 +1578,16 @@ export async function createCheckpoint(
       }
     }
 
-    // 4. Записать в audit trail
+    // 5. Записать в audit trail
     await writeAuditEntry(supabase, {
       checkpointId: checkpoint.checkpoint_id,
       changedBy: permission.userId,
       operationType: 'CREATE',
       fieldName: 'checkpoint',
-      newValue: input.title,
+      newValue: finalTitle,
     })
 
-    // 5. Вернуть созданный checkpoint из VIEW
+    // 6. Вернуть созданный checkpoint из VIEW
     return getCheckpoint(checkpoint.checkpoint_id)
   } catch (error) {
     console.error('[createCheckpoint] Error:', error)
@@ -2107,7 +2167,7 @@ import {
 ### Этап 4: Server Actions (Checkpoint Types CRUD)
 
 **Описание:**
-Реализовать Server Actions для управления типами чекпоинтов: `getCheckpointTypes`, `createCheckpointType`, `updateCheckpointType`, `deleteCheckpointType`.
+Реализовать Server Actions для управления справочником типов чекпоинтов (admin-only): `getCheckpointTypes` (публичный read), `createCheckpointType`, `updateCheckpointType`, `deleteCheckpointType`. Типы используются в SELECT dropdown при создании чекпоинтов всеми пользователями.
 
 **Затрагиваемые файлы:**
 - `modules/checkpoints/actions/checkpoint-types.ts` (новый)
@@ -2122,10 +2182,13 @@ import {
 #### Шаг 4.1: Создать структуру файла и типы
 
 **Зачем:**
-- Типы чекпоинтов — справочник (exam, task_transfer, milestone и т.д.)
-- Admins могут создавать кастомные типы (is_custom = true)
-- Встроенные типы (is_custom = false) нельзя редактировать/удалять
-- Типы используются в SELECT dropdown при создании чекпоинта
+- Типы чекпоинтов — справочник (exam, task_transfer, milestone, custom и т.д.)
+- Создавать/редактировать/удалять типы может ТОЛЬКО admin (разрешение `checkpoints.types.manage`)
+- Тип `custom` (is_custom=true) — это template для произвольных чекпоинтов (без предустановленного названия)
+- При создании чекпоинта:
+  - Предустановленные типы: можно ввести свой title, иначе используется `checkpoint_types.name`
+  - Тип `custom`: обязательно нужно ввести title вручную
+- Типы используются в SELECT dropdown при создании чекпоинта (публичный read)
 
 **Файл:** `modules/checkpoints/actions/checkpoint-types.ts`
 
@@ -2322,8 +2385,8 @@ curl http://localhost:3000/api/test/checkpoint-types
 #### Шаг 4.4: Реализовать `createCheckpointType` (Create)
 
 **Зачем:**
-- Админы могут создавать кастомные типы чекпоинтов
-- Автоматически ставится is_custom=true и created_by=currentUser
+- Админы могут создавать новые типы чекпоинтов
+- Автоматически ставится is_custom=false (с возможностью поменять. нужно задать юзеру вопрос "Вы создаете шаблонный тип "custom"?" по умолчанию ответ нет) и Автоматически ставится created_by=currentUser
 - Уникальность type slug проверяется на уровне БД (UNIQUE constraint)
 
 **Что добавить:**
@@ -2431,14 +2494,13 @@ curl -X POST http://localhost:3000/api/test/checkpoint-types \
 #### Шаг 4.5: Реализовать `updateCheckpointType` (Update)
 
 **Зачем:**
-- Редактирование name, icon, color кастомных типов
-- Встроенные типы (is_custom=false) нельзя редактировать
-- type slug нельзя менять (используется в логике)
+- Редактирование name, icon, color типов чекпоинтов (admin может редактировать все типы)
+- type slug нельзя менять (используется в логике, UNIQUE constraint)
 
 **Что добавить:**
 ```typescript
 /**
- * Обновить кастомный тип чекпоинта (только admin)
+ * Обновить тип чекпоинта (только admin, все типы редактируемы)
  */
 export async function updateCheckpointType(
   input: UpdateCheckpointTypeInput
@@ -2463,12 +2525,7 @@ export async function updateCheckpointType(
       return { success: false, error: 'Тип не найден' }
     }
 
-    // 3. Проверить что это кастомный тип
-    if (!existing.is_custom) {
-      return { success: false, error: 'Нельзя редактировать встроенные типы' }
-    }
-
-    // 4. Подготовить обновление
+    // 3. Подготовить обновление (admin может редактировать все типы)
     const updates: Record<string, unknown> = {}
     if (input.name !== undefined) updates.name = input.name
     if (input.icon !== undefined) updates.icon = input.icon
@@ -2478,7 +2535,7 @@ export async function updateCheckpointType(
       return { success: true, data: existing as CheckpointType }
     }
 
-    // 5. Выполнить UPDATE
+    // 4. Выполнить UPDATE
     const { data, error: updateError } = await supabase
       .from('checkpoint_types')
       .update(updates)
@@ -2528,9 +2585,10 @@ curl -X PATCH http://localhost:3000/api/test/checkpoint-types/custom-type-uuid \
 # 2. Попытка обновить встроенный тип
 curl -X PATCH http://localhost:3000/api/test/checkpoint-types/builtin-type-uuid \
   -H "Content-Type: application/json" \
-  -d '{ "name": "Хакнутое имя" }'
+  -d '{ "name": "Обновлённое название" }'
 
-# Ожидаемо: { success: false, error: "Нельзя редактировать встроенные типы" }
+# Ожидаемо (от админа): { success: true, data: { type_id, name: "Обновлённое название", ... } }
+# Ожидаемо (от не-админа): { success: false, error: "Недостаточно прав" }
 ```
 
 ---
@@ -2538,14 +2596,14 @@ curl -X PATCH http://localhost:3000/api/test/checkpoint-types/builtin-type-uuid 
 #### Шаг 4.6: Реализовать `deleteCheckpointType` (Delete)
 
 **Зачем:**
-- Удаление кастомных типов (встроенные нельзя удалять)
-- Проверка: если тип используется в чекпоинтах — нельзя удалять
-- FK RESTRICT на уровне БД как дополнительная защита
+- Удаление типов чекпоинтов (admin может удалять любые типы)
+- Проверка: если тип используется в чекпоинтах — нельзя удалять (FK RESTRICT защита на уровне БД)
+- Возврат понятной ошибки пользователю, если тип используется
 
 **Что добавить:**
 ```typescript
 /**
- * Удалить кастомный тип чекпоинта (только admin)
+ * Удалить тип чекпоинта (только admin, все типы могут быть удалены если не используются)
  */
 export async function deleteCheckpointType(
   typeId: string
@@ -2559,23 +2617,7 @@ export async function deleteCheckpointType(
       return { success: false, error: adminCheck.error || 'Недостаточно прав' }
     }
 
-    // 2. Получить текущий тип
-    const { data: existing, error: fetchError } = await supabase
-      .from('checkpoint_types')
-      .select('*')
-      .eq('type_id', typeId)
-      .single()
-
-    if (fetchError || !existing) {
-      return { success: false, error: 'Тип не найден' }
-    }
-
-    // 3. Проверить что это кастомный тип
-    if (!existing.is_custom) {
-      return { success: false, error: 'Нельзя удалять встроенные типы' }
-    }
-
-    // 4. Проверить что тип не используется в чекпоинтах
+    // 2. Проверить что тип не используется в чекпоинтах
     const { count, error: countError } = await supabase
       .from('section_checkpoints')
       .select('*', { count: 'exact', head: true })
@@ -2593,7 +2635,7 @@ export async function deleteCheckpointType(
       }
     }
 
-    // 5. Удалить тип
+    // 3. Удалить тип
     const { error: deleteError } = await supabase
       .from('checkpoint_types')
       .delete()
@@ -2637,11 +2679,6 @@ curl -X DELETE http://localhost:3000/api/test/checkpoint-types/unused-custom-typ
 curl -X DELETE http://localhost:3000/api/test/checkpoint-types/used-type-uuid
 
 # Ожидаемо: { success: false, error: "Тип используется в 5 чекпоинт(ах)..." }
-
-# 3. Попытка удалить встроенный тип
-curl -X DELETE http://localhost:3000/api/test/checkpoint-types/builtin-type-uuid
-
-# Ожидаемо: { success: false, error: "Нельзя удалять встроенные типы" }
 ```
 
 ---
@@ -2709,55 +2746,451 @@ import {
 
 ### Этап 5: Cache Hooks (Checkpoints)
 
+**Зачем нужен этот этап:**
+Создание React-хуков для работы с чекпоинтами — это мост между Server Actions (Этап 3) и UI-компонентами. Хуки инкапсулируют логику кеширования, загрузки данных, optimistic updates и автоматической инвалидации кеша. Без этого этапа компонентам придется вручную управлять состоянием загрузки, ошибками и рефетчем данных, что приведет к дублированию кода и багам.
+
 **Описание:**
-Создать хуки для работы с чекпоинтами: `useCheckpoints`, `useCheckpoint`, `useCheckpointAudit`, `useCreateCheckpoint`, `useUpdateCheckpoint`, `useCompleteCheckpoint`, `useDeleteCheckpoint`.
+Создать 7 хуков для работы с чекпоинтами, используя фабрики из `modules/cache/`:
+- **Query hooks** (чтение): `useCheckpoints`, `useCheckpoint`, `useCheckpointAudit`
+- **Mutation hooks** (запись): `useCreateCheckpoint`, `useUpdateCheckpoint`, `useCompleteCheckpoint`, `useDeleteCheckpoint`
 
 **Затрагиваемые файлы:**
 - `modules/checkpoints/hooks/use-checkpoints.ts` (новый)
 
 **Зависимости:**
-Этап 2 (query keys), Этап 3 (Server Actions checkpoints)
+- Этап 2 (query keys в `modules/cache/keys/query-keys.ts`)
+- Этап 3 (Server Actions в `modules/checkpoints/actions/checkpoints.ts`)
 
-**Детали:**
-- `useCheckpoints`: `createCacheQuery` с `queryKeys.checkpoints.list(filters)`, staleTime=fast
-- `useCheckpoint`: `createDetailCacheQuery` с `queryKeys.checkpoints.detail(id)`, staleTime=fast
-- `useCheckpointAudit`: `createDetailCacheQuery` с `queryKeys.checkpoints.audit(id)`, staleTime=medium
-- `useCreateCheckpoint`: `createCacheMutation`, invalidate `checkpoints.all`, `sections.all`, `resourceGraph.all`
-- `useUpdateCheckpoint`: `createUpdateMutation` с optimistic update (merge title, description, checkpoint_date, custom_icon, custom_color)
-- `useCompleteCheckpoint`: `createUpdateMutation` с optimistic update (completed_at, completed_by)
-- `useDeleteCheckpoint`: `createDeleteMutation`, invalidate `checkpoints.all`, `sections.all`, `resourceGraph.all`
+---
 
-**Визуальные изменения:**
-❌ Нет визуальных изменений (hooks только)
+#### Шаг 5.1: Создать файл и импорты
 
-**Как тестировать:**
-1. Создать тестовый компонент `app/test-checkpoints-hooks/page.tsx`:
+**Зачем:**
+Настроить структуру файла и подключить необходимые зависимости из cache module и Server Actions.
+
+**Код:**
+```typescript
+// modules/checkpoints/hooks/use-checkpoints.ts
+'use client'
+
+import {
+  createCacheQuery,
+  createDetailCacheQuery,
+  createCacheMutation,
+  createUpdateMutation,
+  createDeleteMutation,
+  queryKeys,
+} from '@/modules/cache'
+
+import {
+  getCheckpoints,
+  getCheckpointById,
+  getCheckpointAudit,
+  createCheckpoint,
+  updateCheckpoint,
+  completeCheckpoint,
+  deleteCheckpoint,
+  type Checkpoint,
+  type CreateCheckpointInput,
+  type UpdateCheckpointInput,
+  type CompleteCheckpointInput,
+  type CheckpointFilters,
+  type AuditEntry,
+} from '@/modules/checkpoints/actions'
+```
+
+**Как проверить:**
+- `npm run build` — нет ошибок импорта
+- VSCode показывает автокомплит для всех импортов
+
+---
+
+#### Шаг 5.2: `useCheckpoints` — query hook для списка чекпоинтов
+
+**Зачем:**
+Позволяет компонентам загружать список чекпоинтов с фильтрацией по секциям, проектам, типам. Кеширует данные, автоматически обновляется при изменениях. Используется в списках, таблицах, карточках секций.
+
+**Код:**
+```typescript
+export const useCheckpoints = createCacheQuery({
+  queryKey: (filters?: CheckpointFilters) => queryKeys.checkpoints.list(filters),
+  queryFn: getCheckpoints,
+  staleTime: 'fast', // 30 секунд (данные меняются часто)
+})
+```
+
+**Как проверить:**
 ```tsx
+// app/test-checkpoints-hooks/page.tsx
 'use client'
 import { useCheckpoints } from '@/modules/checkpoints/hooks/use-checkpoints'
 
 export default function TestPage() {
-  const { data, isLoading, error } = useCheckpoints({ sectionId: 'test-section-uuid' })
+  const { data, isLoading, error } = useCheckpoints({ sectionId: 'test-uuid' })
 
-  if (isLoading) return <div>Loading...</div>
-  if (error) return <div>Error: {error.message}</div>
+  if (isLoading) return <div>Загрузка...</div>
+  if (error) return <div>Ошибка: {error.message}</div>
 
   return (
-    <div>
-      <h1>Checkpoints: {data?.length || 0}</h1>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+    <div className="p-4">
+      <h1>Чекпоинты: {data?.length || 0}</h1>
+      <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>
     </div>
   )
 }
 ```
-2. Открыть `/test-checkpoints-hooks` → должны загрузиться данные
-3. Проверить в React DevTools (Components) → TanStack Query Devtools → видны query keys `['checkpoints', 'list', ...]`
-4. Тест optimistic update: добавить кнопку с `useUpdateCheckpoint().mutate(...)` → проверить, что UI обновляется мгновенно (до ответа сервера)
-5. Тест cache invalidation: создать checkpoint через `useCreateCheckpoint` → проверить, что список обновился автоматически
-6. Проверить `npm run build` — нет ошибок TypeScript
+
+**Проверки:**
+1. Открыть `/test-checkpoints-hooks` — видны данные из БД
+2. React DevTools → TanStack Query Devtools → query key `['checkpoints', 'list', { sectionId: '...' }]` в состоянии `success`
+3. Обновить данные в БД (через Supabase Admin) → через 30 сек рефетч должен подхватить изменения
+4. Проверить `isLoading: true` при первой загрузке
+
+---
+
+#### Шаг 5.3: `useCheckpoint` — query hook для одного чекпоинта
+
+**Зачем:**
+Загружает детальную информацию о чекпоинте по ID. Используется в модальных окнах, детальных просмотрах, для отображения связанных секций и статуса.
+
+**Код:**
+```typescript
+export const useCheckpoint = createDetailCacheQuery({
+  queryKey: (id: string) => queryKeys.checkpoints.detail(id),
+  queryFn: getCheckpointById,
+  staleTime: 'fast',
+})
+```
+
+**Как проверить:**
+```tsx
+// Добавить в test-checkpoints-hooks/page.tsx
+import { useCheckpoint } from '@/modules/checkpoints/hooks/use-checkpoints'
+
+function CheckpointDetail({ id }: { id: string }) {
+  const { data, isLoading } = useCheckpoint(id)
+
+  if (isLoading) return <div>Загрузка...</div>
+  if (!data) return <div>Чекпоинт не найден</div>
+
+  return (
+    <div className="border p-4 rounded">
+      <h2>{data.title}</h2>
+      <p>Дата: {data.checkpoint_date}</p>
+      <p>Статус: {data.status_label}</p>
+      <p>Связанных секций: {data.linked_sections_count}</p>
+    </div>
+  )
+}
+```
+
+**Проверки:**
+1. Взять реальный `checkpoint_id` из БД (SELECT checkpoint_id FROM checkpoints LIMIT 1)
+2. Передать в `<CheckpointDetail id="..." />`
+3. Должны загрузиться данные конкретного чекпоинта
+4. TanStack Devtools → query key `['checkpoints', 'detail', 'checkpoint-id']`
+
+---
+
+#### Шаг 5.4: `useCheckpointAudit` — query hook для истории изменений
+
+**Зачем:**
+Отображает audit trail (кто, когда, что изменил) для чекпоинта. Используется в модальных окнах "История изменений". Кеш живет дольше (medium), т.к. история не меняется часто.
+
+**Код:**
+```typescript
+export const useCheckpointAudit = createDetailCacheQuery({
+  queryKey: (id: string) => queryKeys.checkpoints.audit(id),
+  queryFn: getCheckpointAudit,
+  staleTime: 'medium', // 5 минут (история редко меняется)
+})
+```
+
+**Как проверить:**
+```tsx
+function AuditLog({ checkpointId }: { checkpointId: string }) {
+  const { data: audit, isLoading } = useCheckpointAudit(checkpointId)
+
+  if (isLoading) return <div>Загрузка истории...</div>
+
+  return (
+    <div>
+      <h3>История изменений ({audit?.length || 0})</h3>
+      {audit?.map((entry) => (
+        <div key={entry.audit_id} className="text-sm border-b pb-2">
+          <div>{entry.action_type} — {entry.action_timestamp}</div>
+          <div>Пользователь: {entry.user_firstname} {entry.user_lastname}</div>
+          <pre className="text-xs">{JSON.stringify(entry.changes, null, 2)}</pre>
+        </div>
+      ))}
+    </div>
+  )
+}
+```
+
+**Проверки:**
+1. Создать/обновить чекпоинт через UI (чтобы появились записи в `checkpoint_audit`)
+2. Передать `checkpointId` в `<AuditLog />`
+3. Должен отобразиться список изменений с именами пользователей
+4. TanStack Devtools → query key `['checkpoints', 'audit', 'checkpoint-id']` со staleTime=300000ms
+
+---
+
+#### Шаг 5.5: `useCreateCheckpoint` — mutation hook для создания
+
+**Зачем:**
+Создает новый чекпоинт и автоматически обновляет кеш списков (чекпоинты, секции, resource graph). Без инвалидации пришлось бы вручную рефетчить все зависимые запросы.
+
+**Код:**
+```typescript
+export const useCreateCheckpoint = createCacheMutation({
+  mutationFn: createCheckpoint,
+  invalidateKeys: [
+    queryKeys.checkpoints.all,    // Все списки чекпоинтов
+    queryKeys.sections.all,         // Секции (т.к. у них есть счетчики чекпоинтов)
+    queryKeys.resourceGraph.all,    // Resource Graph (timeline с чекпоинтами)
+  ],
+})
+```
+
+**Как проверить:**
+```tsx
+import { useCreateCheckpoint } from '@/modules/checkpoints/hooks/use-checkpoints'
+
+function CreateCheckpointButton({ sectionId }: { sectionId: string }) {
+  const createMutation = useCreateCheckpoint()
+
+  const handleCreate = () => {
+    createMutation.mutate({
+      section_id: sectionId,
+      type_id: 'exam-type-uuid', // Взять из БД (SELECT type_id FROM checkpoint_types LIMIT 1)
+      title: 'Тестовый чекпоинт',
+      checkpoint_date: '2025-12-31',
+    }, {
+      onSuccess: (result) => {
+        if (result.success) {
+          alert(`Создан чекпоинт: ${result.data.checkpoint_id}`)
+        } else {
+          alert(`Ошибка: ${result.error}`)
+        }
+      }
+    })
+  }
+
+  return (
+    <button onClick={handleCreate} disabled={createMutation.isPending}>
+      {createMutation.isPending ? 'Создание...' : 'Создать чекпоинт'}
+    </button>
+  )
+}
+```
+
+**Проверки:**
+1. Нажать "Создать чекпоинт" → должен появиться в списке автоматически (без ручного рефетча)
+2. TanStack Devtools → после мутации должны инвалидироваться ключи `['checkpoints']`, `['sections']`, `['resource-graph']`
+3. Проверить в БД: новая запись в `checkpoints` таблице
+4. Проверить обработку ошибок: передать невалидные данные (например, несуществующий `section_id`) → `result.success === false`
+
+---
+
+#### Шаг 5.6: `useUpdateCheckpoint` — mutation hook с optimistic update
+
+**Зачем:**
+Обновляет чекпоинт (название, дату, описание, кастомные иконку/цвет) с мгновенным отображением в UI (optimistic update). Пользователь видит изменения до ответа сервера, что создает ощущение мгновенной реакции.
+
+**Код:**
+```typescript
+export const useUpdateCheckpoint = createUpdateMutation({
+  mutationFn: updateCheckpoint,
+  listQueryKey: queryKeys.checkpoints.all,
+  getId: (input: UpdateCheckpointInput) => input.checkpoint_id,
+  getItemId: (item: Checkpoint) => item.checkpoint_id,
+  merge: (item: Checkpoint, input: UpdateCheckpointInput) => ({
+    ...item,
+    title: input.title ?? item.title,
+    description: input.description ?? item.description,
+    checkpoint_date: input.checkpoint_date ?? item.checkpoint_date,
+    icon: input.custom_icon ?? item.icon,
+    color: input.custom_color ?? item.color,
+  }),
+})
+```
+
+**Как проверить:**
+```tsx
+function EditCheckpoint({ checkpointId }: { checkpointId: string }) {
+  const { data: checkpoint } = useCheckpoint(checkpointId)
+  const updateMutation = useUpdateCheckpoint()
+  const [title, setTitle] = useState('')
+
+  useEffect(() => {
+    if (checkpoint) setTitle(checkpoint.title)
+  }, [checkpoint])
+
+  const handleUpdate = () => {
+    updateMutation.mutate({
+      checkpoint_id: checkpointId,
+      title,
+    })
+  }
+
+  return (
+    <div>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="border px-2 py-1"
+      />
+      <button onClick={handleUpdate}>Сохранить</button>
+    </div>
+  )
+}
+```
+
+**Проверки:**
+1. Изменить название → UI обновится мгновенно (до ответа сервера)
+2. Открыть Network tab в DevTools → увидеть запрос к Server Action
+3. Если запрос упадет (например, нет прав) → UI откатится к старому значению
+4. Проверить, что изменения применились в БД (SELECT title FROM checkpoints WHERE checkpoint_id='...')
+5. TanStack Devtools → видеть optimistic update в query data (временное изменение до ответа)
+
+---
+
+#### Шаг 5.7: `useCompleteCheckpoint` — mutation для завершения чекпоинта
+
+**Зачем:**
+Отмечает чекпоинт как выполненный (заполняет `completed_at` и `completed_by`). Используется кнопкой "Отметить выполненным" в UI. Также с optimistic update для мгновенной реакции.
+
+**Код:**
+```typescript
+export const useCompleteCheckpoint = createUpdateMutation({
+  mutationFn: completeCheckpoint,
+  listQueryKey: queryKeys.checkpoints.all,
+  getId: (input: CompleteCheckpointInput) => input.checkpoint_id,
+  getItemId: (item: Checkpoint) => item.checkpoint_id,
+  merge: (item: Checkpoint, input: CompleteCheckpointInput) => ({
+    ...item,
+    completed_at: new Date().toISOString(),
+    completed_by: input.user_id, // Берется из Server Action (текущий пользователь)
+    status: 'completed', // Optimistic status (сервер пересчитает правильно)
+  }),
+})
+```
+
+**Как проверить:**
+```tsx
+function CompleteButton({ checkpointId, userId }: { checkpointId: string; userId: string }) {
+  const { data: checkpoint } = useCheckpoint(checkpointId)
+  const completeMutation = useCompleteCheckpoint()
+
+  if (checkpoint?.completed_at) {
+    return <div className="text-green-500">✓ Выполнено</div>
+  }
+
+  return (
+    <button
+      onClick={() => completeMutation.mutate({ checkpoint_id: checkpointId, user_id: userId })}
+      disabled={completeMutation.isPending}
+      className="bg-green-500 text-white px-3 py-1 rounded"
+    >
+      {completeMutation.isPending ? 'Сохранение...' : 'Отметить выполненным'}
+    </button>
+  )
+}
+```
+
+**Проверки:**
+1. Нажать "Отметить выполненным" → UI обновится мгновенно (зеленая галочка)
+2. Проверить в БД: `completed_at` и `completed_by` заполнены
+3. Проверить, что `status` пересчитался корректно (VIEW `view_section_checkpoints` содержит логику `CASE WHEN completed_at IS NOT NULL THEN 'completed' ...`)
+4. TanStack Devtools → optimistic update → rollback, если ошибка
+5. Проверить запись в `checkpoint_audit` (должна появиться с `action_type='completed'`)
+
+---
+
+#### Шаг 5.8: `useDeleteCheckpoint` — mutation для удаления
+
+**Зачем:**
+Удаляет чекпоинт и инвалидирует все зависимые кеши (списки чекпоинтов, секции, resource graph). Используется в модальных окнах удаления.
+
+**Код:**
+```typescript
+export const useDeleteCheckpoint = createDeleteMutation({
+  mutationFn: deleteCheckpoint,
+  invalidateKeys: [
+    queryKeys.checkpoints.all,
+    queryKeys.sections.all,
+    queryKeys.resourceGraph.all,
+  ],
+})
+```
+
+**Как проверить:**
+```tsx
+function DeleteButton({ checkpointId }: { checkpointId: string }) {
+  const deleteMutation = useDeleteCheckpoint()
+
+  const handleDelete = () => {
+    if (!confirm('Удалить чекпоинт?')) return
+
+    deleteMutation.mutate(checkpointId, {
+      onSuccess: (result) => {
+        if (result.success) {
+          alert('Чекпоинт удален')
+        } else {
+          alert(`Ошибка: ${result.error}`)
+        }
+      }
+    })
+  }
+
+  return (
+    <button
+      onClick={handleDelete}
+      disabled={deleteMutation.isPending}
+      className="bg-red-500 text-white px-3 py-1 rounded"
+    >
+      {deleteMutation.isPending ? 'Удаление...' : 'Удалить'}
+    </button>
+  )
+}
+```
+
+**Проверки:**
+1. Нажать "Удалить" → чекпоинт исчезнет из списка автоматически
+2. Проверить в БД: запись удалена из таблицы `checkpoints`
+3. Проверить, что audit записи тоже удалены (CASCADE в миграции)
+4. TanStack Devtools → после мутации инвалидируются ключи `['checkpoints']`, `['sections']`, `['resource-graph']`
+5. Попытка удалить несуществующий ID → `result.success === false`, ошибка в `result.error`
+
+---
+
+#### Итоговый чек-лист Этапа 5:
+
+- [ ] Шаг 5.1: Файл `use-checkpoints.ts` создан, импорты настроены
+- [ ] Шаг 5.2: `useCheckpoints` — загрузка списка с фильтрами
+- [ ] Шаг 5.3: `useCheckpoint` — загрузка одного чекпоинта
+- [ ] Шаг 5.4: `useCheckpointAudit` — история изменений
+- [ ] Шаг 5.5: `useCreateCheckpoint` — создание с инвалидацией кеша
+- [ ] Шаг 5.6: `useUpdateCheckpoint` — обновление с optimistic update
+- [ ] Шаг 5.7: `useCompleteCheckpoint` — завершение с optimistic update
+- [ ] Шаг 5.8: `useDeleteCheckpoint` — удаление с инвалидацией
+- [ ] `npm run build` проходит без ошибок
+- [ ] Протестированы все хуки в `app/test-checkpoints-hooks/page.tsx`
+- [ ] TanStack Query Devtools показывает корректные query keys
+
+**Визуальные изменения:**
+❌ Нет визуальных изменений (hooks только, UI появится на этапах 8-12)
 
 **Проверка 🤖 Cache Guardian:**
-Использование фабрик из cache module, корректные query keys, optimistic updates, cache invalidation.
+После реализации — проверить:
+- Использование фабрик `createCacheQuery`, `createCacheMutation`, `createUpdateMutation`, `createDeleteMutation`
+- Корректные query keys из `queryKeys.checkpoints.*`
+- Optimistic updates в `useUpdateCheckpoint` и `useCompleteCheckpoint`
+- Cache invalidation в мутациях (инвалидация `checkpoints.all`, `sections.all`, `resourceGraph.all`)
+- staleTime настроен корректно (fast/medium по требованиям)
+
+---
 
 ---
 
@@ -3215,9 +3648,22 @@ Matches SectionModal.tsx layout, Resource Graph design language, permission guar
 **Детали:**
 - Props: `isOpen: boolean`, `onClose: () => void`, `sectionId: string` (pre-filled)
 - Form: React Hook Form + Zod schema
-- Fields: Раздел (readonly, display section_name), Тип (dropdown checkpoint_types с кнопкой "Создать новый тип"), Название (required), Дата дедлайна (DatePicker, required), Описание (RichTextEditor, optional), Иконка (IconPicker, optional), Цвет (ColorPicker, optional), Связанные разделы (multi-select, optional)
+- Fields:
+  - Раздел (readonly, display section_name)
+  - Тип (dropdown checkpoint_types с кнопкой "Создать новый тип")
+  - Название (text input):
+    - Для предустановленных типов: опционально (placeholder: "По умолчанию — название типа")
+    - Для типа `custom`: обязательно (required, validation error если пустой)
+  - Дата дедлайна (DatePicker, required)
+  - Описание (RichTextEditor, optional)
+  - Иконка (IconPicker, optional)
+  - Цвет (ColorPicker, optional)
+  - Связанные разделы (multi-select, optional)
 - Buttons: "Создать" (primary) → `createMutation.mutate()` → close modal, "Отмена" (outline) → close modal
-- Validation: title required, checkpointDate required, typeId required
+- Validation:
+  - `typeId` required
+  - `checkpointDate` required
+  - `title` required ТОЛЬКО для типа `custom` (динамическая валидация на основе выбранного типа)
 
 **Визуальные изменения:**
 ✅ **ДА** — center modal с формой создания чекпоинта
@@ -3258,13 +3704,16 @@ export default function TestPage() {
    - Поле "Раздел" readonly, показывает section_name
    - Dropdown "Тип" загружает checkpoint_types
    - Кнопка "Создать новый тип" (проверить только для admin)
-   - Input "Название" required (validation error если пустой)
+   - Input "Название":
+     - При выборе предустановленного типа → placeholder "По умолчанию — название типа" (optional)
+     - При выборе типа "Произвольный" (custom) → required (validation error если пустой)
    - DatePicker "Дата дедлайна" required
    - RichTextEditor "Описание" optional
    - IconPicker "Иконка" optional
    - ColorPicker "Цвет" optional
    - Multi-select "Связанные разделы" optional
-   - Click "Создать" с пустыми required полями → validation errors
+   - Click "Создать" с типом "custom" и пустым title → validation error
+   - Click "Создать" с предустановленным типом и пустым title → checkpoint создаётся с дефолтным названием типа
    - Click "Создать" с заполненными полями → checkpoint создаётся → modal закрывается → cache invalidation
    - Click "Отмена" → modal закрывается без создания
    - Click overlay → modal закрывается
@@ -3290,10 +3739,9 @@ Form validation, Resource Graph styling, center modal layout.
 **Детали:**
 - Admin permission guard: `useHasPermission('checkpoints.types.manage')` или role='admin'
 - Table: type_code, name, icon preview, color preview, is_custom badge, actions (Edit, Delete)
-- Create form: type (code), name, icon (IconPicker), color (ColorPicker)
-- Edit modal: name, icon, color (только для is_custom=true)
-- Delete: confirm dialog, проверка на использование в section_checkpoints
-- Built-in types (is_custom=false): readonly, нельзя удалить/изменить
+- Create form: type (code), name, icon (IconPicker), color (ColorPicker), автоматически is_custom=true для новых типов
+- Edit modal: name, icon, color (доступно для ВСЕХ типов — админ может редактировать встроенные типы)
+- Delete: confirm dialog, проверка на использование в section_checkpoints, нельзя удалить если FK constraint (есть чекпоинты с этим типом)
 
 **Визуальные изменения:**
 ✅ **ДА** — admin page `/admin/checkpoints/types` с таблицей типов
@@ -3302,7 +3750,7 @@ Form validation, Resource Graph styling, center modal layout.
 - Admin page layout
 - Table: columns (type_code, name, icon preview, color preview, is_custom badge, actions)
 - Button "Создать тип" (top-right)
-- Row actions: Edit (только custom), Delete (только custom)
+- Row actions: Edit (все типы), Delete (все типы, но с проверкой FK constraint)
 - Edit modal: center modal с формой
 - Empty state: "Нет типов. Создайте первый тип."
 

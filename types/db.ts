@@ -11459,6 +11459,7 @@ export type Database = {
           decomposition_stage_finish: string | null
           decomposition_stage_id: string | null
           decomposition_stage_name: string | null
+          decomposition_stage_order: number | null
           decomposition_stage_start: string | null
           decomposition_stage_status_color: string | null
           decomposition_stage_status_id: string | null

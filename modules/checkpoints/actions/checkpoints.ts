@@ -14,7 +14,9 @@ import * as Sentry from '@sentry/nextjs'
 export interface CreateCheckpointInput {
   sectionId: string
   typeId: string
-  title: string
+  title: string // Название чекпоинта. Логика:
+                // - Для предустановленных типов: опционально (если пусто — берется checkpoint_types.name)
+                // - Для типа 'custom': обязательно (UI должна валидировать)
   checkpointDate: string // ISO date 'YYYY-MM-DD'
   description?: string | null
   customIcon?: string | null
@@ -118,69 +120,81 @@ async function canManageCheckpoint(
     }
 
     // 4. Динамическая проверка контекста раздела
-    // Получаем информацию о разделе, проекте, ответственном
+    // Получаем информацию о разделе
     const { data: section, error: sectionError } = await supabase
       .from('sections')
-      .select(`
-        responsible_id,
-        project_id,
-        responsible:profiles!responsible_id(
-          id,
-          department_id,
-          team_lead_id
-        ),
-        project:projects!project_id(
-          manager_id
-        )
-      `)
-      .eq('id', sectionId)
+      .select('section_id, section_responsible, section_project_id')
+      .eq('section_id', sectionId)
       .single()
 
     if (sectionError || !section) {
       return { canManage: false, userId: user.id, error: 'Раздел не найден' }
     }
 
-    // 5. Получаем профиль текущего пользователя для проверки роли
-    const { data: userProfile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role_id, department_id, roles!inner(name)')
-      .eq('id', user.id)
+    // Я ответственный за раздел
+    if (section.section_responsible === user.id) {
+      return { canManage: true, userId: user.id }
+    }
+
+    // Получить менеджера проекта
+    const { data: project } = await supabase
+      .from('projects')
+      .select('project_manager')
+      .eq('project_id', section.section_project_id)
       .single()
 
-    if (profileError || !userProfile) {
+    // Я менеджер проекта
+    if (project?.project_manager === user.id) {
+      return { canManage: true, userId: user.id }
+    }
+
+    // Если нет ответственного - запрещаем
+    if (!section.section_responsible) {
+      return { canManage: false, userId: user.id, error: 'Недостаточно прав для управления чекпоинтом' }
+    }
+
+    // 5. Для остальных проверок нужна роль - используем view_users
+    const { data: userView } = await supabase
+      .from('view_users')
+      .select('user_id, role_name, department_id, team_id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!userView) {
       return { canManage: false, userId: user.id, error: 'Профиль пользователя не найден' }
     }
 
-    const userRole = (userProfile.roles as unknown as { name: string }).name
+    // Получить данные ответственного
+    const { data: responsibleView } = await supabase
+      .from('view_users')
+      .select('user_id, department_id, team_id')
+      .eq('user_id', section.section_responsible)
+      .single()
 
-    // 6. Проверяем контекст
-    const responsibleData = section.responsible as unknown as {
-      id: string
-      department_id: string | null
-      team_lead_id: string | null
-    } | null
-    const projectData = section.project as unknown as { manager_id: string | null } | null
-
-    // Я ответственный за раздел
-    if (section.responsible_id === user.id) {
-      return { canManage: true, userId: user.id }
-    }
-
-    // Я менеджер проекта
-    if (projectData?.manager_id === user.id) {
-      return { canManage: true, userId: user.id }
+    if (!responsibleView) {
+      return { canManage: false, userId: user.id, error: 'Ответственный не найден' }
     }
 
     // Ответственный из моего отдела (department_head)
-    if (userRole === 'department_head' &&
-        responsibleData?.department_id === userProfile.department_id) {
+    if (userView.role_name === 'department_head' &&
+        responsibleView.department_id === userView.department_id) {
       return { canManage: true, userId: user.id }
     }
 
     // Ответственный из моей команды (team_lead)
-    if (userRole === 'team_lead' &&
-        responsibleData?.team_lead_id === user.id) {
-      return { canManage: true, userId: user.id }
+    if (userView.role_name === 'team_lead') {
+      // Проверить, что я team_lead команды ответственного
+      if (responsibleView.team_id && userView.team_id) {
+        const { data: team } = await supabase
+          .from('teams')
+          .select('team_lead_id')
+          .eq('team_id', responsibleView.team_id)
+          .single()
+
+        if (team?.team_lead_id === user.id) {
+          return { canManage: true, userId: user.id }
+        }
+      }
     }
 
     return { canManage: false, userId: user.id, error: 'Недостаточно прав для управления чекпоинтом' }
@@ -307,18 +321,12 @@ export async function getCheckpoints(
 
         // Фильтр по sectionId: родительский ИЛИ связанный раздел
         if (filters?.sectionId) {
-          const linkedSpan = Sentry.startInactiveSpan({
-            name: 'getCheckpoints.linkedSections',
-            op: 'db.query',
-          })
 
           // 1. Найти checkpoint_id где sectionId — связанный раздел
           const { data: linkedCheckpoints } = await supabase
             .from('checkpoint_section_links')
             .select('checkpoint_id')
             .eq('section_id', filters.sectionId)
-
-          linkedSpan?.end()
 
           const linkedIds = linkedCheckpoints?.map(c => c.checkpoint_id) || []
 
@@ -337,11 +345,11 @@ export async function getCheckpoints(
           // Получить все section_id проекта
           const { data: sectionIds } = await supabase
             .from('sections')
-            .select('id')
-            .eq('project_id', filters.projectId)
+            .select('section_id')
+            .eq('section_project_id', filters.projectId)
 
           if (sectionIds && sectionIds.length > 0) {
-            const ids = sectionIds.map(s => s.id)
+            const ids = sectionIds.map(s => s.section_id)
 
             // Также найти чекпоинты, связанные с разделами проекта
             const { data: linkedCheckpoints } = await supabase
@@ -374,14 +382,7 @@ export async function getCheckpoints(
           query = query.lte('checkpoint_date', filters.dateTo)
         }
 
-        const mainQuerySpan = Sentry.startInactiveSpan({
-          name: 'getCheckpoints.mainQuery',
-          op: 'db.query',
-        })
-
         const { data, error } = await query.order('checkpoint_date', { ascending: true })
-
-        mainQuerySpan?.end()
 
         if (error) {
           Sentry.captureException(error, {
@@ -495,21 +496,7 @@ export async function getCheckpointAudit(
 
         const { data, error } = await supabase
           .from('checkpoint_audit')
-          .select(`
-            audit_id,
-            checkpoint_id,
-            changed_by,
-            changed_at,
-            operation_type,
-            field_name,
-            old_value,
-            new_value,
-            profiles:changed_by (
-              firstname,
-              lastname,
-              avatar_url
-            )
-          `)
+          .select('audit_id, checkpoint_id, changed_by, changed_at, operation_type, field_name, old_value, new_value')
           .eq('checkpoint_id', checkpointId)
           .order('changed_at', { ascending: false })
           .limit(50)
@@ -523,21 +510,41 @@ export async function getCheckpointAudit(
           return { success: false, error: error.message }
         }
 
-        // Transform data to flatten profile fields
-        const entries: AuditEntry[] = (data || []).map((row: Record<string, unknown>) => {
-          const profiles = row.profiles as { firstname?: string; lastname?: string; avatar_url?: string } | null
+        // Получить уникальные user_id
+        const userIds = [...new Set((data || []).map(row => row.changed_by).filter(Boolean))] as string[]
+
+        // Получить данные пользователей
+        const usersMap = new Map<string, { firstname: string; lastname: string; avatar_url: string | null }>()
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('user_id, first_name, last_name, avatar_url')
+            .in('user_id', userIds)
+
+          profiles?.forEach(p => {
+            usersMap.set(p.user_id, {
+              firstname: p.first_name,
+              lastname: p.last_name,
+              avatar_url: p.avatar_url,
+            })
+          })
+        }
+
+        // Transform data
+        const entries: AuditEntry[] = (data || []).map(row => {
+          const userInfo = row.changed_by ? usersMap.get(row.changed_by) : null
           return {
-            audit_id: row.audit_id as string,
-            checkpoint_id: row.checkpoint_id as string,
-            changed_by: row.changed_by as string | null,
-            changed_at: row.changed_at as string,
+            audit_id: row.audit_id,
+            checkpoint_id: row.checkpoint_id,
+            changed_by: row.changed_by,
+            changed_at: row.changed_at,
             operation_type: row.operation_type as AuditEntry['operation_type'],
-            field_name: row.field_name as string,
-            old_value: row.old_value as string | null,
-            new_value: row.new_value as string | null,
-            user_firstname: profiles?.firstname ?? null,
-            user_lastname: profiles?.lastname ?? null,
-            user_avatar_url: profiles?.avatar_url ?? null,
+            field_name: row.field_name,
+            old_value: row.old_value,
+            new_value: row.new_value,
+            user_firstname: userInfo?.firstname ?? null,
+            user_lastname: userInfo?.lastname ?? null,
+            user_avatar_url: userInfo?.avatar_url ?? null,
           }
         })
 
@@ -586,13 +593,33 @@ export async function createCheckpoint(
           return { success: false, error: permError || 'Недостаточно прав' }
         }
 
-        // 2. Создать checkpoint
+        // 2. Если title пустой — получить name из checkpoint_types
+        let finalTitle = input.title?.trim()
+        if (!finalTitle) {
+          const { data: typeData } = await supabase
+            .from('checkpoint_types')
+            .select('name, is_custom')
+            .eq('type_id', input.typeId)
+            .single()
+
+          if (typeData) {
+            // Для custom типа title обязателен (UI должна была валидировать)
+            if (typeData.is_custom) {
+              return { success: false, error: 'Для произвольного типа необходимо указать название' }
+            }
+            finalTitle = typeData.name
+          } else {
+            return { success: false, error: 'Тип чекпоинта не найден' }
+          }
+        }
+
+        // 3. Создать checkpoint
         const { data: checkpoint, error: insertError } = await supabase
           .from('section_checkpoints')
           .insert({
             section_id: input.sectionId,
             type_id: input.typeId,
-            title: input.title,
+            title: finalTitle,
             checkpoint_date: input.checkpointDate,
             description: input.description ?? null,
             custom_icon: input.customIcon ?? null,
@@ -613,7 +640,7 @@ export async function createCheckpoint(
 
         const checkpointId = checkpoint.checkpoint_id
 
-        // 3. Создать связи с дополнительными разделами (если есть)
+        // 4. Создать связи с дополнительными разделами (если есть)
         if (input.linkedSectionIds && input.linkedSectionIds.length > 0) {
           const links = input.linkedSectionIds.map(sectionId => ({
             checkpoint_id: checkpointId,
@@ -630,16 +657,16 @@ export async function createCheckpoint(
           }
         }
 
-        // 4. Audit trail: CREATE
+        // 5. Audit trail: CREATE
         await writeAuditEntry(supabase, {
           checkpointId,
           changedBy: userId,
           operationType: 'CREATE',
           fieldName: 'checkpoint',
-          newValue: input.title,
+          newValue: finalTitle,
         })
 
-        // 5. Получить созданный чекпоинт из VIEW
+        // 6. Получить созданный чекпоинт из VIEW
         const result = await getCheckpoint(checkpointId)
         if (!result.success) {
           return { success: false, error: 'Чекпоинт создан, но не удалось получить данные' }
@@ -725,17 +752,29 @@ export async function updateCheckpoint(
           }
 
           // 5. Audit trail для каждого измененного поля
+          // Маппинг полей из updates в поля Checkpoint
+          const fieldMapping: Record<string, keyof Checkpoint> = {
+            'title': 'title',
+            'description': 'description',
+            'checkpoint_date': 'checkpoint_date',
+            'custom_icon': 'icon',
+            'custom_color': 'color',
+          }
+
           for (const [field, newValue] of Object.entries(updates)) {
-            const oldValue = currentCheckpoint[field as keyof Checkpoint]
-            if (oldValue !== newValue) {
-              await writeAuditEntry(supabase, {
-                checkpointId: input.checkpointId,
-                changedBy: userId,
-                operationType: 'UPDATE',
-                fieldName: field,
-                oldValue: String(oldValue ?? ''),
-                newValue: String(newValue ?? ''),
-              })
+            const checkpointField = fieldMapping[field]
+            if (checkpointField) {
+              const oldValue = currentCheckpoint[checkpointField]
+              if (oldValue !== newValue) {
+                await writeAuditEntry(supabase, {
+                  checkpointId: input.checkpointId,
+                  changedBy: userId,
+                  operationType: 'UPDATE',
+                  fieldName: field,
+                  oldValue: String(oldValue ?? ''),
+                  newValue: String(newValue ?? ''),
+                })
+              }
             }
           }
         }

@@ -26,6 +26,7 @@ export interface CreateCheckpointTypeInput {
   name: string
   icon: string
   color: string
+  isCustomTemplate?: boolean // true = создать шаблон "custom", false = создать обычный тип (по умолчанию false)
 }
 
 /** Input для обновления типа */
@@ -55,7 +56,7 @@ async function isAdmin(): Promise<{ isAdmin: boolean; userId: string | null; err
     const { data: profile } = await supabase
       .from('profiles')
       .select('role_id')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single()
 
     if (!profile?.role_id) {
@@ -64,11 +65,11 @@ async function isAdmin(): Promise<{ isAdmin: boolean; userId: string | null; err
 
     const { data: role } = await supabase
       .from('roles')
-      .select('name')
+      .select('role_name')
       .eq('id', profile.role_id)
       .single()
 
-    if (role?.name === 'admin') {
+    if (role?.role_name === 'admin') {
       return { isAdmin: true, userId: user.id }
     }
 
@@ -145,6 +146,7 @@ export async function createCheckpointType(
       op: 'db.mutation',
       attributes: {
         'checkpointType.type': input.type,
+        'checkpointType.isCustomTemplate': input.isCustomTemplate ?? false,
       },
     },
     async () => {
@@ -166,6 +168,8 @@ export async function createCheckpointType(
         }
 
         // 3. Создать тип
+        // is_custom = true если isCustomTemplate=true (создается шаблон "custom")
+        // is_custom = false по умолчанию (обычный предустановленный тип)
         const { data, error } = await supabase
           .from('checkpoint_types')
           .insert({
@@ -173,7 +177,7 @@ export async function createCheckpointType(
             name: input.name,
             icon: input.icon,
             color: input.color,
-            is_custom: true,
+            is_custom: input.isCustomTemplate ?? false,
             created_by: adminCheck.userId,
           })
           .select()
@@ -209,7 +213,7 @@ export async function createCheckpointType(
 }
 
 /**
- * Обновить кастомный тип чекпоинта (только admin)
+ * Обновить тип чекпоинта (только admin, все типы редактируемы)
  */
 export async function updateCheckpointType(
   input: UpdateCheckpointTypeInput
@@ -243,12 +247,7 @@ export async function updateCheckpointType(
           return { success: false, error: 'Тип не найден' }
         }
 
-        // 3. Проверить что это кастомный тип
-        if (!existing.is_custom) {
-          return { success: false, error: 'Нельзя редактировать встроенные типы' }
-        }
-
-        // 4. Подготовить обновление
+        // 3. Подготовить обновление (admin может редактировать все типы)
         const updates: Record<string, unknown> = {}
         if (input.name !== undefined) updates.name = input.name
         if (input.icon !== undefined) updates.icon = input.icon
@@ -258,7 +257,7 @@ export async function updateCheckpointType(
           return { success: true, data: existing as CheckpointType }
         }
 
-        // 5. Выполнить UPDATE
+        // 4. Выполнить UPDATE
         const { data, error: updateError } = await supabase
           .from('checkpoint_types')
           .update(updates)
@@ -292,7 +291,7 @@ export async function updateCheckpointType(
 }
 
 /**
- * Удалить кастомный тип чекпоинта (только admin)
+ * Удалить тип чекпоинта (только admin, все типы могут быть удалены если не используются)
  */
 export async function deleteCheckpointType(
   typeId: string
@@ -315,29 +314,17 @@ export async function deleteCheckpointType(
           return { success: false, error: adminCheck.error || 'Недостаточно прав' }
         }
 
-        // 2. Получить текущий тип
-        const { data: existing, error: fetchError } = await supabase
-          .from('checkpoint_types')
-          .select('*')
-          .eq('type_id', typeId)
-          .single()
-
-        if (fetchError || !existing) {
-          return { success: false, error: 'Тип не найден' }
-        }
-
-        // 3. Проверить что это кастомный тип
-        if (!existing.is_custom) {
-          return { success: false, error: 'Нельзя удалять встроенные типы' }
-        }
-
-        // 4. Проверить что тип не используется в чекпоинтах
+        // 2. Проверить что тип не используется в чекпоинтах
         const { count, error: countError } = await supabase
           .from('section_checkpoints')
           .select('*', { count: 'exact', head: true })
           .eq('type_id', typeId)
 
         if (countError) {
+          Sentry.captureException(countError, {
+            tags: { module: 'checkpoints', action: 'deleteCheckpointType' },
+            extra: { typeId },
+          })
           console.error('[deleteCheckpointType] Count error:', countError)
           return { success: false, error: 'Ошибка проверки использования типа' }
         }
@@ -349,7 +336,7 @@ export async function deleteCheckpointType(
           }
         }
 
-        // 5. Удалить тип
+        // 3. Удалить тип
         const { error: deleteError } = await supabase
           .from('checkpoint_types')
           .delete()
