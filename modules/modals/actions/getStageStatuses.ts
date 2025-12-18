@@ -21,13 +21,14 @@ export interface StageStatus {
 /**
  * Получить список статусов для этапов декомпозиции
  * Справочные данные - кешируются надолго
+ * ВАЖНО: Используем stage_statuses (не section_statuses!)
  */
 export async function getStageStatuses(): Promise<ActionResult<StageStatus[]>> {
   try {
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('section_statuses')
+      .from('stage_statuses')
       .select('id, name, color, description')
       .order('name')
 

@@ -4,7 +4,7 @@
  * Mutation hooks for decomposition stages CRUD operations
  */
 
-import { createCacheMutation, createDeleteMutation, queryKeys } from '@/modules/cache'
+import { createCacheMutation, queryKeys } from '@/modules/cache'
 import {
   createDecompositionStage,
   updateDecompositionStage,
@@ -34,7 +34,9 @@ export const useCreateDecompositionStage = createCacheMutation<CreateStageInput,
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -55,29 +57,33 @@ export const useUpdateDecompositionStage = createCacheMutation<
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
 /**
  * Хук для удаления этапа декомпозиции
+ * Использует createCacheMutation вместо createDeleteMutation,
+ * т.к. optimistic update обрабатывается в StagesManager локально
  *
  * @example
  * const { mutate: remove, isPending } = useDeleteDecompositionStage()
  * remove({ stageId, sectionId })
  */
-export const useDeleteDecompositionStage = createDeleteMutation<
+export const useDeleteDecompositionStage = createCacheMutation<
   { stageId: string; sectionId: string },
   { deleted: boolean }
 >({
   mutationFn: ({ stageId }) => deleteDecompositionStage(stageId),
-  listQueryKey: queryKeys.decomposition.all,
-  getId: (input) => input.stageId,
-  getItemId: () => '',
-  invalidateKeys: [
+  invalidateKeys: (input) => [
+    queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -97,5 +103,8 @@ export const useReorderDecompositionStages = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.stages(input.sectionId),
     queryKeys.decomposition.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
+    queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })

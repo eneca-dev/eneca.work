@@ -1,16 +1,15 @@
 'use client'
 
 /**
- * DecompositionRow - Строка таблицы декомпозиции
+ * DecompositionRow - Компактная строка задачи
  */
 
-import { useState, useCallback } from 'react'
-import { GripVertical, Trash2, Clock } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { GripVertical, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Checkbox } from '@/components/ui/checkbox'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -20,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Decomposition, WorkCategory, DifficultyLevel } from './types'
-import { getDifficultyColor, getProgressColor, getProgressBarColor } from './utils'
+import { getProgressBarColor } from './utils'
 
 // ============================================================================
 // Types
@@ -31,11 +30,8 @@ interface DecompositionRowProps {
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
   actualHours: number
-  isSelected: boolean
-  onToggleSelect: () => void
   onUpdate: (updates: Partial<Decomposition>) => void
   onDelete: () => void
-  onOpenLog?: (itemId: string) => void
 }
 
 // ============================================================================
@@ -47,16 +43,20 @@ export function DecompositionRow({
   workCategories,
   difficultyLevels,
   actualHours,
-  isSelected,
-  onToggleSelect,
   onUpdate,
   onDelete,
-  onOpenLog,
 }: DecompositionRowProps) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [localDescription, setLocalDescription] = useState(decomposition.description)
   const [localPlannedHours, setLocalPlannedHours] = useState(String(decomposition.plannedHours))
   const [localProgress, setLocalProgress] = useState(String(decomposition.progress))
+
+  // Sync local state with props when decomposition changes
+  useEffect(() => {
+    setLocalDescription(decomposition.description)
+    setLocalPlannedHours(String(decomposition.plannedHours))
+    setLocalProgress(String(decomposition.progress))
+  }, [decomposition.description, decomposition.plannedHours, decomposition.progress])
 
   const {
     attributes,
@@ -73,13 +73,19 @@ export function DecompositionRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  // Handle description blur
+  // Handle description blur - delete task if description is empty
   const handleDescriptionBlur = useCallback(() => {
     setEditingField(null)
-    if (localDescription !== decomposition.description) {
-      onUpdate({ description: localDescription })
+    const trimmed = localDescription.trim()
+    if (!trimmed) {
+      // Delete task if description is empty
+      onDelete()
+      return
     }
-  }, [localDescription, decomposition.description, onUpdate])
+    if (trimmed !== decomposition.description) {
+      onUpdate({ description: trimmed })
+    }
+  }, [localDescription, decomposition.description, onUpdate, onDelete])
 
   // Handle planned hours blur
   const handlePlannedHoursBlur = useCallback(() => {
@@ -99,7 +105,7 @@ export function DecompositionRow({
     }
   }, [localProgress, decomposition.progress, onUpdate])
 
-  // Find current category name
+  // Find current category
   const currentCategory = workCategories.find(
     (cat) => cat.work_category_name === decomposition.typeOfWork
   )
@@ -113,51 +119,53 @@ export function DecompositionRow({
     <tr
       ref={setNodeRef}
       style={style}
-      className={`group border-b border-border/40 hover:bg-muted/30 transition-colors ${
-        isSelected ? 'bg-primary/5' : ''
-      } ${isDragging ? 'shadow-lg' : ''}`}
+      className={cn(
+        'group border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors',
+        isDragging && 'shadow-lg'
+      )}
     >
-      {/* Checkbox */}
-      <td className="w-10 px-2 py-1.5">
-        <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} />
-      </td>
-
       {/* Drag Handle */}
-      <td className="w-8 px-1 py-1.5">
+      <td className="w-6 px-0.5 py-1">
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted/60 rounded"
+          className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-slate-700/50 rounded"
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <GripVertical className="h-3 w-3 text-slate-600" />
         </button>
       </td>
 
       {/* Description */}
-      <td className="px-2 py-1.5 min-w-[200px]">
+      <td className="px-1.5 py-1 min-w-[150px]">
         {editingField === 'description' ? (
           <Input
             value={localDescription}
             onChange={(e) => setLocalDescription(e.target.value)}
             onBlur={handleDescriptionBlur}
-            onKeyDown={(e) => e.key === 'Enter' && handleDescriptionBlur()}
-            className="h-7 text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleDescriptionBlur()
+              if (e.key === 'Escape') {
+                setLocalDescription(decomposition.description)
+                setEditingField(null)
+              }
+            }}
+            className="h-5 text-[11px] px-1 bg-slate-800/80"
             autoFocus
           />
         ) : (
           <div
             onClick={() => setEditingField('description')}
-            className="text-sm cursor-text hover:bg-muted/40 px-1 py-0.5 rounded min-h-[24px]"
+            className="text-[11px] cursor-text hover:bg-slate-700/30 px-1 py-0.5 rounded min-h-[20px] truncate"
           >
             {decomposition.description || (
-              <span className="text-muted-foreground italic">Введите описание...</span>
+              <span className="text-slate-600 italic">Описание...</span>
             )}
           </div>
         )}
       </td>
 
       {/* Type of Work */}
-      <td className="w-[140px] px-2 py-1.5">
+      <td className="w-[110px] px-1.5 py-1">
         <Select
           value={currentCategory?.work_category_id || ''}
           onValueChange={(value) => {
@@ -167,12 +175,12 @@ export function DecompositionRow({
             }
           }}
         >
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue placeholder="Тип работы" />
+          <SelectTrigger className="h-5 text-[10px] px-1.5 bg-transparent border-slate-700/50">
+            <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
             {workCategories.map((cat) => (
-              <SelectItem key={cat.work_category_id} value={cat.work_category_id}>
+              <SelectItem key={cat.work_category_id} value={cat.work_category_id} className="text-xs">
                 {cat.work_category_name}
               </SelectItem>
             ))}
@@ -181,7 +189,7 @@ export function DecompositionRow({
       </td>
 
       {/* Difficulty */}
-      <td className="w-[80px] px-2 py-1.5">
+      <td className="w-[55px] px-1.5 py-1">
         <Select
           value={currentDifficulty?.difficulty_id || ''}
           onValueChange={(value) => {
@@ -191,18 +199,22 @@ export function DecompositionRow({
             }
           }}
         >
-          <SelectTrigger className={`h-7 text-xs ${getDifficultyColor(decomposition.difficulty)}`}>
+          <SelectTrigger
+            className="h-5 text-[10px] px-1 bg-transparent border-slate-700/50 justify-center"
+          >
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
             {difficultyLevels.map((diff) => (
-              <SelectItem key={diff.difficulty_id} value={diff.difficulty_id}>
+              <SelectItem key={diff.difficulty_id} value={diff.difficulty_id} className="text-xs">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span>{diff.difficulty_abbr}</span>
                     </TooltipTrigger>
-                    <TooltipContent>{diff.difficulty_definition}</TooltipContent>
+                    <TooltipContent className="text-[10px]">
+                      {diff.difficulty_definition}
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </SelectItem>
@@ -211,46 +223,60 @@ export function DecompositionRow({
         </Select>
       </td>
 
-      {/* Planned Hours */}
-      <td className="w-[80px] px-2 py-1.5">
-        {editingField === 'plannedHours' ? (
-          <Input
-            type="number"
-            value={localPlannedHours}
-            onChange={(e) => setLocalPlannedHours(e.target.value)}
-            onBlur={handlePlannedHoursBlur}
-            onKeyDown={(e) => e.key === 'Enter' && handlePlannedHoursBlur()}
-            className="h-7 text-xs text-right"
-            autoFocus
-            min={0}
-            step={0.5}
-          />
-        ) : (
-          <div
-            onClick={() => {
-              setLocalPlannedHours(String(decomposition.plannedHours))
-              setEditingField('plannedHours')
-            }}
-            className="text-xs text-right cursor-text hover:bg-muted/40 px-1 py-0.5 rounded"
-          >
-            {decomposition.plannedHours}
-          </div>
-        )}
-      </td>
-
-      {/* Actual Hours */}
-      <td className="w-[80px] px-2 py-1.5">
-        <div className="text-xs text-right text-muted-foreground">
-          {actualHours > 0 ? actualHours.toFixed(1) : '—'}
-        </div>
+      {/* Hours: Actual/Planned combined */}
+      <td className="w-[70px] px-1.5 py-1">
+        <TooltipProvider>
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <div className="flex items-center justify-center gap-0.5">
+                <span className="text-[10px] text-slate-500">
+                  {actualHours > 0 ? actualHours.toFixed(0) : '—'}
+                </span>
+                <span className="text-[10px] text-slate-700">/</span>
+                {editingField === 'plannedHours' ? (
+                  <Input
+                    type="number"
+                    value={localPlannedHours}
+                    onChange={(e) => setLocalPlannedHours(e.target.value)}
+                    onBlur={handlePlannedHoursBlur}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handlePlannedHoursBlur()
+                      if (e.key === 'Escape') {
+                        setLocalPlannedHours(String(decomposition.plannedHours))
+                        setEditingField(null)
+                      }
+                    }}
+                    className="w-8 h-4 text-[10px] text-center p-0 bg-slate-800"
+                    autoFocus
+                    min={0}
+                    step={0.5}
+                  />
+                ) : (
+                  <span
+                    onClick={() => {
+                      setLocalPlannedHours(String(decomposition.plannedHours))
+                      setEditingField('plannedHours')
+                    }}
+                    className="text-[10px] cursor-text hover:bg-slate-700/40 px-0.5 rounded"
+                  >
+                    {decomposition.plannedHours}
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="text-[10px]">
+              Факт / План часов
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </td>
 
       {/* Progress */}
-      <td className="w-[100px] px-2 py-1.5">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-2 bg-muted/40 rounded-full overflow-hidden">
+      <td className="w-[80px] px-1.5 py-1">
+        <div className="flex items-center gap-1">
+          <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
             <div
-              className={`h-full transition-all ${getProgressBarColor(decomposition.progress)}`}
+              className={cn('h-full transition-all', getProgressBarColor(decomposition.progress))}
               style={{ width: `${decomposition.progress}%` }}
             />
           </div>
@@ -260,8 +286,14 @@ export function DecompositionRow({
               value={localProgress}
               onChange={(e) => setLocalProgress(e.target.value)}
               onBlur={handleProgressBlur}
-              onKeyDown={(e) => e.key === 'Enter' && handleProgressBlur()}
-              className="w-12 h-6 text-xs text-right p-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleProgressBlur()
+                if (e.key === 'Escape') {
+                  setLocalProgress(String(decomposition.progress))
+                  setEditingField(null)
+                }
+              }}
+              className="w-8 h-4 text-[10px] text-right p-0.5 bg-slate-800"
               autoFocus
               min={0}
               max={100}
@@ -272,9 +304,7 @@ export function DecompositionRow({
                 setLocalProgress(String(decomposition.progress))
                 setEditingField('progress')
               }}
-              className={`text-xs cursor-text px-1.5 py-0.5 rounded ${getProgressColor(
-                decomposition.progress
-              )}`}
+              className="text-[10px] cursor-text px-0.5 rounded hover:bg-slate-700/40 w-6 text-right"
             >
               {decomposition.progress}%
             </span>
@@ -282,30 +312,15 @@ export function DecompositionRow({
         </div>
       </td>
 
-      {/* Actions */}
-      <td className="w-12 px-2 py-1.5">
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {onOpenLog && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => onOpenLog(decomposition.id)}
-              title="Открыть журнал"
-            >
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-            onClick={onDelete}
-            title="Удалить задачу"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+      {/* Delete */}
+      <td className="w-8 px-1 py-1">
+        <button
+          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/10 hover:text-red-400 rounded transition-all"
+          onClick={onDelete}
+          title="Удалить"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
       </td>
     </tr>
   )

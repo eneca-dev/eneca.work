@@ -2,19 +2,15 @@
 
 /**
  * StagesManager - Главный компонент управления этапами декомпозиции
+ * Рефакторинг: более компактный дизайн, исправлены баги
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   Plus,
-  Trash2,
-  Copy,
-  ClipboardPaste,
   Loader2,
   ChevronsDown,
   ChevronsUp,
-  FolderOpen,
-  MoveRight,
 } from 'lucide-react'
 import {
   DndContext,
@@ -34,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { StageCard } from './StageCard'
+import { AssignResponsiblesDialog } from './dialogs'
 import type { Stage, Decomposition, StagesManagerProps } from './types'
 import { calculateTotalStats, generateTempId } from './utils'
 import { DEFAULT_STAGE, DEFAULT_DECOMPOSITION } from './constants'
@@ -55,14 +52,13 @@ import {
   useDeleteDecompositionItem,
   useMoveDecompositionItems,
   useReorderDecompositionItems,
-  useBulkDeleteDecompositionItems,
 } from '../../../hooks'
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
+export function StagesManager({ sectionId }: StagesManagerProps) {
   const { toast } = useToast()
 
   // ============================================================================
@@ -77,15 +73,17 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
 
   // Local state for stages (optimistic updates)
   const [stages, setStages] = useState<Stage[]>([])
+  const bootstrapVersionRef = useRef<number>(0)
 
-  // Sync bootstrap data to local state
+  // Sync bootstrap data to local state only when bootstrap changes
   useEffect(() => {
     if (bootstrapData?.stages) {
+      bootstrapVersionRef.current += 1
       setStages(bootstrapData.stages)
     }
   }, [bootstrapData])
 
-  // Get all item IDs for work logs
+  // Get all item IDs for work logs - memoize to prevent re-renders
   const allItemIds = useMemo(() => {
     return stages.flatMap((stage) => stage.decompositions.map((d) => d.id))
   }, [stages])
@@ -105,15 +103,27 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
   const deleteItemMutation = useDeleteDecompositionItem()
   const moveItemsMutation = useMoveDecompositionItems()
   const reorderItemsMutation = useReorderDecompositionItems()
-  const bulkDeleteItemsMutation = useBulkDeleteDecompositionItems()
 
   // ============================================================================
-  // Selection State
+  // UI State
   // ============================================================================
 
-  const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set())
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
-  const [expandedAll, setExpandedAll] = useState(true)
+  // Expand/collapse state - track if user has interacted
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set())
+  const [hasUserInteracted, setHasUserInteracted] = useState(false)
+
+  // Initialize expanded state when stages load (only once)
+  useEffect(() => {
+    if (stages.length > 0 && !hasUserInteracted) {
+      setExpandedStages(new Set(stages.map(s => s.id)))
+    }
+  }, [stages, hasUserInteracted])
+
+  // Responsibles dialog state
+  const [responsiblesDialog, setResponsiblesDialog] = useState<{
+    isOpen: boolean
+    stageId: string | null
+  }>({ isOpen: false, stageId: null })
 
   // ============================================================================
   // DnD Sensors
@@ -146,6 +156,7 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
       decompositions: [],
     }
     setStages((prev) => [...prev, newStage])
+    setExpandedStages((prev) => new Set([...prev, tempId]))
 
     try {
       const result = await createStageMutation.mutateAsync({
@@ -162,9 +173,20 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
             : s
         )
       )
+      setExpandedStages((prev) => {
+        const next = new Set(prev)
+        next.delete(tempId)
+        next.add(result.id)
+        return next
+      })
     } catch (error) {
       // Rollback
       setStages((prev) => prev.filter((s) => s.id !== tempId))
+      setExpandedStages((prev) => {
+        const next = new Set(prev)
+        next.delete(tempId)
+        return next
+      })
       toast({
         title: 'Ошибка',
         description: 'Не удалось создать этап',
@@ -187,7 +209,6 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
           ...updates,
         })
       } catch (error) {
-        // Rollback would require storing previous state
         toast({
           title: 'Ошибка',
           description: 'Не удалось обновить этап',
@@ -261,6 +282,29 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
       }
     },
     [stages, sectionId, reorderStagesMutation, toast]
+  )
+
+  // ============================================================================
+  // Responsibles Operations
+  // ============================================================================
+
+  const handleOpenResponsiblesDialog = useCallback((stageId: string) => {
+    setResponsiblesDialog({ isOpen: true, stageId })
+  }, [])
+
+  const handleCloseResponsiblesDialog = useCallback(() => {
+    setResponsiblesDialog({ isOpen: false, stageId: null })
+  }, [])
+
+  const handleAssignResponsibles = useCallback(
+    async (userIds: string[]) => {
+      const { stageId } = responsiblesDialog
+      if (!stageId) return
+
+      handleUpdateStage(stageId, { responsibles: userIds })
+      handleCloseResponsiblesDialog()
+    },
+    [responsiblesDialog, handleUpdateStage, handleCloseResponsiblesDialog]
   )
 
   // ============================================================================
@@ -455,11 +499,11 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
   )
 
   // ============================================================================
-  // Selection Operations
+  // Expand/Collapse Operations
   // ============================================================================
 
-  const handleToggleSelectStage = useCallback((stageId: string) => {
-    setSelectedStages((prev) => {
+  const handleToggleExpand = useCallback((stageId: string) => {
+    setExpandedStages((prev) => {
       const next = new Set(prev)
       if (next.has(stageId)) {
         next.delete(stageId)
@@ -470,76 +514,14 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
     })
   }, [])
 
-  const handleToggleSelectItem = useCallback((itemId: string) => {
-    setSelectedItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(itemId)) {
-        next.delete(itemId)
-      } else {
-        next.add(itemId)
-      }
-      return next
-    })
-  }, [])
-
-  const handleToggleSelectAllItems = useCallback((stageId: string) => {
-    const stage = stages.find((s) => s.id === stageId)
-    if (!stage) return
-
-    const stageItemIds = stage.decompositions.map((d) => d.id)
-    const allSelected = stageItemIds.every((id) => selectedItems.has(id))
-
-    setSelectedItems((prev) => {
-      const next = new Set(prev)
-      if (allSelected) {
-        stageItemIds.forEach((id) => next.delete(id))
-      } else {
-        stageItemIds.forEach((id) => next.add(id))
-      }
-      return next
-    })
-  }, [stages, selectedItems])
-
-  const handleDeleteSelectedItems = useCallback(async () => {
-    if (selectedItems.size === 0) return
-
-    const itemIds = Array.from(selectedItems)
-
-    // Optimistic update
-    setStages((prev) =>
-      prev.map((s) => ({
-        ...s,
-        decompositions: s.decompositions.filter((d) => !selectedItems.has(d.id)),
-      }))
-    )
-    setSelectedItems(new Set())
-
-    try {
-      await bulkDeleteItemsMutation.mutateAsync({ itemIds, sectionId })
-      toast({
-        title: 'Задачи удалены',
-        description: `Удалено ${itemIds.length} задач`,
-      })
-    } catch (error) {
-      // Would need to restore from backup
-      toast({
-        title: 'Ошибка',
-        description: 'Не удалось удалить задачи',
-        variant: 'destructive',
-      })
-    }
-  }, [selectedItems, sectionId, bulkDeleteItemsMutation, toast])
-
-  // ============================================================================
-  // Toolbar Actions
-  // ============================================================================
-
   const handleExpandAll = useCallback(() => {
-    setExpandedAll(true)
-  }, [])
+    setHasUserInteracted(true)
+    setExpandedStages(new Set(stages.map(s => s.id)))
+  }, [stages])
 
   const handleCollapseAll = useCallback(() => {
-    setExpandedAll(false)
+    setHasUserInteracted(true)
+    setExpandedStages(new Set())
   }, [])
 
   // ============================================================================
@@ -551,6 +533,12 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
     [stages, actualHoursByItemId]
   )
 
+  // Get current stage for responsibles dialog
+  const currentStageForDialog = useMemo(() => {
+    if (!responsiblesDialog.stageId) return null
+    return stages.find(s => s.id === responsiblesDialog.stageId) || null
+  }, [stages, responsiblesDialog.stageId])
+
   // ============================================================================
   // Loading State
   // ============================================================================
@@ -558,7 +546,7 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
   if (isLoadingBootstrap) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -569,56 +557,60 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/40 bg-muted/10">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleAddStage}>
-            <Plus className="h-4 w-4 mr-1" />
+      {/* Compact Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/50 bg-slate-900/30">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleAddStage}
+            className="h-7 px-2 text-xs"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
             Этап
           </Button>
-
-          {selectedItems.size > 0 && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDeleteSelectedItems}
-                className="text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Удалить ({selectedItems.size})
-              </Button>
-            </>
-          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Stats */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground mr-4">
-            <span>{totalStats.totalStages} этапов</span>
-            <span>{totalStats.totalTasks} задач</span>
-            <span>{totalStats.totalPlannedHours} ч план</span>
-            <span>{totalStats.totalActualHours.toFixed(1)} ч факт</span>
-            <span>{totalStats.totalProgress}% готово</span>
+        <div className="flex items-center gap-3">
+          {/* Stats - compact */}
+          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+            <span>{totalStats.totalStages} эт.</span>
+            <span>{totalStats.totalTasks} зад.</span>
+            <span>{totalStats.totalActualHours.toFixed(0)}/{totalStats.totalPlannedHours} ч</span>
+            <span>{totalStats.totalProgress}%</span>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={handleExpandAll} title="Развернуть все">
-            <ChevronsDown className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleCollapseAll} title="Свернуть все">
-            <ChevronsUp className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExpandAll}
+              className="h-6 w-6 p-0"
+              title="Развернуть все"
+            >
+              <ChevronsDown className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCollapseAll}
+              className="h-6 w-6 p-0"
+              title="Свернуть все"
+            >
+              <ChevronsUp className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Stages List */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-2">
         {stages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <p className="text-muted-foreground mb-4">Нет этапов декомпозиции</p>
-            <Button onClick={handleAddStage}>
-              <Plus className="h-4 w-4 mr-2" />
-              Создать первый этап
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <p className="text-sm text-muted-foreground mb-3">Нет этапов</p>
+            <Button variant="outline" size="sm" onClick={handleAddStage}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Создать этап
             </Button>
           </div>
         ) : (
@@ -640,13 +632,11 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
                   difficultyLevels={difficultyLevels}
                   stageStatuses={stageStatuses}
                   actualHoursByItemId={actualHoursByItemId}
-                  isSelected={selectedStages.has(stage.id)}
-                  onToggleSelect={() => handleToggleSelectStage(stage.id)}
+                  isExpanded={expandedStages.has(stage.id)}
+                  onToggleExpand={() => handleToggleExpand(stage.id)}
                   onUpdateStage={(updates) => handleUpdateStage(stage.id, updates)}
                   onDeleteStage={() => handleDeleteStage(stage.id)}
-                  onAddResponsible={() => {
-                    // TODO: Open AssignResponsiblesDialog
-                  }}
+                  onOpenResponsiblesDialog={() => handleOpenResponsiblesDialog(stage.id)}
                   onRemoveResponsible={(userId) => {
                     handleUpdateStage(stage.id, {
                       responsibles: stage.responsibles.filter((r) => r !== userId),
@@ -660,17 +650,21 @@ export function StagesManager({ sectionId, onOpenLog }: StagesManagerProps) {
                     handleDeleteDecomposition(stage.id, decompositionId)
                   }
                   onReorderDecompositions={handleReorderDecompositions}
-                  onOpenLog={onOpenLog}
-                  selectedItems={selectedItems}
-                  onToggleSelectItem={handleToggleSelectItem}
-                  onToggleSelectAllItems={() => handleToggleSelectAllItems(stage.id)}
-                  defaultExpanded={expandedAll}
                 />
               ))}
             </SortableContext>
           </DndContext>
         )}
       </div>
+
+      {/* Responsibles Dialog */}
+      <AssignResponsiblesDialog
+        isOpen={responsiblesDialog.isOpen}
+        onClose={handleCloseResponsiblesDialog}
+        employees={employees}
+        currentResponsibles={currentStageForDialog?.responsibles || []}
+        onAssign={handleAssignResponsibles}
+      />
     </div>
   )
 }

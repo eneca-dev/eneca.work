@@ -1,16 +1,13 @@
 'use client'
 
 /**
- * StageHeader - Заголовок этапа с названием, датами, статусом и метриками
+ * StageHeader - Компактный заголовок этапа с выровненными колонками
  */
 
-import { useState, useCallback } from 'react'
-import { ChevronDown, ChevronRight, GripVertical, Trash2, Calendar, Clock } from 'lucide-react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { Checkbox } from '@/components/ui/checkbox'
+import { useState, useCallback, useMemo } from 'react'
+import { ChevronDown, ChevronRight, GripVertical, Trash2, Plus, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -19,8 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { Stage, StageStatus } from './types'
-import { getStatusColor, getProgressBarColor, formatDisplayDate } from './utils'
+import type { Stage, StageStatus, Employee } from './types'
+import { getProgressBarColor, formatDisplayDate, formatISODateString, parseISODateString } from './utils'
 
 // ============================================================================
 // Types
@@ -28,15 +25,16 @@ import { getStatusColor, getProgressBarColor, formatDisplayDate } from './utils'
 
 interface StageHeaderProps {
   stage: Stage
+  employees: Employee[]
   stageStatuses: StageStatus[]
   isExpanded: boolean
-  isSelected: boolean
   onToggleExpand: () => void
-  onToggleSelect: () => void
   onUpdateName: (name: string) => void
   onUpdateDateRange: (start: string | null, end: string | null) => void
   onUpdateStatus: (statusId: string | null) => void
   onDelete: () => void
+  onOpenResponsiblesDialog: () => void
+  onRemoveResponsible: (userId: string) => void
   plannedHours: number
   actualHours: number
   progress: number
@@ -48,20 +46,39 @@ interface StageHeaderProps {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+function formatDateForInput(dateString: string | null): string {
+  if (!dateString) return ''
+  const date = parseISODateString(dateString)
+  if (!date) return ''
+  return date.toISOString().split('T')[0]
+}
+
+function parseDateFromInput(inputValue: string): string | null {
+  if (!inputValue) return null
+  const date = new Date(inputValue)
+  if (isNaN(date.getTime())) return null
+  return formatISODateString(date)
+}
+
+// ============================================================================
 // Component
 // ============================================================================
 
 export function StageHeader({
   stage,
+  employees,
   stageStatuses,
   isExpanded,
-  isSelected,
   onToggleExpand,
-  onToggleSelect,
   onUpdateName,
   onUpdateDateRange,
   onUpdateStatus,
   onDelete,
+  onOpenResponsiblesDialog,
+  onRemoveResponsible,
   plannedHours,
   actualHours,
   progress,
@@ -70,6 +87,7 @@ export function StageHeader({
 }: StageHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false)
   const [localName, setLocalName] = useState(stage.name)
+  const [isEditingDates, setIsEditingDates] = useState(false)
 
   // Handle name blur
   const handleNameBlur = useCallback(() => {
@@ -81,39 +99,121 @@ export function StageHeader({
     }
   }, [localName, stage.name, onUpdateName])
 
+  // Handle date changes
+  const handleStartDateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newStart = parseDateFromInput(e.target.value)
+      onUpdateDateRange(newStart, stage.endDate)
+    },
+    [stage.endDate, onUpdateDateRange]
+  )
+
+  const handleEndDateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newEnd = parseDateFromInput(e.target.value)
+      onUpdateDateRange(stage.startDate, newEnd)
+    },
+    [stage.startDate, onUpdateDateRange]
+  )
+
   // Find current status
   const currentStatus = stageStatuses.find((s) => s.id === stage.statusId)
 
+  // Get responsible employees
+  const responsibleEmployees = useMemo(
+    () => employees.filter((emp) => stage.responsibles.includes(emp.user_id)),
+    [employees, stage.responsibles]
+  )
+
   return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-muted/20 dark:bg-muted/10 border-b border-border/40">
-      {/* Drag Handle */}
-      {dragHandleProps && (
-        <button
-          {...dragHandleProps.attributes}
-          {...dragHandleProps.listeners}
-          className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted/60 rounded opacity-60 hover:opacity-100 transition-opacity"
-        >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
-        </button>
-      )}
+    <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-800/30 group">
+      {/* Drag Handle - fixed width */}
+      <div className="w-5 flex-shrink-0">
+        {dragHandleProps && (
+          <button
+            {...dragHandleProps.attributes}
+            {...(dragHandleProps.listeners as React.HTMLAttributes<HTMLButtonElement>)}
+            className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-slate-700/50 rounded opacity-40 hover:opacity-100 transition-opacity"
+          >
+            <GripVertical className="h-3.5 w-3.5 text-slate-500" />
+          </button>
+        )}
+      </div>
 
-      {/* Checkbox */}
-      <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} />
-
-      {/* Expand/Collapse Button */}
+      {/* Expand/Collapse - fixed width */}
       <button
         onClick={onToggleExpand}
-        className="p-1 hover:bg-muted/60 rounded transition-colors"
+        className="w-5 flex-shrink-0 p-0.5 hover:bg-slate-700/50 rounded transition-colors flex items-center justify-center"
       >
         {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
         )}
       </button>
 
-      {/* Stage Name */}
-      <div className="flex-1 min-w-0">
+      {/* Responsibles - fixed width for alignment */}
+      <TooltipProvider>
+        <div className="w-[72px] flex-shrink-0 flex items-center -space-x-1.5">
+          {responsibleEmployees.slice(0, 3).map((emp) => (
+            <Tooltip key={emp.user_id} delayDuration={200}>
+              <TooltipTrigger asChild>
+                <div
+                  className="relative cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRemoveResponsible(emp.user_id)
+                  }}
+                >
+                  {emp.avatar_url ? (
+                    <img
+                      src={emp.avatar_url}
+                      alt={emp.full_name}
+                      className="h-5 w-5 rounded-full object-cover border border-slate-700 hover:border-red-500/50 transition-colors"
+                    />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-medium text-slate-300 border border-slate-600 hover:border-red-500/50 transition-colors">
+                      {emp.first_name?.[0]}{emp.last_name?.[0]}
+                    </div>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px]">
+                <p>{emp.full_name}</p>
+                <p className="text-slate-400">Клик для удаления</p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          {responsibleEmployees.length > 3 && (
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <div className="h-5 w-5 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-medium text-slate-400 border border-slate-600">
+                  +{responsibleEmployees.length - 3}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px]">
+                {responsibleEmployees.slice(3).map(e => e.full_name).join(', ')}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onOpenResponsiblesDialog}
+                className="h-5 w-5 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center border border-dashed border-slate-600 hover:border-amber-500/50 transition-colors"
+              >
+                <Plus className="h-3 w-3 text-slate-500" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-[10px]">
+              Добавить ответственного
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
+
+      {/* Stage Name - flexible width */}
+      <div className="flex-1 min-w-[100px] max-w-[180px]">
         {isEditingName ? (
           <Input
             value={localName}
@@ -126,120 +226,136 @@ export function StageHeader({
                 setIsEditingName(false)
               }
             }}
-            className="h-7 text-sm font-medium"
+            className="h-6 text-xs px-1.5 bg-slate-800/80"
             autoFocus
           />
         ) : (
           <button
             onClick={() => setIsEditingName(true)}
-            className="text-sm font-medium text-left hover:bg-muted/40 px-2 py-0.5 rounded truncate max-w-full"
+            className="text-xs font-medium text-left hover:bg-slate-700/40 px-1.5 py-0.5 rounded truncate block w-full"
+            title={stage.name}
           >
             {stage.name}
           </button>
         )}
       </div>
 
-      {/* Dates */}
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>
-                {formatDisplayDate(stage.startDate)} — {formatDisplayDate(stage.endDate)}
-              </span>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>Период выполнения этапа</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {/* Dates - fixed width for alignment */}
+      <div className="w-[145px] flex-shrink-0 flex items-center gap-1 text-[10px]">
+        {isEditingDates ? (
+          <>
+            <input
+              type="date"
+              value={formatDateForInput(stage.startDate)}
+              onChange={handleStartDateChange}
+              onBlur={() => setIsEditingDates(false)}
+              className="h-5 px-1 text-[10px] bg-slate-800 border border-slate-700 rounded w-[65px]"
+            />
+            <span className="text-slate-600">—</span>
+            <input
+              type="date"
+              value={formatDateForInput(stage.endDate)}
+              onChange={handleEndDateChange}
+              onBlur={() => setIsEditingDates(false)}
+              className="h-5 px-1 text-[10px] bg-slate-800 border border-slate-700 rounded w-[65px]"
+            />
+          </>
+        ) : (
+          <button
+            onClick={() => setIsEditingDates(true)}
+            className="text-slate-500 hover:text-slate-300 hover:bg-slate-700/40 px-1.5 py-0.5 rounded transition-colors whitespace-nowrap"
+          >
+            {formatDisplayDate(stage.startDate)} — {formatDisplayDate(stage.endDate)}
+          </button>
+        )}
+      </div>
 
-      {/* Status */}
-      <Select
-        value={stage.statusId || 'none'}
-        onValueChange={(value) => onUpdateStatus(value === 'none' ? null : value)}
-      >
-        <SelectTrigger
-          className={`w-[130px] h-7 text-xs ${
-            currentStatus ? getStatusColor(currentStatus.name) : ''
-          }`}
+      {/* Status - fixed width for alignment */}
+      <div className="w-[100px] flex-shrink-0">
+        <Select
+          value={stage.statusId || 'none'}
+          onValueChange={(value) => onUpdateStatus(value === 'none' ? null : value)}
         >
-          <SelectValue placeholder="Статус" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">
-            <span className="text-muted-foreground">Без статуса</span>
-          </SelectItem>
-          {stageStatuses.map((status) => (
-            <SelectItem key={status.id} value={status.id}>
-              <div className="flex items-center gap-2">
-                <div
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: status.color }}
-                />
-                {status.name}
-              </div>
+          <SelectTrigger
+            className="w-full h-6 text-[10px] px-2 border"
+            style={currentStatus ? {
+              backgroundColor: `${currentStatus.color}1A`,
+              borderColor: `${currentStatus.color}59`,
+              color: currentStatus.color,
+            } : undefined}
+          >
+            <SelectValue placeholder="Статус" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none" className="text-xs">
+              <span className="text-slate-500">—</span>
             </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+            {stageStatuses.map((status) => (
+              <SelectItem key={status.id} value={status.id} className="text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: status.color }}
+                  />
+                  {status.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      {/* Metrics */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        {/* Tasks count */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>{tasksCount} задач</span>
-            </TooltipTrigger>
-            <TooltipContent>Количество задач в этапе</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+      {/* Metrics - fixed width for alignment */}
+      <TooltipProvider>
+        <div className="w-[130px] flex-shrink-0 flex items-center justify-end gap-2 text-[10px] text-slate-500">
+          {/* Tasks */}
+          <span className="w-4 text-center">{tasksCount}</span>
 
-        {/* Hours */}
-        <TooltipProvider>
-          <Tooltip>
+          {/* Hours: actual/planned */}
+          <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                <span>
-                  {actualHours.toFixed(1)} / {plannedHours}
+              <div className="flex items-center gap-0.5 w-[50px] justify-end">
+                <Clock className="h-3 w-3" />
+                <span className="font-mono">
+                  {actualHours.toFixed(0)}/{plannedHours}
                 </span>
               </div>
             </TooltipTrigger>
-            <TooltipContent>Факт / План (часов)</TooltipContent>
+            <TooltipContent side="top" className="text-[10px]">
+              Факт / План часов
+            </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
 
-        {/* Progress */}
-        <TooltipProvider>
-          <Tooltip>
+          {/* Progress */}
+          <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-2 w-24">
-                <div className="flex-1 h-2 bg-muted/40 rounded-full overflow-hidden">
+              <div className="flex items-center gap-1 w-[50px]">
+                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all ${getProgressBarColor(progress)}`}
+                    className={cn('h-full transition-all', getProgressBarColor(progress))}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <span className="w-8 text-right">{progress}%</span>
+                <span className="w-6 text-right">{progress}%</span>
               </div>
             </TooltipTrigger>
-            <TooltipContent>Готовность этапа</TooltipContent>
+            <TooltipContent side="top" className="text-[10px]">
+              Прогресс этапа
+            </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
-      </div>
+        </div>
+      </TooltipProvider>
 
-      {/* Delete Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-opacity"
-        onClick={onDelete}
-        title="Удалить этап"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {/* Delete - fixed width */}
+      <div className="w-6 flex-shrink-0">
+        <button
+          onClick={onDelete}
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 rounded transition-all"
+          title="Удалить этап"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   )
 }

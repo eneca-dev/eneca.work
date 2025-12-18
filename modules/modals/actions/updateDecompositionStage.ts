@@ -66,12 +66,12 @@ export async function createDecompositionStage(
         decomposition_stage_description: input.description ?? null,
         decomposition_stage_start: input.startDate ?? null,
         decomposition_stage_finish: input.endDate ?? null,
-        decomposition_stage_status_id: input.statusId ?? null,
+        stage_status_id: input.statusId ?? null, // Используем stage_status_id (не decomposition_stage_status_id!)
         decomposition_stage_responsibles: input.responsibles ?? [],
         decomposition_stage_order: input.order ?? 0,
         decomposition_stage_created_by: input.createdBy ?? null,
       })
-      .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_description, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_status_id, decomposition_stage_responsibles, decomposition_stage_order')
+      .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_description, decomposition_stage_start, decomposition_stage_finish, stage_status_id, decomposition_stage_responsibles, decomposition_stage_order')
       .single()
 
     if (error) {
@@ -87,7 +87,7 @@ export async function createDecompositionStage(
         description: data.decomposition_stage_description,
         startDate: data.decomposition_stage_start,
         endDate: data.decomposition_stage_finish,
-        statusId: data.decomposition_stage_status_id,
+        statusId: data.stage_status_id,
         responsibles: data.decomposition_stage_responsibles ?? [],
         order: data.decomposition_stage_order,
       },
@@ -126,7 +126,7 @@ export async function updateDecompositionStage(
       updateData.decomposition_stage_finish = input.endDate
     }
     if (input.statusId !== undefined) {
-      updateData.decomposition_stage_status_id = input.statusId
+      updateData.stage_status_id = input.statusId // Используем stage_status_id (не decomposition_stage_status_id!)
     }
     if (input.responsibles !== undefined) {
       updateData.decomposition_stage_responsibles = input.responsibles
@@ -139,7 +139,7 @@ export async function updateDecompositionStage(
       .from('decomposition_stages')
       .update(updateData)
       .eq('decomposition_stage_id', input.stageId)
-      .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_description, decomposition_stage_start, decomposition_stage_finish, decomposition_stage_status_id, decomposition_stage_responsibles, decomposition_stage_order')
+      .select('decomposition_stage_id, decomposition_stage_name, decomposition_stage_description, decomposition_stage_start, decomposition_stage_finish, stage_status_id, decomposition_stage_responsibles, decomposition_stage_order')
       .single()
 
     if (error) {
@@ -155,7 +155,7 @@ export async function updateDecompositionStage(
         description: data.decomposition_stage_description,
         startDate: data.decomposition_stage_start,
         endDate: data.decomposition_stage_finish,
-        statusId: data.decomposition_stage_status_id,
+        statusId: data.stage_status_id,
         responsibles: data.decomposition_stage_responsibles ?? [],
         order: data.decomposition_stage_order,
       },

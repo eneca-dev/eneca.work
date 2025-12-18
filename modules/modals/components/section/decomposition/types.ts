@@ -50,7 +50,6 @@ export type { Profile, Employee } from '../../../actions/getDecompositionStage'
  */
 export type StagesManagerProps = {
   sectionId: string
-  onOpenLog?: (itemId: string) => void
 }
 
 /**
@@ -64,17 +63,15 @@ export type StageCardProps = {
   stageStatuses: StageStatus[]
   actualHoursByItemId: Record<string, number>
   isExpanded: boolean
-  isSelected: boolean
   onToggleExpand: () => void
-  onToggleSelect: () => void
   onUpdateStage: (updates: Partial<Stage>) => void
   onDeleteStage: () => void
-  onAddResponsible: () => void
+  onOpenResponsiblesDialog: () => void
   onRemoveResponsible: (userId: string) => void
   onAddDecomposition: () => void
   onUpdateDecomposition: (decompositionId: string, updates: Partial<Decomposition>) => void
   onDeleteDecomposition: (decompositionId: string) => void
-  onMoveDecomposition?: (decompositionId: string, targetStageId: string | null) => void
+  onReorderDecompositions?: (stageId: string, reordered: Decomposition[]) => void
   isDragging?: boolean
 }
 
@@ -86,12 +83,8 @@ export type DecompositionRowProps = {
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
   actualHours: number
-  isSelected: boolean
-  onToggleSelect: () => void
   onUpdate: (updates: Partial<Decomposition>) => void
   onDelete: () => void
-  onOpenLog?: (itemId: string) => void
-  isDragging?: boolean
 }
 
 /**
@@ -102,13 +95,9 @@ export type DecompositionTableProps = {
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
   actualHoursByItemId: Record<string, number>
-  selectedItems: Set<string>
-  onToggleSelectItem: (itemId: string) => void
-  onToggleSelectAll: () => void
   onUpdateDecomposition: (decompositionId: string, updates: Partial<Decomposition>) => void
   onDeleteDecomposition: (decompositionId: string) => void
   onAddDecomposition: () => void
-  onOpenLog?: (itemId: string) => void
   onReorderDecompositions?: (reordered: Decomposition[]) => void
   stageId: string
 }
@@ -120,9 +109,7 @@ export type StageHeaderProps = {
   stage: Stage
   stageStatuses: StageStatus[]
   isExpanded: boolean
-  isSelected: boolean
   onToggleExpand: () => void
-  onToggleSelect: () => void
   onUpdateName: (name: string) => void
   onUpdateDateRange: (start: string | null, end: string | null) => void
   onUpdateStatus: (statusId: string | null) => void

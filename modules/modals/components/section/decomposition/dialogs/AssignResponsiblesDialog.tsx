@@ -4,7 +4,7 @@
  * AssignResponsiblesDialog - Диалог назначения ответственных на этап
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, Check } from 'lucide-react'
 import {
   Dialog,
@@ -45,6 +45,15 @@ export function AssignResponsiblesDialog({
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set(currentResponsibles))
 
+  // Синхронизируем selected с currentResponsibles при открытии диалога
+  // или при смене этапа (когда currentResponsibles меняется)
+  useEffect(() => {
+    if (isOpen) {
+      setSelected(new Set(currentResponsibles))
+      setSearch('')
+    }
+  }, [isOpen, currentResponsibles])
+
   // Filter employees by search
   const filteredEmployees = useMemo(() => {
     if (!search.trim()) return employees
@@ -77,14 +86,12 @@ export function AssignResponsiblesDialog({
     onClose()
   }
 
-  // Reset state when dialog opens
+  // Handle dialog close
   const handleOpenChange = (open: boolean) => {
-    if (open) {
-      setSelected(new Set(currentResponsibles))
-      setSearch('')
-    } else {
+    if (!open) {
       onClose()
     }
+    // Сброс состояния при открытии обрабатывается в useEffect
   }
 
   return (

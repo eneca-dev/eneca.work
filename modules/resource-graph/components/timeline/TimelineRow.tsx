@@ -703,11 +703,6 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
     return calculateTodayDelta(mergedStageReadiness)
   }, [mergedStageReadiness])
 
-  // Определяем завершённость этапа (100% готовность или статус "завершён")
-  const isCompleted = stageStats.readiness >= 100 ||
-    stage.status.name?.toLowerCase().includes('заверш') ||
-    stage.status.name?.toLowerCase().includes('готов')
-
   // Форматирование даты в ДД.ММ
   const formatStageDate = (dateStr: string | null) => {
     if (!dateStr) return '—'
@@ -729,11 +724,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   return (
     <>
       <div
-        className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
-          // Завершённые этапы — полупрозрачные и серые
-          isCompleted && 'opacity-50 grayscale-[30%]'
-        )}
+        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
         style={{ height: rowHeight, minWidth: totalWidth }}
       >
         {/* Sidebar - двухстрочный layout */}
@@ -1397,39 +1388,47 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
         {/* Timeline area - fixed width */}
         <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Рамка периода раздела (прямоугольник с поддержкой resize) */}
-          <SectionPeriodFrame
-            startDate={section.startDate}
-            endDate={section.endDate}
-            range={range}
-            color={section.status.color}
-            onResize={handleSectionResize}
-          />
-          {/* Заливка плановой готовности с процентами */}
-          {section.readinessCheckpoints.length > 0 && (
-            <PlannedReadinessArea
-              checkpoints={section.readinessCheckpoints}
+          {/* Графики раздела - серые при раскрытии (как у объекта) */}
+          <div
+            className={cn(
+              'absolute inset-0 transition-all duration-200',
+              isExpanded && 'opacity-30 saturate-50'
+            )}
+          >
+            {/* Рамка периода раздела (прямоугольник с поддержкой resize) */}
+            <SectionPeriodFrame
+              startDate={section.startDate}
+              endDate={section.endDate}
               range={range}
-              timelineWidth={timelineWidth}
+              color={section.status.color}
+              onResize={!isExpanded ? handleSectionResize : undefined}
             />
-          )}
-          {/* Заливка фактической готовности (синяя) */}
-          {mergedSectionReadiness.length > 0 && (
-            <ActualReadinessArea
-              snapshots={mergedSectionReadiness}
-              range={range}
-              timelineWidth={timelineWidth}
-            />
-          )}
-          {/* Заливка освоения бюджета */}
-          {section.budgetSpending.length > 0 && (
-            <BudgetSpendingArea
-              spending={section.budgetSpending}
-              range={range}
-              timelineWidth={timelineWidth}
-            />
-          )}
-          {/* Прозрачный слой с тултипами по дням */}
+            {/* Заливка плановой готовности с процентами */}
+            {section.readinessCheckpoints.length > 0 && (
+              <PlannedReadinessArea
+                checkpoints={section.readinessCheckpoints}
+                range={range}
+                timelineWidth={timelineWidth}
+              />
+            )}
+            {/* Заливка фактической готовности (синяя) */}
+            {mergedSectionReadiness.length > 0 && (
+              <ActualReadinessArea
+                snapshots={mergedSectionReadiness}
+                range={range}
+                timelineWidth={timelineWidth}
+              />
+            )}
+            {/* Заливка освоения бюджета */}
+            {section.budgetSpending.length > 0 && (
+              <BudgetSpendingArea
+                spending={section.budgetSpending}
+                range={range}
+                timelineWidth={timelineWidth}
+              />
+            )}
+          </div>
+          {/* Прозрачный слой с тултипами по дням - всегда активен */}
           <SectionTooltipOverlay
             plannedCheckpoints={section.readinessCheckpoints}
             actualSnapshots={mergedSectionReadiness}

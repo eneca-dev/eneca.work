@@ -135,7 +135,7 @@ export async function getResourceGraphData(
       .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query
@@ -196,7 +196,7 @@ export async function getUserWorkload(
       .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query

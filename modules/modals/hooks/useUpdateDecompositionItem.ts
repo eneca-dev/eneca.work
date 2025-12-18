@@ -4,7 +4,7 @@
  * Mutation hooks for decomposition items CRUD operations
  */
 
-import { createCacheMutation, createDeleteMutation, queryKeys } from '@/modules/cache'
+import { createCacheMutation, queryKeys } from '@/modules/cache'
 import {
   createDecompositionItem,
   updateDecompositionItem,
@@ -38,8 +38,10 @@ export const useCreateDecompositionItem = createCacheMutation<CreateItemInput, I
     input.stageId ? queryKeys.decomposition.items(input.stageId) : undefined,
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
-  ].filter(Boolean) as string[][],
+    queryKeys.resourceGraph.lists(),
+  ].filter(Boolean) as readonly unknown[][],
 })
 
 /**
@@ -59,29 +61,33 @@ export const useUpdateDecompositionItem = createCacheMutation<
     input.stageId ? queryKeys.decomposition.items(input.stageId) : undefined,
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
-  ].filter(Boolean) as string[][],
+    queryKeys.resourceGraph.lists(),
+  ].filter(Boolean) as readonly unknown[][],
 })
 
 /**
  * Хук для удаления задачи декомпозиции
+ * Использует createCacheMutation вместо createDeleteMutation,
+ * т.к. optimistic update обрабатывается в StagesManager локально
  *
  * @example
  * const { mutate: remove, isPending } = useDeleteDecompositionItem()
  * remove({ itemId, sectionId })
  */
-export const useDeleteDecompositionItem = createDeleteMutation<
+export const useDeleteDecompositionItem = createCacheMutation<
   { itemId: string; sectionId: string },
   { deleted: boolean }
 >({
   mutationFn: ({ itemId }) => deleteDecompositionItem(itemId),
-  listQueryKey: queryKeys.decomposition.all,
-  getId: (input) => input.itemId,
-  getItemId: () => '',
-  invalidateKeys: [
+  invalidateKeys: (input) => [
+    queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -100,6 +106,10 @@ export const useMoveDecompositionItems = createCacheMutation<
   invalidateKeys: (input) => [
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
+    queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -118,6 +128,10 @@ export const useReorderDecompositionItems = createCacheMutation<
   invalidateKeys: (input) => [
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
+    queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
+    queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -137,7 +151,9 @@ export const useBulkCreateDecompositionItems = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })
 
@@ -157,6 +173,8 @@ export const useBulkDeleteDecompositionItems = createCacheMutation<
     queryKeys.decomposition.bootstrap(input.sectionId),
     queryKeys.decomposition.all,
     queryKeys.sections.all,
+    // Resource graph - оба ключа для гарантированной инвалидации
     queryKeys.resourceGraph.all,
+    queryKeys.resourceGraph.lists(),
   ],
 })

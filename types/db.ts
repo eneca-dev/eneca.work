@@ -938,6 +938,54 @@ export type Database = {
           },
         ]
       }
+      checkpoint_audit: {
+        Row: {
+          audit_id: string
+          changed_at: string
+          changed_by: string | null
+          checkpoint_id: string
+          field_name: string
+          new_value: string | null
+          old_value: string | null
+          operation_type: string
+        }
+        Insert: {
+          audit_id?: string
+          changed_at?: string
+          changed_by?: string | null
+          checkpoint_id: string
+          field_name: string
+          new_value?: string | null
+          old_value?: string | null
+          operation_type: string
+        }
+        Update: {
+          audit_id?: string
+          changed_at?: string
+          changed_by?: string | null
+          checkpoint_id?: string
+          field_name?: string
+          new_value?: string | null
+          old_value?: string | null
+          operation_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_audit_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "section_checkpoints"
+            referencedColumns: ["checkpoint_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_audit_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_checkpoints"
+            referencedColumns: ["checkpoint_id"]
+          },
+        ]
+      }
       checkpoint_blobs: {
         Row: {
           blob: string | null
@@ -976,6 +1024,279 @@ export type Database = {
           v?: number
         }
         Relationships: []
+      }
+      checkpoint_section_links: {
+        Row: {
+          checkpoint_id: string
+          created_at: string
+          section_id: string
+        }
+        Insert: {
+          checkpoint_id: string
+          created_at?: string
+          section_id: string
+        }
+        Update: {
+          checkpoint_id?: string
+          created_at?: string
+          section_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_section_links_checkpoint_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "section_checkpoints"
+            referencedColumns: ["checkpoint_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_checkpoint_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_checkpoints"
+            referencedColumns: ["checkpoint_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_section_budget_summary"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_analytics"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_decomposition_totals"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_section_links_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_id"]
+          },
+        ]
+      }
+      checkpoint_types: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string
+          is_custom: boolean
+          name: string
+          type: string
+          type_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon: string
+          is_custom?: boolean
+          name: string
+          type: string
+          type_id?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string
+          is_custom?: boolean
+          name?: string
+          type?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "checkpoint_types_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       checkpoint_writes: {
         Row: {
@@ -2035,6 +2356,7 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start: string | null
           decomposition_stage_status_id: string | null
+          stage_status_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -2049,6 +2371,7 @@ export type Database = {
           decomposition_stage_section_id: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          stage_status_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -2063,6 +2386,7 @@ export type Database = {
           decomposition_stage_section_id?: string
           decomposition_stage_start?: string | null
           decomposition_stage_status_id?: string | null
+          stage_status_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2274,6 +2598,13 @@ export type Database = {
             columns: ["decomposition_stage_status_id"]
             isOneToOne: false
             referencedRelation: "section_statuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decomposition_stages_stage_status_id_fkey"
+            columns: ["stage_status_id"]
+            isOneToOne: false
+            referencedRelation: "stage_statuses"
             referencedColumns: ["id"]
           },
         ]
@@ -5359,6 +5690,370 @@ export type Database = {
         }
         Relationships: []
       }
+      section_checkpoints: {
+        Row: {
+          checkpoint_date: string
+          checkpoint_id: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          custom_color: string | null
+          custom_icon: string | null
+          description: string | null
+          section_id: string
+          title: string
+          type_id: string
+          updated_at: string
+        }
+        Insert: {
+          checkpoint_date: string
+          checkpoint_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_color?: string | null
+          custom_icon?: string | null
+          description?: string | null
+          section_id: string
+          title: string
+          type_id: string
+          updated_at?: string
+        }
+        Update: {
+          checkpoint_date?: string
+          checkpoint_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          custom_color?: string | null
+          custom_icon?: string | null
+          description?: string | null
+          section_id?: string
+          title?: string
+          type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_section_budget_summary"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_analytics"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_decomposition_totals"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_type_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "checkpoint_types"
+            referencedColumns: ["type_id"]
+          },
+        ]
+      }
       section_comments: {
         Row: {
           author_id: string
@@ -6467,6 +7162,39 @@ export type Database = {
             referencedColumns: ["stage_id"]
           },
         ]
+      }
+      stage_statuses: {
+        Row: {
+          color: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          kanban_order: number
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          color: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       stages: {
         Row: {
@@ -10731,6 +11459,7 @@ export type Database = {
           decomposition_stage_finish: string | null
           decomposition_stage_id: string | null
           decomposition_stage_name: string | null
+          decomposition_stage_order: number | null
           decomposition_stage_start: string | null
           decomposition_stage_status_color: string | null
           decomposition_stage_status_id: string | null
@@ -10906,10 +11635,10 @@ export type Database = {
             referencedColumns: ["difficulty_id"]
           },
           {
-            foreignKeyName: "decomposition_stages_decomposition_stage_status_id_fkey"
+            foreignKeyName: "decomposition_stages_stage_status_id_fkey"
             columns: ["decomposition_stage_status_id"]
             isOneToOne: false
-            referencedRelation: "section_statuses"
+            referencedRelation: "stage_statuses"
             referencedColumns: ["id"]
           },
           {
@@ -15117,6 +15846,559 @@ export type Database = {
           section_id: string | null
         }
         Relationships: []
+      }
+      view_section_checkpoints: {
+        Row: {
+          checkpoint_date: string | null
+          checkpoint_id: string | null
+          color: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          is_custom: boolean | null
+          linked_sections: Json | null
+          linked_sections_count: number | null
+          project_manager: string | null
+          section_id: string | null
+          section_responsible: string | null
+          status: string | null
+          status_label: string | null
+          title: string | null
+          type_code: string | null
+          type_id: string | null
+          type_name: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_project_manager_fkey"
+            columns: ["project_manager"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_section_budget_summary"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_analytics"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_decomposition_totals"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_section_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_id"]
+          },
+          {
+            foreignKeyName: "section_checkpoints_type_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "checkpoint_types"
+            referencedColumns: ["type_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "sections_section_responsible_fkey"
+            columns: ["section_responsible"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       view_section_comments_enriched: {
         Row: {

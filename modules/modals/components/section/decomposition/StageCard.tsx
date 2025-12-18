@@ -1,15 +1,14 @@
 'use client'
 
 /**
- * StageCard - Карточка этапа с заголовком и таблицей задач
+ * StageCard - Компактная карточка этапа
  */
 
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { StageHeader } from './StageHeader'
-import { StageResponsibles } from './StageResponsibles'
 import { DecompositionTable } from './DecompositionTable'
 import type { Stage, Decomposition, Employee, WorkCategory, DifficultyLevel, StageStatus } from './types'
 import { calculateStagePlannedHours, calculateStageActualHours, calculateStageProgress } from './utils'
@@ -25,21 +24,16 @@ interface StageCardProps {
   difficultyLevels: DifficultyLevel[]
   stageStatuses: StageStatus[]
   actualHoursByItemId: Record<string, number>
-  isSelected: boolean
-  onToggleSelect: () => void
+  isExpanded: boolean
+  onToggleExpand: () => void
   onUpdateStage: (updates: Partial<Stage>) => void
   onDeleteStage: () => void
-  onAddResponsible: () => void
+  onOpenResponsiblesDialog: () => void
   onRemoveResponsible: (userId: string) => void
   onAddDecomposition: () => void
   onUpdateDecomposition: (decompositionId: string, updates: Partial<Decomposition>) => void
   onDeleteDecomposition: (decompositionId: string) => void
   onReorderDecompositions?: (stageId: string, reordered: Decomposition[]) => void
-  onOpenLog?: (itemId: string) => void
-  selectedItems: Set<string>
-  onToggleSelectItem: (itemId: string) => void
-  onToggleSelectAllItems: () => void
-  defaultExpanded?: boolean
 }
 
 // ============================================================================
@@ -53,24 +47,17 @@ export function StageCard({
   difficultyLevels,
   stageStatuses,
   actualHoursByItemId,
-  isSelected,
-  onToggleSelect,
+  isExpanded,
+  onToggleExpand,
   onUpdateStage,
   onDeleteStage,
-  onAddResponsible,
+  onOpenResponsiblesDialog,
   onRemoveResponsible,
   onAddDecomposition,
   onUpdateDecomposition,
   onDeleteDecomposition,
   onReorderDecompositions,
-  onOpenLog,
-  selectedItems,
-  onToggleSelectItem,
-  onToggleSelectAllItems,
-  defaultExpanded = true,
 }: StageCardProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-
   // Sortable setup
   const {
     attributes,
@@ -96,23 +83,29 @@ export function StageCard({
   const progress = useMemo(() => calculateStageProgress(stage), [stage])
 
   return (
-    <Card
+    <div
       ref={setNodeRef}
       style={style}
-      className={`mb-3 overflow-hidden group ${isDragging ? 'shadow-lg ring-2 ring-primary/50' : ''}`}
+      className={cn(
+        'mb-2 rounded-lg overflow-hidden',
+        'border border-slate-800/60',
+        'bg-slate-900/40',
+        isDragging && 'shadow-lg ring-1 ring-primary/50'
+      )}
     >
-      {/* Header */}
+      {/* Header with responsibles inline */}
       <StageHeader
         stage={stage}
+        employees={employees}
         stageStatuses={stageStatuses}
         isExpanded={isExpanded}
-        isSelected={isSelected}
-        onToggleExpand={() => setIsExpanded(!isExpanded)}
-        onToggleSelect={onToggleSelect}
+        onToggleExpand={onToggleExpand}
         onUpdateName={(name) => onUpdateStage({ name })}
         onUpdateDateRange={(startDate, endDate) => onUpdateStage({ startDate, endDate })}
         onUpdateStatus={(statusId) => onUpdateStage({ statusId })}
         onDelete={onDeleteStage}
+        onOpenResponsiblesDialog={onOpenResponsiblesDialog}
+        onRemoveResponsible={onRemoveResponsible}
         plannedHours={plannedHours}
         actualHours={actualHours}
         progress={progress}
@@ -120,45 +113,24 @@ export function StageCard({
         dragHandleProps={{ attributes, listeners }}
       />
 
-      {/* Expanded Content */}
+      {/* Expanded Content - decomposition table only */}
       {isExpanded && (
-        <div className="border-t border-border/40">
-          {/* Responsibles */}
-          <div className="px-4 py-2 border-b border-border/20 bg-muted/10">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Ответственные:</span>
-              <StageResponsibles
-                responsibles={stage.responsibles}
-                employees={employees}
-                onAdd={onAddResponsible}
-                onRemove={onRemoveResponsible}
-                compact
-              />
-            </div>
-          </div>
-
-          {/* Decomposition Table */}
-          <DecompositionTable
-            decompositions={stage.decompositions}
-            workCategories={workCategories}
-            difficultyLevels={difficultyLevels}
-            actualHoursByItemId={actualHoursByItemId}
-            selectedItems={selectedItems}
-            onToggleSelectItem={onToggleSelectItem}
-            onToggleSelectAll={onToggleSelectAllItems}
-            onUpdateDecomposition={onUpdateDecomposition}
-            onDeleteDecomposition={onDeleteDecomposition}
-            onAddDecomposition={onAddDecomposition}
-            onOpenLog={onOpenLog}
-            onReorderDecompositions={
-              onReorderDecompositions
-                ? (reordered) => onReorderDecompositions(stage.id, reordered)
-                : undefined
-            }
-            stageId={stage.id}
-          />
-        </div>
+        <DecompositionTable
+          decompositions={stage.decompositions}
+          workCategories={workCategories}
+          difficultyLevels={difficultyLevels}
+          actualHoursByItemId={actualHoursByItemId}
+          onUpdateDecomposition={onUpdateDecomposition}
+          onDeleteDecomposition={onDeleteDecomposition}
+          onAddDecomposition={onAddDecomposition}
+          onReorderDecompositions={
+            onReorderDecompositions
+              ? (reordered) => onReorderDecompositions(stage.id, reordered)
+              : undefined
+          }
+          stageId={stage.id}
+        />
       )}
-    </Card>
+    </div>
   )
 }

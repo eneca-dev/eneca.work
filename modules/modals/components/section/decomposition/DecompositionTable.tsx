@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * DecompositionTable - Таблица задач декомпозиции
+ * DecompositionTable - Компактная таблица задач
  */
 
 import { useCallback } from 'react'
@@ -21,8 +21,6 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Button } from '@/components/ui/button'
 import { DecompositionRow } from './DecompositionRow'
 import type { Decomposition, WorkCategory, DifficultyLevel } from './types'
 
@@ -35,13 +33,9 @@ interface DecompositionTableProps {
   workCategories: WorkCategory[]
   difficultyLevels: DifficultyLevel[]
   actualHoursByItemId: Record<string, number>
-  selectedItems: Set<string>
-  onToggleSelectItem: (itemId: string) => void
-  onToggleSelectAll: () => void
   onUpdateDecomposition: (decompositionId: string, updates: Partial<Decomposition>) => void
   onDeleteDecomposition: (decompositionId: string) => void
   onAddDecomposition: () => void
-  onOpenLog?: (itemId: string) => void
   onReorderDecompositions?: (reordered: Decomposition[]) => void
   stageId: string
 }
@@ -55,13 +49,9 @@ export function DecompositionTable({
   workCategories,
   difficultyLevels,
   actualHoursByItemId,
-  selectedItems,
-  onToggleSelectItem,
-  onToggleSelectAll,
   onUpdateDecomposition,
   onDeleteDecomposition,
   onAddDecomposition,
-  onOpenLog,
   onReorderDecompositions,
 }: DecompositionTableProps) {
   // DnD sensors
@@ -91,18 +81,16 @@ export function DecompositionTable({
     [decompositions, onReorderDecompositions]
   )
 
-  // Check if all items are selected
-  const allSelected = decompositions.length > 0 && decompositions.every((d) => selectedItems.has(d.id))
-  const someSelected = decompositions.some((d) => selectedItems.has(d.id)) && !allSelected
-
   if (decompositions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <p className="text-sm text-muted-foreground mb-4">Нет задач в этом этапе</p>
-        <Button variant="outline" size="sm" onClick={onAddDecomposition}>
-          <Plus className="h-4 w-4 mr-2" />
+      <div className="flex items-center justify-center py-4">
+        <button
+          onClick={onAddDecomposition}
+          className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 px-2.5 py-1.5 rounded transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
           Добавить задачу
-        </Button>
+        </button>
       </div>
     )
   }
@@ -110,34 +98,16 @@ export function DecompositionTable({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-[11px]">
           <thead>
-            <tr className="border-b border-border/60 bg-muted/30">
-              <th className="w-10 px-2 py-2">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={onToggleSelectAll}
-                  className={someSelected ? 'data-[state=checked]:bg-primary/50' : ''}
-                />
-              </th>
-              <th className="w-8 px-1 py-2" />
-              <th className="px-2 py-2 text-left font-medium text-muted-foreground">Описание</th>
-              <th className="w-[140px] px-2 py-2 text-left font-medium text-muted-foreground">
-                Тип работы
-              </th>
-              <th className="w-[80px] px-2 py-2 text-left font-medium text-muted-foreground">
-                Слож.
-              </th>
-              <th className="w-[80px] px-2 py-2 text-right font-medium text-muted-foreground">
-                План, ч
-              </th>
-              <th className="w-[80px] px-2 py-2 text-right font-medium text-muted-foreground">
-                Факт, ч
-              </th>
-              <th className="w-[100px] px-2 py-2 text-left font-medium text-muted-foreground">
-                Готовность
-              </th>
-              <th className="w-12 px-2 py-2" />
+            <tr className="border-b border-slate-800/60 bg-slate-900/50">
+              <th className="w-6 px-0.5 py-1" />
+              <th className="px-1.5 py-1 text-left font-medium text-slate-500">Описание</th>
+              <th className="w-[110px] px-1.5 py-1 text-left font-medium text-slate-500">Тип</th>
+              <th className="w-[55px] px-1.5 py-1 text-center font-medium text-slate-500">Сл.</th>
+              <th className="w-[70px] px-1.5 py-1 text-center font-medium text-slate-500">Часы</th>
+              <th className="w-[80px] px-1.5 py-1 text-left font-medium text-slate-500">%</th>
+              <th className="w-8 px-1 py-1" />
             </tr>
           </thead>
           <tbody>
@@ -152,11 +122,8 @@ export function DecompositionTable({
                   workCategories={workCategories}
                   difficultyLevels={difficultyLevels}
                   actualHours={actualHoursByItemId[decomposition.id] || 0}
-                  isSelected={selectedItems.has(decomposition.id)}
-                  onToggleSelect={() => onToggleSelectItem(decomposition.id)}
                   onUpdate={(updates) => onUpdateDecomposition(decomposition.id, updates)}
                   onDelete={() => onDeleteDecomposition(decomposition.id)}
-                  onOpenLog={onOpenLog}
                 />
               ))}
             </SortableContext>
@@ -164,17 +131,15 @@ export function DecompositionTable({
         </table>
       </div>
 
-      {/* Add button at bottom */}
-      <div className="flex justify-start px-2 py-2">
-        <Button
-          variant="ghost"
-          size="sm"
+      {/* Add button */}
+      <div className="px-1.5 py-1 border-t border-slate-800/40">
+        <button
           onClick={onAddDecomposition}
-          className="text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-400 px-1.5 py-0.5 rounded transition-colors"
         >
-          <Plus className="h-4 w-4 mr-1" />
-          Добавить задачу
-        </Button>
+          <Plus className="h-3 w-3" />
+          Задача
+        </button>
       </div>
     </DndContext>
   )
