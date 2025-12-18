@@ -3197,25 +3197,157 @@ function DeleteButton({ checkpointId }: { checkpointId: string }) {
 ### Этап 6: Cache Hooks (Checkpoint Types)
 
 **Описание:**
-Создать хуки для работы с типами чекпоинтов: `useCheckpointTypes`, `useCreateCheckpointType`, `useUpdateCheckpointType`, `useDeleteCheckpointType`.
+Создать хуки для работы с типами чекпоинтов, которые используются в админ-панели управления типами и в формах создания чекпоинтов (dropdown выбора типа).
+
+**Зачем этот этап нужен:**
+Типы чекпоинтов (`checkpoint_types`) — это справочник (exam, task_transfer, milestone, custom и т.д.), который используется для категоризации чекпоинтов. Без hooks невозможно:
+- Отобразить список типов в SELECT dropdown при создании чекпоинта
+- Реализовать админ-панель управления типами (`/admin/checkpoints/types`)
+- Получать автоматическое обновление UI при изменении типов другими пользователями (через Realtime)
+
+Hooks обеспечивают:
+- **Кеширование** — список типов загружается один раз и переиспользуется во всех компонентах
+- **Автоматическую инвалидацию** — при создании/редактировании типа все SELECT dropdown обновляются автоматически
+- **Optimistic updates** — изменения отображаются мгновенно, до ответа сервера
+- **Type safety** — все операции типизированы через TypeScript
 
 **Затрагиваемые файлы:**
 - `modules/checkpoints/hooks/use-checkpoint-types.ts` (новый)
 
 **Зависимости:**
-Этап 2 (query keys), Этап 4 (Server Actions checkpoint-types)
-
-**Детали:**
-- `useCheckpointTypes`: `createCacheQuery` с `queryKeys.checkpointTypes.list()`, staleTime=slow (редко меняется)
-- `useCreateCheckpointType`: `createCacheMutation`, invalidate `checkpointTypes.all`
-- `useUpdateCheckpointType`: `createUpdateMutation`, invalidate `checkpointTypes.all`, `checkpoints.all` (если изменился type icon/color)
-- `useDeleteCheckpointType`: `createDeleteMutation`, invalidate `checkpointTypes.all`
+- Этап 2 (query keys `checkpointTypes.*` уже добавлены)
+- Этап 4 (Server Actions `getCheckpointTypes`, `createCheckpointType`, `updateCheckpointType`, `deleteCheckpointType`)
 
 **Визуальные изменения:**
-❌ Нет визуальных изменений (hooks только)
+❌ Нет визуальных изменений (hooks — это инфраструктура, UI появится в Этапах 13-14)
 
-**Как тестировать:**
+---
+
+#### Шаг 6.1: Создать файл и импорты
+
+**Зачем:**
+Настроить структуру файла и подключить необходимые зависимости из cache module и Server Actions для типов чекпоинтов.
+
+**Код:**
+```typescript
+// modules/checkpoints/hooks/use-checkpoint-types.ts
+'use client'
+
+import {
+  createCacheQuery,
+  createCacheMutation,
+  createDeleteMutation,
+  createUpdateMutation,
+  queryKeys,
+  STALE_TIMES,
+  type TableRow,
+} from '@/modules/cache'
+import {
+  getCheckpointTypes,
+  createCheckpointType,
+  updateCheckpointType,
+  deleteCheckpointType,
+  type CreateCheckpointTypeInput,
+  type UpdateCheckpointTypeInput,
+} from '../actions/checkpoint-types'
+
+// Helper type для типов из БД
+type CheckpointType = TableRow<'checkpoint_types'>
+```
+
+**Как проверить:**
+```bash
+# Файл создан, импорты корректны
+npm run build
+# Ожидаем: нет ошибок импорта
+```
+
+---
+
+#### Шаг 6.2: `useCheckpointTypes` — query hook для списка типов
+
+**Зачем:**
+Загружает список всех типов чекпоинтов для использования в:
+- SELECT dropdown при создании чекпоинта (пользователь выбирает тип: экспертиза, сдача задания, веха и т.д.)
+- Админ-панели управления типами (`/admin/checkpoints/types` — таблица всех типов)
+- Фильтрах и отчётах (группировка чекпоинтов по типам)
+
+**Особенности:**
+- `staleTime: STALE_TIMES.slow` — типы меняются редко (только админы), можно кешировать надолго (60 минут)
+- Сортировка: сначала встроенные типы (is_custom=false), потом кастомные, по алфавиту
+- Realtime подписка (из Этапа 2) автоматически инвалидирует кеш при изменениях
+
+**Код:**
+```typescript
+/**
+ * Загрузка списка всех типов чекпоинтов.
+ * Используется в SELECT dropdown и админ-панели.
+ */
+export const useCheckpointTypes = createCacheQuery({
+  queryKey: () => queryKeys.checkpointTypes.list(),
+  queryFn: getCheckpointTypes,
+  staleTime: STALE_TIMES.slow, // Типы меняются редко
+})
+```
+
+**Как проверить:**
 1. Создать тестовый компонент `app/test-checkpoint-types/page.tsx`:
+```tsx
+'use client'
+import { useCheckpointTypes } from '@/modules/checkpoints/hooks/use-checkpoint-types'
+
+export default function TestPage() {
+  const { data: types, isLoading, error } = useCheckpointTypes()
+
+  if (isLoading) return <div>Загрузка типов...</div>
+  if (error) return <div>Ошибка: {error.message}</div>
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-4">
+        Типов чекпоинтов: {types?.length || 0}
+      </h1>
+      <pre className="bg-gray-100 p-4 rounded">
+        {JSON.stringify(types, null, 2)}
+      </pre>
+    </div>
+  )
+}
+```
+
+2. Открыть `/test-checkpoint-types`
+3. Проверить:
+   - Типы загрузились (exam, task_transfer, milestone, custom)
+   - Loading state отображается корректно
+   - В TanStack Query Devtools видна query с ключом `['checkpoint-types', 'list']`
+   - staleTime = 3600000 (60 минут)
+
+---
+
+#### Шаг 6.3: `useCreateCheckpointType` — mutation для создания типа
+
+**Зачем:**
+Позволяет администраторам создавать новые типы чекпоинтов в админ-панели. Например, компания хочет добавить специфичный тип "Согласование с заказчиком" или "Передача в архив".
+
+**Особенности:**
+- Доступно ТОЛЬКО для админов (разрешение `checkpoints.types.manage`)
+- Автоматически is_custom=false для новых типов с возможностью изменения на true
+- После создания инвалидирует `checkpointTypes.all` → все SELECT dropdown обновляются автоматически
+
+**Код:**
+```typescript
+/**
+ * Создание нового типа чекпоинта (только для админов).
+ * Инвалидирует список типов.
+ */
+export const useCreateCheckpointType = createCacheMutation({
+  mutationFn: createCheckpointType,
+  invalidateKeys: [queryKeys.checkpointTypes.all],
+})
+```
+
+**Как проверить:**
+1. Добавить в тестовый компонент `app/test-checkpoint-types/page.tsx`:
 ```tsx
 'use client'
 import { useCheckpointTypes, useCreateCheckpointType } from '@/modules/checkpoints/hooks/use-checkpoint-types'
@@ -3224,29 +3356,290 @@ export default function TestPage() {
   const { data: types } = useCheckpointTypes()
   const createMutation = useCreateCheckpointType()
 
+  const handleCreate = () => {
+    createMutation.mutate({
+      type: 'test_approval',
+      name: 'Тестовое согласование',
+      icon: 'check-circle',
+      color: '#3b82f6',
+    })
+  }
+
   return (
-    <div>
-      <h1>Types: {types?.length || 0}</h1>
-      <button onClick={() => createMutation.mutate({
-        type: 'test_type',
-        name: 'Test Type',
-        icon: 'star',
-        color: '#ff0000'
-      })}>
-        Create Type
+    <div className="p-8">
+      <h1>Типов: {types?.length || 0}</h1>
+      <button
+        onClick={handleCreate}
+        disabled={createMutation.isPending}
+        className="bg-blue-500 text-white px-4 py-2 rounded"
+      >
+        {createMutation.isPending ? 'Создание...' : 'Создать тип'}
       </button>
+      {createMutation.isError && (
+        <div className="text-red-500 mt-2">
+          Ошибка: {createMutation.error.message}
+        </div>
+      )}
       <pre>{JSON.stringify(types, null, 2)}</pre>
     </div>
   )
 }
 ```
-2. Открыть `/test-checkpoint-types` → загрузка типов
-3. Кликнуть "Create Type" → проверить, что список обновился автоматически
-4. Проверить TanStack Query Devtools → query key `['checkpoint-types', 'list']`
-5. Проверить `npm run build` — нет ошибок
+
+2. Проверить:
+   - Кликнуть "Создать тип"
+   - Список автоматически обновился (новый тип появился в конце)
+   - Если НЕ админ → ошибка "Недостаточно прав"
+   - В Devtools видна инвалидация query `['checkpoint-types', 'list']`
+
+---
+
+#### Шаг 6.4: `useUpdateCheckpointType` — mutation для редактирования типа
+
+**Зачем:**
+Позволяет администраторам редактировать **любые** типы (встроенные и кастомные):
+- Изменить название: "Экспертиза" → "Проверка экспертизы"
+- Сменить иконку: `check-circle` → `file-check`
+- Изменить цвет: `#10b981` → `#3b82f6`
+
+**Критичная особенность:**
+При изменении `icon` или `color` типа нужно инвалидировать **не только `checkpointTypes.all`**, но и **`checkpoints.all`**!
+
+Почему? VIEW `view_section_checkpoints` использует LEFT JOIN на `checkpoint_types`:
+```sql
+-- Если у чекпоинта нет кастомной иконки — берётся из типа
+COALESCE(sc.custom_icon, ct.icon) AS icon,
+COALESCE(sc.custom_color, ct.color) AS color
+```
+
+Значит, если админ изменит `checkpoint_types.icon` или `checkpoint_types.color`, это повлияет на отображение всех чекпоинтов этого типа!
+
+**Код:**
+```typescript
+/**
+ * Редактирование типа чекпоинта (только для админов).
+ * Инвалидирует типы И чекпоинты (т.к. icon/color из типа используются в VIEW).
+ */
+export const useUpdateCheckpointType = createUpdateMutation({
+  mutationFn: updateCheckpointType,
+  listQueryKey: queryKeys.checkpointTypes.list(),
+  getId: (input) => input.type_id,
+  getItemId: (item) => item.type_id,
+  merge: (item, input) => ({
+    ...item,
+    name: input.name ?? item.name,
+    icon: input.icon ?? item.icon,
+    color: input.color ?? item.color,
+  }),
+  // КРИТИЧНО: инвалидировать checkpoints.all, т.к. icon/color меняются
+  invalidateKeys: [queryKeys.checkpointTypes.all, queryKeys.checkpoints.all],
+})
+```
+
+**Как проверить:**
+1. Добавить в тестовый компонент:
+```tsx
+const types = useCheckpointTypes()
+const updateMutation = useUpdateCheckpointType()
+
+const handleUpdate = (typeId: string) => {
+  updateMutation.mutate({
+    type_id: typeId,
+    name: 'Обновлённое название',
+    icon: 'star',
+    color: '#ef4444',
+  })
+}
+```
+
+2. Проверить:
+   - Кликнуть "Редактировать" на любом типе
+   - Список обновился мгновенно (optimistic update)
+   - После ответа сервера данные корректны
+   - В Devtools видна инвалидация `['checkpoint-types', 'all']` И `['checkpoints', 'all']`
+
+---
+
+#### Шаг 6.5: `useDeleteCheckpointType` — mutation для удаления типа
+
+**Зачем:**
+Позволяет администраторам удалять неиспользуемые типы чекпоинтов.
+
+**Критичная особенность:**
+Нельзя удалить тип, если он используется в чекпоинтах! БД защищена FK CONSTRAINT:
+```sql
+FOREIGN KEY (type_id) REFERENCES checkpoint_types(type_id) ON DELETE RESTRICT
+```
+
+Server Action `deleteCheckpointType` вернёт ошибку → UI покажет toast "Тип используется в чекпоинтах, удаление невозможно".
+
+**Код:**
+```typescript
+/**
+ * Удаление типа чекпоинта (только для админов).
+ * Проверка: тип не должен использоваться в чекпоинтах (FK RESTRICT).
+ */
+export const useDeleteCheckpointType = createDeleteMutation({
+  mutationFn: deleteCheckpointType,
+  listQueryKey: queryKeys.checkpointTypes.list(),
+  getItemId: (item) => item.type_id,
+  invalidateKeys: [queryKeys.checkpointTypes.all],
+})
+```
+
+**Как проверить:**
+1. Добавить в тестовый компонент:
+```tsx
+const deleteMutation = useDeleteCheckpointType()
+
+const handleDelete = (typeId: string) => {
+  if (confirm('Удалить тип?')) {
+    deleteMutation.mutate({ type_id: typeId })
+  }
+}
+```
+
+2. Проверить:
+   - Попытаться удалить встроенный тип (exam) → ошибка "Тип используется"
+   - Создать новый тип → удалить его → успех, список обновился
+   - В Devtools видна инвалидация `['checkpoint-types', 'all']`
+
+---
+
+#### Шаг 6.6: Экспортировать hooks из модуля
+
+**Зачем:**
+Единая точка импорта для других модулей и компонентов. Вместо:
+```typescript
+import { useCheckpointTypes } from '@/modules/checkpoints/hooks/use-checkpoint-types'
+```
+
+Можно будет писать:
+```typescript
+import { useCheckpointTypes } from '@/modules/checkpoints'
+```
+
+**Код:**
+```typescript
+// modules/checkpoints/hooks/index.ts
+export * from './use-checkpoint-types'
+export * from './use-checkpoints' // из Этапа 5
+```
+
+**Как проверить:**
+```typescript
+// Проверить импорт из модуля
+import { useCheckpointTypes } from '@/modules/checkpoints/hooks'
+
+// Работает корректно
+npm run build
+```
+
+---
+
+**Как тестировать Этап 6 целиком:**
+
+1. **Создать тестовую страницу** `app/test-checkpoint-types/page.tsx` с полным функционалом:
+```tsx
+'use client'
+import {
+  useCheckpointTypes,
+  useCreateCheckpointType,
+  useUpdateCheckpointType,
+  useDeleteCheckpointType,
+} from '@/modules/checkpoints/hooks/use-checkpoint-types'
+
+export default function TestPage() {
+  const { data: types, isLoading } = useCheckpointTypes()
+  const createMutation = useCreateCheckpointType()
+  const updateMutation = useUpdateCheckpointType()
+  const deleteMutation = useDeleteCheckpointType()
+
+  if (isLoading) return <div>Загрузка...</div>
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl mb-4">Типов: {types?.length || 0}</h1>
+
+      {/* Создание */}
+      <button
+        onClick={() =>
+          createMutation.mutate({
+            type: 'test_' + Date.now(),
+            name: 'Тестовый тип',
+            icon: 'star',
+            color: '#3b82f6',
+          })
+        }
+        className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+      >
+        Создать
+      </button>
+
+      {/* Список типов */}
+      <div className="mt-4 space-y-2">
+        {types?.map((type) => (
+          <div key={type.type_id} className="flex gap-2 items-center border p-2">
+            <span style={{ color: type.color }}>{type.icon}</span>
+            <span>{type.name}</span>
+            <span className="text-xs text-gray-500">
+              {type.is_custom ? 'Кастомный' : 'Встроенный'}
+            </span>
+            <button
+              onClick={() =>
+                updateMutation.mutate({
+                  type_id: type.type_id,
+                  name: type.name + ' (обновлён)',
+                })
+              }
+              className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+            >
+              Редактировать
+            </button>
+            <button
+              onClick={() =>
+                deleteMutation.mutate({ type_id: type.type_id })
+              }
+              className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+            >
+              Удалить
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+2. **Проверить сценарии:**
+   - ✅ Загрузка списка типов (exam, task_transfer, milestone, custom)
+   - ✅ Создание нового типа → список обновился автоматически
+   - ✅ Редактирование типа → optimistic update → refetch
+   - ✅ Удаление неиспользуемого типа → успех
+   - ✅ Попытка удалить используемый тип → ошибка "Тип используется"
+   - ✅ Попытка операций НЕ админом → ошибка "Недостаточно прав"
+
+3. **TanStack Query Devtools:**
+   - Query `['checkpoint-types', 'list']` в состоянии `success`
+   - staleTime = 3600000ms (60 минут)
+   - При мутациях видна инвалидация query
+   - Optimistic updates работают
+
+4. **Build:**
+```bash
+npm run build
+# Ожидаем: нет TypeScript ошибок
+```
 
 **Проверка 🤖 Cache Guardian:**
-Фабрики, query keys, invalidation.
+После завершения этапа вызвать Cache Guardian для валидации:
+- ✅ Hooks используют фабрики из cache module (`createCacheQuery`, `createCacheMutation`, etc.)
+- ✅ Query keys берутся из `queryKeys.checkpointTypes.*`
+- ✅ Server Actions импортированы корректно
+- ✅ Invalidation keys указаны правильно (`checkpointTypes.all`, `checkpoints.all`)
+- ✅ staleTime соответствует требованиям (slow для типов)
+- ✅ Optimistic update в `useUpdateCheckpointType` через `createUpdateMutation`
 
 ---
 
