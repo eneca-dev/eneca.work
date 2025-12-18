@@ -24,11 +24,14 @@ import {
   getWorkLogsForSection,
   getLoadingsForSection,
   getStageReadinessForSection,
+  getStageResponsiblesForSection,
   updateItemProgress,
   updateLoadingDates,
   updateStageDates,
   updateSectionDates,
 } from '../actions'
+
+import type { StageResponsible } from '../actions'
 
 import type {
   Project,
@@ -170,6 +173,29 @@ export const useLoadings = createDetailCacheQuery<Loading[]>({
 export const useStageReadiness = createDetailCacheQuery<Record<string, ReadinessPoint[]>>({
   queryKey: (sectionId) => queryKeys.resourceGraph.stageReadiness(sectionId),
   queryFn: getStageReadinessForSection,
+  staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
+})
+
+// ============================================================================
+// Stage Responsibles Hooks - Ответственные за этапы
+// ============================================================================
+
+/**
+ * Хук для получения ответственных за этапы раздела
+ *
+ * Загружается лениво при развороте раздела (enabled: true).
+ * Возвращает Record<stageId, StageResponsible[]> для отображения аватаров в sidebar.
+ *
+ * @param sectionId - ID раздела
+ * @param options - { enabled: boolean } - включить загрузку
+ *
+ * @example
+ * const { data: stageResponsibles, isLoading } = useStageResponsibles(sectionId, { enabled: isExpanded })
+ * // stageResponsibles['stage-id-123'] -> [{ id: 'user-id', firstName: 'John', lastName: 'Doe', avatarUrl: '...' }, ...]
+ */
+export const useStageResponsibles = createDetailCacheQuery<Record<string, StageResponsible[]>>({
+  queryKey: (sectionId) => queryKeys.resourceGraph.stageResponsibles(sectionId),
+  queryFn: getStageResponsiblesForSection,
   staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
 })
 

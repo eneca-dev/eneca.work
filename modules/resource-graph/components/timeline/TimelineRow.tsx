@@ -48,12 +48,14 @@ import {
   useWorkLogs,
   useLoadings,
   useStageReadiness,
+  useStageResponsibles,
   useSectionBudgets,
   useUpdateLoadingDates,
   useUpdateStageDates,
   useUpdateSectionDates,
   useTimelineResize,
 } from '../../hooks'
+import type { StageResponsible } from '../../actions'
 import dynamic from 'next/dynamic'
 import { WorkLogCreateModal, ProgressUpdateDialog } from '@/modules/modals'
 
@@ -628,6 +630,8 @@ interface DecompositionStageRowProps {
   loadings?: Loading[]
   /** Readiness snapshots для этого этапа */
   stageReadiness?: ReadinessPoint[]
+  /** Ответственные за этот этап */
+  responsibles?: StageResponsible[]
   /** ID раздела (для модалки создания отчёта) */
   sectionId: string
   /** Название раздела (для модалки создания отчёта) */
@@ -636,7 +640,7 @@ interface DecompositionStageRowProps {
   onWorkLogCreated?: () => void
 }
 
-function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, stageReadiness, sectionId, sectionName, onWorkLogCreated }: DecompositionStageRowProps) {
+function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, stageReadiness, responsibles, sectionId, sectionName, onWorkLogCreated }: DecompositionStageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = stage.items.length > 0
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
@@ -672,6 +676,9 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
   const stageLoadings = useMemo(() => {
     return loadings?.filter(l => l.stageId === stage.id && l.status === 'active' && !l.isShortage) || []
   }, [loadings, stage.id])
+
+  // Ответственные за этап (из props)
+  const stageResponsibles = responsibles || []
 
   // Расчёт готовности этапа из задач (взвешенное среднее по часам)
   const stageStats = useMemo(() => {
@@ -715,7 +722,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
 
   // Высоты зон в timeline (адаптивно под количество загрузок)
   const readinessZoneHeight = 32 // фиксированная нижняя зона для готовности
-  const sidebarMinHeight = 44 // минимальная высота для двухстрочного sidebar
+  const sidebarMinHeight = 56 // минимальная высота для трёхстрочного sidebar
   // Загрузки: используем calculateLoadingsRowHeight для вычисления нужной высоты
   const loadingsZoneHeight = calculateLoadingsRowHeight(stageLoadings.length, 28)
   // Общая высота = max(базовая, loadings + readiness, sidebar)
@@ -727,7 +734,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
         className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
         style={{ height: rowHeight, minWidth: totalWidth }}
       >
-        {/* Sidebar - двухстрочный layout */}
+        {/* Sidebar - трёхстрочный layout */}
         <div
           className={cn(
             'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
@@ -766,58 +773,95 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
             </span>
           </div>
 
-          {/* Вторая строка: Progress + Hours + Status + Dates */}
+          {/* Вторая строка: Progress + Hours + Avatars + Status */}
           <div className="flex items-center gap-2 pl-[26px]">
             {/* Progress Circle + Delta */}
-            {stageStats.hasData && (
-              <div className="flex items-center gap-1">
-                <ProgressCircle
-                  progress={stageStats.readiness}
-                  size={18}
-                  strokeWidth={2}
-                  color={stage.status.color || undefined}
-                />
-                {/* Прирост за сегодня */}
-                {todayDelta !== null && todayDelta !== 0 && (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className={`text-[9px] font-medium tabular-nums ${
-                            todayDelta > 0 ? 'text-emerald-500' : 'text-red-400'
-                          }`}
-                        >
-                          {todayDelta > 0 ? '+' : ''}{Math.round(todayDelta)}%
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Прирост за сегодня
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-1 w-[40px] shrink-0">
+              {stageStats.hasData ? (
+                <>
+                  <ProgressCircle
+                    progress={stageStats.readiness}
+                    size={18}
+                    strokeWidth={2}
+                    color={stage.status.color || undefined}
+                  />
+                  {todayDelta !== null && todayDelta !== 0 && (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={`text-[9px] font-medium tabular-nums ${
+                              todayDelta > 0 ? 'text-emerald-500' : 'text-red-400'
+                            }`}
+                          >
+                            {todayDelta > 0 ? '+' : ''}{Math.round(todayDelta)}%
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          Прирост за сегодня
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </>
+              ) : (
+                <div className="w-[18px] h-[18px]" />
+              )}
+            </div>
 
             {/* Hours: факт / план */}
-            {stageStats.plannedHours > 0 && (
-              <div className="flex items-center gap-0.5 text-[9px] tabular-nums">
-                {stageStats.actualHours > 0 && (
-                  <span className="text-emerald-500 font-medium">
-                    {formatHoursCompact(stageStats.actualHours)}
-                  </span>
-                )}
-                {stageStats.actualHours > 0 && (
-                  <span className="text-muted-foreground/50">/</span>
-                )}
-                <span className="text-muted-foreground">
-                  {formatHoursCompact(stageStats.plannedHours)}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-0.5 text-[9px] tabular-nums w-[55px] shrink-0 justify-end">
+              <span className={stageStats.actualHours > 0 ? 'text-emerald-500 font-medium' : 'text-muted-foreground/40'}>
+                {formatHoursCompact(stageStats.actualHours)}
+              </span>
+              <span className="text-muted-foreground/50">/</span>
+              <span className="text-muted-foreground">
+                {formatHoursCompact(stageStats.plannedHours)}
+              </span>
+            </div>
+
+            {/* Avatars - ответственные */}
+            <div className="flex items-center -space-x-1.5 min-w-[60px] shrink-0">
+              {stageResponsibles.slice(0, 3).map((emp) => (
+                <TooltipProvider key={emp.id} delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Avatar className="w-5 h-5 border border-background">
+                        {emp.avatarUrl ? (
+                          <AvatarImage src={emp.avatarUrl} alt={`${emp.firstName} ${emp.lastName}`} />
+                        ) : null}
+                        <AvatarFallback className="text-[8px] bg-muted">
+                          {(emp.firstName?.[0] || '') + (emp.lastName?.[0] || '')}
+                        </AvatarFallback>
+                      </Avatar>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {emp.firstName} {emp.lastName}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+              {stageResponsibles.length > 3 && (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium border border-background">
+                        +{stageResponsibles.length - 3}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {stageResponsibles.slice(3).map(e => `${e.firstName} ${e.lastName}`).join(', ')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {stageResponsibles.length === 0 && (
+                <span className="text-[9px] text-muted-foreground/40">—</span>
+              )}
+            </div>
 
             {/* Status chip */}
-            {stage.status.name && (
+            {stage.status.name ? (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-medium shrink-0"
                 style={{
@@ -836,15 +880,17 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
                 />
                 {stage.status.name}
               </span>
+            ) : (
+              <span className="text-[9px] text-muted-foreground/40">—</span>
             )}
+          </div>
 
-            {/* Dates */}
-            {(stage.startDate || stage.finishDate) && (
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
-              </span>
-            )}
+          {/* Третья строка: Dates */}
+          <div className="flex items-center gap-1 pl-[26px]">
+            <Calendar className="w-3 h-3 text-muted-foreground shrink-0" />
+            <span className="text-[10px] text-muted-foreground">
+              {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
+            </span>
           </div>
         </div>
 
@@ -1081,6 +1127,11 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 
   // Lazy load stage readiness при развороте объекта
   const { data: stageReadinessMap, isLoading: readinessLoading } = useStageReadiness(section.id, {
+    enabled: isObjectExpanded, // Загружаем когда объект развёрнут
+  })
+
+  // Lazy load stage responsibles при развороте объекта
+  const { data: stageResponsiblesMap } = useStageResponsibles(section.id, {
     enabled: isObjectExpanded, // Загружаем когда объект развёрнут
   })
 
@@ -1476,6 +1527,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
               workLogs={workLogs}
               loadings={loadings}
               stageReadiness={stageReadinessMap?.[stage.id]}
+              responsibles={stageResponsiblesMap?.[stage.id]}
               sectionId={section.id}
               sectionName={section.name}
               onWorkLogCreated={() => refetchWorkLogs()}

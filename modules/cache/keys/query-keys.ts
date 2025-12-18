@@ -97,6 +97,8 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.sections.details(), id] as const,
     hierarchy: (projectId: string) => [...queryKeys.sections.all, 'hierarchy', projectId] as const,
     decomposition: (id: string) => [...queryKeys.sections.detail(id), 'decomposition'] as const,
+    /** Контрольные точки плановой готовности раздела */
+    readinessCheckpoints: (sectionId: string) => [...queryKeys.sections.detail(sectionId), 'readiness-checkpoints'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -227,6 +229,8 @@ export const queryKeys = {
     loadings: (sectionId: string) => [...queryKeys.resourceGraph.all, 'loadings', sectionId] as const,
     /** Stage readiness для раздела (lazy load при развороте) */
     stageReadiness: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageReadiness', sectionId] as const,
+    /** Stage responsibles для раздела (lazy load при развороте) */
+    stageResponsibles: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageResponsibles', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------

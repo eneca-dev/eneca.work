@@ -13,6 +13,7 @@ import {
   Check,
   FileText,
   ListTodo,
+  Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -26,7 +27,7 @@ import { SectionMetrics } from './SectionMetrics'
 import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
 import { DateRangeInput } from './DateRangeInput'
-import { OverviewTab, TasksTab } from './tabs'
+import { OverviewTab, TasksTab, ReadinessTab } from './tabs'
 
 // ============================================================================
 // Constants
@@ -145,7 +146,7 @@ export function SectionModal({
   const [editingName, setEditingName] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'readiness'>('overview')
 
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -486,7 +487,7 @@ export function SectionModal({
           {/* Content with Tabs */}
           <Tabs.Root
             value={activeTab}
-            onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks')}
+            onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks' | 'readiness')}
             className="flex-1 flex flex-col overflow-hidden"
           >
             {/* Tab List */}
@@ -513,6 +514,17 @@ export function SectionModal({
                 <ListTodo className="w-4 h-4" />
                 Задачи
               </Tabs.Trigger>
+              <Tabs.Trigger
+                value="readiness"
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
+                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
+                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                )}
+              >
+                <Target className="w-4 h-4" />
+                План
+              </Tabs.Trigger>
             </Tabs.List>
 
             {/* Tab Content */}
@@ -533,6 +545,10 @@ export function SectionModal({
 
                 <Tabs.Content value="tasks" className="flex-1 overflow-hidden">
                   <TasksTab sectionId={sectionId} />
+                </Tabs.Content>
+
+                <Tabs.Content value="readiness" className="flex-1 overflow-y-auto">
+                  <ReadinessTab sectionId={sectionId} />
                 </Tabs.Content>
               </>
             )}

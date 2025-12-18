@@ -1070,3 +1070,101 @@ export async function updateSectionDates(
   }
 }
 
+// ============================================================================
+// Stage Responsibles Actions - Ответственные за этапы
+// ============================================================================
+
+export interface StageResponsible {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  avatarUrl: string | null
+}
+
+/**
+ * Получить ответственных за этапы раздела
+ *
+ * Загружает decomposition_stage_responsibles и джойнит с profiles
+ * для получения имён и аватаров.
+ *
+ * @param sectionId - ID раздела
+ * @returns Map<stageId, StageResponsible[]>
+ */
+export async function getStageResponsiblesForSection(
+  sectionId: string
+): Promise<ActionResult<Record<string, StageResponsible[]>>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем этапы с их ответственными
+    const { data: stages, error: stagesError } = await supabase
+      .from('decomposition_stages')
+      .select('decomposition_stage_id, decomposition_stage_responsibles')
+      .eq('decomposition_stage_section_id', sectionId)
+
+    if (stagesError) {
+      console.error('[getStageResponsiblesForSection] Stages error:', stagesError)
+      return { success: false, error: stagesError.message }
+    }
+
+    // Собираем все уникальные user_id
+    const allUserIds = new Set<string>()
+    for (const stage of stages || []) {
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+      if (responsibles) {
+        for (const id of responsibles) {
+          allUserIds.add(id)
+        }
+      }
+    }
+
+    // Если нет ответственных, возвращаем пустой результат
+    if (allUserIds.size === 0) {
+      const result: Record<string, StageResponsible[]> = {}
+      for (const stage of stages || []) {
+        result[stage.decomposition_stage_id] = []
+      }
+      return { success: true, data: result }
+    }
+
+    // Загружаем профили для всех ответственных
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('user_id, first_name, last_name, avatar_url')
+      .in('user_id', Array.from(allUserIds))
+
+    if (profilesError) {
+      console.error('[getStageResponsiblesForSection] Profiles error:', profilesError)
+      return { success: false, error: profilesError.message }
+    }
+
+    // Создаём map для быстрого доступа
+    const profilesMap = new Map<string, StageResponsible>()
+    for (const p of profiles || []) {
+      profilesMap.set(p.user_id, {
+        id: p.user_id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        avatarUrl: p.avatar_url,
+      })
+    }
+
+    // Формируем результат
+    const result: Record<string, StageResponsible[]> = {}
+    for (const stage of stages || []) {
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+      result[stage.decomposition_stage_id] = (responsibles || [])
+        .map(id => profilesMap.get(id))
+        .filter((p): p is StageResponsible => p !== undefined)
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('[getStageResponsiblesForSection] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки ответственных за этапы',
+    }
+  }
+}
+

@@ -49,6 +49,17 @@ export {
 } from './useUpdateDecompositionItem'
 
 // ============================================================================
+// Readiness Checkpoints Hooks
+// ============================================================================
+
+export {
+  useReadinessCheckpoints,
+  useCreateReadinessCheckpoint,
+  useUpdateReadinessCheckpoint,
+  useDeleteReadinessCheckpoint,
+} from './useReadinessCheckpoints'
+
+// ============================================================================
 // Типизированные хуки для конкретных модалок
 // ============================================================================
 
