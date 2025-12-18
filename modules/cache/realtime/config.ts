@@ -80,6 +80,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'decomposition_stages',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Этапы декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
     ],
@@ -87,6 +88,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'decomposition_items',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Задачи декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
     ],

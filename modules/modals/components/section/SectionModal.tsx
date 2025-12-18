@@ -5,16 +5,17 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import * as FocusScope from '@radix-ui/react-focus-scope'
+import * as Tabs from '@radix-ui/react-tabs'
 import {
   X,
   Edit3,
   Loader2,
-  MessageSquare,
   Check,
+  FileText,
+  ListTodo,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { CommentsPanel } from '@/modules/comments/components/CommentsPanel'
 import { useSectionStatuses } from '@/modules/statuses-tags/statuses/hooks/useSectionStatuses'
 import { useUsers, type CachedUser } from '@/modules/cache'
 import type { Section } from '@/modules/resource-graph/types'
@@ -25,13 +26,14 @@ import { SectionMetrics } from './SectionMetrics'
 import { StatusDropdown, type StatusOption } from './StatusDropdown'
 import { ResponsibleDropdown } from './ResponsibleDropdown'
 import { DateRangeInput } from './DateRangeInput'
+import { OverviewTab, TasksTab } from './tabs'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const ANIMATION_DURATION = 300
-const PANEL_WIDTH = 640
+const PANEL_WIDTH = 1100
 
 // ============================================================================
 // Schema
@@ -141,9 +143,9 @@ export function SectionModal({
   // ─────────────────────────────────────────────────────────────────────────
 
   const [editingName, setEditingName] = useState(false)
-  const [isDescriptionFocused, setIsDescriptionFocused] = useState(false)
   const [savingField, setSavingField] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks'>('overview')
 
   const originalDescription = useRef<string>('')
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -151,8 +153,8 @@ export function SectionModal({
   useEffect(() => {
     if (!isOpen) {
       setEditingName(false)
-      setIsDescriptionFocused(false)
       setSaveError(null)
+      setActiveTab('overview')
     }
   }, [isOpen])
 
@@ -234,19 +236,12 @@ export function SectionModal({
     }
   }, [form, saveField])
 
-  const handleDescriptionBlur = useCallback(async () => {
-    setIsDescriptionFocused(false)
-    const description = form.getValues('description')?.trim() || null
-    const original = originalDescription.current || null
-    if (description !== original) {
+  const handleSaveDescription = useCallback(
+    async (description: string | null) => {
       await saveField('description', description)
-    }
-  }, [form, saveField])
-
-  const handleDescriptionFocus = useCallback(() => {
-    setIsDescriptionFocused(true)
-    originalDescription.current = form.getValues('description') || ''
-  }, [form])
+    },
+    [saveField]
+  )
 
   const handleStartDateChange = useCallback(
     async (value: string) => {
@@ -278,10 +273,6 @@ export function SectionModal({
         if (editingName) {
           setEditingName(false)
           reset()
-        } else if (isDescriptionFocused) {
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur()
-          }
         } else {
           onClose()
         }
@@ -290,7 +281,7 @@ export function SectionModal({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, editingName, isDescriptionFocused, onClose, reset])
+  }, [isOpen, editingName, onClose, reset])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -492,89 +483,60 @@ export function SectionModal({
             </div>
           )}
 
-          {/* Content */}
-          <main className="flex-1 overflow-y-auto">
+          {/* Content with Tabs */}
+          <Tabs.Root
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as 'overview' | 'tasks')}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
+            {/* Tab List */}
+            <Tabs.List className="flex gap-1 px-5 py-2 border-b border-slate-800/50 bg-slate-900/50">
+              <Tabs.Trigger
+                value="overview"
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
+                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
+                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                )}
+              >
+                <FileText className="w-4 h-4" />
+                Обзор
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="tasks"
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all',
+                  'data-[state=active]:bg-slate-800 data-[state=active]:text-slate-100',
+                  'data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-300 data-[state=inactive]:hover:bg-slate-800/50'
+                )}
+              >
+                <ListTodo className="w-4 h-4" />
+                Задачи
+              </Tabs.Trigger>
+            </Tabs.List>
+
+            {/* Tab Content */}
             {isLoading ? (
-              <div className="flex items-center justify-center py-16">
+              <div className="flex-1 flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-500" aria-label="Загрузка..." />
               </div>
             ) : (
-              <div className="px-5 py-5 space-y-5">
-                {/* Description */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label
-                      htmlFor="section-description"
-                      className="text-[10px] font-medium text-slate-400 uppercase tracking-wider"
-                    >
-                      Описание
-                    </label>
-                    {savingField === 'description' && (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-400">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Сохранение...</span>
-                      </div>
-                    )}
-                  </div>
+              <>
+                <Tabs.Content value="overview" className="flex-1 overflow-y-auto">
+                  <OverviewTab
+                    sectionId={sectionId}
+                    form={form}
+                    savingField={savingField}
+                    onSaveDescription={handleSaveDescription}
+                  />
+                </Tabs.Content>
 
-                  <div className="relative">
-                    <textarea
-                      id="section-description"
-                      {...form.register('description')}
-                      onFocus={handleDescriptionFocus}
-                      onBlur={handleDescriptionBlur}
-                      placeholder="Описание раздела..."
-                      disabled={savingField === 'description'}
-                      className={cn(
-                        'w-full px-4 py-3',
-                        'text-sm leading-relaxed',
-                        'bg-slate-800/30 rounded-xl',
-                        'border transition-all duration-200',
-                        'resize-none',
-                        'h-[140px]',
-                        'placeholder:text-slate-600',
-                        !isDescriptionFocused && 'border-slate-800/50 text-slate-300',
-                        isDescriptionFocused && 'border-amber-500/50 ring-2 ring-amber-500/15 text-slate-200 bg-slate-800/50',
-                        savingField === 'description' && 'opacity-60 cursor-wait'
-                      )}
-                      style={{
-                        wordBreak: 'break-word',
-                        overflowWrap: 'anywhere',
-                      }}
-                    />
-                    {isDescriptionFocused && (
-                      <div className="absolute bottom-2.5 right-3 text-[10px] text-slate-600">
-                        Esc для отмены
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-slate-800/50" aria-hidden="true" />
-
-                {/* Comments */}
-                <section aria-labelledby="comments-heading">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MessageSquare className="w-4 h-4 text-slate-500" aria-hidden="true" />
-                    <h3
-                      id="comments-heading"
-                      className="text-[10px] font-medium text-slate-400 uppercase tracking-wider"
-                    >
-                      Комментарии
-                    </h3>
-                  </div>
-                  <div className="bg-slate-800/20 rounded-xl border border-slate-800/40 overflow-hidden">
-                    <CommentsPanel
-                      sectionId={sectionId}
-                      autoScrollOnMount={false}
-                      autoScrollOnNewComment={true}
-                    />
-                  </div>
-                </section>
-              </div>
+                <Tabs.Content value="tasks" className="flex-1 overflow-hidden">
+                  <TasksTab sectionId={sectionId} />
+                </Tabs.Content>
+              </>
             )}
-          </main>
+          </Tabs.Root>
         </div>
       </FocusScope.Root>
     </>

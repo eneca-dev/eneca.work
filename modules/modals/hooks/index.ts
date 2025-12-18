@@ -3,6 +3,50 @@
  */
 
 export { useModal } from './useModal'
+export { useUpdateSection } from './useUpdateSection'
+
+// ============================================================================
+// Reference Data Hooks
+// ============================================================================
+
+export { useWorkCategories } from './useWorkCategories'
+export { useDifficultyLevels } from './useDifficultyLevels'
+export { useStageStatuses } from './useStageStatuses'
+
+// ============================================================================
+// Decomposition Query Hooks
+// ============================================================================
+
+export {
+  useDecompositionBootstrap,
+  useEmployees,
+  useWorkLogsAggregate,
+} from './useDecompositionStage'
+
+// ============================================================================
+// Decomposition Stage Mutation Hooks
+// ============================================================================
+
+export {
+  useCreateDecompositionStage,
+  useUpdateDecompositionStage,
+  useDeleteDecompositionStage,
+  useReorderDecompositionStages,
+} from './useUpdateDecompositionStage'
+
+// ============================================================================
+// Decomposition Item Mutation Hooks
+// ============================================================================
+
+export {
+  useCreateDecompositionItem,
+  useUpdateDecompositionItem,
+  useDeleteDecompositionItem,
+  useMoveDecompositionItems,
+  useReorderDecompositionItems,
+  useBulkCreateDecompositionItems,
+  useBulkDeleteDecompositionItems,
+} from './useUpdateDecompositionItem'
 
 // ============================================================================
 // Типизированные хуки для конкретных модалок

@@ -144,6 +144,37 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Difficulty Levels (уровни сложности декомпозиции)
+  // -------------------------------------------------------------------------
+  difficultyLevels: {
+    all: ['difficulty-levels'] as const,
+    list: () => [...queryKeys.difficultyLevels.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Stage Statuses (статусы этапов декомпозиции)
+  // -------------------------------------------------------------------------
+  stageStatuses: {
+    all: ['stage-statuses'] as const,
+    list: () => [...queryKeys.stageStatuses.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Decomposition (этапы и задачи декомпозиции)
+  // -------------------------------------------------------------------------
+  decomposition: {
+    all: ['decomposition'] as const,
+    /** Bootstrap данные для раздела (этапы + items + справочники) */
+    bootstrap: (sectionId: string) => [...queryKeys.decomposition.all, 'bootstrap', sectionId] as const,
+    /** Этапы декомпозиции для раздела */
+    stages: (sectionId: string) => [...queryKeys.decomposition.all, 'stages', sectionId] as const,
+    /** Задачи для этапа */
+    items: (stageId: string) => [...queryKeys.decomposition.all, 'items', stageId] as const,
+    /** Агрегированные часы работы для задач */
+    workLogs: (itemIdsKey: string) => [...queryKeys.decomposition.all, 'work-logs', itemIdsKey] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Notifications
   // -------------------------------------------------------------------------
   notifications: {
