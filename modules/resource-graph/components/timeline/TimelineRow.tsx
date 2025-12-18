@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, differenceInDays } from 'date-fns'
 import {
   ChevronRight,
   FolderKanban,
@@ -63,7 +63,7 @@ const SectionModal = dynamic(
   { ssr: false }
 )
 import type { DayCell } from './TimelineHeader'
-import { ROW_HEIGHT, SECTION_ROW_HEIGHT, STAGE_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../constants'
+import { ROW_HEIGHT, OBJECT_ROW_HEIGHT, SECTION_ROW_HEIGHT, STAGE_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../constants'
 
 // ============================================================================
 // Grid Background
@@ -1501,6 +1501,246 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
 }
 
 // ============================================================================
+// Object Row - Aggregated Metrics
+// ============================================================================
+
+interface AggregatedMetrics {
+  plannedReadiness: ReadinessPoint[]
+  actualReadiness: ReadinessPoint[]
+  budgetSpending: { date: string; spent: number; percentage: number }[]
+  totalPlannedHours: number
+}
+
+/**
+ * Интерполирует плановую готовность раздела на конкретную дату
+ * - До начала раздела: 0%
+ * - После окончания раздела: 100%
+ * - Между чекпоинтами: линейная интерполяция
+ */
+function interpolateSectionPlan(section: Section, dateStr: string): number {
+  const date = parseISO(dateStr)
+
+  // Если нет дат раздела, возвращаем 0
+  if (!section.startDate || !section.endDate) return 0
+
+  const startDate = parseISO(section.startDate)
+  const endDate = parseISO(section.endDate)
+
+  // До начала раздела = 0%
+  if (date < startDate) return 0
+
+  // После окончания раздела = 100%
+  if (date > endDate) return 100
+
+  // Если есть чекпоинты, интерполируем между ними
+  if (section.readinessCheckpoints.length > 0) {
+    const sorted = [...section.readinessCheckpoints].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
+
+    // Находим левый и правый чекпоинты для интерполяции
+    let leftPoint: { date: string; value: number } | null = null
+    let rightPoint: { date: string; value: number } | null = null
+
+    for (const cp of sorted) {
+      const cpDate = parseISO(cp.date)
+      if (cpDate <= date) {
+        leftPoint = cp
+      }
+      if (cpDate >= date && !rightPoint) {
+        rightPoint = cp
+      }
+    }
+
+    // Если точно на чекпоинте
+    if (leftPoint && rightPoint && leftPoint.date === rightPoint.date) {
+      return leftPoint.value
+    }
+
+    // Если до первого чекпоинта - интерполируем от 0% на startDate до первого чекпоинта
+    if (!leftPoint && rightPoint) {
+      const firstCpDate = parseISO(rightPoint.date)
+      const totalDays = differenceInDays(firstCpDate, startDate)
+      if (totalDays <= 0) return rightPoint.value
+      const daysFromStart = differenceInDays(date, startDate)
+      return (rightPoint.value * daysFromStart) / totalDays
+    }
+
+    // Если после последнего чекпоинта - интерполируем от последнего чекпоинта до 100% на endDate
+    if (leftPoint && !rightPoint) {
+      const lastCpDate = parseISO(leftPoint.date)
+      const totalDays = differenceInDays(endDate, lastCpDate)
+      if (totalDays <= 0) return 100
+      const daysFromLast = differenceInDays(date, lastCpDate)
+      return leftPoint.value + ((100 - leftPoint.value) * daysFromLast) / totalDays
+    }
+
+    // Между двумя чекпоинтами - линейная интерполяция
+    if (leftPoint && rightPoint) {
+      const leftDate = parseISO(leftPoint.date)
+      const rightDate = parseISO(rightPoint.date)
+      const totalDays = differenceInDays(rightDate, leftDate)
+      if (totalDays <= 0) return leftPoint.value
+      const daysFromLeft = differenceInDays(date, leftDate)
+      return leftPoint.value + ((rightPoint.value - leftPoint.value) * daysFromLeft) / totalDays
+    }
+  }
+
+  // Если нет чекпоинтов - линейная интерполяция от 0% до 100%
+  const totalDays = differenceInDays(endDate, startDate)
+  if (totalDays <= 0) return 100
+  const daysFromStart = differenceInDays(date, startDate)
+  return (100 * daysFromStart) / totalDays
+}
+
+/**
+ * Агрегирует метрики из всех разделов объекта
+ * Использует взвешенное среднее по плановым часам
+ * План интерполируется для каждого дня и монотонно растёт от 0% до 100%
+ */
+function aggregateSectionsMetrics(sections: Section[]): AggregatedMetrics | null {
+  if (sections.length === 0) return null
+
+  // Считаем плановые часы для каждого раздела (веса)
+  const sectionWeights = new Map<string, number>()
+  let totalPlannedHours = 0
+
+  for (const section of sections) {
+    let sectionHours = 0
+    for (const stage of section.decompositionStages) {
+      for (const item of stage.items) {
+        sectionHours += item.plannedHours || 0
+      }
+    }
+    sectionWeights.set(section.id, sectionHours)
+    totalPlannedHours += sectionHours
+  }
+
+  // Если нет плановых часов, используем равные веса
+  if (totalPlannedHours === 0) {
+    const equalWeight = 1 / sections.length
+    for (const section of sections) {
+      sectionWeights.set(section.id, equalWeight)
+    }
+    totalPlannedHours = 1
+  }
+
+  // Определяем общий диапазон дат объекта
+  let minDate: Date | null = null
+  let maxDate: Date | null = null
+
+  for (const section of sections) {
+    if (section.startDate) {
+      const start = parseISO(section.startDate)
+      if (!minDate || start < minDate) minDate = start
+    }
+    if (section.endDate) {
+      const end = parseISO(section.endDate)
+      if (!maxDate || end > maxDate) maxDate = end
+    }
+  }
+
+  if (!minDate || !maxDate) return null
+
+  // Собираем ключевые даты для плановой готовности
+  // (все чекпоинты + начало/конец каждого раздела)
+  const planDates = new Set<string>()
+  for (const section of sections) {
+    if (section.startDate) planDates.add(section.startDate)
+    if (section.endDate) planDates.add(section.endDate)
+    section.readinessCheckpoints.forEach(p => planDates.add(p.date))
+  }
+  const sortedPlanDates = Array.from(planDates).sort()
+
+  // Агрегируем плановую готовность с интерполяцией
+  const plannedReadiness: ReadinessPoint[] = []
+  for (const dateStr of sortedPlanDates) {
+    let weightedSum = 0
+    let totalWeight = 0
+
+    for (const section of sections) {
+      const weight = sectionWeights.get(section.id) || 0
+      if (weight > 0) {
+        const interpolatedValue = interpolateSectionPlan(section, dateStr)
+        weightedSum += interpolatedValue * weight
+        totalWeight += weight
+      }
+    }
+
+    if (totalWeight > 0) {
+      plannedReadiness.push({ date: dateStr, value: Math.round(weightedSum / totalWeight) })
+    }
+  }
+
+  // Гарантируем монотонный рост плана (каждое следующее значение >= предыдущего)
+  for (let i = 1; i < plannedReadiness.length; i++) {
+    if (plannedReadiness[i].value < plannedReadiness[i - 1].value) {
+      plannedReadiness[i].value = plannedReadiness[i - 1].value
+    }
+  }
+
+  // Собираем даты для факта и бюджета
+  const otherDates = new Set<string>()
+  for (const section of sections) {
+    section.actualReadiness.forEach(p => otherDates.add(p.date))
+    section.budgetSpending.forEach(p => otherDates.add(p.date))
+  }
+  const sortedOtherDates = Array.from(otherDates).sort()
+
+  // Агрегируем фактическую готовность
+  const actualReadiness: ReadinessPoint[] = []
+  for (const date of sortedOtherDates) {
+    let weightedSum = 0
+    let totalWeight = 0
+
+    for (const section of sections) {
+      const weight = sectionWeights.get(section.id) || 0
+      const point = section.actualReadiness.find(p => p.date === date)
+      if (point) {
+        weightedSum += point.value * weight
+        totalWeight += weight
+      }
+    }
+
+    if (totalWeight > 0) {
+      actualReadiness.push({ date, value: Math.round(weightedSum / totalWeight) })
+    }
+  }
+
+  // Агрегируем бюджет (сумма расходов / сумма бюджетов)
+  const budgetSpending: { date: string; spent: number; percentage: number }[] = []
+  for (const date of sortedOtherDates) {
+    let totalSpent = 0
+    let totalBudgetLimit = 0
+    let hasData = false
+
+    for (const section of sections) {
+      const point = section.budgetSpending.find(p => p.date === date)
+      if (point) {
+        totalSpent += point.spent
+        // Восстанавливаем лимит из percentage: limit = spent * 100 / percentage
+        if (point.percentage > 0) {
+          totalBudgetLimit += (point.spent * 100) / point.percentage
+        }
+        hasData = true
+      }
+    }
+
+    if (hasData) {
+      const percentage = totalBudgetLimit > 0 ? (totalSpent / totalBudgetLimit) * 100 : 0
+      budgetSpending.push({ date, spent: totalSpent, percentage: Math.round(percentage) })
+    }
+  }
+
+  return {
+    plannedReadiness,
+    actualReadiness,
+    budgetSpending,
+    totalPlannedHours,
+  }
+}
+
+// ============================================================================
 // Object Row
 // ============================================================================
 
@@ -1514,18 +1754,104 @@ function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = object.sections.length > 0
 
+  // Агрегированные метрики из всех разделов
+  const aggregatedMetrics = useMemo(() => {
+    return aggregateSectionsMetrics(object.sections)
+  }, [object.sections])
+
+  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const totalWidth = SIDEBAR_WIDTH + timelineWidth
+  const depth = 2
+
   return (
-    <BaseRow
-      depth={2}
-      isExpanded={isExpanded}
-      onToggle={() => setIsExpanded(!isExpanded)}
-      hasChildren={hasChildren}
-      icon={<Box className="w-4 h-4" />}
-      label={object.name}
-      dayCells={dayCells}
-      range={range}
-    >
-      {object.sections.map((section) => (
+    <>
+      <div
+        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        style={{ height: OBJECT_ROW_HEIGHT, minWidth: totalWidth }}
+      >
+        {/* Sidebar - sticky left при горизонтальном скролле */}
+        <div
+          className={cn(
+            'flex items-center gap-1 shrink-0 border-r border-border px-2',
+            'sticky left-0 z-20 bg-background'
+          )}
+          style={{
+            width: SIDEBAR_WIDTH,
+            paddingLeft: 8 + depth * 16,
+          }}
+        >
+          {/* Expand/Collapse */}
+          {hasChildren ? (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-0.5 hover:bg-muted rounded transition-colors"
+            >
+              <ChevronRight
+                className={cn(
+                  'w-4 h-4 text-muted-foreground transition-transform',
+                  isExpanded && 'rotate-90'
+                )}
+              />
+            </button>
+          ) : (
+            <div className="w-5" />
+          )}
+          {/* Icon */}
+          <span className="text-muted-foreground">
+            <Box className="w-4 h-4" />
+          </span>
+          {/* Label */}
+          <span className="text-sm truncate flex-1 min-w-0" title={object.name}>
+            {object.name}
+          </span>
+        </div>
+
+        {/* Timeline area - fixed width */}
+        <div className="relative" style={{ width: timelineWidth }}>
+          <TimelineGrid dayCells={dayCells} />
+          {/* Агрегированные графики объекта */}
+          {aggregatedMetrics && (
+            <div
+              className={cn(
+                'absolute inset-0 transition-all duration-200',
+                // Серый и полупрозрачный когда объект развёрнут
+                isExpanded && 'opacity-30 saturate-50'
+              )}
+            >
+              {/* Плановая готовность (пунктирная линия) */}
+              {aggregatedMetrics.plannedReadiness.length > 0 && (
+                <PlannedReadinessArea
+                  checkpoints={aggregatedMetrics.plannedReadiness}
+                  range={range}
+                  timelineWidth={timelineWidth}
+                  rowHeight={OBJECT_ROW_HEIGHT}
+                />
+              )}
+              {/* Фактическая готовность (синяя область) */}
+              {aggregatedMetrics.actualReadiness.length > 0 && (
+                <ActualReadinessArea
+                  snapshots={aggregatedMetrics.actualReadiness}
+                  range={range}
+                  timelineWidth={timelineWidth}
+                  rowHeight={OBJECT_ROW_HEIGHT}
+                />
+              )}
+              {/* Освоение бюджета (оранжевая область) */}
+              {aggregatedMetrics.budgetSpending.length > 0 && (
+                <BudgetSpendingArea
+                  spending={aggregatedMetrics.budgetSpending}
+                  range={range}
+                  timelineWidth={timelineWidth}
+                  rowHeight={OBJECT_ROW_HEIGHT}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Children */}
+      {isExpanded && object.sections.map((section) => (
         <SectionRow
           key={section.id}
           section={section}
@@ -1534,7 +1860,7 @@ function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
           isObjectExpanded={isExpanded}
         />
       ))}
-    </BaseRow>
+    </>
   )
 }
 

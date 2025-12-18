@@ -12,6 +12,8 @@ interface ActualReadinessAreaProps {
   range: TimelineRange
   /** Общая ширина timeline в пикселях */
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 interface PointData {
@@ -30,6 +32,7 @@ export function ActualReadinessArea({
   snapshots,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: ActualReadinessAreaProps) {
   // Вычисляем точки с интерполяцией
   const points = useMemo(() => {
@@ -52,8 +55,8 @@ export function ActualReadinessArea({
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
-    const graphHeight = SECTION_ROW_HEIGHT * 0.75
-    const topPadding = SECTION_ROW_HEIGHT * 0.1
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
 
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
@@ -83,12 +86,12 @@ export function ActualReadinessArea({
     }
 
     return result
-  }, [snapshots, range.start, timelineWidth])
+  }, [snapshots, range.start, timelineWidth, rowHeight])
 
   if (points.length === 0) return null
 
   // Создаём SVG paths для заливки и линии
-  const baseY = SECTION_ROW_HEIGHT * 0.85
+  const baseY = rowHeight * 0.85
   const { areaPath, linePath } = useMemo(() => {
     if (points.length < 1) return { areaPath: '', linePath: '' }
 
@@ -116,11 +119,11 @@ export function ActualReadinessArea({
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {/* Градиентная заливка синим */}
         <defs>

@@ -222,6 +222,14 @@ export const queryKeys = {
     list: () => [...queryKeys.budgetTags.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.budgetTags.all, 'detail', id] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Section Statuses (статусы разделов)
+  // -------------------------------------------------------------------------
+  sectionStatuses: {
+    all: ['section-statuses'] as const,
+    list: () => [...queryKeys.sectionStatuses.all, 'list'] as const,
+  },
 } as const
 
 // ============================================================================
