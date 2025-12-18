@@ -3645,60 +3645,429 @@ npm run build
 
 ### Этап 7: TypeScript Types
 
+**ЗАЧЕМ НУЖЕН:**
+Этот этап — фундамент type safety для всего модуля checkpoints. Без строгих типов:
+- Разработчики будут ошибаться в названиях полей (`checkpointDate` vs `checkpoint_date`)
+- Нет autocomplete в IDE — медленная разработка
+- Ошибки всплывут только в runtime, а не на этапе компиляции
+- Невозможно гарантировать соответствие между БД и UI
+- Cache hooks не смогут вывести правильные типы
+
 **Описание:**
-Создать TypeScript типы для модуля checkpoints: `Checkpoint`, `CheckpointType`, `AuditEntry`, `CheckpointFilters`.
+Создать централизованную систему TypeScript типов для модуля checkpoints с четким разделением:
+1. **Domain Types** — бизнес-сущности из базы данных
+2. **Computed Types** — расчетные поля (status, label, counts)
+3. **Filter Types** — фильтрация и пагинация
+4. **Form Types** — входные данные для форм
+
+---
+
+#### Шаг 7.1: Создание файла типов
 
 **Затрагиваемые файлы:**
 - `modules/checkpoints/types/index.ts` (новый)
 
 **Зависимости:**
-Этап 1 (`types/db.ts` обновлен после миграции)
+- Этап 1 (`types/db.ts` обновлен после миграции)
+- `modules/cache/types.ts` (для BaseFilters)
 
-**Детали:**
-- `Checkpoint`: интерфейс из VIEW `view_section_checkpoints` (все поля + computed status/status_label/linked_sections)
-- `CheckpointType`: интерфейс из таблицы `checkpoint_types`
-- `AuditEntry`: интерфейс из `checkpoint_audit` + JOIN profiles (user_firstname, user_lastname, user_avatar_url)
-- `CheckpointFilters`: extends BaseFilters (уже в query-keys.ts, переместить в types/index.ts)
+**ЗАЧЕМ:**
+Централизовать все типы в одном месте для:
+- Упрощения импортов (`import { Checkpoint } from '@/modules/checkpoints/types'`)
+- Единого источника правды (single source of truth)
+- Упрощения рефакторинга (изменения в одном месте)
 
-**Визуальные изменения:**
-❌ Нет визуальных изменений (types только)
-
-**Как тестировать:**
-1. Создать тестовый файл `test-types.ts`:
+**Что делать:**
 ```typescript
-import type { Checkpoint, CheckpointType, AuditEntry } from '@/modules/checkpoints/types'
+// modules/checkpoints/types/index.ts
+
+import type { Database } from '@/types/db'
+import type { BaseFilters } from '@/modules/cache/types'
+
+// ============================================================================
+// 1. BASE TYPES (из таблиц БД)
+// ============================================================================
+
+/** Тип чекпоинта из справочника */
+export type CheckpointType = Database['public']['Tables']['checkpoint_types']['Row']
+
+/** Чекпоинт (base, без computed fields) */
+export type CheckpointBase = Database['public']['Tables']['section_checkpoints']['Row']
+
+/** Связь чекпоинта с разделами */
+export type CheckpointSectionLink = Database['public']['Tables']['checkpoint_section_links']['Row']
+
+/** Запись аудита */
+export type CheckpointAuditBase = Database['public']['Tables']['checkpoint_audit']['Row']
+
+// ============================================================================
+// 2. COMPUTED TYPES (из VIEW view_section_checkpoints)
+// ============================================================================
+
+/** Статус чекпоинта (computed) */
+export type CheckpointStatus = 'pending' | 'completed' | 'completed_late' | 'overdue'
+
+/** Полный чекпоинт с computed полями и JOIN данными */
+export interface Checkpoint extends CheckpointBase {
+  // Поля типа (JOIN checkpoint_types)
+  type_code: string
+  type_name: string
+  is_custom: boolean
+  icon: string
+  color: string
+
+  // Computed поля
+  status: CheckpointStatus
+  status_label: string
+
+  // Контекст разрешений (JOIN sections/projects/profiles)
+  section_responsible: string | null        // responsible.id
+  project_manager: string | null            // manager.id
+
+  // Связанные разделы (aggregated)
+  linked_sections: Array<{
+    section_id: string
+    section_code: string
+    section_name: string
+  }>
+  linked_sections_count: number
+}
+
+/** Запись аудита с данными пользователя */
+export interface AuditEntry extends CheckpointAuditBase {
+  // JOIN profiles
+  user_firstname: string | null
+  user_lastname: string | null
+  user_avatar_url: string | null
+}
+
+// ============================================================================
+// 3. FILTER TYPES
+// ============================================================================
+
+export interface CheckpointFilters extends BaseFilters {
+  section_id?: string                        // Фильтр по разделу
+  type_id?: string                           // Фильтр по типу
+  status?: CheckpointStatus | CheckpointStatus[]  // Фильтр по статусу
+  date_from?: string                         // Фильтр "с даты" (ISO)
+  date_to?: string                           // Фильтр "по дату" (ISO)
+  is_custom?: boolean                        // Только custom типы?
+  has_linked_sections?: boolean              // Только с связанными разделами?
+}
+
+// ============================================================================
+// 4. FORM INPUT TYPES
+// ============================================================================
+
+/** Данные для создания чекпоинта */
+export interface CreateCheckpointInput {
+  section_id: string
+  type_id: string
+  title?: string                             // Optional для предустановленных типов
+  description?: string
+  checkpoint_date: string                    // ISO date string
+  linked_section_ids?: string[]              // M:N связи
+}
+
+/** Данные для обновления чекпоинта */
+export interface UpdateCheckpointInput {
+  checkpoint_id: string
+  title?: string
+  description?: string
+  checkpoint_date?: string
+  type_id?: string
+  linked_section_ids?: string[]
+}
+
+/** Данные для завершения чекпоинта */
+export interface CompleteCheckpointInput {
+  checkpoint_id: string
+  completed_at?: string                      // Default = NOW()
+}
+
+/** Данные для создания типа чекпоинта */
+export interface CreateCheckpointTypeInput {
+  code: string
+  name: string
+  icon: string
+  color: string
+  is_custom?: boolean                        // Default = true (admin-created)
+}
+
+/** Данные для обновления типа чекпоинта */
+export interface UpdateCheckpointTypeInput {
+  type_id: string
+  name?: string
+  icon?: string
+  color?: string
+}
+```
+
+**Как проверить:**
+1. Создать файл `modules/checkpoints/types/index.ts` с кодом выше
+2. Запустить `npm run build` — не должно быть ошибок TypeScript
+3. Открыть файл в VSCode — при наведении на `Checkpoint` должна быть подсказка со всеми полями
+
+---
+
+#### Шаг 7.2: Тестирование типов
+
+**ЗАЧЕМ:**
+Убедиться, что:
+1. Типы корректно экспортируются
+2. Autocomplete работает
+3. TypeScript выводит ошибки при неправильном использовании
+4. Enum types строгие (не просто `string`)
+
+**Что делать:**
+Создать тестовый файл `modules/checkpoints/types/test-types.ts`:
+
+```typescript
+import type {
+  Checkpoint,
+  CheckpointType,
+  AuditEntry,
+  CheckpointFilters,
+  CreateCheckpointInput,
+  CheckpointStatus
+} from './index'
+
+// ============================================================================
+// TEST 1: Checkpoint type
+// ============================================================================
 
 const checkpoint: Checkpoint = {
-  checkpoint_id: 'test',
-  section_id: 'test',
-  type_id: 'test',
+  checkpoint_id: 'test-id',
+  section_id: 'section-1',
+  type_id: 'type-1',
   type_code: 'exam',
   type_name: 'Экспертиза',
   is_custom: false,
-  title: 'Test',
+  title: 'Тестовый чекпоинт',
   description: null,
   checkpoint_date: '2025-12-31',
   icon: 'check-circle',
   color: '#10b981',
   completed_at: null,
   completed_by: null,
-  status: 'pending',
+  status: 'pending',                         // Should be strict enum
   status_label: 'Ожидается',
   created_by: null,
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
-  section_responsible: null,
-  project_manager: null,
+  section_responsible: 'user-1',
+  project_manager: 'user-2',
   linked_sections: [],
   linked_sections_count: 0,
 }
+
+// ✅ Should autocomplete all fields when typing `checkpoint.`
+const checkpointDate = checkpoint.checkpoint_date
+const status = checkpoint.status
+
+// ❌ Should show TypeScript error (wrong status value)
+// const wrongCheckpoint: Checkpoint = { ...checkpoint, status: 'invalid' }
+
+// ============================================================================
+// TEST 2: CheckpointType
+// ============================================================================
+
+const checkpointType: CheckpointType = {
+  type_id: 'type-1',
+  code: 'exam',
+  name: 'Экспертиза',
+  icon: 'check-circle',
+  color: '#10b981',
+  is_custom: false,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+
+// ============================================================================
+// TEST 3: AuditEntry
+// ============================================================================
+
+const auditEntry: AuditEntry = {
+  audit_id: 'audit-1',
+  checkpoint_id: 'test-id',
+  action: 'CREATE',
+  changed_by: 'user-1',
+  changed_at: '2025-01-01T00:00:00Z',
+  old_data: null,
+  new_data: { title: 'Новый чекпоинт' },
+  user_firstname: 'Иван',
+  user_lastname: 'Иванов',
+  user_avatar_url: 'https://example.com/avatar.jpg',
+}
+
+// ============================================================================
+// TEST 4: Filter types
+// ============================================================================
+
+const filters: CheckpointFilters = {
+  section_id: 'section-1',
+  type_id: 'type-1',
+  status: ['pending', 'overdue'],            // Should accept array
+  date_from: '2025-01-01',
+  date_to: '2025-12-31',
+  limit: 50,
+  offset: 0,
+  sort_by: 'checkpoint_date',
+  sort_order: 'asc',
+}
+
+// ============================================================================
+// TEST 5: Input types
+// ============================================================================
+
+const createInput: CreateCheckpointInput = {
+  section_id: 'section-1',
+  type_id: 'type-1',
+  title: 'Новый чекпоинт',
+  checkpoint_date: '2025-12-31',
+  linked_section_ids: ['section-2', 'section-3'],
+}
+
+// ============================================================================
+// TEST 6: Strict enum type checking
+// ============================================================================
+
+// ✅ Should accept valid status
+const validStatus: CheckpointStatus = 'pending'
+
+// ❌ Should show TypeScript error
+// const invalidStatus: CheckpointStatus = 'wrong_status'
+
+// ✅ Type guard should work
+function isOverdue(status: CheckpointStatus): boolean {
+  return status === 'overdue'
+}
+
+console.log('✅ All type tests passed!')
 ```
-2. Проверить `npm run build` — нет ошибок TypeScript
-3. Проверить autocomplete в VSCode: при вводе `checkpoint.` должны появиться все поля
-4. Проверить enum types: `status: 'pending' | 'completed' | 'completed_late' | 'overdue'` (не `string`)
+
+**Как проверить:**
+1. Создать файл `modules/checkpoints/types/test-types.ts`
+2. Запустить `npm run build` — не должно быть ошибок
+3. Раскомментировать строки с ❌ — должны появиться ошибки TypeScript
+4. В VSCode набрать `checkpoint.` — должен появиться autocomplete со всеми полями
+5. Навести на `status: 'pending'` — VSCode должен показать `'pending' | 'completed' | 'completed_late' | 'overdue'`, а не просто `string`
+
+---
+
+#### Шаг 7.3: Экспорт через index.ts модуля
+
+**ЗАЧЕМ:**
+Упростить импорты в других частях приложения:
+```typescript
+// ❌ Было:
+import { Checkpoint } from '@/modules/checkpoints/types/index'
+
+// ✅ Стало:
+import { Checkpoint } from '@/modules/checkpoints'
+```
+
+**Что делать:**
+Создать/обновить `modules/checkpoints/index.ts`:
+
+```typescript
+// modules/checkpoints/index.ts
+
+export * from './types'
+```
+
+**Как проверить:**
+1. В любом файле написать: `import { Checkpoint } from '@/modules/checkpoints'`
+2. Autocomplete должен сработать
+3. `npm run build` — нет ошибок
+
+---
+
+#### Шаг 7.4: Финальная проверка интеграции с Cache Module
+
+**ЗАЧЕМ:**
+Убедиться, что типы корректно используются в Cache Module:
+- Query keys имеют правильную типизацию
+- Hooks возвращают правильные типы
+- Filters работают с autocomplete
+
+**Что делать:**
+Создать тестовый файл `modules/checkpoints/types/test-cache-integration.ts`:
+
+```typescript
+import type { Checkpoint, CheckpointFilters } from '@/modules/checkpoints'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+
+// ============================================================================
+// TEST: Query keys должны иметь правильную типизацию
+// ============================================================================
+
+const checkpointListKey = queryKeys.checkpoints.lists()
+const checkpointDetailKey = queryKeys.checkpoints.detail('checkpoint-1')
+const filteredKey = queryKeys.checkpoints.list({ section_id: 'section-1' })
+
+// ✅ Should infer correct type for filters
+const filters: CheckpointFilters = {
+  section_id: 'section-1',
+  status: 'pending',
+  date_from: '2025-01-01',
+}
+
+const keyWithFilters = queryKeys.checkpoints.list(filters)
+
+// ============================================================================
+// TEST: Simulate hook return type
+// ============================================================================
+
+// Simulate what useCheckpoints hook would return
+type UseCheckpointsReturn = {
+  data: Checkpoint[] | undefined
+  isLoading: boolean
+  error: Error | null
+}
+
+const mockHookResult: UseCheckpointsReturn = {
+  data: undefined,
+  isLoading: true,
+  error: null,
+}
+
+// ✅ Should have autocomplete for checkpoint fields
+if (mockHookResult.data) {
+  mockHookResult.data.forEach(checkpoint => {
+    console.log(checkpoint.checkpoint_id)      // ✅ Should autocomplete
+    console.log(checkpoint.status)             // ✅ Should autocomplete
+    console.log(checkpoint.linked_sections)    // ✅ Should autocomplete
+  })
+}
+
+console.log('✅ Cache integration types work correctly!')
+```
+
+**Как проверить:**
+1. Создать файл выше
+2. Запустить `npm run build` — нет ошибок
+3. Проверить autocomplete при вводе `checkpoint.`
+4. Проверить, что `filters` object имеет autocomplete для всех полей из `CheckpointFilters`
+
+---
 
 **Проверка 🤖 Clean Code Guardian:**
-Naming conventions, strict TypeScript types.
+После завершения всех шагов вызвать агента для проверки:
+- ✅ Naming conventions: `PascalCase` для типов, `camelCase` для полей
+- ✅ Strict TypeScript: нет `any`, все типы явно определены
+- ✅ Документация: каждый тип имеет JSDoc комментарий
+- ✅ Exports: все типы экспортированы через `index.ts`
+- ✅ Enum safety: `status` — строгий union type, не `string`
+
+**Критерии готовности этапа:**
+- [ ] Файл `modules/checkpoints/types/index.ts` создан
+- [ ] Все 4 группы типов определены (Base, Computed, Filter, Input)
+- [ ] Тестовый файл `test-types.ts` проходит проверку TypeScript
+- [ ] Autocomplete работает во всех случаях
+- [ ] `npm run build` выполнен без ошибок
+- [ ] Clean Code Guardian вернул ✅ (или исправлены замечания)
+- [ ] Удалены тестовые файлы (`test-types.ts`, `test-cache-integration.ts`)
 
 ---
 
