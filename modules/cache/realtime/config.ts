@@ -14,7 +14,7 @@ export interface TableSubscription {
   /** События для подписки (по умолчанию все) */
   events?: RealtimeEvent[]
   /** Query keys для инвалидации при изменении */
-  invalidateKeys: readonly unknown[][]
+  invalidateKeys: readonly (readonly unknown[])[]
   /** Дополнительный фильтр (например, filter: 'user_id=eq.123') */
   filter?: string
 }
@@ -165,6 +165,38 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'user_notifications',
     invalidateKeys: [queryKeys.notifications.all],
+  },
+
+  // ============================================================================
+  // Checkpoints (чекпоинты/дедлайны разделов)
+  // ============================================================================
+  {
+    table: 'section_checkpoints',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+      queryKeys.sections.all,
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'checkpoint_section_links',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_audit',
+    events: ['INSERT'],
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_types',
+    invalidateKeys: [
+      queryKeys.checkpointTypes.all,
+      queryKeys.checkpoints.all,
+    ],
   },
 ]
 

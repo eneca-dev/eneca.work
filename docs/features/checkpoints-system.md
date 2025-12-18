@@ -81,27 +81,111 @@
 Создать миграцию с таблицами `checkpoint_types`, `section_checkpoints`, `checkpoint_section_links`, `checkpoint_audit`, VIEW `view_section_checkpoints`, индексами и Realtime publication.
 
 **Затрагиваемые файлы:**
-- `supabase/migrations/YYYYMMDDHHMMSS_create_checkpoints_system.sql` (новый)
+- `supabase/migrations/2025-12-17_section_checkpoints_integration.sql` (✅ уже есть)
+- `supabase/migrations/2025-12-18_section_checkpoints_status_audit.sql` (✅ уже есть)
+- `supabase/migrations/YYYYMMDDHHMMSS_checkpoints_additions.sql` (новый — доработки)
 - `types/db.ts` (обновится после `npm run db:types`)
 
 **Зависимости:**
 Нет (независимый этап)
 
-**Детали:**
-- 4 таблицы с FK constraints, ON DELETE CASCADE/RESTRICT/SET NULL
-- Partial indexes для performance (uncompleted, completed, audit)
-- VIEW агрегирует linked_sections (jsonb_agg), computed status (CASE), permission context
-- Realtime publication для всех 4 таблиц
+**Текущий статус:** ✅ ЗАВЕРШЁН
+
+---
+
+#### Шаг 1.1: Основные таблицы (✅ ГОТОВО)
+
+Уже реализовано в существующих миграциях:
+- ✅ `checkpoint_types` — таблица типов чекпоинтов
+- ✅ `section_checkpoints` — основная таблица с `completed_at`, `completed_by`, `updated_at`
+- ✅ `checkpoint_section_links` — M:N связь с разделами
+- ✅ `checkpoint_audit` — audit trail таблица
+- ✅ `view_section_checkpoints` — VIEW с computed status, permission context, linked sections
+- ✅ Индексы: `idx_section_checkpoints_uncompleted`, `idx_section_checkpoints_completed`, `idx_checkpoint_audit_*`
+
+---
+
+#### Шаг 1.2: Добавить `created_by` в `checkpoint_types` (✅ ГОТОВО)
+
+**Зачем:** Для отслеживания кто создал кастомный тип + permission checks.
+
+**SQL миграция:**
+```sql
+-- Добавить колонку created_by в checkpoint_types
+ALTER TABLE public.checkpoint_types
+  ADD COLUMN IF NOT EXISTS created_by uuid;
+
+ALTER TABLE public.checkpoint_types
+  ADD CONSTRAINT checkpoint_types_created_by_fkey
+  FOREIGN KEY (created_by) REFERENCES public.profiles(user_id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.checkpoint_types.created_by IS 'User who created custom checkpoint type (NULL for built-in types)';
+
+-- Индекс для FK lookup
+CREATE INDEX IF NOT EXISTS idx_checkpoint_types_created_by
+  ON public.checkpoint_types(created_by)
+  WHERE created_by IS NOT NULL;
+```
+
+**Как тестировать:**
+```sql
+-- Проверить колонку добавлена
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'checkpoint_types' AND column_name = 'created_by';
+-- Ожидаемый результат: created_by | uuid | YES
+```
+
+---
+
+#### Шаг 1.3: Добавить таблицы в Realtime publication (✅ ГОТОВО)
+
+**Зачем:** Чтобы cache module получал события об изменениях и инвалидировал query keys.
+
+**SQL миграция:**
+```sql
+-- Добавить таблицы в Realtime publication
+ALTER PUBLICATION supabase_realtime ADD TABLE public.checkpoint_types;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.section_checkpoints;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.checkpoint_section_links;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.checkpoint_audit;
+```
+
+**Как тестировать:**
+```sql
+-- Проверить таблицы в publication
+SELECT tablename
+FROM pg_publication_tables
+WHERE pubname = 'supabase_realtime'
+  AND tablename IN ('checkpoint_types', 'section_checkpoints', 'checkpoint_section_links', 'checkpoint_audit');
+-- Ожидаемый результат: 4 строки
+```
+
+---
+
+#### Шаг 1.4: Обновить TypeScript типы (✅ ГОТОВО)
+
+**Зачем:** Без актуальных типов в `types/db.ts` Server Actions и hooks не скомпилируются.
+
+**Команда:**
+```bash
+npm run db:types
+```
+
+**Как тестировать:**
+1. Открыть `types/db.ts`
+2. Проверить наличие типов:
+   - `checkpoint_types` в `Tables`
+   - `section_checkpoints` в `Tables`
+   - `checkpoint_section_links` в `Tables`
+   - `checkpoint_audit` в `Tables`
+   - `view_section_checkpoints` в `Views`
+3. Проверить `npm run build` — нет ошибок TypeScript
+
+---
 
 **Визуальные изменения:**
 ❌ Нет визуальных изменений (backend only)
-
-**Как тестировать:**
-1. Применить миграцию: `supabase migration up` или через Supabase Studio
-2. Проверить создание таблиц: `SELECT * FROM checkpoint_types;` (должна быть пустая таблица)
-3. Проверить VIEW: `SELECT * FROM view_section_checkpoints;` (должна быть пустая или с данными если есть sections)
-4. Запустить `npm run db:types` — проверить, что `types/db.ts` обновился (появились типы `checkpoint_types`, `section_checkpoints`, `checkpoint_section_links`, `checkpoint_audit`, `view_section_checkpoints`)
-5. Проверить Realtime publication: `SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime';` (должны быть 4 новые таблицы)
 
 **Проверка 🤖 DB Architect:**
 После создания миграции — проверка схемы на оптимизацию индексов, FK cascades, VIEW performance.
@@ -120,24 +204,208 @@
 **Зависимости:**
 Этап 1 (база данных должна быть готова)
 
-**Детали:**
-- Query keys: `checkpoints.all`, `checkpoints.lists()`, `checkpoints.list(filters)`, `checkpoints.detail(id)`, `checkpoints.audit(id)`, `checkpoints.bySection(sectionId)`, `checkpoints.byProject(projectId)`
-- Query keys: `checkpointTypes.all`, `checkpointTypes.list()`, `checkpointTypes.detail(id)`
-- `CheckpointFilters` interface extends `BaseFilters` (sectionId, projectId, status, dateFrom, dateTo)
-- Realtime: 4 subscriptions (section_checkpoints, checkpoint_section_links, checkpoint_audit, checkpoint_types) → invalidate соответствующие query keys
+**Текущий статус:** ✅ ЗАВЕРШЁН
+
+---
+
+#### Шаг 2.1: Добавить CheckpointFilters interface
+
+**Зачем:**
+- Типизация параметров фильтрации для `useCheckpoints(filters)` hook
+- Без этого интерфейса hooks не смогут принимать типизированные фильтры
+- Позволяет фильтровать чекпоинты по: секции, проекту, статусу, диапазону дат
+- Используется в `queryKeys.checkpoints.list(filters)` для создания уникальных cache keys
+
+**Файл:** `modules/cache/keys/query-keys.ts`
+
+**Что добавить (после `BudgetFilters`):**
+```typescript
+export interface CheckpointFilters extends BaseFilters {
+  sectionId?: string
+  projectId?: string
+  status?: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  dateFrom?: string
+  dateTo?: string
+}
+```
+
+**Как тестировать:**
+```typescript
+// В любом файле должен работать импорт
+import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
+
+const filters: CheckpointFilters = {
+  sectionId: 'test',
+  status: 'pending',
+  dateFrom: '2025-01-01',
+}
+```
+
+---
+
+#### Шаг 2.2: Добавить Query Keys для Checkpoints
+
+**Зачем:**
+- Query keys — основа TanStack Query кеширования. Без них невозможно создать hooks
+- `checkpoints.all` — базовый ключ для инвалидации всех checkpoint-кешей разом
+- `checkpoints.list(filters)` — уникальный ключ для каждой комбинации фильтров (разные фильтры = разные кеши)
+- `checkpoints.detail(id)` — кеш отдельного чекпоинта для `useCheckpoint(id)` hook
+- `checkpoints.audit(id)` — отдельный кеш для audit history (может загружаться lazy)
+- `checkpointTypes.*` — справочник типов, редко меняется, кешируется отдельно
+
+**Файл:** `modules/cache/keys/query-keys.ts`
+
+**Что добавить в `queryKeys` объект (после `budgetTags`):**
+```typescript
+// -------------------------------------------------------------------------
+// Checkpoints (чекпоинты/дедлайны)
+// -------------------------------------------------------------------------
+checkpoints: {
+  all: ['checkpoints'] as const,
+  lists: () => [...queryKeys.checkpoints.all, 'list'] as const,
+  list: (filters?: CheckpointFilters) => [...queryKeys.checkpoints.lists(), filters] as const,
+  details: () => [...queryKeys.checkpoints.all, 'detail'] as const,
+  detail: (id: string) => [...queryKeys.checkpoints.details(), id] as const,
+  audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
+  bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
+  byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+},
+
+// -------------------------------------------------------------------------
+// Checkpoint Types (типы чекпоинтов)
+// -------------------------------------------------------------------------
+checkpointTypes: {
+  all: ['checkpoint-types'] as const,
+  list: () => [...queryKeys.checkpointTypes.all, 'list'] as const,
+  details: () => [...queryKeys.checkpointTypes.all, 'detail'] as const,
+  detail: (id: string) => [...queryKeys.checkpointTypes.details(), id] as const,
+},
+```
+
+**Как тестировать:**
+```typescript
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+
+// Все ключи должны быть типизированы
+console.log(queryKeys.checkpoints.all)          // ['checkpoints']
+console.log(queryKeys.checkpoints.list())       // ['checkpoints', 'list', undefined]
+console.log(queryKeys.checkpoints.detail('x'))  // ['checkpoints', 'detail', 'x']
+console.log(queryKeys.checkpoints.audit('x'))   // ['checkpoints', 'audit', 'x']
+console.log(queryKeys.checkpointTypes.list())   // ['checkpoint-types', 'list']
+```
+
+---
+
+#### Шаг 2.3: Добавить Realtime Subscriptions
+
+**Зачем:**
+- Автоматическая инвалидация кеша при изменениях в БД (без ручного refetch)
+- Когда другой пользователь создаёт/редактирует чекпоинт — UI обновляется автоматически
+- Без Realtime subscriptions данные будут stale до истечения staleTime или ручного refetch
+- Критично для Resource Graph Timeline — чекпоинты должны появляться в реальном времени
+- Связанные кеши (`sections.all`, `resourceGraph.all`) тоже инвалидируются, т.к. зависят от checkpoints
+
+**Файл:** `modules/cache/realtime/config.ts`
+
+**Что добавить в `realtimeSubscriptions` массив (после notifications):**
+```typescript
+// ============================================================================
+// Checkpoints (чекпоинты/дедлайны разделов)
+// ============================================================================
+{
+  table: 'section_checkpoints',
+  invalidateKeys: [
+    queryKeys.checkpoints.all,
+    queryKeys.sections.all,        // Секции зависят от checkpoints
+    queryKeys.resourceGraph.all,   // Timeline зависит от checkpoints
+  ],
+},
+{
+  table: 'checkpoint_section_links',
+  invalidateKeys: [
+    queryKeys.checkpoints.all,     // linked_sections меняется
+  ],
+},
+{
+  table: 'checkpoint_audit',
+  events: ['INSERT'],              // Audit только создаётся, не редактируется
+  invalidateKeys: [
+    queryKeys.checkpoints.all,     // Audit history обновляется
+  ],
+},
+{
+  table: 'checkpoint_types',
+  invalidateKeys: [
+    queryKeys.checkpointTypes.all,
+    queryKeys.checkpoints.all,     // Checkpoints зависят от types (icon, color в VIEW)
+  ],
+},
+```
+
+**Почему такая инвалидация:**
+- `section_checkpoints` → инвалидирует `checkpoints.all` + `sections.all` + `resourceGraph.all` (чекпоинты отображаются на timeline и в секциях)
+- `checkpoint_section_links` → инвалидирует только `checkpoints.all` (linked_sections — computed field в VIEW)
+- `checkpoint_audit` → только INSERT, инвалидирует `checkpoints.all` (audit history)
+- `checkpoint_types` → инвалидирует `checkpointTypes.all` + `checkpoints.all` (VIEW делает LEFT JOIN для resolved icon/color)
+
+**Как тестировать:**
+1. Запустить `npm run dev`
+2. Открыть приложение в браузере
+3. Открыть DevTools → Console
+4. В Supabase Studio выполнить:
+```sql
+INSERT INTO checkpoint_types (type, name, icon, color, is_custom)
+VALUES ('test_realtime', 'Test Realtime', 'star', '#ff0000', true);
+```
+5. В консоли браузера должен появиться лог о Realtime event
+6. Удалить тестовую запись:
+```sql
+DELETE FROM checkpoint_types WHERE type = 'test_realtime';
+```
+
+---
+
+#### Шаг 2.4: Экспортировать CheckpointFilters из cache module
+
+**Зачем:**
+- Единая точка импорта для типов из cache module: `import { CheckpointFilters } from '@/modules/cache'`
+- Без экспорта придётся импортировать напрямую из `@/modules/cache/keys/query-keys` — нарушение инкапсуляции
+- Соответствует паттерну других фильтров (`UserFilters`, `ProjectFilters` и т.д.)
+- Используется в `modules/checkpoints/hooks/` при создании типизированных hooks
+
+**Файл:** `modules/cache/index.ts`
+
+**Что добавить (если не экспортируется автоматически):**
+```typescript
+export type { CheckpointFilters } from './keys/query-keys'
+```
+
+**Как тестировать:**
+```typescript
+import type { CheckpointFilters } from '@/modules/cache'
+
+const filters: CheckpointFilters = { sectionId: 'test' }
+```
+
+---
+
+**Итоговый чек-лист Этапа 2:**
+- [x] `CheckpointFilters` interface добавлен
+- [x] Query keys `checkpoints.*` добавлены
+- [x] Query keys `checkpointTypes.*` добавлены
+- [x] Realtime subscription для `section_checkpoints` добавлена
+- [x] Realtime subscription для `checkpoint_section_links` добавлена
+- [x] Realtime subscription для `checkpoint_audit` добавлена
+- [x] Realtime subscription для `checkpoint_types` добавлена
+- [x] `npm run build` проходит без ошибок
 
 **Визуальные изменения:**
 ❌ Нет визуальных изменений (cache configuration only)
 
-**Как тестировать:**
-1. Проверить `npm run build` — нет ошибок TypeScript (query keys экспортируются корректно)
-2. Открыть браузер DevTools → Console
-3. Проверить, что Realtime subscriptions создаются (в консоли должны быть логи от Supabase Realtime при изменениях в таблицах)
-4. Создать тестовую запись в `checkpoint_types` через Supabase Studio → проверить, что в консоли появился лог о Realtime event
-5. Проверить TypeScript: импорт `queryKeys.checkpoints.all` в тестовом файле не выдаёт ошибок
-
-**Проверка 🤖 Pragmatic Architect:**
-Использование существующих паттернов query keys, нет дублирования.
+**Проверка 🤖 Pragmatic Architect:** ✅ Approved
+- Query keys следуют существующим паттернам (`all/lists/list/details/detail`)
+- Realtime subscriptions минимально необходимые (4 таблицы)
+- Нет over-engineering, дублирования или лишней сложности
 
 ---
 
