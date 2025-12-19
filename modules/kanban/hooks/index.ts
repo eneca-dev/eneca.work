@@ -108,8 +108,225 @@ export const useKanbanSection = createDetailCacheQuery<KanbanSection | null>({
 export { useStageStatuses } from './useStageStatuses'
 
 // ============================================================================
-// Mutation Hooks (TODO: добавить после подключения к БД)
+// Mutation Hooks
+// ============================================================================
+//
+// ARCHITECTURAL NOTE:
+// Эти хуки используют useMutation напрямую из @tanstack/react-query,
+// а НЕ фабрики из modules/cache (createCacheMutation, createUpdateMutation).
+//
+// Причина: текущие фабрики cache module работают с плоскими массивами TData[],
+// но НЕ поддерживают InfiniteData<TData[]> структуру, которая используется
+// в useKanbanSectionsInfinite для пагинации.
+//
+// TODO: Когда cache module будет расширен фабрикой createInfiniteUpdateMutation,
+// перевести эти хуки на использование фабрики.
 // ============================================================================
 
-// export const useUpdateStageStatus = createUpdateMutation(...)
-// export const useUpdateTaskProgress = createUpdateMutation(...)
+import { useMutation, type InfiniteData } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
+import { updateStageStatus, updateTaskProgress } from '../actions'
+import type { StageStatus } from '../types'
+
+/**
+ * Input для обновления статуса этапа
+ */
+export interface UpdateStageStatusInput {
+  stageId: string
+  sectionId: string
+  newStatus: StageStatus
+}
+
+/**
+ * Хук для обновления статуса этапа с оптимистичным обновлением
+ *
+ * При drag&drop:
+ * 1. UI обновляется мгновенно (optimistic update)
+ * 2. Запрос идёт на сервер в фоне
+ * 3. При ошибке - автоматический откат к предыдущему состоянию
+ *
+ * @example
+ * const { mutate: updateStatus, isPending } = useUpdateStageStatusOptimistic()
+ *
+ * const handleDragEnd = (event: DragEndEvent) => {
+ *   updateStatus({
+ *     stageId: 'stage-123',
+ *     sectionId: 'section-456',
+ *     newStatus: 'in_progress',
+ *   })
+ * }
+ */
+export function useUpdateStageStatusOptimistic(
+  filters?: Record<string, unknown>
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: UpdateStageStatusInput) => {
+      const result = await updateStageStatus(input)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result.data
+    },
+
+    // Оптимистичное обновление ПЕРЕД отправкой запроса
+    onMutate: async (input: UpdateStageStatusInput) => {
+      // Отменяем текущие запросы, чтобы они не перезаписали наше обновление
+      await queryClient.cancelQueries({ queryKey: queryKeys.kanban.all })
+
+      // Сохраняем предыдущее состояние для отката
+      const infiniteQueryKey = queryKeys.kanban.infinite(filters)
+      const previousData = queryClient.getQueryData<
+        InfiniteData<KanbanSection[]>
+      >(infiniteQueryKey)
+
+      // Оптимистично обновляем кеш infinite query
+      if (previousData) {
+        queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
+          infiniteQueryKey,
+          (old) => {
+            if (!old) return old
+
+            // Обновляем каждую страницу
+            const newPages = old.pages.map((page) =>
+              page.map((section) => {
+                // Находим нужный section
+                if (section.id !== input.sectionId) return section
+
+                // Обновляем stages в этом section
+                return {
+                  ...section,
+                  stages: section.stages.map((stage) => {
+                    if (stage.id !== input.stageId) return stage
+                    // Обновляем статус этапа
+                    return {
+                      ...stage,
+                      status: input.newStatus,
+                    }
+                  }),
+                }
+              })
+            )
+
+            return {
+              ...old,
+              pages: newPages,
+            }
+          }
+        )
+      }
+
+      // Возвращаем контекст для отката при ошибке
+      return { previousData, infiniteQueryKey }
+    },
+
+    // При ошибке откатываем к предыдущему состоянию
+    onError: (error, _input, context) => {
+      console.error('[useUpdateStageStatusOptimistic] Error:', error)
+
+      if (context?.previousData) {
+        queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+      }
+    },
+
+    // НЕ инвалидируем данные после успеха - optimistic update уже обновил кеш корректно
+    // Инвалидация вызывала бы полную перезагрузку данных, что замедляет UI
+    // Синхронизация с сервером происходит через Realtime подписку на decomposition_stages
+  })
+}
+
+/**
+ * Input для обновления прогресса задачи
+ */
+export interface UpdateTaskProgressInput {
+  taskId: string
+  stageId: string
+  sectionId: string
+  progress: number
+}
+
+/**
+ * Хук для обновления прогресса задачи с оптимистичным обновлением
+ */
+export function useUpdateTaskProgressOptimistic(
+  filters?: Record<string, unknown>
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: UpdateTaskProgressInput) => {
+      const result = await updateTaskProgress(input)
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      return result.data
+    },
+
+    onMutate: async (input: UpdateTaskProgressInput) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.kanban.all })
+
+      const infiniteQueryKey = queryKeys.kanban.infinite(filters)
+      const previousData = queryClient.getQueryData<
+        InfiniteData<KanbanSection[]>
+      >(infiniteQueryKey)
+
+      if (previousData) {
+        queryClient.setQueryData<InfiniteData<KanbanSection[]>>(
+          infiniteQueryKey,
+          (old) => {
+            if (!old) return old
+
+            const newPages = old.pages.map((page) =>
+              page.map((section) => {
+                if (section.id !== input.sectionId) return section
+
+                return {
+                  ...section,
+                  stages: section.stages.map((stage) => {
+                    if (stage.id !== input.stageId) return stage
+
+                    // Обновляем progress у задачи
+                    const newTasks = stage.tasks.map((task) => {
+                      if (task.id !== input.taskId) return task
+                      return { ...task, progress: input.progress }
+                    })
+
+                    // Пересчитываем progress этапа
+                    const totalProgress = newTasks.reduce(
+                      (sum, t) => sum + t.progress,
+                      0
+                    )
+                    const avgProgress =
+                      newTasks.length > 0
+                        ? Math.round(totalProgress / newTasks.length)
+                        : 0
+
+                    return {
+                      ...stage,
+                      tasks: newTasks,
+                      progress: avgProgress,
+                    }
+                  }),
+                }
+              })
+            )
+
+            return { ...old, pages: newPages }
+          }
+        )
+      }
+
+      return { previousData, infiniteQueryKey }
+    },
+
+    onError: (error, _input, context) => {
+      console.error('[useUpdateTaskProgressOptimistic] Error:', error)
+      if (context?.previousData) {
+        queryClient.setQueryData(context.infiniteQueryKey, context.previousData)
+      }
+    },
+
+    // НЕ инвалидируем - optimistic update уже обновил кеш, Realtime синхронизирует
+  })
+}

@@ -82,6 +82,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска
     ],
   },
   {
@@ -89,6 +90,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
     invalidateKeys: [
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска (задачи)
     ],
   },
 

@@ -12,13 +12,10 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { Loader2, LayoutGrid, AlertCircle, Database, ChevronDown } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
 import { InlineFilter, type FilterOption } from '@/modules/inline-filter'
-import { queryKeys } from '@/modules/cache/keys/query-keys'
 import { useKanbanFiltersStore, KANBAN_FILTER_CONFIG } from '../stores'
 import { useKanbanFilterOptions } from '../filters/useFilterOptions'
-import { useKanbanSectionsInfinite, useStageStatuses } from '../hooks'
-import { updateStageStatus } from '../actions'
+import { useKanbanSectionsInfinite, useStageStatuses, useUpdateStageStatusOptimistic } from '../hooks'
 import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanSwimlane } from './KanbanSwimlane'
@@ -40,9 +37,6 @@ interface ViewSettings {
 export function KanbanBoard() {
   // State: загрузить все данные без фильтров
   const [loadAll, setLoadAll] = useState(false)
-
-  // Query client для инвалидации кеша
-  const queryClient = useQueryClient()
 
   // Фильтры
   const { filterString, setFilterString, getQueryParams } = useKanbanFiltersStore()
@@ -78,6 +72,11 @@ export function KanbanBoard() {
 
   // Загружаем статусы этапов из БД
   const { statuses, isLoading: statusesLoading } = useStageStatuses()
+
+  // Mutation для обновления статуса этапа (с оптимистичным обновлением)
+  const { mutate: updateStatus } = useUpdateStageStatusOptimistic(
+    filtersApplied ? queryParams : undefined
+  )
 
   // Local view state
   const [viewSettings, setViewSettings] = useState<ViewSettings>({
@@ -135,7 +134,7 @@ export function KanbanBoard() {
 
   // Handle drag end
   const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
+    (event: DragEndEvent) => {
       setActiveCard(null)
 
       const { active, over } = event
@@ -148,21 +147,17 @@ export function KanbanBoard() {
       // Only allow drops within the same section
       if (activeSectionId !== overSectionId) return
 
-      // Update stage status in database
-      const result = await updateStageStatus({
+      // Оптимистичное обновление статуса этапа:
+      // 1. UI обновится мгновенно
+      // 2. Запрос пойдёт на сервер в фоне
+      // 3. При ошибке - автоматический откат
+      updateStatus({
         stageId: activeStageId,
         sectionId: activeSectionId,
         newStatus: overStatus as StageStatus,
       })
-
-      if (result.success) {
-        // Invalidate cache to refetch data
-        queryClient.invalidateQueries({ queryKey: queryKeys.kanban.all })
-      } else {
-        console.error('Failed to update stage status:', result.error)
-      }
     },
-    [queryClient]
+    [updateStatus]
   )
 
   // Empty state - before data fetch (no filters, no loadAll)
