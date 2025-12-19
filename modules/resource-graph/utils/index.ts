@@ -516,19 +516,6 @@ export function getEmployeeColor(employeeId: string | null): string {
   return EMPLOYEE_COLORS[index]
 }
 
-/**
- * Получить инициалы из имени и фамилии
- *
- * @param firstName - Имя
- * @param lastName - Фамилия
- * @returns Инициалы (1-2 буквы)
- */
-export function getInitials(firstName: string | null, lastName: string | null): string {
-  const first = firstName?.charAt(0)?.toUpperCase() || ''
-  const last = lastName?.charAt(0)?.toUpperCase() || ''
-  return first + last || '?'
-}
-
 // ============================================================================
 // Profile Transformation
 // ============================================================================

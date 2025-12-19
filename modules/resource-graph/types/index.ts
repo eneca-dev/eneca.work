@@ -399,3 +399,15 @@ export interface ProjectStructure {
   objects: Array<{ id: string; name: string; stageId: string | null }>
   sections: Array<{ id: string; name: string; objectId: string | null }>
 }
+
+// ============================================================================
+// Stage Responsibles Types - Ответственные за этапы
+// ============================================================================
+
+/** Ответственный за этап декомпозиции */
+export interface StageResponsible {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  avatarUrl: string | null
+}
