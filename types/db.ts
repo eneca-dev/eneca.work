@@ -6660,6 +6660,39 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_statuses: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          kanban_order: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kanban_order?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sections: {
         Row: {
           external_id: string | null

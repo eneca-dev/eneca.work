@@ -84,6 +84,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.decomposition.all, // Этапы декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска
     ],
   },
   {
@@ -92,6 +93,7 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.decomposition.all, // Задачи декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска (задачи)
     ],
   },
 

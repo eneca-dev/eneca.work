@@ -291,6 +291,16 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Kanban
+  // -------------------------------------------------------------------------
+  kanban: {
+    all: ['kanban'] as const,
+    lists: () => [...queryKeys.kanban.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.kanban.lists(), filters] as const,
+    /** Infinite query key для пагинации */
+    infinite: (filters?: Record<string, unknown>) => [...queryKeys.kanban.list(filters), 'infinite'] as const,
+    details: () => [...queryKeys.kanban.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.kanban.details(), id] as const,
   // Section Statuses (статусы разделов)
   // -------------------------------------------------------------------------
   sectionStatuses: {
