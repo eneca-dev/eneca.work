@@ -4856,6 +4856,216 @@ export type Database = {
         }
         Relationships: []
       }
+      project_reports: {
+        Row: {
+          comment: string
+          created_at: string
+          created_by: string
+          report_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          comment: string
+          created_at?: string
+          created_by: string
+          report_id?: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          created_by?: string
+          report_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_org_structure"
+            referencedColumns: ["employee_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["manager_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_employee_workloads"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_my_work_analytics"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_organizational_structure_ui"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_lead_engineer_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["project_manager_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["section_responsible_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "view_users_with_details"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_cache_projects"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_project_structure"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "v_resource_graph"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_backup"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_timeline"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_project_tree_with_loadings"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_section_hierarchy"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_sections_with_loadings"
+            referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "project_reports_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "view_stage_employee_loadings"
+            referencedColumns: ["stage_id"]
+          },
+        ]
+      }
       project_tag_links: {
         Row: {
           assigned_at: string | null

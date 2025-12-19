@@ -24,11 +24,14 @@ import {
   getWorkLogsForSection,
   getLoadingsForSection,
   getStageReadinessForSection,
+  getStageReports,
   getStageResponsiblesForSection,
   updateItemProgress,
   updateLoadingDates,
   updateStageDates,
   updateSectionDates,
+  upsertStageReport,
+  deleteStageReport,
   createLoading as createLoadingAction,
   updateLoading as updateLoadingAction,
   deleteLoading as deleteLoadingAction,
@@ -43,6 +46,7 @@ import type {
   WorkLog,
   Loading,
   ReadinessPoint,
+  ProjectReport,
 } from '../types'
 
 import {
@@ -186,6 +190,61 @@ export const useStageReadiness = createDetailCacheQuery<Record<string, Readiness
 })
 
 // ============================================================================
+// Project Reports Hooks - Отчеты к стадиям
+// ============================================================================
+
+/**
+ * Хук для получения отчетов к стадии
+ *
+ * Загружается лениво при развороте стадии (enabled: true).
+ * Данные кешируются навечно, обновляются только через Realtime.
+ *
+ * @param stageId - ID стадии
+ * @param options - { enabled: boolean } - включить загрузку
+ *
+ * @example
+ * const { data: reports, isLoading } = useStageReports(stageId, { enabled: isExpanded })
+ */
+export const useStageReports = createDetailCacheQuery<ProjectReport[]>({
+  queryKey: (stageId) => queryKeys.resourceGraph.stageReports(stageId),
+  queryFn: getStageReports,
+  staleTime: Infinity, // Данные не устаревают, обновляются через Realtime
+})
+
+/**
+ * Хук для создания/обновления отчета к стадии
+ *
+ * Автоматически инвалидирует кеш отчетов стадии.
+ *
+ * @example
+ * const saveMutation = useSaveStageReport()
+ * saveMutation.mutate({ stageId: 'xxx', comment: 'Текст отчета' })
+ */
+export const useSaveStageReport = createCacheMutation({
+  mutationFn: upsertStageReport,
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.stageReports(input.stageId),
+    queryKeys.resourceGraph.all, // Ensure timeline refresh
+  ],
+})
+
+/**
+ * Хук для удаления отчета к стадии
+ *
+ * Автоматически инвалидирует кеш отчетов стадии.
+ *
+ * @example
+ * const deleteMutation = useDeleteStageReport()
+ * deleteMutation.mutate({ reportId: 'xxx', stageId: 'yyy' })
+ */
+export const useDeleteStageReport = createCacheMutation({
+  mutationFn: deleteStageReport,
+  invalidateKeys: (input) => [
+    queryKeys.resourceGraph.stageReports(input.stageId),
+    queryKeys.resourceGraph.all, // Ensure timeline refresh
+  ],
+})
+
 // Stage Responsibles Hooks - Ответственные за этапы
 // ============================================================================
 
