@@ -18,6 +18,7 @@ import type {
   Loading,
   ReadinessPoint,
   ProjectReport,
+  StageResponsible,
 } from '../types'
 import { transformRowsToHierarchy, transformProfileToCreatedBy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
@@ -1296,15 +1297,13 @@ export async function deleteStageReport(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка удаления отчета',
+    }
+  }
+}
+
+// ============================================================================
 // Stage Responsibles Actions - Ответственные за этапы
 // ============================================================================
-
-export interface StageResponsible {
-  id: string
-  firstName: string | null
-  lastName: string | null
-  avatarUrl: string | null
-}
 
 /**
  * Получить ответственных за этапы раздела

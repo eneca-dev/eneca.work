@@ -303,6 +303,9 @@ export const queryKeys = {
     infinite: (filters?: Record<string, unknown>) => [...queryKeys.kanban.list(filters), 'infinite'] as const,
     details: () => [...queryKeys.kanban.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.kanban.details(), id] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Section Statuses (статусы разделов)
   // -------------------------------------------------------------------------
   sectionStatuses: {

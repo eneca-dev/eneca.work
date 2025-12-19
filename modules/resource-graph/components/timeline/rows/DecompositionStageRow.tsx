@@ -18,8 +18,8 @@ import type {
   WorkLog,
   Loading,
   ReadinessPoint,
+  StageResponsible,
 } from '../../../types'
-import type { StageResponsible } from '../../../actions'
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid, ProgressCircle, PeriodBackground } from '../shared'
 import { LoadingBars, calculateLoadingsRowHeight, LOADING_DRAG_TYPE, type LoadingDragData } from '../LoadingBars'

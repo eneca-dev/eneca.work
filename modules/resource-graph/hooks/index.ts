@@ -37,8 +37,6 @@ import {
   deleteLoading as deleteLoadingAction,
 } from '../actions'
 
-import type { StageResponsible } from '../actions'
-
 import type {
   Project,
   ProjectTag,
@@ -47,6 +45,7 @@ import type {
   Loading,
   ReadinessPoint,
   ProjectReport,
+  StageResponsible,
 } from '../types'
 
 import {
