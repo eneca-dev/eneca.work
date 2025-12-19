@@ -31,6 +31,7 @@ export type {
   ProjectFilters,
   SectionFilters,
   LoadingFilters,
+  CheckpointFilters,
 } from './keys/query-keys'
 
 // Provider

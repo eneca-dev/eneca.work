@@ -51,6 +51,8 @@ export type {
   EmployeeViewData,
   // Progress
   ProgressUpdateData,
+  // Checkpoint
+  CheckpointCreateData,
 } from './types'
 
 // ============================================================================
@@ -81,6 +83,8 @@ export {
   useEmployeeViewModal,
   // Progress
   useProgressUpdateModal,
+  // Checkpoint
+  useCheckpointCreateModal,
 } from './hooks'
 
 // ============================================================================
@@ -106,6 +110,7 @@ export {
   openLoadingEdit,
   openEmployeeView,
   closeModal,
+  openCheckpointCreate,
 } from './stores/modal-store'
 
 // ============================================================================
@@ -139,6 +144,9 @@ export { LoadingModal, type LoadingModalProps } from './components/loading'
 
 // Employee
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'
+
+// Checkpoint
+export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
 
 // Global
 // export { GlobalModals } from './components/GlobalModals'

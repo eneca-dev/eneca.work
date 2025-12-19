@@ -54,6 +54,14 @@ export interface BudgetFilters extends BaseFilters {
   tagIds?: string[]
 }
 
+export interface CheckpointFilters extends BaseFilters {
+  sectionId?: string
+  projectId?: string
+  status?: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  dateFrom?: string
+  dateTo?: string
+}
+
 // ============================================================================
 // Query Keys Factory
 // ============================================================================
@@ -256,6 +264,30 @@ export const queryKeys = {
     all: ['budget-tags'] as const,
     list: () => [...queryKeys.budgetTags.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.budgetTags.all, 'detail', id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Checkpoints (чекпоинты/дедлайны)
+  // -------------------------------------------------------------------------
+  checkpoints: {
+    all: ['checkpoints'] as const,
+    lists: () => [...queryKeys.checkpoints.all, 'list'] as const,
+    list: (filters?: CheckpointFilters) => [...queryKeys.checkpoints.lists(), filters] as const,
+    details: () => [...queryKeys.checkpoints.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.checkpoints.details(), id] as const,
+    audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
+    bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
+    byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Checkpoint Types (типы чекпоинтов)
+  // -------------------------------------------------------------------------
+  checkpointTypes: {
+    all: ['checkpoint-types'] as const,
+    list: () => [...queryKeys.checkpointTypes.all, 'list'] as const,
+    details: () => [...queryKeys.checkpointTypes.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.checkpointTypes.details(), id] as const,
   },
 
   // -------------------------------------------------------------------------

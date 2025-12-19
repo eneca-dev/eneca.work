@@ -168,6 +168,17 @@ export interface ProgressUpdateData {
 }
 
 // ============================================================================
+// Checkpoint Modal Types
+// ============================================================================
+
+export interface CheckpointCreateData {
+  /** ID раздела */
+  sectionId: string
+  /** Название раздела */
+  sectionName: string
+}
+
+// ============================================================================
 // Global Modal Store Types
 // ============================================================================
 
@@ -186,6 +197,7 @@ export type ModalType =
   | 'loading-edit'
   | 'employee-view'
   | 'progress-update'
+  | 'checkpoint-create'
 
 export interface GlobalModalState {
   /** Текущая открытая модалка */
