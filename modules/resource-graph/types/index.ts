@@ -350,3 +350,24 @@ export interface TreeNode {
   children?: TreeNode[]
   data?: Record<string, unknown>
 }
+
+// ============================================================================
+// Filter Structure Types - для InlineFilter автокомплита
+// ============================================================================
+
+/** Организационная структура для фильтров */
+export interface OrgStructure {
+  subdivisions: Array<{ id: string; name: string }>
+  departments: Array<{ id: string; name: string; subdivisionId: string | null }>
+  teams: Array<{ id: string; name: string; departmentId: string | null }>
+  employees: Array<{ id: string; name: string; teamId: string | null }>
+}
+
+/** Проектная структура для фильтров */
+export interface ProjectStructure {
+  managers: Array<{ id: string; name: string }>
+  projects: Array<{ id: string; name: string; managerId: string | null }>
+  stages: Array<{ id: string; name: string; projectId: string | null }>
+  objects: Array<{ id: string; name: string; stageId: string | null }>
+  sections: Array<{ id: string; name: string; objectId: string | null }>
+}

@@ -265,6 +265,19 @@ export const queryKeys = {
     all: ['section-statuses'] as const,
     list: () => [...queryKeys.sectionStatuses.all, 'list'] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Filter Structure (структуры для автокомплита InlineFilter)
+  // -------------------------------------------------------------------------
+  filterStructure: {
+    all: ['filter-structure'] as const,
+    /** Организационная структура (подразделения, отделы) */
+    org: () => [...queryKeys.filterStructure.all, 'org'] as const,
+    /** Проектная структура (проекты) */
+    project: () => [...queryKeys.filterStructure.all, 'project'] as const,
+    /** Теги проектов */
+    tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
+  },
 } as const
 
 // ============================================================================

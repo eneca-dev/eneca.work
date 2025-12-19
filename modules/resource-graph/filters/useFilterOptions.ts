@@ -2,77 +2,60 @@
  * Resource Graph Filters - Filter Options Hooks
  *
  * Хуки для загрузки данных структур (для автокомплита InlineFilter)
+ * Используют фабрики из cache module
  */
 
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import {
+  createSimpleCacheQuery,
+  queryKeys,
+  staleTimePresets,
+} from '@/modules/cache'
 import { getOrgStructure, getProjectStructure, getProjectTags } from '../actions'
 import type { FilterOption } from '@/modules/inline-filter'
+import type { OrgStructure, ProjectStructure, ProjectTag } from '../types'
 
 // ============================================================================
-// Query Keys
-// ============================================================================
-
-const filterStructureKeys = {
-  all: ['filter-structure'] as const,
-  org: () => [...filterStructureKeys.all, 'org'] as const,
-  project: () => [...filterStructureKeys.all, 'project'] as const,
-  tags: () => [...filterStructureKeys.all, 'tags'] as const,
-}
-
-// ============================================================================
-// Base Structure Hooks
+// Base Structure Hooks (используют cache module фабрики)
 // ============================================================================
 
 /**
  * Загрузить организационную структуру
+ *
+ * @example
+ * const { data: orgStructure, isLoading } = useOrgStructure()
  */
-export function useOrgStructure() {
-  return useQuery({
-    queryKey: filterStructureKeys.org(),
-    queryFn: async () => {
-      const result = await getOrgStructure()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  })
-}
+export const useOrgStructure = createSimpleCacheQuery<OrgStructure>({
+  queryKey: queryKeys.filterStructure.org(),
+  queryFn: getOrgStructure,
+  staleTime: staleTimePresets.static, // 10 минут - структура редко меняется
+})
 
 /**
  * Загрузить проектную структуру
+ *
+ * @example
+ * const { data: projectStructure, isLoading } = useProjectStructure()
  */
-export function useProjectStructure() {
-  return useQuery({
-    queryKey: filterStructureKeys.project(),
-    queryFn: async () => {
-      const result = await getProjectStructure()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
-  })
-}
+export const useProjectStructure = createSimpleCacheQuery<ProjectStructure>({
+  queryKey: queryKeys.filterStructure.project(),
+  queryFn: getProjectStructure,
+  staleTime: staleTimePresets.medium, // 5 минут - проекты меняются чаще
+})
 
 /**
  * Загрузить теги проектов
+ *
+ * @example
+ * const { data: tags, isLoading } = useProjectTags()
  */
-export function useProjectTags() {
-  return useQuery({
-    queryKey: filterStructureKeys.tags(),
-    queryFn: async () => {
-      const result = await getProjectTags()
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  })
-}
+export const useProjectTags = createSimpleCacheQuery<ProjectTag[]>({
+  queryKey: queryKeys.filterStructure.tags(),
+  queryFn: getProjectTags,
+  staleTime: staleTimePresets.static, // 10 минут - теги редко меняются
+})
 
 // ============================================================================
 // Combined Filter Options Hook (для InlineFilter)
@@ -82,6 +65,9 @@ export function useProjectTags() {
  * Хук для получения всех опций фильтров в формате InlineFilter
  *
  * Возвращает массив FilterOption[] для автокомплита
+ *
+ * @example
+ * const { options, isLoading } = useFilterOptions()
  */
 export function useFilterOptions() {
   const { data: orgStructure, isLoading: loadingOrg } = useOrgStructure()

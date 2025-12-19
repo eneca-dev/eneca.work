@@ -29,6 +29,9 @@ import {
   updateLoadingDates,
   updateStageDates,
   updateSectionDates,
+  createLoading as createLoadingAction,
+  updateLoading as updateLoadingAction,
+  deleteLoading as deleteLoadingAction,
 } from '../actions'
 
 import type { StageResponsible } from '../actions'
@@ -41,6 +44,12 @@ import type {
   Loading,
   ReadinessPoint,
 } from '../types'
+
+import {
+  updateItemProgressInHierarchy,
+  updateDecompositionStageDates,
+  updateSectionDatesInHierarchy,
+} from '../utils'
 
 import type { FilterQueryParams } from '@/modules/inline-filter'
 
@@ -224,68 +233,6 @@ interface UpdateItemProgressInput {
 }
 
 /**
- * Рекурсивно обновляет progress у item в иерархии проектов
- * Включает защитные проверки для случаев когда структура данных неполная
- */
-function updateProgressInHierarchy(
-  projects: Project[] | undefined,
-  itemId: string,
-  newProgress: number
-): Project[] {
-  if (!projects || !Array.isArray(projects)) return projects || []
-
-  return projects.map((project) => {
-    // Проверяем что project имеет нужную структуру
-    if (!project?.stages || !Array.isArray(project.stages)) {
-      return project
-    }
-
-    return {
-      ...project,
-      stages: project.stages.map((stage) => {
-        if (!stage?.objects || !Array.isArray(stage.objects)) {
-          return stage
-        }
-
-        return {
-          ...stage,
-          objects: stage.objects.map((obj) => {
-            if (!obj?.sections || !Array.isArray(obj.sections)) {
-              return obj
-            }
-
-            return {
-              ...obj,
-              sections: obj.sections.map((section) => {
-                if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
-                  return section
-                }
-
-                return {
-                  ...section,
-                  decompositionStages: section.decompositionStages.map((dStage) => {
-                    if (!dStage?.items || !Array.isArray(dStage.items)) {
-                      return dStage
-                    }
-
-                    return {
-                      ...dStage,
-                      items: dStage.items.map((item) =>
-                        item.id === itemId ? { ...item, progress: newProgress } : item
-                      ),
-                    }
-                  }),
-                }
-              }),
-            }
-          }),
-        }
-      }),
-    }
-  })
-}
-
-/**
  * Мутация для обновления прогресса задачи с optimistic update
  *
  * @example
@@ -299,11 +246,9 @@ export const useUpdateItemProgress = createCacheMutation<
   mutationFn: ({ itemId, progress }) => updateItemProgress(itemId, progress),
 
   optimisticUpdate: {
-    // Обновляем все списки resource graph (с любыми фильтрами)
     queryKey: queryKeys.resourceGraph.all,
     updater: (oldData, input) => {
-      // oldData это Project[] из кеша
-      return updateProgressInHierarchy(oldData as Project[] | undefined, input.itemId, input.progress)
+      return updateItemProgressInHierarchy(oldData as Project[] | undefined, input.itemId, input.progress)
     },
   },
 
@@ -388,60 +333,6 @@ interface UpdateStageDatesInput {
 }
 
 /**
- * Рекурсивно обновляет даты этапа в иерархии проектов
- */
-function updateStageDatesInHierarchy(
-  projects: Project[] | undefined,
-  stageId: string,
-  startDate: string,
-  finishDate: string
-): Project[] {
-  if (!projects || !Array.isArray(projects)) return projects || []
-
-  return projects.map((project) => {
-    if (!project?.stages || !Array.isArray(project.stages)) {
-      return project
-    }
-
-    return {
-      ...project,
-      stages: project.stages.map((stage) => {
-        if (!stage?.objects || !Array.isArray(stage.objects)) {
-          return stage
-        }
-
-        return {
-          ...stage,
-          objects: stage.objects.map((obj) => {
-            if (!obj?.sections || !Array.isArray(obj.sections)) {
-              return obj
-            }
-
-            return {
-              ...obj,
-              sections: obj.sections.map((section) => {
-                if (!section?.decompositionStages || !Array.isArray(section.decompositionStages)) {
-                  return section
-                }
-
-                return {
-                  ...section,
-                  decompositionStages: section.decompositionStages.map((dStage) =>
-                    dStage.id === stageId
-                      ? { ...dStage, startDate, finishDate }
-                      : dStage
-                  ),
-                }
-              }),
-            }
-          }),
-        }
-      }),
-    }
-  })
-}
-
-/**
  * Мутация для обновления дат этапа декомпозиции с optimistic update
  *
  * @example
@@ -462,7 +353,7 @@ export const useUpdateStageDates = createCacheMutation<
   optimisticUpdate: {
     queryKey: queryKeys.resourceGraph.all,
     updater: (oldData, input) => {
-      return updateStageDatesInHierarchy(
+      return updateDecompositionStageDates(
         oldData as Project[] | undefined,
         input.stageId,
         input.startDate,
@@ -479,51 +370,6 @@ interface UpdateSectionDatesInput {
   sectionId: string
   startDate: string
   endDate: string
-}
-
-/**
- * Рекурсивно обновляет даты раздела в иерархии проектов
- */
-function updateSectionDatesInHierarchy(
-  projects: Project[] | undefined,
-  sectionId: string,
-  startDate: string,
-  endDate: string
-): Project[] {
-  if (!projects || !Array.isArray(projects)) return projects || []
-
-  return projects.map((project) => {
-    if (!project?.stages || !Array.isArray(project.stages)) {
-      return project
-    }
-
-    return {
-      ...project,
-      stages: project.stages.map((stage) => {
-        if (!stage?.objects || !Array.isArray(stage.objects)) {
-          return stage
-        }
-
-        return {
-          ...stage,
-          objects: stage.objects.map((obj) => {
-            if (!obj?.sections || !Array.isArray(obj.sections)) {
-              return obj
-            }
-
-            return {
-              ...obj,
-              sections: obj.sections.map((section) =>
-                section.id === sectionId
-                  ? { ...section, startDate, endDate }
-                  : section
-              ),
-            }
-          }),
-        }
-      }),
-    }
-  })
 }
 
 /**
@@ -553,6 +399,212 @@ export const useUpdateSectionDates = createCacheMutation<
         input.startDate,
         input.endDate
       )
+    },
+  },
+})
+
+// ============================================================================
+// Loading CRUD Mutation Hooks
+// ============================================================================
+
+/**
+ * Тип входных данных для создания загрузки
+ */
+interface CreateLoadingInput {
+  sectionId: string
+  stageId: string
+  responsibleId: string
+  startDate: string
+  endDate: string
+  rate: number
+  comment?: string
+  // Данные сотрудника для optimistic update
+  employee?: {
+    firstName: string | null
+    lastName: string | null
+    name: string | null
+    avatarUrl: string | null
+  }
+}
+
+/**
+ * Создаёт временную загрузку для optimistic update
+ */
+function createOptimisticLoading(input: CreateLoadingInput): Loading {
+  return {
+    id: `temp-${Date.now()}`, // Временный ID, будет заменён после refetch
+    stageId: input.stageId,
+    startDate: input.startDate,
+    finishDate: input.endDate,
+    rate: input.rate,
+    comment: input.comment || null,
+    status: 'active',
+    isShortage: false,
+    employee: {
+      id: input.responsibleId,
+      firstName: input.employee?.firstName || null,
+      lastName: input.employee?.lastName || null,
+      name: input.employee?.name || null,
+      avatarUrl: input.employee?.avatarUrl || null,
+    },
+  }
+}
+
+/**
+ * Мутация для создания новой загрузки с optimistic update
+ *
+ * @example
+ * const mutation = useCreateLoading()
+ * mutation.mutate({
+ *   sectionId: 'xxx',
+ *   stageId: 'yyy',
+ *   responsibleId: 'zzz',
+ *   startDate: '2024-01-01',
+ *   endDate: '2024-01-15',
+ *   rate: 1,
+ *   comment: 'Комментарий',
+ *   employee: { firstName: 'John', lastName: 'Doe', name: 'John Doe', avatarUrl: null }
+ * })
+ */
+export const useCreateLoading = createCacheMutation<
+  CreateLoadingInput,
+  { loadingId: string }
+>({
+  // Передаём action напрямую - factory сам обрабатывает ActionResult
+  mutationFn: createLoadingAction,
+
+  // Optimistic update - добавляем загрузку в кеш сразу
+  optimisticUpdate: {
+    queryKey: (input) => queryKeys.resourceGraph.loadings(input.sectionId),
+    updater: (oldData, input) => {
+      const loadings = (oldData as Loading[] | undefined) || []
+      const newLoading = createOptimisticLoading(input)
+      return [...loadings, newLoading]
+    },
+  },
+
+  // Инвалидируем кеш после создания чтобы получить реальный ID
+  invalidateKeys: (input) => [queryKeys.resourceGraph.loadings(input.sectionId)],
+})
+
+/**
+ * Тип входных данных для обновления загрузки
+ */
+interface UpdateLoadingInput {
+  loadingId: string
+  sectionId: string // Нужен для инвалидации кеша
+  updates: {
+    responsibleId?: string
+    rate?: number
+    comment?: string
+    stageId?: string
+    startDate?: string
+    endDate?: string
+  }
+}
+
+/**
+ * Обновляет загрузку в массиве (для optimistic update)
+ */
+function updateLoadingInCache(
+  loadings: Loading[] | undefined,
+  loadingId: string,
+  updates: UpdateLoadingInput['updates']
+): Loading[] {
+  if (!loadings) return []
+
+  return loadings.map((loading) => {
+    if (loading.id !== loadingId) return loading
+
+    return {
+      ...loading,
+      ...(updates.rate !== undefined && { rate: updates.rate }),
+      ...(updates.comment !== undefined && { comment: updates.comment }),
+      ...(updates.startDate && { startDate: updates.startDate }),
+      ...(updates.endDate && { finishDate: updates.endDate }),
+      ...(updates.stageId && { stageId: updates.stageId }),
+      // responsibleId требует refetch - не обновляем optimistic
+    }
+  })
+}
+
+/**
+ * Мутация для обновления загрузки с optimistic update
+ *
+ * @example
+ * const mutation = useUpdateLoading()
+ * mutation.mutate({
+ *   loadingId: 'xxx',
+ *   sectionId: 'yyy',
+ *   updates: { rate: 0.5, comment: 'Новый комментарий' }
+ * })
+ */
+export const useUpdateLoading = createCacheMutation<
+  UpdateLoadingInput,
+  { loadingId: string }
+>({
+  // Wrapper нужен т.к. action принимает 2 аргумента, а не объект
+  // Возвращаем ActionResult напрямую - factory сам обработает
+  mutationFn: ({ loadingId, updates }) => updateLoadingAction(loadingId, updates),
+
+  optimisticUpdate: {
+    queryKey: (input) => queryKeys.resourceGraph.loadings(input.sectionId),
+    updater: (oldData, input) => {
+      return updateLoadingInCache(
+        oldData as Loading[] | undefined,
+        input.loadingId,
+        input.updates
+      )
+    },
+  },
+
+  // При изменении responsibleId или stageId нужен refetch
+  invalidateKeys: (input) => {
+    if (input.updates.responsibleId || input.updates.stageId) {
+      return [queryKeys.resourceGraph.loadings(input.sectionId)]
+    }
+    return []
+  },
+})
+
+/**
+ * Тип входных данных для удаления загрузки
+ */
+interface DeleteLoadingInput {
+  loadingId: string
+  sectionId: string // Нужен для инвалидации кеша
+}
+
+/**
+ * Удаляет загрузку из массива (для optimistic update)
+ */
+function deleteLoadingFromCache(
+  loadings: Loading[] | undefined,
+  loadingId: string
+): Loading[] {
+  if (!loadings) return []
+  return loadings.filter((loading) => loading.id !== loadingId)
+}
+
+/**
+ * Мутация для удаления загрузки с optimistic update
+ *
+ * @example
+ * const mutation = useDeleteLoading()
+ * mutation.mutate({ loadingId: 'xxx', sectionId: 'yyy' })
+ */
+export const useDeleteLoading = createCacheMutation<
+  DeleteLoadingInput,
+  { loadingId: string }
+>({
+  // Wrapper нужен т.к. action принимает только loadingId
+  // Возвращаем ActionResult напрямую - factory сам обработает
+  mutationFn: ({ loadingId }) => deleteLoadingAction(loadingId),
+
+  optimisticUpdate: {
+    queryKey: (input) => queryKeys.resourceGraph.loadings(input.sectionId),
+    updater: (oldData, input) => {
+      return deleteLoadingFromCache(oldData as Loading[] | undefined, input.loadingId)
     },
   },
 })
