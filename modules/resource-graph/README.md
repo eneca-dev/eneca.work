@@ -199,14 +199,14 @@ function getProgressColor(progress: number): string {
 
 ## К разработке
 
-- [ ] **stage_readiness_snapshots** — таблица для хранения истории готовности этапов
+- [x] **stage_readiness_snapshots** — таблица для хранения истории готовности этапов
   - Структура: `(id, stage_id, snapshot_date, readiness_value, created_at)`
   - Функция `calculate_stage_readiness(stage_id)` для расчёта
   - Функция `create_daily_stage_readiness_snapshots(date)` для pg_cron
-- [ ] pg_cron для автоматического создания снэпшотов фактической готовности
-- [ ] UI для ввода/редактирования плановой готовности (checkpoints)
+- [x] pg_cron для автоматического создания снэпшотов фактической готовности
+- [x] UI для ввода/редактирования плановой готовности (checkpoints) — вкладка "План" в модалке раздела
+- [x] Модальные окна редактирования раздела (SectionModal)
 - [ ] Drag-and-drop для изменения сроков
-- [ ] Модальные окна редактирования раздела
 - [ ] Экспорт данных (Excel, PDF)
 - [ ] Группировка по ответственному / отделу
 - [ ] Сравнение план/факт готовности
@@ -249,6 +249,75 @@ function getProgressColor(progress: number): string {
 - **Строка 2:** Status chip (outlined style) + Даты (ДД.ММ — ДД.ММ)
 - **Фоновая заливка** периода раздела (полупрозрачная)
 
+### Модальное окно раздела (SectionModal)
+
+Модалка с вкладками для редактирования раздела:
+
+| Вкладка | Описание |
+|---------|----------|
+| **Обзор** | Основные параметры: название, ответственный, даты, статус |
+| **Задачи** | Список и управление задачами раздела |
+| **План** | Контрольные точки плановой готовности (checkpoints) |
+
+#### Вкладка "План"
+
+- **CRUD операции** для контрольных точек через Server Actions
+- **Inline-редактирование** даты и процента готовности
+- **Хуки:** `useReadinessCheckpoints`, `useCreateReadinessCheckpoint`, `useUpdateReadinessCheckpoint`, `useDeleteReadinessCheckpoint`
+- **Инвалидация кеша:** `queryKeys.sections.readinessCheckpoints(sectionId)`, `queryKeys.resourceGraph.all`
+
+### Объект (Object Row) — Агрегированные метрики
+
+Объект отображает **агрегированные графики** из всех своих разделов:
+- **Плановая готовность** — пунктирная зелёная линия
+- **Фактическая готовность** — синяя область
+- **Расходование бюджета** — оранжевая область
+
+#### Поведение при развороте:
+- **Свёрнут** → графики цветные (полная opacity)
+- **Развёрнут** → графики серые и полупрозрачные (`opacity-30 saturate-50`)
+
+#### Алгоритм агрегации плановой готовности
+
+**Проблема:** Разные разделы имеют чекпоинты на разные даты. Простое взвешенное среднее по датам даёт скачки.
+
+**Решение:** Интерполяция + монотонный рост.
+
+```
+Для каждой ключевой даты (все чекпоинты + начало/конец всех разделов):
+  1. Для каждого раздела интерполируем план на эту дату:
+     ├── До startDate раздела → 0%
+     ├── После endDate раздела → 100%
+     └── Внутри периода:
+         ├── Между чекпоинтами → линейная интерполяция
+         ├── До первого чекпоинта → от 0% к первому чекпоинту
+         └── После последнего чекпоинта → от последнего к 100%
+
+  2. Вычисляем взвешенное среднее:
+     value = Σ(plan_раздела × плановые_часы_раздела) / Σ(плановые_часы)
+
+  3. Гарантируем монотонный рост:
+     if value[i] < value[i-1] → value[i] = value[i-1]
+```
+
+**Результат:** План плавно растёт от 0% до 100%, без скачков вниз.
+
+#### Веса для агрегации
+
+Вес каждого раздела = сумма `plannedHours` всех его элементов декомпозиции:
+```typescript
+sectionWeight = Σ(item.plannedHours) для всех items во всех stages раздела
+```
+
+Если ни у одного раздела нет плановых часов — используются равные веса.
+
+#### Агрегация фактической готовности и бюджета
+
+Фактическая готовность и бюджет агрегируются проще — взвешенное среднее только по тем датам, где есть данные:
+```
+value = Σ(actual_раздела × вес_раздела) / Σ(весов_разделов_с_данными)
+```
+
 ### Плановая готовность
 
 - **Таблица:** `section_readiness_checkpoints`
@@ -265,19 +334,19 @@ function getProgressColor(progress: number): string {
 - **Функции PostgreSQL:**
   - `calculate_section_readiness(section_id)` — расчёт текущей готовности
   - `create_daily_readiness_snapshots(date)` — создание снэпшотов
-- **Визуализация:** вертикальные столбики в каждой ячейке дня
-- **Цветовая градация:**
-  - Зелёный (80%+)
-  - Жёлтый (50-79%)
-  - Оранжевый (20-49%)
-  - Красный (<20%)
+- **Визуализация:** SVG area chart (заливка с линией)
+- **Без интерполяции:** график строится ступеньками — если нет данных на дату, используется последнее известное значение
+- **Цвет:** синий (#3b82f6) с градиентной заливкой
 
 ### Готовность этапа декомпозиции (DecompositionStage)
 
-- **Расчёт:** client-side, взвешенное среднее по элементам
+- **Таблица снэпшотов:** `stage_readiness_snapshots`
+- **Расчёт:** PostgreSQL функция `calculate_stage_readiness(stage_id)`, взвешенное среднее по элементам
   - Формула: `SUM(item.progress * item.plannedHours) / SUM(item.plannedHours)`
-- **Визуализация:** `ProgressCircle` — круговой индикатор с процентом внутри
-- **Цвет кольца:** берётся из статуса этапа (`stage.status.color`)
+- **Визуализация:** `StageReadinessArea` — SVG area chart с тултипами
+- **Без интерполяции:** график строится ступеньками — если нет данных на дату, используется последнее известное значение
+- **Цвет линии:** берётся из статуса этапа (`stage.status.color`)
+- **ProgressCircle:** круговой индикатор в sidebar с процентом внутри
 - **Отображение часов:** `{факт}/{план}` рядом с кольцом
 - **Даты:** компактный формат `ДД.ММ — ДД.ММ`
 
@@ -336,7 +405,8 @@ modules/resource-graph/
 │       ├── TimelineRow.tsx    # Все row компоненты
 │       ├── TimelineBar.tsx    # Бар периода
 │       ├── ReadinessGraph.tsx # Линия плановой готовности
-│       └── StageReadinessArea.tsx # Area chart готовности этапов
+│       ├── ActualReadinessArea.tsx # Area chart фактической готовности раздела
+│       └── StageReadinessArea.tsx  # Area chart готовности этапов
 ├── utils/
 │   └── index.ts               # Утилиты трансформации
 └── constants/
@@ -398,8 +468,9 @@ resourceGraph: {
 | `sections` | `resourceGraph.all` |
 | `decomposition_stages` | `resourceGraph.all` |
 | `decomposition_items` | `resourceGraph.all` |
-| `section_readiness_checkpoints` | `resourceGraph.all` |
+| `section_readiness_checkpoints` | `resourceGraph.all`, `sections.readinessCheckpoints` |
 | `section_readiness_snapshots` | `resourceGraph.all` |
+| `stage_readiness_snapshots` | `resourceGraph.all` |
 
 ---
 
@@ -413,8 +484,9 @@ resourceGraph: {
 
 | Таблица | Описание |
 |---------|----------|
-| `section_readiness_checkpoints` | Плановая готовность (date, value) |
-| `section_readiness_snapshots` | Фактическая готовность (date, value) |
+| `section_readiness_checkpoints` | Плановая готовность раздела (date, value) |
+| `section_readiness_snapshots` | Фактическая готовность раздела (date, value) |
+| `stage_readiness_snapshots` | Фактическая готовность этапа декомпозиции (date, value) |
 
 ### Functions
 
@@ -423,9 +495,17 @@ resourceGraph: {
 SELECT calculate_section_readiness('section-uuid');
 -- Returns: INTEGER (0-100)
 
--- Создание снэпшотов за дату
+-- Расчёт текущей готовности этапа декомпозиции
+SELECT calculate_stage_readiness('stage-uuid');
+-- Returns: INTEGER (0-100)
+
+-- Создание снэпшотов готовности разделов за дату
 SELECT * FROM create_daily_readiness_snapshots('2024-01-15');
 -- Returns: TABLE(section_id, readiness, action)
+
+-- Создание снэпшотов готовности этапов за дату
+SELECT * FROM create_daily_stage_readiness_snapshots('2024-01-15');
+-- Returns: TABLE(stage_id, readiness, action)
 ```
 
 ---
@@ -435,7 +515,9 @@ SELECT * FROM create_daily_readiness_snapshots('2024-01-15');
 ```typescript
 // constants/index.ts
 ROW_HEIGHT = 40          // Обычная строка
+OBJECT_ROW_HEIGHT = 56   // Строка объекта (с агрегированными графиками)
 SECTION_ROW_HEIGHT = 56  // Двухстрочная строка раздела
+STAGE_ROW_HEIGHT = 64    // Строка этапа декомпозиции
 DAY_CELL_WIDTH = 36      // Ширина ячейки дня
 SIDEBAR_WIDTH = 320      // Ширина боковой панели
 ```

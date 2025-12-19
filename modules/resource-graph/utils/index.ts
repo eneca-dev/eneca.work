@@ -516,15 +516,29 @@ export function getEmployeeColor(employeeId: string | null): string {
   return EMPLOYEE_COLORS[index]
 }
 
-/**
- * Получить инициалы из имени и фамилии
- *
- * @param firstName - Имя
- * @param lastName - Фамилия
- * @returns Инициалы (1-2 буквы)
- */
-export function getInitials(firstName: string | null, lastName: string | null): string {
-  const first = firstName?.charAt(0)?.toUpperCase() || ''
-  const last = lastName?.charAt(0)?.toUpperCase() || ''
-  return first + last || '?'
-}
+// ============================================================================
+// Re-exports from format.ts
+// ============================================================================
+
+export {
+  formatHoursCompact,
+  formatBudgetAmount,
+  formatDateShort,
+  formatDateFull,
+  formatRate,
+  getInitials,
+  getProgressColor,
+} from './format'
+
+// ============================================================================
+// Re-exports from hierarchy.ts
+// ============================================================================
+
+export {
+  updateInHierarchy,
+  updateByIdInHierarchy,
+  updateItemProgress as updateItemProgressInHierarchy,
+  updateDecompositionStageDates,
+  updateSectionDates as updateSectionDatesInHierarchy,
+  type HierarchyLevel,
+} from './hierarchy'

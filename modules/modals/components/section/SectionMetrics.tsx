@@ -3,6 +3,12 @@
 import { useMemo } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import type { Section } from '@/modules/resource-graph/types'
 
 interface SectionMetricsProps {
@@ -98,34 +104,66 @@ export function SectionMetrics({ section, compact = false }: SectionMetricsProps
     ? TrendingDown
     : Minus
 
-  // Compact inline layout
+  // Compact inline layout with tooltips
   if (compact) {
     return (
-      <div className="flex items-center gap-3 text-[10px]">
-        {/* План */}
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">П:</span>
-          <span className="font-medium text-slate-300 font-mono">{metrics.planned}%</span>
-        </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex items-center gap-3 text-[10px]">
+          {/* План */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 cursor-help">
+                <span className="text-slate-500">П:</span>
+                <span className="font-medium text-slate-300 font-mono">{metrics.planned}%</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <p className="font-medium">Плановая готовность</p>
+              <p className="text-slate-400">Интерполированное значение на сегодня</p>
+            </TooltipContent>
+          </Tooltip>
 
-        {/* Факт с отклонением */}
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Ф:</span>
-          <span className="font-medium text-slate-300 font-mono">{metrics.actual}%</span>
-          {metrics.deviation !== 0 && (
-            <span className={cn('flex items-center gap-0.5', deviationColor)}>
-              <DeviationIcon className="w-2.5 h-2.5" />
-              <span>{metrics.deviation > 0 ? '+' : ''}{metrics.deviation}</span>
-            </span>
-          )}
-        </div>
+          {/* Факт с отклонением */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 cursor-help">
+                <span className="text-slate-500">Ф:</span>
+                <span className="font-medium text-slate-300 font-mono">{metrics.actual}%</span>
+                {metrics.deviation !== 0 && (
+                  <span className={cn('flex items-center gap-0.5', deviationColor)}>
+                    <DeviationIcon className="w-2.5 h-2.5" />
+                    <span>{metrics.deviation > 0 ? '+' : ''}{metrics.deviation}</span>
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <p className="font-medium">Фактическая готовность</p>
+              <p className="text-slate-400">
+                {metrics.deviation > 0
+                  ? `Опережение плана на ${metrics.deviation}%`
+                  : metrics.deviation < 0
+                  ? `Отставание от плана на ${Math.abs(metrics.deviation)}%`
+                  : 'Соответствует плану'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
 
-        {/* Бюджет */}
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Б:</span>
-          <span className="font-medium text-amber-400 font-mono">{formatCurrency(metrics.spent)}</span>
+          {/* Бюджет */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 cursor-help">
+                <span className="text-slate-500">Б:</span>
+                <span className="font-medium text-amber-400 font-mono">{formatCurrency(metrics.spent)}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <p className="font-medium">Израсходовано бюджета</p>
+              <p className="text-slate-400">{metrics.spent.toLocaleString('ru-RU')} ₽</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
-      </div>
+      </TooltipProvider>
     )
   }
 

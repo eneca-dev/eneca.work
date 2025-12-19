@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { differenceInDays, parseISO, addDays, format, subDays } from 'date-fns'
+import { parseISO, addDays, format, subDays } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import type { ReadinessPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH } from '../../constants'
@@ -48,7 +48,7 @@ export function StageReadinessArea({
 }: StageReadinessAreaProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
-  // Вычисляем точки с интерполяцией и дельтой
+  // Вычисляем точки БЕЗ интерполяции (ступеньки)
   const points = useMemo(() => {
     if (!snapshots || snapshots.length === 0) return []
 
@@ -73,6 +73,7 @@ export function StageReadinessArea({
     const topPadding = rowHeight * 0.1
 
     let prevValue: number | null = null
+    let lastKnownValue = sortedSnapshots[0].value
 
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
@@ -87,8 +88,10 @@ export function StageReadinessArea({
       const exactValue = snapshotMap.get(dateKey)
       if (exactValue !== undefined) {
         value = exactValue
+        lastKnownValue = exactValue
       } else {
-        value = interpolateValue(dayDate, sortedSnapshots)
+        // Ступенька: используем последнее известное значение
+        value = lastKnownValue
         isInterpolated = true
       }
 
@@ -98,8 +101,8 @@ export function StageReadinessArea({
       // Y координата
       const y = topPadding + graphHeight * (1 - value / 100)
 
-      // Дельта относительно предыдущего дня
-      const delta = prevValue !== null ? value - prevValue : null
+      // Дельта относительно предыдущего дня (только для реальных точек)
+      const delta = prevValue !== null && !isInterpolated ? value - prevValue : null
 
       result.push({ x, y, value, date: dateKey, isInterpolated, delta })
       prevValue = value
@@ -285,41 +288,10 @@ export function StageReadinessArea({
 }
 
 /**
- * Интерполирует значение между ближайшими точками
- */
-function interpolateValue(date: Date, snapshots: ReadinessPoint[]): number {
-  let leftPoint: ReadinessPoint | null = null
-  let rightPoint: ReadinessPoint | null = null
-
-  for (const snap of snapshots) {
-    const snapDate = parseISO(snap.date)
-    if (snapDate <= date) {
-      leftPoint = snap
-    }
-    if (snapDate >= date && !rightPoint) {
-      rightPoint = snap
-      break
-    }
-  }
-
-  if (!leftPoint && rightPoint) return rightPoint.value
-  if (leftPoint && !rightPoint) return leftPoint.value
-  if (!leftPoint || !rightPoint) return 0
-
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) return leftPoint.value
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return leftPoint.value + (rightPoint.value - leftPoint.value) * ratio
-}
-
-/**
  * Хелпер для вычисления прироста за сегодня
  * Используется в sidebar этапа
+ *
+ * Без интерполяции: сравнивает только реальные снэпшоты
  */
 export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null {
   if (!snapshots || snapshots.length === 0) return null
@@ -332,7 +304,7 @@ export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null 
     new Date(a.date).getTime() - new Date(b.date).getTime()
   )
 
-  // Ищем значения за сегодня и вчера
+  // Ищем точные значения за сегодня и вчера
   let todayValue: number | null = null
   let yesterdayValue: number | null = null
 
@@ -341,15 +313,24 @@ export function calculateTodayDelta(snapshots: ReadinessPoint[]): number | null 
     if (snap.date === yesterday) yesterdayValue = snap.value
   }
 
-  // Если нет точного значения за сегодня, берём последнее
+  // Если нет точного значения за сегодня, берём последнее известное
   if (todayValue === null && sorted.length > 0) {
     todayValue = sorted[sorted.length - 1].value
   }
 
-  // Если нет точного значения за вчера, интерполируем
+  // Если нет точного значения за вчера, ищем последнее известное до вчера
   if (yesterdayValue === null && sorted.length > 0) {
-    const yesterdayDate = subDays(new Date(), 1)
-    yesterdayValue = interpolateValue(yesterdayDate, sorted)
+    const yesterdayDate = new Date(yesterday)
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (new Date(sorted[i].date) < yesterdayDate) {
+        yesterdayValue = sorted[i].value
+        break
+      }
+    }
+    // Если не нашли ничего до вчера, берём первое значение
+    if (yesterdayValue === null) {
+      yesterdayValue = sorted[0].value
+    }
   }
 
   if (todayValue !== null && yesterdayValue !== null) {
