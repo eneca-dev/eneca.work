@@ -1,9 +1,13 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { KANBAN_COLUMNS } from '../constants'
+import type { StageStatus } from '../hooks/useStageStatuses'
 
-export function KanbanHeader() {
+interface KanbanHeaderProps {
+  statuses: StageStatus[]
+}
+
+export function KanbanHeader({ statuses }: KanbanHeaderProps) {
   return (
     <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b">
       <div className="flex h-full">
@@ -12,29 +16,18 @@ export function KanbanHeader() {
 
         {/* Column Headers */}
         <div className="flex flex-1 gap-0">
-          {KANBAN_COLUMNS.map((column) => (
+          {statuses.map((status) => (
             <div
-              key={column.id}
-              className={cn(
-                'flex-1',
-                'px-3 py-3',
-                column.bgColor
-              )}
+              key={status.id}
+              className="flex-1 px-3 py-3 bg-muted/30"
             >
               <div className="flex items-center gap-2">
                 <div
-                  className={cn(
-                    'w-2 h-2 rounded-full',
-                    column.id === 'backlog' && 'bg-slate-400',
-                    column.id === 'planned' && 'bg-teal-500',
-                    column.id === 'in_progress' && 'bg-orange-500',
-                    column.id === 'paused' && 'bg-stone-500',
-                    column.id === 'review' && 'bg-indigo-500',
-                    column.id === 'done' && 'bg-emerald-500'
-                  )}
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: status.color }}
                 />
-                <span className={cn('text-sm font-medium', column.color)}>
-                  {column.title}
+                <span className="text-sm font-medium text-foreground/90">
+                  {status.name}
                 </span>
               </div>
             </div>
