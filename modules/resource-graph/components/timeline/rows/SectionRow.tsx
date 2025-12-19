@@ -203,7 +203,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
     <>
       <div
         className={cn(
-          'flex hover:bg-muted/30 transition-colors',
+          'flex',
           // Убираем нижнюю границу когда развёрнут (BudgetsRow продолжает раздел)
           !isExpanded && 'border-b border-border/50'
         )}

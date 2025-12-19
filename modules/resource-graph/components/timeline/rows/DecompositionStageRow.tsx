@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { format, parseISO } from 'date-fns'
-import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus } from 'lucide-react'
+import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -241,7 +241,7 @@ export function DecompositionStageRow({
         {/* Sidebar - compact two-line layout */}
         <div
           className={cn(
-            'flex flex-col justify-center gap-1 shrink-0 border-r border-border px-2',
+            'flex flex-col justify-center gap-1 shrink-0 border-r border-border px-2 relative',
             'sticky left-0 z-20 bg-background'
           )}
           style={{
@@ -249,6 +249,17 @@ export function DecompositionStageRow({
             paddingLeft: 8 + depth * 16,
           }}
         >
+          {/* Create loading button - positioned at right edge of sidebar */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsLoadingModalOpen(true)
+            }}
+          >
+            <UserPlus className="w-3 h-3" />
+            <span>Загрузка</span>
+          </button>
           {/* First row: Expand + Icon + Name + Create loading button */}
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Expand/Collapse */}
@@ -298,7 +309,6 @@ export function DecompositionStageRow({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
           </div>
 
           {/* Second row: Progress + Status + Avatars + Task count + Create task button */}
@@ -357,6 +367,25 @@ export function DecompositionStageRow({
               </span>
             )}
 
+            {/* Dates display or "Разместить" button */}
+            {stage.startDate && stage.finishDate ? (
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+                <Calendar className="w-3 h-3" />
+                {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
+              </span>
+            ) : (
+              <button
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-muted-foreground/50 text-[9px] text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsStageModalOpen(true)
+                }}
+              >
+                <MapPin className="w-3 h-3" />
+                Разместить
+              </button>
+            )}
+
             {/* Spacer */}
             <div className="flex-1" />
 
@@ -399,13 +428,6 @@ export function DecompositionStageRow({
               </div>
             )}
 
-            {/* Task count badge (when collapsed) */}
-            {!isExpanded && hasChildren && (
-              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                {stage.items.length} {stage.items.length === 1 ? 'задача' : stage.items.length < 5 ? 'задачи' : 'задач'}
-              </span>
-            )}
-
             {/* Create task button - visible on hover */}
             <TooltipProvider delayDuration={300}>
               <Tooltip>
@@ -430,17 +452,6 @@ export function DecompositionStageRow({
 
         {/* Timeline area - split into two zones */}
         <div className="relative" style={{ width: timelineWidth }}>
-          {/* Create loading button - positioned at left edge of timeline */}
-          <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsLoadingModalOpen(true)
-            }}
-          >
-            <UserPlus className="w-3 h-3" />
-            <span>Загрузка</span>
-          </button>
           <TimelineGrid dayCells={dayCells} />
 
           {/* Period background (with resize support) */}
@@ -491,6 +502,8 @@ export function DecompositionStageRow({
                 timelineWidth={timelineWidth}
                 rowHeight={readinessZoneHeight}
                 color="#64748b"
+                stageStartDate={stage.startDate}
+                stageEndDate={stage.finishDate}
               />
             )}
           </div>

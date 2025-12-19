@@ -86,7 +86,7 @@ export function ProjectReportsRow({
     <>
       {/* Заголовок строки отчетов */}
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: REPORT_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar */}

@@ -169,7 +169,7 @@ function BaseRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           depth === 0 && 'bg-muted/20'
         )}
         style={{ height, minWidth: totalWidth }}
@@ -398,7 +398,7 @@ function DecompositionItemRow({ item, dayCells, range, workLogs, sectionId, sect
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        className="flex border-b border-border/50 group"
         style={{ height: ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
@@ -732,7 +732,7 @@ function DecompositionStageRow({ stage, dayCells, range, workLogs, loadings, sta
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors',
+          'flex border-b border-border/50',
           // Завершённые этапы — полупрозрачные и серые
           isCompleted && 'opacity-50 grayscale-[30%]'
         )}
@@ -1245,7 +1245,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        className="flex border-b border-border/50 group"
         style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}

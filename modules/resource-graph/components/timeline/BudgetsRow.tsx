@@ -106,7 +106,7 @@ export function BudgetsRow({
     <>
       {/* Заголовок строки бюджетов */}
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar */}
@@ -302,12 +302,12 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
   return (
     <div
-      className="group flex border-b border-border/30 hover:bg-muted/20 transition-colors"
+      className="group flex border-b border-border/30"
       style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
     >
       {/* Sidebar */}
       <div
-        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background group-hover:bg-muted/20"
+        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
         style={{
           width: SIDEBAR_WIDTH,
           paddingLeft: 8 + depth * 16,
