@@ -12,6 +12,8 @@ interface BudgetSpendingAreaProps {
   range: TimelineRange
   /** Общая ширина timeline в пикселях */
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 interface PointData {
@@ -57,6 +59,7 @@ export function BudgetSpendingArea({
   spending,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: BudgetSpendingAreaProps) {
   // Вычисляем точки с интерполяцией
   const points = useMemo(() => {
@@ -79,8 +82,8 @@ export function BudgetSpendingArea({
 
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
-    const graphHeight = SECTION_ROW_HEIGHT * 0.75
-    const topPadding = SECTION_ROW_HEIGHT * 0.1
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
 
     // Максимальный процент для масштабирования (если есть перерасход)
     const maxPercentage = Math.max(100, ...sortedSpending.map(s => s.percentage))
@@ -117,12 +120,12 @@ export function BudgetSpendingArea({
     }
 
     return result
-  }, [spending, range.start, timelineWidth])
+  }, [spending, range.start, timelineWidth, rowHeight])
 
   if (points.length === 0) return null
 
   // Создаём SVG paths
-  const baseY = SECTION_ROW_HEIGHT * 0.85
+  const baseY = rowHeight * 0.85
   const { areaPath, linePath, isOverspend } = useMemo(() => {
     if (points.length < 1) return { areaPath: '', linePath: '', isOverspend: false }
 
@@ -157,11 +160,11 @@ export function BudgetSpendingArea({
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         <defs>
           {/* Диагональный паттерн полосок */}
