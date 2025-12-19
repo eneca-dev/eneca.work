@@ -98,25 +98,31 @@
 - [ ] Optimistic updates в `useUpdateCheckpoint`, `useCompleteCheckpoint`
 - [ ] Cache invalidation: `sections.all`, `resourceGraph.all` при изменениях
 
-### 5. UI Components (`modules/checkpoints/components/`)
-- [ ] `CheckpointCard.tsx` — timeline marker с вертикальной полосой, tooltip, click handler
+### 5. UI Components
+
+**В `modules/checkpoints/components/`:**
+- [ ] `CheckpointMarker.tsx` — SVG кружочек на timeline (обводка = статус, заливка = цвет типа), tooltip при hover
 - [ ] `CheckpointDetailModal.tsx` — slide-in panel (420px) с tabs: General, Linked Sections, Audit History
-- [ ] `CheckpointCreateModal.tsx` — center modal с формой создания
 - [ ] `AuditTimeline.tsx` — audit history timeline (user avatar, operation, field, old→new, timestamp)
 - [ ] `LinkedSectionsList.tsx` — список связанных разделов с multi-select dropdown
 - [ ] `StatusBadge.tsx` — цветовой badge (pending/completed/completed_late/overdue)
 - [ ] `CheckpointTypeManager.tsx` — admin panel (`/admin/checkpoints/types`) для управления типами
 - [ ] Permission guards: readonly mode для пользователей без прав
 
+**В `modules/modals/components/checkpoint/`:**
+- [ ] `CheckpointCreateModal.tsx` — center modal с формой создания (стиль как WorkLogCreateModal)
+
 ### 6. Resource Graph Integration
-- [ ] Чекпоинты отображаются на timeline как вертикальные маркеры (по `checkpoint_date`)
-- [ ] Design language: Dark theme + amber accents (matches Resource Graph)
-- [ ] Tooltip при hover: title, checkpoint_date, status badge
-- [ ] Click → открытие `CheckpointDetailModal`
+- [ ] Чекпоинты отображаются на timeline как **кружочки** в верхней части строки раздела
+- [ ] Обводка кружочка = статус: жёлтый (pending), красный (overdue), оранжевый (completed_late), зелёный (completed)
+- [ ] Заливка кружочка = цвет типа чекпоинта
+- [ ] Tooltip при hover: title, checkpoint_date, status, type
+- [ ] Кнопка "+" слева от аватара в SectionRow → открытие CheckpointCreateModal
+- [ ] Click на кружочек → (пока ничего, позже — открытие CheckpointDetailModal)
 
 ### 7. Section Detail Modal Integration
 - [ ] Вкладка "Чекпоинты" в `SectionModal.tsx` (список чекпоинтов раздела)
-- [ ] Кнопка "Создать чекпоинт" → открытие `CheckpointCreateModal` с pre-filled sectionId
+- [ ] Кнопка "Создать чекпоинт" в tab → открытие `CheckpointCreateModal` с pre-filled sectionId
 
 ### 8. TypeScript & Types
 - [ ] `modules/checkpoints/types/index.ts` — экспорт всех типов (`Checkpoint`, `CheckpointType`, `AuditEntry`, `CheckpointFilters`)
@@ -4127,79 +4133,72 @@ export default function TestPage() {
 
 ---
 
-### Этап 9: UI Components - CheckpointCard (Timeline Marker)
+### Этап 9: UI Components - CheckpointMarker (Timeline Circle)
 
 **Описание:**
-Создать компонент `CheckpointCard.tsx` для отображения чекпоинта на Resource Graph Timeline как вертикальной полосы с tooltip.
+Создать компонент `CheckpointMarker.tsx` для отображения чекпоинта на Resource Graph Timeline как кружочка в верхней части строки раздела. Стиль аналогичен точкам графика в `ReadinessGraph.tsx` — SVG circle с заливкой и обводкой.
 
 **Затрагиваемые файлы:**
-- `modules/checkpoints/components/CheckpointCard.tsx` (новый)
+- `modules/checkpoints/components/CheckpointMarker.tsx` (новый)
+- `modules/resource-graph/components/timeline/TimelineRow.tsx` (изменение — добавить отображение маркеров в SectionRow)
 
 **Зависимости:**
-Этап 7 (types), Этап 8 (StatusBadge)
+Этап 5 (useCheckpoints hook), Этап 7 (types)
 
 **Детали:**
-- Props: `checkpoint: Checkpoint`, `position: { left: number }`, `onClickOpen: (id: string) => void`
-- Вертикальная полоса (w-0.5, hover:w-1) с цветом из `checkpoint.color || statusColor`
-- Dot marker (w-4 h-4, rounded-full, border-2) с иконкой внутри (Lucide icon, w-2 h-2)
-- Tooltip: title, checkpoint_date (format dd.MM.yyyy), StatusBadge
-- Hover effects: scale dot, expand line width
+- Props: `checkpoint: Checkpoint`, `x: number` (позиция в px), `y: number` (верхняя часть строки)
+- **Внешний вид — кружочек:**
+  - SVG `<circle>` размер r=5-6 (как в ReadinessGraph)
+  - Внутренняя заливка: цвет типа чекпоинта (`checkpoint.color`) или белый/серый
+  - **Обводка (stroke) — индикатор статуса:**
+    - `pending` (ожидается): жёлтый `#eab308` (yellow-500)
+    - `overdue` (просрочено): красный `#ef4444` (red-500)
+    - `completed_late` (выполнено с опозданием): оранжевый `#f97316` (orange-500)
+    - `completed` (выполнено вовремя): зелёный `#22c55e` (green-500)
+  - strokeWidth: 2-2.5px
+- **Hover → Tooltip:**
+  - Стиль как в `WorkLogMarkers.tsx` — тёмный tooltip с blur
+  - Содержимое: title, checkpoint_date (dd.MM.yyyy), status label, type name
+  - Задержка: `delayDuration={200}`
+- **Click:** Пока ничего (будет добавлено позже — открытие модалки деталей)
+- **Позиционирование:**
+  - X: рассчитывается из `checkpoint_date` через `differenceInDays` + `DAY_CELL_WIDTH`
+  - Y: верхняя часть строки раздела (~15-20% от высоты SECTION_ROW_HEIGHT)
+
+**Интеграция в SectionRow:**
+- В `SectionRow` добавить загрузку чекпоинтов через `useCheckpoints({ sectionId })`
+- Рендерить `CheckpointMarker` поверх timeline area в SVG слое
+- Маркеры отображаются **в верхней части** строки, не перекрывая графики готовности
 
 **Визуальные изменения:**
-✅ **ДА** — вертикальная полоса на timeline с dot marker и tooltip
+✅ **ДА** — кружочки чекпоинтов на timeline в строках разделов
 
 **Ожидаемый вид:**
-- Вертикальная тонкая линия (0.5px → 1px на hover)
-- Dot вверху линии с иконкой внутри
-- Tooltip при hover: название чекпоинта, дата, status badge
-- Цвет линии и dot зависит от status или custom color
+- Маленькие кружочки (r=5-6) в верхней части строки раздела
+- Цвет обводки показывает статус: жёлтый/красный/оранжевый/зелёный
+- Заливка — цвет типа чекпоинта или нейтральный
+- Hover → tooltip с деталями чекпоинта
+- Множественные чекпоинты на разных датах не накладываются
 
 **Как тестировать:**
-1. Создать тестовую страницу `app/test-checkpoint-card/page.tsx`:
-```tsx
-'use client'
-import { CheckpointCard } from '@/modules/checkpoints/components/CheckpointCard'
-import type { Checkpoint } from '@/modules/checkpoints/types'
-import { useState } from 'react'
-
-export default function TestPage() {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const testCheckpoint: Checkpoint = {
-    checkpoint_id: 'test-1',
-    title: 'Экспертиза раздела АР',
-    checkpoint_date: '2025-12-31',
-    status: 'pending',
-    status_label: 'Ожидается',
-    icon: 'check-circle',
-    color: '#10b981',
-    // ... остальные поля
-  }
-
-  return (
-    <div className="relative h-screen w-full bg-background">
-      <CheckpointCard
-        checkpoint={testCheckpoint}
-        position={{ left: 200 }}
-        onClickOpen={(id) => setSelectedId(id)}
-      />
-      {selectedId && <div className="p-4">Clicked: {selectedId}</div>}
-    </div>
-  )
-}
-```
-2. Открыть `/test-checkpoint-card`
-3. Проверить:
-   - Вертикальная линия отображается на позиции left: 200px
-   - Dot marker вверху линии с иконкой
-   - Hover на линию → tooltip появляется
-   - Hover на линию → линия расширяется до 1px
-   - Hover на dot → dot увеличивается (scale-125)
-   - Click → console.log срабатывает с checkpoint_id
-4. Проверить на тёмной теме (Resource Graph background)
+1. Создать тестовые checkpoints через Supabase Studio для существующего раздела:
+   - Один `pending` (дата в будущем)
+   - Один `overdue` (дата в прошлом, не выполнен)
+   - Один `completed` (completed_at заполнен, дата >= checkpoint_date)
+   - Один `completed_late` (completed_at заполнен, дата < checkpoint_date)
+2. Открыть Resource Graph `/resource-graph`
+3. Развернуть проект → стадия → объект → увидеть раздел
+4. Проверить:
+   - Кружочки отображаются в верхней части строки раздела
+   - Позиция X соответствует checkpoint_date (выравнивание с grid ячейками)
+   - Цвета обводки корректны: жёлтый/красный/оранжевый/зелёный
+   - Hover → tooltip появляется с задержкой 200ms
+   - Tooltip показывает: название, дату, статус, тип
+   - Click → пока ничего не происходит (логируется в console)
+5. Проверить, что маркеры не перекрывают другие элементы (графики готовности, рамки периода)
 
 **Проверка 🤖 Modal Architect:**
-Resource Graph design language, tooltip styling, transition effects.
+Соответствие Resource Graph design language (стиль как в ReadinessGraph), tooltip как в WorkLogMarkers.
 
 ---
 
@@ -4399,90 +4398,672 @@ Matches SectionModal.tsx layout, Resource Graph design language, permission guar
 ### Этап 13: UI Components - CheckpointCreateModal
 
 **Описание:**
-Создать компонент `CheckpointCreateModal.tsx` — center modal для создания нового чекпоинта.
+Создать модальное окно `CheckpointCreateModal.tsx` для создания нового чекпоинта. Модалка должна быть создана **в модуле `modules/modals`** — как по дизайну, так и по структуре кода (аналогично `WorkLogCreateModal.tsx`).
 
 **Затрагиваемые файлы:**
-- `modules/checkpoints/components/CheckpointCreateModal.tsx` (новый)
+- `modules/modals/components/checkpoint/CheckpointCreateModal.tsx` (новый)
+- `modules/modals/components/checkpoint/index.ts` (новый — barrel export)
+- `modules/modals/types/index.ts` (изменение — добавить `CheckpointCreateData`)
+- `modules/modals/hooks/index.ts` (изменение — добавить `useCheckpointCreateModal`)
+- `modules/modals/stores/modal-store.ts` (изменение — добавить `openCheckpointCreate`)
+- `modules/modals/index.ts` (изменение — экспорты)
+- `modules/resource-graph/components/timeline/TimelineRow.tsx` (изменение — добавить кнопку создания чекпоинта в SectionRow)
 
 **Зависимости:**
 Этап 5 (useCreateCheckpoint), Этап 6 (useCheckpointTypes), Этап 7 (types)
 
-**Детали:**
-- Props: `isOpen: boolean`, `onClose: () => void`, `sectionId: string` (pre-filled)
-- Form: React Hook Form + Zod schema
-- Fields:
-  - Раздел (readonly, display section_name)
-  - Тип (dropdown checkpoint_types с кнопкой "Создать новый тип")
-  - Название (text input):
-    - Для предустановленных типов: опционально (placeholder: "По умолчанию — название типа")
-    - Для типа `custom`: обязательно (required, validation error если пустой)
-  - Дата дедлайна (DatePicker, required)
-  - Описание (RichTextEditor, optional)
-  - Иконка (IconPicker, optional)
-  - Цвет (ColorPicker, optional)
-  - Связанные разделы (multi-select, optional)
-- Buttons: "Создать" (primary) → `createMutation.mutate()` → close modal, "Отмена" (outline) → close modal
-- Validation:
-  - `typeId` required
-  - `checkpointDate` required
-  - `title` required ТОЛЬКО для типа `custom` (динамическая валидация на основе выбранного типа)
+**Текущий статус:** ⏳ В ПРОЦЕССЕ
 
-**Визуальные изменения:**
-✅ **ДА** — center modal с формой создания чекпоинта
+---
 
-**Ожидаемый вид:**
-- Center modal (max-width 600px)
-- Overlay затемнённый
-- Form: 8 полей (Раздел readonly, Тип dropdown, Название input, Дата DatePicker, Описание RichText, Иконка IconPicker, Цвет ColorPicker, Связанные разделы multi-select)
-- Buttons: "Создать" (primary green), "Отмена" (outline gray)
-- Validation errors под полями (красный текст)
+#### Шаг 13.1: Добавить тип `CheckpointCreateData` и `ModalType`
 
-**Как тестировать:**
-1. Создать страницу `app/test-create-checkpoint/page.tsx`:
-```tsx
-'use client'
-import { CheckpointCreateModal } from '@/modules/checkpoints/components/CheckpointCreateModal'
-import { useState } from 'react'
+**Зачем:**
+- `CheckpointCreateData` — типизация данных, передаваемых при открытии модалки
+- `ModalType` нужен для глобального store модалок
 
-export default function TestPage() {
-  const [isOpen, setIsOpen] = useState(true)
+**Файл:** `modules/modals/types/index.ts`
 
-  return (
-    <div className="p-8">
-      <button onClick={() => setIsOpen(true)}>Create Checkpoint</button>
-      <CheckpointCreateModal
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        sectionId="existing-section-uuid"
-      />
-    </div>
-  )
+**Что добавить (после `ProgressUpdateData`):**
+```typescript
+// ============================================================================
+// Checkpoint Modal Types
+// ============================================================================
+
+export interface CheckpointCreateData {
+  /** ID раздела */
+  sectionId: string
+  /** Название раздела */
+  sectionName: string
 }
 ```
-2. Открыть `/test-create-checkpoint`
-3. Проверить:
-   - Center modal отображается
-   - Overlay затемнён
-   - Поле "Раздел" readonly, показывает section_name
-   - Dropdown "Тип" загружает checkpoint_types
-   - Кнопка "Создать новый тип" (проверить только для admin)
-   - Input "Название":
-     - При выборе предустановленного типа → placeholder "По умолчанию — название типа" (optional)
-     - При выборе типа "Произвольный" (custom) → required (validation error если пустой)
-   - DatePicker "Дата дедлайна" required
-   - RichTextEditor "Описание" optional
-   - IconPicker "Иконка" optional
-   - ColorPicker "Цвет" optional
-   - Multi-select "Связанные разделы" optional
-   - Click "Создать" с типом "custom" и пустым title → validation error
-   - Click "Создать" с предустановленным типом и пустым title → checkpoint создаётся с дефолтным названием типа
-   - Click "Создать" с заполненными полями → checkpoint создаётся → modal закрывается → cache invalidation
-   - Click "Отмена" → modal закрывается без создания
-   - Click overlay → modal закрывается
-4. Проверить на тёмной теме
+
+**Изменить `ModalType` (добавить новый тип):**
+```typescript
+export type ModalType =
+  | 'budget-create'
+  | 'budget-edit'
+  | 'worklog-create'
+  | 'worklog-edit'
+  | 'section-view'
+  | 'section-edit'
+  | 'stage-view'
+  | 'stage-edit'
+  | 'item-view'
+  | 'item-edit'
+  | 'loading-create'
+  | 'loading-edit'
+  | 'employee-view'
+  | 'progress-update'
+  | 'checkpoint-create' // ← ДОБАВИТЬ
+```
+
+**Как тестировать:**
+```typescript
+import type { CheckpointCreateData, ModalType } from '@/modules/modals'
+
+const data: CheckpointCreateData = { sectionId: 'x', sectionName: 'Раздел АР' }
+const type: ModalType = 'checkpoint-create'
+```
+
+---
+
+#### Шаг 13.2: Добавить хук `useCheckpointCreateModal`
+
+**Зачем:**
+- Типизированный хук для локального управления модалкой
+- Соответствует паттерну других модалок (`useBudgetCreateModal`, `useWorkLogCreateModal`)
+
+**Файл:** `modules/modals/hooks/index.ts`
+
+**Что добавить (в импорты):**
+```typescript
+import type {
+  // ... существующие импорты ...
+  CheckpointCreateData,
+} from '../types'
+```
+
+**Что добавить (после `useProgressUpdateModal`):**
+```typescript
+/**
+ * Хук для модалки создания чекпоинта
+ */
+export function useCheckpointCreateModal() {
+  return useModal<CheckpointCreateData>()
+}
+```
+
+**Как тестировать:**
+```typescript
+import { useCheckpointCreateModal } from '@/modules/modals'
+
+const { isOpen, open, close, data } = useCheckpointCreateModal()
+open({ sectionId: 'x', sectionName: 'Раздел' })
+```
+
+---
+
+#### Шаг 13.3: Добавить хелпер `openCheckpointCreate` в store
+
+**Зачем:**
+- Глобальный хелпер для открытия модалки из любого места приложения
+- Соответствует паттерну `openBudgetCreate`, `openWorkLogCreate`
+
+**Файл:** `modules/modals/stores/modal-store.ts`
+
+**Что добавить (после `closeModal`):**
+```typescript
+/**
+ * Открыть модалку создания чекпоинта
+ */
+export const openCheckpointCreate = (sectionId: string, sectionName: string) =>
+  useModalStore.getState().openModal('checkpoint-create', { sectionId, sectionName })
+```
+
+**Как тестировать:**
+```typescript
+import { openCheckpointCreate } from '@/modules/modals'
+
+openCheckpointCreate('section-uuid', 'Раздел АР')
+```
+
+---
+
+#### Шаг 13.4: Создать компонент `CheckpointCreateModal.tsx`
+
+**Зачем:**
+- Основной UI компонент модалки создания чекпоинта
+- Дизайн аналогичен `WorkLogCreateModal` (center modal, blur overlay)
+
+**Файл:** `modules/modals/components/checkpoint/CheckpointCreateModal.tsx` (новый)
+
+**Структура компонента:**
+```typescript
+'use client'
+
+import React, { useEffect, useState, useMemo } from 'react'
+import { X, Flag, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useHasPermission } from '@/modules/permissions'
+import { DatePicker } from '@/modules/projects/components/DatePicker'
+import { useCheckpointTypes, useCreateCheckpoint } from '@/modules/cache'
+import type { BaseModalProps } from '../../types'
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface CheckpointCreateModalProps extends BaseModalProps {
+  /** ID раздела */
+  sectionId: string
+  /** Название раздела (для отображения в header) */
+  sectionName: string
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
+export function CheckpointCreateModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  sectionId,
+  sectionName,
+}: CheckpointCreateModalProps) {
+  // State
+  const [selectedTypeId, setSelectedTypeId] = useState<string>('')
+  const [name, setName] = useState<string>('')
+  const [deadlineDate, setDeadlineDate] = useState<string>('')
+  const [description, setDescription] = useState<string>('')
+
+  // Hooks
+  const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
+  const createCheckpoint = useCreateCheckpoint()
+  const canManageTypes = useHasPermission('checkpoints.types.manage')
+
+  // Выбранный тип (для проверки is_custom и placeholder)
+  const selectedType = useMemo(() => {
+    return checkpointTypes.find(t => t.checkpoint_type_id === selectedTypeId)
+  }, [checkpointTypes, selectedTypeId])
+
+  // Reset при открытии
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTypeId('')
+      setName('')
+      setDeadlineDate('')
+      setDescription('')
+    }
+  }, [isOpen])
+
+  // Валидация
+  const canSave = useMemo(() => {
+    const hasType = !!selectedTypeId
+    const hasDate = !!deadlineDate
+    // Для custom типа — название обязательно
+    const hasName = selectedType?.is_custom ? name.trim().length > 0 : true
+    return hasType && hasDate && hasName && !createCheckpoint.isPending
+  }, [selectedTypeId, deadlineDate, name, selectedType, createCheckpoint.isPending])
+
+  // Сохранение
+  const handleSave = async () => {
+    if (!canSave) return
+
+    createCheckpoint.mutate({
+      section_id: sectionId,
+      checkpoint_type_id: selectedTypeId,
+      name: name.trim() || null,
+      deadline_date: deadlineDate,
+      description: description.trim() || null,
+    }, {
+      onSuccess: () => {
+        onSuccess?.()
+        onClose()
+      },
+    })
+  }
+
+  // Форматирование даты
+  const formatDateLocal = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div
+          className={cn(
+            'pointer-events-auto w-full max-w-md',
+            'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md',
+            'border border-slate-200 dark:border-slate-700/50',
+            'rounded-lg shadow-2xl shadow-black/20 dark:shadow-black/50',
+            'transform transition-all duration-200',
+            isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-700/50">
+            <div className="flex items-center gap-2">
+              <Flag className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                Добавить чекпоинт
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">·</span>
+              <span
+                className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[180px]"
+                title={sectionName}
+              >
+                {sectionName}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="px-4 py-3">
+            {typesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Тип чекпоинта */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    Тип <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedTypeId}
+                    onChange={(e) => setSelectedTypeId(e.target.value)}
+                    className={cn(
+                      'w-full px-2.5 py-1.5 text-xs',
+                      'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
+                      'rounded text-slate-700 dark:text-slate-200',
+                      'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                      'transition-colors'
+                    )}
+                  >
+                    <option value="">Выберите тип...</option>
+                    {checkpointTypes.map((type) => (
+                      <option key={type.checkpoint_type_id} value={type.checkpoint_type_id}>
+                        {type.icon} {type.name}
+                      </option>
+                    ))}
+                  </select>
+                  {/* Кнопка создания нового типа (только для админов) */}
+                  {canManageTypes && (
+                    <button
+                      type="button"
+                      className="mt-1.5 text-[10px] text-primary hover:underline"
+                      onClick={() => {
+                        // TODO: открыть модалку создания типа или перейти на /admin/checkpoints/types
+                      }}
+                    >
+                      + Создать новый тип
+                    </button>
+                  )}
+                </div>
+
+                {/* Название */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    Название {selectedType?.is_custom && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={selectedType?.is_custom ? 'Введите название' : 'По умолчанию — название типа'}
+                    className={cn(
+                      'w-full px-2.5 py-1.5 text-xs',
+                      'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
+                      'rounded text-slate-700 dark:text-slate-200',
+                      'placeholder:text-slate-400 dark:placeholder:text-slate-600',
+                      'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                      'transition-colors'
+                    )}
+                  />
+                </div>
+
+                {/* Дата дедлайна */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    Дата дедлайна <span className="text-red-500">*</span>
+                  </label>
+                  <DatePicker
+                    value={deadlineDate ? new Date(deadlineDate) : null}
+                    onChange={(d) => setDeadlineDate(formatDateLocal(d))}
+                    placeholder="Выберите дату"
+                    calendarWidth="260px"
+                    inputClassName={cn(
+                      'w-full px-2.5 py-1.5 text-xs',
+                      'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
+                      'rounded text-slate-700 dark:text-slate-200',
+                      'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                      'transition-colors cursor-pointer'
+                    )}
+                  />
+                </div>
+
+                {/* Описание */}
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                    Описание
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    placeholder="Опционально"
+                    className={cn(
+                      'w-full px-2.5 py-1.5 text-xs resize-none',
+                      'bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700',
+                      'rounded text-slate-700 dark:text-slate-200',
+                      'placeholder:text-slate-400 dark:placeholder:text-slate-600',
+                      'focus:outline-none focus:border-slate-300 dark:focus:border-slate-600 focus:ring-1 focus:ring-slate-300/50 dark:focus:ring-slate-600/50',
+                      'transition-colors'
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-slate-200 dark:border-slate-700/50">
+            <button
+              onClick={onClose}
+              disabled={createCheckpoint.isPending}
+              className={cn(
+                'px-3 py-1.5 text-[11px] font-medium rounded',
+                'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
+                'border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                'bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800',
+                'transition-colors',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+            >
+              Отмена
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded',
+                'text-white bg-green-500 hover:bg-green-400',
+                'transition-colors',
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500'
+              )}
+            >
+              {createCheckpoint.isPending ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Создание...
+                </>
+              ) : (
+                <>
+                  <Flag className="w-3 h-3" />
+                  Создать
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default CheckpointCreateModal
+```
+
+**Как тестировать:**
+```typescript
+import { CheckpointCreateModal } from '@/modules/modals'
+
+<CheckpointCreateModal
+  isOpen={true}
+  onClose={() => {}}
+  sectionId="xxx"
+  sectionName="Раздел АР"
+/>
+```
+
+---
+
+#### Шаг 13.5: Создать barrel export для checkpoint
+
+**Зачем:**
+- Единая точка экспорта для компонентов папки `checkpoint/`
+- Соответствует паттерну других модалок (`worklog/index.ts`, `budget/index.ts`)
+
+**Файл:** `modules/modals/components/checkpoint/index.ts` (новый)
+
+**Содержимое:**
+```typescript
+/**
+ * Checkpoint Modals
+ */
+
+export { CheckpointCreateModal, type CheckpointCreateModalProps } from './CheckpointCreateModal'
+```
+
+**Как тестировать:**
+```typescript
+import { CheckpointCreateModal } from '@/modules/modals/components/checkpoint'
+```
+
+---
+
+#### Шаг 13.6: Обновить главный index модуля модалок
+
+**Зачем:**
+- Экспортировать все новые типы, хуки, хелперы и компоненты из `modules/modals`
+- Единая точка импорта для всего модуля
+
+**Файл:** `modules/modals/index.ts`
+
+**Изменения:**
+
+1. **В секции Types добавить:**
+```typescript
+// Checkpoint
+CheckpointCreateData,
+```
+
+2. **В секции Hooks добавить:**
+```typescript
+// Checkpoint
+useCheckpointCreateModal,
+```
+
+3. **В секции Store добавить:**
+```typescript
+openCheckpointCreate,
+```
+
+4. **В секции Components добавить:**
+```typescript
+// Checkpoint
+export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
+```
+
+**Как тестировать:**
+```typescript
+import {
+  // Types
+  CheckpointCreateData,
+  // Hooks
+  useCheckpointCreateModal,
+  // Store
+  openCheckpointCreate,
+  // Components
+  CheckpointCreateModal,
+} from '@/modules/modals'
+```
+
+---
+
+#### Шаг 13.7: Добавить кнопку создания чекпоинта в SectionRow
+
+**Зачем:**
+- Пользователь должен иметь возможность создать чекпоинт прямо из строки раздела на Resource Graph
+- Кнопка появляется при hover на строку раздела
+
+**Файл:** `modules/resource-graph/components/timeline/TimelineRow.tsx`
+
+**Изменения:**
+
+1. **Импортировать модалку (после существующих импортов):**
+```typescript
+import { WorkLogCreateModal, ProgressUpdateDialog, CheckpointCreateModal } from '@/modules/modals'
+```
+
+2. **Добавить state в SectionRow (после `isSectionModalOpen`):**
+```typescript
+const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
+```
+
+3. **Добавить `group` класс к родительскому div строки (~строка 1240):**
+```typescript
+<div
+  className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+  style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
+>
+```
+
+4. **Добавить кнопку "+" ПЕРЕД аватаром (в первой строке sidebar, после expand button, ~строка 1270):**
+```typescript
+{/* Кнопка добавления чекпоинта (появляется при hover) */}
+<TooltipProvider delayDuration={200}>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsCheckpointModalOpen(true)
+        }}
+        className={cn(
+          'p-0.5 rounded transition-all shrink-0',
+          'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
+          'opacity-0 group-hover:opacity-100'
+        )}
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </TooltipTrigger>
+    <TooltipContent side="top" className="text-xs">
+      Добавить чекпоинт
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+
+{/* Avatar вместо иконки */}
+```
+
+5. **Добавить рендер модалки (после SectionModal, ~строка 1498):**
+```typescript
+{/* Section Modal */}
+<SectionModal ... />
+
+{/* Checkpoint Create Modal */}
+<CheckpointCreateModal
+  isOpen={isCheckpointModalOpen}
+  onClose={() => setIsCheckpointModalOpen(false)}
+  sectionId={section.id}
+  sectionName={section.name}
+  onSuccess={() => {
+    // TODO: invalidate checkpoints data when integrated with Resource Graph
+  }}
+/>
+```
+
+**Визуальный результат:**
+- При hover на строку раздела появляется кнопка "+" слева от аватара
+- Tooltip "Добавить чекпоинт"
+- Click → открывается center modal
+
+---
+
+#### Шаг 13.8: Финальная проверка и тестирование
+
+**Чек-лист:**
+
+**Build:**
+```bash
+npm run build
+```
+Должен проходить без ошибок TypeScript.
+
+**Тестирование UI:**
+1. Открыть Resource Graph `/resource-graph`
+2. Развернуть проект → стадия → объект
+3. Навести курсор на строку раздела
+4. Проверить:
+   - [ ] Кнопка "+" появляется слева от аватара
+   - [ ] Tooltip "Добавить чекпоинт" при наведении на кнопку
+5. Нажать на кнопку "+"
+6. Проверить модалку:
+   - [ ] Center modal отображается
+   - [ ] Overlay затемнён с blur
+   - [ ] Header: иконка (Flag) + "Добавить чекпоинт" + section_name
+   - [ ] Dropdown "Тип" загружает checkpoint_types
+   - [ ] Input "Название" с динамической валидацией:
+     - Для предустановленных типов: placeholder "По умолчанию — название типа"
+     - Для типа `custom`: required (кнопка "Создать" disabled пока пустое)
+   - [ ] DatePicker "Дата дедлайна" required
+   - [ ] Textarea "Описание" optional
+   - [ ] Кнопка "Создать" disabled пока не выбран тип и дата
+   - [ ] "Создать" → checkpoint создаётся → modal закрывается
+   - [ ] "Отмена" → modal закрывается
+   - [ ] Click overlay → modal закрывается
+7. Проверить на тёмной теме
 
 **Проверка 🤖 Modal Architect:**
-Form validation, Resource Graph styling, center modal layout.
+- [ ] Дизайн аналогичен WorkLogCreateModal
+- [ ] Структура файлов соответствует modules/modals паттерну
+- [ ] Стили: overlay blur, backdrop-blur-md, border-slate-700/50
+
+---
+
+**Резюме шагов Этапа 13:**
+
+| Шаг | Файл | Действие |
+|-----|------|----------|
+| 13.1 | `modules/modals/types/index.ts` | Добавить `CheckpointCreateData` и `'checkpoint-create'` в ModalType |
+| 13.2 | `modules/modals/hooks/index.ts` | Добавить `useCheckpointCreateModal()` |
+| 13.3 | `modules/modals/stores/modal-store.ts` | Добавить `openCheckpointCreate()` |
+| 13.4 | `modules/modals/components/checkpoint/CheckpointCreateModal.tsx` | Создать компонент модалки |
+| 13.5 | `modules/modals/components/checkpoint/index.ts` | Создать barrel export |
+| 13.6 | `modules/modals/index.ts` | Добавить все экспорты |
+| 13.7 | `modules/resource-graph/.../TimelineRow.tsx` | Добавить кнопку "+" и модалку в SectionRow |
+| 13.8 | — | Финальная проверка и тестирование |
+
+**Визуальные изменения:**
+✅ **ДА** — center modal + кнопка создания в строке раздела
+
+**Проверка 🤖 Modal Architect:**
+Дизайн аналогичен WorkLogCreateModal, структура файлов в modules/modals.
 
 ---
 
@@ -4538,50 +5119,43 @@ Admin component structure, permission checks.
 
 ---
 
-### Этап 15: Resource Graph Integration
+### Этап 15: Click handler для CheckpointMarker → CheckpointDetailModal
 
 **Описание:**
-Интегрировать чекпоинты в Resource Graph Timeline — отображение CheckpointCard на timeline по checkpoint_date.
+Добавить click handler для `CheckpointMarker` — при клике на кружочек чекпоинта открывается `CheckpointDetailModal`.
+
+**Примечание:** Основная интеграция чекпоинтов в Resource Graph (отображение маркеров, загрузка данных) уже выполнена в **Этапе 9**. Этот этап добавляет только click handler для открытия детальной модалки.
 
 **Затрагиваемые файлы:**
-- `modules/resource-graph/components/Timeline.tsx` (изменение, добавить слой checkpoints)
-- `modules/resource-graph/hooks/use-timeline-data.ts` (изменение, загрузка checkpoints)
+- `modules/checkpoints/components/CheckpointMarker.tsx` (изменение — добавить onClick)
+- `modules/resource-graph/components/timeline/TimelineRow.tsx` (изменение — state для открытой модалки, передача handler в CheckpointMarker)
 
 **Зависимости:**
-Этап 5 (useCheckpoints hook), Этап 9 (CheckpointCard), Этап 12 (CheckpointDetailModal)
+Этап 9 (CheckpointMarker), Этап 12 (CheckpointDetailModal)
 
 **Детали:**
-- Загрузка чекпоинтов: `useCheckpoints({ projectId, dateFrom, dateTo })` (фильтр по видимому диапазону timeline)
-- Рендер CheckpointCard поверх timeline rows (absolute positioning)
-- Расчет position.left из checkpoint_date (mapping на px координаты timeline)
-- Click handler: открытие CheckpointDetailModal
-- Z-index: checkpoints выше timeline rows, ниже modals
+- В `CheckpointMarker` добавить prop `onClick?: (checkpointId: string) => void`
+- SVG circle становится кликабельным: `cursor-pointer`, `pointer-events: auto`
+- В `SectionRow`:
+  - State: `selectedCheckpointId: string | null`
+  - Handler: `handleCheckpointClick = (id) => setSelectedCheckpointId(id)`
+  - Render: `<CheckpointDetailModal checkpointId={selectedCheckpointId} />`
 
 **Визуальные изменения:**
-✅ **ДА** — вертикальные маркеры чекпоинтов на Resource Graph Timeline
-
-**Ожидаемый вид:**
-- Вертикальные линии на timeline поверх sections rows
-- Линии позиционированы по checkpoint_date
-- Tooltip при hover
-- Click → открывается CheckpointDetailModal
+✅ **ДА** — click на кружочек чекпоинта открывает slide-in модалку
 
 **Как тестировать:**
-1. Создать checkpoint через Supabase Studio с checkpoint_date в диапазоне timeline
-2. Открыть Resource Graph `/resource-graph` (или route где используется Timeline)
-3. Проверить:
-   - CheckpointCard отображается на timeline
-   - Позиция left соответствует checkpoint_date (выравнивание с grid)
-   - Hover → tooltip с title, date, status
-   - Click → CheckpointDetailModal открывается
-   - Z-index: checkpoint выше timeline rows, ниже modals
-   - Множественные checkpoints на разных датах отображаются корректно
-   - Scroll timeline → checkpoints позиционированы корректно (absolute positioning)
-4. Проверить фильтрацию: изменить dateFrom/dateTo → checkpoints вне диапазона не загружаются
-5. Проверить Realtime: создать checkpoint в БД → checkpoint появляется на timeline автоматически (cache invalidation)
+1. Открыть Resource Graph `/resource-graph`
+2. Найти раздел с чекпоинтами (кружочки в верхней части строки)
+3. Кликнуть на кружочек чекпоинта
+4. Проверить:
+   - Открывается `CheckpointDetailModal` (slide-in справа)
+   - Модалка показывает детали выбранного чекпоинта
+   - Закрытие модалки работает (X, overlay, ESC)
+5. Кликнуть на другой чекпоинт → модалка обновляется
 
 **Проверка 🤖 Pragmatic Architect:**
-Не усложняет Resource Graph, использует существующие timeline utilities (date-to-px mapping).
+Минимальные изменения, переиспользование существующей модалки.
 
 ---
 
@@ -4761,15 +5335,15 @@ Seed data в миграции корректен.
 Этап 7 (TypeScript Types) ← зависит от Этап 1
   ↓
 Этап 8 (StatusBadge) ← зависит от Этап 7
-Этап 9 (CheckpointCard) ← зависит от Этап 7, Этап 8
+Этап 9 (CheckpointMarker + Resource Graph Integration) ← зависит от Этап 5, Этап 7
 Этап 10 (AuditTimeline) ← зависит от Этап 5, Этап 7
 Этап 11 (LinkedSectionsList) ← зависит от Этап 5, Этап 7
   ↓
 Этап 12 (CheckpointDetailModal) ← зависит от Этап 5, Этап 7, Этапы 8-11
-Этап 13 (CheckpointCreateModal) ← зависит от Этап 5, Этап 6, Этап 7
+Этап 13 (CheckpointCreateModal в modules/modals) ← зависит от Этап 5, Этап 6, Этап 7
 Этап 14 (CheckpointTypeManager) ← зависит от Этап 6, Этап 7
   ↓
-Этап 15 (Resource Graph Integration) ← зависит от Этап 5, Этап 9, Этап 12
+Этап 15 (Click handler → CheckpointDetailModal) ← зависит от Этап 9, Этап 12
 Этап 16 (Section Modal Integration) ← зависит от Этап 5, Этап 8, Этап 12, Этап 13
   ↓
 Этап 17 (Public API) ← зависит от все предыдущие этапы
