@@ -9,6 +9,8 @@ interface PlannedReadinessAreaProps {
   checkpoints: ReadinessCheckpoint[]
   range: TimelineRange
   timelineWidth: number
+  /** Высота строки (по умолчанию SECTION_ROW_HEIGHT) */
+  rowHeight?: number
 }
 
 /**
@@ -18,6 +20,7 @@ export function PlannedReadinessArea({
   checkpoints,
   range,
   timelineWidth,
+  rowHeight = SECTION_ROW_HEIGHT,
 }: PlannedReadinessAreaProps) {
   // Вычисляем точки для SVG path
   const points = useMemo(() => {
@@ -32,14 +35,14 @@ export function PlannedReadinessArea({
         const x = dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
 
         // Y координата: инвертируем (0% внизу, 100% вверху)
-        const graphHeight = SECTION_ROW_HEIGHT * 0.75
-        const topPadding = SECTION_ROW_HEIGHT * 0.1
+        const graphHeight = rowHeight * 0.75
+        const topPadding = rowHeight * 0.1
         const y = topPadding + graphHeight * (1 - cp.value / 100)
 
         return { x, y, value: cp.value, date: cp.date }
       })
       .filter((p) => p.x >= 0 && p.x <= timelineWidth)
-  }, [checkpoints, range, timelineWidth])
+  }, [checkpoints, range, timelineWidth, rowHeight])
 
   if (points.length === 0) return null
 
@@ -59,11 +62,11 @@ export function PlannedReadinessArea({
   return (
     <div
       className="absolute inset-0 pointer-events-none"
-      style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+      style={{ width: timelineWidth, height: rowHeight }}
     >
       <svg
         className="absolute inset-0"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        style={{ width: timelineWidth, height: rowHeight }}
       >
         {/* Пунктирная линия */}
         {linePath && (

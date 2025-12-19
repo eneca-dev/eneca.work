@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, TimelineRange } from '../../types'
 import { TimelineHeader, type DayCell } from './TimelineHeader'
-import { ProjectRow } from './TimelineRow'
+import { ProjectRow } from './rows'
 import { SIDEBAR_WIDTH } from '../../constants'
 
 interface ResourceGraphTimelineProps {
