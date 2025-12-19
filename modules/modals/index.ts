@@ -51,6 +51,8 @@ export type {
   EmployeeViewData,
   // Progress
   ProgressUpdateData,
+  // Checkpoint
+  CheckpointCreateData,
 } from './types'
 
 // ============================================================================
@@ -81,6 +83,8 @@ export {
   useEmployeeViewModal,
   // Progress
   useProgressUpdateModal,
+  // Checkpoint
+  useCheckpointCreateModal,
 } from './hooks'
 
 // ============================================================================
@@ -106,6 +110,7 @@ export {
   openLoadingEdit,
   openEmployeeView,
   closeModal,
+  openCheckpointCreate,
 } from './stores/modal-store'
 
 // ============================================================================
@@ -128,19 +133,20 @@ export { SectionModal, type SectionModalProps } from './components/section'
 export { SectionMetrics } from './components/section'
 
 // Stage
-// export { StageViewModal } from './components/stage/StageViewModal'
-// export { StageEditModal } from './components/stage/StageEditModal'
+export { StageModal, type StageModalProps } from './components/stage'
+export { ResponsiblesDropdown } from './components/stage'
 
-// Item
-// export { ItemViewModal } from './components/item/ItemViewModal'
-// export { ItemEditModal } from './components/item/ItemEditModal'
+// Item / Task
+export { TaskSidebar, type TaskSidebarProps } from './components/task'
 
 // Loading
-// export { LoadingCreateModal } from './components/loading/LoadingCreateModal'
-// export { LoadingEditModal } from './components/loading/LoadingEditModal'
+export { LoadingModal, type LoadingModalProps } from './components/loading'
 
 // Employee
 // export { EmployeeViewModal } from './components/employee/EmployeeViewModal'
+
+// Checkpoint
+export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
 
 // Global
 // export { GlobalModals } from './components/GlobalModals'

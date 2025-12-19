@@ -136,7 +136,7 @@ export async function getResourceGraphData(
       .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query
@@ -197,7 +197,7 @@ export async function getUserWorkload(
       .order('stage_name')
       .order('object_name')
       .order('section_name')
-      .order('decomposition_stage_name')
+      .order('decomposition_stage_order')
       .order('decomposition_item_order')
 
     const { data, error } = await query
@@ -1296,6 +1296,270 @@ export async function deleteStageReport(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка удаления отчета',
+// Stage Responsibles Actions - Ответственные за этапы
+// ============================================================================
+
+export interface StageResponsible {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  avatarUrl: string | null
+}
+
+/**
+ * Получить ответственных за этапы раздела
+ *
+ * Загружает decomposition_stage_responsibles и джойнит с profiles
+ * для получения имён и аватаров.
+ *
+ * @param sectionId - ID раздела
+ * @returns Map<stageId, StageResponsible[]>
+ */
+export async function getStageResponsiblesForSection(
+  sectionId: string
+): Promise<ActionResult<Record<string, StageResponsible[]>>> {
+  try {
+    const supabase = await createClient()
+
+    // Получаем этапы с их ответственными
+    const { data: stages, error: stagesError } = await supabase
+      .from('decomposition_stages')
+      .select('decomposition_stage_id, decomposition_stage_responsibles')
+      .eq('decomposition_stage_section_id', sectionId)
+
+    if (stagesError) {
+      console.error('[getStageResponsiblesForSection] Stages error:', stagesError)
+      return { success: false, error: stagesError.message }
+    }
+
+    // Собираем все уникальные user_id
+    const allUserIds = new Set<string>()
+    for (const stage of stages || []) {
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+      if (responsibles) {
+        for (const id of responsibles) {
+          allUserIds.add(id)
+        }
+      }
+    }
+
+    // Если нет ответственных, возвращаем пустой результат
+    if (allUserIds.size === 0) {
+      const result: Record<string, StageResponsible[]> = {}
+      for (const stage of stages || []) {
+        result[stage.decomposition_stage_id] = []
+      }
+      return { success: true, data: result }
+    }
+
+    // Загружаем профили для всех ответственных
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('user_id, first_name, last_name, avatar_url')
+      .in('user_id', Array.from(allUserIds))
+
+    if (profilesError) {
+      console.error('[getStageResponsiblesForSection] Profiles error:', profilesError)
+      return { success: false, error: profilesError.message }
+    }
+
+    // Создаём map для быстрого доступа
+    const profilesMap = new Map<string, StageResponsible>()
+    for (const p of profiles || []) {
+      profilesMap.set(p.user_id, {
+        id: p.user_id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        avatarUrl: p.avatar_url,
+      })
+    }
+
+    // Формируем результат
+    const result: Record<string, StageResponsible[]> = {}
+    for (const stage of stages || []) {
+      const responsibles = stage.decomposition_stage_responsibles as string[] | null
+      result[stage.decomposition_stage_id] = (responsibles || [])
+        .map(id => profilesMap.get(id))
+        .filter((p): p is StageResponsible => p !== undefined)
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('[getStageResponsiblesForSection] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки ответственных за этапы',
+    }
+  }
+}
+
+// ============================================================================
+// Loading CRUD Actions - Создание, обновление, удаление загрузок
+// ============================================================================
+
+/**
+ * Создать новую загрузку
+ *
+ * @param input - Данные для создания загрузки
+ * @returns ID созданной загрузки
+ */
+export async function createLoading(input: {
+  sectionId: string
+  stageId: string
+  responsibleId: string
+  startDate: string
+  endDate: string
+  rate: number
+  comment?: string
+}): Promise<ActionResult<{ loadingId: string }>> {
+  try {
+    // Валидация
+    if (!input.sectionId || !input.stageId || !input.responsibleId) {
+      return { success: false, error: 'Обязательные поля не заполнены' }
+    }
+
+    if (!input.startDate || !input.endDate) {
+      return { success: false, error: 'Даты начала и окончания обязательны' }
+    }
+
+    if (input.startDate > input.endDate) {
+      return { success: false, error: 'Дата начала не может быть позже даты окончания' }
+    }
+
+    const supabase = await createClient()
+
+    // RLS проверяет авторизацию на уровне базы данных
+    const { data, error } = await supabase
+      .from('loadings')
+      .insert({
+        loading_section: input.sectionId,
+        loading_stage: input.stageId,
+        loading_responsible: input.responsibleId,
+        loading_start: input.startDate,
+        loading_finish: input.endDate,
+        loading_rate: input.rate,
+        loading_comment: input.comment || null,
+        loading_status: 'active',
+      })
+      .select('loading_id')
+      .single()
+
+    if (error) {
+      console.error('[createLoading] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data: { loadingId: data.loading_id } }
+  } catch (error) {
+    console.error('[createLoading] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка создания загрузки',
+    }
+  }
+}
+
+/**
+ * Обновить загрузку (ответственного, ставку, комментарий и т.д.)
+ *
+ * @param loadingId - ID загрузки
+ * @param updates - Поля для обновления
+ * @returns Успех или ошибка
+ */
+export async function updateLoading(
+  loadingId: string,
+  updates: {
+    responsibleId?: string
+    rate?: number
+    comment?: string
+    stageId?: string
+    startDate?: string
+    endDate?: string
+  }
+): Promise<ActionResult<{ loadingId: string }>> {
+  try {
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    const supabase = await createClient()
+
+    // RLS проверяет авторизацию на уровне базы данных
+    // Формируем объект для обновления
+    const updateData: Record<string, unknown> = {}
+
+    if (updates.responsibleId !== undefined) {
+      updateData.loading_responsible = updates.responsibleId
+    }
+    if (updates.rate !== undefined) {
+      updateData.loading_rate = updates.rate
+    }
+    if (updates.comment !== undefined) {
+      updateData.loading_comment = updates.comment
+    }
+    if (updates.stageId !== undefined) {
+      updateData.loading_stage = updates.stageId
+    }
+    if (updates.startDate !== undefined) {
+      updateData.loading_start = updates.startDate
+    }
+    if (updates.endDate !== undefined) {
+      updateData.loading_finish = updates.endDate
+    }
+
+    const { error } = await supabase
+      .from('loadings')
+      .update(updateData)
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[updateLoading] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data: { loadingId } }
+  } catch (error) {
+    console.error('[updateLoading] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка обновления загрузки',
+    }
+  }
+}
+
+/**
+ * Удалить загрузку
+ *
+ * @param loadingId - ID загрузки
+ * @returns Успех или ошибка
+ */
+export async function deleteLoading(
+  loadingId: string
+): Promise<ActionResult<{ loadingId: string }>> {
+  try {
+    if (!loadingId) {
+      return { success: false, error: 'ID загрузки обязателен' }
+    }
+
+    const supabase = await createClient()
+
+    // RLS проверяет авторизацию на уровне базы данных
+    const { error } = await supabase
+      .from('loadings')
+      .delete()
+      .eq('loading_id', loadingId)
+
+    if (error) {
+      console.error('[deleteLoading] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data: { loadingId } }
+  } catch (error) {
+    console.error('[deleteLoading] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка удаления загрузки',
     }
   }
 }

@@ -534,3 +534,29 @@ export function getInitials(firstName: string | null, lastName: string | null): 
 // ============================================================================
 
 export { transformProfileToCreatedBy } from './profile-transform'
+// ============================================================================
+// Re-exports from format.ts
+// ============================================================================
+
+export {
+  formatHoursCompact,
+  formatBudgetAmount,
+  formatDateShort,
+  formatDateFull,
+  formatRate,
+  getInitials,
+  getProgressColor,
+} from './format'
+
+// ============================================================================
+// Re-exports from hierarchy.ts
+// ============================================================================
+
+export {
+  updateInHierarchy,
+  updateByIdInHierarchy,
+  updateItemProgress as updateItemProgressInHierarchy,
+  updateDecompositionStageDates,
+  updateSectionDates as updateSectionDatesInHierarchy,
+  type HierarchyLevel,
+} from './hierarchy'

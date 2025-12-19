@@ -54,6 +54,14 @@ export interface BudgetFilters extends BaseFilters {
   tagIds?: string[]
 }
 
+export interface CheckpointFilters extends BaseFilters {
+  sectionId?: string
+  projectId?: string
+  status?: 'pending' | 'completed' | 'completed_late' | 'overdue'
+  dateFrom?: string
+  dateTo?: string
+}
+
 // ============================================================================
 // Query Keys Factory
 // ============================================================================
@@ -97,6 +105,8 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.sections.details(), id] as const,
     hierarchy: (projectId: string) => [...queryKeys.sections.all, 'hierarchy', projectId] as const,
     decomposition: (id: string) => [...queryKeys.sections.detail(id), 'decomposition'] as const,
+    /** Контрольные точки плановой готовности раздела */
+    readinessCheckpoints: (sectionId: string) => [...queryKeys.sections.detail(sectionId), 'readiness-checkpoints'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -141,6 +151,37 @@ export const queryKeys = {
   workCategories: {
     all: ['work-categories'] as const,
     list: () => [...queryKeys.workCategories.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Difficulty Levels (уровни сложности декомпозиции)
+  // -------------------------------------------------------------------------
+  difficultyLevels: {
+    all: ['difficulty-levels'] as const,
+    list: () => [...queryKeys.difficultyLevels.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Stage Statuses (статусы этапов декомпозиции)
+  // -------------------------------------------------------------------------
+  stageStatuses: {
+    all: ['stage-statuses'] as const,
+    list: () => [...queryKeys.stageStatuses.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Decomposition (этапы и задачи декомпозиции)
+  // -------------------------------------------------------------------------
+  decomposition: {
+    all: ['decomposition'] as const,
+    /** Bootstrap данные для раздела (этапы + items + справочники) */
+    bootstrap: (sectionId: string) => [...queryKeys.decomposition.all, 'bootstrap', sectionId] as const,
+    /** Этапы декомпозиции для раздела */
+    stages: (sectionId: string) => [...queryKeys.decomposition.all, 'stages', sectionId] as const,
+    /** Задачи для этапа */
+    items: (stageId: string) => [...queryKeys.decomposition.all, 'items', stageId] as const,
+    /** Агрегированные часы работы для задач */
+    workLogs: (itemIdsKey: string) => [...queryKeys.decomposition.all, 'work-logs', itemIdsKey] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -198,6 +239,8 @@ export const queryKeys = {
     stageReadiness: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageReadiness', sectionId] as const,
     /** Stage reports для стадии (lazy load при развороте) */
     stageReports: (stageId: string) => [...queryKeys.resourceGraph.all, 'stageReports', stageId] as const,
+    /** Stage responsibles для раздела (lazy load при развороте) */
+    stageResponsibles: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageResponsibles', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -223,6 +266,61 @@ export const queryKeys = {
     all: ['budget-tags'] as const,
     list: () => [...queryKeys.budgetTags.all, 'list'] as const,
     detail: (id: string) => [...queryKeys.budgetTags.all, 'detail', id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Checkpoints (чекпоинты/дедлайны)
+  // -------------------------------------------------------------------------
+  checkpoints: {
+    all: ['checkpoints'] as const,
+    lists: () => [...queryKeys.checkpoints.all, 'list'] as const,
+    list: (filters?: CheckpointFilters) => [...queryKeys.checkpoints.lists(), filters] as const,
+    details: () => [...queryKeys.checkpoints.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.checkpoints.details(), id] as const,
+    audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
+    bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
+    byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Checkpoint Types (типы чекпоинтов)
+  // -------------------------------------------------------------------------
+  checkpointTypes: {
+    all: ['checkpoint-types'] as const,
+    list: () => [...queryKeys.checkpointTypes.all, 'list'] as const,
+    details: () => [...queryKeys.checkpointTypes.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.checkpointTypes.details(), id] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Kanban
+  // -------------------------------------------------------------------------
+  kanban: {
+    all: ['kanban'] as const,
+    lists: () => [...queryKeys.kanban.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.kanban.lists(), filters] as const,
+    /** Infinite query key для пагинации */
+    infinite: (filters?: Record<string, unknown>) => [...queryKeys.kanban.list(filters), 'infinite'] as const,
+    details: () => [...queryKeys.kanban.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.kanban.details(), id] as const,
+  // Section Statuses (статусы разделов)
+  // -------------------------------------------------------------------------
+  sectionStatuses: {
+    all: ['section-statuses'] as const,
+    list: () => [...queryKeys.sectionStatuses.all, 'list'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Filter Structure (структуры для автокомплита InlineFilter)
+  // -------------------------------------------------------------------------
+  filterStructure: {
+    all: ['filter-structure'] as const,
+    /** Организационная структура (подразделения, отделы) */
+    org: () => [...queryKeys.filterStructure.all, 'org'] as const,
+    /** Проектная структура (проекты) */
+    project: () => [...queryKeys.filterStructure.all, 'project'] as const,
+    /** Теги проектов */
+    tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
   },
 } as const
 

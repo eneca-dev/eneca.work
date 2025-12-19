@@ -56,7 +56,8 @@ import {
   useTimelineResize,
 } from '../../hooks'
 import dynamic from 'next/dynamic'
-import { WorkLogCreateModal, ProgressUpdateDialog } from '@/modules/modals'
+import { WorkLogCreateModal, ProgressUpdateDialog, CheckpointCreateModal } from '@/modules/modals'
+import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
 
 // Dynamic import to avoid circular dependency during build
 const SectionModal = dynamic(
@@ -1077,12 +1078,18 @@ interface SectionRowProps {
 function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
+  const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
 
   // Lazy load work logs при развороте объекта (не раздела!)
   const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
     enabled: isObjectExpanded, // Загружаем когда объект развёрнут
   })
+
+  // Lazy load checkpoints при развороте объекта
+  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints(
+    isObjectExpanded ? { sectionId: section.id } : undefined
+  )
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
@@ -1238,7 +1245,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
         style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left при горизонтальном скролле */}
@@ -1252,7 +1259,7 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* Первая строка: Expand + Avatar + Name */}
+          {/* Первая строка: Expand + Checkpoint Button + Avatar + Name */}
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Expand/Collapse */}
             {hasChildren ? (
@@ -1270,6 +1277,30 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             ) : (
               <div className="w-5 shrink-0" />
             )}
+
+            {/* Кнопка добавления чекпоинта (появляется при hover) */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsCheckpointModalOpen(true)
+                    }}
+                    className={cn(
+                      'p-0.5 rounded transition-all shrink-0',
+                      'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
+                      'opacity-0 group-hover:opacity-100'
+                    )}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Добавить чекпоинт
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Avatar вместо иконки */}
             <TooltipProvider delayDuration={200}>
@@ -1440,6 +1471,14 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
           />
+          {/* Маркеры чекпоинтов */}
+          {checkpoints.length > 0 && (
+            <CheckpointMarkers
+              checkpoints={checkpoints}
+              range={range}
+              timelineWidth={timelineWidth}
+            />
+          )}
         </div>
       </div>
 
@@ -1495,6 +1534,17 @@ function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowPr
         onSuccess={() => {
           // Invalidate section data after update
           refetchWorkLogs()
+        }}
+      />
+
+      {/* Checkpoint Create Modal */}
+      <CheckpointCreateModal
+        isOpen={isCheckpointModalOpen}
+        onClose={() => setIsCheckpointModalOpen(false)}
+        sectionId={section.id}
+        sectionName={section.name}
+        onSuccess={() => {
+          refetchCheckpoints()
         }}
       />
     </>

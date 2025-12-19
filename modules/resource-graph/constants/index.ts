@@ -40,6 +40,9 @@ export const LOADING_STATUS_COLORS = {
 /** Высота строки в пикселях */
 export const ROW_HEIGHT = 40
 
+/** Высота строки объекта (с графиками агрегации) */
+export const OBJECT_ROW_HEIGHT = 56
+
 /** Высота строки раздела (двухстрочная) */
 export const SECTION_ROW_HEIGHT = 56
 
@@ -50,7 +53,7 @@ export const STAGE_ROW_HEIGHT = 64
 export const DAY_CELL_WIDTH = 36
 
 /** Ширина боковой панели */
-export const SIDEBAR_WIDTH = 320
+export const SIDEBAR_WIDTH = 340
 
 // ============================================================================
 // Work Log Display Constants

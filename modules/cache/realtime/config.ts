@@ -14,7 +14,7 @@ export interface TableSubscription {
   /** События для подписки (по умолчанию все) */
   events?: RealtimeEvent[]
   /** Query keys для инвалидации при изменении */
-  invalidateKeys: readonly unknown[][]
+  invalidateKeys: readonly (readonly unknown[])[]
   /** Дополнительный фильтр (например, filter: 'user_id=eq.123') */
   filter?: string
 }
@@ -72,7 +72,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'loadings',
     invalidateKeys: [
       queryKeys.loadings.all,
-      queryKeys.sections.all, // Подсчёты в секциях
+      // НЕ инвалидируем sections.all - слишком агрессивно, вызывает лаги
+      // Optimistic updates обрабатывают UI, подсчёты пересчитаются при refetch
       // Resource graph loadings (lazy-loaded per section)
       [...queryKeys.resourceGraph.all, 'loadings'],
     ],
@@ -80,15 +81,19 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'decomposition_stages',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Этапы декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска
     ],
   },
   {
     table: 'decomposition_items',
     invalidateKeys: [
+      queryKeys.decomposition.all, // Задачи декомпозиции
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
+      queryKeys.kanban.all, // Канбан-доска (задачи)
     ],
   },
 
@@ -178,6 +183,38 @@ export const realtimeSubscriptions: TableSubscription[] = [
   {
     table: 'user_notifications',
     invalidateKeys: [queryKeys.notifications.all],
+  },
+
+  // ============================================================================
+  // Checkpoints (чекпоинты/дедлайны разделов)
+  // ============================================================================
+  {
+    table: 'section_checkpoints',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+      queryKeys.sections.all,
+      queryKeys.resourceGraph.all,
+    ],
+  },
+  {
+    table: 'checkpoint_section_links',
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_audit',
+    events: ['INSERT'],
+    invalidateKeys: [
+      queryKeys.checkpoints.all,
+    ],
+  },
+  {
+    table: 'checkpoint_types',
+    invalidateKeys: [
+      queryKeys.checkpointTypes.all,
+      queryKeys.checkpoints.all,
+    ],
   },
 ]
 

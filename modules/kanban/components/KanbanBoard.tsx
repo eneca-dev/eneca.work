@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useState } from 'react'
+import { useCallback, useState, useMemo } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -11,41 +11,108 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { Loader2, LayoutGrid, RefreshCw, FilterX, Building2, FolderKanban, ChevronsDownUp } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useKanbanStore } from '../stores/kanban-store'
-import type { KanbanStage, KanbanSection, StageStatus } from '../types'
+import { Loader2, LayoutGrid, AlertCircle, Database, ChevronDown } from 'lucide-react'
+import { InlineFilter, type FilterOption } from '@/modules/inline-filter'
+import { useKanbanFiltersStore, KANBAN_FILTER_CONFIG } from '../stores'
+import { useKanbanFilterOptions } from '../filters/useFilterOptions'
+import { useKanbanSectionsInfinite, useStageStatuses, useUpdateStageStatusOptimistic } from '../hooks'
+import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanSwimlane } from './KanbanSwimlane'
 import { KanbanCard } from './KanbanCard'
 
+// ============================================================================
+// Local View State
+// ============================================================================
+
+interface ViewSettings {
+  showEmptySwimlanes: boolean
+  collapsedSections: string[]
+}
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export function KanbanBoard() {
+  // State: загрузить все данные без фильтров
+  const [loadAll, setLoadAll] = useState(false)
+
+  // Фильтры
+  const { filterString, setFilterString, getQueryParams } = useKanbanFiltersStore()
+  const { options: filterOptions } = useKanbanFilterOptions()
+
+  // Получаем параметры фильтра
+  const queryParams = useMemo(() => getQueryParams(), [filterString, getQueryParams])
+
+  // Проверяем, применены ли фильтры
+  const filtersApplied = useMemo(() => {
+    return Object.keys(queryParams).length > 0
+  }, [queryParams])
+
+  // Определяем, нужно ли загружать данные
+  const shouldFetchData = filtersApplied || loadAll
+
+  // Infinite query для загрузки данных с пагинацией
   const {
-    board,
+    data,
     isLoading,
     error,
-    loadBoard,
-    moveStage,
-    viewSettings,
-    toggleSectionCollapse,
-    toggleCollapseAll,
-  } = useKanbanStore()
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useKanbanSectionsInfinite(filtersApplied ? queryParams : undefined, {
+    enabled: shouldFetchData,
+  })
+
+  // Собираем все секции из всех страниц
+  const sections = useMemo(() => {
+    return data?.pages.flat() ?? []
+  }, [data])
+
+  // Загружаем статусы этапов из БД
+  const { statuses, isLoading: statusesLoading } = useStageStatuses()
+
+  // Mutation для обновления статуса этапа (с оптимистичным обновлением)
+  const { mutate: updateStatus } = useUpdateStageStatusOptimistic(
+    filtersApplied ? queryParams : undefined
+  )
+
+  // Local view state
+  const [viewSettings, setViewSettings] = useState<ViewSettings>({
+    showEmptySwimlanes: true,
+    collapsedSections: [],
+  })
 
   const [activeCard, setActiveCard] = useState<{
     stage: KanbanStage
     section: KanbanSection
   } | null>(null)
 
-  // Load board on mount
-  useEffect(() => {
-    loadBoard()
-  }, [loadBoard])
+  // Build board from sections
+  const board: KanbanBoardType | null = useMemo(() => {
+    if (!sections || sections.length === 0) return null
+    return {
+      projectId: sections[0]?.projectId || '',
+      projectName: sections[0]?.projectName || '',
+      sections,
+    }
+  }, [sections])
+
+  // Handle "Load All" button click
+  const handleLoadAll = useCallback(() => {
+    setLoadAll(true)
+  }, [])
+
+  // Toggle section collapse
+  const toggleSectionCollapse = useCallback((sectionId: string) => {
+    setViewSettings((prev) => ({
+      ...prev,
+      collapsedSections: prev.collapsedSections.includes(sectionId)
+        ? prev.collapsedSections.filter((id) => id !== sectionId)
+        : [...prev.collapsedSections, sectionId],
+    }))
+  }, [])
 
   // DnD sensors
   const sensors = useSensors(
@@ -80,19 +147,70 @@ export function KanbanBoard() {
       // Only allow drops within the same section
       if (activeSectionId !== overSectionId) return
 
-      // Move the stage to the new status
-      moveStage(activeStageId, activeSectionId, overStatus as StageStatus)
+      // Оптимистичное обновление статуса этапа:
+      // 1. UI обновится мгновенно
+      // 2. Запрос пойдёт на сервер в фоне
+      // 3. При ошибке - автоматический откат
+      updateStatus({
+        stageId: activeStageId,
+        sectionId: activeSectionId,
+        newStatus: overStatus as StageStatus,
+      })
     },
-    [moveStage]
+    [updateStatus]
   )
 
-  // Loading state
-  if (isLoading) {
+  // Empty state - before data fetch (no filters, no loadAll)
+  if (!shouldFetchData) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="text-sm">Загрузка доски...</span>
+      <div className="flex flex-col h-full">
+        <FilterToolbar
+          filterString={filterString}
+          setFilterString={setFilterString}
+          filterOptions={filterOptions}
+          sectionsCount={0}
+          showFiltersHint
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
+            <h2 className="text-lg font-medium mb-2">
+              Выберите данные для отображения
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Используйте фильтр выше для поиска проектов.
+            </p>
+            <p className="text-xs text-muted-foreground mb-6 font-mono bg-muted/50 px-3 py-2 rounded">
+              подразделение:"ОВ" проект:"Название"
+            </p>
+            <button
+              onClick={handleLoadAll}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Database size={16} />
+              Загрузить всё
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state
+  if (isLoading || statusesLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <FilterToolbar
+          filterString={filterString}
+          setFilterString={setFilterString}
+          filterOptions={filterOptions}
+          sectionsCount={0}
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="text-sm">Загрузка доски...</span>
+          </div>
         </div>
       </div>
     )
@@ -101,21 +219,39 @@ export function KanbanBoard() {
   // Error state
   if (error) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-destructive">
-          <span className="text-sm">{error}</span>
+      <div className="flex flex-col h-full">
+        <FilterToolbar
+          filterString={filterString}
+          setFilterString={setFilterString}
+          filterOptions={filterOptions}
+          sectionsCount={0}
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-destructive">
+            <AlertCircle className="h-8 w-8" />
+            <span className="text-sm">{error instanceof Error ? error.message : 'Ошибка загрузки данных'}</span>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Empty state
+  // Empty state - after data fetch (no results)
   if (!board || board.sections.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <LayoutGrid className="h-12 w-12 opacity-50" />
-          <span className="text-sm">Нет данных для отображения</span>
+      <div className="flex flex-col h-full">
+        <FilterToolbar
+          filterString={filterString}
+          setFilterString={setFilterString}
+          filterOptions={filterOptions}
+          sectionsCount={0}
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <LayoutGrid className="h-12 w-12 opacity-50" />
+            <span className="text-sm">Нет данных для отображения</span>
+            <span className="text-xs">Попробуйте изменить фильтры</span>
+          </div>
         </div>
       </div>
     )
@@ -126,111 +262,17 @@ export function KanbanBoard() {
     ? board.sections
     : board.sections.filter((s) => s.stages.length > 0)
 
-  // Check if all sections are collapsed
-  const allCollapsed = board?.sections.every((s) =>
-    viewSettings.collapsedSections.includes(s.id)
-  )
-
   return (
     <div className="flex flex-col h-full">
-      {/* Filters Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b bg-background">
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Organization Filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2 h-9">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <Building2 className="h-4 w-4" />
-                <span>Организация</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => console.log('Filter: all')}>
-                Все
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Filter: non-production')}>
-                Непроизводственные отделы
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Filter: production')}>
-                Производственные отделы
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Filter: eneka')}>
-                ЭНЭКА - СП Групп
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Project Filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2 h-9">
-                <FolderKanban className="h-4 w-4" />
-                <span>Проект</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[320px]">
-              <DropdownMenuItem onClick={() => console.log('Project: all')}>
-                Все
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Project: proj1')}>
-                11-PUZ-07-YY/25-УЧПТ THE VIEW
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Project: proj2')}>
-                11-ГП-04/25-А-Пионерская 41, БАТ офис
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Project: proj3')}>
-                11-ГП-04/25-С-Пионерская 41, БАТ
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Project: proj4')}>
-                11-ПР-05/25-П-Мангазея (Северный речной порт)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log('Project: proj5')}>
-                12-П-29/25-С Технониколь (Термомасло)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Reset Filters */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 h-9"
-            onClick={() => console.log('Reset filters clicked')}
-          >
-            <FilterX className="h-4 w-4" />
-            <span>Сбросить фильтры</span>
-          </Button>
-
-          {/* Refresh */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 h-9"
-            onClick={() => {
-              console.log('Refresh clicked')
-              loadBoard()
-            }}
-          >
-            <RefreshCw className="h-4 w-4" />
-            <span>Обновить</span>
-          </Button>
-
-          {/* Collapse All */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 h-9"
-            onClick={toggleCollapseAll}
-          >
-            <ChevronsDownUp className="h-4 w-4" />
-            <span>{allCollapsed ? 'Развернуть всё' : 'Свернуть всё'}</span>
-          </Button>
-        </div>
-      </div>
+      <FilterToolbar
+        filterString={filterString}
+        setFilterString={setFilterString}
+        filterOptions={filterOptions}
+        sectionsCount={board.sections.length}
+      />
 
       {/* Column Headers */}
-      <KanbanHeader />
+      <KanbanHeader statuses={statuses} />
 
       {/* Swimlanes */}
       <DndContext
@@ -248,6 +290,29 @@ export function KanbanBoard() {
               onToggleCollapse={() => toggleSectionCollapse(section.id)}
             />
           ))}
+
+          {/* Load More Button */}
+          {hasNextPage && (
+            <div className="flex justify-center py-4 border-t bg-card/50">
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Загрузить ещё
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Drag Overlay */}
@@ -262,6 +327,47 @@ export function KanbanBoard() {
           )}
         </DragOverlay>
       </DndContext>
+    </div>
+  )
+}
+
+// ============================================================================
+// Filter Toolbar Component
+// ============================================================================
+
+interface FilterToolbarProps {
+  filterString: string
+  setFilterString: (value: string) => void
+  filterOptions: FilterOption[]
+  sectionsCount: number
+  showFiltersHint?: boolean
+}
+
+function FilterToolbar({
+  filterString,
+  setFilterString,
+  filterOptions,
+  sectionsCount,
+  showFiltersHint = false,
+}: FilterToolbarProps) {
+  return (
+    <div className="flex-shrink-0 px-4 py-3 border-b bg-card">
+      <div className="flex items-center gap-4">
+        <div className="shrink-0">
+          <h1 className="text-lg font-semibold">Канбан</h1>
+          <p className="text-xs text-muted-foreground">
+            {showFiltersHint ? 'Выберите фильтры' : `Разделов: ${sectionsCount}`}
+          </p>
+        </div>
+        <div className="flex-1 min-w-0">
+          <InlineFilter
+            config={KANBAN_FILTER_CONFIG}
+            value={filterString}
+            onChange={setFilterString}
+            options={filterOptions}
+          />
+        </div>
+      </div>
     </div>
   )
 }
