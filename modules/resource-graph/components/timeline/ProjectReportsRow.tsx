@@ -48,10 +48,10 @@ interface ProjectReportsRowProps {
   dayCells: DayCell[]
   depth: number
   range: TimelineRange
-  /** Дата начала стадии для позиционирования */
-  stageStartDate: string | null
-  /** Дата окончания стадии для позиционирования */
-  stageEndDate: string | null
+  /** Дата начала стадии для позиционирования (опционально) */
+  stageStartDate?: string | null
+  /** Дата окончания стадии для позиционирования (опционально) */
+  stageEndDate?: string | null
 }
 
 // ============================================================================
@@ -125,7 +125,7 @@ export function ProjectReportsRow({
 
           {/* Count */}
           {!isLoading && reportCount > 0 && (
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-[10px] font-medium ml-auto tabular-nums shrink-0 text-blue-500">
@@ -146,7 +146,7 @@ export function ProjectReportsRow({
           )}
 
           {/* Add report button */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -228,8 +228,8 @@ interface ProjectReportItemRowProps {
   timelineWidth: number
   totalWidth: number
   range: TimelineRange
-  stageStartDate: string | null
-  stageEndDate: string | null
+  stageStartDate?: string | null
+  stageEndDate?: string | null
 }
 
 function ProjectReportItemRow({
@@ -317,7 +317,7 @@ function ProjectReportItemRow({
 
           {/* Delete button */}
           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <AlertDialogTrigger asChild>
@@ -404,7 +404,7 @@ function ProjectReportItemRow({
                     {shortComment}
                   </p>
                 </div>
-                <TooltipProvider delayDuration={200}>
+                <TooltipProvider delayDuration={300}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums shrink-0">

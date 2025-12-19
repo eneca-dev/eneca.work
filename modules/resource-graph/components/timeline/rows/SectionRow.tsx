@@ -202,7 +202,11 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className={cn(
+          'flex hover:bg-muted/30 transition-colors',
+          // Убираем нижнюю границу когда развёрнут (BudgetsRow продолжает раздел)
+          !isExpanded && 'border-b border-border/50'
+        )}
         style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
@@ -235,7 +239,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             )}
 
             {/* Avatar */}
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar className="w-5 h-5 shrink-0">
@@ -287,7 +291,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             {todayIndicators && (
               <div className="flex items-center gap-1.5 ml-auto">
                 {todayIndicators.planned !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-emerald-500">
@@ -301,7 +305,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
                   </TooltipProvider>
                 )}
                 {todayIndicators.actual !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="text-[10px] font-medium tabular-nums text-blue-500">
@@ -325,7 +329,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
                   </TooltipProvider>
                 )}
                 {todayIndicators.budget !== null && (
-                  <TooltipProvider delayDuration={200}>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
@@ -422,6 +426,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             range={range}
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
+            sectionStatusColor={section.status.color}
             budgets={budgets}
             budgetsLoading={budgetsLoading}
             onRefetch={refetchBudgets}

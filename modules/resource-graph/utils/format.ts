@@ -27,21 +27,21 @@ export function formatHoursCompact(hours: number): string {
 // ============================================================================
 
 /**
- * Компактный формат суммы бюджета (1.2M ₽, 123K ₽)
+ * Компактный формат суммы бюджета (1.2M BYN, 123K BYN)
  *
  * @example
- * formatBudgetAmount(1234567) // "1.2M ₽"
- * formatBudgetAmount(123456) // "123K ₽"
- * formatBudgetAmount(999) // "999 ₽"
+ * formatBudgetAmount(1234567) // "1.2M BYN"
+ * formatBudgetAmount(123456) // "123K BYN"
+ * formatBudgetAmount(999) // "999 BYN"
  */
 export function formatBudgetAmount(amount: number): string {
   if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}M ₽`
+    return `${(amount / 1_000_000).toFixed(1)}M BYN`
   }
   if (amount >= 1_000) {
-    return `${Math.round(amount / 1_000)}K ₽`
+    return `${Math.round(amount / 1_000)}K BYN`
   }
-  return `${Math.round(amount)} ₽`
+  return `${Math.round(amount)} BYN`
 }
 
 // ============================================================================

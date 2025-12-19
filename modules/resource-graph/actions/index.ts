@@ -260,6 +260,65 @@ export async function getProjectTags(): Promise<ActionResult<ProjectTag[]>> {
   }
 }
 
+/**
+ * Получить теги для всех проектов (пакетная загрузка)
+ *
+ * Возвращает Map<projectId, ProjectTag[]> для эффективного доступа к тегам
+ * каждого проекта в UI.
+ *
+ * @returns Record<projectId, tags[]>
+ */
+export async function getProjectTagsMap(): Promise<ActionResult<Record<string, ProjectTag[]>>> {
+  try {
+    const supabase = await createClient()
+
+    // Загружаем все связи проект-тег с данными тегов
+    const { data, error } = await supabase
+      .from('project_tag_links')
+      .select(`
+        project_id,
+        project_tags (
+          tag_id,
+          name,
+          color
+        )
+      `)
+
+    if (error) {
+      console.error('[getProjectTagsMap] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Группируем теги по project_id
+    const result: Record<string, ProjectTag[]> = {}
+
+    for (const row of data || []) {
+      const projectId = row.project_id
+      const tag = row.project_tags as { tag_id: string; name: string; color: string | null } | null
+
+      if (!projectId || !tag) continue
+
+      if (!result[projectId]) {
+        result[projectId] = []
+      }
+
+      result[projectId].push({
+        id: tag.tag_id,
+        name: tag.name,
+        color: tag.color,
+      })
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error('[getProjectTagsMap] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки тегов проектов',
+    }
+  }
+}
+
 // ============================================================================
 // Filter Structure Actions (загрузка всей структуры за один запрос)
 // ============================================================================
@@ -1559,6 +1618,188 @@ export async function deleteLoading(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка удаления загрузки',
+    }
+  }
+}
+
+// ============================================================================
+// Decomposition Item CRUD Actions - Создание задач
+// ============================================================================
+
+/**
+ * Создать новую задачу (decomposition_item)
+ *
+ * @param input - Данные для создания задачи
+ * @returns ID созданной задачи
+ */
+export async function createDecompositionItem(input: {
+  sectionId: string
+  stageId: string
+  description: string
+  plannedHours: number
+  workCategoryId: string
+  responsibleId?: string
+  dueDate?: string
+}): Promise<ActionResult<{ itemId: string }>> {
+  try {
+    // Валидация
+    if (!input.sectionId || !input.stageId) {
+      return { success: false, error: 'ID раздела и этапа обязательны' }
+    }
+
+    if (!input.description?.trim()) {
+      return { success: false, error: 'Название задачи обязательно' }
+    }
+
+    if (!input.workCategoryId) {
+      return { success: false, error: 'Категория работ обязательна' }
+    }
+
+    if (input.plannedHours < 0) {
+      return { success: false, error: 'Плановые часы не могут быть отрицательными' }
+    }
+
+    const supabase = await createClient()
+
+    // Получаем текущего пользователя
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // Получаем максимальный order для этого этапа
+    const { data: existingItems } = await supabase
+      .from('decomposition_items')
+      .select('decomposition_item_order')
+      .eq('decomposition_item_stage_id', input.stageId)
+      .order('decomposition_item_order', { ascending: false })
+      .limit(1)
+
+    const maxOrder = existingItems?.[0]?.decomposition_item_order ?? 0
+    const newOrder = maxOrder + 1
+
+    // Создаём задачу
+    const { data, error } = await supabase
+      .from('decomposition_items')
+      .insert({
+        decomposition_item_section_id: input.sectionId,
+        decomposition_item_stage_id: input.stageId,
+        decomposition_item_description: input.description.trim(),
+        decomposition_item_planned_hours: input.plannedHours,
+        decomposition_item_work_category_id: input.workCategoryId,
+        decomposition_item_responsible: input.responsibleId || null,
+        decomposition_item_planned_due_date: input.dueDate || null,
+        decomposition_item_order: newOrder,
+        decomposition_item_progress: 0,
+        decomposition_item_created_by: user.id,
+      })
+      .select('decomposition_item_id')
+      .single()
+
+    if (error) {
+      console.error('[createDecompositionItem] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data: { itemId: data.decomposition_item_id } }
+  } catch (error) {
+    console.error('[createDecompositionItem] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка создания задачи',
+    }
+  }
+}
+
+/**
+ * Удалить задачу (decomposition_item) с каскадным удалением отчётов
+ *
+ * @param itemId - ID задачи
+ * @returns Успех или ошибка
+ */
+export async function deleteDecompositionItem(
+  itemId: string
+): Promise<ActionResult<{ itemId: string }>> {
+  try {
+    if (!itemId) {
+      return { success: false, error: 'ID задачи обязателен' }
+    }
+
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Необходима авторизация' }
+    }
+
+    // 1. Удаляем все work_logs связанные с задачей
+    const { error: workLogsError } = await supabase
+      .from('work_logs')
+      .delete()
+      .eq('decomposition_item_id', itemId)
+
+    if (workLogsError) {
+      console.error('[deleteDecompositionItem] Work logs delete error:', workLogsError)
+      return { success: false, error: `Ошибка удаления отчётов: ${workLogsError.message}` }
+    }
+
+    // 2. Удаляем саму задачу
+    const { error: itemError } = await supabase
+      .from('decomposition_items')
+      .delete()
+      .eq('decomposition_item_id', itemId)
+
+    if (itemError) {
+      console.error('[deleteDecompositionItem] Item delete error:', itemError)
+      return { success: false, error: itemError.message }
+    }
+
+    return { success: true, data: { itemId } }
+  } catch (error) {
+    console.error('[deleteDecompositionItem] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка удаления задачи',
+    }
+  }
+}
+
+/**
+ * Получить категории работ
+ *
+ * @returns Список категорий работ
+ */
+export async function getWorkCategories(): Promise<ActionResult<Array<{
+  id: string
+  name: string
+  color: string | null
+}>>> {
+  try {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('work_categories')
+      .select('work_category_id, work_category_name, work_category_color')
+      .order('work_category_name')
+
+    if (error) {
+      console.error('[getWorkCategories] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    const categories = (data || []).map(row => ({
+      id: row.work_category_id,
+      name: row.work_category_name,
+      color: row.work_category_color,
+    }))
+
+    return { success: true, data: categories }
+  } catch (error) {
+    console.error('[getWorkCategories] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки категорий работ',
     }
   }
 }

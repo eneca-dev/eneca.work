@@ -325,6 +325,26 @@ export const queryKeys = {
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Project Tags (теги проектов)
+  // -------------------------------------------------------------------------
+  projectTags: {
+    all: ['project-tags'] as const,
+    /** Список всех тегов (справочник) */
+    list: () => [...queryKeys.projectTags.all, 'list'] as const,
+    /** Map тегов по проектам (Record<projectId, tags[]>) */
+    map: () => [...queryKeys.projectTags.all, 'map'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Company Calendar (праздники и переносы)
+  // -------------------------------------------------------------------------
+  companyCalendar: {
+    all: ['company-calendar'] as const,
+    /** События календаря (праздники и переносы) */
+    events: () => [...queryKeys.companyCalendar.all, 'events'] as const,
+  },
 } as const
 
 // ============================================================================

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { differenceInDays, parseISO, format, addDays } from 'date-fns'
+import { parseISO, format, addDays } from 'date-fns'
 import type { BudgetSpendingPoint, TimelineRange } from '../../types'
 import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '../../constants'
 
@@ -61,7 +61,7 @@ export function BudgetSpendingArea({
   timelineWidth,
   rowHeight = SECTION_ROW_HEIGHT,
 }: BudgetSpendingAreaProps) {
-  // Вычисляем точки с интерполяцией
+  // Вычисляем точки БЕЗ интерполяции (ступеньки) — как у ActualReadinessArea
   const points = useMemo(() => {
     if (!spending || spending.length === 0) return []
 
@@ -80,6 +80,11 @@ export function BudgetSpendingArea({
     const firstDataDate = parseISO(sortedSpending[0].date)
     const lastDataDate = parseISO(sortedSpending[sortedSpending.length - 1].date)
 
+    // График идёт до сегодняшнего дня (или до последней даты данных, если она позже)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const endDate = lastDataDate > today ? lastDataDate : today
+
     const result: PointData[] = []
     const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
     const graphHeight = rowHeight * 0.75
@@ -88,12 +93,16 @@ export function BudgetSpendingArea({
     // Максимальный процент для масштабирования (если есть перерасход)
     const maxPercentage = Math.max(100, ...sortedSpending.map(s => s.percentage))
 
+    // Начальные значения для ступенчатой интерполяции
+    let lastKnownPercentage = sortedSpending[0].percentage
+    let lastKnownSpent = sortedSpending[0].spent
+
     for (let i = 0; i < totalDays; i++) {
       const dayDate = addDays(range.start, i)
       const dateKey = format(dayDate, 'yyyy-MM-dd')
 
-      // Пропускаем дни до/после данных
-      if (dayDate < firstDataDate || dayDate > lastDataDate) continue
+      // Пропускаем дни до первых данных или после сегодня
+      if (dayDate < firstDataDate || dayDate > endDate) continue
 
       let percentage: number
       let spent: number
@@ -103,10 +112,12 @@ export function BudgetSpendingArea({
       if (exactPoint) {
         percentage = exactPoint.percentage
         spent = exactPoint.spent
+        lastKnownPercentage = percentage
+        lastKnownSpent = spent
       } else {
-        const interpolated = interpolateSpending(dayDate, sortedSpending)
-        percentage = interpolated.percentage
-        spent = interpolated.spent
+        // Ступенька: используем последнее известное значение
+        percentage = lastKnownPercentage
+        spent = lastKnownSpent
         isInterpolated = true
       }
 
@@ -265,38 +276,3 @@ export function BudgetSpendingArea({
   )
 }
 
-/**
- * Интерполирует значение расхода бюджета между точками
- */
-function interpolateSpending(date: Date, spending: BudgetSpendingPoint[]): { percentage: number; spent: number } {
-  let leftPoint: BudgetSpendingPoint | null = null
-  let rightPoint: BudgetSpendingPoint | null = null
-
-  for (const point of spending) {
-    const pointDate = parseISO(point.date)
-    if (pointDate <= date) {
-      leftPoint = point
-    }
-    if (pointDate >= date && !rightPoint) {
-      rightPoint = point
-      break
-    }
-  }
-
-  if (!leftPoint && rightPoint) return { percentage: rightPoint.percentage, spent: rightPoint.spent }
-  if (leftPoint && !rightPoint) return { percentage: leftPoint.percentage, spent: leftPoint.spent }
-  if (!leftPoint || !rightPoint) return { percentage: 0, spent: 0 }
-
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) return { percentage: leftPoint.percentage, spent: leftPoint.spent }
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return {
-    percentage: leftPoint.percentage + (rightPoint.percentage - leftPoint.percentage) * ratio,
-    spent: leftPoint.spent + (rightPoint.spent - leftPoint.spent) * ratio,
-  }
-}
