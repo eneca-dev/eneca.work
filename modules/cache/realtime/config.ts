@@ -122,6 +122,19 @@ export const realtimeSubscriptions: TableSubscription[] = [
   },
 
   // ============================================================================
+  // Отчёты к стадиям (project_reports)
+  // ============================================================================
+  {
+    table: 'project_reports',
+    invalidateKeys: [
+      // Инвалидируем все stageReports кеши (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageReports'],
+      // Инвалидируем resourceGraph.all для обновления timeline
+      queryKeys.resourceGraph.all,
+    ],
+  },
+
+  // ============================================================================
   // Бюджеты
   // ============================================================================
   {

@@ -44,6 +44,7 @@ import { ActualReadinessArea } from './ActualReadinessArea'
 import { BudgetSpendingArea } from './BudgetSpendingArea'
 import { BudgetsRow } from './BudgetsRow'
 import { SectionTooltipOverlay } from './SectionTooltipOverlay'
+import { ProjectReportsRow } from './ProjectReportsRow'
 import {
   useWorkLogs,
   useLoadings,
@@ -1551,10 +1552,13 @@ interface StageRowProps {
 function StageRow({ stage, dayCells, range }: StageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = stage.objects.length > 0
+  const timelineWidth = dayCells.length * DAY_CELL_WIDTH
+  const totalWidth = SIDEBAR_WIDTH + timelineWidth
+  const depth = 1
 
   return (
     <BaseRow
-      depth={1}
+      depth={depth}
       isExpanded={isExpanded}
       onToggle={() => setIsExpanded(!isExpanded)}
       hasChildren={hasChildren}
@@ -1563,14 +1567,30 @@ function StageRow({ stage, dayCells, range }: StageRowProps) {
       dayCells={dayCells}
       range={range}
     >
-      {stage.objects.map((obj) => (
-        <ObjectRow
-          key={obj.id}
-          object={obj}
-          dayCells={dayCells}
-          range={range}
-        />
-      ))}
+      {isExpanded && (
+        <>
+          {/* Stage Reports Row */}
+          <ProjectReportsRow
+            stageId={stage.id}
+            stageName={stage.name}
+            dayCells={dayCells}
+            depth={depth + 1}
+            range={range}
+            stageStartDate={stage.startDate}
+            stageEndDate={stage.finishDate}
+          />
+
+          {/* Objects */}
+          {stage.objects.map((obj) => (
+            <ObjectRow
+              key={obj.id}
+              object={obj}
+              dayCells={dayCells}
+              range={range}
+            />
+          ))}
+        </>
+      )}
     </BaseRow>
   )
 }

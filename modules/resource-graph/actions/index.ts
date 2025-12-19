@@ -17,8 +17,9 @@ import type {
   WorkLog,
   Loading,
   ReadinessPoint,
+  ProjectReport,
 } from '../types'
-import { transformRowsToHierarchy } from '../utils'
+import { transformRowsToHierarchy, transformProfileToCreatedBy } from '../utils'
 import type { FilterQueryParams } from '@/modules/inline-filter'
 
 // ============================================================================
@@ -1066,6 +1067,235 @@ export async function updateSectionDates(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Ошибка обновления дат раздела',
+    }
+  }
+}
+
+// ============================================================================
+// Project Reports Actions
+// ============================================================================
+
+/**
+ * Получить все отчеты для стадии
+ * @param stageId - ID стадии
+ * @returns Массив отчетов с информацией об авторах
+ */
+export async function getStageReports(
+  stageId: string
+): Promise<ActionResult<ProjectReport[]>> {
+  try {
+    const supabase = await createClient()
+
+    // Query с JOIN profiles для автора
+    const { data, error } = await supabase
+      .from('project_reports')
+      .select(`
+        report_id,
+        stage_id,
+        comment,
+        created_at,
+        updated_at,
+        profiles:created_by (
+          user_id,
+          first_name,
+          last_name,
+          avatar_url
+        )
+      `)
+      .eq('stage_id', stageId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('[getStageReports] Supabase error:', error)
+      return { success: false, error: error.message }
+    }
+
+    // Transform в ProjectReport[]
+    type ProfileRow = {
+      user_id: string
+      first_name: string | null
+      last_name: string | null
+      avatar_url: string | null
+    }
+
+    const reports: ProjectReport[] = (data || []).map(row => {
+      const profile = row.profiles as ProfileRow | null
+
+      return {
+        id: row.report_id,
+        stageId: row.stage_id,
+        comment: row.comment,
+        createdBy: transformProfileToCreatedBy(profile),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }
+    })
+
+    return { success: true, data: reports }
+  } catch (error) {
+    console.error('[getStageReports] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка загрузки отчетов',
+    }
+  }
+}
+
+/**
+ * Создать или обновить отчет к стадии
+ * @param input - Данные отчета
+ * @returns Созданный или обновленный отчет
+ */
+export async function upsertStageReport(
+  input: { reportId?: string; stageId: string; comment: string }
+): Promise<ActionResult<ProjectReport>> {
+  try {
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
+    // RLS автоматически проверит разрешение project_reports.create/edit
+
+    type ProfileRow = {
+      user_id: string
+      first_name: string | null
+      last_name: string | null
+      avatar_url: string | null
+    }
+
+    if (input.reportId) {
+      // UPDATE
+      const { data, error } = await supabase
+        .from('project_reports')
+        .update({
+          comment: input.comment,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('report_id', input.reportId)
+        .select(`
+          report_id,
+          stage_id,
+          comment,
+          created_at,
+          updated_at,
+          profiles:created_by (
+            user_id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `)
+        .single()
+
+      if (error) {
+        console.error('[upsertStageReport] Update error:', error)
+        return { success: false, error: error.message }
+      }
+
+      const profile = data.profiles as ProfileRow | null
+
+      return {
+        success: true,
+        data: {
+          id: data.report_id,
+          stageId: data.stage_id,
+          comment: data.comment,
+          createdBy: transformProfileToCreatedBy(profile),
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        },
+      }
+    } else {
+      // INSERT
+      const { data, error } = await supabase
+        .from('project_reports')
+        .insert({
+          stage_id: input.stageId,
+          comment: input.comment,
+          created_by: user.id,
+        })
+        .select(`
+          report_id,
+          stage_id,
+          comment,
+          created_at,
+          updated_at,
+          profiles:created_by (
+            user_id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `)
+        .single()
+
+      if (error) {
+        console.error('[upsertStageReport] Insert error:', error)
+        return { success: false, error: error.message }
+      }
+
+      const profile = data.profiles as ProfileRow | null
+
+      return {
+        success: true,
+        data: {
+          id: data.report_id,
+          stageId: data.stage_id,
+          comment: data.comment,
+          createdBy: transformProfileToCreatedBy(profile),
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        },
+      }
+    }
+  } catch (error) {
+    console.error('[upsertStageReport] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка сохранения отчета',
+    }
+  }
+}
+
+/**
+ * Удалить отчет к стадии
+ * @param input - ID отчета и стадии (для инвалидации кеша)
+ * @returns Результат удаления
+ */
+export async function deleteStageReport(
+  input: { reportId: string; stageId: string }
+): Promise<ActionResult<void>> {
+  try {
+    const supabase = await createClient()
+
+    // Проверка авторизации
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
+    // RLS автоматически проверит разрешение project_reports.edit
+
+    const { error } = await supabase
+      .from('project_reports')
+      .delete()
+      .eq('report_id', input.reportId)
+
+    if (error) {
+      console.error('[deleteStageReport] Error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, data: undefined }
+  } catch (error) {
+    console.error('[deleteStageReport] Error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Ошибка удаления отчета',
     }
   }
 }

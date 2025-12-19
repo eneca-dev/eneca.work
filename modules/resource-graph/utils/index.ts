@@ -528,3 +528,9 @@ export function getInitials(firstName: string | null, lastName: string | null): 
   const last = lastName?.charAt(0)?.toUpperCase() || ''
   return first + last || '?'
 }
+
+// ============================================================================
+// Profile Transformation
+// ============================================================================
+
+export { transformProfileToCreatedBy } from './profile-transform'

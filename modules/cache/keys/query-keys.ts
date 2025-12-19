@@ -196,6 +196,8 @@ export const queryKeys = {
     loadings: (sectionId: string) => [...queryKeys.resourceGraph.all, 'loadings', sectionId] as const,
     /** Stage readiness для раздела (lazy load при развороте) */
     stageReadiness: (sectionId: string) => [...queryKeys.resourceGraph.all, 'stageReadiness', sectionId] as const,
+    /** Stage reports для стадии (lazy load при развороте) */
+    stageReports: (stageId: string) => [...queryKeys.resourceGraph.all, 'stageReports', stageId] as const,
   },
 
   // -------------------------------------------------------------------------
