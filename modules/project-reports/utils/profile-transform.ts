@@ -19,7 +19,7 @@ export function transformProfileToCreatedBy(
   } | null
 ) {
   return {
-    id: profile?.user_id || '',
+    id: profile?.user_id || null,    
     firstName: profile?.first_name || null,
     lastName: profile?.last_name || null,
     name: profile

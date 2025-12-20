@@ -15,6 +15,3 @@ export {
   calculateBarPosition,
   type DayCell,
 } from './timeline'
-
-// Reports components
-export { StageReportMarkers } from './reports/StageReportMarkers'

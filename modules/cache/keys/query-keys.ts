@@ -269,6 +269,18 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Project Reports (отчеты руководителей проектов)
+  // -------------------------------------------------------------------------
+  projectReports: {
+    all: ['project-reports'] as const,
+    lists: () => [...queryKeys.projectReports.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.projectReports.lists(), filters] as const,
+    details: () => [...queryKeys.projectReports.all, 'detail'] as const,
+    /** Reports для конкретной стадии */
+    detail: (stageId: string) => [...queryKeys.projectReports.details(), stageId] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Checkpoints (чекпоинты/дедлайны)
   // -------------------------------------------------------------------------
   checkpoints: {

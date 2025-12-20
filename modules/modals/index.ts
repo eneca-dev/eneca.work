@@ -149,5 +149,8 @@ export { LoadingModal, type LoadingModalProps } from './components/loading'
 // Checkpoint
 export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
 
+// Project Report
+export { ProjectReportModal, type ProjectReportModalProps } from './components/project-report/ProjectReportModal'
+
 // Global
 // export { GlobalModals } from './components/GlobalModals'

@@ -44,7 +44,7 @@ import { ActualReadinessArea } from './ActualReadinessArea'
 import { BudgetSpendingArea } from './BudgetSpendingArea'
 import { BudgetsRow } from './BudgetsRow'
 import { SectionTooltipOverlay } from './SectionTooltipOverlay'
-import { ProjectReportsRow } from './ProjectReportsRow'
+import { ProjectReportsRow } from '@/modules/project-reports'
 import {
   useWorkLogs,
   useLoadings,

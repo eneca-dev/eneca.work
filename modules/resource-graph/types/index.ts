@@ -144,33 +144,6 @@ export interface WorkLog {
   }
 }
 
-// ============================================================================
-// Project Reports Types - Отчеты к стадиям
-// ============================================================================
-
-/**
- * Отчет руководителя проекта к стадии
- */
-export interface ProjectReport {
-  /** ID отчета */
-  id: string
-  /** ID стадии */
-  stageId: string
-  /** Комментарий руководителя проекта */
-  comment: string
-  /** Автор отчета */
-  createdBy: {
-    id: string
-    firstName: string | null
-    lastName: string | null
-    name: string | null
-    avatarUrl: string | null
-  }
-  /** Дата создания */
-  createdAt: string
-  /** Дата последнего обновления */
-  updatedAt: string
-}
 
 // ============================================================================
 // Loading Types - Загрузки сотрудников

@@ -52,6 +52,7 @@ export function ProjectRow({ project, dayCells, range }: ProjectRowProps) {
         <StageRow
           key={stage.id}
           stage={stage}
+          projectName={project.name}
           dayCells={dayCells}
           range={range}
         />
