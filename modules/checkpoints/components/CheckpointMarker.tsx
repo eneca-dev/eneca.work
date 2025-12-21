@@ -1,12 +1,73 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import {
   ArrowRightFromLine,
   Flag,
   Bookmark,
   HelpCircle,
+  Star,
+  AlertCircle,
+  CheckCircle,
+  Calendar,
+  Clock,
+  Target,
+  Trophy,
+  Award,
+  FileCheck,
+  FileText,
+  Send,
+  Milestone,
+  Rocket,
+  Zap,
+  Bell,
+  Eye,
+  Lock,
+  Unlock,
+  Shield,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  CircleCheck,
+  CircleDot,
+  Hourglass,
+  Timer,
+  AlarmCheck,
+  Sparkles,
+  Flame,
+  Bolt,
+  TrendingUp,
+  Activity,
+  BarChart3,
+  PieChart,
+  LineChart,
+  GitCommit,
+  GitBranch,
+  Users,
+  User,
+  UserCheck,
+  Crown,
+  Gem,
+  Diamond,
+  Box,
+  Package,
+  Inbox,
+  Archive,
+  FolderCheck,
+  FolderOpen,
+  Files,
+  ClipboardCheck,
+  Layers,
+  CircleAlert,
+  TriangleAlert,
+  Info,
+  Ban,
+  XCircle,
+  MinusCircle,
+  PlusCircle,
+  Play,
+  Pause,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -23,6 +84,7 @@ import {
   SECTION_ROW_HEIGHT_WITH_CHECKPOINTS
 } from '@/modules/resource-graph/constants'
 import { cn } from '@/lib/utils'
+import { useCheckpointLinks } from '../context/CheckpointLinksContext'
 
 // ============================================================================
 // Constants
@@ -36,18 +98,98 @@ const ICON_SIZE = 12     // Размер иконки внутри маркер�
 // ============================================================================
 
 // Маппинг названий иконок на компоненты
-// Импортируем только используемые иконки для оптимизации бандла
-//
-// ⚠️ Как добавить новую иконку:
-// 1. Добавьте импорт в секцию импортов выше (строка 5-11)
-// 2. Добавьте иконку в ICON_MAP
-// 3. Используйте точное название иконки из Lucide React
-//    Пример: import { Calendar } from 'lucide-react'
-//            ICON_MAP = { ...existing, Calendar }
+// Все иконки, доступные для выбора в CheckpointCreateModal
 const ICON_MAP: Record<string, LucideIcon> = {
-  ArrowRightFromLine,
+  // Основные иконки чекпоинтов
   Flag,
   Bookmark,
+  Star,
+  AlertCircle,
+  CheckCircle,
+  Calendar,
+  Clock,
+  Target,
+  Trophy,
+  Award,
+
+  // Документы и файлы
+  FileCheck,
+  FileText,
+  Files,
+  FolderCheck,
+  FolderOpen,
+  ClipboardCheck,
+
+  // Действия и события
+  Send,
+  ArrowRightFromLine,
+  Milestone,
+  Rocket,
+  Zap,
+  Bell,
+
+  // Состояния и индикаторы
+  Eye,
+  Lock,
+  Unlock,
+  Shield,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  CircleCheck,
+  CircleDot,
+
+  // Время
+  Hourglass,
+  Timer,
+  AlarmCheck,
+
+  // Специальные эффекты
+  Sparkles,
+  Flame,
+  Bolt,
+
+  // Графики и аналитика
+  TrendingUp,
+  Activity,
+  BarChart3,
+  PieChart,
+  LineChart,
+
+  // Git и версионирование
+  GitCommit,
+  GitBranch,
+
+  // Пользователи
+  Users,
+  User,
+  UserCheck,
+
+  // Награды
+  Crown,
+  Gem,
+  Diamond,
+
+  // Организация
+  Box,
+  Package,
+  Inbox,
+  Archive,
+  Layers,
+
+  // Предупреждения
+  CircleAlert,
+  TriangleAlert,
+  Info,
+  Ban,
+  XCircle,
+  MinusCircle,
+  PlusCircle,
+
+  // Управление
+  Play,
+  Pause,
+
   // Fallback иконка для неизвестных типов
   HelpCircle,
 }
@@ -70,6 +212,10 @@ interface CheckpointMarkerProps {
   range: TimelineRange
   /** Общая ширина timeline в пикселях */
   timelineWidth: number
+  /** ID секции (для регистрации связанных чекпоинтов) */
+  sectionId: string
+  /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
+  absoluteRowY: number
 }
 
 interface CheckpointMarkersProps {
@@ -81,6 +227,10 @@ interface CheckpointMarkersProps {
   timelineWidth: number
   /** Callback клика на маркер */
   onMarkerClick?: (checkpoint: Checkpoint) => void
+  /** ID секции (для регистрации связанных чекпоинтов) */
+  sectionId: string
+  /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
+  absoluteRowY: number
 }
 
 // ============================================================================
@@ -105,8 +255,9 @@ const STATUS_LABELS: Record<Checkpoint['status'], string> = {
 // Single Marker Component
 // ============================================================================
 
-function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarkerProps) {
+function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absoluteRowY }: CheckpointMarkerProps) {
   const [isHovered, setIsHovered] = useState(false)
+  const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
 
   // Рассчитываем позицию X
   const x = useMemo(() => {
@@ -116,16 +267,38 @@ function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarker
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
 
+  // Y позиция — центр дополнительного пространства для чекпоинтов
+  // Дополнительное пространство = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
+  const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
+  const relativeY = checkpointSpace / 2
+
+  // Абсолютная Y позиция от верха timeline
+  const absoluteY = absoluteRowY + relativeY
+
+  // Регистрируем позицию чекпоинта для рисования вертикальных линий
+  useEffect(() => {
+    // Регистрируем только если есть связанные секции (> 0 linked_sections)
+    if (checkpoint.linked_sections && checkpoint.linked_sections.length > 0) {
+      registerCheckpoint({
+        checkpoint,
+        sectionId,
+        x,
+        y: absoluteY,
+      })
+    }
+
+    return () => {
+      if (checkpoint.linked_sections && checkpoint.linked_sections.length > 0) {
+        unregisterCheckpoint(checkpoint.checkpoint_id, sectionId)
+      }
+    }
+  }, [checkpoint, sectionId, x, absoluteY, registerCheckpoint, unregisterCheckpoint])
+
   // Получаем компонент иконки
   const IconComponent = useMemo(() => getLucideIcon(checkpoint.icon), [checkpoint.icon])
 
   // Проверяем видимость
   if (x < 0 || x > timelineWidth) return null
-
-  // Y позиция — центр дополнительного пространства для чекпоинтов
-  // Дополнительное пространство = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
-  const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
-  const y = checkpointSpace / 2
 
   // Цвета: статус для обводки, кастомный цвет для иконки
   const statusColor = STATUS_COLORS[checkpoint.status]
@@ -138,7 +311,7 @@ function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarker
     <Tooltip>
       <TooltipTrigger asChild>
         <g
-          transform={`translate(${x}, ${y})`}
+          transform={`translate(${x}, ${relativeY})`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className={cn(
@@ -321,6 +494,8 @@ export function CheckpointMarkers({
   range,
   timelineWidth,
   onMarkerClick,
+  sectionId,
+  absoluteRowY,
 }: CheckpointMarkersProps) {
   if (!checkpoints || checkpoints.length === 0) return null
 
@@ -407,6 +582,8 @@ export function CheckpointMarkers({
               checkpoint={cp}
               range={range}
               timelineWidth={timelineWidth}
+              sectionId={sectionId}
+              absoluteRowY={absoluteRowY}
             />
           </g>
         ))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ChevronRight, Calendar, Loader2, Plus } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -63,6 +63,37 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
+
+  // Ref для получения абсолютной позиции строки
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [absoluteRowY, setAbsoluteRowY] = useState(0)
+
+  // Вычисляем абсолютную Y позицию строки при монтировании и изменении размеров
+  useEffect(() => {
+    const updatePosition = () => {
+      if (rowRef.current) {
+        const rect = rowRef.current.getBoundingClientRect()
+        // Находим родительский контейнер timeline
+        const timelineContainer = rowRef.current.closest('[data-timeline-container]')
+        if (timelineContainer) {
+          const containerRect = timelineContainer.getBoundingClientRect()
+          // Абсолютная позиция относительно timeline контейнера
+          setAbsoluteRowY(rect.top - containerRect.top)
+        }
+      }
+    }
+
+    updatePosition()
+
+    // Обновляем при скролле или resize
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [isExpanded]) // Пересчитываем при разворачивании/сворачивании
 
   // Lazy load work logs при развороте объекта (не раздела!)
   const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
@@ -216,6 +247,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   return (
     <>
       <div
+        ref={rowRef}
         className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
         style={{ height: rowHeight, minWidth: totalWidth }}
       >
@@ -444,6 +476,8 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
               checkpoints={checkpoints}
               range={range}
               timelineWidth={timelineWidth}
+              sectionId={section.id}
+              absoluteRowY={absoluteRowY}
             />
           )}
         </div>
