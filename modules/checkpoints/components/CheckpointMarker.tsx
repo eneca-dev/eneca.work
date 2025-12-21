@@ -1,7 +1,14 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { format, parseISO, differenceInDays } from 'date-fns'
+import {
+  ArrowRightFromLine,
+  Flag,
+  Bookmark,
+  HelpCircle,
+  type LucideIcon,
+} from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -10,7 +17,47 @@ import {
 } from '@/components/ui/tooltip'
 import type { Checkpoint } from '../actions/checkpoints'
 import type { TimelineRange } from '@/modules/resource-graph/types'
-import { DAY_CELL_WIDTH, SECTION_ROW_HEIGHT } from '@/modules/resource-graph/constants'
+import {
+  DAY_CELL_WIDTH,
+  SECTION_ROW_HEIGHT,
+  SECTION_ROW_HEIGHT_WITH_CHECKPOINTS
+} from '@/modules/resource-graph/constants'
+import { cn } from '@/lib/utils'
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const MARKER_RADIUS = 8  // Увеличили с 5 до 8 для иконок
+const ICON_SIZE = 12     // Размер иконки внутри маркера
+
+// ============================================================================
+// Icon Helper
+// ============================================================================
+
+// Маппинг названий иконок на компоненты
+// Импортируем только используемые иконки для оптимизации бандла
+//
+// ⚠️ Как добавить новую иконку:
+// 1. Добавьте импорт в секцию импортов выше (строка 5-11)
+// 2. Добавьте иконку в ICON_MAP
+// 3. Используйте точное название иконки из Lucide React
+//    Пример: import { Calendar } from 'lucide-react'
+//            ICON_MAP = { ...existing, Calendar }
+const ICON_MAP: Record<string, LucideIcon> = {
+  ArrowRightFromLine,
+  Flag,
+  Bookmark,
+  // Fallback иконка для неизвестных типов
+  HelpCircle,
+}
+
+/**
+ * Получить компонент иконки Lucide по названию
+ */
+function getLucideIcon(iconName: string): LucideIcon {
+  return ICON_MAP[iconName] || HelpCircle
+}
 
 // ============================================================================
 // Types
@@ -59,6 +106,8 @@ const STATUS_LABELS: Record<Checkpoint['status'], string> = {
 // ============================================================================
 
 function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarkerProps) {
+  const [isHovered, setIsHovered] = useState(false)
+
   // Рассчитываем позицию X
   const x = useMemo(() => {
     const cpDate = parseISO(checkpoint.checkpoint_date)
@@ -67,70 +116,176 @@ function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarker
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
 
+  // Получаем компонент иконки
+  const IconComponent = useMemo(() => getLucideIcon(checkpoint.icon), [checkpoint.icon])
+
   // Проверяем видимость
   if (x < 0 || x > timelineWidth) return null
 
-  // Y позиция — верхняя часть строки (~15% от высоты)
-  const y = SECTION_ROW_HEIGHT * 0.15
+  // Y позиция — центр дополнительного пространства для чекпоинтов
+  // Дополнительное пространство = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
+  const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
+  const y = checkpointSpace / 2
 
-  // Цвета
-  const strokeColor = STATUS_COLORS[checkpoint.status]
-  const fillColor = checkpoint.color || '#ffffff'
+  // Цвета: статус для обводки, кастомный цвет для иконки
+  const statusColor = STATUS_COLORS[checkpoint.status]
+  const iconColor = checkpoint.color || '#6B7280'
+
+  // Трансформация для hover (масштабирование от центра)
+  const hoverScale = isHovered ? 1.2 : 1
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <g
-          className="cursor-pointer pointer-events-auto"
-          style={{ transform: `translate(${x}px, ${y}px)` }}
+          transform={`translate(${x}, ${y})`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={cn(
+            "checkpoint-marker cursor-pointer pointer-events-auto",
+            checkpoint.status === 'pending' && "animate-pulse-subtle"
+          )}
+          style={{
+            animation: checkpoint.status === 'pending'
+              ? 'checkpoint-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+              : undefined,
+            transition: 'all 0.3s ease-out'
+          }}
         >
+          {/* Внутренняя группа с hover масштабированием */}
+          <g transform={`scale(${hoverScale})`} style={{ transition: 'transform 0.3s ease-out' }}>
+          {/* Вертикальная линия вниз (до начала графиков) */}
+          <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={SECTION_ROW_HEIGHT * 0.5}
+            stroke="currentColor"
+            strokeWidth="1"
+            className="text-border/30 transition-all duration-300"
+            style={{
+              strokeDasharray: '2,2'
+            }}
+          />
+
+          {/* Glow эффект при hover - добавляем через filter */}
+          <defs>
+            <filter id={`glow-${checkpoint.checkpoint_id}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <radialGradient id={`gradient-${checkpoint.checkpoint_id}`}>
+              <stop offset="0%" stopColor={statusColor} stopOpacity="0.3"/>
+              <stop offset="70%" stopColor={statusColor} stopOpacity="0.1"/>
+              <stop offset="100%" stopColor={statusColor} stopOpacity="0"/>
+            </radialGradient>
+          </defs>
+
+          {/* Внешний glow круг - видим только при hover */}
           <circle
             cx={0}
             cy={0}
-            r={5}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={2.5}
-            className="transition-all duration-150 hover:r-6"
+            r={MARKER_RADIUS + 4}
+            fill={`url(#gradient-${checkpoint.checkpoint_id})`}
+            className="hover-glow"
+            style={{ pointerEvents: 'none' }}
           />
+
+          {/* Основной круг маркера - полупрозрачный фон, обводка по статусу */}
+          <circle
+            cx={0}
+            cy={0}
+            r={MARKER_RADIUS}
+            fill="hsl(var(--background))"
+            fillOpacity="0.95"
+            stroke={statusColor}
+            strokeWidth={2}
+            className="transition-all duration-300 checkpoint-circle"
+            style={{
+              filter: `drop-shadow(0 2px 4px ${statusColor}40)`
+            }}
+          />
+
+          {/* Lucide иконка внутри - цветная */}
+          <foreignObject
+            x={-ICON_SIZE / 2}
+            y={-ICON_SIZE / 2}
+            width={ICON_SIZE}
+            height={ICON_SIZE}
+            className="pointer-events-none overflow-visible"
+          >
+            <div className="flex items-center justify-center w-full h-full transition-transform duration-300">
+              <IconComponent
+                size={ICON_SIZE}
+                style={{ color: iconColor }}
+                strokeWidth={2.5}
+                className="transition-all duration-300"
+              />
+            </div>
+          </foreignObject>
+          </g>
         </g>
       </TooltipTrigger>
       <TooltipContent
         side="top"
         align="center"
-        sideOffset={8}
-        className="
-          bg-zinc-900/95 backdrop-blur-xl
-          border border-white/10
-          shadow-xl shadow-black/40
-          rounded-lg px-3 py-2.5
-          max-w-[240px]
-        "
+        sideOffset={12}
+        className={cn(
+          "checkpoint-tooltip",
+          "bg-gradient-to-br from-zinc-900/98 to-zinc-950/98",
+          "backdrop-blur-2xl",
+          "border border-white/[0.08]",
+          "shadow-2xl shadow-black/60",
+          "rounded-xl px-3.5 py-3",
+          "max-w-[260px]",
+          "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
+          "duration-200"
+        )}
+        style={{
+          boxShadow: `0 0 0 1px ${statusColor}15, 0 8px 24px -4px ${statusColor}25, 0 16px 48px -8px rgba(0,0,0,0.4)`
+        }}
       >
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {/* Header: Icon + Title */}
-          <div className="flex items-center gap-2">
-            <span className="text-base">{checkpoint.icon}</span>
-            <span className="text-xs font-medium text-white truncate">
-              {checkpoint.title}
-            </span>
-          </div>
-
-          {/* Type */}
-          <div className="text-[10px] text-white/50">
-            {checkpoint.type_name}
+          <div className="flex items-start gap-2.5">
+            <div
+              className="shrink-0 p-1.5 rounded-lg transition-all duration-300"
+              style={{
+                backgroundColor: `${statusColor}18`,
+                boxShadow: `0 0 12px ${statusColor}25`
+              }}
+            >
+              <IconComponent
+                size={14}
+                className="text-white"
+                strokeWidth={2.5}
+                style={{ color: iconColor }}
+              />
+            </div>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="text-xs font-semibold text-white/95 leading-tight">
+                {checkpoint.title}
+              </div>
+              <div className="text-[10px] text-white/40 mt-0.5 font-medium">
+                {checkpoint.type_name}
+              </div>
+            </div>
           </div>
 
           {/* Date + Status */}
-          <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/10">
-            <span className="text-[11px] text-white/60">
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/[0.06]">
+            <span className="text-[11px] text-white/50 font-medium tabular-nums">
               {format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}
             </span>
             <span
-              className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+              className="text-[10px] font-semibold px-2 py-1 rounded-md transition-all duration-200"
               style={{
-                backgroundColor: `${strokeColor}20`,
-                color: strokeColor,
+                backgroundColor: `${statusColor}22`,
+                color: statusColor,
+                boxShadow: `0 0 8px ${statusColor}20, inset 0 0 0 1px ${statusColor}30`
               }}
             >
               {STATUS_LABELS[checkpoint.status]}
@@ -139,15 +294,16 @@ function CheckpointMarker({ checkpoint, range, timelineWidth }: CheckpointMarker
 
           {/* Description (if any) */}
           {checkpoint.description && (
-            <p className="text-[10px] text-white/50 leading-relaxed pt-1 border-t border-white/10">
+            <p className="text-[11px] text-white/45 leading-relaxed pt-2 border-t border-white/[0.06]">
               {checkpoint.description}
             </p>
           )}
 
           {/* Completed info (if completed) */}
           {checkpoint.completed_at && (
-            <div className="text-[10px] text-white/40 pt-1">
-              Выполнен: {format(parseISO(checkpoint.completed_at), 'dd.MM.yyyy')}
+            <div className="text-[10px] text-white/35 pt-2 border-t border-white/[0.06] flex items-center gap-1.5">
+              <div className="w-1 h-1 rounded-full bg-green-500/60" />
+              <span>Выполнен: {format(parseISO(checkpoint.completed_at), 'dd.MM.yyyy')}</span>
             </div>
           )}
         </div>
@@ -168,21 +324,105 @@ export function CheckpointMarkers({
 }: CheckpointMarkersProps) {
   if (!checkpoints || checkpoints.length === 0) return null
 
+  // Вычисляем позиции всех чекпоинтов для горизонтальной линии
+  const checkpointPositions = useMemo(() => {
+    return checkpoints
+      .map((cp) => {
+        const cpDate = parseISO(cp.checkpoint_date)
+        const dayOffset = differenceInDays(cpDate, range.start)
+        const x = dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
+        return { checkpoint: cp, x }
+      })
+      .filter(({ x }) => x >= 0 && x <= timelineWidth)
+      .sort((a, b) => a.x - b.x)
+  }, [checkpoints, range, timelineWidth])
+
+  // Y позиция для горизонтальной линии — центр дополнительного пространства
+  const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
+  const lineY = checkpointSpace / 2
+
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delayDuration={300}>
+      <style>{`
+        @keyframes checkpoint-pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.85;
+          }
+        }
+
+        /* Hover эффект glow */
+        .checkpoint-marker .hover-glow {
+          opacity: 0;
+          transition: opacity 0.3s ease-out;
+        }
+
+        .checkpoint-marker:hover .hover-glow {
+          opacity: 1;
+        }
+
+        /* Hover эффект для circle */
+        .checkpoint-marker .checkpoint-circle {
+          transition: filter 0.3s ease-out;
+        }
+
+        .checkpoint-marker:hover .checkpoint-circle {
+          filter: drop-shadow(0 4px 12px currentColor);
+        }
+
+        .checkpoint-tooltip {
+          animation-duration: 200ms;
+          animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+      `}</style>
       <svg
-        className="absolute inset-0 pointer-events-none overflow-visible"
-        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT }}
+        className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-50"
+        style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT_WITH_CHECKPOINTS }}
       >
-        {checkpoints.map((cp) => (
-          <CheckpointMarker
-            key={cp.checkpoint_id}
-            checkpoint={cp}
-            range={range}
-            timelineWidth={timelineWidth}
+        {/* Горизонтальная соединительная линия между первым и последним чекпоинтом - рендерим ПЕРВОЙ чтобы была под маркерами */}
+        {checkpointPositions.length > 1 && (
+          <line
+            x1={checkpointPositions[0].x}
+            y1={lineY}
+            x2={checkpointPositions[checkpointPositions.length - 1].x}
+            y2={lineY}
+            stroke="hsl(var(--border))"
+            strokeWidth="2"
+            opacity="0.7"
+            className="transition-all duration-300"
           />
+        )}
+
+        {/* Маркеры чекпоинтов - рендерим после линии, чтобы перекрывали её */}
+        {checkpoints.map((cp, index) => (
+          <g
+            key={cp.checkpoint_id}
+            style={{
+              animation: `fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) ${index * 50}ms both`
+            }}
+          >
+            <CheckpointMarker
+              checkpoint={cp}
+              range={range}
+              timelineWidth={timelineWidth}
+            />
+          </g>
         ))}
       </svg>
+      <style>{`
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </TooltipProvider>
   )
 }

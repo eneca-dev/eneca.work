@@ -46,6 +46,9 @@ export const OBJECT_ROW_HEIGHT = 56
 /** Высота строки раздела (двухстрочная) */
 export const SECTION_ROW_HEIGHT = 56
 
+/** Высота строки раздела с чекпоинтами */
+export const SECTION_ROW_HEIGHT_WITH_CHECKPOINTS = 80
+
 /** Высота строки этапа декомпозиции (двухстрочная + место для загрузок и готовности) */
 export const STAGE_ROW_HEIGHT = 64
 

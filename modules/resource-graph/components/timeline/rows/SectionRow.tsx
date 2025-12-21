@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
-import { ChevronRight, Calendar, Loader2 } from 'lucide-react'
+import { ChevronRight, Calendar, Loader2, Plus } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -31,13 +31,17 @@ import {
   useUpdateSectionDates,
 } from '../../../hooks'
 import { getInitials, formatDateShort } from '../../../utils'
-import { SECTION_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
+import { SECTION_ROW_HEIGHT, SECTION_ROW_HEIGHT_WITH_CHECKPOINTS, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
 
-// Dynamic import для SectionModal
+// Dynamic imports
 const SectionModal = dynamic(
   () => import('@/modules/modals/components/section/SectionModal').then(mod => mod.SectionModal),
   { ssr: false }
 )
+
+// Импорты для чекпоинтов
+import { CheckpointCreateModal } from '@/modules/modals'
+import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
 
 // ============================================================================
 // Section Row
@@ -57,12 +61,18 @@ interface SectionRowProps {
 export function SectionRow({ section, dayCells, range, isObjectExpanded }: SectionRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
+  const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
 
   // Lazy load work logs при развороте объекта (не раздела!)
   const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
     enabled: isObjectExpanded,
   })
+
+  // Lazy load checkpoints при развороте объекта
+  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints(
+    isObjectExpanded ? { sectionId: section.id } : undefined
+  )
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
@@ -199,11 +209,15 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
     return { planned, actual, budget }
   }, [section.readinessCheckpoints, mergedSectionReadiness, section.budgetSpending, section.startDate, section.endDate])
 
+  // Динамическая высота строки в зависимости от наличия чекпоинтов
+  const hasCheckpoints = checkpoints.length > 0
+  const rowHeight = hasCheckpoints ? SECTION_ROW_HEIGHT_WITH_CHECKPOINTS : SECTION_ROW_HEIGHT
+
   return (
     <>
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
-        style={{ height: SECTION_ROW_HEIGHT, minWidth: totalWidth }}
+        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors group"
+        style={{ height: rowHeight, minWidth: totalWidth }}
       >
         {/* Sidebar - sticky left */}
         <div
@@ -216,7 +230,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* Первая строка: Expand + Avatar + Name */}
+          {/* Первая строка: Expand + Checkpoint Button + Avatar + Name */}
           <div className="flex items-center gap-1.5 min-w-0">
             {hasChildren ? (
               <button
@@ -233,6 +247,30 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             ) : (
               <div className="w-5 shrink-0" />
             )}
+
+            {/* Кнопка добавления чекпоинта */}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsCheckpointModalOpen(true)
+                    }}
+                    className={cn(
+                      'p-0.5 rounded transition-all shrink-0',
+                      'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
+                      'opacity-0 group-hover:opacity-100'
+                    )}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Добавить чекпоинт
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Avatar */}
             <TooltipProvider delayDuration={200}>
@@ -352,14 +390,15 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         </div>
 
         {/* Timeline area */}
-        <div className="relative" style={{ width: timelineWidth }}>
+        <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Графики раздела */}
+          {/* Графики раздела - фиксированная высота, всегда 56px, прикреплены к низу */}
           <div
             className={cn(
-              'absolute inset-0 transition-all duration-200',
+              'absolute bottom-0 left-0 right-0 transition-all duration-200',
               isExpanded && 'opacity-30 saturate-50'
             )}
+            style={{ height: SECTION_ROW_HEIGHT }}
           >
             <SectionPeriodFrame
               startDate={section.startDate}
@@ -399,6 +438,14 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
           />
+          {/* Маркеры чекпоинтов - поверх всех графиков */}
+          {checkpoints.length > 0 && (
+            <CheckpointMarkers
+              checkpoints={checkpoints}
+              range={range}
+              timelineWidth={timelineWidth}
+            />
+          )}
         </div>
       </div>
 
@@ -451,6 +498,17 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         sectionId={section.id}
         onSuccess={() => {
           refetchWorkLogs()
+        }}
+      />
+
+      {/* Checkpoint Create Modal */}
+      <CheckpointCreateModal
+        isOpen={isCheckpointModalOpen}
+        onClose={() => setIsCheckpointModalOpen(false)}
+        sectionId={section.id}
+        sectionName={section.name}
+        onSuccess={() => {
+          refetchCheckpoints()
         }}
       />
     </>
