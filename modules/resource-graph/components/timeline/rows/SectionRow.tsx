@@ -78,7 +78,16 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         if (timelineContainer) {
           const containerRect = timelineContainer.getBoundingClientRect()
           // Абсолютная позиция относительно timeline контейнера
-          setAbsoluteRowY(rect.top - containerRect.top)
+          const newY = rect.top - containerRect.top + (timelineContainer as HTMLElement).scrollTop
+          console.log('[SectionRow] Updating absoluteRowY:', {
+            sectionId: section.id,
+            sectionName: section.name,
+            rect_top: rect.top,
+            container_top: containerRect.top,
+            scrollTop: (timelineContainer as HTMLElement).scrollTop,
+            absoluteRowY: newY,
+          })
+          setAbsoluteRowY(newY)
         }
       }
     }
@@ -93,7 +102,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
       window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
     }
-  }, [isExpanded]) // Пересчитываем при разворачивании/сворачивании
+  }, [isExpanded, section.id, section.name]) // Пересчитываем при разворачивании/сворачивании
 
   // Lazy load work logs при развороте объекта (не раздела!)
   const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {

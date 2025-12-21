@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useCheckpointLinks } from '../context/CheckpointLinksContext'
+import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
 
 // ============================================================================
 // Types
@@ -43,8 +44,26 @@ function groupCheckpointsByIdent(
     groups.get(key)!.positions.push({ sectionId: pos.sectionId, y: pos.y })
   }
 
+  // Логируем все группы перед фильтрацией
+  const allGroups = Array.from(groups.values())
+  console.log('[groupCheckpointsByIdent] All groups before filter:', allGroups)
+
+  // Логируем детали каждой группы
+  allGroups.forEach((g, idx) => {
+    console.log(`[groupCheckpointsByIdent] Group ${idx}:`, {
+      checkpoint_id: g.checkpoint_id,
+      x: g.x,
+      positions_count: g.positions.length,
+      positions: g.positions,
+      will_pass_filter: g.positions.length >= 2
+    })
+  })
+
   // Фильтруем только группы с >= 2 позиций (связанные чекпоинты)
-  return Array.from(groups.values()).filter(g => g.positions.length >= 2)
+  const filtered = allGroups.filter(g => g.positions.length >= 2)
+  console.log('[groupCheckpointsByIdent] Filtered groups (>=2 positions):', filtered)
+
+  return filtered
 }
 
 // ============================================================================
@@ -68,36 +87,88 @@ export function CheckpointVerticalLinks() {
     return groupCheckpointsByIdent(positions)
   }, [positions])
 
-  if (linkedGroups.length === 0) return null
+  // Временное логирование для отладки
+  useEffect(() => {
+    if (positions.length > 0) {
+      console.log('[CheckpointVerticalLinks] Positions:', positions)
+      console.log('[CheckpointVerticalLinks] Linked groups:', linkedGroups)
+    }
+  }, [positions, linkedGroups])
+
+  if (linkedGroups.length === 0) {
+    console.log('[CheckpointVerticalLinks] No linked groups, not rendering')
+    return null
+  }
+
+  console.log('[CheckpointVerticalLinks] Rendering SVG with groups:', linkedGroups)
+
+  // Вычисляем минимальные размеры SVG для покрытия всех линий
+  const maxX = Math.max(...linkedGroups.map(g => g.x))
+  const maxY = Math.max(...linkedGroups.flatMap(g => g.positions.map(p => p.y)))
+
+  // Смещение для учета sidebar (340px - 36px = 304px)
+  const X_OFFSET = SIDEBAR_WIDTH
+
+  console.log('[CheckpointVerticalLinks] SVG dimensions:', { maxX, maxY, X_OFFSET })
 
   return (
     <svg
-      className="absolute top-0 left-0 pointer-events-none overflow-visible"
+      className="absolute top-0 left-0 pointer-events-none overflow-visible z-[45]"
       style={{
-        width: '100%',
-        height: '100%',
-        zIndex: 45, // Выше графиков (z-40), но ниже маркеров (z-50)
+        width: maxX + X_OFFSET + 100, // Добавляем запас
+        height: maxY + 100, // Добавляем запас
       }}
     >
+      {/* Определение маркера-стрелки */}
+      <defs>
+        <marker
+          id="checkpoint-arrow"
+          markerWidth="6"
+          markerHeight="6"
+          refX="3"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path
+            d="M 0 0 L 6 3 L 0 6 z"
+            fill="hsl(var(--border))"
+            opacity="0.7"
+          />
+        </marker>
+      </defs>
+
       {linkedGroups.map(group => {
         // Сортируем позиции по Y для корректного рисования линии сверху вниз
         const sortedPositions = [...group.positions].sort((a, b) => a.y - b.y)
 
         const firstY = sortedPositions[0].y
-        const lastY = sortedPositions[sortedPositions.length - 1].y
+        const lastY = sortedPositions[sortedPositions.length - 1].y - 15 // Уменьшаем на 20px для стрелки
+
+        const adjustedX = group.x + X_OFFSET
+
+        console.log('[CheckpointVerticalLinks] Rendering line:', {
+          checkpoint_id: group.checkpoint_id,
+          x: group.x,
+          adjustedX,
+          firstY,
+          lastY,
+          positions: sortedPositions,
+        })
 
         return (
           <g key={group.checkpoint_id}>
             {/* Вертикальная пунктирная линия между первым и последним чекпоинтом */}
             <line
-              x1={group.x}
+              x1={adjustedX}
               y1={firstY}
-              x2={group.x}
+              x2={adjustedX}
               y2={lastY}
               stroke="hsl(var(--border))"
               strokeWidth="2"
               strokeDasharray="4,4"
-              opacity="0.5"
+              opacity="0.7"
+              markerEnd="url(#checkpoint-arrow)"
               className="transition-all duration-300"
             />
 
@@ -109,7 +180,7 @@ export function CheckpointVerticalLinks() {
               return (
                 <circle
                   key={`${group.checkpoint_id}-${pos.sectionId}`}
-                  cx={group.x}
+                  cx={adjustedX}
                   cy={pos.y}
                   r={3}
                   fill="hsl(var(--border))"

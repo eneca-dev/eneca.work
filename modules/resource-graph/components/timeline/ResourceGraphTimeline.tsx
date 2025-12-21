@@ -83,18 +83,21 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
             </div>
           )}
 
-          {/* Content area - project rows */}
-          {projects.map((project) => (
-            <ProjectRow
-              key={project.id}
-              project={project}
-              dayCells={dayCells}
-              range={range}
-            />
-          ))}
+          {/* Content area - wrapper with relative positioning for absolute SVG */}
+          <div className="relative flex-1">
+            {/* Content area - project rows */}
+            {projects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                dayCells={dayCells}
+                range={range}
+              />
+            ))}
 
-          {/* Вертикальные линии между связанными чекпоинтами */}
-          <CheckpointVerticalLinks />
+            {/* Вертикальные линии между связанными чекпоинтами - покрывают весь контент */}
+            <CheckpointVerticalLinks />
+          </div>
         </div>
       </CheckpointLinksProvider>
     )
