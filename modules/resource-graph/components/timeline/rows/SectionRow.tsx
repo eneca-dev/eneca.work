@@ -100,10 +100,10 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
     enabled: isObjectExpanded,
   })
 
-  // Lazy load checkpoints при развороте объекта
-  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints(
-    isObjectExpanded ? { sectionId: section.id } : undefined
-  )
+  // Загружаем checkpoints всегда (нужны для отображения маркеров на связанных разделах)
+  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints({
+    sectionId: section.id
+  })
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
