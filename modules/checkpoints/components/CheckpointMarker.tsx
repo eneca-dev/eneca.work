@@ -79,6 +79,12 @@ import {
 } from '@/modules/resource-graph/constants'
 import { cn } from '@/lib/utils'
 import { useCheckpointLinks } from '../context/CheckpointLinksContext'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 // ============================================================================
 // Constants
@@ -86,6 +92,10 @@ import { useCheckpointLinks } from '../context/CheckpointLinksContext'
 
 const MARKER_RADIUS = 8  // Увеличили с 5 до 8 для иконок
 const ICON_SIZE = 12     // Размер иконки внутри маркера
+
+// Смещение для чекпоинтов на одну дату
+const OVERLAP_OFFSET_X = 6   // Смещение по X для каждого следующего чекпоинта
+const OVERLAP_OFFSET_Y = 4   // Смещение по Y для каждого следующего чекпоинта
 
 // ============================================================================
 // Icon Helper
@@ -212,6 +222,10 @@ interface CheckpointMarkerProps {
   absoluteRowY: number
   /** Callback клика на маркер */
   onMarkerClick?: (checkpoint: Checkpoint) => void
+  /** Индекс наложения (для смещения при одной дате) */
+  overlapIndex?: number
+  /** Общее количество чекпоинтов на эту дату */
+  overlapTotal?: number
 }
 
 interface CheckpointMarkersProps {
@@ -251,22 +265,39 @@ const STATUS_LABELS: Record<Checkpoint['status'], string> = {
 // Single Marker Component
 // ============================================================================
 
-function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absoluteRowY, onMarkerClick }: CheckpointMarkerProps) {
+function CheckpointMarker({
+  checkpoint,
+  range,
+  timelineWidth,
+  sectionId,
+  absoluteRowY,
+  onMarkerClick,
+  overlapIndex = 0,
+  overlapTotal = 1
+}: CheckpointMarkerProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
 
-  // Рассчитываем позицию X
-  const x = useMemo(() => {
+  // Рассчитываем базовую позицию X
+  const baseX = useMemo(() => {
     const cpDate = parseISO(checkpoint.checkpoint_date)
     const dayOffset = differenceInDays(cpDate, range.start)
     // Центр ячейки дня
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
 
+  // Применяем смещение для наложения (каскадный эффект)
+  // Если несколько чекпоинтов на одну дату, смещаем их по диагонали
+  const offsetMultiplier = overlapTotal > 1 ? overlapIndex - (overlapTotal - 1) / 2 : 0
+  const x = baseX + offsetMultiplier * OVERLAP_OFFSET_X
+
   // Y позиция — центр дополнительного пространства для чекпоинтов
   // Дополнительное пространство = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
   const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
-  const relativeY = checkpointSpace / 2
+  const baseRelativeY = checkpointSpace / 2
+
+  // Применяем смещение по Y для каскадного эффекта
+  const relativeY = baseRelativeY + offsetMultiplier * OVERLAP_OFFSET_Y
 
   // Абсолютная Y позиция от верха timeline
   const absoluteY = absoluteRowY + relativeY
@@ -316,35 +347,46 @@ function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absolut
   // Трансформация для hover (масштабирование от центра)
   const hoverScale = isHovered ? 1.2 : 1
 
-  // Формируем текст для тултипа
-  const tooltipText = [
-    checkpoint.title,
-    checkpoint.type_name,
-    format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy'),
-    STATUS_LABELS[checkpoint.status],
-    checkpoint.description,
-    checkpoint.completed_at && `Выполнен: ${format(parseISO(checkpoint.completed_at), 'dd.MM.yyyy')}`,
-  ].filter(Boolean).join(' • ')
+  // Формируем контент для тултипа
+  const tooltipContent = (
+    <div className="flex flex-col gap-1 max-w-xs">
+      <div className="font-semibold text-foreground">{checkpoint.title}</div>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-muted-foreground">{checkpoint.type_name}</span>
+        <span className="text-muted-foreground">•</span>
+        <span className="text-muted-foreground">{format(parseISO(checkpoint.checkpoint_date), 'dd.MM.yyyy')}</span>
+      </div>
+      <div className="flex items-center gap-1 text-xs">
+        <span
+          className="inline-block w-2 h-2 rounded-full"
+          style={{ backgroundColor: statusColor }}
+        />
+        <span style={{ color: statusColor }}>{STATUS_LABELS[checkpoint.status]}</span>
+      </div>
+      {checkpoint.description && (
+        <div className="text-xs text-muted-foreground mt-1 border-t border-border/50 pt-1">
+          {checkpoint.description}
+        </div>
+      )}
+      {checkpoint.completed_at && (
+        <div className="text-xs text-muted-foreground">
+          Выполнен: {format(parseISO(checkpoint.completed_at), 'dd.MM.yyyy')}
+        </div>
+      )}
+    </div>
+  )
 
   return (
-    <g
-      transform={`translate(${x}, ${relativeY})`}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={() => onMarkerClick?.(checkpoint)}
-      className={cn(
-        "checkpoint-marker cursor-pointer pointer-events-auto",
-        checkpoint.status === 'pending' && "animate-pulse-subtle"
-      )}
-      style={{
-        animation: checkpoint.status === 'pending'
-          ? 'checkpoint-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-          : undefined,
-        transition: 'all 0.3s ease-out'
-      }}
-    >
+    <g transform={`translate(${x}, ${relativeY})`}>
       {/* Внутренняя группа с hover масштабированием */}
-      <g transform={`scale(${hoverScale})`} style={{ transition: 'transform 0.3s ease-out' }}>
+      <g
+        transform={`scale(${hoverScale})`}
+        style={{ transition: 'transform 0.3s ease-out' }}
+        className={cn(
+          "checkpoint-marker",
+          checkpoint.status === 'pending' && "animate-pulse-subtle"
+        )}
+      >
         {/* Вертикальная линия вниз (до начала графиков) */}
         {/* Линия начинается от нижней границы маркера (MARKER_RADIUS) */}
         <line
@@ -420,8 +462,34 @@ function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absolut
         </foreignObject>
       </g>
 
-      {/* HTML title tooltip */}
-      <title>{tooltipText}</title>
+      {/* Невидимый foreignObject для тултипа - покрывает весь маркер */}
+      <foreignObject
+        x={-MARKER_RADIUS - 4}
+        y={-MARKER_RADIUS - 4}
+        width={(MARKER_RADIUS + 4) * 2}
+        height={(MARKER_RADIUS + 4) * 2}
+        className="pointer-events-auto overflow-visible"
+        style={{
+          cursor: 'pointer',
+          animation: checkpoint.status === 'pending'
+            ? 'checkpoint-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+            : undefined,
+        }}
+      >
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <div
+              className="w-full h-full"
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              onClick={() => onMarkerClick?.(checkpoint)}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="top" className="z-[100]">
+            {tooltipContent}
+          </TooltipContent>
+        </Tooltip>
+      </foreignObject>
     </g>
   )
 }
@@ -440,9 +508,20 @@ export function CheckpointMarkers({
 }: CheckpointMarkersProps) {
   if (!checkpoints || checkpoints.length === 0) return null
 
-  // Вычисляем позиции всех чекпоинтов для горизонтальной линии
-  const checkpointPositions = useMemo(() => {
-    return checkpoints
+  // Группируем чекпоинты по датам и вычисляем их позиции
+  const { checkpointPositions, checkpointsByDate } = useMemo(() => {
+    // Группируем по дате
+    const byDate = new Map<string, Checkpoint[]>()
+    checkpoints.forEach((cp) => {
+      const date = cp.checkpoint_date
+      if (!byDate.has(date)) {
+        byDate.set(date, [])
+      }
+      byDate.get(date)!.push(cp)
+    })
+
+    // Вычисляем позиции для горизонтальной линии (используем базовую позицию без смещения)
+    const positions = checkpoints
       .map((cp) => {
         const cpDate = parseISO(cp.checkpoint_date)
         const dayOffset = differenceInDays(cpDate, range.start)
@@ -451,6 +530,8 @@ export function CheckpointMarkers({
       })
       .filter(({ x }) => x >= 0 && x <= timelineWidth)
       .sort((a, b) => a.x - b.x)
+
+    return { checkpointPositions: positions, checkpointsByDate: byDate }
   }, [checkpoints, range, timelineWidth])
 
   // Y позиция для горизонтальной линии — центр дополнительного пространства
@@ -458,7 +539,7 @@ export function CheckpointMarkers({
   const lineY = checkpointSpace / 2
 
   return (
-    <>
+    <TooltipProvider>
       <style>{`
         @keyframes checkpoint-pulse {
           0%, 100% {
@@ -507,23 +588,32 @@ export function CheckpointMarkers({
         )}
 
         {/* Маркеры чекпоинтов - рендерим после линии, чтобы перекрывали её */}
-        {checkpoints.map((cp, index) => (
-          <g
-            key={cp.checkpoint_id}
-            style={{
-              animation: `fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) ${index * 50}ms both`
-            }}
-          >
-            <CheckpointMarker
-              checkpoint={cp}
-              range={range}
-              timelineWidth={timelineWidth}
-              sectionId={sectionId}
-              absoluteRowY={absoluteRowY}
-              onMarkerClick={onMarkerClick}
-            />
-          </g>
-        ))}
+        {checkpoints.map((cp, index) => {
+          // Находим количество чекпоинтов на эту дату и индекс текущего
+          const checkpointsOnDate = checkpointsByDate.get(cp.checkpoint_date) || [cp]
+          const overlapIndex = checkpointsOnDate.findIndex(c => c.checkpoint_id === cp.checkpoint_id)
+          const overlapTotal = checkpointsOnDate.length
+
+          return (
+            <g
+              key={cp.checkpoint_id}
+              style={{
+                animation: `fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) ${index * 50}ms both`
+              }}
+            >
+              <CheckpointMarker
+                checkpoint={cp}
+                range={range}
+                timelineWidth={timelineWidth}
+                sectionId={sectionId}
+                absoluteRowY={absoluteRowY}
+                onMarkerClick={onMarkerClick}
+                overlapIndex={overlapIndex}
+                overlapTotal={overlapTotal}
+              />
+            </g>
+          )
+        })}
       </svg>
       <style>{`
         @keyframes fade-in-up {
@@ -537,7 +627,7 @@ export function CheckpointMarkers({
           }
         }
       `}</style>
-    </>
+    </TooltipProvider>
   )
 }
 

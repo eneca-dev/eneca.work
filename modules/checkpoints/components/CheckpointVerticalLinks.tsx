@@ -143,7 +143,7 @@ export function CheckpointVerticalLinks() {
         const sortedPositions = [...group.positions].sort((a, b) => a.y - b.y)
 
         const firstY = sortedPositions[0].y
-        const lastY = sortedPositions[sortedPositions.length - 1].y + 9 // Уменьшаем на 20px для стрелки
+        const lastY = sortedPositions[sortedPositions.length - 1].y - 15 // Уменьшаем на 20px для стрелки
 
         const adjustedX = group.x + X_OFFSET
 
