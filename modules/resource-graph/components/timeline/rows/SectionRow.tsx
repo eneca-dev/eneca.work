@@ -40,8 +40,17 @@ const SectionModal = dynamic(
 )
 
 // Импорты для чекпоинтов
-import { CheckpointCreateModal } from '@/modules/modals'
+import {
+  CheckpointCreateModal,
+  CheckpointEditModal,
+  openCheckpointEdit,
+  useIsModalOpen,
+  useModalData,
+  closeModal,
+  type CheckpointEditData
+} from '@/modules/modals'
 import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
+import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
 
 // ============================================================================
 // Section Row
@@ -63,6 +72,10 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
+
+  // Глобальный стор для модалки редактирования чекпоинта
+  const isCheckpointEditModalOpen = useIsModalOpen('checkpoint-edit')
+  const checkpointEditData = useModalData() as CheckpointEditData | null
 
   // Ref для получения абсолютной позиции строки
   const rowRef = useRef<HTMLDivElement>(null)
@@ -487,6 +500,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
               timelineWidth={timelineWidth}
               sectionId={section.id}
               absoluteRowY={absoluteRowY}
+              onMarkerClick={(checkpoint: Checkpoint) => {
+                openCheckpointEdit(checkpoint.checkpoint_id)
+              }}
             />
           )}
         </div>
@@ -554,6 +570,18 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
           refetchCheckpoints()
         }}
       />
+
+      {/* Checkpoint Edit Modal */}
+      {isCheckpointEditModalOpen && checkpointEditData?.checkpointId && (
+        <CheckpointEditModal
+          isOpen={isCheckpointEditModalOpen}
+          onClose={closeModal}
+          checkpointId={checkpointEditData.checkpointId}
+          onSuccess={() => {
+            refetchCheckpoints()
+          }}
+        />
+      )}
     </>
   )
 }

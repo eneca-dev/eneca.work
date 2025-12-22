@@ -210,6 +210,8 @@ interface CheckpointMarkerProps {
   sectionId: string
   /** Абсолютная Y позиция строки секции от верха timeline (в пикселях) */
   absoluteRowY: number
+  /** Callback клика на маркер */
+  onMarkerClick?: (checkpoint: Checkpoint) => void
 }
 
 interface CheckpointMarkersProps {
@@ -249,7 +251,7 @@ const STATUS_LABELS: Record<Checkpoint['status'], string> = {
 // Single Marker Component
 // ============================================================================
 
-function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absoluteRowY }: CheckpointMarkerProps) {
+function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absoluteRowY, onMarkerClick }: CheckpointMarkerProps) {
   const [isHovered, setIsHovered] = useState(false)
   const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
 
@@ -329,6 +331,7 @@ function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absolut
       transform={`translate(${x}, ${relativeY})`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={() => onMarkerClick?.(checkpoint)}
       className={cn(
         "checkpoint-marker cursor-pointer pointer-events-auto",
         checkpoint.status === 'pending' && "animate-pulse-subtle"
@@ -343,9 +346,10 @@ function CheckpointMarker({ checkpoint, range, timelineWidth, sectionId, absolut
       {/* Внутренняя группа с hover масштабированием */}
       <g transform={`scale(${hoverScale})`} style={{ transition: 'transform 0.3s ease-out' }}>
         {/* Вертикальная линия вниз (до начала графиков) */}
+        {/* Линия начинается от нижней границы маркера (MARKER_RADIUS) */}
         <line
           x1={0}
-          y1={0}
+          y1={MARKER_RADIUS}
           x2={0}
           y2={SECTION_ROW_HEIGHT * 0.5}
           stroke="currentColor"
@@ -485,7 +489,7 @@ export function CheckpointMarkers({
         }
       `}</style>
       <svg
-        className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-50"
+        className="absolute top-0 left-0 right-0 pointer-events-none overflow-visible z-10"
         style={{ width: timelineWidth, height: SECTION_ROW_HEIGHT_WITH_CHECKPOINTS }}
       >
         {/* Горизонтальная соединительная линия между первым и последним чекпоинтом - рендерим ПЕРВОЙ чтобы была под маркерами */}
@@ -516,6 +520,7 @@ export function CheckpointMarkers({
               timelineWidth={timelineWidth}
               sectionId={sectionId}
               absoluteRowY={absoluteRowY}
+              onMarkerClick={onMarkerClick}
             />
           </g>
         ))}

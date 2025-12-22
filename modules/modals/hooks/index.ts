@@ -80,6 +80,7 @@ import type {
   EmployeeViewData,
   ProgressUpdateData,
   CheckpointCreateData,
+  CheckpointEditData,
 } from '../types'
 
 /**
@@ -185,4 +186,11 @@ export function useProgressUpdateModal() {
  */
 export function useCheckpointCreateModal() {
   return useModal<CheckpointCreateData>()
+}
+
+/**
+ * Хук для модалки редактирования чекпоинта
+ */
+export function useCheckpointEditModal() {
+  return useModal<CheckpointEditData>()
 }

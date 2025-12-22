@@ -149,3 +149,9 @@ export const closeModal = () => useModalStore.getState().closeModal()
  */
 export const openCheckpointCreate = (sectionId: string, sectionName: string) =>
   useModalStore.getState().openModal('checkpoint-create', { sectionId, sectionName })
+
+/**
+ * Открыть модалку редактирования чекпоинта
+ */
+export const openCheckpointEdit = (checkpointId: string) =>
+  useModalStore.getState().openModal('checkpoint-edit', { checkpointId })

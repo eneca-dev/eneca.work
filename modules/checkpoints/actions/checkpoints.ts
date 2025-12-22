@@ -27,12 +27,16 @@ export interface CreateCheckpointInput {
 /** Input для обновления чекпоинта */
 export interface UpdateCheckpointInput {
   checkpointId: string
+  typeId?: string // Изменение типа чекпоинта
   title?: string
   description?: string | null
   checkpointDate?: string
   customIcon?: string | null
   customColor?: string | null
   linkedSectionIds?: string[] // Полный список связанных разделов
+  // Только для optimistic update (не отправляются на сервер)
+  _optimisticIcon?: string
+  _optimisticColor?: string
 }
 
 /** Input для отметки выполнения */
@@ -725,11 +729,15 @@ export async function updateCheckpoint(
 
         // 3. Подготовить данные для обновления
         const updates: Record<string, unknown> = {}
+        if (input.typeId !== undefined) updates.type_id = input.typeId
         if (input.title !== undefined) updates.title = input.title
         if (input.description !== undefined) updates.description = input.description
         if (input.checkpointDate !== undefined) updates.checkpoint_date = input.checkpointDate
         if (input.customIcon !== undefined) updates.custom_icon = input.customIcon
         if (input.customColor !== undefined) updates.custom_color = input.customColor
+
+        console.log('[updateCheckpoint] Input:', input)
+        console.log('[updateCheckpoint] Updates to apply:', updates)
 
         if (Object.keys(updates).length === 0 && !input.linkedSectionIds) {
           return { success: false, error: 'Нет данных для обновления' }
@@ -754,6 +762,7 @@ export async function updateCheckpoint(
           // 5. Audit trail для каждого измененного поля
           // Маппинг полей из updates в поля Checkpoint
           const fieldMapping: Record<string, keyof Checkpoint> = {
+            'type_id': 'type_id',
             'title': 'title',
             'description': 'description',
             'checkpoint_date': 'checkpoint_date',

@@ -131,16 +131,18 @@ export const useCreateCheckpoint = createCacheMutation({
  */
 export const useUpdateCheckpoint = createUpdateMutation({
   mutationFn: updateCheckpoint,
-  listQueryKey: queryKeys.checkpoints.all,
+  listQueryKey: queryKeys.checkpoints.lists(),
   getId: (input: UpdateCheckpointInput) => input.checkpointId,
   getItemId: (item: Checkpoint) => item.checkpoint_id,
   merge: (item: Checkpoint, input: UpdateCheckpointInput) => ({
     ...item,
+    type_id: input.typeId ?? item.type_id,
     title: input.title ?? item.title,
     description: input.description ?? item.description,
     checkpoint_date: input.checkpointDate ?? item.checkpoint_date,
-    icon: input.customIcon ?? item.icon,
-    color: input.customColor ?? item.color,
+    // Для optimistic update используем _optimisticIcon/_optimisticColor если есть
+    icon: input._optimisticIcon ?? input.customIcon ?? item.icon,
+    color: input._optimisticColor ?? input.customColor ?? item.color,
     // linked_sections обновятся после рефетча с сервера
   }),
   invalidateKeys: [
@@ -148,6 +150,32 @@ export const useUpdateCheckpoint = createUpdateMutation({
     queryKeys.resourceGraph.all,
   ],
 })
+
+/**
+ * Вычисляет статус чекпоинта на основе дат
+ * Логика соответствует VIEW logic из миграции 2025-12-18_section_checkpoints_status_audit.sql
+ */
+function calculateCheckpointStatus(
+  completedAt: string | null,
+  checkpointDate: string
+): Checkpoint['status'] {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0) // Сброс времени для корректного сравнения дат
+
+  const deadline = new Date(checkpointDate)
+  deadline.setHours(0, 0, 0, 0)
+
+  if (completedAt) {
+    const completed = new Date(completedAt)
+    completed.setHours(0, 0, 0, 0)
+
+    // Выполнен в срок или с опозданием
+    return completed <= deadline ? 'completed' : 'completed_late'
+  }
+
+  // Не выполнен: просрочен или ожидается
+  return now > deadline ? 'overdue' : 'pending'
+}
 
 /**
  * Хук для отметки чекпоинта как выполненного/невыполненного
@@ -165,16 +193,20 @@ export const useUpdateCheckpoint = createUpdateMutation({
  */
 export const useCompleteCheckpoint = createUpdateMutation({
   mutationFn: completeCheckpoint,
-  listQueryKey: queryKeys.checkpoints.all,
+  listQueryKey: queryKeys.checkpoints.lists(),
   getId: (input: CompleteCheckpointInput) => input.checkpointId,
   getItemId: (item: Checkpoint) => item.checkpoint_id,
-  merge: (item: Checkpoint, input: CompleteCheckpointInput) => ({
-    ...item,
-    completed_at: input.completed ? new Date().toISOString() : null,
-    completed_by: input.completed ? 'optimistic-user-id' : null, // Сервер вернет реальный user_id
-    // status пересчитается на сервере (VIEW logic)
-    status: input.completed ? 'completed' as const : 'pending' as const,
-  }),
+  merge: (item: Checkpoint, input: CompleteCheckpointInput) => {
+    const completedAt = input.completed ? new Date().toISOString() : null
+    const status = calculateCheckpointStatus(completedAt, item.checkpoint_date)
+
+    return {
+      ...item,
+      completed_at: completedAt,
+      completed_by: input.completed ? 'optimistic-user-id' : null, // Сервер вернет реальный user_id
+      status,
+    }
+  },
   invalidateKeys: [
     queryKeys.sections.all,
     queryKeys.resourceGraph.all,
@@ -197,6 +229,9 @@ export const useCompleteCheckpoint = createUpdateMutation({
  */
 export const useDeleteCheckpoint = createDeleteMutation({
   mutationFn: deleteCheckpoint,
+  listQueryKey: queryKeys.checkpoints.lists(),
+  getId: (checkpointId: string) => checkpointId,
+  getItemId: (item: Checkpoint) => item.checkpoint_id,
   invalidateKeys: [
     queryKeys.checkpoints.all,
     queryKeys.sections.all,
