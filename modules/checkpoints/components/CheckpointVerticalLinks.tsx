@@ -135,7 +135,7 @@ export function CheckpointVerticalLinks() {
 
   return (
     <svg
-      className="absolute top-0 left-0 pointer-events-none overflow-visible z-10"
+      className="absolute top-0 left-0 pointer-events-none overflow-visible z-0"
       style={{
         width: maxX + X_OFFSET + 100, // Добавляем запас
         height: maxY + 100, // Добавляем запас

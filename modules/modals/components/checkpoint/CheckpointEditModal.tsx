@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useDebounceValue } from 'usehooks-ts'
 import { X, Flag, Loader2, Check, ChevronDown, type LucideIcon, Trash2, CircleDashed, CircleCheckBig } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,9 +11,13 @@ import {
   useCheckpointTypes,
   useUpdateCheckpoint,
   useDeleteCheckpoint,
-  useCompleteCheckpoint
+  useCompleteCheckpoint,
+  useProjectSections
 } from '@/modules/checkpoints/hooks'
-import { useProjectStructure } from '@/modules/resource-graph/hooks'
+import type { SectionOption } from '@/modules/checkpoints/actions/checkpoints'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/modules/cache'
+import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -27,12 +32,6 @@ import type { BaseModalProps } from '../../types'
 export interface CheckpointEditModalProps extends BaseModalProps {
   /** ID чекпоинта для редактирования */
   checkpointId: string
-}
-
-interface SectionOption {
-  id: string
-  name: string
-  objectId: string | null
 }
 
 // Предустановленные цвета для кастомных чекпоинтов
@@ -257,9 +256,13 @@ export function CheckpointEditModal({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   // Hooks
+  const queryClient = useQueryClient()
   const { data: checkpoint, isLoading: checkpointLoading } = useCheckpoint(checkpointId)
   const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
-  const { data: structureData, isLoading: structureLoading } = useProjectStructure()
+  const { data: projectSections = [], isLoading: sectionsLoading } = useProjectSections(
+    checkpoint?.section_id || '',
+    { enabled: !!checkpoint?.section_id }
+  )
   const updateCheckpoint = useUpdateCheckpoint()
   const deleteCheckpoint = useDeleteCheckpoint()
   const completeCheckpoint = useCompleteCheckpoint()
@@ -268,34 +271,6 @@ export function CheckpointEditModal({
     if (!selectedTypeId) return null
     return checkpointTypes.find((t) => t.type_id === selectedTypeId)
   }, [checkpointTypes, selectedTypeId])
-
-  // Вычисление разделов проекта из структуры
-  const projectSections = useMemo<SectionOption[]>(() => {
-    if (!structureData?.sections || !checkpoint) return []
-
-    const currentSection = structureData.sections.find((s) => s.id === checkpoint.section_id)
-    if (!currentSection?.objectId) return []
-
-    const currentObject = structureData.objects.find((o) => o.id === currentSection.objectId)
-    if (!currentObject?.stageId) return []
-
-    const currentStage = structureData.stages.find((s) => s.id === currentObject.stageId)
-    if (!currentStage?.projectId) return []
-
-    const projectStages = structureData.stages.filter((s) => s.projectId === currentStage.projectId)
-    const stageIds = new Set(projectStages.map((s) => s.id))
-
-    const projectObjects = structureData.objects.filter((o) => o.stageId && stageIds.has(o.stageId))
-    const objectIds = new Set(projectObjects.map((o) => o.id))
-
-    return structureData.sections
-      .filter((s) => s.objectId && objectIds.has(s.objectId))
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        objectId: s.objectId,
-      }))
-  }, [structureData, checkpoint])
 
   // Инициализация данных из чекпоинта
   useEffect(() => {
@@ -330,6 +305,29 @@ export function CheckpointEditModal({
     }
     // Для custom типа ничего не делаем — пользователь сам выберет иконку/цвет
   }, [selectedType])
+
+  // Debounced description для синхронизации с кешем (300ms задержка)
+  const [debouncedDescription] = useDebounceValue(description, 300)
+
+  // Синхронизация description с кешем в реальном времени (с debounce)
+  useEffect(() => {
+    if (!checkpoint) return
+
+    // Обновляем кеш только если debounced description изменился
+    const currentCached = queryClient.getQueryData<Checkpoint>(
+      queryKeys.checkpoints.detail(checkpointId)
+    )
+
+    if (currentCached && currentCached.description !== debouncedDescription) {
+      queryClient.setQueryData<Checkpoint>(
+        queryKeys.checkpoints.detail(checkpointId),
+        {
+          ...currentCached,
+          description: debouncedDescription,
+        }
+      )
+    }
+  }, [debouncedDescription, checkpoint, checkpointId, queryClient])
 
   // Валидация
   const canSave = useMemo(() => {
@@ -440,7 +438,6 @@ export function CheckpointEditModal({
   }
 
   const isLoading = checkpointLoading || typesLoading
-  const sectionsLoading = structureLoading
 
   if (!isOpen) return null
 

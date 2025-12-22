@@ -49,7 +49,7 @@ import {
   closeModal,
   type CheckpointEditData
 } from '@/modules/modals'
-import { useCheckpoints, CheckpointMarkers } from '@/modules/checkpoints'
+import { useCheckpoints, CheckpointMarkers, useCanManageCheckpoint } from '@/modules/checkpoints'
 import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
 
 // ============================================================================
@@ -446,13 +446,13 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         {/* Timeline area */}
         <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Графики раздела - фиксированная высота, всегда 56px, прикреплены к низу */}
+          {/* Графики раздела - занимают всю высоту строки */}
           <div
             className={cn(
               'absolute bottom-0 left-0 right-0 transition-all duration-200',
               isExpanded && 'opacity-30 saturate-50'
             )}
-            style={{ height: SECTION_ROW_HEIGHT }}
+            style={{ height: rowHeight }}
           >
             <SectionPeriodFrame
               startDate={section.startDate}
@@ -491,6 +491,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             timelineWidth={timelineWidth}
             sectionStartDate={section.startDate}
             sectionEndDate={section.endDate}
+            rowHeight={rowHeight}
           />
           {/* Маркеры чекпоинтов - поверх всех графиков */}
           {checkpoints.length > 0 && (

@@ -87,6 +87,13 @@ export interface AuditEntry {
   user_avatar_url?: string | null
 }
 
+/** Упрощенная информация о разделе для списков */
+export interface SectionOption {
+  id: string
+  name: string
+  objectId: string | null
+}
+
 // ============================================================================
 // Permission Helper
 // ============================================================================
@@ -1003,6 +1010,132 @@ export async function deleteCheckpoint(
           extra: { checkpointId },
         })
         console.error('[deleteCheckpoint] Error:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+        }
+      }
+    }
+  )
+}
+
+// ============================================================================
+// Helper Actions
+// ============================================================================
+
+/**
+ * Получить список разделов проекта для выбора в UI
+ *
+ * Используется в CheckpointEditModal для выбора связанных разделов.
+ * Возвращает только разделы того же проекта, что и указанный раздел.
+ *
+ * @param sectionId - ID раздела, для которого нужно получить список разделов проекта
+ * @returns Список разделов проекта (исключая сам sectionId)
+ */
+export async function getProjectSections(
+  sectionId: string
+): Promise<ActionResult<SectionOption[]>> {
+  return await Sentry.startSpan(
+    {
+      name: 'getProjectSections',
+      op: 'db.query',
+      attributes: {
+        'section.id': sectionId,
+      },
+    },
+    async () => {
+      try {
+        const supabase = await createClient()
+
+        // 1. Получить projectId раздела через section -> object -> stage -> project
+        const { data: section, error: sectionError } = await supabase
+          .from('sections')
+          .select('section_id, section_object_id')
+          .eq('section_id', sectionId)
+          .single()
+
+        if (sectionError || !section || !section.section_object_id) {
+          console.error('[getProjectSections] Section error:', sectionError)
+          return { success: false, error: 'Раздел не найден' }
+        }
+
+        const { data: object, error: objectError } = await supabase
+          .from('objects')
+          .select('object_id, object_stage_id')
+          .eq('object_id', section.section_object_id)
+          .single()
+
+        if (objectError || !object || !object.object_stage_id) {
+          console.error('[getProjectSections] Object error:', objectError)
+          return { success: false, error: 'Объект не найден' }
+        }
+
+        const { data: stage, error: stageError } = await supabase
+          .from('stages')
+          .select('stage_id, stage_project_id')
+          .eq('stage_id', object.object_stage_id)
+          .single()
+
+        if (stageError || !stage || !stage.stage_project_id) {
+          console.error('[getProjectSections] Stage error:', stageError)
+          return { success: false, error: 'Стадия не найдена' }
+        }
+
+        const projectId = stage.stage_project_id
+
+        // 2. Получить все разделы проекта через обратную цепочку
+        const { data: projectStages, error: stagesError } = await supabase
+          .from('stages')
+          .select('stage_id')
+          .eq('stage_project_id', projectId)
+
+        if (stagesError || !projectStages) {
+          console.error('[getProjectSections] Stages error:', stagesError)
+          return { success: false, error: 'Стадии не найдены' }
+        }
+
+        const stageIds = projectStages.map(s => s.stage_id)
+
+        const { data: projectObjects, error: objectsError } = await supabase
+          .from('objects')
+          .select('object_id')
+          .in('object_stage_id', stageIds)
+
+        if (objectsError || !projectObjects) {
+          console.error('[getProjectSections] Objects error:', objectsError)
+          return { success: false, error: 'Объекты не найдены' }
+        }
+
+        const objectIds = projectObjects.map(o => o.object_id)
+
+        const { data: projectSections, error: sectionsError } = await supabase
+          .from('sections')
+          .select('section_id, section_name, section_object_id')
+          .in('section_object_id', objectIds)
+          .order('section_name', { ascending: true })
+
+        if (sectionsError) {
+          Sentry.captureException(sectionsError, {
+            tags: { module: 'checkpoints' },
+            extra: { sectionId, projectId },
+          })
+          console.error('[getProjectSections] Sections error:', sectionsError)
+          return { success: false, error: sectionsError.message }
+        }
+
+        const sections: SectionOption[] = (projectSections || []).map(s => ({
+          id: s.section_id,
+          name: s.section_name,
+          objectId: s.section_object_id,
+        }))
+
+        return { success: true, data: sections }
+      } catch (error) {
+        Sentry.captureException(error, {
+          tags: { module: 'checkpoints', action: 'getProjectSections' },
+          extra: { sectionId },
+        })
+        console.error('[getProjectSections] Error:', error)
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Неизвестная ошибка',

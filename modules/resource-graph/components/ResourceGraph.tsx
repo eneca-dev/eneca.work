@@ -18,6 +18,8 @@ import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
 import { cn } from '@/lib/utils'
 import type { TimelineRange } from '../types'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
+import { DebugPanel } from './debug'
+import { UserSync } from '@/components/UserSync'
 
 // Timeline config - 180 дней (полгода)
 const DAYS_BEFORE_TODAY = 30  // Месяц назад
@@ -106,6 +108,12 @@ export function ResourceGraph() {
 
   return (
     <div className="h-full flex flex-col bg-background">
+      {/* User Sync */}
+      <UserSync />
+
+      {/* Debug Panel */}
+      <DebugPanel />
+
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-card border-b shadow-sm">
         {/* Main toolbar with InlineFilter */}

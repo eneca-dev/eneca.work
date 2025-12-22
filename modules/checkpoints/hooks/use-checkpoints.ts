@@ -28,11 +28,13 @@ import {
   updateCheckpoint,
   completeCheckpoint,
   deleteCheckpoint,
+  getProjectSections,
   type Checkpoint,
   type CreateCheckpointInput,
   type UpdateCheckpointInput,
   type CompleteCheckpointInput,
   type AuditEntry,
+  type SectionOption,
 } from '@/modules/checkpoints/actions/checkpoints'
 
 import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
@@ -183,6 +185,58 @@ export function useUpdateCheckpoint() {
 
   return createCacheMutation<UpdateCheckpointInput, Checkpoint>({
     mutationFn: updateCheckpoint,
+
+    // Optimistic update для detail кеша (используется в модалке)
+    onMutate: async (input) => {
+      // Отменить активные запросы для этого чекпоинта
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.checkpoints.detail(input.checkpointId)
+      })
+
+      // Сохранить текущее состояние для rollback
+      const previousCheckpoint = queryClient.getQueryData<Checkpoint>(
+        queryKeys.checkpoints.detail(input.checkpointId)
+      )
+
+      // Optimistically обновить detail кеш
+      if (previousCheckpoint) {
+        const updatedCheckpoint: Checkpoint = {
+          ...previousCheckpoint,
+          type_id: input.typeId ?? previousCheckpoint.type_id,
+          title: input.title ?? previousCheckpoint.title,
+          description: input.description !== undefined ? input.description : previousCheckpoint.description,
+          checkpoint_date: input.checkpointDate ?? previousCheckpoint.checkpoint_date,
+          icon: input._optimisticIcon ?? input.customIcon ?? previousCheckpoint.icon,
+          color: input._optimisticColor ?? input.customColor ?? previousCheckpoint.color,
+          linked_sections: input.linkedSectionIds !== undefined
+            ? input.linkedSectionIds.map(id => ({
+                section_id: id,
+                section_name: 'Загрузка...',
+              }))
+            : previousCheckpoint.linked_sections,
+          linked_sections_count: input.linkedSectionIds !== undefined
+            ? input.linkedSectionIds.length
+            : previousCheckpoint.linked_sections_count,
+        }
+
+        queryClient.setQueryData(
+          queryKeys.checkpoints.detail(input.checkpointId),
+          updatedCheckpoint
+        )
+      }
+
+      return { previousCheckpoint }
+    },
+
+    // При ошибке откатить изменения
+    onError: (err, input, context) => {
+      if (context?.previousCheckpoint) {
+        queryClient.setQueryData(
+          queryKeys.checkpoints.detail(input.checkpointId),
+          context.previousCheckpoint
+        )
+      }
+    },
 
     optimisticUpdate: {
       queryKey: queryKeys.checkpoints.lists(),
@@ -393,4 +447,25 @@ export const useDeleteCheckpoint = createDeleteMutation({
     queryKeys.sections.all,
     queryKeys.resourceGraph.all,
   ],
+})
+
+// ============================================================================
+// Helper Hooks
+// ============================================================================
+
+/**
+ * Хук для загрузки разделов проекта
+ *
+ * Используется для выбора связанных разделов в CheckpointEditModal.
+ * Загружает только разделы того же проекта, что и указанный раздел.
+ *
+ * @example
+ * ```tsx
+ * const { data: sections, isLoading } = useProjectSections(checkpoint.section_id)
+ * ```
+ */
+export const useProjectSections = createDetailCacheQuery({
+  queryKey: (sectionId: string) => queryKeys.checkpoints.projectSections(sectionId),
+  queryFn: getProjectSections,
+  staleTime: 'medium', // 5 минут — структура проекта меняется редко
 })

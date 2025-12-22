@@ -280,6 +280,7 @@ export const queryKeys = {
     audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
     bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
     byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+    projectSections: (sectionId: string) => [...queryKeys.checkpoints.all, 'projectSections', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------
