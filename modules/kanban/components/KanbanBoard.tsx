@@ -19,7 +19,7 @@ import { useKanbanSectionsInfinite, useStageStatuses, useUpdateStageStatusOptimi
 import type { KanbanStage, KanbanSection, StageStatus, KanbanBoard as KanbanBoardType } from '../types'
 import { KanbanHeader } from './KanbanHeader'
 import { KanbanSwimlane } from './KanbanSwimlane'
-import { KanbanCard } from './KanbanCard'
+import { KanbanCardPreview } from './KanbanCard'
 
 // ============================================================================
 // Local View State
@@ -135,27 +135,36 @@ export function KanbanBoard() {
   // Handle drag end
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      setActiveCard(null)
-
       const { active, over } = event
-      if (!over) return
+
+      if (!over) {
+        setActiveCard(null)
+        return
+      }
 
       // Parse IDs: format is "sectionId:stageId" for active, "sectionId:status" for over
       const [activeSectionId, activeStageId] = (active.id as string).split(':')
       const [overSectionId, overStatus] = (over.id as string).split(':')
 
       // Only allow drops within the same section
-      if (activeSectionId !== overSectionId) return
+      if (activeSectionId !== overSectionId) {
+        setActiveCard(null)
+        return
+      }
 
       // Оптимистичное обновление статуса этапа:
-      // 1. UI обновится мгновенно
-      // 2. Запрос пойдёт на сервер в фоне
-      // 3. При ошибке - автоматический откат
+      // 1. onMutate синхронно обновит кеш через flushSync
+      // 2. setActiveCard(null) скроет DragOverlay
+      // 3. Карточка уже в новой колонке (благодаря optimistic update)
+      // 4. Запрос идёт на сервер в фоне, при ошибке - автоматический откат
       updateStatus({
         stageId: activeStageId,
         sectionId: activeSectionId,
         newStatus: overStatus as StageStatus,
       })
+
+      // Убираем DragOverlay - карточка уже в новой колонке
+      setActiveCard(null)
     },
     [updateStatus]
   )
@@ -288,6 +297,7 @@ export function KanbanBoard() {
               section={section}
               isCollapsed={viewSettings.collapsedSections.includes(section.id)}
               onToggleCollapse={() => toggleSectionCollapse(section.id)}
+              activeSectionId={activeCard?.section.id ?? null}
             />
           ))}
 
@@ -315,15 +325,15 @@ export function KanbanBoard() {
           )}
         </div>
 
-        {/* Drag Overlay */}
-        <DragOverlay>
+        {/* DragOverlay - показывает копию карточки, следующую за курсором */}
+        {/* Оригинальная карточка скрыта (opacity: 0), когда drag заканчивается, */}
+        {/* DragOverlay исчезает, а карточка уже в новой колонке благодаря optimistic update */}
+        <DragOverlay dropAnimation={null}>
           {activeCard && (
-            <div className="opacity-90 rotate-2 scale-105">
-              <KanbanCard
-                stage={activeCard.stage}
-                section={activeCard.section}
-              />
-            </div>
+            <KanbanCardPreview
+              stage={activeCard.stage}
+              section={activeCard.section}
+            />
           )}
         </DragOverlay>
       </DndContext>

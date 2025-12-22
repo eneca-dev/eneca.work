@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { KanbanSection } from '../types'
@@ -11,6 +11,7 @@ interface KanbanSwimlaneProps {
   section: KanbanSection
   isCollapsed: boolean
   onToggleCollapse: () => void
+  activeSectionId?: string | null // ID активного раздела при перетаскивании
 }
 
 // Circular progress component
@@ -67,6 +68,7 @@ export function KanbanSwimlane({
   section,
   isCollapsed,
   onToggleCollapse,
+  activeSectionId,
 }: KanbanSwimlaneProps) {
   const statusConfig = SECTION_STATUSES[section.status]
 
@@ -167,16 +169,31 @@ export function KanbanSwimlane({
           isCollapsed ? 'max-h-0' : 'max-h-[800px]'
         )}
       >
-        <div className="flex items-stretch gap-0 min-h-[100px] p-2">
-          {KANBAN_COLUMNS.map((column) => (
-            <KanbanDropZone
-              key={column.id}
-              column={column}
-              sectionId={section.id}
-              stages={section.stages}
-              section={section}
-            />
-          ))}
+        <div className="relative">
+          <div className="flex items-stretch gap-0 min-h-[100px] p-2">
+            {KANBAN_COLUMNS.map((column) => (
+              <KanbanDropZone
+                key={column.id}
+                column={column}
+                sectionId={section.id}
+                stages={section.stages}
+                section={section}
+                activeSectionId={activeSectionId}
+              />
+            ))}
+          </div>
+
+          {/* Полоска-предупреждение при попытке переноса в другой раздел */}
+          {activeSectionId && activeSectionId !== section.id && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-destructive/5 backdrop-blur-[2px]">
+              <div className="bg-destructive/90 text-destructive-foreground px-6 py-3 rounded-lg shadow-lg border-2 border-destructive flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <span className="font-medium text-sm">
+                  Нельзя переносить карточки этапов между разными разделами
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

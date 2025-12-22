@@ -165,8 +165,9 @@ export function transformRowsToKanbanSections(
           }
         : null,
       plannedHours: row.decomposition_item_planned_hours || 0,
-      actualHours: 0, // Not available in v_resource_graph, would need work_logs
+      actualHours: row.decomposition_item_actual_hours || 0,
       progress: row.decomposition_item_progress || 0,
+      cpi: row.decomposition_item_cpi || null,
       dueDate: row.decomposition_item_planned_due_date || null,
       order: row.decomposition_item_order || 0,
       workCategory: row.work_category_name || null,
@@ -199,6 +200,17 @@ export function transformRowsToKanbanSections(
           0
         )
         stage.progress = Math.round((weightedProgress / stage.plannedHours) * 100)
+      }
+
+      // Calculate stage CPI (EV / Actual)
+      if (stage.actualHours > 0) {
+        const earnedValue = stage.tasks.reduce(
+          (sum, t) => sum + (t.plannedHours * t.progress) / 100,
+          0
+        )
+        stage.cpi = Math.round((earnedValue / stage.actualHours) * 1000) / 1000 // Round to 3 decimals
+      } else {
+        stage.cpi = null
       }
     }
 

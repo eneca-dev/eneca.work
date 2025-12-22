@@ -2,8 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core'
 import { cn } from '@/lib/utils'
-import type { KanbanStage, KanbanSection } from '../types'
-import type { KanbanColumn } from '../types'
+import type { KanbanStage, KanbanSection, KanbanColumn } from '../types'
 import { KanbanCard } from './KanbanCard'
 
 interface KanbanDropZoneProps {
@@ -11,6 +10,7 @@ interface KanbanDropZoneProps {
   sectionId: string
   stages: KanbanStage[]
   section: KanbanSection
+  activeSectionId?: string | null // ID активного раздела при перетаскивании
 }
 
 export function KanbanDropZone({
@@ -18,6 +18,7 @@ export function KanbanDropZone({
   sectionId,
   stages,
   section,
+  activeSectionId,
 }: KanbanDropZoneProps) {
   const droppableId = `${sectionId}:${column.id}`
   const { setNodeRef, isOver } = useDroppable({
@@ -27,23 +28,29 @@ export function KanbanDropZone({
 
   const stagesInColumn = stages.filter((s) => s.status === column.id)
 
+  // Проверяем, можно ли дропнуть сюда карточку
+  const isDragActive = activeSectionId !== null && activeSectionId !== undefined
+  const isDropAllowed = !isDragActive || activeSectionId === sectionId
+
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex-1',
+        'flex-1 relative',
         'p-2 transition-colors duration-200',
-        'overflow-hidden',
-        isOver && 'ring-2 ring-primary/20 ring-inset'
+        'overflow-visible',
+        // Обычное состояние при наведении (только если дроп разрешён)
+        isOver && isDropAllowed && 'ring-2 ring-primary/20 ring-inset'
       )}
     >
       <div
         className={cn(
-          'flex flex-col gap-2 h-full',
+          'flex flex-col gap-2 h-full relative',
           'p-2',
-          'overflow-hidden',
+          'overflow-visible',
           column.bgColor,
-          isOver && 'ring-2 ring-primary/30 ring-inset'
+          // Обычное состояние при наведении (только если дроп разрешён)
+          isOver && isDropAllowed && 'ring-2 ring-primary/30 ring-inset'
         )}
       >
         {stagesInColumn.length === 0 ? (
@@ -54,7 +61,7 @@ export function KanbanDropZone({
               'min-h-[80px]'
             )}
           >
-            {isOver ? 'Отпустите здесь' : ''}
+            {isOver && isDropAllowed && 'Отпустите здесь'}
           </div>
         ) : (
           stagesInColumn.map((stage) => (
