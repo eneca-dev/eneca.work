@@ -52,8 +52,9 @@ export function getWeekDays(date: Date): Date[] {
 
 // Проверки дат
 export function isWeekend(date: Date): boolean {
-  // ✅ Определяем день недели в часовом поясе Минска
-  const day = getMinskDayOfWeek(date);
+  // Используем локальный день недели, т.к. даты календаря создаются
+  // через date-fns в локальном часовом поясе и отображаются локально
+  const day = date.getDay();
   return day === 0 || day === 6; // Воскресенье или суббота
 }
 

@@ -27,9 +27,9 @@ export function parseMinskDate(dateString: string): Date {
   // Удаляем время если есть, берем только дату
   const dateOnly = dateString.split('T')[0]
 
-  // Создаем строку даты-времени в формате ISO для часового пояса Минска
-  // toZonedTime интерпретирует эту дату как время в указанном часовом поясе
-  return toZonedTime(`${dateOnly}T00:00:00`, MINSK_TZ)
+  // Добавляем "Z" чтобы строка интерпретировалась как UTC (независимо от браузера)
+  // Затем toZonedTime конвертирует UTC → Minsk timezone
+  return toZonedTime(`${dateOnly}T00:00:00Z`, MINSK_TZ)
 }
 
 /**
