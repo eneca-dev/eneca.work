@@ -194,6 +194,45 @@ export function createSimpleMutation<TInput, TData>(config: {
 }
 
 /**
+ * Фабрика для создания мутации создания с optimistic update
+ *
+ * @example
+ * const useCreateProject = createCreateMutation({
+ *   mutationFn: createProject,
+ *   listQueryKey: queryKeys.projects.lists(),
+ *   buildOptimisticItem: (input) => ({
+ *     project_id: 'temp-' + Date.now(),
+ *     project_name: input.name,
+ *     ...input,
+ *     _isOptimistic: true,
+ *   }),
+ *   invalidateKeys: [queryKeys.projects.all],
+ * })
+ */
+export function createCreateMutation<TInput, TData extends { [key: string]: unknown }>(config: {
+  mutationFn: (input: TInput) => Promise<ActionResult<TData>>
+  listQueryKey: readonly unknown[]
+  buildOptimisticItem: (input: TInput) => TData
+  invalidateKeys?: readonly unknown[][]
+  onSuccess?: (data: TData, input: TInput) => void
+  onError?: (error: Error, input: TInput) => void
+}) {
+  return createCacheMutation<TInput, TData>({
+    mutationFn: config.mutationFn,
+    optimisticUpdate: {
+      queryKey: config.listQueryKey,
+      updater: (old, input) => {
+        const optimisticItem = config.buildOptimisticItem(input)
+        return old ? [...old, optimisticItem] : [optimisticItem]
+      },
+    },
+    invalidateKeys: config.invalidateKeys,
+    onSuccess: config.onSuccess,
+    onError: config.onError,
+  })
+}
+
+/**
  * Фабрика для создания мутации удаления с optimistic update
  *
  * @example

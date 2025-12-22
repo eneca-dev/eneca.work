@@ -253,9 +253,6 @@ export function CheckpointEditModal({
   const [customIcon, setCustomIcon] = useState<string>('Flag')
   const [customColor, setCustomColor] = useState<string>('#6b7280')
 
-  // Optimistic completion state
-  const [optimisticCompleted, setOptimisticCompleted] = useState<boolean | null>(null)
-
   // Delete confirmation state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
@@ -311,9 +308,6 @@ export function CheckpointEditModal({
       setDescription(checkpoint.description || '')
       setLinkedSectionIds(checkpoint.linked_sections?.map(s => s.section_id) || [])
 
-      // Синхронизируем optimistic состояние с реальным
-      setOptimisticCompleted(null)
-
       // Если тип custom — берём icon/color из VIEW (они могут быть кастомизированы)
       // Если тип НЕ custom — берём icon/color из типа (игнорируем старые custom значения)
       if (currentType?.is_custom) {
@@ -342,31 +336,20 @@ export function CheckpointEditModal({
     const hasDate = !!deadlineDate
     const hasName = selectedType?.is_custom ? name.trim().length > 0 : true
 
-    // Проверка изменения состояния выполнения
-    const currentCompleted = optimisticCompleted !== null ? optimisticCompleted : !!checkpoint?.completed_at
-    const originalCompleted = !!checkpoint?.completed_at
-    const completedChanged = currentCompleted !== originalCompleted
-
     const hasChanges =
       selectedTypeId !== checkpoint?.type_id ||
       name !== (checkpoint?.title || '') ||
       deadlineDate !== (checkpoint?.checkpoint_date || '') ||
       description !== (checkpoint?.description || '') ||
       JSON.stringify(linkedSectionIds.sort()) !== JSON.stringify(checkpoint?.linked_sections?.map(s => s.section_id).sort() || []) ||
-      (selectedType?.is_custom && (customIcon !== checkpoint?.icon || customColor !== checkpoint?.color)) ||
-      completedChanged
+      (selectedType?.is_custom && (customIcon !== checkpoint?.icon || customColor !== checkpoint?.color))
 
     return hasDate && hasName && hasChanges && !updateCheckpoint.isPending
-  }, [selectedTypeId, name, deadlineDate, description, linkedSectionIds, customIcon, customColor, selectedType, checkpoint, updateCheckpoint.isPending, optimisticCompleted])
+  }, [selectedTypeId, name, deadlineDate, description, linkedSectionIds, customIcon, customColor, selectedType, checkpoint, updateCheckpoint.isPending])
 
   // Сохранение
   const handleSave = async (): Promise<void> => {
     if (!canSave || !checkpoint) return
-
-    // Проверяем, изменился ли статус выполнения
-    const currentCompleted = optimisticCompleted !== null ? optimisticCompleted : !!checkpoint.completed_at
-    const originalCompleted = !!checkpoint.completed_at
-    const completedChanged = currentCompleted !== originalCompleted
 
     const payload = {
       checkpointId,
@@ -384,57 +367,19 @@ export function CheckpointEditModal({
       _optimisticColor: selectedType?.is_custom ? customColor : selectedType?.color,
     }
 
-    // Если изменился только статус выполнения - используем completeCheckpoint
-    if (completedChanged && Object.values(payload).filter(v => v !== undefined).length === 1) {
-      completeCheckpoint.mutate(
-        {
-          checkpointId,
-          completed: currentCompleted,
-        },
-        {
-          onSuccess: () => {
-            console.log('[CheckpointEditModal] Checkpoint completion saved')
-            setOptimisticCompleted(null)
-            onSuccess?.()
-            onClose()
-          },
-          onError: (error) => {
-            console.error('[CheckpointEditModal] Failed to save completion:', error)
-          },
-        }
-      )
-      return
-    }
+    // Закрываем модалку сразу для мгновенного отклика
+    // Optimistic update обновит чекпоинт в кеше мгновенно
+    onClose()
+    onSuccess?.()
 
-    // Обновляем основные данные
+    // Обновление происходит в фоне с optimistic update
     updateCheckpoint.mutate(payload, {
-      onSuccess: async (result) => {
+      onSuccess: (result) => {
         console.log('[CheckpointEditModal] Checkpoint updated successfully:', result)
-
-        // Если также изменился статус выполнения - обновляем его отдельно
-        if (completedChanged) {
-          completeCheckpoint.mutate(
-            {
-              checkpointId,
-              completed: currentCompleted,
-            },
-            {
-              onSuccess: () => {
-                console.log('[CheckpointEditModal] Checkpoint completion also saved')
-                setOptimisticCompleted(null)
-              },
-              onError: (error) => {
-                console.error('[CheckpointEditModal] Failed to save completion:', error)
-              },
-            }
-          )
-        }
-
-        onSuccess?.()
-        onClose()
       },
       onError: (error) => {
         console.error('[CheckpointEditModal] Failed to update checkpoint:', error)
+        // TODO: Показать toast с ошибкой пользователю
       },
     })
   }
@@ -466,12 +411,9 @@ export function CheckpointEditModal({
   const handleToggleComplete = (): void => {
     if (!checkpoint) return
 
-    const currentCompleted = optimisticCompleted !== null ? optimisticCompleted : !!checkpoint.completed_at
-    const newCompleted = !currentCompleted
+    const newCompleted = !checkpoint.completed_at
 
-    // Мгновенно обновляем UI
-    setOptimisticCompleted(newCompleted)
-
+    // Optimistic update происходит автоматически в хуке useCompleteCheckpoint
     completeCheckpoint.mutate(
       {
         checkpointId,
@@ -481,13 +423,9 @@ export function CheckpointEditModal({
         onSuccess: () => {
           console.log('[CheckpointEditModal] Checkpoint completion toggled')
           onSuccess?.()
-          // Сбрасываем optimistic state после успешного обновления
-          setOptimisticCompleted(null)
         },
         onError: (error) => {
           console.error('[CheckpointEditModal] Failed to toggle completion:', error)
-          // Откатываем optimistic update при ошибке
-          setOptimisticCompleted(null)
         },
       }
     )
@@ -565,33 +503,25 @@ export function CheckpointEditModal({
                     <TooltipTrigger asChild>
                       <button
                         onClick={handleToggleComplete}
-                        disabled={updateCheckpoint.isPending}
+                        disabled={completeCheckpoint.isPending || updateCheckpoint.isPending}
                         className={cn(
                           'flex items-center justify-center transition-all',
                           'disabled:opacity-50 disabled:cursor-not-allowed'
                         )}
                       >
-                        {(() => {
-                          const isCompleted = optimisticCompleted !== null ? optimisticCompleted : !!checkpoint?.completed_at
-                          return (
-                            <CircleCheckBig
-                              className={cn(
-                                'w-5 h-5 transition-colors',
-                                isCompleted
-                                  ? 'text-green-500 hover:text-green-600 dark:text-green-500 dark:hover:text-green-400'
-                                  : 'text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400'
-                              )}
-                              strokeWidth={2}
-                            />
-                          )
-                        })()}
+                        <CircleCheckBig
+                          className={cn(
+                            'w-5 h-5 transition-colors',
+                            checkpoint.completed_at
+                              ? 'text-green-500 hover:text-green-600 dark:text-green-500 dark:hover:text-green-400'
+                              : 'text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400'
+                          )}
+                          strokeWidth={2}
+                        />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-[11px] py-1 px-2">
-                      {(() => {
-                        const isCompleted = optimisticCompleted !== null ? optimisticCompleted : !!checkpoint?.completed_at
-                        return isCompleted ? 'Отменить выполнение' : 'Отметить выполненным'
-                      })()}
+                      {checkpoint.completed_at ? 'Отменить выполнение' : 'Отметить выполненным'}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -883,6 +813,8 @@ export function CheckpointEditModal({
                       onChange={(d) => setDeadlineDate(formatDateLocal(d))}
                       placeholder="Выберите дату"
                       calendarWidth="260px"
+                      offsetY={32}
+                      offsetX={-260}
                       inputClassName={cn(
                         'w-full px-2.5 py-1.5 text-xs rounded transition-colors cursor-pointer',
                         'bg-white border border-slate-300 text-slate-700',

@@ -13,6 +13,7 @@ import {
   createCacheQuery,
   createDetailCacheQuery,
   createCacheMutation,
+  createCreateMutation,
   createUpdateMutation,
   createDeleteMutation,
   queryKeys,
@@ -86,7 +87,10 @@ export const useCheckpointAudit = createDetailCacheQuery({
 // ============================================================================
 
 /**
- * Хук для создания нового чекпоинта
+ * Хук для создания нового чекпоинта с optimistic update
+ *
+ * Мгновенно добавляет чекпоинт в список с временным ID.
+ * После успешного создания на сервере заменяет temporary item реальными данными.
  *
  * Автоматически инвалидирует кеш:
  * - checkpoints.all (списки чекпоинтов)
@@ -102,10 +106,48 @@ export const useCheckpointAudit = createDetailCacheQuery({
  *   title: 'Экспертиза',
  *   checkpointDate: '2025-12-31',
  * })
+ * // Модалка закрывается сразу, чекпоинт появляется на графике мгновенно
  * ```
  */
-export const useCreateCheckpoint = createCacheMutation({
+export const useCreateCheckpoint = createCreateMutation({
   mutationFn: createCheckpoint,
+  listQueryKey: queryKeys.checkpoints.lists(),
+  buildOptimisticItem: (input: CreateCheckpointInput): Checkpoint => {
+    // Создаем временный ID для optimistic item
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Находим тип чекпоинта для получения иконки и цвета
+    // Примечание: это упрощенная версия, реальные данные придут с сервера
+    const now = new Date().toISOString()
+
+    return {
+      checkpoint_id: tempId,
+      section_id: input.sectionId,
+      type_id: input.typeId,
+      type_code: 'custom', // Будет обновлено с сервера
+      type_name: input.title || 'Новый чекпоинт',
+      is_custom: !!input.customIcon,
+      title: input.title || 'Новый чекпоинт',
+      description: input.description || null,
+      checkpoint_date: input.checkpointDate,
+      icon: input.customIcon || 'Flag',
+      color: input.customColor || '#6b7280',
+      completed_at: null,
+      completed_by: null,
+      status: 'pending',
+      status_label: 'Ожидается',
+      created_by: null, // Будет установлено сервером
+      created_at: now,
+      updated_at: now,
+      section_responsible: null,
+      project_manager: null,
+      linked_sections: (input.linkedSectionIds || []).map(id => ({
+        section_id: id,
+        section_name: 'Загрузка...', // Будет обновлено с сервера
+      })),
+      linked_sections_count: (input.linkedSectionIds || []).length,
+    }
+  },
   invalidateKeys: [
     queryKeys.checkpoints.all,
     queryKeys.sections.all,

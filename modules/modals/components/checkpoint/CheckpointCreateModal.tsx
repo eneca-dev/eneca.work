@@ -503,14 +503,19 @@ export function CheckpointCreateModal({
       customColor: selectedType?.is_custom ? customColor : undefined,
     }
 
+    // Закрываем модалку сразу для мгновенного отклика
+    // Optimistic update добавит чекпоинт на график мгновенно
+    onClose()
+    onSuccess?.()
+
+    // Создание происходит в фоне с optimistic update
     createCheckpoint.mutate(payload, {
       onSuccess: (result) => {
         console.log('[CheckpointCreateModal] Checkpoint created successfully:', result)
-        onSuccess?.()
-        onClose()
       },
       onError: (error) => {
         console.error('[CheckpointCreateModal] Failed to create checkpoint:', error)
+        // TODO: Показать toast с ошибкой пользователю
       },
     })
   }
@@ -857,6 +862,8 @@ export function CheckpointCreateModal({
                       onChange={(d) => setDeadlineDate(formatDateLocal(d))}
                       placeholder="Выберите дату"
                       calendarWidth="260px"
+                      offsetY={32}
+                      offsetX={-260}
                       inputClassName={cn(
                         'w-full px-2.5 py-1.5 text-xs rounded transition-colors cursor-pointer',
                         'bg-white border border-slate-300 text-slate-700',

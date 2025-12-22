@@ -436,7 +436,7 @@ function CheckpointMarker({
           fill="hsl(var(--background))"
           fillOpacity="0.95"
           stroke={statusColor}
-          strokeWidth={2}
+          strokeWidth={1.2}
           className="transition-all duration-300 checkpoint-circle"
           style={{
             filter: `drop-shadow(0 2px 4px ${statusColor}40)`
