@@ -265,18 +265,13 @@ function ReportDotMarker({ report, x }: ReportDotMarkerProps) {
         <div
           className="absolute pointer-events-auto cursor-default"
           style={{
-            left: x + DAY_CELL_WIDTH / 2 - 3,
+            left: x + DAY_CELL_WIDTH / 2 - 6,
             top: '50%',
             transform: 'translateY(-50%)',
           }}
         >
-          {/* Маленькая точка */}
-          <div
-            className="w-1.5 h-1.5 rounded-full bg-blue-500"
-            style={{
-              boxShadow: '0 0 3px rgba(59, 130, 246, 0.4)',
-            }}
-          />
+          {/* Иконка отчета */}
+          <MessageSquareText className="w-3 h-3 text-blue-500" />
         </div>
       </TooltipTrigger>
 
