@@ -4,6 +4,7 @@ import React, { useMemo } from 'react'
 import { Calendar, Clock, AlertTriangle } from 'lucide-react'
 import type { UserLoading, DeadlinesBlockProps } from '../types'
 import { ScrollableContainer } from './ScrollableContainer'
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 interface LocalDeadlineItem {
   id: string
@@ -62,7 +63,8 @@ export const DeadlinesBlock: React.FC<DeadlinesBlockProps> = ({ loadings, isComp
     // Добавляем дедлайны загрузок
     loadings.forEach(loading => {
       if (loading.loading_finish) {
-        const finishDate = new Date(loading.loading_finish)
+        // ✅ Парсим дату в часовом поясе Минска
+        const finishDate = parseMinskDate(loading.loading_finish)
         const daysLeft = calculateDaysLeft(finishDate)
         
         items.push({

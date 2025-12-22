@@ -1,41 +1,24 @@
 import { format, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isToday } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { CalendarEvent, WorkSchedule } from '@/modules/calendar/types';
+import { parseMinskDate, formatMinskDate, getMinskDayOfWeek } from '@/lib/timezone-utils';
 
 // Форматирование дат
 export function formatDate(date: Date, formatStr: string = "dd.MM.yyyy"): string {
   return format(date, formatStr, { locale: ru });
 }
 
-// Функция для правильного форматирования даты в строку YYYY-MM-DD без проблем с часовыми поясами
+// Функция для правильного форматирования даты в строку YYYY-MM-DD в часовом поясе Минска
 export function formatDateToString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // ✅ Форматируем дату в часовом поясе Минска (UTC+3)
+  return formatMinskDate(date);
 }
 
-// Функция для безопасного парсинга даты из строки
+// Функция для безопасного парсинга даты из строки в часовом поясе Минска
 export function parseDateFromString(dateString: string): Date {
-  // Если строка уже содержит время, используем её как есть
-  if (dateString.includes('T')) {
-    return new Date(dateString);
-  }
-  
-  // Если это только дата в формате YYYY-MM-DD, добавляем время полуночи
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return new Date(dateString + 'T00:00:00');
-  }
-  
-  // Для других форматов пытаемся парсить как есть
-  const date = new Date(dateString);
-  
-  // Проверяем, что дата валидна
-  if (isNaN(date.getTime())) {
-    throw new Error(`Invalid date string: ${dateString}`);
-  }
-  
-  return date;
+  // ✅ Все даты парсим как даты в часовом поясе Минска (UTC+3)
+  // parseMinskDate обрабатывает как "YYYY-MM-DD", так и ISO строки с timezone
+  return parseMinskDate(dateString);
 }
 
 export function formatMonthYear(date: Date): string {
@@ -69,12 +52,14 @@ export function getWeekDays(date: Date): Date[] {
 
 // Проверки дат
 export function isWeekend(date: Date): boolean {
-  const day = date.getDay();
+  // ✅ Определяем день недели в часовом поясе Минска
+  const day = getMinskDayOfWeek(date);
   return day === 0 || day === 6; // Воскресенье или суббота
 }
 
 export function isWorkingDay(date: Date, workSchedules: WorkSchedule[]): boolean {
-  const dayOfWeek = date.getDay();
+  // ✅ Определяем день недели в часовом поясе Минска
+  const dayOfWeek = getMinskDayOfWeek(date);
   const schedule = workSchedules.find(s => s.day_of_week === dayOfWeek);
   return schedule?.is_working_day || false;
 }

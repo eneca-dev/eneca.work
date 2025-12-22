@@ -1,5 +1,6 @@
 import { createClient } from "@/utils/supabase/client"
 import type { Section, Loading, PlannedLoading, DecompositionStage } from "@/modules/planning/types"
+import { parseMinskDate } from '@/lib/timezone-utils'
 
 // Используем единый клиент Supabase вместо создания нового
 export const supabase = createClient()
@@ -441,8 +442,9 @@ export async function fetchSectionsWithLoadings(
               : undefined,
           responsibleAvatarUrl: sectionItem.responsible_avatar || undefined,
           responsibleTeamName: sectionItem.responsible_team_name || undefined,
-          startDate: sectionItem.loading_start ? new Date(sectionItem.loading_start) : new Date(),
-          endDate: sectionItem.loading_finish ? new Date(sectionItem.loading_finish) : new Date(),
+          // ✅ Парсим даты в часовом поясе Минска
+          startDate: sectionItem.loading_start ? parseMinskDate(sectionItem.loading_start) : new Date(),
+          endDate: sectionItem.loading_finish ? parseMinskDate(sectionItem.loading_finish) : new Date(),
           rate: sectionItem.loading_rate || 1,
           comment: (sectionItem as any).loading_comment || undefined,
           createdAt: sectionItem.loading_created ? new Date(sectionItem.loading_created) : new Date(),
@@ -808,8 +810,9 @@ export async function updateLoading(
       sectionName: loadingData.section_name,
       projectId: loadingData.project_id,
       projectName: loadingData.project_name,
-      startDate: new Date(loadingData.loading_start),
-      endDate: new Date(loadingData.loading_finish),
+      // ✅ Парсим даты в часовом поясе Минска
+      startDate: parseMinskDate(loadingData.loading_start),
+      endDate: parseMinskDate(loadingData.loading_finish),
       rate: loadingData.loading_rate || 1,
       comment: loadingData.loading_comment || undefined,
     }

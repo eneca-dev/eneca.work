@@ -1,7 +1,9 @@
 import type { CalendarEvent } from "@/modules/calendar/types"
+import { formatMinskDate, getMinskDayOfWeek, parseMinskDate } from '@/lib/timezone-utils'
 
 export const isWeekend = (date: Date) => {
-  const day = date.getDay()
+  // ✅ Определяем день недели в часовом поясе Минска
+  const day = getMinskDayOfWeek(date)
   return day === 0 || day === 6 // 0 - воскресенье, 6 - суббота
 }
 
@@ -51,14 +53,16 @@ export const groupDatesByMonth = (dates: { date: Date; label: string; isWeekend?
  * 3. Выходные дни (Сб/Вс)
  */
 export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boolean => {
-  const dateString = date.toISOString().split('T')[0]
+  // ✅ Форматируем дату в часовом поясе Минска
+  const dateString = formatMinskDate(date)
 
   // Приоритет 1: Проверяем переносы
   const transferEvent = calendarEvents.find(
     (event) =>
       event.calendar_event_type === 'Перенос' &&
       event.calendar_event_is_global &&
-      event.calendar_event_date_start.split('T')[0] === dateString &&
+      // ✅ Парсим и форматируем дату события в часовом поясе Минска для корректного сравнения
+      formatMinskDate(parseMinskDate(event.calendar_event_date_start)) === dateString &&
       event.calendar_event_is_weekday !== null
   )
 
@@ -71,7 +75,8 @@ export const isWorkingDay = (date: Date, calendarEvents: CalendarEvent[]): boole
     (event) =>
       event.calendar_event_type === 'Праздник' &&
       event.calendar_event_is_global &&
-      event.calendar_event_date_start.split('T')[0] === dateString
+      // ✅ Парсим и форматируем дату события в часовом поясе Минска для корректного сравнения
+      formatMinskDate(parseMinskDate(event.calendar_event_date_start)) === dateString
   )
 
   if (holidayEvent) {
@@ -129,9 +134,10 @@ export const generateTimeUnits = (
 // Функция для получения текущей даты с началом в понедельник текущей недели
 export const getCurrentWeekStart = () => {
   const today = new Date()
-  const day = today.getDay()
+  // ✅ Используем день недели в часовом поясе Минска
+  const day = getMinskDayOfWeek(today)
   const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Если сегодня воскресенье, то -6, иначе +1
-  
+
   // Создаем новый объект Date, чтобы не мутировать исходный
   const weekStart = new Date(today)
   weekStart.setDate(diff)

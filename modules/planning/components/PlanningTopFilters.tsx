@@ -9,6 +9,7 @@ import { useSectionStatusesStore } from '@/modules/statuses-tags/statuses/store'
 import { useFilterStore } from '@/modules/planning/filters/store'
 import { useFilterValidation } from '@/modules/planning/filters/hooks/useFilterValidation'
 import { useHasPermission } from '@/modules/permissions/hooks/usePermissions'
+import { getMinskDayOfWeek } from '@/lib/timezone-utils'
 
 import { usePlanningViewStore } from '@/modules/planning/stores/usePlanningViewStore'
 import { usePlanningStore } from '@/modules/planning/stores/usePlanningStore'
@@ -32,7 +33,8 @@ function toISODate(date: Date): string {
 
 function getMonthMatrix(year: number, month: number): Date[] {
   const firstOfMonth = new Date(year, month, 1)
-  const weekday = firstOfMonth.getDay()
+  // ✅ Используем день недели в часовом поясе Минска
+  const weekday = getMinskDayOfWeek(firstOfMonth)
   const mondayIndex = (weekday + 6) % 7
   const start = new Date(year, month, 1 - mondayIndex)
   const days: Date[] = []
