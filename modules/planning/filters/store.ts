@@ -826,7 +826,8 @@ export const useFilterStore = create<FilterStore>()(
             console.log('✅ Валидация фильтров после rehydration завершена')
           }
 
-          validateAfterRehydration().catch(console.error)
+          // setTimeout гарантирует что store уже создан к моменту вызова
+          setTimeout(() => validateAfterRehydration().catch(console.error), 0)
         }
       }
     )
