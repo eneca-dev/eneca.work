@@ -95,7 +95,6 @@ const ICON_SIZE = 12     // Размер иконки внутри маркер�
 
 // Смещение для чекпоинтов на одну дату
 const OVERLAP_OFFSET_X = 6   // Смещение по X для каждого следующего чекпоинта
-const OVERLAP_OFFSET_Y = 4   // Смещение по Y для каждого следующего чекпоинта
 
 // ============================================================================
 // Icon Helper
@@ -276,7 +275,7 @@ function CheckpointMarker({
   overlapTotal = 1
 }: CheckpointMarkerProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const { registerCheckpoint, unregisterCheckpoint } = useCheckpointLinks()
+  const { registerCheckpoint, unregisterCheckpoint, getGroupMaxOffset } = useCheckpointLinks()
 
   // Рассчитываем базовую позицию X
   const baseX = useMemo(() => {
@@ -286,18 +285,37 @@ function CheckpointMarker({
     return dayOffset * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2
   }, [checkpoint.checkpoint_date, range.start])
 
-  // Применяем смещение для наложения (каскадный эффект)
-  // Если несколько чекпоинтов на одну дату, смещаем их по диагонали
-  const offsetMultiplier = overlapTotal > 1 ? overlapIndex - (overlapTotal - 1) / 2 : 0
-  const x = baseX + offsetMultiplier * OVERLAP_OFFSET_X
+  // Проверяем, есть ли связанные чекпоинты (для синхронизации смещения)
+  const hasLinkedCheckpoints = checkpoint.linked_sections && checkpoint.linked_sections.length > 0
 
-  // Y позиция — центр дополнительного пространства для чекпоинтов
+  // Вычисляем смещение по X
+  // Если чекпоинт связан с другими, используем максимальное смещение группы
+  // Иначе используем локальное смещение
+  const offsetX = useMemo(() => {
+    if (hasLinkedCheckpoints) {
+      // Пытаемся получить синхронизированное смещение группы
+      const groupOffset = getGroupMaxOffset(checkpoint.checkpoint_id)
+      if (groupOffset !== null) {
+        console.log('[CheckpointMarker] Using group offset:', {
+          checkpoint_id: checkpoint.checkpoint_id,
+          sectionId,
+          groupOffsetX: groupOffset,
+        })
+        return groupOffset
+      }
+    }
+
+    // Локальное смещение (для несвязанных чекпоинтов или если группа ещё не сформирована)
+    const offsetMultiplier = overlapTotal > 1 ? overlapIndex - (overlapTotal - 1) / 2 : 0
+    return offsetMultiplier * OVERLAP_OFFSET_X
+  }, [hasLinkedCheckpoints, checkpoint.checkpoint_id, sectionId, overlapIndex, overlapTotal, getGroupMaxOffset])
+
+  const x = baseX + offsetX
+
+  // Y позиция — центр дополнительного пространства для чекпоинтов (без вертикального смещения)
   // Дополнительное пространство = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
   const checkpointSpace = SECTION_ROW_HEIGHT_WITH_CHECKPOINTS - SECTION_ROW_HEIGHT
-  const baseRelativeY = checkpointSpace / 2
-
-  // Применяем смещение по Y для каскадного эффекта
-  const relativeY = baseRelativeY + offsetMultiplier * OVERLAP_OFFSET_Y
+  const relativeY = checkpointSpace / 2
 
   // Абсолютная Y позиция от верха timeline
   const absoluteY = absoluteRowY + relativeY
@@ -311,6 +329,8 @@ function CheckpointMarker({
         sectionId,
         x,
         y: absoluteY,
+        overlapIndex,
+        overlapTotal,
         linked_sections: checkpoint.linked_sections,
       })
       registerCheckpoint({
@@ -318,6 +338,8 @@ function CheckpointMarker({
         sectionId,
         x,
         y: absoluteY,
+        overlapIndex,
+        overlapTotal,
       })
     } else {
       console.log('[CheckpointMarker] NOT registering (no linked sections):', {
@@ -332,7 +354,7 @@ function CheckpointMarker({
         unregisterCheckpoint(checkpoint.checkpoint_id, sectionId)
       }
     }
-  }, [checkpoint, sectionId, x, absoluteY, registerCheckpoint, unregisterCheckpoint])
+  }, [checkpoint, sectionId, x, absoluteY, overlapIndex, overlapTotal, registerCheckpoint, unregisterCheckpoint])
 
   // Получаем компонент иконки
   const IconComponent = useMemo(() => getLucideIcon(checkpoint.icon), [checkpoint.icon])

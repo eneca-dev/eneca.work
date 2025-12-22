@@ -10,10 +10,13 @@ import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
 
 interface CheckpointGroup {
   checkpoint_id: string
+  /** Синхронизированная X координата для всей группы (максимальное смещение) */
   x: number
   positions: Array<{
     sectionId: string
     y: number
+    overlapIndex: number
+    overlapTotal: number
   }>
 }
 
@@ -24,6 +27,9 @@ interface CheckpointGroup {
 /**
  * Сгруппировать чекпоинты по checkpoint_id
  * Возвращает только группы с более чем одной позицией (связанные чекпоинты)
+ *
+ * Для каждой группы вычисляется максимальное смещение X среди всех чекпоинтов,
+ * чтобы все маркеры и вертикальная стрелка были выровнены по одной линии.
  */
 function groupCheckpointsByIdent(
   positions: ReturnType<typeof useCheckpointLinks>['positions']
@@ -36,16 +42,32 @@ function groupCheckpointsByIdent(
     if (!groups.has(key)) {
       groups.set(key, {
         checkpoint_id: pos.checkpoint.checkpoint_id,
-        x: pos.x,
+        x: pos.x, // Временное значение, будет пересчитано ниже
         positions: [],
       })
     }
 
-    groups.get(key)!.positions.push({ sectionId: pos.sectionId, y: pos.y })
+    groups.get(key)!.positions.push({
+      sectionId: pos.sectionId,
+      y: pos.y,
+      overlapIndex: pos.overlapIndex,
+      overlapTotal: pos.overlapTotal,
+    })
   }
 
-  // Логируем все группы перед фильтрацией
-  const allGroups = Array.from(groups.values())
+  // Пересчитываем X для каждой группы: берём максимальное смещение
+  // Это гарантирует, что все связанные чекпоинты будут на одной вертикали
+  const allGroups = Array.from(groups.values()).map(group => {
+    // Находим максимальное X среди всех позиций в группе
+    const positionsWithX = positions.filter(p => p.checkpoint.checkpoint_id === group.checkpoint_id)
+    const maxX = Math.max(...positionsWithX.map(p => p.x))
+
+    return {
+      ...group,
+      x: maxX,
+    }
+  })
+
   console.log('[groupCheckpointsByIdent] All groups before filter:', allGroups)
 
   // Логируем детали каждой группы

@@ -14,6 +14,10 @@ interface CheckpointPosition {
   y: number
   /** X позиция центра маркера чекпоинта в пикселях от левого края timeline */
   x: number
+  /** Индекс наложения (для синхронизации смещения между связанными чекпоинтами) */
+  overlapIndex: number
+  /** Общее количество чекпоинтов на эту дату */
+  overlapTotal: number
 }
 
 interface CheckpointLinksContextValue {
@@ -23,6 +27,8 @@ interface CheckpointLinksContextValue {
   unregisterCheckpoint: (checkpointId: string, sectionId: string) => void
   /** Все зарегистрированные позиции */
   positions: CheckpointPosition[]
+  /** Получить синхронизированное максимальное смещение по X для группы связанных чекпоинтов */
+  getGroupMaxOffset: (checkpointId: string) => number | null
 }
 
 // ============================================================================
@@ -58,8 +64,36 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
     ))
   }, [])
 
+  const getGroupMaxOffset = useCallback((checkpointId: string) => {
+    // Находим все позиции с этим checkpoint_id
+    const groupPositions = positions.filter(p => p.checkpoint.checkpoint_id === checkpointId)
+
+    // Если нет связанных чекпоинтов (< 2 позиций), возвращаем null
+    if (groupPositions.length < 2) {
+      return null
+    }
+
+    // Находим максимальный overlapIndex и overlapTotal в группе
+    let maxOverlapIndex = 0
+    let maxOverlapTotal = 1
+
+    for (const pos of groupPositions) {
+      if (pos.overlapTotal > maxOverlapTotal ||
+          (pos.overlapTotal === maxOverlapTotal && pos.overlapIndex > maxOverlapIndex)) {
+        maxOverlapIndex = pos.overlapIndex
+        maxOverlapTotal = pos.overlapTotal
+      }
+    }
+
+    // Вычисляем только смещение по X (без смещения по Y)
+    const offsetMultiplier = maxOverlapTotal > 1 ? maxOverlapIndex - (maxOverlapTotal - 1) / 2 : 0
+    const OVERLAP_OFFSET_X = 6
+
+    return offsetMultiplier * OVERLAP_OFFSET_X
+  }, [positions])
+
   return (
-    <CheckpointLinksContext.Provider value={{ registerCheckpoint, unregisterCheckpoint, positions }}>
+    <CheckpointLinksContext.Provider value={{ registerCheckpoint, unregisterCheckpoint, positions, getGroupMaxOffset }}>
       {children}
     </CheckpointLinksContext.Provider>
   )

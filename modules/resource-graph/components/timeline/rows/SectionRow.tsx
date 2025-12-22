@@ -81,6 +81,16 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   const rowRef = useRef<HTMLDivElement>(null)
   const [absoluteRowY, setAbsoluteRowY] = useState(0)
 
+  // Lazy load work logs при развороте объекта (не раздела!)
+  const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
+    enabled: isObjectExpanded,
+  })
+
+  // Загружаем checkpoints всегда (нужны для отображения маркеров на связанных разделах)
+  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints({
+    sectionId: section.id
+  })
+
   // Вычисляем абсолютную Y позицию строки при монтировании и изменении размеров
   useEffect(() => {
     const updatePosition = () => {
@@ -115,17 +125,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
       window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
     }
-  }, [isExpanded, section.id, section.name]) // Пересчитываем при разворачивании/сворачивании
-
-  // Lazy load work logs при развороте объекта (не раздела!)
-  const { data: workLogs, isLoading: workLogsLoading, refetch: refetchWorkLogs } = useWorkLogs(section.id, {
-    enabled: isObjectExpanded,
-  })
-
-  // Загружаем checkpoints всегда (нужны для отображения маркеров на связанных разделах)
-  const { data: checkpoints = [], refetch: refetchCheckpoints } = useCheckpoints({
-    sectionId: section.id
-  })
+  }, [isExpanded, section.id, section.name, checkpoints.length]) // Пересчитываем при разворачивании/сворачивании и при загрузке чекпоинтов
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {

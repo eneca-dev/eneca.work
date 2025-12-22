@@ -18,6 +18,7 @@ import {
   createDeleteMutation,
   queryKeys,
 } from '@/modules/cache'
+import { useQueryClient } from '@tanstack/react-query'
 
 import {
   getCheckpoints,
@@ -161,6 +162,11 @@ export const useCreateCheckpoint = createCreateMutation({
  * Мгновенно обновляет UI до получения ответа от сервера.
  * При ошибке откатывает изменения.
  *
+ * Особенности:
+ * - Обновляет чекпоинт во ВСЕХ списках где он есть
+ * - Добавляет чекпоинт в списки НОВЫХ связанных разделов (optimistic)
+ * - Удаляет из списков разделов, из которых его убрали
+ *
  * @example
  * ```tsx
  * const updateMutation = useUpdateCheckpoint()
@@ -168,30 +174,138 @@ export const useCreateCheckpoint = createCreateMutation({
  *   checkpointId: 'uuid',
  *   title: 'Новое название',
  *   checkpointDate: '2026-01-15',
+ *   linkedSectionIds: ['section-1', 'section-2'],
  * })
  * ```
  */
-export const useUpdateCheckpoint = createUpdateMutation({
-  mutationFn: updateCheckpoint,
-  listQueryKey: queryKeys.checkpoints.lists(),
-  getId: (input: UpdateCheckpointInput) => input.checkpointId,
-  getItemId: (item: Checkpoint) => item.checkpoint_id,
-  merge: (item: Checkpoint, input: UpdateCheckpointInput) => ({
-    ...item,
-    type_id: input.typeId ?? item.type_id,
-    title: input.title ?? item.title,
-    description: input.description ?? item.description,
-    checkpoint_date: input.checkpointDate ?? item.checkpoint_date,
-    // Для optimistic update используем _optimisticIcon/_optimisticColor если есть
-    icon: input._optimisticIcon ?? input.customIcon ?? item.icon,
-    color: input._optimisticColor ?? input.customColor ?? item.color,
-    // linked_sections обновятся после рефетча с сервера
-  }),
-  invalidateKeys: [
-    queryKeys.sections.all,
-    queryKeys.resourceGraph.all,
-  ],
-})
+export function useUpdateCheckpoint() {
+  const queryClient = useQueryClient()
+
+  return createCacheMutation<UpdateCheckpointInput, Checkpoint>({
+    mutationFn: updateCheckpoint,
+
+    optimisticUpdate: {
+      queryKey: queryKeys.checkpoints.lists(),
+      updater: (old, input) => {
+        if (!old) return []
+
+        const idToUpdate = input.checkpointId
+
+        // Найти текущий чекпоинт в этом списке
+        const currentItem = old.find(item => item.checkpoint_id === idToUpdate)
+
+        if (!currentItem) {
+          // Чекпоинта нет в этом списке
+          // Проверим, нужно ли добавить его (если это новый связанный раздел)
+
+          if (!input.linkedSectionIds) {
+            return old
+          }
+
+          // Получить queryKey этого конкретного списка
+          const queries = queryClient.getQueryCache().findAll({
+            queryKey: queryKeys.checkpoints.lists()
+          })
+
+          // Найти query для этого конкретного списка (по данным)
+          const currentQuery = queries.find(q => q.state.data === old)
+
+          if (!currentQuery) {
+            return old
+          }
+
+          // Извлечь sectionId из query key
+          const queryKey = currentQuery.queryKey as readonly unknown[]
+          const filters = queryKey[2] as { sectionId?: string } | undefined
+
+          // Проверить, является ли этот список запросом для одного из новых связанных разделов
+          if (!filters?.sectionId || !input.linkedSectionIds.includes(filters.sectionId)) {
+            return old
+          }
+
+          // Нужно добавить чекпоинт в этот список
+          // Попробуем найти его в detail кеше
+          const checkpointFromCache = queryClient.getQueryData<Checkpoint>(
+            queryKeys.checkpoints.detail(idToUpdate)
+          )
+
+          if (!checkpointFromCache) {
+            // Чекпоинта нет в detail кеше, инвалидация обновит данные с сервера
+            return old
+          }
+
+          // Создаем обновленную версию
+          const updatedCheckpoint: Checkpoint = {
+            ...checkpointFromCache,
+            type_id: input.typeId ?? checkpointFromCache.type_id,
+            title: input.title ?? checkpointFromCache.title,
+            description: input.description ?? checkpointFromCache.description,
+            checkpoint_date: input.checkpointDate ?? checkpointFromCache.checkpoint_date,
+            icon: input._optimisticIcon ?? input.customIcon ?? checkpointFromCache.icon,
+            color: input._optimisticColor ?? input.customColor ?? checkpointFromCache.color,
+            linked_sections: input.linkedSectionIds.map(id => ({
+              section_id: id,
+              section_name: 'Загрузка...',
+            })),
+            linked_sections_count: input.linkedSectionIds.length,
+          }
+
+          return [...old, updatedCheckpoint]
+        }
+
+        // Обновить существующий чекпоинт
+        const updatedItem: Checkpoint = {
+          ...currentItem,
+          type_id: input.typeId ?? currentItem.type_id,
+          title: input.title ?? currentItem.title,
+          description: input.description ?? currentItem.description,
+          checkpoint_date: input.checkpointDate ?? currentItem.checkpoint_date,
+          icon: input._optimisticIcon ?? input.customIcon ?? currentItem.icon,
+          color: input._optimisticColor ?? input.customColor ?? currentItem.color,
+          linked_sections: input.linkedSectionIds !== undefined
+            ? input.linkedSectionIds.map(id => ({
+                section_id: id,
+                section_name: 'Загрузка...',
+              }))
+            : currentItem.linked_sections,
+          linked_sections_count: input.linkedSectionIds !== undefined
+            ? input.linkedSectionIds.length
+            : currentItem.linked_sections_count,
+        }
+
+        // Проверить, нужно ли удалить чекпоинт из этого списка
+        if (input.linkedSectionIds !== undefined) {
+          const queries = queryClient.getQueryCache().findAll({
+            queryKey: queryKeys.checkpoints.lists()
+          })
+          const currentQuery = queries.find(q => q.state.data === old)
+
+          if (currentQuery) {
+            const queryKey = currentQuery.queryKey as readonly unknown[]
+            const filters = queryKey[2] as { sectionId?: string } | undefined
+
+            // Если это список связанного раздела (не родительский раздел)
+            if (filters?.sectionId && filters.sectionId !== currentItem.section_id) {
+              // Проверить, остался ли этот раздел в связанных
+              if (!input.linkedSectionIds.includes(filters.sectionId)) {
+                // Удалить чекпоинт из этого списка
+                return old.filter(item => item.checkpoint_id !== idToUpdate)
+              }
+            }
+          }
+        }
+
+        return old.map(item => item.checkpoint_id === idToUpdate ? updatedItem : item)
+      },
+    },
+
+    invalidateKeys: [
+      queryKeys.checkpoints.all, // Инвалидируем ВСЕ списки чекпоинтов для обновления данных с сервера
+      queryKeys.sections.all,
+      queryKeys.resourceGraph.all,
+    ],
+  })()
+}
 
 /**
  * Вычисляет статус чекпоинта на основе дат
