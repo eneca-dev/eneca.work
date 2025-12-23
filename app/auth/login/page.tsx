@@ -2,7 +2,7 @@
 
 import type React from "react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AuthButton } from "@/components/auth-button"
 import { AuthInput } from "@/components/auth-input"
@@ -16,8 +16,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [redirectUrl, setRedirectUrl] = useState('/dashboard')
   const router = useRouter()
   const supabase = createClient()
+
+  // Получаем URL для редиректа после логина из параметров
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('next')
+    if (next) {
+      setRedirectUrl(next)
+    }
+  }, [])
 
   // Функция для получения понятного сообщения об ошибке
   const getErrorMessage = (error: any): string => {
@@ -166,7 +176,7 @@ export default function LoginPage() {
           span.setAttribute("auth.success", true)
 
           router.refresh()
-          router.push("/dashboard")
+          router.push(redirectUrl)
 
         } catch (err) {
           span.setAttribute("auth.success", false)

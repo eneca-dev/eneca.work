@@ -217,14 +217,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({
       <div className="w-full" key={`${year}-${month}`}>
         <div className="grid grid-cols-7 text-center">
           {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-            <div key={d} className="w-6 h-6 flex items-center justify-center rounded font-bold text-xs text-muted-foreground m-0.5">
+            <div key={d} className="w-5 h-4 flex items-center justify-center rounded font-bold text-[10px] text-muted-foreground m-0.5">
               {d}
             </div>
           ))}
           {weeks.flat().map((cellDate, idx) => {
             if (!cellDate) {
               return (
-                <div key={idx} className="w-6 h-6 flex items-center justify-center rounded cursor-default m-0.5" />
+                <div key={idx} className="w-5 h-5 flex items-center justify-center rounded cursor-default m-0.5" />
               )
             }
 
@@ -235,7 +235,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
               <div
                 key={idx}
                 className={cn(
-                  "w-6 h-6 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-xs m-0.5 transition-colors hover:bg-accent/50",
+                  "w-5 h-5 flex items-center justify-center rounded-full cursor-pointer border border-transparent text-[10px] m-0.5 transition-colors hover:bg-accent/50",
                   isSelected && "bg-primary text-primary-foreground border-primary shadow-sm",
                 )}
                 onClick={() => onSelectDate(cellDate)}
@@ -291,11 +291,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                       : { left: 0, top: `calc(100% + ${offsetY}px)`, marginTop: '4px', position: 'absolute' as const })
           }
         >
-          <div className="font-sans bg-background rounded-lg p-2 dark:bg-slate-700" style={{ width: calendarWidth }}>
-            <div className="flex items-center justify-between mb-1">
-              <button className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
-              <div className="text-center font-bold text-foreground text-sm px-2 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
-              <button className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
+          <div className="font-sans bg-background rounded-lg p-1.5 dark:bg-slate-700" style={{ width: calendarWidth }}>
+            <div className="flex items-center justify-between mb-0.5">
+              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
+              <div className="text-center font-bold text-foreground text-xs px-1 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
+              <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
             </div>
             {renderMonth(currentMonth)}
           </div>
@@ -333,11 +333,11 @@ export const DatePicker: React.FC<DatePickerProps> = ({
               className="fixed z-[1000] shadow-lg rounded-lg bg-background border border-border dark:bg-slate-700 dark:border-slate-500"
               style={{ left, top, width: calendarWidth as any }}
             >
-              <div className="font-sans bg-background rounded-lg p-2 dark:bg-slate-700" style={{ width: calendarWidth }}>
-                <div className="flex items-center justify-between mb-1">
-                  <button className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
-                  <div className="text-center font-bold text-foreground text-sm px-2 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
-                  <button className="cursor-pointer border-none bg-transparent text-sm text-foreground rounded p-1 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
+              <div className="font-sans bg-background rounded-lg p-1.5 dark:bg-slate-700" style={{ width: calendarWidth }}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handlePrev}>←</button>
+                  <div className="text-center font-bold text-foreground text-xs px-1 flex-1">{currentMonth.toLocaleString("ru-RU", { month: "long", year: "numeric" })}</div>
+                  <button className="cursor-pointer border-none bg-transparent text-xs text-foreground rounded p-0.5 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onClick={handleNext}>→</button>
                 </div>
                 {renderMonth(currentMonth)}
               </div>

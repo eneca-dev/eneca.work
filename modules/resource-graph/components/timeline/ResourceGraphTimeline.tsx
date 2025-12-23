@@ -7,6 +7,7 @@ import type { Project, TimelineRange } from '../../types'
 import { TimelineHeader, type DayCell } from './TimelineHeader'
 import { ProjectRow } from './rows'
 import { SIDEBAR_WIDTH } from '../../constants'
+import { CheckpointLinksProvider, CheckpointVerticalLinks } from '@/modules/checkpoints'
 
 interface ResourceGraphTimelineProps {
   projects: Project[]
@@ -55,41 +56,50 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
     }
 
     return (
-      <div
-        ref={ref}
-        onScroll={onScroll}
-        className={cn('flex flex-col h-full overflow-auto', className)}
-      >
-        {/* Header area - only shown when not hidden (header in parent sticky area) */}
-        {!hideHeader && (
-          <div className="flex border-b border-border/50 sticky top-0 z-20 bg-background">
-            {/* Sidebar header */}
-            <div
-              className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"
-              style={{ width: SIDEBAR_WIDTH }}
-            >
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Структура
-              </span>
-            </div>
+      <CheckpointLinksProvider>
+        <div
+          ref={ref}
+          onScroll={onScroll}
+          data-timeline-container
+          className={cn('flex flex-col h-full overflow-auto relative', className)}
+        >
+          {/* Header area - only shown when not hidden (header in parent sticky area) */}
+          {!hideHeader && (
+            <div className="flex border-b border-border/50 sticky top-0 z-20 bg-background">
+              {/* Sidebar header */}
+              <div
+                className="shrink-0 flex items-center px-3 py-2 border-r border-border/50 bg-muted/20"
+                style={{ width: SIDEBAR_WIDTH }}
+              >
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Структура
+                </span>
+              </div>
 
-            {/* Timeline header */}
-            <div className="flex-1 overflow-hidden">
-              <TimelineHeader dayCells={dayCells} />
+              {/* Timeline header */}
+              <div className="flex-1 overflow-hidden">
+                <TimelineHeader dayCells={dayCells} />
+              </div>
             </div>
+          )}
+
+          {/* Content area - wrapper with relative positioning for absolute SVG */}
+          <div className="relative flex-1">
+            {/* Content area - project rows */}
+            {projects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                dayCells={dayCells}
+                range={range}
+              />
+            ))}
+
+            {/* Вертикальные линии между связанными чекпоинтами - покрывают весь контент */}
+            <CheckpointVerticalLinks />
           </div>
-        )}
-
-        {/* Content area - project rows */}
-        {projects.map((project) => (
-          <ProjectRow
-            key={project.id}
-            project={project}
-            dayCells={dayCells}
-            range={range}
-          />
-        ))}
-      </div>
+        </div>
+      </CheckpointLinksProvider>
     )
   }
 )

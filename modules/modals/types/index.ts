@@ -178,6 +178,11 @@ export interface CheckpointCreateData {
   sectionName: string
 }
 
+export interface CheckpointEditData {
+  /** ID чекпоинта */
+  checkpointId: string
+}
+
 // ============================================================================
 // Template Modal Types
 // ============================================================================
@@ -229,6 +234,7 @@ export type ModalType =
   | 'employee-view'
   | 'progress-update'
   | 'checkpoint-create'
+  | 'checkpoint-edit'
   | 'template-select'
   | 'template-save'
 

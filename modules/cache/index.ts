@@ -52,6 +52,7 @@ export {
   // Mutation factories
   createCacheMutation,
   createSimpleMutation,
+  createCreateMutation,
   createDeleteMutation,
   createUpdateMutation,
 } from './hooks'

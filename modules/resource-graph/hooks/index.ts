@@ -22,6 +22,7 @@ import {
   getProjectTags,
   getProjectTagsMap,
   getCompanyCalendarEvents,
+  getProjectStructure,
   getWorkLogsForSection,
   getLoadingsForSection,
   getStageReadinessForSection,
@@ -139,6 +140,26 @@ export const useCompanyCalendarEvents = createSimpleCacheQuery<CompanyCalendarEv
   queryKey: queryKeys.companyCalendar.events(),
   queryFn: getCompanyCalendarEvents,
   staleTime: staleTimePresets.eternal, // 24 часа - праздники практически не меняются
+})
+
+/**
+ * Хук для получения структуры проектов (projects, stages, objects, sections)
+ *
+ * Используется для построения иерархии и фильтров.
+ * Данные кешируются на 5 минут, т.к. структура меняется относительно редко.
+ *
+ * @example
+ * const { data: structure, isLoading } = useProjectStructure()
+ */
+export const useProjectStructure = createSimpleCacheQuery<{
+  projects: Array<{ id: string; name: string }>
+  stages: Array<{ id: string; name: string; projectId: string | null }>
+  objects: Array<{ id: string; name: string; stageId: string | null }>
+  sections: Array<{ id: string; name: string; objectId: string | null }>
+}>({
+  queryKey: queryKeys.filterStructure.project(),
+  queryFn: getProjectStructure,
+  staleTime: staleTimePresets.slow, // 5 минут - структура меняется редко
 })
 
 // ============================================================================

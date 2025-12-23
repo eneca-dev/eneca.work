@@ -4858,25 +4858,34 @@ export type Database = {
       }
       project_reports: {
         Row: {
+          actual_readiness: number | null
+          budget_spent: number | null
           comment: string
           created_at: string
           created_by: string
+          planned_readiness: number | null
           report_id: string
           stage_id: string
           updated_at: string
         }
         Insert: {
+          actual_readiness?: number | null
+          budget_spent?: number | null
           comment: string
           created_at?: string
           created_by: string
+          planned_readiness?: number | null
           report_id?: string
           stage_id: string
           updated_at?: string
         }
         Update: {
+          actual_readiness?: number | null
+          budget_spent?: number | null
           comment?: string
           created_at?: string
           created_by?: string
+          planned_readiness?: number | null
           report_id?: string
           stage_id?: string
           updated_at?: string
@@ -6867,39 +6876,6 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
-        }
-        Relationships: []
-      }
-      stage_statuses: {
-        Row: {
-          color: string
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          kanban_order: number
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          color: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          kanban_order?: number
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          kanban_order?: number
-          name?: string
-          updated_at?: string
         }
         Relationships: []
       }
@@ -11690,6 +11666,8 @@ export type Database = {
       }
       v_resource_graph: {
         Row: {
+          decomposition_item_actual_hours: number | null
+          decomposition_item_cpi: number | null
           decomposition_item_description: string | null
           decomposition_item_difficulty_id: string | null
           decomposition_item_id: string | null

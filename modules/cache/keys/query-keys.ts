@@ -101,6 +101,7 @@ export const queryKeys = {
     statistics: (id: string) => [...queryKeys.projects.detail(id), 'statistics'] as const,
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
+    structure: () => [...queryKeys.projects.all, 'structure'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -289,6 +290,7 @@ export const queryKeys = {
     audit: (id: string) => [...queryKeys.checkpoints.all, 'audit', id] as const,
     bySection: (sectionId: string) => [...queryKeys.checkpoints.lists(), { sectionId }] as const,
     byProject: (projectId: string) => [...queryKeys.checkpoints.lists(), { projectId }] as const,
+    projectSections: (sectionId: string) => [...queryKeys.checkpoints.all, 'projectSections', sectionId] as const,
   },
 
   // -------------------------------------------------------------------------
