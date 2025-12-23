@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useCheckpointLinks } from '../context/CheckpointLinksContext'
 import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
 
@@ -11,6 +11,7 @@ import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
 const SVG_PADDING = 100
 const ARROW_OFFSET = 15
 const DEBUG = true // Set to true for development debugging
+const DEBUG_VISIBILITY = true // Detailed visibility logs
 
 // ============================================================================
 // Types
@@ -100,7 +101,77 @@ function groupCheckpointsByIdent(
  * Использует CheckpointLinksContext для получения позиций всех чекпоинтов.
  */
 export function CheckpointVerticalLinks() {
-  const { positions, getSectionVisibility } = useCheckpointLinks()
+  const { positions, getSectionVisibility, getObjectVisibility } = useCheckpointLinks()
+
+  /**
+   * Проверить, видима ли секция на экране
+   * Секция видима только если:
+   * 1. Объект, в котором она находится, развернут (isExpanded = true)
+   * 2. Сама секция видима (tracked in context)
+   */
+  const isSectionVisible = useCallback((sectionId: string, objectId: string | null): boolean => {
+    if (!objectId) {
+      // Если нет object_id, считаем секцию видимой (резервный вариант)
+      return true
+    }
+
+    const objectVisibility = getObjectVisibility(objectId)
+
+    if (!objectVisibility) {
+      // Объект не отслеживается - считаем невидимым
+      if (DEBUG_VISIBILITY) {
+        console.log('[isSectionVisible] Object not tracked:', {
+          sectionId,
+          objectId,
+          result: false,
+        })
+      }
+      return false
+    }
+
+    if (!objectVisibility.isExpanded) {
+      // Объект свернут - секция точно невидима
+      if (DEBUG_VISIBILITY) {
+        console.log('[isSectionVisible] Object is collapsed:', {
+          sectionId,
+          objectId,
+          objectName: objectVisibility.objectName,
+          result: false,
+        })
+      }
+      return false
+    }
+
+    // Объект развернут - проверяем секцию
+    const sectionVisibility = getSectionVisibility(sectionId)
+
+    if (!sectionVisibility) {
+      // Секция не отслеживается - считаем невидимой
+      if (DEBUG_VISIBILITY) {
+        console.log('[isSectionVisible] Section not tracked:', {
+          sectionId,
+          objectId,
+          result: false,
+        })
+      }
+      return false
+    }
+
+    // Секция видима, если она в контексте (даже если isExpanded = false)
+    // Потому что раздел видим, даже если не развернут
+    const result = true
+
+    if (DEBUG_VISIBILITY) {
+      console.log('[isSectionVisible] Section is visible:', {
+        sectionId,
+        objectId,
+        sectionName: sectionVisibility.sectionName,
+        result,
+      })
+    }
+
+    return result
+  }, [getObjectVisibility, getSectionVisibility])
 
   // Группируем чекпоинты по checkpoint_id
   const linkedGroups = useMemo(() => {
@@ -222,31 +293,54 @@ export function CheckpointVerticalLinks() {
               }
 
               // 1. Проверяем связанные разделы от родительского чекпоинта
-              linkedSections.forEach((linkedSection) => {
-                const isVisible = visibleSectionIds.has(linkedSection.section_id)
-                const visibility = getSectionVisibility(linkedSection.section_id)
+              if (DEBUG_VISIBILITY) {
+                console.log('[CheckpointVerticalLinks] 🔍 Step 1: Checking linked sections from parent:', {
+                  checkpoint_id: group.checkpoint_id,
+                  linkedSectionsCount: linkedSections.length,
+                  linkedSections: linkedSections.map(ls => ({
+                    id: ls.section_id,
+                    name: ls.section_name,
+                  })),
+                })
+              }
 
-                if (DEBUG) {
+              linkedSections.forEach((linkedSection) => {
+                const isVisibleInPositions = visibleSectionIds.has(linkedSection.section_id)
+                const isActuallyVisible = isSectionVisible(linkedSection.section_id, linkedSection.object_id)
+
+                if (DEBUG_VISIBILITY) {
                   console.log('[Step 1] Checking linked section from parent:', {
                     linkedSectionId: linkedSection.section_id,
                     linkedSectionName: linkedSection.section_name,
-                    isVisible,
-                    hasVisibility: !!visibility,
-                    visibility,
+                    linkedObjectId: linkedSection.object_id,
+                    isVisibleInPositions,
+                    isActuallyVisible,
+                    decision: !isActuallyVisible ? 'ADD_ARROW' : 'VISIBLE',
                   })
                 }
 
-                if (!isVisible) {
+                // Добавляем стрелку только если секция не видна на экране
+                // (объект свернут или секция не отслеживается)
+                if (!isActuallyVisible) {
+                  const visibility = getSectionVisibility(linkedSection.section_id)
+
+                  // Нужна информация о названии секции
                   if (visibility) {
                     collapsedSectionArrows.set(linkedSection.section_id, {
                       sectionName: linkedSection.section_name,
                       fromY: referencePos.y,
                     })
                     if (DEBUG) {
-                      console.log('[Step 1] ✅ Added arrow for collapsed linked section:', linkedSection.section_name)
+                      console.log('[Step 1] ✅ Added arrow for collapsed/hidden linked section:', {
+                        sectionName: linkedSection.section_name,
+                        fromY: referencePos.y,
+                      })
                     }
                   } else if (DEBUG) {
-                    console.log('[Step 1] ⚠️ No visibility info for:', linkedSection.section_name)
+                    console.log('[Step 1] ⚠️ No visibility info for:', {
+                      sectionName: linkedSection.section_name,
+                      reason: 'Section never mounted or not tracked',
+                    })
                   }
                 }
               })
@@ -254,37 +348,56 @@ export function CheckpointVerticalLinks() {
               // 2. Проверяем родительский раздел (checkpoint.section_id) - если он не виден, добавляем стрелку
               // Это покрывает случай, когда видим связанный чекпоинт, но не видим родительский
               const parentSectionIdFromCheckpoint = parentCheckpointData?.checkpoint.section_id
+              const parentObjectId = parentCheckpointData?.checkpoint.linked_sections.find(
+                ls => ls.section_id === parentSectionIdFromCheckpoint
+              )?.object_id ?? null
 
-              if (DEBUG) {
-                console.log('[Step 2] Checking if parent section is visible:', {
+              if (DEBUG_VISIBILITY) {
+                console.log('[CheckpointVerticalLinks] 🔍 Step 2: Checking if parent section is visible:', {
+                  checkpoint_id: group.checkpoint_id,
                   parentSectionId: parentSectionIdFromCheckpoint,
-                  isParentVisible: parentSectionIdFromCheckpoint ? visibleSectionIds.has(parentSectionIdFromCheckpoint) : null,
+                  parentObjectId,
+                  isParentVisibleInPositions: parentSectionIdFromCheckpoint ? visibleSectionIds.has(parentSectionIdFromCheckpoint) : null,
                   visibleSections: Array.from(visibleSectionIds),
+                  allPositions: group.positions.map(p => ({
+                    sectionId: p.sectionId,
+                    y: p.y,
+                  })),
                 })
               }
 
-              if (parentSectionIdFromCheckpoint && !visibleSectionIds.has(parentSectionIdFromCheckpoint)) {
-                const visibility = getSectionVisibility(parentSectionIdFromCheckpoint)
+              if (parentSectionIdFromCheckpoint) {
+                const isParentActuallyVisible = isSectionVisible(parentSectionIdFromCheckpoint, parentObjectId)
 
-                if (DEBUG) {
-                  console.log('[Step 2] Parent section is collapsed:', {
+                if (DEBUG_VISIBILITY) {
+                  console.log('[Step 2] Checking parent section visibility:', {
                     parentSectionId: parentSectionIdFromCheckpoint,
-                    hasVisibility: !!visibility,
-                    visibility,
+                    parentObjectId,
+                    isActuallyVisible: isParentActuallyVisible,
                     alreadyHasArrow: collapsedSectionArrows.has(parentSectionIdFromCheckpoint),
                   })
                 }
 
-                if (visibility && !collapsedSectionArrows.has(parentSectionIdFromCheckpoint)) {
-                  // Используем позицию первого видимого связанного чекпоинта
-                  const firstLinkedPos = group.positions.find(p => p.sectionId !== parentSectionIdFromCheckpoint)
-                  if (firstLinkedPos) {
-                    collapsedSectionArrows.set(parentSectionIdFromCheckpoint, {
-                      sectionName: visibility.sectionName,
-                      fromY: firstLinkedPos.y,
-                    })
-                    if (DEBUG) {
-                      console.log('[Step 2] ✅ Added arrow for collapsed parent section:', visibility.sectionName)
+                if (!isParentActuallyVisible && !collapsedSectionArrows.has(parentSectionIdFromCheckpoint)) {
+                  const visibility = getSectionVisibility(parentSectionIdFromCheckpoint)
+
+                  if (visibility) {
+                    // Используем позицию первого видимого связанного чекпоинта
+                    const firstLinkedPos = group.positions.find(p => p.sectionId !== parentSectionIdFromCheckpoint)
+                    if (firstLinkedPos) {
+                      collapsedSectionArrows.set(parentSectionIdFromCheckpoint, {
+                        sectionName: visibility.sectionName,
+                        fromY: firstLinkedPos.y,
+                      })
+                      if (DEBUG) {
+                        console.log('[Step 2] ✅ Added arrow for collapsed/hidden parent section:', {
+                          sectionName: visibility.sectionName,
+                          fromY: firstLinkedPos.y,
+                          fromSectionId: firstLinkedPos.sectionId,
+                        })
+                      }
+                    } else if (DEBUG) {
+                      console.log('[Step 2] ⚠️ No visible linked position found for parent arrow')
                     }
                   }
                 }
@@ -293,7 +406,7 @@ export function CheckpointVerticalLinks() {
               if (DEBUG) {
                 console.log('[CheckpointVerticalLinks] Final arrows to render:', {
                   checkpoint_id: group.checkpoint_id,
-                  arrows: Array.from(collapsedSectionArrows.entries()).map(([id, data]) => ({
+                  sectionArrows: Array.from(collapsedSectionArrows.entries()).map(([id, data]) => ({
                     sectionId: id,
                     sectionName: data.sectionName,
                     fromY: data.fromY,
@@ -321,6 +434,18 @@ export function CheckpointVerticalLinks() {
                       y2 = pos.y - ARROW_OFFSET
                     }
 
+                    if (DEBUG_VISIBILITY) {
+                      console.log('[CheckpointVerticalLinks] 📏 Drawing line between visible checkpoints:', {
+                        checkpoint_id: group.checkpoint_id,
+                        fromSectionId: referencePos.sectionId,
+                        toSectionId: pos.sectionId,
+                        direction: isArrowUp ? 'UP' : 'DOWN',
+                        y1,
+                        y2,
+                        x: adjustedX,
+                      })
+                    }
+
                     return (
                       <line
                         key={`${group.checkpoint_id}-${pos.sectionId}`}
@@ -340,23 +465,36 @@ export function CheckpointVerticalLinks() {
 
                   {/* Рисуем стрелки-указатели к невидимым (свёрнутым) разделам */}
                   {Array.from(collapsedSectionArrows.entries()).map(([sectionId, { sectionName, fromY }]) => {
-                    if (DEBUG) {
-                      console.log('[CollapsedSection Arrow]:', {
+                    // Определяем направление: предполагаем, что свёрнутый раздел находится выше
+                    // (в реальности нужно было бы сравнивать позиции в структуре, но используем эвристику:
+                    // если fromY > среднего Y всех видимых чекпоинтов, то стрелка вверх, иначе вниз)
+                    const avgY = group.positions.reduce((sum, p) => sum + p.y, 0) / group.positions.length
+                    const isArrowUp = fromY > avgY
+                    const arrowLength = 40
+                    const y2 = isArrowUp ? fromY - arrowLength : fromY + arrowLength
+                    const labelY = isArrowUp ? fromY - arrowLength - 10 : fromY + arrowLength - 10
+
+                    if (DEBUG || DEBUG_VISIBILITY) {
+                      console.log('[CheckpointVerticalLinks] 🎯 Drawing arrow to collapsed section:', {
                         checkpoint_id: group.checkpoint_id,
                         collapsedSectionId: sectionId,
                         collapsedSectionName: sectionName,
                         fromY,
+                        toY: y2,
+                        direction: isArrowUp ? 'UP' : 'DOWN',
+                        avgY,
+                        x: adjustedX,
                       })
                     }
 
                     return (
                       <g key={`collapsed-${group.checkpoint_id}-${sectionId}`}>
-                        {/* Вертикальная пунктирная стрелка в направлении свёрнутого раздела (вниз) */}
+                        {/* Вертикальная пунктирная стрелка в направлении свёрнутого раздела */}
                         <line
                           x1={adjustedX}
                           y1={fromY}
                           x2={adjustedX}
-                          y2={fromY + 40}
+                          y2={y2}
                           stroke="hsl(var(--muted-foreground))"
                           strokeWidth="1.5"
                           strokeDasharray="3,3"
@@ -368,7 +506,7 @@ export function CheckpointVerticalLinks() {
                         {/* Метка с названием свёрнутого раздела */}
                         <foreignObject
                           x={adjustedX + 8}
-                          y={fromY + 30}
+                          y={labelY}
                           width="120"
                           height="40"
                           className="pointer-events-none"

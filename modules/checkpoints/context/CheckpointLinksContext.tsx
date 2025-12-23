@@ -26,6 +26,12 @@ interface SectionVisibility {
   isExpanded: boolean
 }
 
+interface ObjectVisibility {
+  objectId: string
+  objectName: string
+  isExpanded: boolean
+}
+
 interface CheckpointLinksContextValue {
   /** Зарегистрировать позицию чекпоинта */
   registerCheckpoint: (position: CheckpointPosition) => void
@@ -39,6 +45,10 @@ interface CheckpointLinksContextValue {
   trackSectionVisibility: (sectionId: string, sectionName: string, isExpanded: boolean) => void
   /** Получить информацию о видимости секции */
   getSectionVisibility: (sectionId: string) => SectionVisibility | undefined
+  /** Обновить видимость объекта (развёрнут/свёрнут) */
+  trackObjectVisibility: (objectId: string, objectName: string, isExpanded: boolean) => void
+  /** Получить информацию о видимости объекта */
+  getObjectVisibility: (objectId: string) => ObjectVisibility | undefined
 }
 
 // ============================================================================
@@ -58,21 +68,55 @@ interface CheckpointLinksProviderProps {
 export function CheckpointLinksProvider({ children }: CheckpointLinksProviderProps) {
   const [positions, setPositions] = useState<CheckpointPosition[]>([])
   const [sectionVisibility, setSectionVisibility] = useState<Map<string, SectionVisibility>>(new Map())
+  const [objectVisibility, setObjectVisibility] = useState<Map<string, ObjectVisibility>>(new Map())
 
   const registerCheckpoint = useCallback((position: CheckpointPosition) => {
+    console.log('[CheckpointLinksContext] 📝 Registering checkpoint:', {
+      checkpoint_id: position.checkpoint.checkpoint_id,
+      sectionId: position.sectionId,
+      x: position.x,
+      y: position.y,
+      overlapIndex: position.overlapIndex,
+      overlapTotal: position.overlapTotal,
+      linkedSectionsCount: position.checkpoint.linked_sections?.length || 0,
+    })
+
     setPositions(prev => {
       // Удаляем старую позицию если есть, добавляем новую
       const filtered = prev.filter(
         p => !(p.checkpoint.checkpoint_id === position.checkpoint.checkpoint_id && p.sectionId === position.sectionId)
       )
-      return [...filtered, position]
+      const newPositions = [...filtered, position]
+
+      console.log('[CheckpointLinksContext] 📊 Total positions after registration:', {
+        total: newPositions.length,
+        byCheckpointId: newPositions.reduce((acc, p) => {
+          acc[p.checkpoint.checkpoint_id] = (acc[p.checkpoint.checkpoint_id] || 0) + 1
+          return acc
+        }, {} as Record<string, number>),
+      })
+
+      return newPositions
     })
   }, [])
 
   const unregisterCheckpoint = useCallback((checkpointId: string, sectionId: string) => {
-    setPositions(prev => prev.filter(
-      p => !(p.checkpoint.checkpoint_id === checkpointId && p.sectionId === sectionId)
-    ))
+    console.log('[CheckpointLinksContext] 🗑️ Unregistering checkpoint:', {
+      checkpoint_id: checkpointId,
+      sectionId,
+    })
+
+    setPositions(prev => {
+      const newPositions = prev.filter(
+        p => !(p.checkpoint.checkpoint_id === checkpointId && p.sectionId === sectionId)
+      )
+
+      console.log('[CheckpointLinksContext] 📊 Total positions after unregistration:', {
+        total: newPositions.length,
+      })
+
+      return newPositions
+    })
   }, [])
 
   const getGroupMaxOffset = useCallback((checkpointId: string) => {
@@ -104,16 +148,74 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
   }, [positions])
 
   const trackSectionVisibility = useCallback((sectionId: string, sectionName: string, isExpanded: boolean) => {
+    console.log('[CheckpointLinksContext] 👁️ Tracking section visibility:', {
+      sectionId,
+      sectionName,
+      isExpanded,
+      action: isExpanded ? 'EXPAND' : 'COLLAPSE',
+    })
+
     setSectionVisibility(prev => {
       const next = new Map(prev)
       next.set(sectionId, { sectionId, sectionName, isExpanded })
+
+      console.log('[CheckpointLinksContext] 📊 Total sections tracked:', {
+        total: next.size,
+        expanded: Array.from(next.values()).filter(v => v.isExpanded).length,
+        collapsed: Array.from(next.values()).filter(v => !v.isExpanded).length,
+      })
+
       return next
     })
   }, [])
 
   const getSectionVisibility = useCallback((sectionId: string) => {
-    return sectionVisibility.get(sectionId)
+    const visibility = sectionVisibility.get(sectionId)
+
+    console.log('[CheckpointLinksContext] 🔍 Getting section visibility:', {
+      sectionId,
+      found: !!visibility,
+      isExpanded: visibility?.isExpanded,
+      sectionName: visibility?.sectionName,
+    })
+
+    return visibility
   }, [sectionVisibility])
+
+  const trackObjectVisibility = useCallback((objectId: string, objectName: string, isExpanded: boolean) => {
+    console.log('[CheckpointLinksContext] 🏢 Tracking object visibility:', {
+      objectId,
+      objectName,
+      isExpanded,
+      action: isExpanded ? 'EXPAND' : 'COLLAPSE',
+    })
+
+    setObjectVisibility(prev => {
+      const next = new Map(prev)
+      next.set(objectId, { objectId, objectName, isExpanded })
+
+      console.log('[CheckpointLinksContext] 📊 Total objects tracked:', {
+        total: next.size,
+        expanded: Array.from(next.values()).filter(v => v.isExpanded).length,
+        collapsed: Array.from(next.values()).filter(v => !v.isExpanded).length,
+      })
+
+      return next
+    })
+  }, [])
+
+  const getObjectVisibility = useCallback((objectId: string) => {
+    const visibility = objectVisibility.get(objectId)
+
+    console.log('[CheckpointLinksContext] 🔍 Getting object visibility:', {
+      objectId,
+      found: !!visibility,
+      isExpanded: visibility?.isExpanded,
+      objectName: visibility?.objectName,
+    })
+
+    return visibility
+  }, [objectVisibility])
 
   return (
     <CheckpointLinksContext.Provider
@@ -123,7 +225,9 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
         positions,
         getGroupMaxOffset,
         trackSectionVisibility,
-        getSectionVisibility
+        getSectionVisibility,
+        trackObjectVisibility,
+        getObjectVisibility
       }}
     >
       {children}

@@ -67,7 +67,7 @@ export interface Checkpoint {
   updated_at: string
   section_responsible: string | null
   project_manager: string | null
-  linked_sections: Array<{ section_id: string; section_name: string }>
+  linked_sections: Array<{ section_id: string; section_name: string; object_id: string | null }>
   linked_sections_count: number
 }
 

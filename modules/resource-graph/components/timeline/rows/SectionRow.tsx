@@ -132,8 +132,16 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
 
   // Отслеживаем состояние развёрнутости секции для чекпоинтов
   useEffect(() => {
+    console.log('[SectionRow] 🔄 Visibility state changed:', {
+      sectionId: section.id,
+      sectionName: section.name,
+      isExpanded,
+      hasChildren,
+      checkpointsCount: checkpoints.length,
+    })
+
     trackSectionVisibility(section.id, section.name, isExpanded)
-  }, [section.id, section.name, isExpanded, trackSectionVisibility])
+  }, [section.id, section.name, isExpanded, trackSectionVisibility, hasChildren, checkpoints.length])
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChevronRight, Box } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProjectObject, TimelineRange } from '../../../types'
@@ -12,6 +12,7 @@ import { BudgetSpendingArea } from '../BudgetSpendingArea'
 import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
+import { useCheckpointLinks } from '@/modules/checkpoints'
 
 // ============================================================================
 // Object Row
@@ -29,6 +30,21 @@ interface ObjectRowProps {
 export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const hasChildren = object.sections.length > 0
+
+  // Отслеживаем видимость объекта для чекпоинтов
+  const { trackObjectVisibility } = useCheckpointLinks()
+
+  // Отслеживаем состояние развёрнутости объекта
+  useEffect(() => {
+    console.log('[ObjectRow] 🔄 Object visibility state changed:', {
+      objectId: object.id,
+      objectName: object.name,
+      isExpanded,
+      sectionsCount: object.sections.length,
+    })
+
+    trackObjectVisibility(object.id, object.name, isExpanded)
+  }, [object.id, object.name, isExpanded, trackObjectVisibility, object.sections.length])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {
