@@ -3,8 +3,11 @@
 /**
  * Хуки для работы с чекпоинтами
  *
- * Инкапсулируют логику кеширования, загрузки данных, optimistic updates
- * и автоматической инвалидации кеша для модуля checkpoints.
+ * Инкапсулируют логику кеширования, загрузки данных и автоматической
+ * инвалидации кеша для модуля checkpoints.
+ *
+ * Optimistic updates используются только для операций complete/delete.
+ * Для create/update используется инвалидация кеша с перезагрузкой данных.
  *
  * @module modules/checkpoints/hooks/use-checkpoints
  */
@@ -13,12 +16,10 @@ import {
   createCacheQuery,
   createDetailCacheQuery,
   createCacheMutation,
-  createCreateMutation,
   createUpdateMutation,
   createDeleteMutation,
   queryKeys,
 } from '@/modules/cache'
-import { useQueryClient } from '@tanstack/react-query'
 
 import {
   getCheckpoints,
@@ -86,14 +87,22 @@ export const useCheckpointAudit = createDetailCacheQuery({
 })
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Временный ID пользователя для optimistic updates (будет заменен сервером) */
+const OPTIMISTIC_USER_ID = 'optimistic-user-id' as const
+
+// ============================================================================
 // Mutation Hooks (изменение данных)
 // ============================================================================
 
 /**
- * Хук для создания нового чекпоинта с optimistic update
+ * Хук для создания нового чекпоинта
  *
- * Мгновенно добавляет чекпоинт в список с временным ID.
- * После успешного создания на сервере заменяет temporary item реальными данными.
+ * После успешного создания на сервере автоматически инвалидирует кеш,
+ * что приводит к перезагрузке только затронутых списков чекпоинтов
+ * (родительского раздела и связанных разделов).
  *
  * Автоматически инвалидирует кеш:
  * - checkpoints.all (списки чекпоинтов)
@@ -109,48 +118,10 @@ export const useCheckpointAudit = createDetailCacheQuery({
  *   title: 'Экспертиза',
  *   checkpointDate: '2025-12-31',
  * })
- * // Модалка закрывается сразу, чекпоинт появляется на графике мгновенно
  * ```
  */
-export const useCreateCheckpoint = createCreateMutation({
+export const useCreateCheckpoint = createCacheMutation<CreateCheckpointInput, Checkpoint>({
   mutationFn: createCheckpoint,
-  listQueryKey: queryKeys.checkpoints.lists(),
-  buildOptimisticItem: (input: CreateCheckpointInput): Checkpoint => {
-    // Создаем временный ID для optimistic item
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-    // Находим тип чекпоинта для получения иконки и цвета
-    // Примечание: это упрощенная версия, реальные данные придут с сервера
-    const now = new Date().toISOString()
-
-    return {
-      checkpoint_id: tempId,
-      section_id: input.sectionId,
-      type_id: input.typeId,
-      type_code: 'custom', // Будет обновлено с сервера
-      type_name: input.title || 'Новый чекпоинт',
-      is_custom: !!input.customIcon,
-      title: input.title || 'Новый чекпоинт',
-      description: input.description || null,
-      checkpoint_date: input.checkpointDate,
-      icon: input.customIcon || 'Flag',
-      color: input.customColor || '#6b7280',
-      completed_at: null,
-      completed_by: null,
-      status: 'pending',
-      status_label: 'Ожидается',
-      created_by: null, // Будет установлено сервером
-      created_at: now,
-      updated_at: now,
-      section_responsible: null,
-      project_manager: null,
-      linked_sections: (input.linkedSectionIds || []).map(id => ({
-        section_id: id,
-        section_name: 'Загрузка...', // Будет обновлено с сервера
-      })),
-      linked_sections_count: (input.linkedSectionIds || []).length,
-    }
-  },
   invalidateKeys: [
     queryKeys.checkpoints.all,
     queryKeys.sections.all,
@@ -159,15 +130,11 @@ export const useCreateCheckpoint = createCreateMutation({
 })
 
 /**
- * Хук для обновления чекпоинта с optimistic update
+ * Хук для обновления чекпоинта
  *
- * Мгновенно обновляет UI до получения ответа от сервера.
- * При ошибке откатывает изменения.
- *
- * Особенности:
- * - Обновляет чекпоинт во ВСЕХ списках где он есть
- * - Добавляет чекпоинт в списки НОВЫХ связанных разделов (optimistic)
- * - Удаляет из списков разделов, из которых его убрали
+ * Обновляет чекпоинт и автоматически инвалидирует все связанные кеши.
+ * После обновления списки чекпоинтов для всех затронутых разделов
+ * (родительского и связанных) будут перезагружены с сервера.
  *
  * @example
  * ```tsx
@@ -180,189 +147,19 @@ export const useCreateCheckpoint = createCreateMutation({
  * })
  * ```
  */
-export function useUpdateCheckpoint() {
-  const queryClient = useQueryClient()
-
-  return createCacheMutation<UpdateCheckpointInput, Checkpoint>({
-    mutationFn: updateCheckpoint,
-
-    // Optimistic update для detail кеша (используется в модалке)
-    onMutate: async (input) => {
-      // Отменить активные запросы для этого чекпоинта
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.checkpoints.detail(input.checkpointId)
-      })
-
-      // Сохранить текущее состояние для rollback
-      const previousCheckpoint = queryClient.getQueryData<Checkpoint>(
-        queryKeys.checkpoints.detail(input.checkpointId)
-      )
-
-      // Optimistically обновить detail кеш
-      if (previousCheckpoint) {
-        const updatedCheckpoint: Checkpoint = {
-          ...previousCheckpoint,
-          type_id: input.typeId ?? previousCheckpoint.type_id,
-          title: input.title ?? previousCheckpoint.title,
-          description: input.description !== undefined ? input.description : previousCheckpoint.description,
-          checkpoint_date: input.checkpointDate ?? previousCheckpoint.checkpoint_date,
-          icon: input._optimisticIcon ?? input.customIcon ?? previousCheckpoint.icon,
-          color: input._optimisticColor ?? input.customColor ?? previousCheckpoint.color,
-          linked_sections: input.linkedSectionIds !== undefined
-            ? input.linkedSectionIds.map(id => ({
-                section_id: id,
-                section_name: 'Загрузка...',
-              }))
-            : previousCheckpoint.linked_sections,
-          linked_sections_count: input.linkedSectionIds !== undefined
-            ? input.linkedSectionIds.length
-            : previousCheckpoint.linked_sections_count,
-        }
-
-        queryClient.setQueryData(
-          queryKeys.checkpoints.detail(input.checkpointId),
-          updatedCheckpoint
-        )
-      }
-
-      return { previousCheckpoint }
-    },
-
-    // При ошибке откатить изменения
-    onError: (err, input, context) => {
-      if (context?.previousCheckpoint) {
-        queryClient.setQueryData(
-          queryKeys.checkpoints.detail(input.checkpointId),
-          context.previousCheckpoint
-        )
-      }
-    },
-
-    optimisticUpdate: {
-      queryKey: queryKeys.checkpoints.lists(),
-      updater: (old, input) => {
-        if (!old) return []
-
-        const idToUpdate = input.checkpointId
-
-        // Найти текущий чекпоинт в этом списке
-        const currentItem = old.find(item => item.checkpoint_id === idToUpdate)
-
-        if (!currentItem) {
-          // Чекпоинта нет в этом списке
-          // Проверим, нужно ли добавить его (если это новый связанный раздел)
-
-          if (!input.linkedSectionIds) {
-            return old
-          }
-
-          // Получить queryKey этого конкретного списка
-          const queries = queryClient.getQueryCache().findAll({
-            queryKey: queryKeys.checkpoints.lists()
-          })
-
-          // Найти query для этого конкретного списка (по данным)
-          const currentQuery = queries.find(q => q.state.data === old)
-
-          if (!currentQuery) {
-            return old
-          }
-
-          // Извлечь sectionId из query key
-          const queryKey = currentQuery.queryKey as readonly unknown[]
-          const filters = queryKey[2] as { sectionId?: string } | undefined
-
-          // Проверить, является ли этот список запросом для одного из новых связанных разделов
-          if (!filters?.sectionId || !input.linkedSectionIds.includes(filters.sectionId)) {
-            return old
-          }
-
-          // Нужно добавить чекпоинт в этот список
-          // Попробуем найти его в detail кеше
-          const checkpointFromCache = queryClient.getQueryData<Checkpoint>(
-            queryKeys.checkpoints.detail(idToUpdate)
-          )
-
-          if (!checkpointFromCache) {
-            // Чекпоинта нет в detail кеше, инвалидация обновит данные с сервера
-            return old
-          }
-
-          // Создаем обновленную версию
-          const updatedCheckpoint: Checkpoint = {
-            ...checkpointFromCache,
-            type_id: input.typeId ?? checkpointFromCache.type_id,
-            title: input.title ?? checkpointFromCache.title,
-            description: input.description ?? checkpointFromCache.description,
-            checkpoint_date: input.checkpointDate ?? checkpointFromCache.checkpoint_date,
-            icon: input._optimisticIcon ?? input.customIcon ?? checkpointFromCache.icon,
-            color: input._optimisticColor ?? input.customColor ?? checkpointFromCache.color,
-            linked_sections: input.linkedSectionIds.map(id => ({
-              section_id: id,
-              section_name: 'Загрузка...',
-            })),
-            linked_sections_count: input.linkedSectionIds.length,
-          }
-
-          return [...old, updatedCheckpoint]
-        }
-
-        // Обновить существующий чекпоинт
-        const updatedItem: Checkpoint = {
-          ...currentItem,
-          type_id: input.typeId ?? currentItem.type_id,
-          title: input.title ?? currentItem.title,
-          description: input.description ?? currentItem.description,
-          checkpoint_date: input.checkpointDate ?? currentItem.checkpoint_date,
-          icon: input._optimisticIcon ?? input.customIcon ?? currentItem.icon,
-          color: input._optimisticColor ?? input.customColor ?? currentItem.color,
-          linked_sections: input.linkedSectionIds !== undefined
-            ? input.linkedSectionIds.map(id => ({
-                section_id: id,
-                section_name: 'Загрузка...',
-              }))
-            : currentItem.linked_sections,
-          linked_sections_count: input.linkedSectionIds !== undefined
-            ? input.linkedSectionIds.length
-            : currentItem.linked_sections_count,
-        }
-
-        // Проверить, нужно ли удалить чекпоинт из этого списка
-        if (input.linkedSectionIds !== undefined) {
-          const queries = queryClient.getQueryCache().findAll({
-            queryKey: queryKeys.checkpoints.lists()
-          })
-          const currentQuery = queries.find(q => q.state.data === old)
-
-          if (currentQuery) {
-            const queryKey = currentQuery.queryKey as readonly unknown[]
-            const filters = queryKey[2] as { sectionId?: string } | undefined
-
-            // Если это список связанного раздела (не родительский раздел)
-            if (filters?.sectionId && filters.sectionId !== currentItem.section_id) {
-              // Проверить, остался ли этот раздел в связанных
-              if (!input.linkedSectionIds.includes(filters.sectionId)) {
-                // Удалить чекпоинт из этого списка
-                return old.filter(item => item.checkpoint_id !== idToUpdate)
-              }
-            }
-          }
-        }
-
-        return old.map(item => item.checkpoint_id === idToUpdate ? updatedItem : item)
-      },
-    },
-
-    invalidateKeys: [
-      queryKeys.checkpoints.all, // Инвалидируем ВСЕ списки чекпоинтов для обновления данных с сервера
-      queryKeys.sections.all,
-      queryKeys.resourceGraph.all,
-    ],
-  })()
-}
+export const useUpdateCheckpoint = createCacheMutation<UpdateCheckpointInput, Checkpoint>({
+  mutationFn: updateCheckpoint,
+  invalidateKeys: [
+    queryKeys.checkpoints.all,
+    queryKeys.sections.all,
+    queryKeys.resourceGraph.all,
+  ],
+})
 
 /**
  * Вычисляет статус чекпоинта на основе дат
+ *
+ * Используется в useCompleteCheckpoint для optimistic update.
  * Логика соответствует VIEW logic из миграции 2025-12-18_section_checkpoints_status_audit.sql
  */
 function calculateCheckpointStatus(
@@ -413,7 +210,7 @@ export const useCompleteCheckpoint = createUpdateMutation({
     return {
       ...item,
       completed_at: completedAt,
-      completed_by: input.completed ? 'optimistic-user-id' : null, // Сервер вернет реальный user_id
+      completed_by: input.completed ? OPTIMISTIC_USER_ID : null,
       status,
     }
   },
