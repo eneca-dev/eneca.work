@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useDraggable } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
+import { useQueryClient } from '@tanstack/react-query'
 import { Clock, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -14,8 +13,9 @@ import {
 } from '@/components/ui/tooltip'
 import type { KanbanStage, KanbanSection, KanbanTask } from '../types'
 import { getColumnById } from '../constants'
-import { AddReportModal } from './AddReportModal'
-import { useKanbanStore } from '../stores/kanban-store'
+import { WorkLogCreateModal, TaskSidebar } from '@/modules/modals'
+import { queryKeys } from '@/modules/cache/keys/query-keys'
+import { useKanbanFiltersStore } from '../stores'
 import { Input } from '@/components/ui/input'
 
 interface TaskItemProps {
@@ -25,54 +25,31 @@ interface TaskItemProps {
 }
 
 function TaskItem({ task, section, stage }: TaskItemProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  // Модалки
+  const [isWorkLogModalOpen, setIsWorkLogModalOpen] = useState(false)
+  const [isTaskSidebarOpen, setIsTaskSidebarOpen] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [isEditingPlannedHours, setIsEditingPlannedHours] = useState(false)
-  const [tempPlannedHours, setTempPlannedHours] = useState(task.plannedHours.toString())
-  const [isEditingProgress, setIsEditingProgress] = useState(false)
-  const [tempProgress, setTempProgress] = useState(task.progress.toString())
 
-  const updateTaskPlannedHours = useKanbanStore((state) => state.updateTaskPlannedHours)
-  const updateTaskProgress = useKanbanStore((state) => state.updateTaskProgress)
-
-  const handleSavePlannedHours = () => {
-    const newHours = parseFloat(tempPlannedHours)
-    if (!isNaN(newHours) && newHours >= 0) {
-      updateTaskPlannedHours(section.id, stage.id, task.id, newHours)
-    }
-    setIsEditingPlannedHours(false)
-  }
-
-  const handleCancelEdit = () => {
-    setTempPlannedHours(task.plannedHours.toString())
-    setIsEditingPlannedHours(false)
-  }
-
-  const handleSaveProgress = () => {
-    const newProgress = parseFloat(tempProgress)
-    if (!isNaN(newProgress) && newProgress >= 0 && newProgress <= 100) {
-      updateTaskProgress(section.id, stage.id, task.id, newProgress)
-    }
-    setIsEditingProgress(false)
-  }
-
-  const handleCancelProgressEdit = () => {
-    setTempProgress(task.progress.toString())
-    setIsEditingProgress(false)
-  }
+  // Для инвалидации кеша после успешного сохранения
+  const queryClient = useQueryClient()
+  const { getQueryParams } = useKanbanFiltersStore()
 
   return (
     <>
       <div className="flex items-center gap-2 py-2">
-        {/* Task description */}
+        {/* Task description - клик открывает TaskSidebar */}
         <span
           className={cn(
-            'flex-1 text-xs truncate',
+            'flex-1 text-xs truncate cursor-pointer hover:text-primary transition-colors',
             task.progress === 100
               ? 'text-muted-foreground line-through'
               : 'text-foreground'
           )}
-          title={task.description}
+          title={`${task.description} (клик для редактирования)`}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsTaskSidebarOpen(true)
+          }}
         >
           {task.description}
         </span>
@@ -116,45 +93,13 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
                   className="flex items-center gap-1.5 cursor-pointer hover:bg-muted/50 rounded px-1.5 py-0.5 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setIsModalOpen(true)
+                    setIsWorkLogModalOpen(true)
                   }}
                 >
                   <span className="text-[11px] text-muted-foreground font-medium">
-                    {task.actualHours}/
-                    {isEditingPlannedHours ? (
-                      <Input
-                        type="number"
-                        value={tempPlannedHours}
-                        onChange={(e) => setTempPlannedHours(e.target.value)}
-                        onBlur={handleSavePlannedHours}
-                        onKeyDown={(e) => {
-                          e.stopPropagation()
-                          if (e.key === 'Enter') {
-                            handleSavePlannedHours()
-                          } else if (e.key === 'Escape') {
-                            handleCancelEdit()
-                          }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-block w-12 h-5 text-[11px] px-1 py-0 text-center"
-                        autoFocus
-                        min="0"
-                        step="0.5"
-                      />
-                    ) : (
-                      <span
-                        className="hover:underline cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIsEditingPlannedHours(true)
-                        }}
-                      >
-                        {task.plannedHours}
-                      </span>
-                    )}{' '}
-                    ч
+                    {task.actualHours}/{task.plannedHours} ч
                   </span>
-                  {isHovered && !isEditingPlannedHours && (
+                  {isHovered && (
                     <Clock className="h-3 w-3 text-muted-foreground" />
                   )}
                 </div>
@@ -201,52 +146,87 @@ function TaskItem({ task, section, stage }: TaskItemProps) {
                 strokeLinecap="round"
               />
             </svg>
-            {/* Percentage text - editable */}
-            {isEditingProgress ? (
-              <Input
-                type="number"
-                value={tempProgress}
-                onChange={(e) => setTempProgress(e.target.value)}
-                onBlur={handleSaveProgress}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Enter') {
-                    handleSaveProgress()
-                  } else if (e.key === 'Escape') {
-                    handleCancelProgressEdit()
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute w-10 h-5 text-[7px] px-0.5 py-0 text-center"
-                autoFocus
-                min="0"
-                max="100"
-                step="10"
-              />
-            ) : (
-              <span
-                className="absolute text-[7px] font-medium text-foreground cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsEditingProgress(true)
-                  setTempProgress(task.progress.toString())
-                }}
-                title="Нажмите для изменения прогресса"
-              >
-                {task.progress}%
-              </span>
-            )}
+            {/* Percentage text - клик открывает TaskSidebar */}
+            <span
+              className="absolute text-[7px] font-medium text-foreground cursor-pointer hover:underline"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsTaskSidebarOpen(true)
+              }}
+              title="Нажмите для редактирования задачи"
+            >
+              {task.progress}%
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Add Report Modal */}
-      <AddReportModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        task={task}
-        section={section}
-        stage={stage}
+      {/* WorkLog Create Modal */}
+      <WorkLogCreateModal
+        isOpen={isWorkLogModalOpen}
+        onClose={() => setIsWorkLogModalOpen(false)}
+        onSuccess={() => {
+          setIsWorkLogModalOpen(false)
+
+          // Инвалидируем кеш канбана - данные перезагрузятся с сервера
+          // Это обновит actualHours задачи после создания отчёта
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
+        sectionId={section.id}
+        sectionName={section.name}
+        defaultItemId={task.id}
+      />
+
+      {/* Task Sidebar */}
+      <TaskSidebar
+        isOpen={isTaskSidebarOpen}
+        onClose={() => setIsTaskSidebarOpen(false)}
+        onSuccess={() => {
+          setIsTaskSidebarOpen(false)
+
+          // Инвалидируем кеш канбана - данные перезагрузятся с сервера
+          // Это обновит plannedHours, progress и другие поля задачи
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.kanban.infinite(getQueryParams())
+          })
+        }}
+        task={{
+          id: task.id,
+          description: task.description,
+          plannedHours: task.plannedHours,
+          plannedDueDate: task.dueDate || null,
+          progress: task.progress,
+          order: task.order,
+          responsible: task.responsible ? {
+            id: task.responsible.userId,
+            firstName: task.responsible.firstName,
+            lastName: task.responsible.lastName,
+            name: null,
+          } : {
+            id: null,
+            firstName: null,
+            lastName: null,
+            name: null,
+          },
+          // Поля, которых нет в KanbanTask, передаём как null
+          status: {
+            id: null,
+            name: null,
+            color: null,
+          },
+          difficulty: {
+            id: null,
+            abbr: null,
+            name: null,
+          },
+          workCategoryId: null,
+          workCategoryName: task.workCategory || null,
+        }}
+        taskId={task.id}
+        sectionId={section.id}
+        stageId={stage.id}
       />
     </>
   )
@@ -388,25 +368,26 @@ function CompactCircularProgress({
 interface KanbanCardProps {
   stage: KanbanStage
   section: KanbanSection
+  // HTML5 Drag and Drop
+  onDragStart: (stageId: string, sectionId: string, e: React.DragEvent) => void
+  onDragEnd: () => void
+  isDragging: boolean
 }
 
-export function KanbanCard({ stage, section }: KanbanCardProps) {
+export function KanbanCard({
+  stage,
+  section,
+  onDragStart,
+  onDragEnd,
+  isDragging
+}: KanbanCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: `${section.id}:${stage.id}`,
-      data: { stage, section },
-    })
 
   const column = getColumnById(stage.status)
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    // ВАЖНО: Всегда transition: 'none' для transform, чтобы избежать "отскока" после drag
-    // При завершении драга карточка уже будет в новой колонке (благодаря optimistic update)
-    // и не должна анимированно возвращаться к transform: translate(0, 0)
-    transition: 'none',
+  // HTML5 Drag handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    onDragStart(stage.id, section.id, e)
   }
 
   const tasksCount = stage.tasks.length
@@ -426,10 +407,9 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
       className={cn(
         'group relative',
         'w-full max-w-full',
@@ -437,10 +417,9 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
         'hover:shadow-md hover:border-primary/30',
         'cursor-grab active:cursor-grabbing',
         'overflow-hidden',
-        // КРИТИЧНО: Полностью скрываем карточку при drag
-        // DragOverlay покажет копию карточки, следующую за курсором
-        // Когда drop происходит, DragOverlay исчезает, а карточка уже в новой колонке
-        isDragging && 'opacity-0'
+        // Уменьшаем прозрачность при перетаскивании
+        // Карточка остаётся на месте, но визуально "подсвечивается" что она активна
+        isDragging && 'opacity-50 ring-2 ring-primary/50'
       )}
     >
       {/* Card Header */}
@@ -580,150 +559,3 @@ export function KanbanCard({ stage, section }: KanbanCardProps) {
   )
 }
 
-// ============================================================================
-// KanbanCardPreview - статичная версия карточки для DragOverlay
-// ============================================================================
-
-interface KanbanCardPreviewProps {
-  stage: KanbanStage
-  section: KanbanSection
-}
-
-/**
- * Статичная версия карточки для отображения в DragOverlay
- * Не содержит drag логики, только визуальное представление
- */
-export function KanbanCardPreview({ stage, section }: KanbanCardPreviewProps) {
-  const column = getColumnById(stage.status)
-
-  // Get unique work categories for avatars
-  const uniqueCategories = Array.from(
-    new Set(stage.tasks.map((t) => t.workCategory).filter(Boolean))
-  ).slice(0, 3)
-
-  return (
-    <div
-      className={cn(
-        'group relative',
-        'w-[280px]', // Фиксированная ширина для overlay
-        'bg-card rounded-lg border shadow-lg', // shadow-lg для поднятого эффекта
-        'cursor-grabbing',
-        'overflow-hidden',
-        'ring-2 ring-primary/30' // Подсветка при drag
-      )}
-    >
-      {/* Card Header */}
-      <div className="p-3 pl-4">
-        {/* Title row */}
-        <div className="flex items-start gap-2 mb-2">
-          <h4 className="flex-1 text-sm font-medium leading-tight line-clamp-2 text-foreground">
-            {stage.name}
-          </h4>
-        </div>
-
-        {/* Info row - avatars, hours, progress */}
-        <div className="flex items-center justify-between gap-3">
-          {/* Avatars */}
-          <div className="flex -space-x-2">
-            {uniqueCategories.length > 0 ? (
-              uniqueCategories.map((category, idx) => (
-                <Avatar
-                  key={idx}
-                  className="h-8 w-8 border-2 border-background"
-                >
-                  <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-medium">
-                    {category?.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              ))
-            ) : (
-              <Avatar className="h-8 w-8 border-2 border-background">
-                <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
-                  {stage.name.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            )}
-          </div>
-
-          {/* Hours and Progress */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* CPI Indicator */}
-            {(() => {
-              const cpiStatus = getCPIStatus(stage.cpi)
-              const CPIIcon = cpiStatus.icon
-              return (
-                <div className={cn(
-                  'flex items-center justify-center w-6 h-6 rounded-full',
-                  cpiStatus.bgColor
-                )}>
-                  <CPIIcon className={cn('w-3.5 h-3.5', cpiStatus.color)} />
-                </div>
-              )
-            })()}
-
-            <div className="text-right">
-              <div className="text-[10px] text-muted-foreground leading-tight">
-                Факт/План
-              </div>
-              <div className="text-xs font-medium text-foreground">
-                {stage.actualHours}/{stage.plannedHours} ч
-              </div>
-            </div>
-
-            {/* Circular Progress - simplified */}
-            <div className="relative inline-flex items-center justify-center flex-shrink-0">
-              <svg className="w-7 h-7 -rotate-90">
-                <circle
-                  cx="14"
-                  cy="14"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  fill="none"
-                  className="text-muted"
-                />
-                <circle
-                  cx="14"
-                  cy="14"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  fill="none"
-                  strokeDasharray={2 * Math.PI * 10}
-                  strokeDashoffset={2 * Math.PI * 10 * (1 - stage.progress / 100)}
-                  className={cn(
-                    stage.progress === 100
-                      ? 'text-emerald-500'
-                      : stage.progress > 50
-                        ? 'text-primary'
-                        : stage.progress > 0
-                          ? 'text-amber-500'
-                          : 'text-muted-foreground/30'
-                  )}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="absolute text-[8px] font-medium text-foreground">
-                {stage.progress}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Status indicator line */}
-      <div
-        className={cn(
-          'absolute left-0 top-2 bottom-2 rounded-full',
-          'w-0.5',
-          column?.id === 'done' && 'bg-green-500',
-          column?.id === 'review' && 'bg-pink-500',
-          column?.id === 'in_progress' && 'bg-blue-500',
-          column?.id === 'paused' && 'bg-amber-500',
-          column?.id === 'planned' && 'bg-violet-500',
-          column?.id === 'backlog' && 'bg-gray-400'
-        )}
-      />
-    </div>
-  )
-}
