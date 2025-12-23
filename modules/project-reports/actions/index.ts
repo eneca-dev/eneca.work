@@ -7,6 +7,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { formatMinskDate } from '@/lib/timezone-utils'
 import type { ActionResult } from '@/modules/cache'
 import type { ProjectReport } from '../types'
 import { transformProfileToCreatedBy } from '../utils/profile-transform'
@@ -101,7 +102,8 @@ export async function calculateStageMetrics(
 }>> {
   try {
     const supabase = await createClient()
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    // Используем дату по Минскому времени
+    const today = formatMinskDate(new Date())
 
     // Получаем данные из view v_resource_graph для всех секций стадии
     const { data: rows, error } = await supabase

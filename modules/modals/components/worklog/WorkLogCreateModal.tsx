@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, KeyboardEvent } from 'react'
+import { formatMinskDate } from '@/lib/timezone-utils'
 import { createClient } from '@/utils/supabase/client'
 import { X, FileText, Loader2, Search, User, Wallet, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -61,7 +62,8 @@ export function WorkLogCreateModal({
   const { data: cachedBudgets = [], isLoading: budgetsLoading } = useBudgetsByEntity('section', isOpen ? sectionId : undefined)
 
   const [selectedItemId, setSelectedItemId] = useState<string>(defaultItemId || '')
-  const [workDate, setWorkDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  // Используем дату по Минскому времени для дефолтного значения
+  const [workDate, setWorkDate] = useState<string>(formatMinskDate(new Date()))
   const [hours, setHours] = useState<string>('')
   const [rate, setRate] = useState<string>('')
   const [description, setDescription] = useState<string>('')
@@ -87,7 +89,7 @@ export function WorkLogCreateModal({
   useEffect(() => {
     if (isOpen) {
       setSelectedItemId(defaultItemId || '')
-      setWorkDate(new Date().toISOString().slice(0, 10))
+      setWorkDate(formatMinskDate(new Date()))
       setHours('')
       setRate('')
       setDescription('')

@@ -3,8 +3,9 @@
 import { useState, useMemo } from 'react'
 import { ChevronRight, MessageSquareText, Loader2, Plus, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { format, parseISO, differenceInDays } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { formatMinskDate } from '@/lib/timezone-utils'
 import {
   Tooltip,
   TooltipContent,
@@ -68,17 +69,21 @@ export function ProjectReportsRow({
   const saveMutation = useSaveStageReport()
   const reportCount = reports?.length ?? 0
 
-  // Рассчитываем позиции маркеров отчетов
+  // Рассчитываем позиции маркеров отчетов (используем Минское время)
   const reportMarkers = useMemo(() => {
     if (!reports || reports.length === 0) return []
 
     return reports
       .map((report) => {
-        const reportDate = parseISO(report.createdAt)
-        const dayIndex = differenceInDays(reportDate, range.start)
+        // Конвертируем дату создания отчёта в Минское время
+        const reportDateMinsk = formatMinskDate(parseISO(report.createdAt))
+        // Находим индекс ячейки дня по совпадению дат в Минском времени
+        const dayIndex = dayCells.findIndex(
+          (cell) => formatMinskDate(cell.date) === reportDateMinsk
+        )
 
         // Пропускаем если вне диапазона
-        if (dayIndex < 0 || dayIndex >= dayCells.length) return null
+        if (dayIndex < 0) return null
 
         return {
           report,
@@ -87,7 +92,7 @@ export function ProjectReportsRow({
         }
       })
       .filter((m): m is NonNullable<typeof m> => m !== null)
-  }, [reports, range.start, dayCells.length])
+  }, [reports, dayCells])
 
   return (
     <>
@@ -384,11 +389,12 @@ function ProjectReportItemRow({
   // Инициалы автора
   const initials = getInitials(report.createdBy.firstName, report.createdBy.lastName)
 
-  // Рассчитываем позицию маркера на основе даты создания отчета
-  const reportDate = parseISO(report.createdAt)
-  const dayIndex = differenceInDays(reportDate, range.start)
-  const markerX =
-    dayIndex >= 0 && dayIndex < dayCells.length ? dayIndex * DAY_CELL_WIDTH : null
+  // Рассчитываем позицию маркера на основе даты создания отчета (Минское время)
+  const reportDateMinsk = formatMinskDate(parseISO(report.createdAt))
+  const dayIndex = dayCells.findIndex(
+    (cell) => formatMinskDate(cell.date) === reportDateMinsk
+  )
+  const markerX = dayIndex >= 0 ? dayIndex * DAY_CELL_WIDTH : null
 
   return (
     <>
