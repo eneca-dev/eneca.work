@@ -1,8 +1,16 @@
 'use client'
 
-import { useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { useCheckpointLinks } from '../context/CheckpointLinksContext'
 import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const SVG_PADDING = 100
+const ARROW_OFFSET = 15
+const DEBUG = false // Set to true for development debugging
 
 // ============================================================================
 // Types
@@ -68,22 +76,12 @@ function groupCheckpointsByIdent(
     }
   })
 
-  console.log('[groupCheckpointsByIdent] All groups before filter:', allGroups)
-
-  // Логируем детали каждой группы
-  allGroups.forEach((g, idx) => {
-    console.log(`[groupCheckpointsByIdent] Group ${idx}:`, {
-      checkpoint_id: g.checkpoint_id,
-      x: g.x,
-      positions_count: g.positions.length,
-      positions: g.positions,
-      will_pass_filter: g.positions.length >= 2
-    })
-  })
-
   // Фильтруем только группы с >= 2 позиций (связанные чекпоинты)
   const filtered = allGroups.filter(g => g.positions.length >= 2)
-  console.log('[groupCheckpointsByIdent] Filtered groups (>=2 positions):', filtered)
+
+  if (DEBUG) {
+    console.log('[groupCheckpointsByIdent] Filtered groups (>=2 positions):', filtered)
+  }
 
   return filtered
 }
@@ -109,104 +107,119 @@ export function CheckpointVerticalLinks() {
     return groupCheckpointsByIdent(positions)
   }, [positions])
 
-  // Временное логирование для отладки
-  useEffect(() => {
-    if (positions.length > 0) {
-      console.log('[CheckpointVerticalLinks] Positions:', positions)
-      console.log('[CheckpointVerticalLinks] Linked groups:', linkedGroups)
-    }
-  }, [positions, linkedGroups])
-
   if (linkedGroups.length === 0) {
-    console.log('[CheckpointVerticalLinks] No linked groups, not rendering')
     return null
   }
 
-  console.log('[CheckpointVerticalLinks] Rendering SVG with groups:', linkedGroups)
+  if (DEBUG) {
+    console.log('[CheckpointVerticalLinks] Rendering SVG with groups:', linkedGroups)
+  }
 
   // Вычисляем минимальные размеры SVG для покрытия всех линий
   const maxX = Math.max(...linkedGroups.map(g => g.x))
   const maxY = Math.max(...linkedGroups.flatMap(g => g.positions.map(p => p.y)))
 
-  // Смещение для учета sidebar (340px - 36px = 304px)
+  // Смещение для учета sidebar
   const X_OFFSET = SIDEBAR_WIDTH
-
-  console.log('[CheckpointVerticalLinks] SVG dimensions:', { maxX, maxY, X_OFFSET })
 
   return (
     <svg
       className="absolute top-0 left-0 pointer-events-none overflow-visible z-0"
       style={{
-        width: maxX + X_OFFSET + 100, // Добавляем запас
-        height: maxY + 100, // Добавляем запас
+        width: maxX + X_OFFSET + SVG_PADDING,
+        height: maxY + SVG_PADDING,
       }}
     >
       {/* Определение маркера-стрелки */}
       <defs>
         <marker
           id="checkpoint-arrow"
-          markerWidth="6"
-          markerHeight="6"
-          refX="3"
-          refY="3"
+          markerWidth="10"
+          markerHeight="10"
+          refX="5"
+          refY="5"
           orient="auto"
-          markerUnits="strokeWidth"
+          markerUnits="userSpaceOnUse"
         >
           <path
-            d="M 0 0 L 6 3 L 0 6 z"
+            d="M 0 0 L 10 5 L 0 10 z"
             fill="hsl(var(--border))"
-            opacity="0.7"
+            opacity="0.9"
           />
         </marker>
       </defs>
 
       {linkedGroups.map(group => {
-        // Сортируем позиции по Y для корректного рисования линии сверху вниз
-        const sortedPositions = [...group.positions].sort((a, b) => a.y - b.y)
+        // Создаём lookup map для быстрого поиска
+        const positionsMap = new Map(
+          positions.map(p => [`${p.checkpoint.checkpoint_id}-${p.sectionId}`, p])
+        )
 
-        const firstY = sortedPositions[0].y
-        const lastY = sortedPositions[sortedPositions.length - 1].y - 15 // Уменьшаем на 20px для стрелки
+        // Найдём родительский чекпоинт (тот, где checkpoint.section_id совпадает с sectionId позиции)
+        const parentPos = group.positions.find(pos => {
+          const checkpoint = positionsMap.get(`${group.checkpoint_id}-${pos.sectionId}`)
+          return checkpoint?.checkpoint.section_id === checkpoint?.sectionId
+        })
+
+        // Если не нашли родительский, используем первый по Y (резервный вариант)
+        const sortedPositions = [...group.positions].sort((a, b) => a.y - b.y)
+        const referencePos = parentPos || sortedPositions[0]
 
         const adjustedX = group.x + X_OFFSET
 
-        console.log('[CheckpointVerticalLinks] Rendering line:', {
-          checkpoint_id: group.checkpoint_id,
-          x: group.x,
-          adjustedX,
-          firstY,
-          lastY,
-          positions: sortedPositions,
-        })
+        if (DEBUG) {
+          console.log('[CheckpointVerticalLinks] Rendering lines from parent:', {
+            checkpoint_id: group.checkpoint_id,
+            parentSectionId: referencePos.sectionId,
+            linkedCount: group.positions.length - 1,
+          })
+        }
 
         return (
           <g key={group.checkpoint_id}>
-            {/* Вертикальная пунктирная линия между первым и последним чекпоинтом */}
-            <line
-              x1={adjustedX}
-              y1={firstY}
-              x2={adjustedX}
-              y2={lastY}
-              stroke="hsl(var(--border))"
-              strokeWidth="2"
-              strokeDasharray="4,4"
-              opacity="0.7"
-              markerEnd="url(#checkpoint-arrow)"
-              className="transition-all duration-300"
-            />
+            {/* Рисуем отдельную линию от родительского к каждому связанному чекпоинту */}
+            {group.positions.map((pos) => {
+              // Пропускаем сам родительский чекпоинт
+              if (pos.sectionId === referencePos.sectionId) return null
 
-            {/* Опционально: точки на каждой позиции для визуальной связи */}
-            {sortedPositions.map((pos, idx) => {
-              // Не рисуем точки на первом и последнем (там уже есть маркеры)
-              if (idx === 0 || idx === sortedPositions.length - 1) return null
+              // Определяем направление для этой конкретной связи
+              const isArrowUp = pos.y < referencePos.y
+
+              // Для правильного отображения стрелки линия должна идти от начала к концу
+              // markerEnd всегда на конце линии (y2)
+              let y1, y2
+              if (isArrowUp) {
+                // Стрелка вверх: линия идёт от родительского (снизу) вверх к связанному
+                y1 = referencePos.y
+                y2 = pos.y + ARROW_OFFSET
+              } else {
+                // Стрелка вниз: линия идёт от родительского (сверху) вниз к связанному
+                y1 = referencePos.y
+                y2 = pos.y - ARROW_OFFSET
+              }
+
+              if (DEBUG) {
+                console.log(`[Line] ${group.checkpoint_id} -> ${pos.sectionId}:`, {
+                  isArrowUp,
+                  y1,
+                  y2,
+                  direction: y2 > y1 ? 'down' : 'up'
+                })
+              }
 
               return (
-                <circle
+                <line
                   key={`${group.checkpoint_id}-${pos.sectionId}`}
-                  cx={adjustedX}
-                  cy={pos.y}
-                  r={3}
-                  fill="hsl(var(--border))"
-                  opacity="0.6"
+                  x1={adjustedX}
+                  y1={y1}
+                  x2={adjustedX}
+                  y2={y2}
+                  stroke="hsl(var(--border))"
+                  strokeWidth="2"
+                  strokeDasharray="4,4"
+                  opacity="0.7"
+                  markerEnd="url(#checkpoint-arrow)"
+                  className="transition-all duration-300"
                 />
               )
             })}
