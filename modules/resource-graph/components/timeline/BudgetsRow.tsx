@@ -47,6 +47,8 @@ interface BudgetsRowProps {
   range: TimelineRange
   sectionStartDate: string | null
   sectionEndDate: string | null
+  /** Цвет статуса раздела (для палочек периода) */
+  sectionStatusColor?: string
   /** Бюджеты раздела (загружаются в родительском компоненте) */
   budgets: BudgetCurrent[] | undefined
   /** Идёт загрузка бюджетов */
@@ -71,6 +73,7 @@ export function BudgetsRow({
   range,
   sectionStartDate,
   sectionEndDate,
+  sectionStatusColor,
   budgets,
   budgetsLoading: isLoading,
   onRefetch: refetch,
@@ -103,7 +106,7 @@ export function BudgetsRow({
     <>
       {/* Заголовок строки бюджетов */}
       <div
-        className="flex border-b border-border/50 hover:bg-muted/30 transition-colors"
+        className="flex border-b border-border/50"
         style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
       >
         {/* Sidebar */}
@@ -142,7 +145,7 @@ export function BudgetsRow({
 
           {/* Summary - compact */}
           {!isLoading && budgetCount > 0 && (
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className={cn(
@@ -171,7 +174,7 @@ export function BudgetsRow({
           )}
 
           {/* Add budget button */}
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -196,14 +199,17 @@ export function BudgetsRow({
           </TooltipProvider>
         </div>
 
-        {/* Timeline - показываем период раздела */}
+        {/* Timeline - показываем период раздела (серый, как у развёрнутого раздела) */}
         <div className="relative" style={{ width: timelineWidth }}>
           <TimelineGrid dayCells={dayCells} />
-          <SectionPeriodFrame
-            startDate={sectionStartDate}
-            endDate={sectionEndDate}
-            range={range}
-          />
+          <div className="absolute inset-0 opacity-30 saturate-50">
+            <SectionPeriodFrame
+              startDate={sectionStartDate}
+              endDate={sectionEndDate}
+              range={range}
+              color={sectionStatusColor}
+            />
+          </div>
         </div>
       </div>
 
@@ -296,12 +302,12 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
   return (
     <div
-      className="group flex border-b border-border/30 hover:bg-muted/20 transition-colors"
+      className="group flex border-b border-border/30"
       style={{ height: BUDGET_ROW_HEIGHT, minWidth: totalWidth }}
     >
       {/* Sidebar */}
       <div
-        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background group-hover:bg-muted/20"
+        className="flex items-center gap-1.5 shrink-0 border-r border-border px-2 sticky left-0 z-20 bg-background"
         style={{
           width: SIDEBAR_WIDTH,
           paddingLeft: 8 + depth * 16,
@@ -322,7 +328,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
         </span>
 
         {/* Amount */}
-        <TooltipProvider delayDuration={200}>
+        <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-[10px] tabular-nums shrink-0 ml-auto" style={{ color: progressColor }}>
@@ -342,7 +348,7 @@ function BudgetItemRow({ budget, dayCells, depth, timelineWidth, totalWidth, ran
 
         {/* Delete button */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <AlertDialogTrigger asChild>

@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { format, parseISO } from 'date-fns'
-import { ChevronRight, ListTodo, Calendar, Plus } from 'lucide-react'
+import { ChevronRight, ListTodo, Plus, UserPlus, SquarePlus, Calendar, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -23,12 +23,11 @@ import type {
 import type { DayCell } from '../TimelineHeader'
 import { TimelineGrid, ProgressCircle, PeriodBackground } from '../shared'
 import { LoadingBars, calculateLoadingsRowHeight, LOADING_DRAG_TYPE, type LoadingDragData } from '../LoadingBars'
-import { LoadingModal } from '@/modules/modals'
+import { LoadingModal, TaskCreateModal } from '@/modules/modals'
 import { StageReadinessArea, calculateTodayDelta } from '../StageReadinessArea'
 import { StageExpandedFrame } from '../StageExpandedFrame'
 import { DecompositionItemRow } from './DecompositionItemRow'
 import { calculateStageReadiness } from './calculations'
-import { formatHoursCompact } from '../../../utils'
 import {
   useUpdateLoadingDates,
   useUpdateStageDates,
@@ -84,8 +83,8 @@ export function DecompositionStageRow({
   const [isExpanded, setIsExpanded] = useState(false)
   const [isStageModalOpen, setIsStageModalOpen] = useState(false)
   const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false)
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [isStageHovered, setIsStageHovered] = useState(false)
   const hasChildren = stage.items.length > 0
   const timelineWidth = dayCells.length * DAY_CELL_WIDTH
   const totalWidth = SIDEBAR_WIDTH + timelineWidth
@@ -220,7 +219,7 @@ export function DecompositionStageRow({
 
   // Zone heights in timeline (adaptive to loadings count)
   const readinessZoneHeight = 32 // fixed bottom zone for readiness
-  const sidebarMinHeight = 56 // minimum height for three-line sidebar
+  const sidebarMinHeight = 48 // minimum height for two-line sidebar
   // Loadings: use calculateLoadingsRowHeight to compute needed height
   const loadingsZoneHeight = calculateLoadingsRowHeight(stageLoadings.length, 28)
   // Total height = max(base, loadings + readiness, sidebar)
@@ -230,7 +229,7 @@ export function DecompositionStageRow({
     <>
       <div
         className={cn(
-          'flex border-b border-border/50 hover:bg-muted/30 transition-colors group',
+          'flex border-b border-border/50 group',
           isDragOver && 'bg-primary/10 ring-2 ring-primary/30 ring-inset'
         )}
         style={{ height: rowHeight, minWidth: totalWidth }}
@@ -238,13 +237,11 @@ export function DecompositionStageRow({
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onMouseEnter={() => setIsStageHovered(true)}
-        onMouseLeave={() => setIsStageHovered(false)}
       >
-        {/* Sidebar - three-line layout */}
+        {/* Sidebar - compact two-line layout */}
         <div
           className={cn(
-            'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
+            'flex flex-col justify-center gap-1 shrink-0 border-r border-border px-2 relative',
             'sticky left-0 z-20 bg-background'
           )}
           style={{
@@ -252,7 +249,18 @@ export function DecompositionStageRow({
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* First row: Expand + Icon + Name */}
+          {/* Create loading button - positioned at right edge of sidebar */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded-r text-[9px] text-muted-foreground hover:text-foreground bg-background border-r border-t border-b border-border"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsLoadingModalOpen(true)
+            }}
+          >
+            <UserPlus className="w-3 h-3" />
+            <span>Загрузка</span>
+          </button>
+          {/* First row: Expand + Icon + Name + Create loading button */}
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Expand/Collapse */}
             {hasChildren ? (
@@ -275,132 +283,70 @@ export function DecompositionStageRow({
             <ListTodo className="w-4 h-4 text-muted-foreground shrink-0" />
 
             {/* Stage Name - clickable to open StageModal */}
-            <button
-              className={cn(
-                'text-sm font-medium truncate min-w-0 text-left',
-                'hover:text-primary transition-colors cursor-pointer'
-              )}
-              title={`${stage.name} — нажмите для просмотра`}
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsStageModalOpen(true)
-              }}
-            >
-              {stage.name}
-            </button>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className={cn(
+                      'text-sm font-medium truncate min-w-0 text-left flex-1',
+                      'hover:text-primary transition-colors cursor-pointer'
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsStageModalOpen(true)
+                    }}
+                  >
+                    {stage.name}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs max-w-[300px]">
+                  <div className="space-y-1">
+                    <div className="font-medium">{stage.name}</div>
+                    <div className="text-muted-foreground">
+                      {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
 
-            {/* Task count badge (when collapsed) */}
-            {!isExpanded && hasChildren && (
-              <TooltipProvider delayDuration={200}>
+          {/* Second row: Progress + Status + Avatars + Task count + Create task button */}
+          <div className="flex items-center gap-2 pl-[26px]">
+            {/* Progress Circle */}
+            {stageStats.hasData ? (
+              <ProgressCircle
+                progress={stageStats.readiness}
+                size={18}
+                strokeWidth={2}
+              />
+            ) : (
+              <div className="w-[18px] h-[18px] rounded-full bg-muted/30" />
+            )}
+
+            {/* Delta (if any) */}
+            {todayDelta !== null && todayDelta !== 0 && (
+              <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span
-                      className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-medium shrink-0 ml-1"
-                      style={{
-                        backgroundColor: '#64748b20',
-                        color: '#64748b',
-                        border: '1px solid #64748b40',
-                      }}
+                      className={cn(
+                        'text-[9px] font-medium tabular-nums',
+                        todayDelta > 0 ? 'text-emerald-500' : 'text-red-400'
+                      )}
                     >
-                      {stage.items.length}
+                      {todayDelta > 0 ? '+' : ''}{Math.round(todayDelta)}%
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
-                    {stage.items.length} {stage.items.length === 1 ? 'задача' : stage.items.length < 5 ? 'задачи' : 'задач'}
+                    Прирост за сегодня
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
-          </div>
-
-          {/* Second row: Progress + Hours + Avatars + Status */}
-          <div className="flex items-center gap-2 pl-[26px]">
-            {/* Progress Circle + Delta */}
-            <div className="flex items-center gap-1 w-[40px] shrink-0">
-              {stageStats.hasData ? (
-                <>
-                  <ProgressCircle
-                    progress={stageStats.readiness}
-                    size={18}
-                    strokeWidth={2}
-                  />
-                  {todayDelta !== null && todayDelta !== 0 && (
-                    <TooltipProvider delayDuration={200}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className={`text-[9px] font-medium tabular-nums ${
-                              todayDelta > 0 ? 'text-emerald-500' : 'text-red-400'
-                            }`}
-                          >
-                            {todayDelta > 0 ? '+' : ''}{Math.round(todayDelta)}%
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          Прирост за сегодня
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </>
-              ) : (
-                <div className="w-[18px] h-[18px]" />
-              )}
-            </div>
-
-            {/* Hours: fact / plan */}
-            <div className="flex items-center gap-0.5 text-[9px] tabular-nums w-[55px] shrink-0 justify-end">
-              <span className={stageStats.actualHours > 0 ? 'text-emerald-500 font-medium' : 'text-muted-foreground/40'}>
-                {formatHoursCompact(stageStats.actualHours)}
-              </span>
-              <span className="text-muted-foreground/50">/</span>
-              <span className="text-muted-foreground">
-                {formatHoursCompact(stageStats.plannedHours)}
-              </span>
-            </div>
-
-            {/* Avatars - responsibles */}
-            <div className="flex items-center -space-x-1.5 min-w-[60px] shrink-0">
-              {stageResponsibles.slice(0, 3).map((emp) => (
-                <TooltipProvider key={emp.id} delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Avatar className="w-5 h-5 border border-background">
-                        {emp.avatarUrl ? (
-                          <AvatarImage src={emp.avatarUrl} alt={`${emp.firstName} ${emp.lastName}`} />
-                        ) : null}
-                        <AvatarFallback className="text-[8px] bg-muted">
-                          {(emp.firstName?.[0] || '') + (emp.lastName?.[0] || '')}
-                        </AvatarFallback>
-                      </Avatar>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {emp.firstName} {emp.lastName}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-              {stageResponsibles.length > 3 && (
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium border border-background">
-                        +{stageResponsibles.length - 3}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {stageResponsibles.slice(3).map(e => `${e.firstName} ${e.lastName}`).join(', ')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {stageResponsibles.length === 0 && (
-                <span className="text-[9px] text-muted-foreground/40">—</span>
-              )}
-            </div>
 
             {/* Status chip */}
-            {stage.status.name ? (
+            {stage.status.name && (
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-medium shrink-0"
                 style={{
@@ -419,29 +365,88 @@ export function DecompositionStageRow({
                 />
                 {stage.status.name}
               </span>
-            ) : (
-              <span className="text-[9px] text-muted-foreground/40">—</span>
             )}
 
-            {/* Add loading button - visible on hover */}
-            <button
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-muted rounded shrink-0"
-              title="Добавить загрузку"
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsLoadingModalOpen(true)
-              }}
-            >
-              <Plus className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-          </div>
+            {/* Dates display or "Разместить" button */}
+            {stage.startDate && stage.finishDate ? (
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+                <Calendar className="w-3 h-3" />
+                {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
+              </span>
+            ) : (
+              <button
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-muted-foreground/50 text-[9px] text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsStageModalOpen(true)
+                }}
+              >
+                <MapPin className="w-3 h-3" />
+                Разместить
+              </button>
+            )}
 
-          {/* Third row: Dates */}
-          <div className="flex items-center gap-1 pl-[26px]">
-            <Calendar className="w-3 h-3 text-muted-foreground shrink-0" />
-            <span className="text-[10px] text-muted-foreground">
-              {formatStageDate(stage.startDate)} — {formatStageDate(stage.finishDate)}
-            </span>
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Responsibles avatars */}
+            {stageResponsibles.length > 0 && (
+              <div className="flex items-center -space-x-1.5 shrink-0">
+                {stageResponsibles.slice(0, 3).map((emp) => (
+                  <TooltipProvider key={emp.id} delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Avatar className="w-5 h-5 border border-background">
+                          {emp.avatarUrl ? (
+                            <AvatarImage src={emp.avatarUrl} alt={`${emp.firstName} ${emp.lastName}`} />
+                          ) : null}
+                          <AvatarFallback className="text-[8px] bg-muted">
+                            {(emp.firstName?.[0] || '') + (emp.lastName?.[0] || '')}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {emp.firstName} {emp.lastName}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+                {stageResponsibles.length > 3 && (
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-medium border border-background">
+                          +{stageResponsibles.length - 3}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {stageResponsibles.slice(3).map(e => `${e.firstName} ${e.lastName}`).join(', ')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+            )}
+
+            {/* Create task button - visible on hover */}
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-muted rounded shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsTaskModalOpen(true)
+                    }}
+                  >
+                    <SquarePlus className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Создать задачу
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -497,6 +502,8 @@ export function DecompositionStageRow({
                 timelineWidth={timelineWidth}
                 rowHeight={readinessZoneHeight}
                 color="#64748b"
+                stageStartDate={stage.startDate}
+                stageEndDate={stage.finishDate}
               />
             )}
           </div>
@@ -520,8 +527,9 @@ export function DecompositionStageRow({
             workLogs={workLogs}
             sectionId={sectionId}
             sectionName={sectionName}
+            stageStartDate={stage.startDate}
+            stageEndDate={stage.finishDate}
             onWorkLogCreated={onWorkLogCreated}
-            isParentHovered={isStageHovered}
             onProgressUpdated={onWorkLogCreated} // Same callback — updates graph data
           />
         ))}
@@ -546,6 +554,16 @@ export function DecompositionStageRow({
         stageId={stage.id}
         defaultStartDate={stage.startDate || new Date().toISOString().split('T')[0]}
         defaultEndDate={stage.finishDate || new Date().toISOString().split('T')[0]}
+        onSuccess={onWorkLogCreated}
+      />
+
+      {/* TaskCreateModal for creating new task */}
+      <TaskCreateModal
+        isOpen={isTaskModalOpen}
+        onClose={() => setIsTaskModalOpen(false)}
+        sectionId={sectionId}
+        stageId={stage.id}
+        stageName={stage.name}
         onSuccess={onWorkLogCreated}
       />
     </>

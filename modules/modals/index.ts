@@ -138,6 +138,7 @@ export { ResponsiblesDropdown } from './components/stage'
 
 // Item / Task
 export { TaskSidebar, type TaskSidebarProps } from './components/task'
+export { TaskCreateModal, type TaskCreateModalProps } from './components/task'
 
 // Loading
 export { LoadingModal, type LoadingModalProps } from './components/loading'

@@ -23,6 +23,10 @@ export {
   useWorkLogsAggregate,
 } from './useDecompositionStage'
 
+// Unified hook с кешированием из resourceGraph
+export { useDecompositionData } from './useDecompositionData'
+export type { DecompositionDataResult } from './useDecompositionData'
+
 // ============================================================================
 // Decomposition Stage Mutation Hooks
 // ============================================================================

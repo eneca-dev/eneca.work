@@ -35,22 +35,21 @@ export function ProgressCircle({
   const progressColor = color || getProgressColor(progress)
   const isComplete = Math.round(progress) >= 100
 
-  // При 100% показываем маленькую прозрачную галочку
+  // При 100% показываем галочку того же размера что и круг прогресса
   if (isComplete) {
-    const completedSize = size * 0.7 // Уменьшаем размер на 30%
     return (
       <div
-        className="relative shrink-0 flex items-center justify-center rounded-full opacity-50 hover:opacity-80 transition-opacity"
+        className="relative shrink-0 flex items-center justify-center rounded-full opacity-60 hover:opacity-90 transition-opacity"
         style={{
-          width: completedSize,
-          height: completedSize,
+          width: size,
+          height: size,
           backgroundColor: '#22c55e40', // green-500 с 25% opacity
           border: '1px solid #22c55e60',
         }}
       >
         <svg
-          width={completedSize * 0.5}
-          height={completedSize * 0.5}
+          width={size * 0.5}
+          height={size * 0.5}
           viewBox="0 0 24 24"
           fill="none"
           stroke="#22c55e"

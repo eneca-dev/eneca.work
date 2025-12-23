@@ -81,6 +81,15 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // Employees (расширенные данные сотрудников для назначения ответственных)
+  // -------------------------------------------------------------------------
+  employees: {
+    all: ['employees'] as const,
+    list: () => [...queryKeys.employees.all, 'list'] as const,
+    detail: (id: string) => [...queryKeys.employees.all, 'detail', id] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // Projects
   // -------------------------------------------------------------------------
   projects: {
@@ -324,6 +333,39 @@ export const queryKeys = {
     project: () => [...queryKeys.filterStructure.all, 'project'] as const,
     /** Теги проектов */
     tags: () => [...queryKeys.filterStructure.all, 'tags'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Project Tags (теги проектов)
+  // -------------------------------------------------------------------------
+  projectTags: {
+    all: ['project-tags'] as const,
+    /** Список всех тегов (справочник) */
+    list: () => [...queryKeys.projectTags.all, 'list'] as const,
+    /** Map тегов по проектам (Record<projectId, tags[]>) */
+    map: () => [...queryKeys.projectTags.all, 'map'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Company Calendar (праздники и переносы)
+  // -------------------------------------------------------------------------
+  companyCalendar: {
+    all: ['company-calendar'] as const,
+    /** События календаря (праздники и переносы) */
+    events: () => [...queryKeys.companyCalendar.all, 'events'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // Decomposition Templates (шаблоны декомпозиции)
+  // -------------------------------------------------------------------------
+  decTemplates: {
+    all: ['dec-templates'] as const,
+    lists: () => [...queryKeys.decTemplates.all, 'list'] as const,
+    /** Список шаблонов (опционально с фильтром по отделу) */
+    list: (departmentId?: string) => [...queryKeys.decTemplates.lists(), departmentId] as const,
+    details: () => [...queryKeys.decTemplates.all, 'detail'] as const,
+    /** Детали шаблона по ID */
+    detail: (id: string) => [...queryKeys.decTemplates.details(), id] as const,
   },
 } as const
 

@@ -23,6 +23,10 @@ interface StageReadinessAreaProps {
   rowHeight: number
   /** Цвет линии и заливки (по умолчанию синий) */
   color?: string
+  /** Дата начала этапа (для плановой линии) */
+  stageStartDate?: string | null
+  /** Дата окончания этапа (для плановой линии) */
+  stageEndDate?: string | null
 }
 
 interface PointData {
@@ -45,6 +49,8 @@ export function StageReadinessArea({
   timelineWidth,
   rowHeight,
   color = '#3b82f6',
+  stageStartDate,
+  stageEndDate,
 }: StageReadinessAreaProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
@@ -110,6 +116,49 @@ export function StageReadinessArea({
 
     return result
   }, [snapshots, range.start, timelineWidth, rowHeight])
+
+  // Вычисляем плановую линию (0% в начале этапа → 100% в конце)
+  const plannedLine = useMemo(() => {
+    if (!stageStartDate || !stageEndDate) return null
+
+    const stageStart = parseISO(stageStartDate)
+    const stageEnd = parseISO(stageEndDate)
+    const stageDuration = Math.max(1, Math.ceil((stageEnd.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)))
+
+    const graphHeight = rowHeight * 0.75
+    const topPadding = rowHeight * 0.1
+    const totalDays = Math.ceil(timelineWidth / DAY_CELL_WIDTH)
+
+    // Находим X координаты для начала и конца этапа
+    const startDayIndex = Math.ceil((stageStart.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24))
+    const endDayIndex = Math.ceil((stageEnd.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24))
+
+    // Проверяем что этап попадает в видимую область
+    if (endDayIndex < 0 || startDayIndex >= totalDays) return null
+
+    // Координаты точек
+    const startX = Math.max(0, startDayIndex * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2)
+    const endX = Math.min(timelineWidth, endDayIndex * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2)
+
+    // Y: 0% внизу (topPadding + graphHeight), 100% вверху (topPadding)
+    const startY = topPadding + graphHeight // 0%
+    const endY = topPadding // 100%
+
+    return {
+      path: `M ${startX} ${startY} L ${endX} ${endY}`,
+      startX,
+      endX,
+      stageDuration,
+      // Функция для расчёта планового значения на конкретную дату
+      getPlannedValue: (dateStr: string): number | null => {
+        const date = parseISO(dateStr)
+        if (date < stageStart) return 0
+        if (date > stageEnd) return 100
+        const daysPassed = (date.getTime() - stageStart.getTime()) / (1000 * 60 * 60 * 24)
+        return Math.round((daysPassed / stageDuration) * 100)
+      }
+    }
+  }, [stageStartDate, stageEndDate, range.start, timelineWidth, rowHeight])
 
   if (points.length === 0) return null
 
@@ -180,7 +229,19 @@ export function StageReadinessArea({
             />
           )}
 
-          {/* Верхняя граница — сплошная линия */}
+          {/* Плановая линия — пунктирная */}
+          {plannedLine && (
+            <path
+              d={plannedLine.path}
+              fill="none"
+              stroke={color}
+              strokeWidth="1"
+              strokeDasharray="4 3"
+              strokeOpacity="0.5"
+            />
+          )}
+
+          {/* Верхняя граница — сплошная линия (факт) */}
           {linePath && (
             <path
               d={linePath}
@@ -247,6 +308,24 @@ export function StageReadinessArea({
                     </span>
                   )}
                 </div>
+                {/* План vs Факт */}
+                {plannedLine && (() => {
+                  const plannedValue = plannedLine.getPlannedValue(point.date)
+                  if (plannedValue === null) return null
+                  const diff = Math.round(point.value) - plannedValue
+                  return (
+                    <div className="flex items-center gap-2 pt-0.5 border-t border-border/50">
+                      <span className="text-muted-foreground">
+                        План: {plannedValue}%
+                      </span>
+                      {diff !== 0 && (
+                        <span className={diff > 0 ? 'text-emerald-500' : 'text-red-400'}>
+                          {diff > 0 ? '+' : ''}{diff}%
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </TooltipContent>
           </Tooltip>

@@ -114,7 +114,7 @@ export function SectionTooltipOverlay({
         }
       }
 
-      // Бюджет
+      // Бюджет — ступенчатая интерполяция до сегодня (как график)
       let budgetPercent: number | null = null
       let budgetSpent: number | null = null
       const exactBudget = budgetMap.get(dateKey)
@@ -122,13 +122,15 @@ export function SectionTooltipOverlay({
         budgetPercent = exactBudget.percent
         budgetSpent = exactBudget.spent
       } else if (sortedBudget.length > 0) {
-        // Интерполируем только если дата в пределах данных
         const firstBudget = parseISO(sortedBudget[0].date)
-        const lastBudget = parseISO(sortedBudget[sortedBudget.length - 1].date)
-        if (dayDate >= firstBudget && dayDate <= lastBudget) {
-          const interpolated = interpolateBudget(dayDate, sortedBudget)
-          budgetPercent = interpolated.percent
-          budgetSpent = interpolated.spent
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        // Показываем значение от первой даты данных до сегодня
+        if (dayDate >= firstBudget && dayDate <= today) {
+          // Ступенчатая интерполяция — последнее известное значение
+          const lastKnown = getLastKnownBudget(dayDate, sortedBudget)
+          budgetPercent = lastKnown.percent
+          budgetSpent = lastKnown.spent
         }
       }
 
@@ -310,50 +312,29 @@ function interpolateValue(
 }
 
 /**
- * Интерполирует значение бюджета между точками
+ * Возвращает последнее известное значение бюджета до указанной даты (ступенчатая интерполяция)
  */
-function interpolateBudget(
+function getLastKnownBudget(
   date: Date,
   points: BudgetSpendingPoint[]
 ): { percent: number; spent: number } {
-  let leftPoint: BudgetSpendingPoint | null = null
-  let rightPoint: BudgetSpendingPoint | null = null
+  let lastKnown: BudgetSpendingPoint | null = null
 
   for (const point of points) {
     const pointDate = parseISO(point.date)
     if (pointDate <= date) {
-      leftPoint = point
-    }
-    if (pointDate >= date && !rightPoint) {
-      rightPoint = point
+      lastKnown = point
+    } else {
       break
     }
   }
 
-  if (!leftPoint && rightPoint) {
-    return { percent: rightPoint.percentage, spent: rightPoint.spent }
-  }
-  if (leftPoint && !rightPoint) {
-    return { percent: leftPoint.percentage, spent: leftPoint.spent }
-  }
-  if (!leftPoint || !rightPoint) {
-    return { percent: 0, spent: 0 }
+  if (lastKnown) {
+    return { percent: lastKnown.percentage, spent: lastKnown.spent }
   }
 
-  const leftDate = parseISO(leftPoint.date)
-  const rightDate = parseISO(rightPoint.date)
-  const totalDays = differenceInDays(rightDate, leftDate)
-  if (totalDays === 0) {
-    return { percent: leftPoint.percentage, spent: leftPoint.spent }
-  }
-
-  const daysFromLeft = differenceInDays(date, leftDate)
-  const ratio = daysFromLeft / totalDays
-
-  return {
-    percent: leftPoint.percentage + (rightPoint.percentage - leftPoint.percentage) * ratio,
-    spent: leftPoint.spent + (rightPoint.spent - leftPoint.spent) * ratio,
-  }
+  // Если дата раньше первой точки, берём первую
+  return { percent: points[0].percentage, spent: points[0].spent }
 }
 
 /**
@@ -361,10 +342,10 @@ function interpolateBudget(
  */
 function formatMoney(value: number): string {
   if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M ₽`
+    return `${(value / 1_000_000).toFixed(1)}M BYN`
   }
   if (value >= 1_000) {
-    return `${Math.round(value / 1_000)}K ₽`
+    return `${Math.round(value / 1_000)}K BYN`
   }
-  return `${Math.round(value)} ₽`
+  return `${Math.round(value)} BYN`
 }
