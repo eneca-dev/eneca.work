@@ -8,10 +8,17 @@
 'use client'
 
 import { useState, useMemo, useCallback, useRef } from 'react'
-import { Database } from 'lucide-react'
+import { Database, ChevronsUpDown, ChevronsDownUp } from 'lucide-react'
 import { addDays, startOfDay } from 'date-fns'
 import { useResourceGraphData, useCompanyCalendarEvents } from '../hooks'
-import { useDisplaySettingsStore, useFiltersStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
+import { useDisplaySettingsStore, useFiltersStore, useUIStateStore, RESOURCE_GRAPH_FILTER_CONFIG } from '../stores'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import { useFilterOptions } from '../filters'
 import { ResourceGraphTimeline, TimelineHeader, generateDayCells } from './timeline'
 import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
@@ -77,6 +84,7 @@ export function ResourceGraph() {
   // Filters store
   const { filterString, setFilterString } = useFiltersStore()
   const { settings } = useDisplaySettingsStore()
+  const { collapseAll, expandNode } = useUIStateStore()
 
   // Load filter options for autocomplete
   const { options: filterOptions, isLoading: loadingOptions } = useFilterOptions()
@@ -104,24 +112,47 @@ export function ResourceGraph() {
     setLoadAll(true)
   }, [])
 
+  // Expand all nodes in the tree
+  const handleExpandAll = useCallback(() => {
+    if (!data) return
+    data.forEach((project) => {
+      expandNode('project', project.id)
+      project.stages.forEach((stage) => {
+        expandNode('stage', stage.id)
+        stage.objects.forEach((obj) => {
+          expandNode('object', obj.id)
+          obj.sections.forEach((section) => {
+            expandNode('section', section.id)
+            section.decompositionStages.forEach((ds) => {
+              expandNode('decomposition_stage', ds.id)
+            })
+          })
+        })
+      })
+    })
+  }, [data, expandNode])
+
+  // Collapse all nodes
+  const handleCollapseAll = useCallback(() => {
+    collapseAll()
+  }, [collapseAll])
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-card border-b shadow-sm">
-        {/* Main toolbar with InlineFilter */}
-        <div className="px-4 py-3 flex items-center gap-4">
-          {/* Left: Title & Stats */}
-          <div className="shrink-0">
-            <h1 className="text-lg font-semibold">График ресурсов</h1>
-            <p className="text-xs text-muted-foreground">
-              {shouldFetchData
-                ? `Проектов: ${data?.length || 0}${loadAll && !filtersApplied ? ' (все)' : ''}`
-                : 'Выберите фильтры'}
-            </p>
+        {/* Main toolbar with InlineFilter - aligned to sidebar */}
+        <div className="flex items-center py-2">
+          {/* Left: Title aligned with sidebar */}
+          <div
+            className="shrink-0 flex items-center px-3"
+            style={{ width: SIDEBAR_WIDTH }}
+          >
+            <h1 className="text-lg font-semibold">Планирование</h1>
           </div>
 
-          {/* InlineFilter */}
-          <div className="flex-1 min-w-0">
+          {/* InlineFilter - takes remaining space */}
+          <div className="flex-1 min-w-0 pr-4">
             <InlineFilter
               config={RESOURCE_GRAPH_FILTER_CONFIG}
               value={filterString}
@@ -142,12 +173,42 @@ export function ResourceGraph() {
             <div className="flex" style={{ minWidth: totalWidth }}>
               {/* Sidebar header - sticky left */}
               <div
-                className="shrink-0 flex items-center px-3 py-2 border-r border-border bg-card sticky left-0 z-20"
+                className="shrink-0 flex items-center justify-between px-3 py-1.5 border-r border-border bg-card sticky left-0 z-20"
                 style={{ width: SIDEBAR_WIDTH }}
               >
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Структура
                 </span>
+                <TooltipProvider>
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleExpandAll}
+                        >
+                          <ChevronsUpDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Развернуть всё</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleCollapseAll}
+                        >
+                          <ChevronsDownUp className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Свернуть всё</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
               {/* Timeline header with dates */}
               <TimelineHeader dayCells={dayCells} />

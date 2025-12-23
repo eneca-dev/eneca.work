@@ -1,8 +1,30 @@
 // Экспорт типов
-export type { TemplateListItem, TemplateStage, TemplateStageItem, TemplateDetail, Stage, Decomposition } from './types'
+export type {
+  TemplateListItem,
+  TemplateStage,
+  TemplateStageItem,
+  TemplateDetail,
+  Stage,
+  Decomposition,
+} from './types'
 
-// Экспорт API функций
-export { loadTemplatesList, loadTemplateDetail, saveTemplate, deleteTemplate, applyTemplate } from './api'
+// Экспорт Server Actions
+export {
+  getTemplatesList,
+  getTemplateDetail,
+  createTemplate,
+  removeTemplate,
+  applyTemplateToSection,
+} from './actions/templates'
+
+// Экспорт хуков
+export {
+  useTemplatesList,
+  useTemplateDetail,
+  useCreateTemplate,
+  useDeleteTemplate,
+  useApplyTemplate,
+} from './hooks'
 
 // Экспорт компонентов
 export { TemplatesDialog } from './components/TemplatesDialog'

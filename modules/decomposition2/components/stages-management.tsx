@@ -35,7 +35,7 @@ import { DateRangePicker, type DateRange } from "@/modules/projects/components/D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "../hooks/use-toast";
 import { DecompositionStagesChart } from "@/modules/projects/components/DecompositionStagesChart";
-import { TemplatesDialog, SaveTemplateDialog, applyTemplate, saveTemplate, type TemplateStage } from "@/modules/dec-templates";
+import { TemplatesDialog, SaveTemplateDialog, useApplyTemplate, useCreateTemplate, type TemplateStage } from "@/modules/dec-templates";
 import { usePermissionsStore } from "@/modules/permissions/store/usePermissionsStore";
 import { useUserStore } from "@/stores/useUserStore";
 import { pluralizeStages, pluralizeTasks } from "@/lib/pluralize";
@@ -1365,6 +1365,10 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
   const hasPermission = usePermissionsStore(state => state.hasPermission);
   const hasManagePermission = hasPermission('dec.templates.manage');
 
+  // Template mutations
+  const applyTemplateMutation = useApplyTemplate();
+  const createTemplateMutation = useCreateTemplate();
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -2307,11 +2311,15 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
   // Handlers для работы с шаблонами
   const handleApplyTemplate = async (templateId: string) => {
     try {
-      const newStages = await applyTemplate(templateId, sectionId, defaultStageStatusId);
+      const newStages = await applyTemplateMutation.mutateAsync({
+        templateId,
+        sectionId,
+        statusId: defaultStageStatusId,
+      });
       // Преобразовать newStages, добавив поле responsibles для совместимости с локальным типом Stage
       const newStagesWithResponsibles = newStages.map(stage => ({
         ...stage,
-        responsibles: [] as string[]
+        responsibles: stage.responsibles || [] as string[]
       }));
       // Добавить новые этапы в state БЕЗ перезагрузки страницы
       setStages([...stages, ...newStagesWithResponsibles]);
@@ -2331,15 +2339,6 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
   };
 
   const handleSaveTemplate = async (departmentId: string, name: string) => {
-    if (!userId) {
-      toast({
-        title: "Ошибка",
-        description: "Пользователь не авторизован",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       // Подготовить этапы для сохранения (исключить __no_stage__)
       const validStages = stages.filter(s => s.id !== '__no_stage__');
@@ -2347,7 +2346,7 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
       const templateStages: TemplateStage[] = validStages.map((stage, index) => ({
         name: stage.name,
         order: index,
-        items: stage.decompositions.map((decomp, itemIndex) => {
+        items: stage.decompositions.map((decomp) => {
           const categoryId = categoryNameToId.get(decomp.typeOfWork);
           if (!categoryId) {
             throw new Error(`Категория работы "${decomp.typeOfWork}" не найдена в справочнике`);
@@ -2365,7 +2364,11 @@ export default function StagesManagement({ sectionId, onOpenLog, onRefreshReady 
         })
       }));
 
-      await saveTemplate(name, departmentId, templateStages, userId);
+      await createTemplateMutation.mutateAsync({
+        name,
+        departmentId,
+        stages: templateStages,
+      });
 
       toast({
         title: "Успешно",

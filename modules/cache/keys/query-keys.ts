@@ -354,6 +354,19 @@ export const queryKeys = {
     /** События календаря (праздники и переносы) */
     events: () => [...queryKeys.companyCalendar.all, 'events'] as const,
   },
+
+  // -------------------------------------------------------------------------
+  // Decomposition Templates (шаблоны декомпозиции)
+  // -------------------------------------------------------------------------
+  decTemplates: {
+    all: ['dec-templates'] as const,
+    lists: () => [...queryKeys.decTemplates.all, 'list'] as const,
+    /** Список шаблонов (опционально с фильтром по отделу) */
+    list: (departmentId?: string) => [...queryKeys.decTemplates.lists(), departmentId] as const,
+    details: () => [...queryKeys.decTemplates.all, 'detail'] as const,
+    /** Детали шаблона по ID */
+    detail: (id: string) => [...queryKeys.decTemplates.details(), id] as const,
+  },
 } as const
 
 // ============================================================================
