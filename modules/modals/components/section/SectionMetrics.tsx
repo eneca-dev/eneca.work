@@ -159,7 +159,7 @@ export function SectionMetrics({ section, compact = false }: SectionMetricsProps
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
               <p className="font-medium">Израсходовано бюджета</p>
-              <p className="text-slate-400">{metrics.spent.toLocaleString('ru-RU')} ₽</p>
+              <p className="text-slate-400">{metrics.spent.toLocaleString('ru-RU')} BYN</p>
             </TooltipContent>
           </Tooltip>
         </div>

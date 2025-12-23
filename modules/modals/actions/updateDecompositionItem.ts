@@ -64,6 +64,12 @@ export async function createDecompositionItem(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { data, error } = await supabase
       .from('decomposition_items')
       .insert({
@@ -116,6 +122,12 @@ export async function updateDecompositionItem(
 ): Promise<ActionResult<ItemResult>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {}
@@ -186,6 +198,12 @@ export async function deleteDecompositionItem(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { error } = await supabase
       .from('decomposition_items')
       .delete()
@@ -215,6 +233,12 @@ export async function moveDecompositionItems(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { error } = await supabase
       .from('decomposition_items')
       .update({ decomposition_item_stage_id: input.targetStageId })
@@ -243,6 +267,12 @@ export async function reorderDecompositionItems(
 ): Promise<ActionResult<{ reordered: boolean }>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // Обновляем порядок и/или этап для каждой задачи
     const updates = input.items.map(({ itemId, order, stageId }) => {
@@ -290,6 +320,12 @@ export async function bulkCreateDecompositionItems(
     }
 
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     const insertData = items.map((item) => ({
       decomposition_item_section_id: item.sectionId,
@@ -347,6 +383,12 @@ export async function bulkDeleteDecompositionItems(
     }
 
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     const { error, count } = await supabase
       .from('decomposition_items')

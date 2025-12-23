@@ -58,6 +58,12 @@ export async function createDecompositionStage(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     const { data, error } = await supabase
       .from('decomposition_stages')
       .insert({
@@ -109,6 +115,12 @@ export async function updateDecompositionStage(
 ): Promise<ActionResult<StageResult>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {}
@@ -178,6 +190,12 @@ export async function deleteDecompositionStage(
   try {
     const supabase = await createClient()
 
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
+
     // Сначала обнуляем stage_id у всех items этого этапа
     await supabase
       .from('decomposition_items')
@@ -212,6 +230,12 @@ export async function reorderDecompositionStages(
 ): Promise<ActionResult<{ reordered: boolean }>> {
   try {
     const supabase = await createClient()
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return { success: false, error: 'Не авторизован' }
+    }
 
     // Обновляем порядок каждого этапа
     const updates = input.stages.map(({ stageId, order }) =>

@@ -37,12 +37,8 @@ import { DEFAULT_STAGE, DEFAULT_DECOMPOSITION } from './constants'
 
 // Hooks
 import {
-  useDecompositionBootstrap,
+  useDecompositionData,
   useWorkLogsAggregate,
-  useEmployees,
-  useWorkCategories,
-  useDifficultyLevels,
-  useStageStatuses,
   useCreateDecompositionStage,
   useUpdateDecompositionStage,
   useDeleteDecompositionStage,
@@ -62,26 +58,30 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   const { toast } = useToast()
 
   // ============================================================================
-  // Data Fetching
+  // Data Fetching - Unified hook с кешированием из resourceGraph
   // ============================================================================
 
-  const { data: bootstrapData, isLoading: isLoadingBootstrap } = useDecompositionBootstrap(sectionId)
-  const { data: employees = [] } = useEmployees()
-  const { data: workCategories = [] } = useWorkCategories()
-  const { data: difficultyLevels = [] } = useDifficultyLevels()
-  const { data: stageStatuses = [] } = useStageStatuses()
+  const {
+    stages: initialStages,
+    workCategories,
+    difficultyLevels,
+    stageStatuses,
+    employees,
+    isLoading: isLoadingData,
+    dataSource,
+  } = useDecompositionData(sectionId)
 
   // Local state for stages (optimistic updates)
   const [stages, setStages] = useState<Stage[]>([])
   const bootstrapVersionRef = useRef<number>(0)
 
-  // Sync bootstrap data to local state only when bootstrap changes
+  // Sync data to local state only when it changes
   useEffect(() => {
-    if (bootstrapData?.stages) {
+    if (initialStages.length > 0 || dataSource !== 'none') {
       bootstrapVersionRef.current += 1
-      setStages(bootstrapData.stages)
+      setStages(initialStages)
     }
-  }, [bootstrapData])
+  }, [initialStages, dataSource])
 
   // Get all item IDs for work logs - memoize to prevent re-renders
   const allItemIds = useMemo(() => {
@@ -543,7 +543,7 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   // Loading State
   // ============================================================================
 
-  if (isLoadingBootstrap) {
+  if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
