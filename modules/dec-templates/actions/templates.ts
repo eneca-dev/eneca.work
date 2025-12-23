@@ -59,20 +59,17 @@ interface DecompositionItemInsert {
 
 // ============================================================================
 // Server Actions
+// RLS обеспечивает авторизацию через JWT в cookies.
+// getUser() нужен ТОЛЬКО когда требуется user.id в логике.
 // ============================================================================
 
 /**
  * Получить список всех шаблонов
+ * Auth: RLS (не нужен user.id)
  */
 export async function getTemplatesList(): Promise<ActionResult<TemplateListItem[]>> {
   try {
     const supabase = await createClient()
-
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Не авторизован' }
-    }
 
     const { data, error } = await supabase
       .from('dec_templates')
@@ -114,16 +111,11 @@ export async function getTemplatesList(): Promise<ActionResult<TemplateListItem[
 
 /**
  * Получить детали шаблона по ID
+ * Auth: RLS (не нужен user.id)
  */
 export async function getTemplateDetail(templateId: string): Promise<ActionResult<TemplateDetail>> {
   try {
     const supabase = await createClient()
-
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Не авторизован' }
-    }
 
     const { data, error } = await supabase
       .from('dec_templates')
@@ -172,6 +164,7 @@ export async function getTemplateDetail(templateId: string): Promise<ActionResul
 
 /**
  * Сохранить новый шаблон
+ * Auth: НУЖЕН user.id для created_by
  */
 export async function createTemplate(input: {
   name: string
@@ -181,7 +174,7 @@ export async function createTemplate(input: {
   try {
     const supabase = await createClient()
 
-    // Auth check
+    // Нужен user.id для created_by
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return { success: false, error: 'Не авторизован' }
@@ -205,22 +198,24 @@ export async function createTemplate(input: {
     }
 
     // 2. Batch insert stages with items in JSONB
-    const stagesToInsert = input.stages.map((stage) => ({
-      template_id: template.id,
-      name: stage.name,
-      stage_order: stage.order,
-      items: stage.items,
-    }))
+    if (input.stages.length > 0) {
+      const stagesToInsert = input.stages.map((stage) => ({
+        template_id: template.id,
+        name: stage.name,
+        stage_order: stage.order,
+        items: stage.items,
+      }))
 
-    const { error: stagesError } = await supabase
-      .from('dec_template_stages')
-      .insert(stagesToInsert)
+      const { error: stagesError } = await supabase
+        .from('dec_template_stages')
+        .insert(stagesToInsert)
 
-    if (stagesError) {
-      // Rollback: delete created template
-      console.error('[createTemplate] Stages error, rolling back:', stagesError)
-      await supabase.from('dec_templates').delete().eq('id', template.id)
-      return { success: false, error: stagesError.message }
+      if (stagesError) {
+        // Rollback: delete created template
+        console.error('[createTemplate] Stages error, rolling back:', stagesError)
+        await supabase.from('dec_templates').delete().eq('id', template.id)
+        return { success: false, error: stagesError.message }
+      }
     }
 
     return { success: true, data: { id: template.id } }
@@ -235,18 +230,13 @@ export async function createTemplate(input: {
 
 /**
  * Удалить шаблон
+ * Auth: RLS (не нужен user.id)
  */
 export async function removeTemplate(input: {
   templateId: string
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const supabase = await createClient()
-
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Не авторизован' }
-    }
 
     const { error } = await supabase
       .from('dec_templates')
@@ -270,7 +260,12 @@ export async function removeTemplate(input: {
 
 /**
  * Применить шаблон к разделу
- * Создает этапы и декомпозиции в БД, возвращает созданные Stage[]
+ * Auth: RLS (не нужен user.id)
+ *
+ * ОПТИМИЗИРОВАНО:
+ * - Параллельные запросы через Promise.all
+ * - Нет дублирования auth проверок
+ * - Batch insert для этапов и задач
  */
 export async function applyTemplateToSection(input: {
   templateId: string
@@ -280,42 +275,81 @@ export async function applyTemplateToSection(input: {
   try {
     const supabase = await createClient()
 
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Не авторизован' }
+    // =========================================================================
+    // STEP 1: Параллельно загружаем все необходимые данные
+    // =========================================================================
+    const [templateResult, statusesResult, maxOrderResult] = await Promise.all([
+      // 1a. Загружаем шаблон с этапами
+      supabase
+        .from('dec_templates')
+        .select(`
+          id,
+          name,
+          dec_template_stages(
+            id,
+            name,
+            stage_order,
+            items
+          )
+        `)
+        .eq('id', input.templateId)
+        .single(),
+
+      // 1b. Загружаем статусы (только id и name для поиска "План")
+      supabase
+        .from('section_statuses')
+        .select('id, name'),
+
+      // 1c. Загружаем max order существующих этапов
+      supabase
+        .from('decomposition_stages')
+        .select('decomposition_stage_order')
+        .eq('decomposition_stage_section_id', input.sectionId)
+        .order('decomposition_stage_order', { ascending: false })
+        .limit(1),
+    ])
+
+    // Проверяем ошибки
+    if (templateResult.error) {
+      console.error('[applyTemplateToSection] Template error:', templateResult.error)
+      return { success: false, error: 'Шаблон не найден' }
     }
 
-    // 1. Load template structure
-    const templateResult = await getTemplateDetail(input.templateId)
-    if (!templateResult.success) {
-      return { success: false, error: templateResult.error }
-    }
-
-    const template = templateResult.data
-    if (!template.stages || template.stages.length === 0) {
+    const templateData = templateResult.data
+    if (!templateData?.dec_template_stages?.length) {
       return { success: false, error: 'Шаблон пуст или не содержит этапов' }
     }
 
-    // 2. Find max order among existing stages
-    const { data: existingStages } = await supabase
-      .from('decomposition_stages')
-      .select('decomposition_stage_order')
-      .eq('decomposition_stage_section_id', input.sectionId)
-      .order('decomposition_stage_order', { ascending: false })
-      .limit(1)
+    // Парсим этапы шаблона
+    const templateStages: TemplateStage[] = (templateData.dec_template_stages || [])
+      .sort((a: DbTemplateStageRow, b: DbTemplateStageRow) => a.stage_order - b.stage_order)
+      .map((stage: DbTemplateStageRow) => ({
+        name: stage.name,
+        order: stage.stage_order,
+        items: stage.items || [],
+      }))
 
-    const maxOrder = existingStages?.[0]?.decomposition_stage_order ?? 0
+    // Находим статус "План"
+    let resolvedStatusId: string | null = null
+    if (statusesResult.data?.length) {
+      const planStatus = statusesResult.data.find((s) => /план/i.test(s.name))
+      resolvedStatusId = planStatus?.id || statusesResult.data[0]?.id || null
+    }
 
-    // 3. Batch insert new stages
-    const stagesToCreate = template.stages.map((stage) => ({
+    // Max order
+    const maxOrder = maxOrderResult.data?.[0]?.decomposition_stage_order ?? 0
+
+    // =========================================================================
+    // STEP 2: Создаём этапы (batch insert)
+    // =========================================================================
+    const stagesToCreate = templateStages.map((stage) => ({
       decomposition_stage_section_id: input.sectionId,
       decomposition_stage_name: stage.name,
       decomposition_stage_order: maxOrder + stage.order + 1,
       decomposition_stage_start: null,
       decomposition_stage_finish: null,
       decomposition_stage_description: null,
-      decomposition_stage_status_id: input.statusId,
+      decomposition_stage_status_id: resolvedStatusId,
     }))
 
     const { data: createdStages, error: stagesError } = await supabase
@@ -328,17 +362,19 @@ export async function applyTemplateToSection(input: {
       return { success: false, error: `Не удалось создать этапы: ${stagesError.message}` }
     }
 
-    if (!createdStages || createdStages.length === 0) {
+    if (!createdStages?.length) {
       return { success: false, error: 'Не удалось создать этапы' }
     }
 
-    // Save IDs for potential rollback
+    // IDs для потенциального rollback
     const createdStageIds = createdStages.map((s: DbDecompositionStageRow) => s.decomposition_stage_id)
 
-    // 4. Batch insert all decompositions for all stages
+    // =========================================================================
+    // STEP 3: Создаём задачи (batch insert)
+    // =========================================================================
     const itemsToCreate: DecompositionItemInsert[] = []
     createdStages.forEach((dbStage: DbDecompositionStageRow, stageIndex: number) => {
-      const templateStage = template.stages[stageIndex]
+      const templateStage = templateStages[stageIndex]
       templateStage.items.forEach((item, itemIndex) => {
         itemsToCreate.push({
           decomposition_item_section_id: input.sectionId,
@@ -352,7 +388,6 @@ export async function applyTemplateToSection(input: {
       })
     })
 
-    // Create decompositions only if there are any
     let createdItems: DbDecompositionItemRow[] = []
     if (itemsToCreate.length > 0) {
       const { data, error: itemsError } = await supabase
@@ -361,21 +396,23 @@ export async function applyTemplateToSection(input: {
         .select('decomposition_item_id, decomposition_item_stage_id, decomposition_item_description')
 
       if (itemsError) {
-        // Rollback: delete created stages
+        // Rollback
         console.error('[applyTemplateToSection] Items error, rolling back:', itemsError)
         await supabase
           .from('decomposition_stages')
           .delete()
           .in('decomposition_stage_id', createdStageIds)
-        return { success: false, error: `Не удалось создать декомпозиции: ${itemsError.message}` }
+        return { success: false, error: `Не удалось создать задачи: ${itemsError.message}` }
       }
 
       createdItems = (data || []) as DbDecompositionItemRow[]
     }
 
-    // 5. Build Stage[] for adding to state
+    // =========================================================================
+    // STEP 4: Формируем результат
+    // =========================================================================
     const newStages: Stage[] = createdStages.map((dbStage: DbDecompositionStageRow, stageIndex: number) => {
-      const templateStage = template.stages[stageIndex]
+      const templateStage = templateStages[stageIndex]
       const stageItems = createdItems.filter(
         (item) => item.decomposition_item_stage_id === dbStage.decomposition_stage_id
       )

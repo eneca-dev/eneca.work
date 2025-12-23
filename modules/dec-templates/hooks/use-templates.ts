@@ -48,6 +48,7 @@ export const useTemplateDetail = createDetailCacheQuery<TemplateDetail>({
 
 /**
  * Хук для получения списка отделов
+ * Кешируется на Infinity - отделы не меняются в рамках сессии
  *
  * @example
  * const { data: departments, isLoading } = useDepartmentsList()
@@ -55,7 +56,7 @@ export const useTemplateDetail = createDetailCacheQuery<TemplateDetail>({
 export const useDepartmentsList = createSimpleCacheQuery<Department[]>({
   queryKey: queryKeys.departments.list(),
   queryFn: getDepartmentsList,
-  staleTime: staleTimePresets.static,
+  staleTime: staleTimePresets.infinity,
 })
 
 // ============================================================================

@@ -19,20 +19,16 @@ interface DepartmentRow {
 
 // ============================================================================
 // Server Actions
+// RLS обеспечивает авторизацию через JWT в cookies.
 // ============================================================================
 
 /**
  * Получить список отделов для выбора
+ * Auth: RLS (не нужен user.id)
  */
 export async function getDepartmentsList(): Promise<ActionResult<Department[]>> {
   try {
     const supabase = await createClient()
-
-    // Auth check
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return { success: false, error: 'Не авторизован' }
-    }
 
     const { data, error } = await supabase
       .from('departments')

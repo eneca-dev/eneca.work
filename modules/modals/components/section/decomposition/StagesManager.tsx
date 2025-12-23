@@ -37,14 +37,12 @@ import type { Stage, Decomposition, StagesManagerProps } from './types'
 import { calculateTotalStats, generateTempId } from './utils'
 import { DEFAULT_STAGE, DEFAULT_DECOMPOSITION } from './constants'
 
-// Templates
+// Templates - new modals from modals module
 import {
-  TemplatesDialog,
-  SaveTemplateDialog,
-  useApplyTemplate,
-  useCreateTemplate,
-  type TemplateStage,
-} from '@/modules/dec-templates'
+  TemplateSelectModal,
+  TemplateSaveModal,
+} from '@/modules/modals'
+import type { TemplateStage } from '@/modules/dec-templates'
 
 // Permissions and User
 import { useHasPermission } from '@/modules/permissions'
@@ -153,15 +151,25 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   const hasManageTemplatesPermission = useHasPermission('dec.templates.manage')
   const userDepartmentId = useUserStore((state) => state.profile?.department_id || state.profile?.departmentId)
 
-  // Template mutations
-  const applyTemplateMutation = useApplyTemplate()
-  const createTemplateMutation = useCreateTemplate()
-
-  // Find "план" status for templates
-  const planStatusId = useMemo(() => {
-    const planStatus = stageStatuses.find((s) => /план/i.test(s.name))
-    return planStatus?.id || stageStatuses[0]?.id || null
-  }, [stageStatuses])
+  // Template stages for save modal (memoized to avoid re-renders)
+  const templateStagesForSave = useMemo((): TemplateStage[] => {
+    return stages.map((stage, index) => ({
+      name: stage.name,
+      order: index,
+      items: stage.decompositions.map((d) => {
+        const workCat = workCategories.find((c) => c.work_category_name === d.typeOfWork)
+        const diffLevel = difficultyLevels.find((dl) => dl.difficulty_abbr === d.difficulty)
+        return {
+          description: d.description,
+          workCategoryId: workCat?.work_category_id || '',
+          workCategoryName: d.typeOfWork,
+          difficultyId: diffLevel?.difficulty_id || null,
+          difficultyName: d.difficulty || null,
+          plannedHours: d.plannedHours,
+        }
+      }),
+    }))
+  }, [stages, workCategories, difficultyLevels])
 
   // ============================================================================
   // DnD Sensors
@@ -563,103 +571,36 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
   }, [])
 
   // ============================================================================
-  // Template Operations
+  // Template Operations (callbacks for new modals)
   // ============================================================================
 
-  const handleApplyTemplate = useCallback(
-    async (templateId: string) => {
-      try {
-        // Pass planStatusId so all stages get "план" status
-        const newStages = await applyTemplateMutation.mutateAsync({
-          templateId,
-          sectionId,
-          statusId: planStatusId,
-        })
+  const handleTemplateApplied = useCallback(
+    (newStages: Stage[]) => {
+      // Add new stages to local state
+      setStages((prev) => [...prev, ...newStages])
 
-        // Add new stages to local state
-        setStages((prev) => [...prev, ...newStages])
+      // Expand new stages
+      setExpandedStages((prev) => {
+        const next = new Set(prev)
+        newStages.forEach((s) => next.add(s.id))
+        return next
+      })
 
-        // Expand new stages
-        setExpandedStages((prev) => {
-          const next = new Set(prev)
-          newStages.forEach((s) => next.add(s.id))
-          return next
-        })
-
-        toast({
-          title: 'Шаблон применён',
-          description: `Добавлено ${newStages.length} этап(ов)`,
-        })
-
-        setTemplatesDialogOpen(false)
-      } catch (error) {
-        console.error('Error applying template:', error)
-        toast({
-          title: 'Ошибка',
-          description: error instanceof Error ? error.message : 'Не удалось применить шаблон',
-          variant: 'destructive',
-        })
-      }
+      toast({
+        title: 'Шаблон применён',
+        description: `Добавлено ${newStages.length} этап(ов)`,
+      })
     },
-    [sectionId, planStatusId, applyTemplateMutation, toast]
+    [toast]
   )
 
-  const handleSaveTemplate = useCallback(
-    async (departmentId: string, name: string) => {
-      if (stages.length === 0) {
-        toast({
-          title: 'Ошибка',
-          description: 'Нет этапов для сохранения',
-          variant: 'destructive',
-        })
-        return
-      }
-
-      try {
-        // Convert stages to template format
-        const templateStages: TemplateStage[] = stages.map((stage, index) => ({
-          name: stage.name,
-          order: index,
-          items: stage.decompositions.map((d) => {
-            // Find work category id
-            const workCat = workCategories.find((c) => c.work_category_name === d.typeOfWork)
-            // Find difficulty id
-            const diffLevel = difficultyLevels.find((dl) => dl.difficulty_abbr === d.difficulty)
-
-            return {
-              description: d.description,
-              workCategoryId: workCat?.work_category_id || '',
-              workCategoryName: d.typeOfWork,
-              difficultyId: diffLevel?.difficulty_id || null,
-              difficultyName: d.difficulty || null,
-              plannedHours: d.plannedHours,
-            }
-          }),
-        }))
-
-        await createTemplateMutation.mutateAsync({
-          name,
-          departmentId,
-          stages: templateStages,
-        })
-
-        toast({
-          title: 'Шаблон сохранён',
-          description: `Шаблон "${name}" успешно создан`,
-        })
-
-        setSaveDialogOpen(false)
-      } catch (error) {
-        console.error('Error saving template:', error)
-        toast({
-          title: 'Ошибка',
-          description: error instanceof Error ? error.message : 'Не удалось сохранить шаблон',
-          variant: 'destructive',
-        })
-      }
-    },
-    [stages, workCategories, difficultyLevels, createTemplateMutation, toast]
-  )
+  const handleTemplateSaved = useCallback(() => {
+    toast({
+      title: 'Шаблон сохранён',
+      description: 'Шаблон успешно создан',
+    })
+    setSaveDialogOpen(false)
+  }, [toast])
 
   // ============================================================================
   // Computed Values
@@ -829,20 +770,22 @@ export function StagesManager({ sectionId }: StagesManagerProps) {
         onAssign={handleAssignResponsibles}
       />
 
-      {/* Templates Dialog */}
-      <TemplatesDialog
+      {/* Template Select Modal (new design) */}
+      <TemplateSelectModal
         isOpen={templatesDialogOpen}
         onClose={() => setTemplatesDialogOpen(false)}
-        onApply={handleApplyTemplate}
+        onApply={handleTemplateApplied}
+        sectionId={sectionId}
         hasManagePermission={hasManageTemplatesPermission}
         defaultDepartmentId={userDepartmentId || undefined}
       />
 
-      {/* Save Template Dialog */}
-      <SaveTemplateDialog
+      {/* Template Save Modal (new design) */}
+      <TemplateSaveModal
         isOpen={saveDialogOpen}
         onClose={() => setSaveDialogOpen(false)}
-        onSave={handleSaveTemplate}
+        onSuccess={handleTemplateSaved}
+        stages={templateStagesForSave}
         defaultDepartmentId={userDepartmentId || undefined}
       />
     </div>

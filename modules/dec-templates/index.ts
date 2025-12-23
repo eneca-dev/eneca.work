@@ -21,6 +21,7 @@ export {
 export {
   useTemplatesList,
   useTemplateDetail,
+  useDepartmentsList,
   useCreateTemplate,
   useDeleteTemplate,
   useApplyTemplate,

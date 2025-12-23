@@ -53,6 +53,9 @@ export type {
   ProgressUpdateData,
   // Checkpoint
   CheckpointCreateData,
+  // Template
+  TemplateSelectData,
+  TemplateSaveData,
 } from './types'
 
 // ============================================================================
@@ -148,6 +151,14 @@ export { LoadingModal, type LoadingModalProps } from './components/loading'
 
 // Checkpoint
 export { CheckpointCreateModal, type CheckpointCreateModalProps } from './components/checkpoint'
+
+// Template
+export {
+  TemplateSelectModal,
+  TemplateSaveModal,
+  type TemplateSelectModalProps,
+  type TemplateSaveModalProps,
+} from './components/templates'
 
 // Global
 // export { GlobalModals } from './components/GlobalModals'
