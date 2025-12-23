@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { X, Flag, Loader2, Check, ChevronDown, type LucideIcon, Trash2, CircleDashed, CircleCheckBig } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
+import { X, Flag, Loader2, Check, Trash2, CircleCheckBig } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
 import {
@@ -13,11 +12,7 @@ import {
   useCompleteCheckpoint,
   useProjectSections
 } from '@/modules/checkpoints/hooks'
-import type { SectionOption } from '@/modules/checkpoints/actions/checkpoints'
-import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { CheckpointTypeSelector, SectionMultiSelect } from '@/modules/checkpoints/components/shared'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DeleteConfirmDialog } from '@/modules/modals/components/section/decomposition/dialogs'
 import type { BaseModalProps } from '../../types'
@@ -29,203 +24,6 @@ import type { BaseModalProps } from '../../types'
 export interface CheckpointEditModalProps extends BaseModalProps {
   /** ID чекпоинта для редактирования */
   checkpointId: string
-}
-
-// Предустановленные цвета для кастомных чекпоинтов
-const PRESET_COLORS = [
-  '#ef4444', // red
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#14b8a6', // teal
-  '#3b82f6', // blue
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#6b7280', // gray
-  '#1e293b', // slate
-]
-
-// Иконки для чекпоинтов
-const CHECKPOINT_ICONS = [
-  'Flag', 'Bookmark', 'Star', 'AlertCircle', 'CheckCircle',
-  'Calendar', 'Clock', 'Target', 'Trophy', 'Award',
-  'FileCheck', 'FileText', 'Send', 'ArrowRightFromLine', 'Milestone',
-  'Rocket', 'Zap', 'Bell', 'Eye', 'Lock',
-  'Unlock', 'Shield', 'Heart', 'ThumbsUp', 'MessageSquare',
-  'CircleCheck', 'CircleDot', 'Hourglass', 'Timer', 'AlarmCheck',
-  'Sparkles', 'Flame', 'Bolt', 'TrendingUp', 'Activity',
-  'BarChart3', 'PieChart', 'LineChart', 'GitCommit', 'GitBranch',
-  'Users', 'User', 'UserCheck', 'Crown', 'Gem',
-  'Diamond', 'Box', 'Package', 'Inbox', 'Archive',
-  'FolderCheck', 'FolderOpen', 'Files', 'ClipboardCheck', 'Layers',
-  'CircleAlert', 'TriangleAlert', 'Info', 'HelpCircle', 'Ban',
-  'XCircle', 'MinusCircle', 'PlusCircle', 'Play', 'Pause',
-]
-
-// ============================================================================
-// Multi-Select Sections Component (Compact Chips)
-// ============================================================================
-
-interface SectionMultiSelectProps {
-  selectedIds: string[]
-  onChange: (ids: string[]) => void
-  sections: SectionOption[]
-  excludeId?: string
-  isLoading?: boolean
-}
-
-function SectionMultiSelect({
-  selectedIds,
-  onChange,
-  sections,
-  excludeId,
-  isLoading,
-}: SectionMultiSelectProps) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-
-  const availableSections = useMemo(() => {
-    return sections.filter((s) => s.id !== excludeId)
-  }, [sections, excludeId])
-
-  const filteredSections = useMemo(() => {
-    if (!search) return availableSections
-    const searchLower = search.toLowerCase()
-    return availableSections.filter((s) => s.name.toLowerCase().includes(searchLower))
-  }, [search, availableSections])
-
-  const selectedSections = useMemo(() => {
-    return availableSections.filter((s) => selectedIds.includes(s.id))
-  }, [availableSections, selectedIds])
-
-  const toggleSection = (sectionId: string) => {
-    if (selectedIds.includes(sectionId)) {
-      onChange(selectedIds.filter((id) => id !== sectionId))
-    } else {
-      onChange([...selectedIds, sectionId])
-    }
-  }
-
-  const removeSection = (sectionId: string) => {
-    onChange(selectedIds.filter((id) => id !== sectionId))
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {selectedSections.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {selectedSections.map((section) => (
-            <div
-              key={section.id}
-              className={cn(
-                'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border',
-                'bg-amber-100 border-amber-300 text-amber-700',
-                'dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-400'
-              )}
-            >
-              <span className="truncate max-w-[100px]">{section.name}</span>
-              <button
-                type="button"
-                onClick={() => removeSection(section.id)}
-                className="p-0.5 hover:bg-amber-500/20 rounded"
-              >
-                <X size={8} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            disabled={isLoading}
-            className={cn(
-              'w-full flex items-center justify-between px-2 py-1 text-[11px] rounded transition-colors border',
-              'bg-white border-slate-300 text-slate-700',
-              'hover:border-slate-400',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              'dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200',
-              'dark:hover:border-slate-600'
-            )}
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                <Loader2 size={10} className="animate-spin" />
-                <span className="text-[10px]">Загрузка...</span>
-              </span>
-            ) : (
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                {selectedIds.length > 0
-                  ? `Выбрано: ${selectedIds.length}`
-                  : 'Связанные разделы...'}
-              </span>
-            )}
-            <ChevronDown size={10} className="text-slate-500 dark:text-slate-400" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          className={cn(
-            'w-[260px] p-0 border',
-            'bg-white border-slate-300',
-            'dark:bg-slate-900 dark:border-slate-700'
-          )}
-          align="start"
-        >
-          <Command className="bg-transparent">
-            <CommandInput
-              placeholder="Поиск..."
-              value={search}
-              onValueChange={setSearch}
-              className={cn(
-                'text-[11px] border-b h-7',
-                'text-slate-700 border-slate-200',
-                'dark:text-slate-200 dark:border-slate-700'
-              )}
-            />
-            <CommandList>
-              <CommandEmpty className="py-3 text-center text-[10px] text-slate-400 dark:text-slate-500">
-                Не найдено
-              </CommandEmpty>
-              <CommandGroup>
-                <ScrollArea className="h-[140px]">
-                  {filteredSections.map((section) => {
-                    const isSelected = selectedIds.includes(section.id)
-                    return (
-                      <CommandItem
-                        key={section.id}
-                        value={section.id}
-                        onSelect={() => toggleSection(section.id)}
-                        className={cn(
-                          'flex items-center gap-1.5 px-2 py-1 cursor-pointer text-[11px]',
-                          isSelected && 'bg-amber-500/10'
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'w-3 h-3 rounded border flex items-center justify-center shrink-0',
-                            isSelected
-                              ? 'bg-amber-500 border-amber-500'
-                              : 'border-slate-400 bg-white dark:border-slate-600 dark:bg-slate-800/50'
-                          )}
-                        >
-                          {isSelected && <Check size={8} className="text-slate-900" />}
-                        </div>
-                        <span className="truncate text-slate-700 dark:text-slate-200">
-                          {section.name}
-                        </span>
-                      </CommandItem>
-                    )
-                  })}
-                </ScrollArea>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
-  )
 }
 
 // ============================================================================
@@ -540,7 +338,7 @@ export function CheckpointEditModal({
               <div className="grid grid-cols-2 gap-3">
                 {/* Left column */}
                 <div className="space-y-3">
-                  {/* Checkpoint Type Selector - 2 Columns */}
+                  {/* Checkpoint Type Selector */}
                   <div>
                     <label className={cn(
                       'block text-[10px] font-medium uppercase tracking-wide mb-1.5',
@@ -548,194 +346,16 @@ export function CheckpointEditModal({
                     )}>
                       Тип чекпоинта
                     </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {checkpointTypes.map((type) => {
-                        const isSelected = selectedTypeId === type.type_id
-                        const IconComponent =
-                          (LucideIcons as unknown as Record<string, LucideIcon>)[type.icon] || Flag
-
-                        // Кастомный тип - особое отображение
-                        if (type.is_custom) {
-                          const CustomIconComponent =
-                            (LucideIcons as unknown as Record<string, LucideIcon>)[customIcon] || Flag
-
-                          return (
-                            <div
-                              key={type.type_id}
-                              className={cn(
-                                'col-span-2 flex items-center gap-1 px-1.5 py-1 rounded-md',
-                                'border-2 border-dashed transition-all duration-150',
-                                !isSelected &&
-                                  cn(
-                                    'border-slate-300 bg-white',
-                                    'hover:border-slate-400 hover:bg-slate-50',
-                                    'dark:border-slate-600 dark:bg-slate-800/30',
-                                    'dark:hover:border-slate-500 dark:hover:bg-slate-800/50'
-                                  )
-                              )}
-                              style={
-                                isSelected
-                                  ? {
-                                      borderColor: `${customColor}80`,
-                                      backgroundColor: `${customColor}10`,
-                                    }
-                                  : undefined
-                              }
-                            >
-                              {/* Левая часть - иконка с выпадающим списком */}
-                              {isSelected ? (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="flex items-center justify-center w-5 h-5 rounded hover:bg-amber-500/10 transition-colors"
-                                    >
-                                      <CustomIconComponent size={12} style={{ color: customColor }} />
-                                    </button>
-                                  </PopoverTrigger>
-                                  <PopoverContent
-                                    className={cn(
-                                      'w-[320px] p-2 border',
-                                      'bg-white border-slate-300',
-                                      'dark:bg-slate-900 dark:border-slate-700'
-                                    )}
-                                    align="start"
-                                  >
-                                    {/* Выбор иконки */}
-                                    <div className="space-y-2">
-                                      <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                                        Иконка
-                                      </div>
-                                      <ScrollArea className="h-[200px]">
-                                        <div className="grid grid-cols-8 gap-1 p-1">
-                                          {CHECKPOINT_ICONS.map((iconName) => {
-                                            const IconComp = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName]
-                                            if (!IconComp) return null
-                                            return (
-                                              <button
-                                                key={iconName}
-                                                type="button"
-                                                onClick={() => setCustomIcon(iconName)}
-                                                className={cn(
-                                                  'p-1.5 rounded transition-colors border',
-                                                  customIcon === iconName
-                                                    ? 'bg-amber-500/20 border-amber-500/50'
-                                                    : cn(
-                                                        'border-transparent hover:bg-slate-100',
-                                                        'dark:hover:bg-slate-800'
-                                                      )
-                                                )}
-                                                title={iconName}
-                                              >
-                                                <IconComp
-                                                  size={14}
-                                                  color={customIcon === iconName ? customColor : '#94a3b8'}
-                                                />
-                                              </button>
-                                            )
-                                          })}
-                                        </div>
-                                      </ScrollArea>
-                                    </div>
-
-                                    {/* Выбор цвета */}
-                                    <div className={cn(
-                                      'mt-2 pt-2 space-y-2 border-t',
-                                      'border-slate-200 dark:border-slate-700/50'
-                                    )}>
-                                      <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                                        Цвет
-                                      </div>
-                                      <div className="grid grid-cols-10 gap-1.5">
-                                        {PRESET_COLORS.map((color) => (
-                                          <button
-                                            key={color}
-                                            type="button"
-                                            onClick={() => setCustomColor(color)}
-                                            className={cn(
-                                              'w-6 h-6 rounded-md border-2 transition-all',
-                                              customColor === color
-                                                ? 'border-amber-500 scale-110'
-                                                : 'border-transparent hover:border-slate-400 dark:hover:border-slate-500'
-                                            )}
-                                            style={{ backgroundColor: color }}
-                                          />
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              ) : (
-                                <div className="flex items-center justify-center w-5 h-5">
-                                  <CircleDashed size={10} className="text-slate-400 dark:text-slate-500" />
-                                </div>
-                              )}
-
-                              {/* Средняя часть - кнопка выбора типа */}
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTypeId(type.type_id)}
-                                className="flex items-center min-w-0 flex-1"
-                              >
-                                <span
-                                  className={cn(
-                                    'truncate text-[9px] font-medium',
-                                    !isSelected && 'text-slate-600 dark:text-slate-400'
-                                  )}
-                                  style={isSelected ? { color: customColor } : undefined}
-                                >
-                                  Создать свой тип
-                                </span>
-                              </button>
-                            </div>
-                          )
-                        }
-
-                        return (
-                          <button
-                            key={type.type_id}
-                            type="button"
-                            onClick={() => setSelectedTypeId(type.type_id)}
-                            className={cn(
-                              'flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium',
-                              'border transition-all duration-150',
-                              isSelected
-                                ? 'shadow-sm'
-                                : cn(
-                                    'border-slate-200 bg-white text-slate-700',
-                                    'hover:border-slate-300 hover:shadow-sm',
-                                    'dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300',
-                                    'dark:hover:border-slate-600 dark:hover:bg-slate-800/60'
-                                  )
-                            )}
-                            style={
-                              isSelected
-                                ? {
-                                    borderColor: `${type.color}60`,
-                                    backgroundColor: `${type.color}10`,
-                                    color: type.color,
-                                  }
-                                : undefined
-                            }
-                          >
-                            <IconComponent
-                              size={12}
-                              className="shrink-0"
-                              style={{ color: type.color || '#6b7280' }}
-                            />
-                            <span className="truncate">{type.name}</span>
-                            {isSelected && <Check className="w-3 h-3 ml-0.5 shrink-0" style={{ color: type.color }} />}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {/* Подсказка для кастомного типа */}
-                    {selectedType?.is_custom && (
-                      <div className="text-[9px] text-slate-500 dark:text-slate-400 italic mt-1">
-                        Кликните на иконку, чтобы её сменить
-                      </div>
-                    )}
+                    <CheckpointTypeSelector
+                      types={checkpointTypes}
+                      selectedTypeId={selectedTypeId}
+                      onSelect={setSelectedTypeId}
+                      customIcon={customIcon}
+                      customColor={customColor}
+                      onCustomIconChange={setCustomIcon}
+                      onCustomColorChange={setCustomColor}
+                      isLoading={typesLoading}
+                    />
                   </div>
 
                   {/* Linked Sections */}
