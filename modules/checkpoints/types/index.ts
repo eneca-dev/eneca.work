@@ -29,8 +29,9 @@ export type CheckpointStatus = 'pending' | 'completed' | 'completed_late' | 'ove
 /** Связанный раздел для чекпоинта */
 export interface LinkedSection {
   section_id: string
-  section_code: string
+  section_code?: string
   section_name: string
+  object_id?: string | null
 }
 
 /** Полный чекпоинт с computed полями и JOIN данными */

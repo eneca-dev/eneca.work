@@ -35,7 +35,10 @@ interface CheckpointGroup {
 
 /**
  * Сгруппировать чекпоинты по checkpoint_id
- * Возвращает только группы с более чем одной позицией (связанные чекпоинты)
+ * Возвращает группы с:
+ * - 2+ позиций (связанные чекпоинты видимы на графике)
+ * - 1 позиция, если есть linked_sections с section_id отличным от текущего
+ *   (для показа стрелок к отфильтрованным разделам)
  *
  * Для каждой группы вычисляется максимальное смещение X среди всех чекпоинтов,
  * чтобы все маркеры и вертикальная стрелка были выровнены по одной линии.
@@ -77,11 +80,34 @@ function groupCheckpointsByIdent(
     }
   })
 
-  // Фильтруем только группы с >= 2 позиций (связанные чекпоинты)
-  const filtered = allGroups.filter(g => g.positions.length >= 2)
+  // Фильтруем группы:
+  // - >= 2 позиций (связанные чекпоинты видимы на графике) ИЛИ
+  // - 1 позиция с linked_sections (есть невидимые связи, покажем стрелку)
+  const filtered = allGroups.filter(g => {
+    if (g.positions.length >= 2) return true
+
+    // Для одиночных позиций проверяем наличие linked_sections
+    if (g.positions.length === 1) {
+      const checkpoint = positions.find(p => p.checkpoint.checkpoint_id === g.checkpoint_id)?.checkpoint
+      if (!checkpoint) return false
+
+      // Есть linked_sections с section_id отличным от текущего?
+      const currentSectionId = g.positions[0].sectionId
+      const hasHiddenLinkedSections = checkpoint.linked_sections?.some(
+        ls => ls.section_id !== currentSectionId && ls.section_id !== checkpoint.section_id
+      )
+      return hasHiddenLinkedSections
+    }
+
+    return false
+  })
 
   if (DEBUG) {
-    console.log('[groupCheckpointsByIdent] Filtered groups (>=2 positions):', filtered)
+    console.log('[groupCheckpointsByIdent] Filtered groups:', filtered.map(g => ({
+      checkpoint_id: g.checkpoint_id,
+      positions: g.positions.length,
+      reason: g.positions.length >= 2 ? 'multiple_visible' : 'has_hidden_links'
+    })))
   }
 
   return filtered
@@ -306,7 +332,7 @@ export function CheckpointVerticalLinks() {
 
               linkedSections.forEach((linkedSection) => {
                 const isVisibleInPositions = visibleSectionIds.has(linkedSection.section_id)
-                const isActuallyVisible = isSectionVisible(linkedSection.section_id, linkedSection.object_id)
+                const isActuallyVisible = isSectionVisible(linkedSection.section_id, linkedSection.object_id ?? null)
 
                 if (DEBUG_VISIBILITY) {
                   console.log('[Step 1] Checking linked section from parent:', {
@@ -319,27 +345,19 @@ export function CheckpointVerticalLinks() {
                   })
                 }
 
-                // Добавляем стрелку только если секция не видна на экране
-                // (объект свернут или секция не отслеживается)
-                if (!isActuallyVisible) {
-                  const visibility = getSectionVisibility(linkedSection.section_id)
-
-                  // Нужна информация о названии секции
-                  if (visibility) {
-                    collapsedSectionArrows.set(linkedSection.section_id, {
+                // Добавляем стрелку если секция не видна на экране
+                // (объект свернут, секция не отслеживается, или не прошла фильтр)
+                // Используем section_name напрямую из linked_sections - не зависим от getSectionVisibility
+                if (!isActuallyVisible && !isVisibleInPositions) {
+                  collapsedSectionArrows.set(linkedSection.section_id, {
+                    sectionName: linkedSection.section_name,
+                    fromY: referencePos.y,
+                  })
+                  if (DEBUG) {
+                    console.log('[Step 1] ✅ Added arrow for hidden linked section:', {
                       sectionName: linkedSection.section_name,
                       fromY: referencePos.y,
-                    })
-                    if (DEBUG) {
-                      console.log('[Step 1] ✅ Added arrow for collapsed/hidden linked section:', {
-                        sectionName: linkedSection.section_name,
-                        fromY: referencePos.y,
-                      })
-                    }
-                  } else if (DEBUG) {
-                    console.log('[Step 1] ⚠️ No visibility info for:', {
-                      sectionName: linkedSection.section_name,
-                      reason: 'Section never mounted or not tracked',
+                      reason: 'Section not visible (filtered out or collapsed)',
                     })
                   }
                 }

@@ -507,7 +507,14 @@ function CheckpointMarker({
               onClick={() => onMarkerClick?.(checkpoint)}
             />
           </TooltipTrigger>
-          <TooltipContent side="top" className="z-[100]">
+          <TooltipContent
+            side="top"
+            sideOffset={8}
+            align="center"
+            className="z-[100]"
+            avoidCollisions={true}
+            collisionPadding={16}
+          >
             {tooltipContent}
           </TooltipContent>
         </Tooltip>
