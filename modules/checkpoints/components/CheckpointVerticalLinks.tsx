@@ -10,7 +10,7 @@ import { SIDEBAR_WIDTH } from '@/modules/resource-graph/constants'
 
 const SVG_PADDING = 100
 const ARROW_OFFSET = 15
-const DEBUG = false // Set to true for development debugging
+const DEBUG = true // Set to true for development debugging
 
 // ============================================================================
 // Types
@@ -100,7 +100,7 @@ function groupCheckpointsByIdent(
  * Использует CheckpointLinksContext для получения позиций всех чекпоинтов.
  */
 export function CheckpointVerticalLinks() {
-  const { positions } = useCheckpointLinks()
+  const { positions, getSectionVisibility } = useCheckpointLinks()
 
   // Группируем чекпоинты по checkpoint_id
   const linkedGroups = useMemo(() => {
@@ -130,8 +130,9 @@ export function CheckpointVerticalLinks() {
         height: maxY + SVG_PADDING,
       }}
     >
-      {/* Определение маркера-стрелки */}
+      {/* Определение маркеров-стрелок */}
       <defs>
+        {/* Основная стрелка для связей между чекпоинтами */}
         <marker
           id="checkpoint-arrow"
           markerWidth="10"
@@ -145,6 +146,23 @@ export function CheckpointVerticalLinks() {
             d="M 0 0 L 10 5 L 0 10 z"
             fill="hsl(var(--border))"
             opacity="0.9"
+          />
+        </marker>
+
+        {/* Стрелка для указания направления к родительскому разделу */}
+        <marker
+          id="parent-direction-arrow"
+          markerWidth="8"
+          markerHeight="8"
+          refX="4"
+          refY="4"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path
+            d="M 0 0 L 8 4 L 0 8 z"
+            fill="hsl(var(--muted-foreground))"
+            opacity="0.6"
           />
         </marker>
       </defs>
@@ -167,62 +185,206 @@ export function CheckpointVerticalLinks() {
 
         const adjustedX = group.x + X_OFFSET
 
+        // Получаем данные родительского чекпоинта для определения родительской секции
+        const parentCheckpoint = positionsMap.get(`${group.checkpoint_id}-${referencePos.sectionId}`)?.checkpoint
+        const parentSectionId = parentCheckpoint?.section_id
+        const parentSectionVisibility = parentSectionId ? getSectionVisibility(parentSectionId) : undefined
+
         if (DEBUG) {
           console.log('[CheckpointVerticalLinks] Rendering lines from parent:', {
             checkpoint_id: group.checkpoint_id,
             parentSectionId: referencePos.sectionId,
             linkedCount: group.positions.length - 1,
+            parentSectionVisibility,
           })
         }
 
         return (
           <g key={group.checkpoint_id}>
-            {/* Рисуем отдельную линию от родительского к каждому связанному чекпоинту */}
-            {group.positions.map((pos) => {
-              // Пропускаем сам родительский чекпоинт
-              if (pos.sectionId === referencePos.sectionId) return null
+            {/* Проверяем связи для поиска невидимых разделов */}
+            {(() => {
+              const parentCheckpointData = positionsMap.get(`${group.checkpoint_id}-${referencePos.sectionId}`)
+              const linkedSections = parentCheckpointData?.checkpoint.linked_sections || []
 
-              // Определяем направление для этой конкретной связи
-              const isArrowUp = pos.y < referencePos.y
+              // Собираем все видимые sectionId из group.positions
+              const visibleSectionIds = new Set(group.positions.map(p => p.sectionId))
 
-              // Для правильного отображения стрелки линия должна идти от начала к концу
-              // markerEnd всегда на конце линии (y2)
-              let y1, y2
-              if (isArrowUp) {
-                // Стрелка вверх: линия идёт от родительского (снизу) вверх к связанному
-                y1 = referencePos.y
-                y2 = pos.y + ARROW_OFFSET
-              } else {
-                // Стрелка вниз: линия идёт от родительского (сверху) вниз к связанному
-                y1 = referencePos.y
-                y2 = pos.y - ARROW_OFFSET
+              // Собираем стрелки к невидимым разделам (будем рисовать только уникальные)
+              const collapsedSectionArrows = new Map<string, { sectionName: string; fromY: number }>()
+
+              if (DEBUG) {
+                console.log('[CheckpointVerticalLinks] Processing group:', {
+                  checkpoint_id: group.checkpoint_id,
+                  linkedSections: linkedSections.map(ls => ({ id: ls.section_id, name: ls.section_name })),
+                  visibleSectionIds: Array.from(visibleSectionIds),
+                  referencePos,
+                })
+              }
+
+              // 1. Проверяем связанные разделы от родительского чекпоинта
+              linkedSections.forEach((linkedSection) => {
+                const isVisible = visibleSectionIds.has(linkedSection.section_id)
+                const visibility = getSectionVisibility(linkedSection.section_id)
+
+                if (DEBUG) {
+                  console.log('[Step 1] Checking linked section from parent:', {
+                    linkedSectionId: linkedSection.section_id,
+                    linkedSectionName: linkedSection.section_name,
+                    isVisible,
+                    hasVisibility: !!visibility,
+                    visibility,
+                  })
+                }
+
+                if (!isVisible) {
+                  if (visibility) {
+                    collapsedSectionArrows.set(linkedSection.section_id, {
+                      sectionName: linkedSection.section_name,
+                      fromY: referencePos.y,
+                    })
+                    if (DEBUG) {
+                      console.log('[Step 1] ✅ Added arrow for collapsed linked section:', linkedSection.section_name)
+                    }
+                  } else if (DEBUG) {
+                    console.log('[Step 1] ⚠️ No visibility info for:', linkedSection.section_name)
+                  }
+                }
+              })
+
+              // 2. Проверяем родительский раздел (checkpoint.section_id) - если он не виден, добавляем стрелку
+              // Это покрывает случай, когда видим связанный чекпоинт, но не видим родительский
+              const parentSectionIdFromCheckpoint = parentCheckpointData?.checkpoint.section_id
+
+              if (DEBUG) {
+                console.log('[Step 2] Checking if parent section is visible:', {
+                  parentSectionId: parentSectionIdFromCheckpoint,
+                  isParentVisible: parentSectionIdFromCheckpoint ? visibleSectionIds.has(parentSectionIdFromCheckpoint) : null,
+                  visibleSections: Array.from(visibleSectionIds),
+                })
+              }
+
+              if (parentSectionIdFromCheckpoint && !visibleSectionIds.has(parentSectionIdFromCheckpoint)) {
+                const visibility = getSectionVisibility(parentSectionIdFromCheckpoint)
+
+                if (DEBUG) {
+                  console.log('[Step 2] Parent section is collapsed:', {
+                    parentSectionId: parentSectionIdFromCheckpoint,
+                    hasVisibility: !!visibility,
+                    visibility,
+                    alreadyHasArrow: collapsedSectionArrows.has(parentSectionIdFromCheckpoint),
+                  })
+                }
+
+                if (visibility && !collapsedSectionArrows.has(parentSectionIdFromCheckpoint)) {
+                  // Используем позицию первого видимого связанного чекпоинта
+                  const firstLinkedPos = group.positions.find(p => p.sectionId !== parentSectionIdFromCheckpoint)
+                  if (firstLinkedPos) {
+                    collapsedSectionArrows.set(parentSectionIdFromCheckpoint, {
+                      sectionName: visibility.sectionName,
+                      fromY: firstLinkedPos.y,
+                    })
+                    if (DEBUG) {
+                      console.log('[Step 2] ✅ Added arrow for collapsed parent section:', visibility.sectionName)
+                    }
+                  }
+                }
               }
 
               if (DEBUG) {
-                console.log(`[Line] ${group.checkpoint_id} -> ${pos.sectionId}:`, {
-                  isArrowUp,
-                  y1,
-                  y2,
-                  direction: y2 > y1 ? 'down' : 'up'
+                console.log('[CheckpointVerticalLinks] Final arrows to render:', {
+                  checkpoint_id: group.checkpoint_id,
+                  arrows: Array.from(collapsedSectionArrows.entries()).map(([id, data]) => ({
+                    sectionId: id,
+                    sectionName: data.sectionName,
+                    fromY: data.fromY,
+                  })),
                 })
               }
 
               return (
-                <line
-                  key={`${group.checkpoint_id}-${pos.sectionId}`}
-                  x1={adjustedX}
-                  y1={y1}
-                  x2={adjustedX}
-                  y2={y2}
-                  stroke="hsl(var(--border))"
-                  strokeWidth="2"
-                  strokeDasharray="4,4"
-                  opacity="0.7"
-                  markerEnd="url(#checkpoint-arrow)"
-                  className="transition-all duration-300"
-                />
+                <>
+                  {/* Рисуем линии между видимыми чекпоинтами */}
+                  {group.positions.map((pos) => {
+                    // Пропускаем сам родительский чекпоинт
+                    if (pos.sectionId === referencePos.sectionId) return null
+
+                    // Определяем направление для этой конкретной связи
+                    const isArrowUp = pos.y < referencePos.y
+
+                    // Для правильного отображения стрелки линия должна идти от начала к концу
+                    let y1, y2
+                    if (isArrowUp) {
+                      y1 = referencePos.y
+                      y2 = pos.y + ARROW_OFFSET
+                    } else {
+                      y1 = referencePos.y
+                      y2 = pos.y - ARROW_OFFSET
+                    }
+
+                    return (
+                      <line
+                        key={`${group.checkpoint_id}-${pos.sectionId}`}
+                        x1={adjustedX}
+                        y1={y1}
+                        x2={adjustedX}
+                        y2={y2}
+                        stroke="hsl(var(--border))"
+                        strokeWidth="2"
+                        strokeDasharray="4,4"
+                        opacity="0.7"
+                        markerEnd="url(#checkpoint-arrow)"
+                        className="transition-all duration-300"
+                      />
+                    )
+                  })}
+
+                  {/* Рисуем стрелки-указатели к невидимым (свёрнутым) разделам */}
+                  {Array.from(collapsedSectionArrows.entries()).map(([sectionId, { sectionName, fromY }]) => {
+                    if (DEBUG) {
+                      console.log('[CollapsedSection Arrow]:', {
+                        checkpoint_id: group.checkpoint_id,
+                        collapsedSectionId: sectionId,
+                        collapsedSectionName: sectionName,
+                        fromY,
+                      })
+                    }
+
+                    return (
+                      <g key={`collapsed-${group.checkpoint_id}-${sectionId}`}>
+                        {/* Вертикальная пунктирная стрелка в направлении свёрнутого раздела (вниз) */}
+                        <line
+                          x1={adjustedX}
+                          y1={fromY}
+                          x2={adjustedX}
+                          y2={fromY + 40}
+                          stroke="hsl(var(--muted-foreground))"
+                          strokeWidth="1.5"
+                          strokeDasharray="3,3"
+                          opacity="0.6"
+                          markerEnd="url(#parent-direction-arrow)"
+                          className="transition-all duration-300"
+                        />
+
+                        {/* Метка с названием свёрнутого раздела */}
+                        <foreignObject
+                          x={adjustedX + 8}
+                          y={fromY + 30}
+                          width="120"
+                          height="40"
+                          className="pointer-events-none"
+                        >
+                          <div className="flex items-center">
+                            <div className="bg-muted/80 border border-border/50 rounded px-2 py-0.5 text-xs text-muted-foreground font-normal truncate max-w-full shadow-sm">
+                              {sectionName}
+                            </div>
+                          </div>
+                        </foreignObject>
+                      </g>
+                    )
+                  })}
+                </>
               )
-            })}
+            })()}
           </g>
         )
       })}

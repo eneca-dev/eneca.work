@@ -188,6 +188,7 @@ function calculateCheckpointStatus(
  * Хук для отметки чекпоинта как выполненного/невыполненного
  *
  * Использует optimistic update для мгновенной реакции UI.
+ * Обновляет как списки чекпоинтов, так и detail-кеш для мгновенного отклика в модалках.
  *
  * @example
  * ```tsx
@@ -201,6 +202,7 @@ function calculateCheckpointStatus(
 export const useCompleteCheckpoint = createUpdateMutation({
   mutationFn: completeCheckpoint,
   listQueryKey: queryKeys.checkpoints.lists(),
+  detailQueryKey: (input: CompleteCheckpointInput) => queryKeys.checkpoints.detail(input.checkpointId),
   getId: (input: CompleteCheckpointInput) => input.checkpointId,
   getItemId: (item: Checkpoint) => item.checkpoint_id,
   merge: (item: Checkpoint, input: CompleteCheckpointInput) => {

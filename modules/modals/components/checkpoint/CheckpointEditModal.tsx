@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { useDebounceValue } from 'usehooks-ts'
 import { X, Flag, Loader2, Check, ChevronDown, type LucideIcon, Trash2, CircleDashed, CircleCheckBig } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -15,8 +14,6 @@ import {
   useProjectSections
 } from '@/modules/checkpoints/hooks'
 import type { SectionOption } from '@/modules/checkpoints/actions/checkpoints'
-import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/modules/cache'
 import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -256,7 +253,6 @@ export function CheckpointEditModal({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   // Hooks
-  const queryClient = useQueryClient()
   const { data: checkpoint, isLoading: checkpointLoading } = useCheckpoint(checkpointId)
   const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
   const { data: projectSections = [], isLoading: sectionsLoading } = useProjectSections(
@@ -277,6 +273,14 @@ export function CheckpointEditModal({
     if (checkpoint && checkpointTypes.length > 0) {
       const currentType = checkpointTypes.find(t => t.type_id === checkpoint.type_id)
 
+      console.log('[CheckpointEditModal] Initializing checkpoint data:', {
+        checkpointId,
+        completed_at: checkpoint.completed_at,
+        isCompleted: !!checkpoint.completed_at,
+        title: checkpoint.title,
+        checkpoint_date: checkpoint.checkpoint_date,
+      })
+
       setSelectedTypeId(checkpoint.type_id)
       setName(checkpoint.title || '')
       setDeadlineDate(checkpoint.checkpoint_date || '')
@@ -294,7 +298,7 @@ export function CheckpointEditModal({
         setCustomColor(currentType.color || '#6b7280')
       }
     }
-  }, [checkpoint, checkpointTypes])
+  }, [checkpoint, checkpointTypes, checkpointId])
 
   // Обновление иконки и цвета при смене типа
   useEffect(() => {
@@ -305,29 +309,6 @@ export function CheckpointEditModal({
     }
     // Для custom типа ничего не делаем — пользователь сам выберет иконку/цвет
   }, [selectedType])
-
-  // Debounced description для синхронизации с кешем (300ms задержка)
-  const [debouncedDescription] = useDebounceValue(description, 300)
-
-  // Синхронизация description с кешем в реальном времени (с debounce)
-  useEffect(() => {
-    if (!checkpoint) return
-
-    // Обновляем кеш только если debounced description изменился
-    const currentCached = queryClient.getQueryData<Checkpoint>(
-      queryKeys.checkpoints.detail(checkpointId)
-    )
-
-    if (currentCached && currentCached.description !== debouncedDescription) {
-      queryClient.setQueryData<Checkpoint>(
-        queryKeys.checkpoints.detail(checkpointId),
-        {
-          ...currentCached,
-          description: debouncedDescription,
-        }
-      )
-    }
-  }, [debouncedDescription, checkpoint, checkpointId, queryClient])
 
   // Валидация
   const canSave = useMemo(() => {
@@ -411,6 +392,14 @@ export function CheckpointEditModal({
 
     const newCompleted = !checkpoint.completed_at
 
+    console.log('[CheckpointEditModal] Toggle complete clicked:', {
+      checkpointId,
+      currentStatus: checkpoint.completed_at ? 'completed' : 'not completed',
+      newStatus: newCompleted ? 'completed' : 'not completed',
+      completed_at: checkpoint.completed_at,
+      willBe: newCompleted,
+    })
+
     // Optimistic update происходит автоматически в хуке useCompleteCheckpoint
     completeCheckpoint.mutate(
       {
@@ -419,7 +408,7 @@ export function CheckpointEditModal({
       },
       {
         onSuccess: () => {
-          console.log('[CheckpointEditModal] Checkpoint completion toggled')
+          console.log('[CheckpointEditModal] Checkpoint completion toggled successfully')
           onSuccess?.()
         },
         onError: (error) => {

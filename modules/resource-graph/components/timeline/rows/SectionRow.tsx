@@ -49,7 +49,7 @@ import {
   closeModal,
   type CheckpointEditData
 } from '@/modules/modals'
-import { useCheckpoints, CheckpointMarkers, useCanManageCheckpoint } from '@/modules/checkpoints'
+import { useCheckpoints, CheckpointMarkers, useCanManageCheckpoint, useCheckpointLinks } from '@/modules/checkpoints'
 import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
 
 // ============================================================================
@@ -76,6 +76,9 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   // Глобальный стор для модалки редактирования чекпоинта
   const isCheckpointEditModalOpen = useIsModalOpen('checkpoint-edit')
   const checkpointEditData = useModalData() as CheckpointEditData | null
+
+  // Отслеживаем видимость секции для чекпоинтов
+  const { trackSectionVisibility } = useCheckpointLinks()
 
   // Ref для получения абсолютной позиции строки
   const rowRef = useRef<HTMLDivElement>(null)
@@ -126,6 +129,11 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
       window.removeEventListener('resize', updatePosition)
     }
   }, [isExpanded, section.id, section.name, checkpoints.length]) // Пересчитываем при разворачивании/сворачивании и при загрузке чекпоинтов
+
+  // Отслеживаем состояние развёрнутости секции для чекпоинтов
+  useEffect(() => {
+    trackSectionVisibility(section.id, section.name, isExpanded)
+  }, [section.id, section.name, isExpanded, trackSectionVisibility])
 
   // Lazy load loadings при развороте объекта
   const { data: loadings, isLoading: loadingsLoading } = useLoadings(section.id, {
@@ -446,13 +454,13 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         {/* Timeline area */}
         <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Графики раздела - занимают всю высоту строки */}
+          {/* Графики раздела - занимают нижнюю часть строки, оставляя место для чекпоинтов */}
           <div
             className={cn(
               'absolute bottom-0 left-0 right-0 transition-all duration-200',
               isExpanded && 'opacity-30 saturate-50'
             )}
-            style={{ height: rowHeight }}
+            style={{ height: hasCheckpoints ? SECTION_ROW_HEIGHT : rowHeight }}
           >
             <SectionPeriodFrame
               startDate={section.startDate}

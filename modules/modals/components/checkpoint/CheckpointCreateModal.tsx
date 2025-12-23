@@ -4,10 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { X, Flag, Loader2, Check, ChevronDown, type LucideIcon, CircleDashed } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useHasPermission } from '@/modules/permissions'
 import { DatePicker } from '@/modules/projects/components/DatePicker'
-import { useCheckpointTypes, useCreateCheckpoint } from '@/modules/checkpoints/hooks'
-import { getProjectStructure } from '@/modules/resource-graph/actions'
+import { useCheckpointTypes, useCreateCheckpoint, useProjectStructure } from '@/modules/checkpoints/hooks'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -399,73 +397,51 @@ export function CheckpointCreateModal({
   const [customIcon, setCustomIcon] = useState<string>('Flag')
   const [customColor, setCustomColor] = useState<string>('#6b7280')
 
-  // Sections state
-  const [projectSections, setProjectSections] = useState<SectionOption[]>([])
-  const [sectionsLoading, setSectionsLoading] = useState(false)
-  const [projectId, setProjectId] = useState<string | null>(initialProjectId || null)
-
   // Hooks
   const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
+  const { data: projectStructureResult, isLoading: structureLoading } = useProjectStructure()
   const createCheckpoint = useCreateCheckpoint()
-  const canManageTypes = useHasPermission('checkpoints.types.manage')
 
   const selectedType = useMemo(() => {
     return checkpointTypes.find((t) => t.type_id === selectedTypeId)
   }, [checkpointTypes, selectedTypeId])
 
-  // Загрузка разделов проекта
-  useEffect(() => {
-    async function loadSections() {
-      if (!isOpen) return
-
-      setSectionsLoading(true)
-      try {
-        const result = await getProjectStructure()
-        if (result.success && result.data) {
-          const currentSection = result.data.sections.find((s) => s.id === sectionId)
-          if (currentSection?.objectId) {
-            const currentObject = result.data.objects.find(
-              (o) => o.id === currentSection.objectId
-            )
-            if (currentObject?.stageId) {
-              const currentStage = result.data.stages.find(
-                (s) => s.id === currentObject.stageId
-              )
-              if (currentStage?.projectId) {
-                setProjectId(currentStage.projectId)
-
-                const projectStages = result.data.stages.filter(
-                  (s) => s.projectId === currentStage.projectId
-                )
-                const stageIds = new Set(projectStages.map((s) => s.id))
-
-                const projectObjects = result.data.objects.filter(
-                  (o) => o.stageId && stageIds.has(o.stageId)
-                )
-                const objectIds = new Set(projectObjects.map((o) => o.id))
-
-                const sections = result.data.sections
-                  .filter((s) => s.objectId && objectIds.has(s.objectId))
-                  .map((s) => ({
-                    id: s.id,
-                    name: s.name,
-                    objectId: s.objectId,
-                  }))
-
-                setProjectSections(sections)
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[CheckpointCreateModal] Error loading sections:', error)
-      } finally {
-        setSectionsLoading(false)
-      }
+  // Обработка структуры проекта для получения разделов
+  const { projectSections, projectId } = useMemo(() => {
+    if (!projectStructureResult || !sectionId || !isOpen) {
+      return { projectSections: [], projectId: initialProjectId || null }
     }
 
-    loadSections()
-  }, [isOpen, sectionId])
+    const { sections, objects, stages } = projectStructureResult
+
+    const currentSection = sections.find((s) => s.id === sectionId)
+    if (!currentSection?.objectId) return { projectSections: [], projectId: initialProjectId || null }
+
+    const currentObject = objects.find((o) => o.id === currentSection.objectId)
+    if (!currentObject?.stageId) return { projectSections: [], projectId: initialProjectId || null }
+
+    const currentStage = stages.find((s) => s.id === currentObject.stageId)
+    if (!currentStage?.projectId) return { projectSections: [], projectId: initialProjectId || null }
+
+    const projectStages = stages.filter((s) => s.projectId === currentStage.projectId)
+    const stageIds = new Set(projectStages.map((s) => s.id))
+
+    const projectObjects = objects.filter((o) => o.stageId && stageIds.has(o.stageId))
+    const objectIds = new Set(projectObjects.map((o) => o.id))
+
+    const filteredSections = sections
+      .filter((s) => s.objectId && objectIds.has(s.objectId))
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        objectId: s.objectId,
+      }))
+
+    return {
+      projectSections: filteredSections,
+      projectId: currentStage.projectId,
+    }
+  }, [projectStructureResult, sectionId, isOpen, initialProjectId])
 
   // Reset при открытии
   useEffect(() => {
@@ -814,7 +790,7 @@ export function CheckpointCreateModal({
                         onChange={setLinkedSectionIds}
                         sections={projectSections}
                         excludeId={sectionId}
-                        isLoading={sectionsLoading}
+                        isLoading={structureLoading}
                       />
                     </div>
                   </div>

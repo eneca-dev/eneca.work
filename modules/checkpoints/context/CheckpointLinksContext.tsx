@@ -20,6 +20,12 @@ interface CheckpointPosition {
   overlapTotal: number
 }
 
+interface SectionVisibility {
+  sectionId: string
+  sectionName: string
+  isExpanded: boolean
+}
+
 interface CheckpointLinksContextValue {
   /** Зарегистрировать позицию чекпоинта */
   registerCheckpoint: (position: CheckpointPosition) => void
@@ -29,6 +35,10 @@ interface CheckpointLinksContextValue {
   positions: CheckpointPosition[]
   /** Получить синхронизированное максимальное смещение по X для группы связанных чекпоинтов */
   getGroupMaxOffset: (checkpointId: string) => number | null
+  /** Обновить видимость секции (развёрнута/свёрнута) */
+  trackSectionVisibility: (sectionId: string, sectionName: string, isExpanded: boolean) => void
+  /** Получить информацию о видимости секции */
+  getSectionVisibility: (sectionId: string) => SectionVisibility | undefined
 }
 
 // ============================================================================
@@ -47,6 +57,7 @@ interface CheckpointLinksProviderProps {
 
 export function CheckpointLinksProvider({ children }: CheckpointLinksProviderProps) {
   const [positions, setPositions] = useState<CheckpointPosition[]>([])
+  const [sectionVisibility, setSectionVisibility] = useState<Map<string, SectionVisibility>>(new Map())
 
   const registerCheckpoint = useCallback((position: CheckpointPosition) => {
     setPositions(prev => {
@@ -92,8 +103,29 @@ export function CheckpointLinksProvider({ children }: CheckpointLinksProviderPro
     return offsetMultiplier * OVERLAP_OFFSET_X
   }, [positions])
 
+  const trackSectionVisibility = useCallback((sectionId: string, sectionName: string, isExpanded: boolean) => {
+    setSectionVisibility(prev => {
+      const next = new Map(prev)
+      next.set(sectionId, { sectionId, sectionName, isExpanded })
+      return next
+    })
+  }, [])
+
+  const getSectionVisibility = useCallback((sectionId: string) => {
+    return sectionVisibility.get(sectionId)
+  }, [sectionVisibility])
+
   return (
-    <CheckpointLinksContext.Provider value={{ registerCheckpoint, unregisterCheckpoint, positions, getGroupMaxOffset }}>
+    <CheckpointLinksContext.Provider
+      value={{
+        registerCheckpoint,
+        unregisterCheckpoint,
+        positions,
+        getGroupMaxOffset,
+        trackSectionVisibility,
+        getSectionVisibility
+      }}
+    >
       {children}
     </CheckpointLinksContext.Provider>
   )

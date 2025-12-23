@@ -102,6 +102,11 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
                 ? config.optimisticUpdate!.queryKey(input)
                 : config.optimisticUpdate!.queryKey
 
+            console.log('[createCacheMutation] onMutate - optimistic update starting:', {
+              queryKey,
+              input,
+            })
+
             // Отменяем текущие запросы с этим ключом (partial match)
             await queryClient.cancelQueries({ queryKey })
 
@@ -113,6 +118,11 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
               { queryKey },
               (oldData) => {
                 if (oldData !== undefined) {
+                  console.log('[createCacheMutation] Applying optimistic update to query:', {
+                    queryKey,
+                    oldDataLength: oldData.length,
+                  })
+
                   // Сохраняем для отката
                   const fullQueryKey = queryClient.getQueryCache()
                     .findAll({ queryKey })
@@ -120,11 +130,21 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
                   previousQueries.push({ queryKey: fullQueryKey, data: oldData })
 
                   // Применяем update
-                  return config.optimisticUpdate!.updater(oldData, input)
+                  const newData = config.optimisticUpdate!.updater(oldData, input)
+                  console.log('[createCacheMutation] Optimistic update applied:', {
+                    queryKey,
+                    newDataLength: newData.length,
+                  })
+                  return newData
                 }
                 return oldData
               }
             )
+
+            console.log('[createCacheMutation] onMutate - matched queries:', {
+              count: previousQueries.length,
+              queryKeys: previousQueries.map(q => q.queryKey),
+            })
 
             // Возвращаем контекст для отката
             return { previousQueries, queryKey } as TContext
@@ -132,9 +152,17 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
         : undefined,
 
       onError: (error, input, context) => {
+        console.error('[createCacheMutation] onError - mutation failed:', {
+          error: error.message,
+          input,
+        })
+
         // Откатываем optimistic update при ошибке
         if (config.optimisticUpdate && context) {
           const ctx = context as { previousQueries: Array<{ queryKey: readonly unknown[]; data: TData[] }>; queryKey: readonly unknown[] }
+          console.log('[createCacheMutation] Rolling back optimistic update:', {
+            queriesCount: ctx.previousQueries?.length || 0,
+          })
           // Восстанавливаем все предыдущие данные
           for (const { queryKey: qk, data } of ctx.previousQueries || []) {
             queryClient.setQueryData(qk, data)
@@ -146,12 +174,22 @@ export function createCacheMutation<TInput, TData, TContext = unknown>(
       },
 
       onSuccess: async (data, input, context) => {
+        console.log('[createCacheMutation] onSuccess - mutation succeeded:', {
+          data,
+          input,
+        })
+
         // Инвалидируем ключи
         if (config.invalidateKeys) {
           const keys =
             typeof config.invalidateKeys === 'function'
               ? config.invalidateKeys(input, data)
               : config.invalidateKeys
+
+          console.log('[createCacheMutation] Invalidating keys:', {
+            keysCount: keys.length,
+            keys,
+          })
 
           await Promise.all(
             keys.map((queryKey) => queryClient.invalidateQueries({ queryKey }))
@@ -272,10 +310,13 @@ export function createDeleteMutation<TInput, TData extends { [key: string]: unkn
 /**
  * Фабрика для создания мутации обновления с optimistic update
  *
+ * Поддерживает обновление как списков, так и detail-кеша для мгновенного отклика UI.
+ *
  * @example
  * const useUpdateProject = createUpdateMutation({
  *   mutationFn: updateProject,
  *   listQueryKey: queryKeys.projects.lists(),
+ *   detailQueryKey: (input) => queryKeys.projects.detail(input.project_id),
  *   getId: (input) => input.project_id,
  *   getItemId: (item) => item.project_id,
  *   merge: (item, input) => ({ ...item, ...input }),
@@ -288,6 +329,8 @@ export function createUpdateMutation<
 >(config: {
   mutationFn: (input: TInput) => Promise<ActionResult<TData>>
   listQueryKey: readonly unknown[]
+  /** Опциональный query key для обновления detail-кеша (одиночного элемента) */
+  detailQueryKey?: (input: TInput) => readonly unknown[]
   getId: (input: TInput) => string
   getItemId: (item: TData) => string
   merge: (item: TData, input: TInput) => TData
@@ -295,22 +338,162 @@ export function createUpdateMutation<
   onSuccess?: (data: TData, input: TInput) => void
   onError?: (error: Error, input: TInput) => void
 }) {
-  return createCacheMutation<TInput, TData>({
-    mutationFn: config.mutationFn,
-    optimisticUpdate: {
-      queryKey: config.listQueryKey,
-      updater: (old, input) => {
-        if (!old) return []
-        const idToUpdate = config.getId(input)
-        return old.map((item) =>
-          config.getItemId(item) === idToUpdate ? config.merge(item, input) : item
-        )
+  return function useUpdateMutation(options?: MutationHookOptions<TData, TInput>) {
+    const queryClient = useQueryClient()
+
+    return useMutation<TData, Error, TInput>({
+      mutationFn: async (input: TInput) => {
+        const result = await config.mutationFn(input)
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+        return result.data
       },
-    },
-    invalidateKeys: config.invalidateKeys,
-    onSuccess: config.onSuccess,
-    onError: config.onError,
-  })
+
+      onMutate: async (input: TInput) => {
+        console.log('[createUpdateMutation] onMutate - starting optimistic update:', {
+          listQueryKey: config.listQueryKey,
+          detailQueryKey: config.detailQueryKey?.(input),
+          input,
+        })
+
+        // Отменяем текущие запросы для списков
+        await queryClient.cancelQueries({ queryKey: config.listQueryKey })
+
+        // Сохраняем предыдущие данные для списков
+        const previousLists: Array<{ queryKey: readonly unknown[]; data: TData[] }> = []
+
+        // Применяем optimistic update к спискам
+        queryClient.setQueriesData<TData[]>(
+          { queryKey: config.listQueryKey },
+          (oldData) => {
+            if (oldData !== undefined) {
+              console.log('[createUpdateMutation] Updating list cache:', {
+                queryKey: config.listQueryKey,
+                oldDataLength: oldData.length,
+              })
+
+              // Сохраняем для отката
+              const fullQueryKey = queryClient.getQueryCache()
+                .findAll({ queryKey: config.listQueryKey })
+                .find(q => q.state.data === oldData)?.queryKey || config.listQueryKey
+              previousLists.push({ queryKey: fullQueryKey, data: oldData })
+
+              // Применяем update
+              const idToUpdate = config.getId(input)
+              const newData = oldData.map((item) =>
+                config.getItemId(item) === idToUpdate ? config.merge(item, input) : item
+              )
+
+              console.log('[createUpdateMutation] List cache updated:', {
+                queryKey: config.listQueryKey,
+                newDataLength: newData.length,
+              })
+
+              return newData
+            }
+            return oldData
+          }
+        )
+
+        // Обновляем detail-кеш, если указан detailQueryKey
+        let previousDetail: { queryKey: readonly unknown[]; data: TData | undefined } | null = null
+
+        if (config.detailQueryKey) {
+          const detailKey = config.detailQueryKey(input)
+
+          // Отменяем текущие запросы для detail
+          await queryClient.cancelQueries({ queryKey: detailKey })
+
+          // Получаем старые данные
+          const oldDetailData = queryClient.getQueryData<TData>(detailKey)
+
+          console.log('[createUpdateMutation] Updating detail cache:', {
+            queryKey: detailKey,
+            hasOldData: !!oldDetailData,
+          })
+
+          if (oldDetailData) {
+            // Сохраняем для отката
+            previousDetail = { queryKey: detailKey, data: oldDetailData }
+
+            // Применяем update
+            const newDetailData = config.merge(oldDetailData, input)
+
+            queryClient.setQueryData<TData>(detailKey, newDetailData)
+
+            console.log('[createUpdateMutation] Detail cache updated:', {
+              queryKey: detailKey,
+            })
+          }
+        }
+
+        console.log('[createUpdateMutation] onMutate - optimistic update complete:', {
+          listsUpdated: previousLists.length,
+          detailUpdated: !!previousDetail,
+        })
+
+        // Возвращаем контекст для отката
+        return { previousLists, previousDetail }
+      },
+
+      onError: (error, input, context) => {
+        console.error('[createUpdateMutation] onError - mutation failed:', {
+          error: error.message,
+          input,
+        })
+
+        if (context) {
+          const ctx = context as {
+            previousLists: Array<{ queryKey: readonly unknown[]; data: TData[] }>
+            previousDetail: { queryKey: readonly unknown[]; data: TData | undefined } | null
+          }
+
+          console.log('[createUpdateMutation] Rolling back optimistic update:', {
+            listsCount: ctx.previousLists?.length || 0,
+            hasDetail: !!ctx.previousDetail,
+          })
+
+          // Откатываем списки
+          for (const { queryKey, data } of ctx.previousLists || []) {
+            queryClient.setQueryData(queryKey, data)
+          }
+
+          // Откатываем detail
+          if (ctx.previousDetail) {
+            queryClient.setQueryData(ctx.previousDetail.queryKey, ctx.previousDetail.data)
+          }
+        }
+
+        // Вызываем пользовательский обработчик
+        config.onError?.(error, input)
+      },
+
+      onSuccess: async (data, input, context) => {
+        console.log('[createUpdateMutation] onSuccess - mutation succeeded:', {
+          data,
+          input,
+        })
+
+        // Инвалидируем ключи
+        if (config.invalidateKeys) {
+          console.log('[createUpdateMutation] Invalidating keys:', {
+            keysCount: config.invalidateKeys.length,
+            keys: config.invalidateKeys,
+          })
+
+          await Promise.all(
+            config.invalidateKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey }))
+          )
+        }
+
+        // Вызываем пользовательский обработчик
+        config.onSuccess?.(data, input)
+      },
+
+      ...options?.mutationOptions,
+    })
+  }
 }
 
 // ============================================================================

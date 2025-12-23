@@ -92,6 +92,7 @@ export const queryKeys = {
     statistics: (id: string) => [...queryKeys.projects.detail(id), 'statistics'] as const,
     hierarchy: (id: string) => [...queryKeys.projects.detail(id), 'hierarchy'] as const,
     favorites: () => [...queryKeys.projects.all, 'favorites'] as const,
+    structure: () => [...queryKeys.projects.all, 'structure'] as const,
   },
 
   // -------------------------------------------------------------------------
