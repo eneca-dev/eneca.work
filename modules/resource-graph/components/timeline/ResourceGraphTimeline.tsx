@@ -7,7 +7,7 @@ import type { Project, TimelineRange } from '../../types'
 import { TimelineHeader, type DayCell } from './TimelineHeader'
 import { ProjectRow } from './rows'
 import { SIDEBAR_WIDTH } from '../../constants'
-import { CheckpointLinksProvider, CheckpointVerticalLinks } from '@/modules/checkpoints'
+import { CheckpointLinksProvider } from '@/modules/checkpoints'
 
 interface ResourceGraphTimelineProps {
   projects: Project[]
@@ -94,9 +94,6 @@ export const ResourceGraphTimeline = forwardRef<HTMLDivElement, ResourceGraphTim
                 range={range}
               />
             ))}
-
-            {/* Вертикальные линии между связанными чекпоинтами - покрывают весь контент */}
-            <CheckpointVerticalLinks />
           </div>
         </div>
       </CheckpointLinksProvider>

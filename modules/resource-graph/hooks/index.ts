@@ -73,17 +73,23 @@ export const resourceGraphKeys = queryKeys.resourceGraph
 /**
  * Хук для получения данных графика ресурсов
  *
+ * Данные обновляются через Realtime подписки, поэтому staleTime = Infinity.
+ * При изменениях в таблицах (sections, loadings, decomposition_* и др.)
+ * Realtime автоматически инвалидирует кеш.
+ *
  * @example
  * const { data, isLoading, error } = useResourceGraphData({ project_id: 'xxx' })
  */
 export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParams>({
   queryKey: (filters) => queryKeys.resourceGraph.list(filters),
   queryFn: getResourceGraphData,
-  staleTime: staleTimePresets.fast,
+  staleTime: Infinity, // Обновляется через Realtime
 })
 
 /**
  * Хук для получения загрузки конкретного пользователя
+ *
+ * Данные обновляются через Realtime подписки (loadings, decomposition_*).
  *
  * @example
  * const { data, isLoading } = useUserWorkload('user-id-123')
@@ -91,7 +97,7 @@ export const useResourceGraphData = createCacheQuery<Project[], FilterQueryParam
 export const useUserWorkload = createDetailCacheQuery<Project[]>({
   queryKey: (userId) => queryKeys.resourceGraph.user(userId),
   queryFn: (userId) => getUserWorkload(userId),
-  staleTime: staleTimePresets.fast,
+  staleTime: Infinity, // Обновляется через Realtime
 })
 
 // ============================================================================

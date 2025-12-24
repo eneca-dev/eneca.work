@@ -10,7 +10,8 @@ import {
   useUpdateCheckpoint,
   useDeleteCheckpoint,
   useCompleteCheckpoint,
-  useProjectSections
+  useProjectSections,
+  usePrefetchCheckpoints,
 } from '@/modules/checkpoints/hooks'
 import { CheckpointTypeSelector, SectionMultiSelect } from '@/modules/checkpoints/components/shared'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -50,13 +51,35 @@ export function CheckpointEditModal({
   // Delete confirmation state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
-  // Hooks
-  const { data: checkpoint, isLoading: checkpointLoading } = useCheckpoint(checkpointId)
-  const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
-  const { data: projectSections = [], isLoading: sectionsLoading } = useProjectSections(
-    checkpoint?.section_id || '',
-    { enabled: !!checkpoint?.section_id }
+  // Prefetch utilities - для получения данных из кеша
+  const { getCheckpointFromCache } = usePrefetchCheckpoints()
+
+  // Пытаемся получить checkpoint из кеша списка (мгновенно)
+  const cachedCheckpoint = useMemo(
+    () => getCheckpointFromCache(checkpointId),
+    [getCheckpointFromCache, checkpointId]
   )
+
+  // Hooks - useCheckpoint используется как fallback если нет в кеше
+  // Типы чекпоинтов и project sections загружаются параллельно
+  const { data: fetchedCheckpoint, isLoading: checkpointLoading } = useCheckpoint(checkpointId, {
+    // Если есть в кеше - не делаем лишний запрос
+    enabled: !cachedCheckpoint,
+  })
+
+  // Используем кешированный или загруженный checkpoint
+  const checkpoint = cachedCheckpoint || fetchedCheckpoint
+
+  // Типы чекпоинтов - обычно уже предзагружены в ReferencePrefetch
+  const { data: checkpointTypes = [], isLoading: typesLoading } = useCheckpointTypes()
+
+  // Project sections - загружаем сразу если знаем section_id (из кеша или после загрузки)
+  const sectionIdForProjectSections = cachedCheckpoint?.section_id || fetchedCheckpoint?.section_id
+  const { data: projectSections = [], isLoading: sectionsLoading } = useProjectSections(
+    sectionIdForProjectSections || '',
+    { enabled: !!sectionIdForProjectSections }
+  )
+
   const updateCheckpoint = useUpdateCheckpoint()
   const deleteCheckpoint = useDeleteCheckpoint()
   const completeCheckpoint = useCompleteCheckpoint()
@@ -224,7 +247,8 @@ export function CheckpointEditModal({
     return `${y}-${m}-${day}`
   }
 
-  const isLoading = checkpointLoading || typesLoading
+  // Loading state: не показываем loader если checkpoint уже в кеше
+  const isLoading = (!cachedCheckpoint && checkpointLoading) || typesLoading
 
   if (!isOpen) return null
 

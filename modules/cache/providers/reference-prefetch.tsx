@@ -3,8 +3,8 @@
 /**
  * ReferencePrefetch - Компонент для prefetch справочных данных
  *
- * Загружает справочники (категории работ, уровни сложности, статусы этапов)
- * при старте приложения. Эти данные редко меняются и нужны во многих местах.
+ * Загружает справочники (категории работ, уровни сложности, статусы этапов,
+ * типы чекпоинтов) при старте приложения. Эти данные редко меняются и нужны во многих местах.
  *
  * Размещается в ClientProviders после QueryProvider для preloading данных.
  */
@@ -18,6 +18,7 @@ import { staleTimePresets } from '../client/query-client'
 import { getWorkCategories } from '@/modules/modals/actions/getWorkCategories'
 import { getDifficultyLevels } from '@/modules/modals/actions/getDifficultyLevels'
 import { getStageStatuses } from '@/modules/modals/actions/getStageStatuses'
+import { getCheckpointTypes } from '@/modules/checkpoints/actions/checkpoint-types'
 
 export function ReferencePrefetch() {
   const queryClient = useQueryClient()
@@ -64,6 +65,20 @@ export function ReferencePrefetch() {
             return result.data
           },
           staleTime: staleTimePresets.static,
+        })
+      }
+
+      // Checkpoint Types - нужны для модалки чекпоинтов
+      const checkpointTypesKey = queryKeys.checkpointTypes.list()
+      if (!queryClient.getQueryData(checkpointTypesKey)) {
+        queryClient.prefetchQuery({
+          queryKey: checkpointTypesKey,
+          queryFn: async () => {
+            const result = await getCheckpointTypes()
+            if (!result.success) throw new Error(result.error)
+            return result.data
+          },
+          staleTime: staleTimePresets.static, // 10 минут - типы меняются очень редко
         })
       }
     }

@@ -19,7 +19,9 @@ export function SectionMultiSelect({
   const [search, setSearch] = useState('')
 
   // Фильтрация: исключаем excludeId
+  // Защита от undefined/null - sections может быть не загружен
   const availableSections = useMemo(() => {
+    if (!sections || !Array.isArray(sections)) return []
     return sections.filter((s) => s.id !== excludeId)
   }, [sections, excludeId])
 

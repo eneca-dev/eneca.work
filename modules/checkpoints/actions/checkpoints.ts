@@ -1029,6 +1029,9 @@ export async function deleteCheckpoint(
  * Используется в CheckpointEditModal для выбора связанных разделов.
  * Возвращает только разделы того же проекта, что и указанный раздел.
  *
+ * ОПТИМИЗИРОВАНО: Использует VIEW v_project_sections вместо 4 последовательных запросов.
+ * Теперь выполняется всего 2 запроса: 1) получить project_id, 2) получить все разделы проекта.
+ *
  * @param sectionId - ID раздела, для которого нужно получить список разделов проекта
  * @returns Список разделов проекта (исключая сам sectionId)
  */
@@ -1047,71 +1050,25 @@ export async function getProjectSections(
       try {
         const supabase = await createClient()
 
-        // 1. Получить projectId раздела через section -> object -> stage -> project
-        const { data: section, error: sectionError } = await supabase
-          .from('sections')
-          .select('section_id, section_object_id')
+        // 1. Получить project_id через VIEW (1 запрос вместо 3)
+        const { data: currentSection, error: sectionError } = await supabase
+          .from('v_project_sections')
+          .select('project_id')
           .eq('section_id', sectionId)
           .single()
 
-        if (sectionError || !section || !section.section_object_id) {
+        if (sectionError || !currentSection?.project_id) {
           console.error('[getProjectSections] Section error:', sectionError)
           return { success: false, error: 'Раздел не найден' }
         }
 
-        const { data: object, error: objectError } = await supabase
-          .from('objects')
-          .select('object_id, object_stage_id')
-          .eq('object_id', section.section_object_id)
-          .single()
+        const projectId = currentSection.project_id
 
-        if (objectError || !object || !object.object_stage_id) {
-          console.error('[getProjectSections] Object error:', objectError)
-          return { success: false, error: 'Объект не найден' }
-        }
-
-        const { data: stage, error: stageError } = await supabase
-          .from('stages')
-          .select('stage_id, stage_project_id')
-          .eq('stage_id', object.object_stage_id)
-          .single()
-
-        if (stageError || !stage || !stage.stage_project_id) {
-          console.error('[getProjectSections] Stage error:', stageError)
-          return { success: false, error: 'Стадия не найдена' }
-        }
-
-        const projectId = stage.stage_project_id
-
-        // 2. Получить все разделы проекта через обратную цепочку
-        const { data: projectStages, error: stagesError } = await supabase
-          .from('stages')
-          .select('stage_id')
-          .eq('stage_project_id', projectId)
-
-        if (stagesError || !projectStages) {
-          console.error('[getProjectSections] Stages error:', stagesError)
-          return { success: false, error: 'Стадии не найдены' }
-        }
-
-        const stageIds = projectStages.map(s => s.stage_id)
-
-        const { data: projectObjects, error: objectsError } = await supabase
-          .from('objects')
-          .select('object_id')
-          .in('object_stage_id', stageIds)
-
-        if (objectsError || !projectObjects) {
-          console.error('[getProjectSections] Objects error:', objectsError)
-          return { success: false, error: 'Объекты не найдены' }
-        }
-
-        const objectIds = projectObjects.map(o => o.object_id)
-
+        // 2. Получить все разделы проекта через VIEW (1 запрос вместо 4)
         const { data: projectSections, error: sectionsError } = await supabase
-          .from('sections')
-          .select('section_id, section_name, section_object_id')
-          .in('section_object_id', objectIds)
+          .from('v_project_sections')
+          .select('section_id, section_name, object_id')
+          .eq('project_id', projectId)
           .order('section_name', { ascending: true })
 
         if (sectionsError) {
@@ -1126,7 +1083,7 @@ export async function getProjectSections(
         const sections: SectionOption[] = (projectSections || []).map(s => ({
           id: s.section_id,
           name: s.section_name,
-          objectId: s.section_object_id,
+          objectId: s.object_id,
         }))
 
         return { success: true, data: sections }

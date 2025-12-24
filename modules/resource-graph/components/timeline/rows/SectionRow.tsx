@@ -42,12 +42,7 @@ const SectionModal = dynamic(
 // Импорты для чекпоинтов
 import {
   CheckpointCreateModal,
-  CheckpointEditModal,
   openCheckpointEdit,
-  useIsModalOpen,
-  useModalData,
-  closeModal,
-  type CheckpointEditData
 } from '@/modules/modals'
 import { useCheckpoints, CheckpointMarkers, useCanManageCheckpoint, useCheckpointLinks } from '@/modules/checkpoints'
 import type { Checkpoint } from '@/modules/checkpoints/actions/checkpoints'
@@ -72,10 +67,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false)
   const [isCheckpointModalOpen, setIsCheckpointModalOpen] = useState(false)
   const hasChildren = section.decompositionStages.length > 0
-
-  // Глобальный стор для модалки редактирования чекпоинта
-  const isCheckpointEditModalOpen = useIsModalOpen('checkpoint-edit')
-  const checkpointEditData = useModalData() as CheckpointEditData | null
 
   // Отслеживаем видимость секции для чекпоинтов
   const { trackSectionVisibility } = useCheckpointLinks()
@@ -280,7 +271,7 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         {/* Sidebar - sticky left */}
         <div
           className={cn(
-            'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2',
+            'flex flex-col justify-center gap-0.5 shrink-0 border-r border-border px-2 relative',
             'sticky left-0 z-20 bg-background'
           )}
           style={{
@@ -288,7 +279,19 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             paddingLeft: 8 + depth * 16,
           }}
         >
-          {/* Первая строка: Expand + Checkpoint Button + Avatar + Name */}
+          {/* Кнопка добавления чекпоинта - справа от sidebar (как кнопка загрузки) */}
+          <button
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 px-1.5 py-1 hover:bg-amber-500/10 rounded-r text-[9px] text-muted-foreground hover:text-amber-500 bg-background border-r border-t border-b border-border"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsCheckpointModalOpen(true)
+            }}
+          >
+            <Plus className="w-3 h-3" />
+            <span>Чекпоинт</span>
+          </button>
+
+          {/* Первая строка: Expand + Avatar + Name */}
           <div className="flex items-center gap-1.5 min-w-0">
             {hasChildren ? (
               <button
@@ -305,30 +308,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
             ) : (
               <div className="w-5 shrink-0" />
             )}
-
-            {/* Кнопка добавления чекпоинта */}
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setIsCheckpointModalOpen(true)
-                    }}
-                    className={cn(
-                      'p-0.5 rounded transition-all shrink-0',
-                      'text-muted-foreground/50 hover:text-amber-500 hover:bg-amber-500/10',
-                      'opacity-0 group-hover:opacity-100'
-                    )}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Добавить чекпоинт
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
 
             {/* Avatar */}
             <TooltipProvider delayDuration={300}>
@@ -450,13 +429,12 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
         {/* Timeline area */}
         <div className="relative" style={{ width: timelineWidth, height: rowHeight }}>
           <TimelineGrid dayCells={dayCells} />
-          {/* Графики раздела - занимают нижнюю часть строки, оставляя место для чекпоинтов */}
+          {/* Рамка периода раздела - покрывает всю высоту строки включая зону чекпоинтов */}
           <div
             className={cn(
-              'absolute bottom-0 left-0 right-0 transition-all duration-200',
+              'absolute inset-0 transition-all duration-200',
               isExpanded && 'opacity-30 saturate-50'
             )}
-            style={{ height: hasCheckpoints ? SECTION_ROW_HEIGHT : rowHeight }}
           >
             <SectionPeriodFrame
               startDate={section.startDate}
@@ -465,6 +443,15 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
               color={section.status.color}
               onResize={!isExpanded ? handleSectionResize : undefined}
             />
+          </div>
+          {/* Графики раздела - занимают нижнюю часть строки, оставляя место для чекпоинтов */}
+          <div
+            className={cn(
+              'absolute bottom-0 left-0 right-0 transition-all duration-200',
+              isExpanded && 'opacity-30 saturate-50'
+            )}
+            style={{ height: hasCheckpoints ? SECTION_ROW_HEIGHT : rowHeight }}
+          >
             {section.readinessCheckpoints.length > 0 && (
               <PlannedReadinessArea
                 checkpoints={section.readinessCheckpoints}
@@ -576,18 +563,6 @@ export function SectionRow({ section, dayCells, range, isObjectExpanded }: Secti
           refetchCheckpoints()
         }}
       />
-
-      {/* Checkpoint Edit Modal */}
-      {isCheckpointEditModalOpen && checkpointEditData?.checkpointId && (
-        <CheckpointEditModal
-          isOpen={isCheckpointEditModalOpen}
-          onClose={closeModal}
-          checkpointId={checkpointEditData.checkpointId}
-          onSuccess={() => {
-            refetchCheckpoints()
-          }}
-        />
-      )}
     </>
   )
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, KeyboardEvent } from 'react'
-import { createClient } from '@/utils/supabase/client'
 import { X, FileText, Loader2, Search, User, Wallet, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHasPermission } from '@/modules/permissions'
@@ -11,6 +10,11 @@ import { useUsers, useCurrentUser, useWorkCategories, type CachedUser } from '@/
 import { useBudgetsByEntity } from '@/modules/budgets'
 import type { BaseModalProps } from '../../types'
 import { ProgressUpdateDialog } from '../progress'
+import {
+  useDecompositionItemsForWorkLog,
+  useUserHourlyRate,
+  useCreateWorkLog,
+} from '../../hooks'
 
 // ============================================================================
 // Types
@@ -25,21 +29,12 @@ export interface WorkLogCreateModalProps extends BaseModalProps {
   defaultItemId?: string | null
 }
 
-interface ItemOption {
-  id: string
-  description: string
-  work_category_id: string
-  progress: number
-}
-
 // UserOption теперь импортируется как CachedUser из @/modules/cache
 type UserOption = CachedUser
 
 // ============================================================================
 // Component
 // ============================================================================
-
-const supabase = createClient()
 
 export function WorkLogCreateModal({
   isOpen,
@@ -49,16 +44,16 @@ export function WorkLogCreateModal({
   sectionName,
   defaultItemId = null,
 }: WorkLogCreateModalProps) {
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const [items, setItems] = useState<ItemOption[]>([])
-
   // Используем кешированные хуки для справочников
   const { data: cachedUsers = [], isLoading: usersLoading } = useUsers()
   const { data: currentUser } = useCurrentUser()
   const { data: cachedCategories = [], isLoading: categoriesLoading } = useWorkCategories()
   const { data: cachedBudgets = [], isLoading: budgetsLoading } = useBudgetsByEntity('section', isOpen ? sectionId : undefined)
+
+  // Загружаем decomposition items через хук (Server Action)
+  const { data: items = [], isLoading: itemsLoading } = useDecompositionItemsForWorkLog(sectionId, {
+    enabled: isOpen,
+  })
 
   const [selectedItemId, setSelectedItemId] = useState<string>(defaultItemId || '')
   const [workDate, setWorkDate] = useState<string>(new Date().toISOString().slice(0, 10))
@@ -84,6 +79,17 @@ export function WorkLogCreateModal({
   const canEditDate = useHasPermission('work_logs.date.edit')
   const isAdmin = useHasPermission('users.admin_panel')
 
+  // Мутация для создания work log
+  const { mutate: createWorkLogMutation, isPending: saving } = useCreateWorkLog()
+
+  // Загрузка ставки выбранного пользователя (если не текущий)
+  const shouldLoadUserRate = canEditExecutor && selectedUserId && selectedUserId !== currentUser?.user_id
+  const { data: selectedUserRate } = useUserHourlyRate(
+    shouldLoadUserRate ? selectedUserId : undefined,
+    { enabled: shouldLoadUserRate }
+  )
+
+  // Сброс формы при открытии
   useEffect(() => {
     if (isOpen) {
       setSelectedItemId(defaultItemId || '')
@@ -107,43 +113,19 @@ export function WorkLogCreateModal({
     }
   }, [currentUser, selectedUserId, isOpen])
 
-  useEffect(() => {
-    if (!isOpen) return
-    const loadItems = async () => {
-      setLoading(true)
-      try {
-        // Загружаем только decomposition items - остальное из кеша
-        const { data, error } = await supabase
-          .from('decomposition_items')
-          .select(
-            'decomposition_item_id, decomposition_item_description, decomposition_item_work_category_id, decomposition_item_progress'
-          )
-          .eq('decomposition_item_section_id', sectionId)
-          .order('decomposition_item_order', { ascending: true })
-
-        if (!error && data) {
-          setItems(
-            data.map((r: any) => ({
-              id: r.decomposition_item_id,
-              description: r.decomposition_item_description,
-              work_category_id: r.decomposition_item_work_category_id,
-              progress: r.decomposition_item_progress ?? 0,
-            }))
-          )
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadItems()
-  }, [isOpen, sectionId])
-
   // Устанавливаем ставку из кешированного профиля текущего пользователя
   useEffect(() => {
     if (currentUser?.salary != null && isOpen && !rate) {
       setRate(String(currentUser.salary))
     }
   }, [currentUser, isOpen, rate])
+
+  // Устанавливаем ставку при выборе другого пользователя
+  useEffect(() => {
+    if (selectedUserRate != null) {
+      setRate(String(selectedUserRate))
+    }
+  }, [selectedUserRate])
 
   // Автовыбор бюджета если он один
   useEffect(() => {
@@ -155,29 +137,6 @@ export function WorkLogCreateModal({
   useEffect(() => {
     setSelectedItemId(defaultItemId || '')
   }, [defaultItemId])
-
-  // Автоматическая подгрузка ставки при выборе пользователя
-  useEffect(() => {
-    if (!selectedUserId || !canEditExecutor) return
-
-    const loadUserRate = async () => {
-      try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('salary')
-          .eq('user_id', selectedUserId)
-          .single()
-
-        if (profileData && profileData.salary != null) {
-          setRate(String(profileData.salary))
-        }
-      } catch (error) {
-        console.error('Ошибка при загрузке ставки пользователя:', error)
-      }
-    }
-
-    loadUserRate()
-  }, [selectedUserId, canEditExecutor])
 
   const categoryById = useMemo(() => {
     const map = new Map<string, string>()
@@ -234,48 +193,42 @@ export function WorkLogCreateModal({
     if (e.key === 'Enter' && canSave && !saving) save()
   }
 
-  const save = async () => {
+  const save = () => {
     if (!canSave) return
-    setSaving(true)
-    try {
-      const { data: userResp } = await supabase.auth.getUser()
-      const userId = userResp.user?.id
-      if (!userId) throw new Error('Пользователь не найден')
 
-      const payload = {
-        decomposition_item_id: selectedItemId,
-        work_log_description: description || null,
-        work_log_created_by: canEditExecutor ? selectedUserId : userId,
-        work_log_date: workDate,
-        work_log_hours: Number(hours),
-        work_log_hourly_rate: isAdmin ? Number(rate) : Number(rate) || 0,
-        budget_id: selectedBudgetId,
+    createWorkLogMutation(
+      {
+        sectionId,
+        decompositionItemId: selectedItemId,
+        description: description.trim() || null,
+        workDate,
+        hours: Number(hours),
+        hourlyRate: isAdmin ? Number(rate) : Number(rate) || 0,
+        budgetId: selectedBudgetId,
+        executorId: canEditExecutor ? selectedUserId : undefined,
+      },
+      {
+        onSuccess: () => {
+          // Находим информацию о выбранной задаче для диалога обновления готовности
+          const selectedItem = items.find((i) => i.id === selectedItemId)
+          if (selectedItem) {
+            setSavedItemInfo({
+              id: selectedItem.id,
+              name: selectedItem.description,
+              progress: selectedItem.progress,
+            })
+            setShowProgressDialog(true)
+          } else {
+            // Если не нашли задачу (не должно быть), закрываем сразу
+            onSuccess?.()
+            onClose()
+          }
+        },
+        onError: (error) => {
+          console.error('Ошибка сохранения отчёта:', error)
+        },
       }
-      const { error } = await supabase.from('work_logs').insert(payload)
-      if (error) {
-        console.error('Supabase insert error:', error)
-        throw new Error(error.message || 'Не удалось сохранить отчёт')
-      }
-
-      // Находим информацию о выбранной задаче для диалога обновления готовности
-      const selectedItem = items.find((i) => i.id === selectedItemId)
-      if (selectedItem) {
-        setSavedItemInfo({
-          id: selectedItem.id,
-          name: selectedItem.description,
-          progress: selectedItem.progress,
-        })
-        setShowProgressDialog(true)
-      } else {
-        // Если не нашли задачу (не должно быть), закрываем сразу
-        onSuccess?.()
-        onClose()
-      }
-    } catch (e) {
-      console.error('Ошибка сохранения отчёта:', e)
-    } finally {
-      setSaving(false)
-    }
+    )
   }
 
   // Обработчик закрытия диалога обновления готовности
@@ -292,6 +245,8 @@ export function WorkLogCreateModal({
     const day = String(d.getDate()).padStart(2, '0')
     return `${y}-${m}-${day}`
   }
+
+  const loading = itemsLoading
 
   if (!isOpen) return null
 

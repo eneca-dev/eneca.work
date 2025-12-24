@@ -85,6 +85,8 @@ export const realtimeSubscriptions: TableSubscription[] = [
       queryKeys.sections.all, // Подсчёты в секциях
       queryKeys.resourceGraph.all, // График ресурсов
       queryKeys.kanban.all, // Канбан-доска
+      // Ответственные за этапы (lazy-loaded данные)
+      [...queryKeys.resourceGraph.all, 'stageResponsibles'],
     ],
   },
   {
@@ -110,6 +112,13 @@ export const realtimeSubscriptions: TableSubscription[] = [
     table: 'section_readiness_snapshots',
     invalidateKeys: [
       queryKeys.resourceGraph.all, // Фактическая готовность
+    ],
+  },
+  {
+    table: 'stage_readiness_snapshots',
+    invalidateKeys: [
+      // Инвалидируем stageReadiness кеши (lazy-loaded данные по этапам)
+      [...queryKeys.resourceGraph.all, 'stageReadiness'],
     ],
   },
 

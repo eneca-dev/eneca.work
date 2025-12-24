@@ -12,7 +12,7 @@ import { BudgetSpendingArea } from '../BudgetSpendingArea'
 import { SectionRow } from './SectionRow'
 import { aggregateSectionsMetrics } from './calculations'
 import { OBJECT_ROW_HEIGHT, SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../../../constants'
-import { useCheckpointLinks } from '@/modules/checkpoints'
+import { useCheckpointLinks, usePrefetchCheckpoints } from '@/modules/checkpoints'
 
 // ============================================================================
 // Object Row
@@ -34,7 +34,10 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
   // Отслеживаем видимость объекта для чекпоинтов
   const { trackObjectVisibility } = useCheckpointLinks()
 
-  // Отслеживаем состояние развёрнутости объекта
+  // Prefetch чекпоинтов для всех разделов объекта
+  const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
+
+  // Отслеживаем состояние развёрнутости объекта + prefetch данных
   useEffect(() => {
     console.log('[ObjectRow] 🔄 Object visibility state changed:', {
       objectId: object.id,
@@ -44,7 +47,16 @@ export function ObjectRow({ object, dayCells, range }: ObjectRowProps) {
     })
 
     trackObjectVisibility(object.id, object.name, isExpanded)
-  }, [object.id, object.name, isExpanded, trackObjectVisibility, object.sections.length])
+
+    // При раскрытии объекта - prefetch чекпоинтов для всех разделов
+    if (isExpanded && object.sections.length > 0) {
+      const sectionIds = object.sections.map((s) => s.id)
+      prefetchForSections(sectionIds)
+
+      // Также prefetch project sections для модалки (берём первый раздел)
+      prefetchProjectSections(object.sections[0].id)
+    }
+  }, [object.id, object.name, isExpanded, trackObjectVisibility, object.sections, prefetchForSections, prefetchProjectSections])
 
   // Агрегированные метрики из всех разделов
   const aggregatedMetrics = useMemo(() => {

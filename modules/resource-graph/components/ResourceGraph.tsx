@@ -25,8 +25,14 @@ import { SIDEBAR_WIDTH, DAY_CELL_WIDTH } from '../constants'
 import { cn } from '@/lib/utils'
 import type { TimelineRange } from '../types'
 import { InlineFilter, parseFilterString, tokensToQueryParams } from '@/modules/inline-filter'
-import { DebugPanel } from './debug'
 import { UserSync } from '@/components/UserSync'
+import {
+  CheckpointEditModal,
+  useIsModalOpen,
+  useModalData,
+  closeModal,
+  type CheckpointEditData
+} from '@/modules/modals'
 
 // Timeline config - 180 дней (полгода)
 const DAYS_BEFORE_TODAY = 30  // Месяц назад
@@ -47,6 +53,10 @@ export function ResourceGraph() {
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const contentScrollRef = useRef<HTMLDivElement>(null)
   const isScrollingSyncRef = useRef(false)
+
+  // Global checkpoint edit modal state
+  const isCheckpointEditModalOpen = useIsModalOpen('checkpoint-edit')
+  const checkpointEditData = useModalData() as CheckpointEditData | null
 
   // Sync scroll between header and content
   const handleHeaderScroll = useCallback(() => {
@@ -143,9 +153,6 @@ export function ResourceGraph() {
     <div className="h-full flex flex-col bg-background">
       {/* User Sync */}
       <UserSync />
-
-      {/* Debug Panel */}
-      <DebugPanel />
 
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-card border-b shadow-sm">
@@ -279,6 +286,15 @@ export function ResourceGraph() {
           />
         )}
       </div>
+
+      {/* Global Checkpoint Edit Modal */}
+      {isCheckpointEditModalOpen && checkpointEditData?.checkpointId && (
+        <CheckpointEditModal
+          isOpen={isCheckpointEditModalOpen}
+          onClose={closeModal}
+          checkpointId={checkpointEditData.checkpointId}
+        />
+      )}
     </div>
   )
 }

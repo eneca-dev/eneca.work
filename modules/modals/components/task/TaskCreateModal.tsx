@@ -3,9 +3,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { X, ListTodo, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useWorkCategories, queryKeys } from '@/modules/cache'
-import { createDecompositionItem } from '@/modules/resource-graph/actions'
+import { useWorkCategories } from '@/modules/cache'
+import { useCreateDecompositionItem } from '../../hooks'
 import type { BaseModalProps } from '../../types'
 
 // ============================================================================
@@ -38,31 +37,11 @@ export function TaskCreateModal({
   const [hoursString, setHoursString] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('')
 
-  const queryClient = useQueryClient()
-
   // Query: Work categories (from cache module)
   const { data: categories = [], isLoading: categoriesLoading } = useWorkCategories()
 
-  // Mutation: Create task
-  const { mutate: createTask, isPending: isCreating } = useMutation({
-    mutationFn: async (data: {
-      sectionId: string
-      stageId: string
-      description: string
-      plannedHours: number
-      workCategoryId: string
-    }) => {
-      const result = await createDecompositionItem(data)
-      if (!result.success) throw new Error(result.error)
-      return result.data
-    },
-    onSuccess: () => {
-      // Invalidate resource graph data to refresh the tree
-      queryClient.invalidateQueries({ queryKey: queryKeys.resourceGraph.all })
-      onSuccess?.()
-      onClose()
-    },
-  })
+  // Mutation: Create task (using cache module hook)
+  const { mutate: createTask, isPending: isCreating } = useCreateDecompositionItem()
 
   // Derived state
   const hours = useMemo(() => {
@@ -98,14 +77,22 @@ export function TaskCreateModal({
   const handleSubmit = useCallback(() => {
     if (!isFormValid || isCreating) return
 
-    createTask({
-      sectionId,
-      stageId,
-      description: description.trim(),
-      plannedHours: hours,
-      workCategoryId: selectedCategoryId,
-    })
-  }, [isFormValid, isCreating, createTask, sectionId, stageId, description, hours, selectedCategoryId])
+    createTask(
+      {
+        sectionId,
+        stageId,
+        description: description.trim(),
+        plannedHours: hours,
+        workCategoryId: selectedCategoryId,
+      },
+      {
+        onSuccess: () => {
+          onSuccess?.()
+          onClose()
+        },
+      }
+    )
+  }, [isFormValid, isCreating, createTask, sectionId, stageId, description, hours, selectedCategoryId, onSuccess, onClose])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && isFormValid && !isCreating) {

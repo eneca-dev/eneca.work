@@ -47,6 +47,9 @@ import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
 /**
  * Хук для загрузки списка чекпоинтов с фильтрацией
  *
+ * ОПТИМИЗИРОВАНО: Увеличен staleTime до 5 минут, т.к. чекпоинты
+ * меняются относительно редко (не каждые 30 сек).
+ *
  * @example
  * ```tsx
  * const { data: checkpoints, isLoading } = useCheckpoints({ sectionId: 'uuid' })
@@ -55,11 +58,13 @@ import type { CheckpointFilters } from '@/modules/cache/keys/query-keys'
 export const useCheckpoints = createCacheQuery({
   queryKey: (filters?: CheckpointFilters) => queryKeys.checkpoints.list(filters),
   queryFn: getCheckpoints,
-  staleTime: 'fast', // 30 секунд — данные меняются часто
+  staleTime: 'slow', // 5 минут — чекпоинты меняются редко
 })
 
 /**
  * Хук для загрузки детальной информации о чекпоинте
+ *
+ * ОПТИМИЗИРОВАНО: Увеличен staleTime до 5 минут.
  *
  * @example
  * ```tsx
@@ -69,7 +74,7 @@ export const useCheckpoints = createCacheQuery({
 export const useCheckpoint = createDetailCacheQuery({
   queryKey: (id: string) => queryKeys.checkpoints.detail(id),
   queryFn: getCheckpoint,
-  staleTime: 'fast',
+  staleTime: 'slow', // 5 минут
 })
 
 /**
@@ -100,14 +105,12 @@ const OPTIMISTIC_USER_ID = 'optimistic-user-id' as const
 /**
  * Хук для создания нового чекпоинта
  *
- * После успешного создания на сервере автоматически инвалидирует кеш,
- * что приводит к перезагрузке только затронутых списков чекпоинтов
- * (родительского раздела и связанных разделов).
+ * После успешного создания на сервере автоматически инвалидирует кеш
+ * списков чекпоинтов. Чекпоинты загружаются отдельно от основных данных
+ * графика, поэтому не требуется инвалидация resourceGraph.
  *
- * Автоматически инвалидирует кеш:
- * - checkpoints.all (списки чекпоинтов)
- * - sections.all (у секций есть счетчики чекпоинтов)
- * - resourceGraph.all (timeline с чекпоинтами)
+ * ОПТИМИЗИРОВАНО: Инвалидирует только списки чекпоинтов, не затрагивая
+ * sections или resourceGraph (чекпоинты загружаются отдельным запросом).
  *
  * @example
  * ```tsx
@@ -122,19 +125,21 @@ const OPTIMISTIC_USER_ID = 'optimistic-user-id' as const
  */
 export const useCreateCheckpoint = createCacheMutation<CreateCheckpointInput, Checkpoint>({
   mutationFn: createCheckpoint,
-  invalidateKeys: [
-    queryKeys.checkpoints.all,
-    queryKeys.sections.all,
-    queryKeys.resourceGraph.all,
+  invalidateKeys: (input) => [
+    // Инвалидируем список чекпоинтов для родительского раздела
+    queryKeys.checkpoints.bySection(input.sectionId),
+    // Инвалидируем списки для связанных разделов (если есть)
+    ...(input.linkedSectionIds || []).map(id => queryKeys.checkpoints.bySection(id)),
   ],
 })
 
 /**
  * Хук для обновления чекпоинта
  *
- * Обновляет чекпоинт и автоматически инвалидирует все связанные кеши.
- * После обновления списки чекпоинтов для всех затронутых разделов
- * (родительского и связанных) будут перезагружены с сервера.
+ * Обновляет чекпоинт и инвалидирует кеш списков чекпоинтов.
+ *
+ * ОПТИМИЗИРОВАНО: Инвалидирует только detail и списки чекпоинтов,
+ * не затрагивая sections или resourceGraph.
  *
  * @example
  * ```tsx
@@ -149,10 +154,11 @@ export const useCreateCheckpoint = createCacheMutation<CreateCheckpointInput, Ch
  */
 export const useUpdateCheckpoint = createCacheMutation<UpdateCheckpointInput, Checkpoint>({
   mutationFn: updateCheckpoint,
-  invalidateKeys: [
-    queryKeys.checkpoints.all,
-    queryKeys.sections.all,
-    queryKeys.resourceGraph.all,
+  invalidateKeys: (input) => [
+    // Инвалидируем detail кеш чекпоинта
+    queryKeys.checkpoints.detail(input.checkpointId),
+    // Инвалидируем все списки чекпоинтов (т.к. не знаем какие секции затронуты)
+    queryKeys.checkpoints.lists(),
   ],
 })
 
@@ -216,19 +222,16 @@ export const useCompleteCheckpoint = createUpdateMutation({
       status,
     }
   },
-  invalidateKeys: [
-    queryKeys.sections.all,
-    queryKeys.resourceGraph.all,
-  ],
+  // ОПТИМИЗИРОВАНО: Убраны sections.all и resourceGraph.all
+  // Чекпоинты загружаются отдельно, optimistic update уже обновил списки
+  invalidateKeys: [],
 })
 
 /**
  * Хук для удаления чекпоинта
  *
- * Автоматически инвалидирует кеш:
- * - checkpoints.all
- * - sections.all
- * - resourceGraph.all
+ * ОПТИМИЗИРОВАНО: Использует optimistic delete + инвалидацию только
+ * списков чекпоинтов. Убраны sections.all и resourceGraph.all.
  *
  * @example
  * ```tsx
@@ -241,11 +244,9 @@ export const useDeleteCheckpoint = createDeleteMutation({
   listQueryKey: queryKeys.checkpoints.lists(),
   getId: (checkpointId: string) => checkpointId,
   getItemId: (item: Checkpoint) => item.checkpoint_id,
-  invalidateKeys: [
-    queryKeys.checkpoints.all,
-    queryKeys.sections.all,
-    queryKeys.resourceGraph.all,
-  ],
+  // ОПТИМИЗИРОВАНО: Убраны sections.all и resourceGraph.all
+  // Optimistic delete уже удалил элемент из списков
+  invalidateKeys: [],
 })
 
 // ============================================================================
@@ -268,3 +269,97 @@ export const useProjectSections = createDetailCacheQuery({
   queryFn: getProjectSections,
   staleTime: 'medium', // 5 минут — структура проекта меняется редко
 })
+
+// ============================================================================
+// Prefetch Utilities
+// ============================================================================
+
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { staleTimePresets } from '@/modules/cache'
+
+/**
+ * Хук для prefetch чекпоинтов нескольких разделов
+ *
+ * Используется при раскрытии объекта для предзагрузки чекпоинтов
+ * всех его разделов. Это обеспечивает мгновенное отображение маркеров.
+ *
+ * @example
+ * ```tsx
+ * const { prefetchForSections, prefetchProjectSections } = usePrefetchCheckpoints()
+ *
+ * useEffect(() => {
+ *   if (isExpanded) {
+ *     prefetchForSections(object.sections.map(s => s.id))
+ *   }
+ * }, [isExpanded])
+ * ```
+ */
+export function usePrefetchCheckpoints() {
+  const queryClient = useQueryClient()
+
+  /**
+   * Prefetch чекпоинтов для списка разделов
+   */
+  const prefetchForSections = useCallback(
+    (sectionIds: string[]) => {
+      sectionIds.forEach((sectionId) => {
+        const key = queryKeys.checkpoints.list({ sectionId })
+        // Prefetch только если нет в кеше
+        if (!queryClient.getQueryData(key)) {
+          queryClient.prefetchQuery({
+            queryKey: key,
+            queryFn: () => getCheckpoints({ sectionId }),
+            staleTime: staleTimePresets.slow, // 5 минут
+          })
+        }
+      })
+    },
+    [queryClient]
+  )
+
+  /**
+   * Prefetch разделов проекта для модалки (нужны для выбора связанных разделов)
+   */
+  const prefetchProjectSections = useCallback(
+    (sectionId: string) => {
+      const key = queryKeys.checkpoints.projectSections(sectionId)
+      if (!queryClient.getQueryData(key)) {
+        queryClient.prefetchQuery({
+          queryKey: key,
+          queryFn: () => getProjectSections(sectionId),
+          staleTime: staleTimePresets.slow, // 5 минут
+        })
+      }
+    },
+    [queryClient]
+  )
+
+  /**
+   * Получить чекпоинт из кеша списка (для модалки)
+   * Возвращает checkpoint если он есть в любом закешированном списке
+   */
+  const getCheckpointFromCache = useCallback(
+    (checkpointId: string): Checkpoint | undefined => {
+      // Получаем все закешированные списки чекпоинтов
+      const queries = queryClient.getQueriesData<{ success: boolean; data: Checkpoint[] }>({
+        queryKey: queryKeys.checkpoints.lists(),
+      })
+
+      for (const [, data] of queries) {
+        if (data?.success && data.data) {
+          const found = data.data.find((cp) => cp.checkpoint_id === checkpointId)
+          if (found) return found
+        }
+      }
+      return undefined
+    },
+    [queryClient]
+  )
+
+  return {
+    prefetchForSections,
+    prefetchProjectSections,
+    getCheckpointFromCache,
+  }
+}
